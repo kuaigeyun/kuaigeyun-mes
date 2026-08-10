@@ -82,6 +82,22 @@ export function payablePaymentPushPercent(
   return ratioToPushProgressPercent(Number(paidAmount ?? 0), Number(totalAmount ?? 0));
 }
 
+/** 应收 → 销项发票（按已开票/总额） */
+export function receivableInvoicePushPercent(
+  invoicedAmount?: number | string | null,
+  totalAmount?: number | string | null,
+): number {
+  return ratioToPushProgressPercent(Number(invoicedAmount ?? 0), Number(totalAmount ?? 0));
+}
+
+/** 应付 → 进项发票（按已收票/总额） */
+export function payableInvoicePushPercent(
+  invoicedAmount?: number | string | null,
+  totalAmount?: number | string | null,
+): number {
+  return ratioToPushProgressPercent(Number(invoicedAmount ?? 0), Number(totalAmount ?? 0));
+}
+
 /** 来料检验 → 采购退货（已下推不合格数 / 不合格数） */
 export function incomingInspectionReturnPushPercent(
   pushedQty?: number | string | null,

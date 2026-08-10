@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from tortoise.queryset import Q
 
 from apps.common.base_service import AppBaseService
+from apps.kuaicaiwu.services.finance_service import derive_invoice_amount_status
 from apps.kuaicaiwu.models.payable import Payable
 from apps.kuaizhizao.models.document_relation import DocumentRelation
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
@@ -585,6 +586,16 @@ class PayablePullService(AppBaseService[Payable]):
                 "reason": reason,
             }
             payload["capabilities"] = existing_caps
+            invoiced, remaining_inv, inv_status = derive_invoice_amount_status(
+                pushed_map.get(pid, Decimal("0")),
+                Decimal(str(payload.get("total_amount") or 0)),
+                status_none="未收票",
+                status_partial="部分收票",
+                status_full="已收票",
+            )
+            payload["invoiced_amount"] = invoiced
+            payload["remaining_invoice_amount"] = remaining_inv
+            payload["invoice_status"] = inv_status
             enriched.append(payload)
         return enriched
 
@@ -602,5 +613,13 @@ class PayablePullService(AppBaseService[Payable]):
             inv_caps = (inv_row.get("capabilities") or {}).get("push_purchase_invoice")
             if inv_caps is not None:
                 caps["push_purchase_invoice"] = inv_caps
-            merged.append({**pay_row, "capabilities": caps})
+            merged.append(
+                {
+                    **pay_row,
+                    "capabilities": caps,
+                    "invoiced_amount": inv_row.get("invoiced_amount"),
+                    "remaining_invoice_amount": inv_row.get("remaining_invoice_amount"),
+                    "invoice_status": inv_row.get("invoice_status"),
+                }
+            )
         return merged

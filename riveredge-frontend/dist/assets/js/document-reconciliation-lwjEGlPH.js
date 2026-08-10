@@ -1,0 +1,1 @@
+import{t as a}from"./clearSessionQueries-BZmFX7j8.js";const t="/apps/kuaicaiwu/document-reconciliation",c={listOpenGaps:e=>a(`${t}/gaps/open`,{method:"GET",params:e}),getStandardChain:(e,n,o)=>a(`${t}/chain/${e}/${n}/${o}`,{method:"GET"}),getPrepaymentBalances:e=>a(`${t}/prepayment-balances`,{method:"GET",params:e})};export{c as d};

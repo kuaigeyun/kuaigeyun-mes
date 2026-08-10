@@ -26,9 +26,24 @@ async def test_resolve_provenance_status_official_self_hosted():
 
 
 @pytest.mark.asyncio
+async def test_resolve_provenance_status_official_self_hosted_via_github_only():
+    with patch(
+        "infra.services.build_provenance_service._gitee_commit_exists",
+        new=AsyncMock(return_value=False),
+    ), patch(
+        "infra.services.build_provenance_service._github_commit_exists",
+        new=AsyncMock(return_value=True),
+    ):
+        assert await resolve_provenance_status(git_commit="605ba6d") == "official_self_hosted"
+
+
+@pytest.mark.asyncio
 async def test_resolve_provenance_status_unverified_commit():
     with patch(
         "infra.services.build_provenance_service._gitee_commit_exists",
+        new=AsyncMock(return_value=False),
+    ), patch(
+        "infra.services.build_provenance_service._github_commit_exists",
         new=AsyncMock(return_value=False),
     ):
         assert await resolve_provenance_status(git_commit="deadbeef") == "unverified_commit"
@@ -38,6 +53,9 @@ async def test_resolve_provenance_status_unverified_commit():
 async def test_resolve_provenance_status_official_unknown_commit_on_timeout():
     with patch(
         "infra.services.build_provenance_service._gitee_commit_exists",
+        new=AsyncMock(return_value=None),
+    ), patch(
+        "infra.services.build_provenance_service._github_commit_exists",
         new=AsyncMock(return_value=None),
     ):
         assert await resolve_provenance_status(git_commit="3266282") == "official_unknown_commit"

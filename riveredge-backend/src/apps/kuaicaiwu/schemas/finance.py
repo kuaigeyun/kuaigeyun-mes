@@ -61,6 +61,9 @@ class PayableResponse(PayableBase):
     """应付单响应schema"""
     id: int = Field(..., description="应付单ID")
     tenant_id: int = Field(..., description="租户ID")
+    invoiced_amount: Decimal = Field(Decimal("0"), ge=0, description="已收票金额（列表聚合）")
+    remaining_invoice_amount: Decimal = Field(Decimal("0"), ge=0, description="未收票金额（列表聚合）")
+    invoice_status: str = Field("未收票", max_length=20, description="收票状态（列表聚合）")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     created_by_name: Optional[str] = Field(None, description="创建人姓名")
@@ -188,6 +191,9 @@ class ReceivableResponse(ReceivableBase):
     """应收单响应schema"""
     id: int = Field(..., description="应收单ID")
     tenant_id: int = Field(..., description="租户ID")
+    invoiced_amount: Decimal = Field(Decimal("0"), ge=0, description="已开票金额（列表聚合）")
+    remaining_invoice_amount: Decimal = Field(Decimal("0"), ge=0, description="未开票金额（列表聚合）")
+    invoice_status: str = Field("未开票", max_length=20, description="开票状态（列表聚合）")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     created_by_name: Optional[str] = Field(None, description="创建人姓名")

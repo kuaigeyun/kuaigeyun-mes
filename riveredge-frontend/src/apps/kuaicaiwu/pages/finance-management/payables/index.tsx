@@ -58,7 +58,8 @@ import {
   DocumentPushProgressBar,
   DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
 } from '../../../../kuaizhizao/pages/sales-management/shared/DocumentPushProgressBar';
-import { payablePaymentPushPercent } from '../../../../kuaizhizao/pages/sales-management/shared/pushProgress';
+import { payablePaymentPushPercent, payableInvoicePushPercent } from '../../../../kuaizhizao/pages/sales-management/shared/pushProgress';
+import { renderPayableInvoiceStatusTag } from '../../../utils/financeInvoiceStatusUi';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
@@ -476,6 +477,41 @@ const PayableList: React.FC = () => {
             sorter: true,
         },
         {
+            title: t(`${P}.col.invoiceStatus`),
+            dataIndex: 'invoice_status',
+            width: 100,
+            hideInSearch: true,
+            render: (_, record) => renderPayableInvoiceStatusTag(record.invoice_status, t),
+        },
+        {
+            title: t(`${P}.col.invoicedAmount`),
+            dataIndex: 'invoiced_amount',
+            valueType: 'money',
+            align: 'right',
+            width: 120,
+            hideInSearch: true,
+        },
+        {
+            title: t(`${P}.col.remainingInvoiceAmount`),
+            dataIndex: 'remaining_invoice_amount',
+            valueType: 'money',
+            align: 'right',
+            width: 120,
+            hideInSearch: true,
+            render: (_, record) => (
+                <span
+                    style={{
+                        color: Number(record.remaining_invoice_amount ?? 0) > 0 ? '#1677ff' : 'inherit',
+                        fontWeight: Number(record.remaining_invoice_amount ?? 0) > 0 ? 'bold' : 'normal',
+                    }}
+                >
+                    {record.remaining_invoice_amount != null
+                        ? `¥${Number(record.remaining_invoice_amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`
+                        : '-'}
+                </span>
+            ),
+        },
+        {
             title: t(`${P}.col.totalAmount`),
             dataIndex: 'total_amount',
             valueType: 'money',
@@ -569,6 +605,22 @@ const PayableList: React.FC = () => {
                 );
             },
         },
+        {
+            title: t(`${P}.col.invoicePushProgress`),
+            dataIndex: 'invoice_push_progress',
+            ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
+            render: (_, record) => {
+                const percent = payableInvoicePushPercent(record.invoiced_amount, record.total_amount);
+                return (
+                    <DocumentPushProgressBar
+                        percent={percent}
+                        tooltip={t(`${P}.col.invoicePushProgressTooltip`, {
+                            percent: Math.round(percent),
+                        })}
+                    />
+                );
+            },
+        },
         ...financeDocCreatedUpdatedColumns<Payable>(t),
         {
             title: t('app.kuaicaiwu.common.lifecycle'),
@@ -594,7 +646,8 @@ const PayableList: React.FC = () => {
             title: t('common.actions'),
             valueType: 'option',
             fixed: 'right',
-            width: 220,
+            width: 280,
+            uniActionRenderOptions: { directMax: 5 },
             render: (_, record) => [
                         <Button {...rowActionKind('read')}
                             key="det"
@@ -637,8 +690,9 @@ const PayableList: React.FC = () => {
                             </Button>
                         ) : null,
                         record.capabilities?.push_purchase_invoice?.allowed !== false &&
+                        Number(record.remaining_invoice_amount ?? record.total_amount ?? 0) > 0 &&
                         purchaseInvoicePerms.canCreate ? (
-                            <Button {...rowActionKind('execute')}
+                            <Button {...rowActionKind('create')}
                                 key="invoice"
                                 type="link"
                                 size="small"

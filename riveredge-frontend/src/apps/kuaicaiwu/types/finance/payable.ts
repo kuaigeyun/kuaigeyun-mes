@@ -16,6 +16,9 @@ export interface Payable {
     business_date: string;
     invoice_received: boolean;
     invoice_number?: string;
+    invoiced_amount?: number;
+    remaining_invoice_amount?: number;
+    invoice_status?: string;
     reviewer_id?: number;
     reviewer_name?: string;
     review_time?: string;
@@ -26,7 +29,10 @@ export interface Payable {
   updated_at: string;
   created_by_name?: string;
   updated_by_name?: string;
-  capabilities?: { push_payment?: { allowed?: boolean; reason?: string } };
+  capabilities?: {
+    push_payment?: { allowed?: boolean; reason?: string };
+    push_purchase_invoice?: { allowed?: boolean; reason?: string };
+  };
 }
 
 export interface PayableListParams {

@@ -1188,10 +1188,15 @@ set_deploy_env_value() {
 # 须在启动后端前调用，以便新进程加载 PLATFORM_BUILD_TIME / GIT_SHA。
 record_deploy_release_metadata() {
     ensure_env_file
-    local sha build_time install_id remote branch
+    load_deploy_env
+    local sha build_time install_id remote branch git_remote
+    git_remote="${GIT_REMOTE:-origin}"
     sha="$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null | tr -d '[:space:]')"
     build_time="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-    remote="$(git -C "$PROJECT_ROOT" remote get-url origin 2>/dev/null | tr -d '[:space:]' || true)"
+    remote="$(git -C "$PROJECT_ROOT" remote get-url "$git_remote" 2>/dev/null | tr -d '[:space:]' || true)"
+    if [ -z "$remote" ]; then
+        remote="$(git -C "$PROJECT_ROOT" remote get-url origin 2>/dev/null | tr -d '[:space:]' || true)"
+    fi
     branch="$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null | tr -d '[:space:]' || true)"
     install_id="$(read_env_value INSTALL_INSTANCE_ID 2>/dev/null || true)"
     if [ -z "$install_id" ]; then
@@ -1203,6 +1208,17 @@ record_deploy_release_metadata() {
     [ -n "$remote" ] && set_env_value BUILD_GIT_REMOTE "$remote"
     [ -n "$branch" ] && [ "$branch" != "HEAD" ] && set_env_value BUILD_GIT_BRANCH "$branch"
     log_info "发版记录: install_id=${install_id:-unknown} commit=${sha:-unknown} remote=${remote:-unknown} branch=${branch:-unknown} deploy_time=${build_time}"
+}
+
+# update / 向导 [3] 更新后强制重启后端，避免 .env 已写入 GIT_SHA 但旧进程仍持有旧环境。
+ensure_backend_restarted_for_release() {
+    stop_service backend
+    kill_port "$BACKEND_PORT"
+    if bg_enabled; then
+        kill_port "$BACKEND_PORT_BLUE" 2>/dev/null || true
+        kill_port "$BACKEND_PORT_GREEN" 2>/dev/null || true
+    fi
+    export FORCE_BACKEND_RESTART=1
 }
 
 admin_config_complete() {
@@ -2793,7 +2809,9 @@ start_backend_prod() {
         bg_start_backend_slot "$(bg_active_slot)" prod || exit 1
         return 0
     fi
-    if [ -f "$LOGS_DIR/backend.pid" ] && kill -0 "$(cat "$LOGS_DIR/backend.pid")" 2>/dev/null; then
+    if [ "${FORCE_BACKEND_RESTART:-0}" != "1" ] \
+        && [ -f "$LOGS_DIR/backend.pid" ] \
+        && kill -0 "$(cat "$LOGS_DIR/backend.pid")" 2>/dev/null; then
         log_info "后端已在运行"
         return 0
     fi
@@ -5008,7 +5026,9 @@ run_update_dev() {
     cmd_stop_dev || return 1
     cmd_migrate || return 1
     record_deploy_release_metadata || return 1
+    ensure_backend_restarted_for_release
     cmd_start_dev || return 1
+    unset FORCE_BACKEND_RESTART
 }
 
 run_update_prod() {
@@ -5028,7 +5048,9 @@ run_update_prod() {
         bg_sync_all_frontend_slots_from_dist || return 1
     fi
     record_deploy_release_metadata || return 1
+    ensure_backend_restarted_for_release
     cmd_start_prod || return 1
+    unset FORCE_BACKEND_RESTART
 }
 
 cmd_update_dev() {

@@ -480,6 +480,8 @@ bg_run_update_prod() {
 
     cmd_migrate || { bg_rollback_update; return 1; }
 
+    record_deploy_release_metadata || { bg_rollback_update; return 1; }
+
     bg_stop_scheduler_only
     if ! bg_start_backend_slot "$inactive" prod; then
         bg_rollback_update
@@ -504,7 +506,6 @@ bg_run_update_prod() {
     bg_stop_backend_slot "$old_active" 1
     bg_sync_active_backend_pid_legacy
     bg_drain_worker_scheduler || return 1
-    record_deploy_release_metadata || return 1
     log_ok "生产环境蓝绿 update 完成 (active=${inactive}, :${inactive_port})"
 }
 
@@ -524,6 +525,8 @@ bg_run_update_dev() {
 
     cmd_migrate || { bg_rollback_update; return 1; }
 
+    record_deploy_release_metadata || { bg_rollback_update; return 1; }
+
     bg_stop_scheduler_only
     if ! bg_start_backend_slot "$inactive" dev; then
         bg_rollback_update
@@ -540,7 +543,6 @@ bg_run_update_dev() {
     bg_stop_backend_slot "$old_active" 1
     bg_sync_active_backend_pid_legacy
     bg_drain_worker_scheduler || return 1
-    record_deploy_release_metadata || return 1
     log_ok "开发环境蓝绿 update 完成 (active=${inactive}, API 入口 :${BACKEND_PORT})"
 }
 

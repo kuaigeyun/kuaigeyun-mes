@@ -18,6 +18,7 @@ from loguru import logger
 from infra.config.infra_config import infra_settings
 from infra.constants.official_provenance import (
     OFFICIAL_GITEE_REPO_SLUG,
+    OFFICIAL_GITHUB_REPO_SLUG,
     OFFICIAL_SITE,
     TELEMETRY_DISCLOSURE_PATH,
     is_official_git_remote,
@@ -36,6 +37,7 @@ ProvenanceStatus = Literal[
 ]
 
 GITEE_COMMIT_API = f"https://gitee.com/api/v5/repos/{OFFICIAL_GITEE_REPO_SLUG}/commits"
+GITHUB_COMMIT_API = f"https://api.github.com/repos/{OFFICIAL_GITHUB_REPO_SLUG}/commits"
 
 
 def _normalize_to_iso_utc(raw: str) -> str:
@@ -183,12 +185,47 @@ async def _gitee_commit_exists(sha: str) -> Optional[bool]:
         return None
 
 
+async def _github_commit_exists(sha: str) -> Optional[bool]:
+    """返回 True=存在，False=不存在，None=无法判定（超时/网络）。"""
+    if not sha:
+        return None
+    url = f"{GITHUB_COMMIT_API}/{sha}"
+    try:
+        resp = await get_http_client().get(
+            url,
+            timeout=5.0,
+            headers={"Accept": "application/vnd.github+json"},
+        )
+        if resp.status_code == 200:
+            return True
+        if resp.status_code == 404:
+            return False
+        logger.warning("GitHub commit 校验异常状态码: {} sha={}", resp.status_code, sha)
+        return None
+    except Exception as exc:
+        logger.warning("GitHub commit 校验失败: {} sha={}", exc, sha)
+        return None
+
+
+async def _official_commit_exists(sha: str) -> Optional[bool]:
+    """在官方 Gitee / GitHub 仓库中校验 commit 是否存在。"""
+    gitee = await _gitee_commit_exists(sha)
+    if gitee is True:
+        return True
+    github = await _github_commit_exists(sha)
+    if github is True:
+        return True
+    if gitee is False and github is False:
+        return False
+    return None
+
+
 async def resolve_provenance_status(*, git_commit: str) -> ProvenanceStatus:
     if not git_commit:
         return "unverified_build"
     if not infra_settings.OFFICIAL_PROVENANCE_ENABLED:
         return "unknown"
-    exists = await _gitee_commit_exists(git_commit)
+    exists = await _official_commit_exists(git_commit)
     if exists is True:
         return "official_self_hosted"
     if exists is False:

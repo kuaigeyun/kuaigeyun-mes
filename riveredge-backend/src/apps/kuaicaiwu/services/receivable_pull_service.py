@@ -11,6 +11,7 @@ from tortoise.queryset import Q
 
 from apps.common.base_service import AppBaseService
 from apps.kuaicaiwu.models.receivable import Receivable
+from apps.kuaicaiwu.services.finance_service import derive_invoice_amount_status
 from apps.kuaizhizao.models.document_relation import DocumentRelation
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 
@@ -580,5 +581,15 @@ class ReceivablePullService(AppBaseService[Receivable]):
                 "reason": reason,
             }
             payload["capabilities"] = existing_caps
+            invoiced, remaining_inv, inv_status = derive_invoice_amount_status(
+                pushed_map.get(rid, Decimal("0")),
+                Decimal(str(payload.get("total_amount") or 0)),
+                status_none="未开票",
+                status_partial="部分开票",
+                status_full="已开票",
+            )
+            payload["invoiced_amount"] = invoiced
+            payload["remaining_invoice_amount"] = remaining_inv
+            payload["invoice_status"] = inv_status
             enriched.append(payload)
         return enriched

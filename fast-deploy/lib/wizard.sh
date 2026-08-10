@@ -1679,6 +1679,8 @@ wizard_update_app() {
     source "$PROJECT_ROOT/fast-deploy/lib/common.sh"
     load_deploy_env
 
+    wizard_run_deploy_step release_meta_pull "对齐发版 commit/remote（写入 .env）" "$log" record_deploy_release_metadata || return 1
+
     # 与 deploy.sh update 共用 run_update_*（SKIP_GIT_SYNC：上面已 pull）
     if [ "$DEPLOY_MODE" = "prod" ]; then
         SKIP_GIT_SYNC=1 wizard_run_deploy_step update \
@@ -1687,6 +1689,8 @@ wizard_update_app() {
         SKIP_GIT_SYNC=1 wizard_run_deploy_step update \
             "迁移 → 启动（同 deploy.sh update，不含扩展/H5）" "$log" run_update_dev || return 1
     fi
+
+    wizard_run_deploy_step release_meta_final "确认发版信息与运行 commit 一致" "$log" record_deploy_release_metadata || return 1
 }
 
 wizard_show_summary() {
@@ -1721,6 +1725,15 @@ wizard_show_summary() {
     wizard_panel_kv "Database" "$(read_env_value DB_USER || echo postgres)@${db_host}:${db_port}/${db_name}"
     wizard_panel_kv "Admin" "$(read_env_value PLATFORM_SUPERADMIN_USERNAME || echo infra_admin)"
     wizard_panel_kv "BlueGreen" "$(blue_green_deploy_status_label)"
+    local deploy_sha deploy_time
+    deploy_sha="$(read_env_value GIT_SHA 2>/dev/null || true)"
+    deploy_time="$(read_env_value PLATFORM_BUILD_TIME 2>/dev/null || true)"
+    if [ -n "$deploy_sha" ]; then
+        wizard_panel_kv "Release commit" "${deploy_sha}"
+    fi
+    if [ -n "$deploy_time" ]; then
+        wizard_panel_kv "Release time" "${deploy_time}"
+    fi
     wizard_panel_mid
     wizard_panel_section "COMMANDS 常用命令"
     wizard_panel_line "${WIZARD_DIM}./fast-deploy/deploy.sh status${WIZARD_RESET}  查看状态"

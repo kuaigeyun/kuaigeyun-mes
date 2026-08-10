@@ -16,6 +16,9 @@ export interface Receivable {
     business_date: string;
     invoice_issued: boolean;
     invoice_number?: string;
+    invoiced_amount?: number;
+    remaining_invoice_amount?: number;
+    invoice_status?: string;
     reviewer_id?: number;
     reviewer_name?: string;
     review_time?: string;
@@ -26,7 +29,10 @@ export interface Receivable {
   updated_at: string;
   created_by_name?: string;
   updated_by_name?: string;
-  capabilities?: { push_receipt?: { allowed?: boolean; reason?: string } };
+  capabilities?: {
+    push_receipt?: { allowed?: boolean; reason?: string };
+    push_sales_invoice?: { allowed?: boolean; reason?: string };
+  };
 }
 
 export interface ReceivableListParams {
