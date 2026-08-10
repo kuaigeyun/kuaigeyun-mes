@@ -247,6 +247,44 @@ export type WorkOrderReadinessPopoverProps = {
   children: React.ReactNode
 }
 
+export type WorkOrderReadinessModalProps = {
+  open: boolean
+  onClose: () => void
+  workOrderId: number
+  workOrderCode?: string
+  /**
+   * 用户操作改变齐套后回调（确认领料等）。
+   * 勿在「仅打开查看」时触发列表 reload，否则表格单元格卸载会导致弹窗被关掉。
+   */
+  onReadinessSynced?: () => void
+}
+
+/** 列表单元格触发器：仅负责打开，Modal 须挂在表格外（页面级） */
+export const WorkOrderReadinessTrigger: React.FC<{
+  onOpen: () => void
+  children: React.ReactNode
+}> = ({ onOpen, children }) => (
+  <span
+    role="button"
+    tabIndex={0}
+    className="wo-readiness-trigger"
+    onClick={(e) => {
+      stopRowToggle(e)
+      onOpen()
+    }}
+    onMouseDown={stopRowToggle}
+    onKeyDown={(e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()
+        e.stopPropagation()
+        onOpen()
+      }
+    }}
+  >
+    {children}
+  </span>
+)
+
 /** 发起叫料：独立 Modal，与主面板同级挂载 */
 const WorkOrderMaterialCallModal: React.FC<{
   open: boolean
@@ -583,15 +621,15 @@ const WorkOrderReadinessPopoverContent: React.FC<{
     staleTime: 0,
   })
 
+  // 打开查看时后端可能已写回齐套率：只标记列表缓存过期，不在此触发 reload。
+  // 立刻 reload 会重挂载表格单元格，把挂在单元格内的 Modal 卸掉（用户感知为「自动关闭/点不开」）。
   useEffect(() => {
     if (!kittingData) return
-    // UniTable 缓存键以 uniTable 开头；仅 invalidate 不够，须由列表页 reload
     void queryClient.invalidateQueries({
       queryKey: ['uniTable', 'kuaizhizao', 'work-orders', 'list'],
       exact: false,
     })
-    onReadinessSynced?.()
-  }, [kittingData, queryClient, onReadinessSynced])
+  }, [kittingData, queryClient])
 
   const { data: calls, isLoading: callsLoading } = useQuery({
     queryKey: ['materialCallsByWorkOrder', workOrderId],
@@ -1585,15 +1623,21 @@ const WorkOrderReadinessPopoverContent: React.FC<{
   )
 }
 
-export const WorkOrderReadinessPopover: React.FC<WorkOrderReadinessPopoverProps> = ({
+/** 页面级齐套 Modal（须挂在 UniTable 外，避免列表 softReload 卸载关闭） */
+export const WorkOrderReadinessModal: React.FC<WorkOrderReadinessModalProps> = ({
+  open,
+  onClose,
   workOrderId,
   workOrderCode,
   onReadinessSynced,
-  children,
 }) => {
   const { t } = useTranslation()
-  const [mainModalOpen, setMainModalOpen] = useState(false)
   const [callModalOpen, setCallModalOpen] = useState(false)
+
+  const handleCloseMain = useCallback(() => {
+    setCallModalOpen(false)
+    onClose()
+  }, [onClose])
 
   const handleCloseCallModal = useCallback(() => {
     setCallModalOpen(false)
@@ -1601,32 +1645,10 @@ export const WorkOrderReadinessPopover: React.FC<WorkOrderReadinessPopoverProps>
 
   return (
     <>
-      <span
-        role="button"
-        tabIndex={0}
-        className="wo-readiness-trigger"
-        onClick={(e) => {
-          stopRowToggle(e)
-          setMainModalOpen(true)
-        }}
-        onMouseDown={stopRowToggle}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            e.stopPropagation()
-            setMainModalOpen(true)
-          }
-        }}
-      >
-        {children}
-      </span>
       <Modal
         title={t('app.kuaizhizao.workOrder.modalWarehouseAndCall')}
-        open={mainModalOpen}
-        onCancel={() => {
-          setMainModalOpen(false)
-          setCallModalOpen(false)
-        }}
+        open={open}
+        onCancel={handleCloseMain}
         footer={null}
         width={960}
         destroyOnHidden
@@ -1637,11 +1659,11 @@ export const WorkOrderReadinessPopover: React.FC<WorkOrderReadinessPopoverProps>
         maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
         wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
       >
-        {mainModalOpen ? (
+        {open ? (
           <WorkOrderReadinessPopoverContent
             workOrderId={workOrderId}
             setCallModalOpen={setCallModalOpen}
-            onCloseMain={() => setMainModalOpen(false)}
+            onCloseMain={handleCloseMain}
             onReadinessSynced={onReadinessSynced}
           />
         ) : null}
@@ -1654,6 +1676,28 @@ export const WorkOrderReadinessPopover: React.FC<WorkOrderReadinessPopoverProps>
           workOrderCode={workOrderCode}
         />
       )}
+    </>
+  )
+}
+
+/** @deprecated 弹窗状态勿再挂在表格单元格内；请用 Trigger + 页面级 Modal */
+export const WorkOrderReadinessPopover: React.FC<WorkOrderReadinessPopoverProps> = ({
+  workOrderId,
+  workOrderCode,
+  onReadinessSynced,
+  children,
+}) => {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <WorkOrderReadinessTrigger onOpen={() => setOpen(true)}>{children}</WorkOrderReadinessTrigger>
+      <WorkOrderReadinessModal
+        open={open}
+        onClose={() => setOpen(false)}
+        workOrderId={workOrderId}
+        workOrderCode={workOrderCode}
+        onReadinessSynced={onReadinessSynced}
+      />
     </>
   )
 }

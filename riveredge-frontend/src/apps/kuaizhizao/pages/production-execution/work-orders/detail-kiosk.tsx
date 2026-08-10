@@ -20,7 +20,8 @@ import {
     FormOutlined
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
-import { TouchScreenTemplate, TOUCH_SCREEN_CONFIG, HMI_DESIGN_TOKENS } from '../../../../../components/layout-templates';
+import { TOUCH_SCREEN_CONFIG, HMI_DESIGN_TOKENS } from '../../../../../components/layout-templates';
+import { TouchScreenTemplate } from '../../../../../components/layout-templates/hmi';
 import { touchButtonProps, touchQtyInputProps, TOUCH_INPUT_QTY_STYLE } from '../../../../../components/touch-terminal';
 import NumericKeypad from '../../../../../components/touch-keyboard/NumericKeypad';
 import { workOrderApi } from '../../../services/production';

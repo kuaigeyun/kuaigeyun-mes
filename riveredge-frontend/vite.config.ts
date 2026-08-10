@@ -258,7 +258,16 @@ export default defineConfig({
             if (id.includes('@mlightcad/libredwg-web')) return 'vendor-libredwg';
             if (id.includes('altium-toolkit') || id.includes('circuitjson-toolkit')) return 'vendor-altium';
             if (id.includes('echarts')) return 'vendor-echarts';
-            if (id.includes('xlsx') || id.includes('exceljs')) return 'vendor-xlsx';
+            // 仅匹配 sheetjs / exceljs 包路径；禁止 id.includes('xlsx') 宽匹配。
+            // 勿把 graphlib/dagre 强行打进独立 vendor：会把 CJS require 助手绑进该 chunk，
+            // 导致 debounce 等无关模块静态拉起整包图引擎（比不拆更差）。
+            // 全链路图靠 DocumentTrackingRelationsTabsBody 懒加载与列表首屏隔离。
+            if (
+              /\/node_modules\/xlsx([/]|$)/.test(norm) ||
+              /\/node_modules\/exceljs([/]|$)/.test(norm)
+            ) {
+              return 'vendor-xlsx';
+            }
             if (id.includes('html2canvas')) return 'vendor-html2canvas';
             if (id.includes('jspdf') || id.includes('pdf-lib') || id.includes('pdfjs-dist')) return 'vendor-pdf';
             if (id.includes('@svar-ui/react-gantt')) return 'vendor-gantt';

@@ -56,12 +56,12 @@ import { getMaterialUnitDisplayMapShared } from '../../../../../utils/materialUn
 import type { Material, MaterialCreate, MaterialUpdate, BOMHierarchyItem, MaterialUnits, BOMVersionCompareResult } from '../../../types/material';
 import type { ProcessRoute } from '../../../types/process';
 import {
-  CanvasPageTemplate,
   CANVAS_GRID_STYLE,
   PAGE_SPACING,
   SYSTEM_VIEWPORT_OFFSETS,
   getViewportHeightExpr,
 } from '../../../../../components/layout-templates';
+import { CanvasPageTemplate } from '../../../../../components/layout-templates/hmi';
 import { MaterialForm } from '../../../components/MaterialForm';
 import { DEFAULT_MATERIAL_BASE_UNIT } from '../../../constants/materialDefaults';
 import FabricationRawMaterialWizard from '../../../components/FabricationRawMaterialWizard';

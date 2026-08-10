@@ -11,7 +11,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { App, Card, Button, Space, Input, Alert, Spin, Form, Radio, InputNumber, Row, Col, Tag, Divider, Modal } from 'antd';
 import { QrcodeOutlined, ScanOutlined, CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined } from '@ant-design/icons';
-import { TouchScreenTemplate, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
+import { TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
+import { TouchScreenTemplate } from '../../../../../components/layout-templates/hmi';
 import { touchButtonProps, TouchChip } from '../../../../../components/touch-terminal';
 import { reportingApi, workOrderApi } from '../../../services/production';
 import { QRCodeScanner } from '../../../../../components/qrcode';

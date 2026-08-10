@@ -1,15 +1,20 @@
 /**
  * uni-detail 协作区：内嵌全链路图 + 节点点击后的关联单据简览（替代抽屉外左侧浮层）
+ *
+ * 全链路图与节点简览均懒加载，避免单据列表静态依赖 @ant-design/graphs / 各单据详情 API。
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
-import { Button, Space, theme } from 'antd';
+import React, { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { Button, Space, Spin, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { ReactNode } from 'react';
-import {
-  DocumentTrackingRelationsTabsBody,
-  TraceLinkedDocumentBrief,
-} from '../document-tracking-panel';
+import { DocumentTrackingRelationsTabsBody } from '../document-tracking-panel/DocumentTrackingRelationsTabsBody';
+
+const LazyTraceLinkedDocumentBrief = lazy(() =>
+  import('../document-tracking-panel/TraceLinkedDocumentBrief').then((m) => ({
+    default: m.TraceLinkedDocumentBrief,
+  })),
+);
 
 export interface TraceBriefDocument {
   document_type: string;
@@ -58,8 +63,10 @@ export const DetailDrawerInlineFullChain: React.FC<DetailDrawerInlineFullChainPr
       }
       setBriefDoc({ document_type: type, document_id: id });
     },
-    [documentType, selfDocumentId]
+    [documentType, selfDocumentId],
   );
+
+  if (!active) return null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
@@ -101,11 +108,19 @@ export const DetailDrawerInlineFullChain: React.FC<DetailDrawerInlineFullChainPr
           >
             {t('components.documentTrackingPanel.traceBriefTitle')}
           </div>
-          <TraceLinkedDocumentBrief
-            documentType={briefDoc.document_type}
-            documentId={briefDoc.document_id}
-            compactChrome
-          />
+          <Suspense
+            fallback={
+              <div style={{ padding: 16, textAlign: 'center' }}>
+                <Spin size="small" />
+              </div>
+            }
+          >
+            <LazyTraceLinkedDocumentBrief
+              documentType={briefDoc.document_type}
+              documentId={briefDoc.document_id}
+              compactChrome
+            />
+          </Suspense>
           <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
             <Space wrap>
               <Button size="small" onClick={() => setBriefDoc(null)}>

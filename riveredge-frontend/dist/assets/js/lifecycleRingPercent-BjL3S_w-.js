@@ -1,0 +1,1 @@
+function i(e){if(!e.length)return null;const t=e.findIndex(n=>n.status==="active");if(t>=0){const n=e[t];if(n.percent!=null&&Number.isFinite(Number(n.percent)))return Math.min(100,Math.max(0,Math.round(Number(n.percent))));const r=e.length;return r<=1?100:Math.min(100,Math.max(0,Math.round(t/(r-1)*100)))}return e.every(n=>n.status==="done")?100:null}export{i as d};

@@ -8,7 +8,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal, Form, Input, Select, InputNumber, Radio, Card, Space, App, Button } from 'antd';
 import { ApiOutlined, DatabaseOutlined } from '@ant-design/icons';
-import { WizardTemplate } from '../../../components/layout-templates';
+import { WizardTemplate } from '../../../components/layout-templates/hmi';
 import {
   createIntegrationConfig,
   testConnection,

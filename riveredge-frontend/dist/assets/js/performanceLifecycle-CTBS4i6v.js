@@ -1,1 +1,0 @@
-import{c as e}from"./createLifecycleResolver-20P6Fg6U.js";const c=e({stageDefs:[{key:"pending_calculation",label:"待计算"},{key:"calculated",label:"已计算"},{key:"confirmed",label:"已确认"}],nextStepSuggestionKeys:{}}),t=e({stageDefs:[{key:"active",label:"启用"},{key:"inactive",label:"停用"}],nextStepSuggestionKeys:{}});export{t as a,c as g};

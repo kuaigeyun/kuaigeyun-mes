@@ -11,7 +11,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, Button, Space, message, Spin, Empty, Tag } from 'antd';
 import { ZoomInOutlined, ZoomOutOutlined, ReloadOutlined, RotateLeftOutlined, RotateRightOutlined, DownloadOutlined, FullscreenOutlined } from '@ant-design/icons';
-import { TouchScreenTemplate, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
+import { TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
+import { TouchScreenTemplate } from '../../../../../components/layout-templates/hmi';
 import { useTouchScreen } from '../../../../../hooks/useTouchScreen';
 import { App } from 'antd';
 

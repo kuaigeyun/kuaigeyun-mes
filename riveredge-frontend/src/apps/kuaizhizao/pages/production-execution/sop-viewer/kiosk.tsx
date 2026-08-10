@@ -11,7 +11,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Space, Spin, Tag, Empty } from 'antd';
 import { LeftOutlined, RightOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
-import { TouchScreenTemplate } from '../../../../../components/layout-templates';
+import { TouchScreenTemplate } from '../../../../../components/layout-templates/hmi';
 import { sopApi } from '../../../../master-data/services/process';
 import { App } from 'antd';
 import type { SOP } from '../../../../master-data/types/process';

@@ -36,7 +36,7 @@ import {
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { DashboardTemplate } from '../../../components/layout-templates';
+import { DashboardTemplate } from '../../../components/layout-templates/hmi';
 import { PAGE_SPACING } from '../../../components/layout-templates/constants';
 import { QuickEntryGrid, type QuickEntryItem } from '../../../components/quick-entry/QuickEntryGrid';
 import {

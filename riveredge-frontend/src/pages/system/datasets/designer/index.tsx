@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { App, Button, Card, Tabs, Input, Table, Badge, Space, Spin, Form } from 'antd';
 import { SaveOutlined, CloseOutlined, PlayCircleOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
-import { CanvasPageTemplate } from '../../../../components/layout-templates';
+import { CanvasPageTemplate } from '../../../../components/layout-templates/hmi';
 import DatasetQueryBuilder from '../../../../components/dataset-query-builder/DatasetQueryBuilder';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import {

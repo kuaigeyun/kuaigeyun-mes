@@ -7,20 +7,6 @@ import { Descriptions, Empty, Spin, Table, Typography, Button, Space, Divider, t
 import type { ColumnsType } from 'antd/es/table';
 import { useRequest } from 'ahooks';
 import { useTranslation } from 'react-i18next';
-import { getQuotation } from '../../apps/kuaizhizao/services/quotation';
-import { getSalesOrder } from '../../apps/kuaizhizao/services/sales-order';
-import { getDemand } from '../../apps/kuaizhizao/services/demand';
-import { getDemandComputation } from '../../apps/kuaizhizao/services/demand-computation';
-import { workOrderApi } from '../../apps/kuaizhizao/services/production';
-import { getPurchaseOrder } from '../../apps/kuaizhizao/services/purchase';
-import { getPurchaseRequisition } from '../../apps/kuaizhizao/services/purchase-requisition';
-import { warehouseApi } from '../../apps/kuaizhizao/services/warehouse-execution';
-import { reportingApi } from '../../apps/kuaizhizao/services/reporting';
-import { apiRequest } from '../../services/api';
-import { receiptService } from '../../apps/kuaicaiwu/services/finance/receipt';
-import { receivableService } from '../../apps/kuaicaiwu/services/finance/receivable';
-import { payableService } from '../../apps/kuaicaiwu/services/finance/payable';
-import { purchaseInvoiceService } from '../../apps/kuaicaiwu/services/finance/purchase-invoice';
 import { AmountDisplay } from '../permission';
 import { formatQuantity } from '../../utils/format';
 import {
@@ -42,6 +28,70 @@ import { getDemandBusinessModeLabel } from '../../apps/kuaizhizao/utils/business
 import { getDemandTypeLabel } from '../../apps/kuaizhizao/utils/demandType';
 import type { TFunction } from 'i18next';
 import { getDemandComputationLifecycle } from '../../apps/kuaizhizao/utils/demandComputationLifecycle';
+
+/** 各单据详情 API 按需动态加载，避免列表页误伤该模块时顺带拉起全量 services */
+async function loadQuotation(...args: Parameters<typeof import('../../apps/kuaizhizao/services/quotation').getQuotation>) {
+  const { getQuotation } = await import('../../apps/kuaizhizao/services/quotation');
+  return getQuotation(...args);
+}
+async function loadSalesOrder(...args: Parameters<typeof import('../../apps/kuaizhizao/services/sales-order').getSalesOrder>) {
+  const { getSalesOrder } = await import('../../apps/kuaizhizao/services/sales-order');
+  return getSalesOrder(...args);
+}
+async function loadDemand(...args: Parameters<typeof import('../../apps/kuaizhizao/services/demand').getDemand>) {
+  const { getDemand } = await import('../../apps/kuaizhizao/services/demand');
+  return getDemand(...args);
+}
+async function loadDemandComputation(
+  ...args: Parameters<typeof import('../../apps/kuaizhizao/services/demand-computation').getDemandComputation>
+) {
+  const { getDemandComputation } = await import('../../apps/kuaizhizao/services/demand-computation');
+  return getDemandComputation(...args);
+}
+async function loadWorkOrderApi() {
+  const { workOrderApi } = await import('../../apps/kuaizhizao/services/production');
+  return workOrderApi;
+}
+async function loadPurchaseOrder(
+  ...args: Parameters<typeof import('../../apps/kuaizhizao/services/purchase').getPurchaseOrder>
+) {
+  const { getPurchaseOrder } = await import('../../apps/kuaizhizao/services/purchase');
+  return getPurchaseOrder(...args);
+}
+async function loadPurchaseRequisition(
+  ...args: Parameters<typeof import('../../apps/kuaizhizao/services/purchase-requisition').getPurchaseRequisition>
+) {
+  const { getPurchaseRequisition } = await import('../../apps/kuaizhizao/services/purchase-requisition');
+  return getPurchaseRequisition(...args);
+}
+async function loadWarehouseApi() {
+  const { warehouseApi } = await import('../../apps/kuaizhizao/services/warehouse-execution');
+  return warehouseApi;
+}
+async function loadReportingApi() {
+  const { reportingApi } = await import('../../apps/kuaizhizao/services/reporting');
+  return reportingApi;
+}
+async function loadApiRequest() {
+  const { apiRequest } = await import('../../services/api');
+  return apiRequest;
+}
+async function loadReceiptService() {
+  const { receiptService } = await import('../../apps/kuaicaiwu/services/finance/receipt');
+  return receiptService;
+}
+async function loadReceivableService() {
+  const { receivableService } = await import('../../apps/kuaicaiwu/services/finance/receivable');
+  return receivableService;
+}
+async function loadPayableService() {
+  const { payableService } = await import('../../apps/kuaicaiwu/services/finance/payable');
+  return payableService;
+}
+async function loadPurchaseInvoiceService() {
+  const { purchaseInvoiceService } = await import('../../apps/kuaicaiwu/services/finance/purchase-invoice');
+  return purchaseInvoiceService;
+}
 
 const { useToken } = theme;
 
@@ -117,7 +167,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
 
   switch (documentType) {
     case 'quotation': {
-      const q = await getQuotation(documentId, true);
+      const q = await loadQuotation(documentId, true);
       const basics: BriefModel['basics'] = [
         { key: 'code', label: '单据编号', value: dash(q.quotation_code) },
         { key: 'customer', label: '客户', value: dash(q.customer_name) },
@@ -164,7 +214,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
       return { basics, columns, rows };
     }
     case 'sales_order': {
-      const o = await getSalesOrder(documentId, true, false);
+      const o = await loadSalesOrder(documentId, true, false);
       const basics: BriefModel['basics'] = [
         { key: 'code', label: '单据编号', value: dash(o.order_code) },
         { key: 'customer', label: '客户', value: dash(o.customer_name) },
@@ -211,7 +261,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
       return { basics, columns, rows };
     }
     case 'demand': {
-      const d = await getDemand(documentId, true, false);
+      const d = await loadDemand(documentId, true, false);
       const basics: BriefModel['basics'] = [
         { key: 'code', label: '单据编号', value: dash(d.demand_code) },
         { key: 'type', label: '需求类型', value: dash(getDemandTypeLabel(d.demand_type)) },
@@ -258,7 +308,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
       return { basics, columns, rows };
     }
     case 'demand_computation': {
-      const c = await getDemandComputation(documentId, true);
+      const c = await loadDemandComputation(documentId, true);
       const basics: BriefModel['basics'] = [
         { key: 'code', label: '计算单号', value: dash(c.computation_code) },
         { key: 'demand', label: '需求', value: dash(c.demand_code) },
@@ -292,7 +342,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
       return { basics, columns, rows };
     }
     case 'work_order': {
-      const w = await workOrderApi.get(String(documentId));
+      const w = await (await loadWorkOrderApi()).get(String(documentId));
       const basics: BriefModel['basics'] = [
         { key: 'code', label: '工单号', value: dash(w.code) },
         { key: 'name', label: '名称', value: dash(w.name) },
@@ -322,7 +372,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
       return { basics, columns, rows };
     }
     case 'purchase_order': {
-      const p = await getPurchaseOrder(documentId);
+      const p = await loadPurchaseOrder(documentId);
       const basics: BriefModel['basics'] = [
         { key: 'code', label: '单据编号', value: dash(p.order_code) },
         { key: 'supplier', label: '供应商', value: dash(p.supplier_name) },
@@ -373,7 +423,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
       return { basics, columns, rows };
     }
     case 'purchase_requisition': {
-      const r = await getPurchaseRequisition(documentId);
+      const r = await loadPurchaseRequisition(documentId);
       const basics: BriefModel['basics'] = [
         { key: 'code', label: '申请单号', value: dash(r.requisition_code) },
         { key: 'name', label: '主题', value: dash(r.requisition_name) },
@@ -415,7 +465,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
       return { basics, columns, rows };
     }
     case 'production_picking': {
-      const p = (await warehouseApi.productionPicking.get(String(documentId))) as Record<string, unknown>;
+      const p = (await (await loadWarehouseApi()).productionPicking.get(String(documentId))) as Record<string, unknown>;
       const basics: BriefModel['basics'] = [
         { key: 'code', label: '领料单号', value: dash(p.picking_code) },
         { key: 'wo', label: '工单', value: dash(p.work_order_code) },
@@ -459,7 +509,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
       return { basics, columns, rows };
     }
     case 'finished_goods_receipt': {
-      const rec = (await warehouseApi.finishedGoodsReceipt.get(String(documentId))) as Record<string, unknown>;
+      const rec = (await (await loadWarehouseApi()).finishedGoodsReceipt.get(String(documentId))) as Record<string, unknown>;
       const basics: BriefModel['basics'] = [
         { key: 'code', label: '入库单号', value: dash(rec.receipt_code) },
         { key: 'wo', label: '工单', value: dash(rec.work_order_code) },
@@ -504,7 +554,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
       return { basics, columns, rows };
     }
     case 'semi_finished_goods_receipt': {
-      const rec = (await warehouseApi.semiFinishedGoodsReceipt.get(String(documentId))) as Record<string, unknown>;
+      const rec = (await (await loadWarehouseApi()).semiFinishedGoodsReceipt.get(String(documentId))) as Record<string, unknown>;
       const basics: BriefModel['basics'] = [
         { key: 'code', label: '入库单号', value: dash(rec.receipt_code) },
         { key: 'wo', label: '工单', value: dash(rec.work_order_code) },
@@ -549,7 +599,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
       return { basics, columns, rows };
     }
     case 'sales_delivery': {
-      const d = (await warehouseApi.salesDelivery.get(String(documentId))) as Record<string, unknown>;
+      const d = (await (await loadWarehouseApi()).salesDelivery.get(String(documentId))) as Record<string, unknown>;
       const basics: BriefModel['basics'] = [
         { key: 'code', label: '出库单号', value: dash(d.delivery_code) },
         { key: 'customer', label: '客户', value: dash(d.customer_name) },
@@ -603,7 +653,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
       return { basics, columns, rows };
     }
     case 'purchase_receipt': {
-      const pr = (await warehouseApi.purchaseReceipt.get(String(documentId))) as Record<string, unknown>;
+      const pr = (await (await loadWarehouseApi()).purchaseReceipt.get(String(documentId))) as Record<string, unknown>;
       const basics: BriefModel['basics'] = [
         { key: 'code', label: '入库单号', value: dash(pr.receipt_code) },
         { key: 'po', label: '采购订单', value: dash(pr.purchase_order_code) },
@@ -668,12 +718,12 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
       if (!Number.isFinite(woId) || woId <= 0) {
         throw new Error('unsupported:reporting_timeline');
       }
-      const wo = (await workOrderApi.get(String(woId))) as Record<string, unknown>;
+      const wo = (await (await loadWorkOrderApi()).get(String(woId))) as Record<string, unknown>;
       const woCode = String(wo.code ?? '').trim();
       if (!woCode) {
         throw new Error('unsupported:reporting_timeline');
       }
-      const rawList = await reportingApi.list({
+      const rawList = await (await loadReportingApi()).list({
         work_order_code: woCode,
         skip: 0,
         limit: 200,
@@ -729,7 +779,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
       return { basics, columns, rows };
     }
     case 'receivable': {
-      const ar = await receivableService.getReceivable(documentId);
+      const ar = await (await loadReceivableService()).getReceivable(documentId);
       const basics: BriefModel['basics'] = [
         { key: 'code', label: '应收单号', value: dash(ar.receivable_code) },
         { key: 'customer', label: '客户', value: dash(ar.customer_name) },
@@ -741,7 +791,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
       return { basics, columns: [], rows: [] };
     }
     case 'payable': {
-      const py = await payableService.getPayable(documentId);
+      const py = await (await loadPayableService()).getPayable(documentId);
       const basics: BriefModel['basics'] = [
         { key: 'code', label: '应付单号', value: dash(py.payable_code) },
         { key: 'supplier', label: '供应商', value: dash(py.supplier_name) },
@@ -753,6 +803,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
       return { basics, columns: [], rows: [] };
     }
     case 'sales_invoice': {
+      const apiRequest = await loadApiRequest();
       const inv = await apiRequest<Record<string, unknown>>(`/apps/kuaicaiwu/sales-invoices/${documentId}`, {
         method: 'GET',
       });
@@ -804,7 +855,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
       return { basics, columns, rows };
     }
     case 'receipt': {
-      const rc = await receiptService.getReceipt(documentId);
+      const rc = await (await loadReceiptService()).getReceipt(documentId);
       const basics: BriefModel['basics'] = [
         { key: 'code', label: '收款单号', value: dash(rc.receipt_code) },
         { key: 'customer', label: '客户', value: dash(rc.customer_name) },
@@ -830,7 +881,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
       return { basics, columns: [], rows: [] };
     }
     case 'purchase_invoice': {
-      const pi = await purchaseInvoiceService.get(documentId);
+      const pi = await (await loadPurchaseInvoiceService()).get(documentId);
       const basics: BriefModel['basics'] = [
         { key: 'code', label: '发票编码', value: dash(pi.invoice_code) },
         { key: 'po', label: '采购订单', value: dash(pi.purchase_order_code) },
@@ -848,6 +899,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
       return { basics, columns: [], rows: [] };
     }
     case 'payment': {
+      const apiRequest = await loadApiRequest();
       const pm = await apiRequest<Record<string, unknown>>(`/apps/kuaicaiwu/payments/${documentId}`, {
         method: 'GET',
       });
@@ -876,7 +928,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
       return { basics, columns: [], rows: [] };
     }
     case 'reporting_record': {
-      const r = (await reportingApi.get(String(documentId))) as Record<string, unknown>;
+      const r = (await (await loadReportingApi()).get(String(documentId))) as Record<string, unknown>;
       const oc = dash(r.operation_code);
       const on = dash(r.operation_name);
       const opDisplay =

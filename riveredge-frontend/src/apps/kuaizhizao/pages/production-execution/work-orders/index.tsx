@@ -236,8 +236,8 @@ const LazyWorkOrderPeerGroupCreateDetail = lazy(
 import { EMPTY_PEER_GROUP_ITEM } from './components/WorkOrderPeerGroupCreateDetail'
 import { buildOperationsForCreatePayload } from './workOrderCreateOperations'
 const LazyWorkOrderOperationsList = lazy(() => import('./components/WorkOrderDetailDndOperations'))
-const LazyWorkOrderReadinessPopover = lazy(() =>
-  import('./components/WorkOrderReadinessPopover').then((m) => ({ default: m.WorkOrderReadinessPopover })),
+const LazyWorkOrderReadinessModal = lazy(() =>
+  import('./components/WorkOrderReadinessPopover').then((m) => ({ default: m.WorkOrderReadinessModal })),
 )
 import { WorkOrderOperationStepsStrip } from './components/WorkOrderOperationStepsStrip'
 import { WorkOrderMaterialMovementsPanel } from './components/WorkOrderMaterialMovementsPanel'
@@ -1519,9 +1519,33 @@ const WorkOrdersPage: React.FC = () => {
 
   /** 定时/聚焦刷新时重算齐套率与下推进度；首屏与翻页保持轻量读库 */
   const workOrderListHeavyMetricsRef = useRef(false)
+  /** 齐套「库位与补料」Modal 打开中：禁止 softReload，避免表格重挂载把弹窗卸掉 */
+  const readinessModalOpenRef = useRef(false)
+  const [readinessModalTarget, setReadinessModalTarget] = useState<{
+    workOrderId: number
+    workOrderCode?: string
+  } | null>(null)
 
   /** 静默刷新列表：拉持久化/重算后的齐套率与下推进度（UniTable 无 useQuery 观察者，须 reload） */
   const softReloadWorkOrderList = useCallback(() => {
+    if (readinessModalOpenRef.current) return
+    workOrderListHeavyMetricsRef.current = true
+    void queryClient.invalidateQueries({
+      queryKey: [...WORK_ORDER_LIST_UNITABLE_QUERY_KEY],
+      exact: false,
+    })
+    actionRef.current?.reload?.()
+  }, [queryClient])
+
+  const openWorkOrderReadinessModal = useCallback((workOrderId: number, workOrderCode?: string) => {
+    readinessModalOpenRef.current = true
+    setReadinessModalTarget({ workOrderId, workOrderCode })
+  }, [])
+
+  const closeWorkOrderReadinessModal = useCallback(() => {
+    readinessModalOpenRef.current = false
+    setReadinessModalTarget(null)
+    // 关闭后再拉一次列表，刷新圆环（打开查看时后端可能已写回齐套率）
     workOrderListHeavyMetricsRef.current = true
     void queryClient.invalidateQueries({
       queryKey: [...WORK_ORDER_LIST_UNITABLE_QUERY_KEY],
@@ -6838,15 +6862,25 @@ const WorkOrdersPage: React.FC = () => {
         }
         if (wid == null) return inner
         return (
-          <Suspense fallback={inner}>
-            <LazyWorkOrderReadinessPopover
-              workOrderId={wid}
-              workOrderCode={record.code}
-              onReadinessSynced={softReloadWorkOrderList}
-            >
-              {inner}
-            </LazyWorkOrderReadinessPopover>
-          </Suspense>
+          <span
+            role="button"
+            tabIndex={0}
+            className="wo-readiness-trigger"
+            onClick={(e) => {
+              e.stopPropagation()
+              openWorkOrderReadinessModal(wid, record.code)
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                e.stopPropagation()
+                openWorkOrderReadinessModal(wid, record.code)
+              }
+            }}
+          >
+            {inner}
+          </span>
         )
       },
       fieldProps: {
@@ -7311,7 +7345,7 @@ const WorkOrdersPage: React.FC = () => {
     workOrderCustomFieldColumns,
     workOrderLifecycleValueEnum,
     WORK_ORDER_LIST_COLUMNS_REV,
-    softReloadWorkOrderList,
+    openWorkOrderReadinessModal,
     workOrderPerms,
     workOrderAuditEnabled,
     workOrderAuditColumn,
@@ -7729,6 +7763,18 @@ const WorkOrdersPage: React.FC = () => {
           }}
         />
       </ListPageTemplate>
+
+      {readinessModalTarget ? (
+        <Suspense fallback={null}>
+          <LazyWorkOrderReadinessModal
+            open
+            onClose={closeWorkOrderReadinessModal}
+            workOrderId={readinessModalTarget.workOrderId}
+            workOrderCode={readinessModalTarget.workOrderCode}
+            onReadinessSynced={softReloadWorkOrderList}
+          />
+        </Suspense>
+      ) : null}
 
       <UniPullQueryModal<PullDemandComputationCandidate>
         open={pullFromComputationQuery.open}

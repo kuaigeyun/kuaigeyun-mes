@@ -26,7 +26,8 @@ import {
   QrcodeOutlined,
 } from '@ant-design/icons';
 
-import { PremiumTerminalTemplate, HMI_DESIGN_TOKENS, HMI_LAYOUT, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
+import { HMI_DESIGN_TOKENS, HMI_LAYOUT, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
+import { PremiumTerminalTemplate } from '../../../../../components/layout-templates/hmi';
 import {
   touchButtonProps,
   touchCardProps,
