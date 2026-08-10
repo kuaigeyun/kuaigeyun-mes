@@ -1,0 +1,1 @@
+import{l as s,k as l}from"./main-pF_11P2m.js";function p(a,d){return d.map((e,i)=>{const r=e.dataIndex,n=r!=null?a[r]:void 0;let t=n;return e.valueType==="date"&&n&&(t=s(n)),e.valueType==="dateTime"&&n&&(t=l(n)),e.render&&a!=null&&(t=e.render(t,a,i)),{key:String(e.key??e.dataIndex??i),label:e.title,children:t??"-",span:e.span??1}})}export{p as b};

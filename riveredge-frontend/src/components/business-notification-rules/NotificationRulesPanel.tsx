@@ -739,8 +739,8 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
                   { title: t('pages.system.configCenter.notification.column.document'), dataIndex: 'document', width: 120 },
                   { title: t('pages.system.configCenter.notification.column.template'), dataIndex: 'template', width: 220 },
                   { title: t('pages.system.configCenter.notification.column.action'), dataIndex: 'action', width: 140 },
-                  { title: t('pages.system.configCenter.notification.column.channels'), dataIndex: 'channels', width: 180 },
-                  { title: t('pages.system.configCenter.notification.column.recipients'), dataIndex: 'recipients', width: 220 },
+                  { title: t('pages.system.configCenter.notification.column.channels'), dataIndex: 'channels', width: 180, ellipsis: true },
+                  { title: t('pages.system.configCenter.notification.column.recipients'), dataIndex: 'recipients', width: 220, ellipsis: true },
                   {
                     title: t('pages.system.configCenter.notification.column.status'),
                     dataIndex: 'enabled',

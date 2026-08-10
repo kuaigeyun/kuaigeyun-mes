@@ -4,6 +4,7 @@ import { rowActionKind } from '../../../../components/uni-action';
  */
 
 import React, { useRef, useState, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Space, Tag } from 'antd';
 import { PlayCircleOutlined } from '@ant-design/icons';
@@ -50,6 +51,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 const ChangeManagementPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
@@ -61,8 +63,11 @@ const ChangeManagementPage: React.FC = () => {
   const [rowsByUuid, setRowsByUuid] = useState<Record<string, UnifiedChangeRow>>({});
 
   const handleCreateBomChange = useCallback(() => {
-    window.open(buildBomChangeCreateUrl(), '_blank');
-  }, []);
+    navigate(buildBomChangeCreateUrl());
+  }, [navigate]);
+  const handleCreateRouteChange = useCallback(() => {
+    navigate(buildRouteChangeCreateUrl());
+  }, [navigate]);
   useNewShortcut(handleCreateBomChange);
 
   const fetchList = async (
@@ -362,7 +367,7 @@ const ChangeManagementPage: React.FC = () => {
         }}
         toolBarRender={() => [
           <Space key="create">
-            <Button onClick={() => window.open(buildRouteChangeCreateUrl(), '_blank')}>
+            <Button onClick={handleCreateRouteChange}>
               {t('app.kuaiplm.change.createRouteButton')}
             </Button>
           </Space>,

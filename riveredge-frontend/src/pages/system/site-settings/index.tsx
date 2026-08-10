@@ -1791,12 +1791,12 @@ const SiteSettingsPage: React.FC = () => {
         onTabChange={setActiveTabKey}
         tabs={[
           { key: 'basic', label: (<Space><InfoCircleOutlined /><span>{t('pages.system.siteSettings.tabBasic')}</span></Space>), children: basicInfoWithActions },
-          ...(showLoginPageTab
-            ? [{ key: 'login-page', label: (<Space><GlobalOutlined /><span>{t('pages.system.siteSettings.tabLoginPage')}</span></Space>), children: loginPageSettingsWithActions }]
-            : []),
           { key: 'system', label: (<Space><SettingOutlined /><span>{t('pages.system.siteSettings.tabSystem')}</span></Space>), children: systemSettingsWithActions },
           ...(showBranchOrganizationsTab
             ? [{ key: 'branch-organizations', label: (<Space><ApartmentOutlined /><span>{t('pages.system.siteSettings.tabBranchOrganizations')}</span></Space>), children: branchOrganizationsTabContent }]
+            : []),
+          ...(showLoginPageTab
+            ? [{ key: 'login-page', label: (<Space><GlobalOutlined /><span>{t('pages.system.siteSettings.tabLoginPage')}</span></Space>), children: loginPageSettingsWithActions }]
             : []),
           { key: 'init-data', label: (<Space><CloudDownloadOutlined /><span>{t('pages.system.siteSettings.tabInitData')}</span></Space>), children: tenantInitTabContent },
         ]}

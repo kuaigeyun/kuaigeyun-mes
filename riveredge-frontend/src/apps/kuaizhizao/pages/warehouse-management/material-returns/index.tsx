@@ -11,7 +11,7 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Col, Descriptions, Form, InputNumber, Modal, Row, Space, Table, Tag, Typography } from 'antd';
+import { App, Button, Col, Descriptions, Form, InputNumber, Modal, Row, Table, Tag, Typography } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -485,26 +485,28 @@ const MaterialReturnsPage: React.FC = () => {
       },
       {
         title: t('app.kuaizhizao.warehouseMaterialReturn.col.actions'),
-        width: 220,
+        valueType: 'option',
         fixed: 'right',
+        hideInSearch: true,
+        uniActionRenderOptions: { directMax: 4 },
         render: (_, record) => {
-          return (
-            <Space size="small" wrap>
-              <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
-              {record.status === '待归还' && (
-                <>
-                  <Button
-                    {...rowActionKind('execute')}
-                    {...rowActionLabelKeep()}
-                    onClick={() => handleConfirm(record)}
-                  >
-                    {t('app.kuaizhizao.warehouseMaterialReturn.action.confirmInbound')}
-                  </Button>
-                  <Button {...rowActionKind('delete')} onClick={() => handleDelete(record)} />
-                </>
-              )}
-            </Space>
-          );
+          const actions: React.ReactNode[] = [
+            <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail(record)} />,
+          ];
+          if (record.status === '待归还') {
+            actions.push(
+              <Button
+                {...rowActionKind('execute')}
+                {...rowActionLabelKeep()}
+                key="confirm"
+                onClick={() => handleConfirm(record)}
+              >
+                {t('app.kuaizhizao.warehouseMaterialReturn.action.confirmInbound')}
+              </Button>,
+              <Button {...rowActionKind('delete')} key="delete" onClick={() => handleDelete(record)} />,
+            );
+          }
+          return actions;
         },
       },
     ], WAREHOUSE_DOC_LIST_FIELD_RANK),

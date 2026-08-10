@@ -14,7 +14,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormItem, ProFormDependency } from '@ant-design/pro-components';
 import { App, Alert, Button, Card, Col, Descriptions, Empty, InputNumber, Modal, Row, Spin, Table, Tag, Typography, message } from 'antd';
-import { EditOutlined, DeleteOutlined, FormOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, FormOutlined, PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
@@ -1329,6 +1329,7 @@ const ReworkOrdersPage: React.FC = () => {
             label={t('app.kuaizhizao.reworkOrder.createButton')}
             type="primary"
             variant="solid"
+            icon={<PlusOutlined />}
             menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
               {
                 actionKey: 'rework_order.pull_from_work_order',

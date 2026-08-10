@@ -6,7 +6,7 @@
 
 import React, { useMemo, useRef, useState } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
-import { App, Select } from 'antd';
+import { App, Select, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { warehouseApi } from '../../../services/production';
 import { UniTable } from '../../../../../components/uni-table';
@@ -67,16 +67,11 @@ const LineSideWarehousePage: React.FC = () => {
   const columns: ProColumns<LineSideInventoryItem>[] = useMemo(
     () => [
       {
-        title: t('app.kuaizhizao.lineSideWarehouse.colLineSideWarehouse'),
-        dataIndex: 'warehouse_name',
-        width: 140,
-        render: (_, record) => record.warehouse_name || '-',
-      },
-      {
         title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
         key: 'material_name',
         dataIndex: 'material_name',
         ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        fixed: 'left',
         render: (_, record) => (
           <MaterialStackedCell
             material_name={record.material_name}
@@ -93,16 +88,26 @@ const LineSideWarehousePage: React.FC = () => {
         hideInTable: true,
       },
       {
+        title: t('app.kuaizhizao.lineSideWarehouse.colLineSideWarehouse'),
+        dataIndex: 'warehouse_name',
+        width: 168,
+        ellipsis: true,
+        sorter: true,
+        render: (_, record) => record.warehouse_name || '-',
+      },
+      {
         title: t('app.kuaizhizao.batchInventoryQuery.colBatchNo'),
         dataIndex: 'batch_no',
-        width: 100,
+        width: 120,
+        ellipsis: true,
         sorter: true,
         render: (_, record) => record.batch_no || '-',
       },
       {
         title: t('app.kuaizhizao.warehouseReports.colStockQty'),
         dataIndex: 'quantity',
-        width: 100,
+        width: 96,
+        align: 'right',
         valueType: 'digit',
         sorter: true,
         render: (_, record) => (
@@ -114,26 +119,40 @@ const LineSideWarehousePage: React.FC = () => {
       {
         title: t('app.kuaizhizao.lineSideWarehouse.colReservedQty'),
         dataIndex: 'reserved_quantity',
-        width: 100,
-        render: (_, record) => `${record.reserved_quantity} ${record.material_unit || ''}`,
+        width: 96,
+        align: 'right',
+        sorter: true,
+        render: (_, record) => `${formatQuantity(record.reserved_quantity)} ${record.material_unit || ''}`,
       },
       {
         title: t('app.kuaizhizao.lineSideWarehouse.colAvailableQty'),
-        width: 100,
+        key: 'available_quantity',
+        width: 96,
+        align: 'right',
         render: (_, record) => {
           const avail = Number(record.quantity) - Number(record.reserved_quantity);
           return (
             <span style={{ color: avail <= 0 ? '#ff4d4f' : '#52c41a' }}>
-              {avail} {record.material_unit || ''}
+              {formatQuantity(avail)} {record.material_unit || ''}
             </span>
           );
         },
       },
       {
         title: t('app.kuaizhizao.lineSideWarehouse.colReservedWorkOrder'),
+        key: 'reserved_work_order_code',
         dataIndex: 'work_order_code',
-        width: 120,
-        render: (_, record) => record.work_order_code || '-',
+        width: 140,
+        ellipsis: true,
+        sorter: true,
+        render: (_, record) =>
+          record.work_order_code ? (
+            <Typography.Text copyable={{ text: String(record.work_order_code) }} ellipsis>
+              {record.work_order_code}
+            </Typography.Text>
+          ) : (
+            '-'
+          ),
       },
     ],
     [t]
