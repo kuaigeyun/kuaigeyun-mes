@@ -3648,47 +3648,29 @@ const SalesOrdersPage: React.FC = () => {
       </Row>
       <Row gutter={16}>
         <Col span={6}>
-          <ProForm.Item
-            name="prepayment_amount"
-            label={t('app.kuaizhizao.salesOrder.prepaymentAmount')}
-          >
-            <InputNumber min={0} precision={2} style={{ width: '100%' }} placeholder={t('app.kuaizhizao.salesOrder.prepaymentAmountPlaceholder')} />
-          </ProForm.Item>
-        </Col>
-        <Col span={12}>
-          <ProFormSelect
-            name="prepayment_bank_account_id"
-            label={t('app.kuaizhizao.salesOrder.prepaymentBankAccount')}
-            options={bankAccountOptions}
-            showSearch
-            allowClear
-            placeholder={t('app.kuaizhizao.salesOrder.prepaymentBankAccountPlaceholder')}
-          />
-        </Col>
-      </Row>
-      <Row gutter={16}>
-        <Col span={4}>
           <ProFormText
             name="customer_contact"
             label={salesCommonFormLabels.contact}
             placeholder={t('app.kuaizhizao.salesOrder.contactPlaceholder')}
           />
         </Col>
-        <Col span={4}>
+        <Col span={6}>
           <ProFormText
             name="customer_phone"
             label={salesCommonFormLabels.phone}
             placeholder={t('app.kuaizhizao.salesOrder.phonePlaceholder')}
           />
         </Col>
-        <Col span={8}>
+        <Col span={12}>
           <ProFormText
             name="shipping_address"
             label={t('app.kuaizhizao.salesOrder.shippingAddress')}
             placeholder={t('app.kuaizhizao.salesOrder.shippingAddressPlaceholder')}
           />
         </Col>
-        <Col span={4}>
+      </Row>
+      <Row gutter={16}>
+        <Col span={6}>
           <DictionarySelect
             dictionaryCode="PAYMENT_TERMS"
             name="payment_terms"
@@ -3698,7 +3680,25 @@ const SalesOrdersPage: React.FC = () => {
             valueEqualsLabel={false}
           />
         </Col>
-        <Col span={4}>
+        <Col span={6}>
+          <ProForm.Item
+            name="prepayment_amount"
+            label={t('app.kuaizhizao.salesOrder.prepaymentAmount')}
+          >
+            <InputNumber min={0} precision={2} style={{ width: '100%' }} placeholder={t('app.kuaizhizao.salesOrder.prepaymentAmountPlaceholder')} />
+          </ProForm.Item>
+        </Col>
+        <Col span={6}>
+          <ProFormSelect
+            name="prepayment_bank_account_id"
+            label={t('app.kuaizhizao.salesOrder.prepaymentBankAccount')}
+            options={bankAccountOptions}
+            showSearch
+            allowClear
+            placeholder={t('app.kuaizhizao.salesOrder.prepaymentBankAccountPlaceholder')}
+          />
+        </Col>
+        <Col span={6}>
           <DictionarySelect
             dictionaryCode="CURRENCY"
             name="currency_code"
