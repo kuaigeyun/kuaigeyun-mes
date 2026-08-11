@@ -20,9 +20,9 @@ class PurchaseInvoice(BaseModel):
     tenant_id = fields.IntField(description="租户ID")
     invoice_code = fields.CharField(max_length=50, db_index=True, description="发票编码")  # 租户内未删除唯一，见迁移 463
 
-    # 关联采购订单
-    purchase_order_id = fields.IntField(description="采购订单ID")
-    purchase_order_code = fields.CharField(max_length=50, description="采购订单编码")
+    # 关联采购订单（可选：从无 PO 的应付/手工进项开票时可空）
+    purchase_order_id = fields.IntField(null=True, description="采购订单ID")
+    purchase_order_code = fields.CharField(max_length=50, null=True, description="采购订单编码")
 
     # 供应商信息
     supplier_id = fields.IntField(description="供应商ID")

@@ -6794,6 +6794,8 @@ export default {
   'app.kuaizhizao.workOrder.colCompletionProgress': '完工進度',
   'app.kuaizhizao.workOrder.completionProgressTooltip': '{{percent}}%（按末道工序完成量）',
   'app.kuaizhizao.workOrder.colWorkshop': '車間',
+  'app.kuaizhizao.workOrder.colActualStart': '實際開始時間',
+  'app.kuaizhizao.workOrder.colActualEnd': '實際結束時間',
   'app.kuaizhizao.workOrder.detailKioskFeedTitle': '關鍵物料投料',
   'app.kuaizhizao.workOrder.detailKioskSopTab': '作業指導 SOP',
   'app.kuaizhizao.workOrder.emptyNoWip': '暫無在制工單',

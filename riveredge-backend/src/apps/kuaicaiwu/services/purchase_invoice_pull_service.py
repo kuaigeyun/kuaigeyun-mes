@@ -117,6 +117,8 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
                     continue
                 if int(inv.id) in related_target_ids:
                     continue
+                if inv.purchase_order_id is None:
+                    continue
                 sid = int(inv.purchase_order_id)
                 if sid in result:
                     result[sid] = result.get(sid, Decimal("0")) + Decimal(str(inv.total_amount or 0))
@@ -441,8 +443,6 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
         source_allowed = self._payable_source_allowed(payable)
         preview_items = await self._build_preview_items_for_payable(tenant_id, payable)
         po_id, po_code = await self._resolve_purchase_order_from_payable(tenant_id, payable)
-        if source_allowed and po_id is None:
-            source_allowed = False
         allowed, reason = self._derive_pull_capability(
             source_allowed=source_allowed,
             preview_items=preview_items,
@@ -450,9 +450,6 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
             no_lines_reason="purchase_invoice.pull_from_payable.no_lines",
             already_pulled_reason="purchase_invoice.pull_from_payable.already_pulled",
         )
-        if not po_id and preview_items:
-            allowed = False
-            reason = reason or "purchase_invoice.pull_from_payable.no_purchase_order"
         code = str(payable.payable_code or payable_id)
         pushable = float(preview_items[0]["max_push_quantity"]) if preview_items else 0.0
         return {
@@ -468,7 +465,10 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
             "items": preview_items,
             "has_blocking_issues": not allowed,
             "blocking_reason": reason,
-            "tip": "价税合计不可超过可开票金额；删除未审核进项发票后，可开票金额自动回退。",
+            "tip": (
+                "价税合计不可超过可开票金额；删除未审核进项发票后，可开票金额自动回退。"
+                + ("有关联采购订单时将一并挂接。" if po_id else "无采购订单时仅关联应付单。")
+            ),
             "supplier_id": payable.supplier_id,
             "supplier_name": payable.supplier_name,
             "payable_id": payable.id,
@@ -696,8 +696,6 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
         if preview.get("has_blocking_issues"):
             reason = preview.get("blocking_reason") or "当前不可加载进项发票"
             raise BusinessLogicError(reason)
-        if source_type == "payable" and not preview.get("purchase_order_id"):
-            raise BusinessLogicError("应付单未关联采购订单，无法加载进项发票")
         items = preview.get("items") or []
         if not items:
             raise BusinessLogicError("无可开票金额")

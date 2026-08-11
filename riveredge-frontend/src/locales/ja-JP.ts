@@ -6859,6 +6859,8 @@ export default {
   'app.kuaizhizao.workOrder.colCompletionProgress': '完工進捗',
   'app.kuaizhizao.workOrder.completionProgressTooltip': '{{percent}}%（最終工程の完了数量）',
   'app.kuaizhizao.workOrder.colWorkshop': '製造課',
+  'app.kuaizhizao.workOrder.colActualStart': '実際の開始時間',
+  'app.kuaizhizao.workOrder.colActualEnd': '実際の終了時間',
   'app.kuaizhizao.workOrder.detailKioskFeedTitle': 'キーマテリアルフィード',
   'app.kuaizhizao.workOrder.detailKioskSopTab': '製造指示（SOP）',
   'app.kuaizhizao.workOrder.emptyNoWip': 'WIP 製造指示はありません',

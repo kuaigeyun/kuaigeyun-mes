@@ -553,9 +553,6 @@ class PayablePullService(AppBaseService[Payable]):
         pushed_map = await purchase_invoice_pull._sum_pushed_totals_by_payable(
             tenant_id, payable_ids, code_by_id
         )
-        po_by_payable = await purchase_invoice_pull._resolve_purchase_orders_from_payables(
-            tenant_id, payables
-        )
 
         enriched: List[Dict[str, Any]] = []
         for row in payables:
@@ -566,9 +563,7 @@ class PayablePullService(AppBaseService[Payable]):
                 pushed=pushed_map.get(pid, Decimal("0")),
             )
             source_allowed = purchase_invoice_pull._payable_source_allowed(row)
-            po_id, _ = po_by_payable.get(pid, (None, None))
-            if source_allowed and po_id is None:
-                source_allowed = False
+            # 有 PO 时预览会带上订单；无 PO（委外/手工等）仍允许开进项，挂应付即可
             allowed, reason = purchase_invoice_pull._derive_pull_capability(
                 source_allowed=source_allowed,
                 preview_items=preview_items,
@@ -576,9 +571,6 @@ class PayablePullService(AppBaseService[Payable]):
                 no_lines_reason="purchase_invoice.pull_from_payable.no_lines",
                 already_pulled_reason="purchase_invoice.pull_from_payable.already_pulled",
             )
-            if not po_id and preview_items:
-                allowed = False
-                reason = reason or "purchase_invoice.pull_from_payable.no_purchase_order"
             payload = row.model_dump() if hasattr(row, "model_dump") else dict(row)
             existing_caps = dict(payload.get("capabilities") or {})
             existing_caps["push_purchase_invoice"] = {

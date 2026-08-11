@@ -2,8 +2,8 @@ export interface PurchaseInvoice {
     id: number;
     tenant_id: number;
     invoice_code: string;
-    purchase_order_id: number;
-    purchase_order_code: string;
+    purchase_order_id?: number | null;
+    purchase_order_code?: string | null;
     supplier_id: number;
     supplier_name: string;
     invoice_number: string;
@@ -52,8 +52,8 @@ export interface PurchaseInvoiceListParams {
 
 export interface PurchaseInvoiceCreateData {
     invoice_code?: string;
-    purchase_order_id?: number;
-    purchase_order_code?: string;
+    purchase_order_id?: number | null;
+    purchase_order_code?: string | null;
     supplier_id: number;
     supplier_name: string;
     invoice_number: string;
@@ -61,8 +61,8 @@ export interface PurchaseInvoiceCreateData {
     invoice_type: string;
     tax_rate: number;
     invoice_amount: number;
-    tax_amount: number;
-    total_amount: number;
+    tax_amount?: number;
+    total_amount?: number;
     status?: string;
     review_status?: string;
     payable_id?: number;

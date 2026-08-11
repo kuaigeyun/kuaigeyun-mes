@@ -7,7 +7,7 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography, Tag, Alert, Spin, Table, Empty, Form } from 'antd';
 import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { apiRequest } from '../../../../../services/api';
+import { apiRequest, formatApiErrorDetail } from '../../../../../services/api';
 import {
   purchaseInvoiceService,
   type PurchaseInvoicePullCandidate,
@@ -68,6 +68,15 @@ import type { PurchaseInvoiceListParams } from '../../../types/finance/purchase-
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const P = 'app.kuaicaiwu.purchaseInvoice';
+
+function resolveApiErrorMessage(error: unknown, fallback: string): string {
+  const err = error as { response?: { data?: { detail?: unknown } }; message?: string };
+  return (
+    formatApiErrorDetail(err?.response?.data?.detail)
+    || err?.message
+    || fallback
+  );
+}
 const PURCHASE_INVOICE_RESOURCE = 'kuaicaiwu:purchase-invoice';
 
 const TAX_RATE_OPTIONS = [
@@ -170,8 +179,8 @@ const PurchaseInvoiceList: React.FC = () => {
       setCreateModalVisible(false);
       actionRef.current?.reload();
       return true;
-    } catch (error: any) {
-      messageApi.error(error?.message || t(`${P}.registerFailed`));
+    } catch (error: unknown) {
+      messageApi.error(resolveApiErrorMessage(error, t(`${P}.registerFailed`)));
       return false;
     }
   };
@@ -361,6 +370,12 @@ const PurchaseInvoiceList: React.FC = () => {
         : pullPreviewKind === 'purchase_receipt'
           ? pullFromPurchaseReceiptAction.sourceLabel
           : pullFromPayableAction.sourceLabel;
+    const targetLabel =
+      pullPreviewKind === 'purchase_order'
+        ? pullFromPurchaseOrderAction.targetLabel
+        : pullPreviewKind === 'purchase_receipt'
+          ? pullFromPurchaseReceiptAction.targetLabel
+          : pullFromPayableAction.targetLabel;
     setPullSubmitting(true);
     try {
       await purchaseInvoiceService.create({
@@ -387,14 +402,12 @@ const PurchaseInvoiceList: React.FC = () => {
         review_status: '草稿',
         attachments: normalizeDocumentAttachments(values.attachments),
       });
-      messageApi.success(t(`${P}.pullCreateSuccess`, { target: pullFromPurchaseOrderAction.targetLabel }));
+      messageApi.success(t(`${P}.pullCreateSuccess`, { target: targetLabel }));
       resetPullPreview();
       actionRef.current?.reload();
       return true;
-    } catch (e: any) {
-      messageApi.error(
-        e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t('common.createFailed'),
-      );
+    } catch (e: unknown) {
+      messageApi.error(resolveApiErrorMessage(e, t('common.createFailed')));
       return false;
     } finally {
       setPullSubmitting(false);
@@ -669,12 +682,14 @@ const PurchaseInvoiceList: React.FC = () => {
       messageApi.warning(t(`${P}.pullNoInvoiceableAmount`));
       return;
     }
+    let values: Record<string, unknown>;
     try {
-      const values = await pullForm.validateFields();
-      await handlePullCreateSubmit(values);
+      values = await pullForm.validateFields();
     } catch {
       messageApi.warning(t(`${P}.pullFormValidationFailed`));
+      return;
     }
+    await handlePullCreateSubmit(values);
   };
 
   return (

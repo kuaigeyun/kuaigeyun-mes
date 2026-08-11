@@ -7,6 +7,9 @@ export const PURCHASE_INVOICE_CAPABILITY_REASON_MESSAGES: Record<string, string>
   'purchase_invoice.pull_from_purchase_receipt.not_allowed': '当前状态的采购入库单不可加载进项发票',
   'purchase_invoice.pull_from_purchase_receipt.no_lines': '采购入库单无可开票金额',
   'purchase_invoice.pull_from_purchase_receipt.already_pulled': '采购入库单可开票金额已全部开票，删除未审核发票后可再次加载',
+  'purchase_invoice.pull_from_payable.not_allowed': '当前状态的应付单不可加载进项发票',
+  'purchase_invoice.pull_from_payable.no_lines': '应付单无可开票金额',
+  'purchase_invoice.pull_from_payable.already_pulled': '应付单可开票金额已全部开票，删除未审核发票后可再次加载',
 };
 
 export function purchaseInvoiceCapabilityReasonMessage(

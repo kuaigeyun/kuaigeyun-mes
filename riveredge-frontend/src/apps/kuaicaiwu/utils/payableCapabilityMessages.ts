@@ -10,6 +10,9 @@ const FALLBACK: Record<string, string> = {
   'payment.pull_from_payable.not_allowed': '当前状态的应付单不可加载付款单',
   'payment.pull_from_payable.no_lines': '应付单无可付款金额',
   'payment.pull_from_payable.already_pulled': '应付单可付款金额已全部占用，作废未核销付款单后可再次加载',
+  'purchase_invoice.pull_from_payable.not_allowed': '当前状态的应付单不可加载进项发票',
+  'purchase_invoice.pull_from_payable.no_lines': '应付单无可开票金额',
+  'purchase_invoice.pull_from_payable.already_pulled': '应付单可开票金额已全部开票，删除未审核发票后可再次加载',
 };
 
 export const payableCapabilityReasonMessage = (reason: string | undefined | null, t: TFunction): string => {

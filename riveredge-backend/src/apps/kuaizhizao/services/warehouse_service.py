@@ -6631,7 +6631,21 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                             item_update["expiry_date"] = item_data.expiry_date
                         if item_data.manufacturing_date:
                             item_update["manufacturing_date"] = item_data.manufacturing_date
-                        
+                        if item_data.receipt_quantity is not None:
+                            qty = Decimal(str(item_data.receipt_quantity))
+                            if qty <= 0:
+                                raise BusinessLogicError("确认入库数量须大于 0")
+                            item_update["receipt_quantity"] = qty
+                            existing = await PurchaseReceiptItem.get_or_none(
+                                tenant_id=tenant_id, id=item_data.item_id, receipt_id=receipt_id
+                            )
+                            if existing is not None:
+                                unit_price = getattr(existing, "unit_price", None)
+                                if unit_price is not None:
+                                    item_update["total_amount"] = (
+                                        qty * Decimal(str(unit_price))
+                                    ).quantize(Decimal("0.01"))
+
                         if item_update:
                             await PurchaseReceiptItem.filter(
                                 tenant_id=tenant_id, id=item_data.item_id, receipt_id=receipt_id

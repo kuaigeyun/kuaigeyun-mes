@@ -62,6 +62,7 @@ import {
 import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentActionRegistry';
 import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
 import {formatDateBySiteSetting, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format';
+import { formatApiErrorDetail } from '../../../../../services/api';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import {
   DocumentPushProgressBar,
@@ -958,7 +959,9 @@ const InboundPage: React.FC = () => {
         pendingConfirmRecordRef.current = null;
         pendingConfirmHandoffRef.current = undefined;
         messageApi.error(
-          e?.message || e?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.iqc.ensureFailed'),
+          formatApiErrorDetail(e?.response?.data?.detail) ||
+            e?.message ||
+            t('app.kuaizhizao.warehouseInbound.iqc.ensureFailed'),
         );
       } finally {
         setIqcReviewLoading(false);
@@ -980,7 +983,9 @@ const InboundPage: React.FC = () => {
         pendingConfirmRecordRef.current = null;
         pendingConfirmHandoffRef.current = undefined;
         messageApi.error(
-          e?.message || e?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.fqc.ensureFailed'),
+          formatApiErrorDetail(e?.response?.data?.detail) ||
+            e?.message ||
+            t('app.kuaizhizao.warehouseInbound.fqc.ensureFailed'),
         );
       } finally {
         setFqcReviewLoading(false);
@@ -1002,7 +1007,9 @@ const InboundPage: React.FC = () => {
         pendingConfirmRecordRef.current = null;
         pendingConfirmHandoffRef.current = undefined;
         messageApi.error(
-          e?.message || e?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.fqc.ensureFailed'),
+          formatApiErrorDetail(e?.response?.data?.detail) ||
+            e?.message ||
+            t('app.kuaizhizao.warehouseInbound.fqc.ensureFailed'),
         );
       } finally {
         setFqcReviewLoading(false);
@@ -1212,50 +1219,33 @@ const InboundPage: React.FC = () => {
     setPurchaseConfirmPreviewSubmitting(true);
     try {
       if (order.receipt_type === 'purchase') {
-        await warehouseApi.purchaseReceipt.update(String(order.id), {
-          purchase_order_id: Number(order.purchase_order_id || 0),
-          purchase_order_code: order.purchase_order_code || '',
-          supplier_id: Number(order.supplier_id || 0),
-          supplier_name: order.supplier_name || '',
-          warehouse_id: headerWh > 0 ? headerWh : Number(order.warehouse_id || 0),
-          warehouse_name: headerWhName,
-          status: order.status || '草稿',
-          review_status: order.review_status || '待审核',
-          notes: order.notes || undefined,
-          attachments: normalizeDocumentAttachments(purchaseReceiptAttachments),
-          items: mappedItems,
-        });
-        // 后端 update 会全量删除并重建明细，明细 id 会变；确认入库须用最新 id，否则 confirm 内按 item_id 更新无法命中
-        const refreshed = await warehouseApi.purchaseReceipt.get(String(order.id));
-        const refItems = (refreshed as any)?.items || [];
-        const orderedSource = items.filter((it) => it.material_id != null);
-        if (refItems.length !== orderedSource.length) {
-          messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.lineCountMismatch'));
-          return;
-        }
-        if (refItems.some((it: any) => it?.id == null || !(Number(it.id) > 0))) {
+        // 确认入库仅需 inbound:execute；仓/库位/批号/序列号/实收数量均走 confirm，勿先 PUT update（需 update 权）
+        const confirmItems = items
+          .filter((it) => it.material_id != null && it.id != null && Number(it.id) > 0)
+          .map((src) => {
+            const rowId = Number(src.id);
+            const lineWh = purchaseConfirmLineWh[rowId];
+            const whOpt = purchaseConfirmWarehouseOptions.find((o) => o.value === lineWh);
+            const batchStr = (purchaseConfirmPreviewBatch[rowId] ?? '').trim();
+            const serialList = purchaseConfirmPreviewSerial[rowId];
+            const locId = purchaseConfirmLineLoc[rowId];
+            const locCode = purchaseConfirmLineLocCode[rowId];
+            const qty = Number(purchaseConfirmPreviewQty[rowId] ?? src.receipt_quantity ?? 0);
+            return {
+              item_id: rowId,
+              warehouse_id: lineWh,
+              warehouse_name: whOpt?.name ?? '',
+              location_id: locId != null && locId > 0 ? locId : undefined,
+              location_code: locCode || undefined,
+              batch_number: batchStr || undefined,
+              serial_numbers: serialList?.length ? serialList : undefined,
+              receipt_quantity: qty,
+            };
+          });
+        if (confirmItems.length !== mappedItems.length) {
           messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.lineIdAbnormal'));
           return;
         }
-        const confirmItems = orderedSource.map((src, idx) => {
-          const refIt = refItems[idx];
-          const rowId = Number(src.id);
-          const lineWh = purchaseConfirmLineWh[rowId];
-          const whOpt = purchaseConfirmWarehouseOptions.find((o) => o.value === lineWh);
-          const batchStr = (purchaseConfirmPreviewBatch[rowId] ?? '').trim();
-          const serialList = purchaseConfirmPreviewSerial[rowId];
-          const locId = purchaseConfirmLineLoc[rowId];
-          const locCode = purchaseConfirmLineLocCode[rowId];
-          return {
-            item_id: Number(refIt.id),
-            warehouse_id: lineWh,
-            warehouse_name: whOpt?.name ?? '',
-            location_id: locId != null && locId > 0 ? locId : undefined,
-            location_code: locCode || undefined,
-            batch_number: batchStr || undefined,
-            serial_numbers: serialList?.length ? serialList : undefined,
-          };
-        });
         await warehouseApi.purchaseReceipt.confirm(String(order.id), {
           warehouse_id: headerWh,
           warehouse_name: headerWhName,
@@ -1321,7 +1311,11 @@ const InboundPage: React.FC = () => {
       }
       setInboundTrackingRefreshKey((k) => k + 1);
     } catch (error: any) {
-      messageApi.error(error?.message || error?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.msg.confirmFailed'));
+      messageApi.error(
+        formatApiErrorDetail(error?.response?.data?.detail) ||
+          error?.message ||
+          t('app.kuaizhizao.warehouseInbound.msg.confirmFailed'),
+      );
       throw error;
     } finally {
       setPurchaseConfirmPreviewSubmitting(false);
@@ -1394,9 +1388,11 @@ const InboundPage: React.FC = () => {
       }
       setInboundTrackingRefreshKey((k) => k + 1);
     } catch (error: unknown) {
-      const err = error as { message?: string; response?: { data?: { detail?: string } } };
+      const err = error as { message?: string; response?: { data?: { detail?: unknown } } };
       messageApi.error(
-        err?.response?.data?.detail || err?.message || t('app.kuaizhizao.warehouseInbound.msg.confirmFailed'),
+        formatApiErrorDetail(err?.response?.data?.detail) ||
+          err?.message ||
+          t('app.kuaizhizao.warehouseInbound.msg.confirmFailed'),
       );
     } finally {
       setSimpleConfirmPreviewSubmitting(false);

@@ -548,6 +548,12 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 review_status="草稿",
                 **payload,
             )
+            if invoice_data.purchase_order_id:
+                event_source_type, event_source_id = "PurchaseOrder", invoice_data.purchase_order_id
+            elif invoice_data.payable_id:
+                event_source_type, event_source_id = "Payable", invoice_data.payable_id
+            else:
+                event_source_type, event_source_id = None, None
             await self.accounting_event_service.record_event(
                 tenant_id=tenant_id,
                 event_type="PURCHASE_INVOICE_CREATED",
@@ -558,8 +564,8 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 amount=invoice.total_amount,
                 currency="CNY",
                 operator_id=created_by,
-                source_doc_type="PurchaseOrder" if invoice_data.purchase_order_id else None,
-                source_doc_id=invoice_data.purchase_order_id,
+                source_doc_type=event_source_type,
+                source_doc_id=event_source_id,
                 payload={"status": invoice.status},
             )
             await self._maybe_auto_generate_payable_for_purchase_invoice(

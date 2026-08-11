@@ -6860,6 +6860,8 @@ export default {
   'app.kuaizhizao.workOrder.colCompletionProgress': 'Tiến độ hoàn thành',
   'app.kuaizhizao.workOrder.completionProgressTooltip': '{{percent}}% (theo công đoạn cuối)',
   'app.kuaizhizao.workOrder.colWorkshop': 'Xưởng',
+  'app.kuaizhizao.workOrder.colActualStart': 'Thời gian bắt đầu thực tế',
+  'app.kuaizhizao.workOrder.colActualEnd': 'Thời gian kết thúc thực tế',
   'app.kuaizhizao.workOrder.detailKioskFeedTitle': 'Nguồn cấp dữ liệu chính',
   'app.kuaizhizao.workOrder.detailKioskSopTab': 'Hướng dẫn công việc (SOP)',
   'app.kuaizhizao.workOrder.emptyNoWip': 'Không có lệnh sản xuất WIP',

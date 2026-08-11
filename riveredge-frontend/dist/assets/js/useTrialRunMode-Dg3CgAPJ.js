@@ -1,1 +1,0 @@
-import{c as r}from"./clearSessionQueries-DT4ZTdfo.js";import{i as s,g as u}from"./businessConfig-O0_nds8f.js";const i=["businessConfigTrialRunMode"];function o(){return r({queryKey:i,queryFn:u,staleTime:5*60*1e3})}function f(n=!1){const{data:e}=o();return e===void 0?n:s(e)}export{i as T,f as u};

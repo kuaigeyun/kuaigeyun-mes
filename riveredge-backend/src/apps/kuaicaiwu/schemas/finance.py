@@ -114,6 +114,12 @@ class PurchaseInvoiceBase(BaseSchema):
 class PurchaseInvoiceCreate(PurchaseInvoiceBase):
     """采购发票创建schema"""
 
+    tax_amount: Optional[Decimal] = Field(
+        None, ge=0, description="税额（服务端按未税金额×税率计算，入参可忽略）"
+    )
+    total_amount: Optional[Decimal] = Field(
+        None, ge=0, description="价税合计（服务端计算，入参可忽略）"
+    )
     source_type: Optional[str] = Field(None, description="加载源单类型 purchase_order|purchase_receipt|payable")
     source_id: Optional[int] = Field(None, description="加载源单ID")
 

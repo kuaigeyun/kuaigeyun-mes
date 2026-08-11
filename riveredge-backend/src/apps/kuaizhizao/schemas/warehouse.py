@@ -1611,7 +1611,7 @@ class MaterialPrepReminderResponse(BaseSchema):
 # === 入库确认通用 Schema ===
 
 class InboundConfirmationItem(BaseSchema):
-    """入库确认明细字段（支持在确认时补齐或修改批号/库位/仓库）"""
+    """入库确认明细字段（支持在确认时补齐或修改批号/库位/仓库/实收数量）"""
     item_id: int = Field(..., description="明细ID")
     warehouse_id: Optional[int] = Field(None, description="入库仓库ID")
     warehouse_name: Optional[str] = Field(None, description="入库仓库名称")
@@ -1621,6 +1621,9 @@ class InboundConfirmationItem(BaseSchema):
     serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
     expiry_date: Optional[datetime] = Field(None, description="到期日期")
     manufacturing_date: Optional[datetime] = Field(None, description="生产日期")
+    receipt_quantity: Optional[float] = Field(
+        None, gt=0, description="确认时实收数量（可选；具备执行权即可改，无需 update）"
+    )
 
 
 class InboundConfirmationRequest(BaseSchema):

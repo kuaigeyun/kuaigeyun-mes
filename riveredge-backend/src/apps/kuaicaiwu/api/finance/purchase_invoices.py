@@ -71,11 +71,19 @@ async def create_purchase_invoice(
                     data = data.model_copy(
                         update={
                             "purchase_order_id": int(po_id),
-                            "purchase_order_code": str(po_code or data.purchase_order_code or ""),
+                            "purchase_order_code": str(po_code or data.purchase_order_code or "") or None,
                             "supplier_id": int(pull_preview.get("supplier_id") or data.supplier_id),
                             "supplier_name": str(
                                 pull_preview.get("supplier_name") or data.supplier_name or ""
                             ),
+                        }
+                    )
+                elif not po_id and not data.purchase_order_id:
+                    # 无采购订单来源（委外/手工应付等）：显式置空，避免客户端脏值
+                    data = data.model_copy(
+                        update={
+                            "purchase_order_id": None,
+                            "purchase_order_code": None,
                         }
                     )
                 if str(data.source_type or "").strip() == "payable":

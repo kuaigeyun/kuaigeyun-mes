@@ -47,6 +47,22 @@ def test_revoke_conduct_maps_to_update() -> None:
     assert action == "update"
 
 
+def test_ensure_for_purchase_receipt_defaults_to_create_action() -> None:
+    """路径本身仍解析为 create；路由依赖另放行 inbound:execute（见 require_kuaizhizao_quality_execution_access）。"""
+    action = resolve_kuaizhizao_module_action(
+        "POST",
+        "/api/v1/apps/kuaizhizao/incoming-inspections/ensure-for-purchase-receipt/12",
+        module_code="quality-management-incoming-inspection",
+    )
+    assert action == "create"
+    assert (
+        resolve_kuaizhizao_quality_execution_module(
+            "/api/v1/apps/kuaizhizao/incoming-inspections/ensure-for-purchase-receipt/12"
+        )
+        == "quality-management-incoming-inspection"
+    )
+
+
 def test_quality_management_router_mounts_dashboard_routes() -> None:
     from apps.kuaizhizao.api.productions.quality_management import router as qm
 

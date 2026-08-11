@@ -201,12 +201,29 @@ def require_kuaizhizao_quality_execution_access(
             module_code=module_code,
             resolve_print=resolve_print,
         )
+        path_l = (request.url.path or "").lower()
+        method_u = (request.method or "").upper()
         if (
             collection_create_permissions
-            and (request.method or "").upper() == "POST"
+            and method_u == "POST"
             and action == "create"
         ):
             required = list(collection_create_permissions)
+        elif method_u == "POST" and "/ensure-for-" in path_l:
+            # 确认入库前门禁：质检侧可补单(create)，仓储执行(inbound:execute)亦可调用；
+            # 客供来料确认还可走客供登记 execute（与 Hub 确认入口一致）。
+            required = [
+                build_permission_code("kuaizhizao", module_code, "create"),
+                build_permission_code("kuaizhizao", "inbound", "execute"),
+            ]
+            if "customer-material-registration" in path_l:
+                required.append(
+                    build_permission_code(
+                        "kuaizhizao",
+                        "warehouse-management-customer-material-registration",
+                        "execute",
+                    )
+                )
         else:
             required = [build_permission_code("kuaizhizao", module_code, action)]
         await ensure_permission_codes(
@@ -389,6 +406,15 @@ def resolve_kuaizhizao_warehouse_execution_module(path: str) -> str:
     return "warehouse-management-inventory"
 
 
+# 入库 Hub 展示的单据：前端以 inbound:execute 门控「确认入库」，
+# 但 URL 映射到子模块且子模块可能未声明 :execute（如 other-inbound）。
+_INBOUND_HUB_CONFIRM_ACCEPT_INBOUND_EXECUTE = frozenset({
+    "other-inbound",
+    "sales-return",
+    "material-return",
+})
+
+
 def require_kuaizhizao_warehouse_execution_access(
     *,
     check_abac: bool = True,
@@ -400,6 +426,8 @@ def require_kuaizhizao_warehouse_execution_access(
         auth: AuthContext = Depends(get_auth_context),
         tenant_id: int = Depends(get_current_tenant),
     ) -> AuthContext:
+        path_l = (request.url.path or "").lower()
+        method_u = (request.method or "").upper()
         module_code = resolve_kuaizhizao_warehouse_execution_module(request.url.path)
         action = resolve_kuaizhizao_module_action(
             request.method,
@@ -409,19 +437,43 @@ def require_kuaizhizao_warehouse_execution_access(
         )
         if (
             collection_create_permissions
-            and (request.method or "").upper() == "POST"
+            and method_u == "POST"
             and action == "create"
         ):
             required = list(collection_create_permissions)
         elif (
-            (request.method or "").upper() == "POST"
-            and "/production-pickings/" in (request.url.path or "").lower()
-            and "/confirm" in (request.url.path or "").lower()
+            method_u == "POST"
+            and "/production-pickings/" in path_l
+            and "/confirm" in path_l
             and action == "execute"
         ):
             required = [
                 build_permission_code("kuaizhizao", "inbound", "execute"),
                 build_permission_code("kuaizhizao", "outbound", "execute"),
+            ]
+        elif (
+            method_u == "POST"
+            and "/confirm" in path_l
+            and module_code in _INBOUND_HUB_CONFIRM_ACCEPT_INBOUND_EXECUTE
+        ):
+            # Hub 确认入库：inbound:execute 与子模块 execute（若已声明）任一即可
+            required = [
+                build_permission_code("kuaizhizao", "inbound", "execute"),
+                build_permission_code("kuaizhizao", module_code, "execute"),
+            ]
+        elif (
+            method_u == "POST"
+            and "/inventory/customer-material-registration/" in path_l
+            and path_l.rstrip("/").endswith("/process")
+        ):
+            # Hub 客供确认入库：路径默认 create，与前端 inbound:execute 对齐
+            required = [
+                build_permission_code("kuaizhizao", "inbound", "execute"),
+                build_permission_code(
+                    "kuaizhizao",
+                    "warehouse-management-customer-material-registration",
+                    "execute",
+                ),
             ]
         else:
             required = [build_permission_code("kuaizhizao", module_code, action)]

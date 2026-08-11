@@ -7709,14 +7709,79 @@ const WorkOrdersPage: React.FC = () => {
                   (d: WorkOrder) => d.id != null && selectedIds.has(Number(d.id))
                 )
               }
+              items = items.filter(
+                (d: WorkOrder) => d.id != null && !isWorkOrderGroupListRow(d),
+              )
               if (items.length === 0) {
                 messageApi.warning(t('app.kuaizhizao.workOrder.msgExportNoData'))
                 return
               }
+              const productionModeLabel = (mode?: string | null) => {
+                if (mode === 'MTS') return t('app.kuaizhizao.workOrder.productionModeMTS')
+                if (mode === 'MTO') return t('app.kuaizhizao.workOrder.productionModeMTO')
+                return mode || ''
+              }
+              const manufacturingModeLabel = (mode?: string | null) => {
+                if (mode === 'fabrication') return t('app.kuaizhizao.workOrder.manufacturingModeFabrication')
+                if (mode === 'assembly') return t('app.kuaizhizao.workOrder.manufacturingModeAssembly')
+                return mode || ''
+              }
+              const priorityLabel = (priority?: string | null) => {
+                if (priority === 'low') return t('app.kuaizhizao.workOrder.priorityLow')
+                if (priority === 'normal') return t('app.kuaizhizao.workOrder.priorityNormal')
+                if (priority === 'high') return t('app.kuaizhizao.workOrder.priorityHigh')
+                if (priority === 'urgent') return t('app.kuaizhizao.workOrder.priorityUrgent')
+                return priority || ''
+              }
+              const exportColumns = [
+                { key: 'code', title: t('app.kuaizhizao.workOrder.colCode') },
+                { key: 'name', title: t('app.kuaizhizao.workOrder.colName') },
+                { key: 'product_code', title: t('app.kuaizhizao.workOrder.colProductCode') },
+                { key: 'product_name', title: t('app.kuaizhizao.workOrder.colProduct') },
+                { key: 'quantity', title: t('app.kuaizhizao.workOrder.colQuantity') },
+                { key: 'completed_quantity', title: t('app.kuaizhizao.workOrder.colCompletedQty') },
+                { key: 'qualified_quantity', title: t('app.kuaizhizao.workOrder.colQualifiedQty') },
+                { key: 'unqualified_quantity', title: t('app.kuaizhizao.workOrder.colUnqualifiedQty') },
+                { key: 'production_mode', title: t('app.kuaizhizao.workOrder.colProductionMode') },
+                { key: 'manufacturing_mode', title: t('app.kuaizhizao.workOrder.colManufacturingMode') },
+                { key: 'status', title: t('app.kuaizhizao.workOrder.colLifecycle') },
+                { key: 'priority', title: t('app.kuaizhizao.workOrder.colPriority') },
+                { key: 'readiness_rate', title: t('app.kuaizhizao.workOrder.colReadiness') },
+                { key: 'workshop_name', title: t('app.kuaizhizao.workOrder.colWorkshop') },
+                { key: 'sales_order_code', title: t('app.kuaizhizao.workOrder.colSalesOrder') },
+                { key: 'group_code', title: t('app.kuaizhizao.workOrder.colGroup') },
+                { key: 'effective_batch_no', title: t('app.kuaizhizao.workOrder.colBatchNo') },
+                { key: 'effective_serial_no', title: t('app.kuaizhizao.workOrder.colSerialNo') },
+                { key: 'planned_start_date', title: t('app.kuaizhizao.workOrder.colPlannedStart') },
+                { key: 'planned_end_date', title: t('app.kuaizhizao.workOrder.colPlannedEnd') },
+                { key: 'actual_start_date', title: t('app.kuaizhizao.workOrder.colActualStart') },
+                { key: 'actual_end_date', title: t('app.kuaizhizao.workOrder.colActualEnd') },
+                { key: 'created_at', title: t('app.kuaizhizao.workOrder.colCreatedAt') },
+                { key: 'updated_at', title: t('common.updatedAt') },
+                { key: 'remarks', title: t('app.kuaizhizao.workOrder.colRemarks') },
+              ]
+              const exportRows = items.map((row: WorkOrder) => {
+                const r = row as WorkOrder & Record<string, unknown>
+                return {
+                  ...r,
+                  status: translateWorkOrderLifecycleStatus(t, String(r.status ?? '')),
+                  production_mode: productionModeLabel(
+                    r.production_mode == null ? null : String(r.production_mode),
+                  ),
+                  manufacturing_mode: manufacturingModeLabel(
+                    r.manufacturing_mode == null ? null : String(r.manufacturing_mode),
+                  ),
+                  priority: priorityLabel(r.priority == null ? null : String(r.priority)),
+                }
+              })
               await downloadRecordsAsXlsx(
-                items as Array<Record<string, unknown>>,
+                exportRows as Array<Record<string, unknown>>,
                 `work-orders-${new Date().toISOString().slice(0, 10)}.xlsx`,
-              );
+                {
+                  columns: exportColumns,
+                  sheetName: t('app.kuaizhizao.workOrder.pageTitle'),
+                },
+              )
               messageApi.success(t('app.kuaizhizao.workOrder.msgExportSuccess', { count: items.length }))
             } catch (error: any) {
               messageApi.error(error?.message || t('app.kuaizhizao.workOrder.msgExportFailed'))

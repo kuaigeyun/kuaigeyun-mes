@@ -31,7 +31,6 @@ import {
   DOCUMENT_DETAIL_TEXT_COL,
   DocumentDetailTableStyles,
 } from './document-detail-table/documentDetailTable';
-import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
 import {
   AFTER_SALES_REQUEST_TYPES,
   AFTER_SALES_TICKET_STATUSES,
@@ -47,7 +46,8 @@ import {
 } from '../services/sales-order';
 import { customerApi, unwrapSupplyPagedList } from '../../master-data/services/supply-chain';
 import type { Customer } from '../../master-data/types/supply-chain';
-import { formatDateTime } from '../../../utils/format';
+import { formatApiErrorDetail } from '../../../services/api';
+import { formatDateTimeBySiteSetting } from '../../../utils/format';
 
 const getCustomerId = (c: any): number | null => {
   const id = Number(c?.id ?? c?.customer_id);
@@ -474,43 +474,47 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
     [t],
   );
 
-  const submit = async () => {
+  const handleFinish = async (v: Record<string, any>) => {
+    const customerId = Number(v.customer_id);
+    if (!Number.isFinite(customerId) || customerId <= 0) {
+      message.error(t('app.kuaizhizao.afterSalesTicket.customerRequired'));
+      throw new Error('customer_required');
+    }
+    const salesOrderId = Number(v.sales_order_id);
+    if (!Number.isFinite(salesOrderId) || salesOrderId <= 0) {
+      message.error(t('app.kuaizhizao.afterSalesTicket.selectSalesOrderFirst'));
+      throw new Error('sales_order_required');
+    }
+    const registeredRaw = v.registered_at?.toDate?.() ?? v.registered_at;
+    const registered = formatDateTimeBySiteSetting(registeredRaw, '');
+    if (!registered) {
+      message.error(t('common.required'));
+      throw new Error('registered_at_required');
+    }
+    const items = mapItemsPayload(v.items ?? []);
+    if (!items.length) {
+      message.error(t('common.itemsRequired'));
+      throw new Error('items_required');
+    }
+    if (items.some((it) => !it.sales_order_item_id)) {
+      message.error(t('app.kuaizhizao.afterSalesTicket.itemsMustFromSalesOrder'));
+      throw new Error('items_must_from_sales_order');
+    }
+    if (editing?.status === '已关闭') {
+      message.error(t('app.kuaizhizao.afterSalesTicket.closedCannotEdit'));
+      throw new Error('closed_cannot_edit');
+    }
+    const payload = {
+      request_type: v.request_type,
+      content: String(v.content ?? '').trim(),
+      registered_at: registered,
+      sales_order_id: salesOrderId,
+      resolution: v.resolution?.trim() || null,
+      status: v.status,
+      items,
+    };
     try {
-      const v = await form.validateFields();
-      const customerId = Number(v.customer_id);
-      if (!Number.isFinite(customerId) || customerId <= 0) {
-        message.error(t('app.kuaizhizao.afterSalesTicket.customerRequired'));
-        return;
-      }
-      const salesOrderId = Number(v.sales_order_id);
-      if (!Number.isFinite(salesOrderId) || salesOrderId <= 0) {
-        message.error(t('app.kuaizhizao.afterSalesTicket.selectSalesOrderFirst'));
-        return;
-      }
-      const registered = formatDateTime(v.registered_at?.toDate?.() ?? v.registered_at, 'YYYY-MM-DD HH:mm:ss');
-      const items = mapItemsPayload(v.items ?? []);
-      if (!items.length) {
-        message.error(t('common.itemsRequired'));
-        return;
-      }
-      if (items.some((it) => !it.sales_order_item_id)) {
-        message.error(t('app.kuaizhizao.afterSalesTicket.itemsMustFromSalesOrder'));
-        return;
-      }
-      const payload = {
-        request_type: v.request_type,
-        content: String(v.content ?? '').trim(),
-        registered_at: registered,
-        sales_order_id: salesOrderId,
-        resolution: v.resolution?.trim() || null,
-        status: v.status,
-        items,
-      };
       if (editing) {
-        if (editing.status === '已关闭') {
-          message.error(t('app.kuaizhizao.afterSalesTicket.closedCannotEdit'));
-          return;
-        }
         await afterSalesTicketApi.update(editing.id, payload);
         message.success(t('pages.system.siteSettings.saveSuccess'));
       } else {
@@ -524,15 +528,17 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
         });
         message.success(t('common.createSuccess'));
       }
-      onClose();
-      onSuccess?.();
     } catch (e: any) {
-      if (e?.errorFields) return;
-      message.error(e?.message || t('common.operationFailed'));
+      message.error(
+        formatApiErrorDetail(e?.response?.data?.detail) ||
+          e?.message ||
+          t('common.operationFailed'),
+      );
+      throw e;
     }
+    onClose();
+    onSuccess?.();
   };
-
-  useSubmitShortcut(submit, open);
 
   return (
     <>
@@ -543,11 +549,11 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
             : t('app.kuaizhizao.afterSalesTicket.createTitle')
         }
         open={open}
-        onCancel={onClose}
-        onOk={() => void submit()}
+        onClose={onClose}
+        onFinish={handleFinish}
+        isEdit={!!editing}
         width={MODAL_CONFIG.LARGE_WIDTH}
         form={form}
-        destroyOnClose
       >
         <Row gutter={16}>
           <Col xs={24} md={12}>
