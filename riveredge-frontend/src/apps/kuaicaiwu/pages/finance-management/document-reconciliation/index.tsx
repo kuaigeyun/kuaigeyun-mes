@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Card, DatePicker, Form, InputNumber, Select, Space, Steps, Tag, Alert } from 'antd';
+import { App, Button, Card, DatePicker, Form, Select, Space, Steps, Tag, Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { LinkOutlined, SearchOutlined } from '@ant-design/icons';
@@ -8,7 +8,11 @@ import dayjs from 'dayjs';
 import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
 import { apiRequest } from '../../../../../services/api';
-import { documentReconciliationService, type DocumentReconciliationGapItem } from '../../../services/finance/document-reconciliation';
+import {
+  documentReconciliationService,
+  type ChainDocumentCandidate,
+  type DocumentReconciliationGapItem,
+} from '../../../services/finance/document-reconciliation';
 import { formatSettlementType } from '../../../utils/financeUiLabels';
 import { documentReconciliationGapReasonMessage } from '../../../utils/documentReconciliationCapabilityMessages';
 import { formatQuantity } from '../../../../../utils/format';
@@ -80,6 +84,11 @@ const DocumentReconciliationPage: React.FC = () => {
   const [chainMeta, setChainMeta] = useState<{ completion_rate?: number; linked_count?: number; total_steps?: number }>({});
   const [gapSummary, setGapSummary] = useState<GapSummary>({});
   const [partnerOptions, setPartnerOptions] = useState<{ label: string; value: number }[]>([]);
+  const [chainDocOptions, setChainDocOptions] = useState<{ label: string; value: number }[]>([]);
+  const [chainDocSearching, setChainDocSearching] = useState(false);
+  const chainDocSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chainFlowType = Form.useWatch('flow_type', chainForm) as 'sales' | 'purchase' | undefined;
+  const chainDocumentType = Form.useWatch('document_type', chainForm) as string | undefined;
 
   const loadPartners = async (partnerType: 'Customer' | 'Supplier') => {
     const path = partnerType === 'Customer'
@@ -143,6 +152,8 @@ const DocumentReconciliationPage: React.FC = () => {
       messageApi.warning(t(`${D}.unsupportedChain`));
       return;
     }
+    const code = row.doc_code || String(row.doc_id);
+    setChainDocOptions([{ label: code, value: row.doc_id }]);
     chainForm.setFieldsValue({
       flow_type: flowType,
       document_type: docType,
@@ -151,6 +162,74 @@ const DocumentReconciliationPage: React.FC = () => {
     setActiveTab('chain');
     await loadChain(flowType, docType, row.doc_id);
   };
+
+  const fetchChainDocOptions = useCallback(
+    async (documentType: string, keyword?: string) => {
+      if (!documentType) {
+        setChainDocOptions([]);
+        return;
+      }
+      setChainDocSearching(true);
+      try {
+        const res = await documentReconciliationService.listChainCandidates({
+          document_type: documentType,
+          keyword: keyword?.trim() || undefined,
+          limit: 30,
+        });
+        const items = (res?.items ?? []) as ChainDocumentCandidate[];
+        const mapped = items.map((item) => ({
+          value: item.id,
+          label: item.label || item.code || String(item.id),
+        }));
+        const selectedId = chainForm.getFieldValue('document_id') as number | undefined;
+        setChainDocOptions((prev) => {
+          if (!selectedId || mapped.some((o) => o.value === selectedId)) {
+            return mapped;
+          }
+          const keep = prev.find((o) => o.value === selectedId);
+          return keep ? [keep, ...mapped] : mapped;
+        });
+      } catch (error: unknown) {
+        const err = error as { message?: string };
+        messageApi.error(err.message || t(`${D}.chainQueryFailed`));
+        setChainDocOptions((prev) => {
+          const selectedId = chainForm.getFieldValue('document_id') as number | undefined;
+          if (!selectedId) return [];
+          const keep = prev.find((o) => o.value === selectedId);
+          return keep ? [keep] : [];
+        });
+      } finally {
+        setChainDocSearching(false);
+      }
+    },
+    [chainForm, messageApi, t],
+  );
+
+  const handleChainDocSearch = useCallback(
+    (keyword: string) => {
+      if (!chainDocumentType) return;
+      if (chainDocSearchTimerRef.current) {
+        clearTimeout(chainDocSearchTimerRef.current);
+      }
+      chainDocSearchTimerRef.current = setTimeout(() => {
+        void fetchChainDocOptions(chainDocumentType, keyword);
+      }, 300);
+    },
+    [chainDocumentType, fetchChainDocOptions],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (chainDocSearchTimerRef.current) {
+        clearTimeout(chainDocSearchTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!chainDocumentType) return;
+    void fetchChainDocOptions(chainDocumentType);
+  }, [chainDocumentType, fetchChainDocOptions]);
 
   const docTypeEnum = useMemo(
     () => ({
@@ -334,14 +413,22 @@ const DocumentReconciliationPage: React.FC = () => {
     [messageApi, t],
   );
 
-  const chainStartDocOptions = useMemo(() => [
-    { label: t(`${D}.chain.salesDelivery`), value: 'sales_delivery' },
-    { label: t(`${D}.chain.salesOrder`), value: 'sales_order' },
-    { label: t(`${D}.docType.receivable`), value: 'receivable' },
-    { label: t(`${D}.chain.purchaseReceipt`), value: 'purchase_receipt' },
-    { label: t(`${D}.chain.purchaseOrder`), value: 'purchase_order' },
-    { label: t(`${D}.docType.payable`), value: 'payable' },
-  ], [t]);
+  const chainStartDocOptions = useMemo(() => {
+    if (chainFlowType === 'purchase') {
+      return [
+        { label: t(`${D}.chain.purchaseOrder`), value: 'purchase_order' },
+        { label: t(`${D}.chain.purchaseReceipt`), value: 'purchase_receipt' },
+        { label: t(`${D}.docType.payable`), value: 'payable' },
+        { label: t(`${D}.docType.payment`), value: 'payment' },
+      ];
+    }
+    return [
+      { label: t(`${D}.chain.salesOrder`), value: 'sales_order' },
+      { label: t(`${D}.chain.salesDelivery`), value: 'sales_delivery' },
+      { label: t(`${D}.docType.receivable`), value: 'receivable' },
+      { label: t(`${D}.docType.receipt`), value: 'receipt' },
+    ];
+  }, [chainFlowType, t]);
 
   const gapPanel = (
     <>
@@ -391,18 +478,48 @@ const DocumentReconciliationPage: React.FC = () => {
               { label: t(`${D}.directionSales`), value: 'sales' },
               { label: t(`${D}.directionPurchase`), value: 'purchase' },
             ]}
+            onChange={(value: 'sales' | 'purchase') => {
+              chainForm.setFieldsValue({
+                flow_type: value,
+                document_type: value === 'purchase' ? 'purchase_receipt' : 'sales_delivery',
+                document_id: undefined,
+              });
+              setChainDocOptions([]);
+            }}
           />
         </Form.Item>
         <Form.Item name="document_type" label={t(`${D}.startDoc`)} rules={[{ required: true }]}>
-          <Select style={{ width: 160 }} options={chainStartDocOptions} />
+          <Select
+            style={{ width: 160 }}
+            options={chainStartDocOptions}
+            onChange={() => {
+              chainForm.setFieldsValue({ document_id: undefined });
+              setChainDocOptions([]);
+            }}
+          />
         </Form.Item>
         <Form.Item
           name="document_id"
-          label={t(`${D}.chain.docId`)}
-          rules={[{ required: true }]}
-          tooltip={t(`${D}.chain.docIdTooltip`)}
+          label={t(`${D}.chain.docCode`)}
+          rules={[{ required: true, message: t(`${D}.chain.docCodeRequired`) }]}
+          tooltip={t(`${D}.chain.docCodeTooltip`)}
         >
-          <InputNumber min={1} style={{ width: 120 }} placeholder={t(`${D}.chain.docIdPlaceholder`)} />
+          <Select
+            showSearch
+            allowClear
+            filterOption={false}
+            style={{ minWidth: 280 }}
+            placeholder={t(`${D}.chain.docCodePlaceholder`)}
+            options={chainDocOptions}
+            loading={chainDocSearching}
+            onSearch={handleChainDocSearch}
+            onDropdownVisibleChange={(open) => {
+              if (open && chainDocumentType && chainDocOptions.length === 0) {
+                void fetchChainDocOptions(chainDocumentType);
+              }
+            }}
+            notFoundContent={chainDocSearching ? undefined : t(`${D}.chain.docCodeEmpty`)}
+          />
         </Form.Item>
         <Form.Item>
           <Button type="primary" loading={chainLoading} onClick={handleChainSearch}>

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from calendar import monthrange
+from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal
 from io import BytesIO
@@ -339,10 +340,20 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                     "credit": float(amt) if is_return else 0.0,
                     "doc_id": p.id,
                 }
-                if p.source_type == PAYABLE_SOURCE_PURCHASE_RECEIPT and p.source_id:
+                # 应付 source_type：库内可能是中文常量，也可能是加载 API 的英文码
+                src = str(p.source_type or "").strip()
+                if p.source_id and src in (
+                    PAYABLE_SOURCE_PURCHASE_RECEIPT,
+                    "purchase_receipt",
+                    "PurchaseReceipt",
+                ):
                     line["inbound_detail_doc_type"] = "purchase_receipt"
                     line["inbound_detail_doc_id"] = int(p.source_id)
-                elif p.source_type == PAYABLE_SOURCE_OUTSOURCE_RECEIPT and p.source_id:
+                elif p.source_id and src in (
+                    PAYABLE_SOURCE_OUTSOURCE_RECEIPT,
+                    "outsource_material_receipt",
+                    "outsource_receipt",
+                ):
                     line["inbound_detail_doc_type"] = "outsource_material_receipt"
                     line["inbound_detail_doc_id"] = int(p.source_id)
                 lines.append(line)
@@ -360,9 +371,165 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                     "doc_id": p.id,
                 })
         lines.sort(key=lambda x: (x["sort_date"], x["doc_type"], x.get("doc_id", 0)))
+        lines = await self._order_lines_by_settlement_hierarchy(
+            tenant_id, partner_type, lines
+        )
         for ln in lines:
             ln.pop("sort_date", None)
         return lines
+
+    async def _order_lines_by_settlement_hierarchy(
+        self,
+        tenant_id: int,
+        partner_type: str,
+        lines: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """
+        将收/付款单挂到期间内对应的应收/应付单之下（扁平列表 + tree_level）。
+        关联优先 DocumentRelation（加载创建），其次 SettlementRecord（核销）；
+        一笔收/付款只挂到一个父单，避免金额重复。
+        """
+        if not lines:
+            return lines
+        if partner_type == "Customer":
+            parent_types = {"应收单"}
+            child_types = {"收款单", "收款退款"}
+            rel_source, rel_target = "receivable", "receipt"
+            debit_doc_type, credit_doc_type = "Receivable", "Receipt"
+        else:
+            parent_types = {"应付单"}
+            child_types = {"付款单", "付款退款"}
+            rel_source, rel_target = "payable", "payment"
+            debit_doc_type, credit_doc_type = "Payable", "Payment"
+
+        parents = [ln for ln in lines if ln.get("doc_type") in parent_types]
+        children = [ln for ln in lines if ln.get("doc_type") in child_types]
+        others = [
+            ln
+            for ln in lines
+            if ln.get("doc_type") not in parent_types and ln.get("doc_type") not in child_types
+        ]
+        if not parents or not children:
+            for ln in lines:
+                ln.setdefault("tree_level", 0)
+            return lines
+
+        parent_by_id = {
+            int(p["doc_id"]): p for p in parents if p.get("doc_id") is not None
+        }
+        parent_ids = set(parent_by_id.keys())
+        child_ids = [int(c["doc_id"]) for c in children if c.get("doc_id") is not None]
+        child_parent: Dict[int, int] = {}
+
+        if child_ids:
+            from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+            rels = await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type=rel_source,
+                target_type=rel_target,
+                target_id__in=child_ids,
+            ).all()
+            for rel in rels:
+                if not rel.source_id or not rel.target_id:
+                    continue
+                sid, tid = int(rel.source_id), int(rel.target_id)
+                if sid in parent_ids:
+                    child_parent.setdefault(tid, sid)
+
+        unset_ids = [cid for cid in child_ids if cid not in child_parent]
+        if unset_ids:
+            from apps.kuaicaiwu.models.settlement import SettlementRecord
+
+            settles = await SettlementRecord.filter(
+                tenant_id=tenant_id,
+                debit_doc_type=debit_doc_type,
+                credit_doc_type=credit_doc_type,
+                credit_doc_id__in=unset_ids,
+                is_active=True,
+                deleted_at__isnull=True,
+            ).all()
+            by_credit: Dict[int, List[Any]] = defaultdict(list)
+            for s in settles:
+                if s.debit_doc_id and int(s.debit_doc_id) in parent_ids:
+                    by_credit[int(s.credit_doc_id)].append(s)
+            for cid, lst in by_credit.items():
+                best = max(lst, key=lambda x: abs(float(x.amount or 0)))
+                child_parent[cid] = int(best.debit_doc_id)
+
+        buckets: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+        orphans: List[Dict[str, Any]] = []
+        for c in children:
+            row = dict(c)
+            cid = int(row["doc_id"]) if row.get("doc_id") is not None else None
+            pid = child_parent.get(cid) if cid is not None else None
+            if pid is not None and pid in parent_by_id:
+                parent = parent_by_id[pid]
+                row["tree_level"] = 1
+                row["parent_doc_id"] = pid
+                row["parent_doc_code"] = parent.get("doc_code")
+                buckets[pid].append(row)
+            else:
+                row["tree_level"] = 0
+                orphans.append(row)
+
+        def _line_sort_key(ln: Dict[str, Any]) -> Tuple[Any, ...]:
+            return (
+                ln.get("sort_date") or ln.get("date") or "",
+                ln.get("doc_type") or "",
+                ln.get("doc_id") or 0,
+            )
+
+        for pid in buckets:
+            buckets[pid].sort(key=_line_sort_key)
+
+        top_items: List[Tuple[str, Dict[str, Any]]] = []
+        for p in parents:
+            row = dict(p)
+            row["tree_level"] = 0
+            top_items.append(("parent", row))
+        for o in orphans:
+            top_items.append(("orphan", o))
+        for o in others:
+            row = dict(o)
+            row.setdefault("tree_level", 0)
+            top_items.append(("other", row))
+
+        top_items.sort(
+            key=lambda item: (
+                item[1].get("sort_date") or item[1].get("date") or "",
+                0 if item[0] == "parent" else 1,
+                item[1].get("doc_type") or "",
+                item[1].get("doc_id") or 0,
+            )
+        )
+
+        result: List[Dict[str, Any]] = []
+        for kind, item in top_items:
+            result.append(item)
+            if kind == "parent":
+                pid = item.get("doc_id")
+                if pid is not None:
+                    result.extend(buckets.get(int(pid), []))
+        return result
+
+    async def ensure_statement_line_hierarchy(
+        self,
+        tenant_id: int,
+        partner_type: str,
+        opening_balance: Decimal,
+        lines: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """旧快照无 tree_level 时，按核销关系重排并重算行余额（不改库）。"""
+        if not lines:
+            return lines
+        if any("tree_level" in ln for ln in lines):
+            return lines
+        ordered = await self._order_lines_by_settlement_hierarchy(
+            tenant_id, partner_type, [dict(ln) for ln in lines]
+        )
+        _, _, _, with_bal = self._apply_running_balance(opening_balance, ordered)
+        return with_bal
 
     def _apply_running_balance(
         self, opening_balance: Decimal, lines: List[Dict[str, Any]]
@@ -435,7 +602,10 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         end_date: Optional[date] = None,
     ) -> PartnerStatement:
         if start_date and end_date:
+            if end_date < start_date:
+                raise ValidationError("结束日期不能早于起始日期")
             period_label = f"{to_api_isoformat(start_date)}~{to_api_isoformat(end_date)}"
+            # 列表「对账期间」仍用起始月；唯一性按下方 start/end 精确区间判断
             stmt_period = period or start_date.strftime("%Y-%m")
         else:
             start_date, end_date = period_to_date_range(period)
@@ -446,12 +616,13 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             tenant_id=tenant_id,
             partner_id=partner_id,
             partner_type=partner_type,
-            statement_period=stmt_period,
+            start_date=start_date,
+            end_date=end_date,
             deleted_at__isnull=True,
         )
         if exists:
             raise BusinessLogicError(
-                f"该往来单位在 {stmt_period} 已存在对账单 {exists.statement_code}，请勿重复生成"
+                f"该往来单位在 {period_label} 已存在对账单 {exists.statement_code}，请勿重复生成"
             )
 
         preview = await self.preview_statement(
@@ -671,6 +842,9 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             inspection_date = None
             if insp and insp.inspection_time:
                 inspection_date = to_api_isoformat(insp.inspection_time)
+            insp_qty = None
+            if insp is not None and getattr(insp, "inspection_quantity", None) is not None:
+                insp_qty = float(insp.inspection_quantity)
             detail_items.append({
                 "material_code": item.material_code,
                 "material_name": item.material_name,
@@ -679,9 +853,22 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                 "quantity": float(item.receipt_quantity or 0),
                 "unit_price": float(item.unit_price or 0),
                 "amount": float(item.total_amount or 0),
-                "qualified_quantity": float(item.qualified_quantity or 0),
-                "unqualified_quantity": float(item.unqualified_quantity or 0),
-                "quality_status": item.quality_status,
+                "inspection_quantity": insp_qty,
+                "qualified_quantity": float(
+                    (insp.qualified_quantity if insp and insp.qualified_quantity is not None else item.qualified_quantity)
+                    or 0
+                ),
+                "unqualified_quantity": float(
+                    (
+                        insp.unqualified_quantity
+                        if insp and insp.unqualified_quantity is not None
+                        else item.unqualified_quantity
+                    )
+                    or 0
+                ),
+                "quality_status": (
+                    getattr(insp, "quality_status", None) if insp else None
+                ) or item.quality_status,
                 "inspection_date": inspection_date,
                 "inspection_passed": _inspection_passed(insp),
                 "defect_reason": getattr(insp, "nonconformance_reason", None) if insp else None,
@@ -717,30 +904,39 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             deleted_at__isnull=True,
         )
         unit_price = Decimal(str(work_order.unit_price or 0)) if work_order else Decimal("0")
-        qty = Decimal(str(receipt.qualified_quantity or receipt.quantity or 0))
-        amount = (qty * unit_price).quantize(_MONEY)
+        receipt_qty = Decimal(str(receipt.quantity or 0))
+        # 与应付生成一致：按合格数量（无合格则按收货数量）× 委外单价
+        settle_qty = Decimal(str(receipt.qualified_quantity or receipt.quantity or 0))
+        amount = (settle_qty * unit_price).quantize(_MONEY)
         inspection_date = (
             to_api_isoformat(receipt.received_at) if receipt.received_at else None
         )
         unqualified = Decimal(str(receipt.unqualified_quantity or 0))
-        passed = unqualified <= 0 if receipt.received_at else None
+        qualified = Decimal(str(receipt.qualified_quantity or 0))
+        passed = None
+        if receipt.received_at is not None or (qualified + unqualified) > 0:
+            passed = unqualified <= 0
+        process_waste_raw = receipt.process_waste_qty
+        material_waste_raw = receipt.material_waste_qty
+        defect_reason = receipt.nonconformance_reason or ((receipt.remarks or "").strip() or None)
 
         detail_items = [{
             "material_code": work_order.product_code if work_order else "",
             "material_name": work_order.product_name if work_order else "",
-            "material_spec": None,
+            "material_spec": getattr(work_order, "product_spec", None) if work_order else None,
             "unit": receipt.unit,
-            "quantity": float(receipt.quantity or 0),
+            "quantity": float(receipt_qty),
             "unit_price": float(unit_price),
             "amount": float(amount),
-            "qualified_quantity": float(receipt.qualified_quantity or 0),
-            "unqualified_quantity": float(receipt.unqualified_quantity or 0),
+            "inspection_quantity": float(receipt_qty),
+            "qualified_quantity": float(qualified),
+            "unqualified_quantity": float(unqualified),
             "quality_status": "合格" if passed else ("不合格" if passed is False else None),
             "inspection_date": inspection_date,
             "inspection_passed": passed,
-            "defect_reason": receipt.remarks,
-            "process_waste_qty": None,
-            "material_waste_qty": float(unqualified) if unqualified > 0 else None,
+            "defect_reason": defect_reason,
+            "process_waste_qty": float(process_waste_raw) if process_waste_raw is not None else None,
+            "material_waste_qty": float(material_waste_raw) if material_waste_raw is not None else None,
         }]
 
         return {
@@ -751,8 +947,14 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             "items": detail_items,
         }
 
-    def _statement_export_context(self, obj: PartnerStatement) -> Dict[str, Any]:
-        details = obj.transaction_details or {}
+    async def _statement_export_context(self, obj: PartnerStatement) -> Dict[str, Any]:
+        details = dict(obj.transaction_details or {})
+        lines = await self.ensure_statement_line_hierarchy(
+            obj.tenant_id,
+            obj.partner_type,
+            _q_money(obj.opening_balance),
+            list(details.get("lines") or []),
+        )
         return {
             "statement_code": obj.statement_code,
             "company_name": obj.company_name or "本公司",
@@ -771,13 +973,20 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                 "credit_total": float(obj.credit_total),
                 "closing_balance": float(obj.closing_balance),
             },
-            "lines": details.get("lines") or [],
+            "lines": lines,
             "partner_snapshot": details.get("partner_snapshot") or {},
             "notes": obj.notes,
         }
 
-    def export_excel(self, obj: PartnerStatement) -> BytesIO:
-        ctx = self._statement_export_context(obj)
+    @staticmethod
+    def _export_doc_type_label(ln: Dict[str, Any]) -> str:
+        doc_type = str(ln.get("doc_type") or "")
+        if int(ln.get("tree_level") or 0) > 0:
+            return f"  └ {doc_type}"
+        return doc_type
+
+    async def export_excel(self, obj: PartnerStatement) -> BytesIO:
+        ctx = await self._statement_export_context(obj)
         wb = Workbook()
         ws = wb.active
         ws.title = "往来对账单"
@@ -819,7 +1028,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         row += 1
         for ln in ctx["lines"]:
             ws.cell(row, 1, ln.get("date", "")).font = body_font
-            ws.cell(row, 2, ln.get("doc_type", "")).font = body_font
+            ws.cell(row, 2, self._export_doc_type_label(ln)).font = body_font
             ws.cell(row, 3, ln.get("doc_code", "")).font = body_font
             ws.cell(row, 4, ln.get("summary", "")).font = body_font
             ws.cell(row, 5, ln.get("debit", 0)).font = body_font
@@ -835,8 +1044,8 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         out.seek(0)
         return out
 
-    def render_html(self, obj: PartnerStatement) -> str:
-        ctx = self._statement_export_context(obj)
+    async def render_html(self, obj: PartnerStatement) -> str:
+        ctx = await self._statement_export_context(obj)
         summary = ctx["summary"]
         snap = ctx.get("partner_snapshot") or {}
         contact = ""
@@ -848,7 +1057,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             rows_html += f"""
             <tr>
               <td>{ln.get('date', '')}</td>
-              <td>{ln.get('doc_type', '')}</td>
+              <td>{self._export_doc_type_label(ln)}</td>
               <td>{ln.get('doc_code', '')}</td>
               <td>{ln.get('summary', '')}</td>
               <td class="num">{ln.get('debit', 0):,.2f}</td>
@@ -895,7 +1104,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
 </body></html>"""
 
     async def export_pdf(self, obj: PartnerStatement) -> Tuple[bytes, str]:
-        html = self.render_html(obj)
+        html = await self.render_html(obj)
         try:
             from apps.kuaizhizao.services.print_service import _html_to_pdf_bytes_playwright_async
             pdf_bytes = await _html_to_pdf_bytes_playwright_async(html)

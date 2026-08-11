@@ -22,8 +22,10 @@ class BankAccount(BaseModel):
     tenant_id = fields.IntField(description="租户ID")
     account_code = fields.CharField(max_length=50, description="账户编码")
     account_name = fields.CharField(max_length=200, description="账户名称")
-    bank_name = fields.CharField(max_length=200, description="开户行")
-    account_number = fields.CharField(max_length=64, description="银行账号")
+    # bank=银行账户；cash=库存现金（现金收付款入账账户）
+    account_type = fields.CharField(max_length=20, default="bank", description="账户类型 bank/cash")
+    bank_name = fields.CharField(max_length=200, null=True, description="开户行")
+    account_number = fields.CharField(max_length=64, null=True, description="银行账号")
     currency = fields.CharField(max_length=10, default="CNY", description="币种")
     opening_balance = fields.DecimalField(
         max_digits=14, decimal_places=2, default=0, description="期初余额"

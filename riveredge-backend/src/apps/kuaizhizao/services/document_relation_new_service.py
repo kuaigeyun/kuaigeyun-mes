@@ -914,7 +914,7 @@ class DocumentRelationNewService:
             "type": "sales_order",
             "id": order.id,
             "code": getattr(order, "order_code", None),
-            "name": getattr(order, "order_name", None),
+            "name": getattr(order, "order_code", None),
             "changed_at": to_api_isoformat(order.updated_at) if order.updated_at else None,
         }
 

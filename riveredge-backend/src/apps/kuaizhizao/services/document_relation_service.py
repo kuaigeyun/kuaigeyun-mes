@@ -67,6 +67,12 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 from core.utils.timezone_utils import to_api_isoformat
 
 
+
+def _order_display_name(order: Any) -> Optional[str]:
+    """销售/采购订单 ORM 无 order_name，展示名唯一真源为 order_code。"""
+    return getattr(order, "order_code", None)
+
+
 def _dedupe_relation_documents(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """按 (document_type, document_id) 去重，保持顺序。"""
     seen: set = set()
@@ -89,7 +95,7 @@ class DocumentRelationService:
     DOCUMENT_TYPES = {
         "demand": {"model": Demand, "code_field": "demand_code", "name_field": "demand_name"},
         "sales_forecast": {"model": SalesForecast, "code_field": "forecast_code", "name_field": "forecast_name"},
-        "sales_order": {"model": SalesOrder, "code_field": "order_code", "name_field": "order_name"},
+        "sales_order": {"model": SalesOrder, "code_field": "order_code", "name_field": None},
         "quotation": {"model": Quotation, "code_field": "quotation_code", "name_field": None},
         "sales_contract": {"model": SalesContract, "code_field": "contract_code", "name_field": None},
         "material_borrow": {"model": MaterialBorrow, "code_field": "borrow_code", "name_field": None},
@@ -107,7 +113,7 @@ class DocumentRelationService:
         },
         "sales_delivery": {"model": SalesDelivery, "code_field": "delivery_code", "name_field": None},
         "delivery_notice": {"model": DeliveryNotice, "code_field": "notice_code", "name_field": None},
-        "purchase_order": {"model": PurchaseOrder, "code_field": "order_code", "name_field": "order_name"},
+        "purchase_order": {"model": PurchaseOrder, "code_field": "order_code", "name_field": None},
         "purchase_requisition": {
             "model": PurchaseRequisition,
             "code_field": "requisition_code",
@@ -355,7 +361,7 @@ class DocumentRelationService:
                     "document_type": "sales_order",
                     "document_id": order.id,
                     "document_code": order.order_code,
-                    "document_name": getattr(order, "order_name", None) or order.order_code,
+                    "document_name": _order_display_name(order),
                     "status": order.status,
                     "created_at": to_api_isoformat(order.created_at) if order.created_at else None
                 })
@@ -410,7 +416,7 @@ class DocumentRelationService:
                     "document_type": "sales_order",
                     "document_id": order.id,
                     "document_code": order.order_code,
-                    "document_name": order.order_name,
+                    "document_name": _order_display_name(order),
                     "status": order.status,
                     "created_at": to_api_isoformat(order.created_at) if order.created_at else None
                 })
@@ -639,7 +645,7 @@ class DocumentRelationService:
                                 "document_type": "sales_order",
                                 "document_id": sales_order.id,
                                 "document_code": sales_order.order_code,
-                                "document_name": getattr(sales_order, "order_name", None) or sales_order.order_code,
+                                "document_name": _order_display_name(sales_order),
                                 "status": sales_order.status,
                                 "created_at": to_api_isoformat(sales_order.created_at) if sales_order.created_at else None
                             })
@@ -665,7 +671,7 @@ class DocumentRelationService:
                 "document_type": "purchase_order",
                 "document_id": purchase_order.id,
                 "document_code": purchase_order.order_code,
-                "document_name": purchase_order.order_name if hasattr(purchase_order, 'order_name') else None,
+                "document_name": _order_display_name(purchase_order),
                 "status": purchase_order.status,
                 "created_at": to_api_isoformat(purchase_order.created_at) if purchase_order.created_at else None
             })
@@ -702,7 +708,7 @@ class DocumentRelationService:
                                     "document_type": "sales_order",
                                     "document_id": sales_order.id,
                                     "document_code": sales_order.order_code,
-                                    "document_name": getattr(sales_order, "order_name", None) or sales_order.order_code,
+                                    "document_name": _order_display_name(sales_order),
                                     "status": sales_order.status,
                                     "created_at": to_api_isoformat(sales_order.created_at) if sales_order.created_at else None
                                 })
@@ -745,9 +751,7 @@ class DocumentRelationService:
                             "document_type": "purchase_order",
                             "document_id": purchase_order.id,
                             "document_code": purchase_order.order_code,
-                            "document_name": purchase_order.order_name
-                            if hasattr(purchase_order, "order_name")
-                            else None,
+                            "document_name": _order_display_name(purchase_order),
                             "status": purchase_order.status,
                             "created_at": to_api_isoformat(purchase_order.created_at)
                             if purchase_order.created_at
@@ -762,9 +766,7 @@ class DocumentRelationService:
                     "document_type": "purchase_order",
                     "document_id": purchase_order.id,
                     "document_code": purchase_order.order_code,
-                    "document_name": purchase_order.order_name
-                    if hasattr(purchase_order, "order_name")
-                    else None,
+                    "document_name": _order_display_name(purchase_order),
                     "status": purchase_order.status,
                     "created_at": to_api_isoformat(purchase_order.created_at)
                     if purchase_order.created_at
@@ -902,7 +904,7 @@ class DocumentRelationService:
             "document_type": "purchase_order",
             "document_id": po.id,
             "document_code": po.order_code,
-            "document_name": getattr(po, "order_name", None),
+            "document_name": _order_display_name(po),
             "status": po.status if hasattr(po, "status") else None,
             "created_at": to_api_isoformat(po.created_at) if po.created_at else None,
         }]
@@ -960,7 +962,7 @@ class DocumentRelationService:
                     "document_type": "sales_order",
                     "document_id": so.id,
                     "document_code": so.order_code,
-                    "document_name": getattr(so, "order_name", None),
+                    "document_name": _order_display_name(so),
                     "status": so.status if hasattr(so, "status") else None,
                     "created_at": to_api_isoformat(so.created_at) if so.created_at else None,
                 })
@@ -984,7 +986,7 @@ class DocumentRelationService:
             "document_type": "sales_order",
             "document_id": so.id,
             "document_code": so.order_code,
-            "document_name": getattr(so, "order_name", None),
+            "document_name": _order_display_name(so),
             "status": so.status if hasattr(so, "status") else None,
             "created_at": to_api_isoformat(so.created_at) if so.created_at else None,
         }]
@@ -1044,7 +1046,7 @@ class DocumentRelationService:
                         "document_type": "purchase_order",
                         "document_id": purchase_order.id,
                         "document_code": purchase_order.order_code,
-                        "document_name": purchase_order.order_name if hasattr(purchase_order, 'order_name') else None,
+                        "document_name": _order_display_name(purchase_order),
                         "status": purchase_order.status,
                         "created_at": to_api_isoformat(purchase_order.created_at) if purchase_order.created_at else None
                     })
@@ -1066,7 +1068,7 @@ class DocumentRelationService:
                         "document_type": "purchase_order",
                         "document_id": po.id,
                         "document_code": po.order_code,
-                        "document_name": po.order_name if hasattr(po, "order_name") else None,
+                        "document_name": _order_display_name(po),
                         "status": po.status,
                         "created_at": to_api_isoformat(po.created_at) if po.created_at else None,
                     })
@@ -1175,7 +1177,7 @@ class DocumentRelationService:
                         "document_type": "purchase_order",
                         "document_id": purchase_order.id,
                         "document_code": purchase_order.order_code,
-                        "document_name": purchase_order.order_name if hasattr(purchase_order, 'order_name') else None,
+                        "document_name": _order_display_name(purchase_order),
                         "status": purchase_order.status,
                         "created_at": to_api_isoformat(purchase_order.created_at) if purchase_order.created_at else None
                     })
@@ -1288,7 +1290,7 @@ class DocumentRelationService:
                     "document_type": "sales_order",
                     "document_id": order.id,
                     "document_code": order.order_code,
-                    "document_name": order.order_name if hasattr(order, 'order_name') else None,
+                    "document_name": _order_display_name(order),
                     "status": order.status,
                     "created_at": to_api_isoformat(order.created_at) if order.created_at else None
                 })
@@ -1423,7 +1425,7 @@ class DocumentRelationService:
                             "document_type": "sales_order",
                             "document_id": sales_order.id,
                             "document_code": sales_order.order_code,
-                            "document_name": getattr(sales_order, "order_name", None) or sales_order.order_code,
+                            "document_name": _order_display_name(sales_order),
                             "status": sales_order.status,
                             "created_at": to_api_isoformat(sales_order.created_at) if sales_order.created_at else None
                         })
@@ -1451,7 +1453,7 @@ class DocumentRelationService:
                             "document_type": "sales_order",
                             "document_id": sales_order.id,
                             "document_code": sales_order.order_code,
-                            "document_name": getattr(sales_order, "order_name", None) or sales_order.order_code,
+                            "document_name": _order_display_name(sales_order),
                             "status": sales_order.status,
                             "created_at": to_api_isoformat(sales_order.created_at) if sales_order.created_at else None,
                         })
@@ -1568,7 +1570,7 @@ class DocumentRelationService:
                     "document_type": "sales_order",
                     "document_id": sales_order.id,
                     "document_code": sales_order.order_code,
-                    "document_name": getattr(sales_order, "order_name", None) or sales_order.order_code,
+                    "document_name": _order_display_name(sales_order),
                     "status": sales_order.status,
                     "created_at": to_api_isoformat(sales_order.created_at) if sales_order.created_at else None,
                 })
@@ -1761,7 +1763,7 @@ class DocumentRelationService:
                     "document_type": "purchase_order",
                     "document_id": po.id,
                     "document_code": po.order_code,
-                    "document_name": po.order_name if hasattr(po, "order_name") else None,
+                    "document_name": _order_display_name(po),
                     "status": po.status if hasattr(po, "status") else None,
                     "created_at": to_api_isoformat(po.created_at) if po.created_at else None,
                 })
@@ -1849,7 +1851,7 @@ class DocumentRelationService:
                         "document_type": "purchase_order",
                         "document_id": po.id,
                         "document_code": po.order_code,
-                        "document_name": po.order_name if hasattr(po, 'order_name') else None,
+                        "document_name": _order_display_name(po),
                         "status": po.status,
                         "created_at": to_api_isoformat(po.created_at) if po.created_at else None
                     })
@@ -2068,7 +2070,7 @@ class DocumentRelationService:
             "type": "sales_order",
             "id": order.id,
             "code": getattr(order, "order_code", None),
-            "name": getattr(order, "order_name", None),
+            "name": _order_display_name(order),
             "changed_at": to_api_isoformat(order.updated_at) if order.updated_at else None,
         }
 
@@ -2345,7 +2347,7 @@ class DocumentRelationService:
                 "document_type": "sales_order",
                 "document_id": order.id,
                 "document_code": order.order_code,
-                "document_name": order.order_name,
+                "document_name": _order_display_name(order),
                 "status": order.status,
                 "created_at": to_api_isoformat(order.created_at) if order.created_at else None,
             })
@@ -2406,7 +2408,7 @@ class DocumentRelationService:
                     "document_type": "sales_order",
                     "document_id": order.id,
                     "document_code": order.order_code,
-                    "document_name": order.order_name,
+                    "document_name": _order_display_name(order),
                     "status": order.status,
                     "created_at": to_api_isoformat(order.created_at) if order.created_at else None,
                 })
@@ -2479,7 +2481,7 @@ class DocumentRelationService:
                 "document_type": "purchase_order",
                 "document_id": po.id,
                 "document_code": po.order_code,
-                "document_name": po.order_name if hasattr(po, 'order_name') else None,
+                "document_name": _order_display_name(po),
                 "status": po.status,
                 "created_at": to_api_isoformat(po.created_at) if po.created_at else None
             })

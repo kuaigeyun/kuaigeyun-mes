@@ -710,7 +710,11 @@ class DocumentPushPullService:
             # 从响应对象中获取id和code
             po_id = purchase_order.id if hasattr(purchase_order, 'id') else purchase_order.model_dump().get('id')
             po_code = purchase_order.order_code if hasattr(purchase_order, 'order_code') else purchase_order.model_dump().get('order_code')
-            po_name = purchase_order.order_name if hasattr(purchase_order, 'order_name') else purchase_order.model_dump().get('order_name')
+            po_name = (
+                purchase_order.order_code
+                if hasattr(purchase_order, "order_code")
+                else purchase_order.model_dump().get("order_code")
+            )
             
             relation_data = DocumentRelationCreate(
                 source_type="demand_computation",
@@ -812,7 +816,7 @@ class DocumentPushPullService:
         elif doc_type == "work_order":
             return doc.name
         elif doc_type == "purchase_order":
-            return doc.order_name
+            return getattr(doc, "order_code", None)
         else:
             return None
     

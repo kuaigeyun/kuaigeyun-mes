@@ -9,6 +9,10 @@ export interface PartnerStatementLine {
   credit: number;
   balance: number;
   doc_id?: number;
+  /** 0=应收/应付等主行，1=其下核销的收/付款单 */
+  tree_level?: number;
+  parent_doc_id?: number;
+  parent_doc_code?: string;
   inbound_detail_doc_type?: string;
   inbound_detail_doc_id?: number;
 }

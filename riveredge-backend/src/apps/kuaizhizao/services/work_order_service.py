@@ -255,6 +255,60 @@ async def _batch_default_operators_snapshots_by_master_operation_id(
     return out
 
 
+def _parse_assigned_worker_ids(
+    raw_ids: Any,
+    fallback_worker_id: Optional[int] = None,
+) -> List[int]:
+    """解析派工人员 ID 列表，去重并保持顺序。"""
+    out: List[int] = []
+    if isinstance(raw_ids, list):
+        for x in raw_ids:
+            try:
+                uid = int(x)
+            except (TypeError, ValueError):
+                continue
+            if uid > 0 and uid not in out:
+                out.append(uid)
+    if not out and fallback_worker_id is not None:
+        try:
+            uid = int(fallback_worker_id)
+        except (TypeError, ValueError):
+            uid = 0
+        if uid > 0:
+            out.append(uid)
+    return out
+
+
+async def _resolve_assigned_worker_fields(
+    tenant_id: int,
+    worker_ids: List[int],
+) -> Tuple[List[int], Optional[int], Optional[str]]:
+    """解析派工人员列表，返回 (ids, primary_id, joined_names)。"""
+    if not worker_ids:
+        return [], None, None
+    users = await User.filter(
+        tenant_id=tenant_id,
+        id__in=worker_ids,
+        deleted_at__isnull=True,
+    ).all()
+    user_by_id = {u.id: u for u in users}
+    ordered_ids: List[int] = []
+    names: List[str] = []
+    for uid in worker_ids:
+        if uid in ordered_ids:
+            continue
+        u = user_by_id.get(uid)
+        if not u:
+            continue
+        ordered_ids.append(uid)
+        name = str(u.full_name or u.username or uid).strip()
+        if name:
+            names.append(name)
+    if not ordered_ids:
+        return [], None, None
+    return ordered_ids, ordered_ids[0], ("、".join(names) if names else None)
+
+
 async def _resolve_sales_order_snapshot_fields(
     tenant_id: int,
     sales_order_id: Optional[int],
@@ -2081,13 +2135,18 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         if work_center_id:
             query = query.filter(work_center_id=work_center_id)
         if assigned_worker_id:
-            # 筛选有工序分配给该员工的工单
-            wo_ids = await WorkOrderOperation.filter(
+            # 筛选有工序分配给该员工的工单（含多人派工 assigned_worker_ids）
+            wo_ids_primary = await WorkOrderOperation.filter(
                 tenant_id=tenant_id,
                 assigned_worker_id=assigned_worker_id,
-                deleted_at__isnull=True
+                deleted_at__isnull=True,
             ).values_list("work_order_id", flat=True)
-            wo_id_set = set(wo_ids)
+            wo_ids_multi = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                assigned_worker_ids__contains=assigned_worker_id,
+                deleted_at__isnull=True,
+            ).values_list("work_order_id", flat=True)
+            wo_id_set = set(wo_ids_primary) | set(wo_ids_multi)
             if wo_id_set:
                 query = query.filter(id__in=wo_id_set)
             else:
@@ -2443,12 +2502,17 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             query = query.filter(work_center_id=work_center_id)
         if assigned_worker_id:
             from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
-            wo_ids = await WorkOrderOperation.filter(
+            wo_ids_primary = await WorkOrderOperation.filter(
                 tenant_id=tenant_id,
                 assigned_worker_id=assigned_worker_id,
-                deleted_at__isnull=True
+                deleted_at__isnull=True,
             ).values_list("work_order_id", flat=True)
-            wo_id_set = set(wo_ids)
+            wo_ids_multi = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                assigned_worker_ids__contains=assigned_worker_id,
+                deleted_at__isnull=True,
+            ).values_list("work_order_id", flat=True)
+            wo_id_set = set(wo_ids_primary) | set(wo_ids_multi)
             if wo_id_set:
                 query = query.filter(id__in=wo_id_set)
             else:
@@ -4859,6 +4923,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             defect_types = [DefectTypeMinimal(uuid=dt["uuid"], code=dt["code"], name=dt["name"]) for dt in defect_types_raw]
             op_data = {f: getattr(op, f, None) for f in WorkOrderOperationResponse.model_fields if hasattr(op, f)}
             op_data["defect_types"] = defect_types
+            worker_ids = _parse_assigned_worker_ids(
+                op_data.get("assigned_worker_ids"),
+                op_data.get("assigned_worker_id"),
+            )
+            op_data["assigned_worker_ids"] = worker_ids
+            if worker_ids and not op_data.get("assigned_worker_id"):
+                op_data["assigned_worker_id"] = worker_ids[0]
 
             qualified = op.qualified_quantity or Decimal("0")
             master_op_id = int(op.operation_id) if op.operation_id is not None else 0
@@ -5333,8 +5404,25 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             if "work_center_id" in dispatch_patch or "work_center_name" in dispatch_patch:
                 work_order_operation.work_center_id = dispatch_data.work_center_id
                 work_order_operation.work_center_name = dispatch_data.work_center_name
-            work_order_operation.assigned_worker_id = dispatch_data.assigned_worker_id
-            work_order_operation.assigned_worker_name = dispatch_data.assigned_worker_name
+            if (
+                "assigned_worker_ids" in dispatch_patch
+                or "assigned_worker_id" in dispatch_patch
+                or "assigned_worker_name" in dispatch_patch
+            ):
+                if "assigned_worker_ids" in dispatch_patch:
+                    worker_ids = _parse_assigned_worker_ids(dispatch_data.assigned_worker_ids)
+                elif dispatch_data.assigned_worker_id is not None:
+                    worker_ids = _parse_assigned_worker_ids(None, dispatch_data.assigned_worker_id)
+                else:
+                    worker_ids = []
+                (
+                    resolved_ids,
+                    primary_id,
+                    joined_name,
+                ) = await _resolve_assigned_worker_fields(tenant_id, worker_ids)
+                work_order_operation.assigned_worker_ids = resolved_ids
+                work_order_operation.assigned_worker_id = primary_id
+                work_order_operation.assigned_worker_name = joined_name
             work_order_operation.assigned_team_id = dispatch_data.assigned_team_id
             work_order_operation.assigned_team_name = dispatch_data.assigned_team_name
             work_order_operation.assigned_station_id = dispatch_data.assigned_station_id
@@ -5345,14 +5433,6 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             work_order_operation.assigned_mold_name = dispatch_data.assigned_mold_name
             work_order_operation.assigned_tool_id = dispatch_data.assigned_tool_id
             work_order_operation.assigned_tool_name = dispatch_data.assigned_tool_name
-            # 展示名以 id 为准回写，避免前端缓存/列表错名导致工序卡仍显示旧人员
-            if work_order_operation.assigned_worker_id:
-                worker_info = await self.get_user_info(int(work_order_operation.assigned_worker_id))
-                resolved_name = (worker_info.get("name") or "").strip()
-                if resolved_name:
-                    work_order_operation.assigned_worker_name = resolved_name
-            else:
-                work_order_operation.assigned_worker_name = None
             if work_order_operation.assigned_team_id:
                 from apps.master_data.models.factory import WorkGroup
 
@@ -5388,6 +5468,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 for f in WorkOrderOperationResponse.model_fields
                 if hasattr(work_order_operation, f)
             }
+            worker_ids = _parse_assigned_worker_ids(
+                op_payload.get("assigned_worker_ids"),
+                op_payload.get("assigned_worker_id"),
+            )
+            op_payload["assigned_worker_ids"] = worker_ids
+            if worker_ids and not op_payload.get("assigned_worker_id"):
+                op_payload["assigned_worker_id"] = worker_ids[0]
             op_payload["max_reportable_quantity"] = _max_reportable_quantity_for_op(wo, work_order_operation)
             dmap = await _batch_default_operators_snapshots_by_master_operation_id(
                 tenant_id, [work_order_operation.operation_id]
@@ -5549,6 +5636,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 for f in WorkOrderOperationResponse.model_fields
                 if hasattr(work_order_operation, f)
             }
+            worker_ids = _parse_assigned_worker_ids(
+                op_payload.get("assigned_worker_ids"),
+                op_payload.get("assigned_worker_id"),
+            )
+            op_payload["assigned_worker_ids"] = worker_ids
+            if worker_ids and not op_payload.get("assigned_worker_id"):
+                op_payload["assigned_worker_id"] = worker_ids[0]
             op_payload["max_reportable_quantity"] = _max_reportable_quantity_for_op(work_order, work_order_operation)
             dmap = await _batch_default_operators_snapshots_by_master_operation_id(
                 tenant_id, [work_order_operation.operation_id]

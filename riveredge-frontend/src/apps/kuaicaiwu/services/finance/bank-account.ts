@@ -1,13 +1,17 @@
 import { apiRequest } from '../../../../services/api';
 import { normalizeFinanceListResponse } from '../../utils/financeListCore';
 
+export type BankAccountType = 'bank' | 'cash';
+
 export interface BankAccount {
   id: number;
   tenant_id: number;
   account_code: string;
   account_name: string;
-  bank_name: string;
-  account_number: string;
+  /** bank=银行账户；cash=库存现金 */
+  account_type?: BankAccountType | string;
+  bank_name?: string | null;
+  account_number?: string | null;
   currency: string;
   opening_balance: number;
   current_balance: number;

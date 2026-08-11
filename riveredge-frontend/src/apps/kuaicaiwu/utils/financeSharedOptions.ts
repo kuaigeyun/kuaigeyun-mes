@@ -28,9 +28,19 @@ export function formatPaymentMethod(value: string | null | undefined, t: TFuncti
 
 /** 与后端收款/付款单 payment_method 存值一致 */
 export const BANK_TRANSFER_PAYMENT_METHOD = '银行转账';
+export const CASH_PAYMENT_METHOD = '现金';
 
 export function isBankTransferPaymentMethod(method: string | null | undefined): boolean {
   return String(method || '').trim() === BANK_TRANSFER_PAYMENT_METHOD;
+}
+
+export function isCashPaymentMethod(method: string | null | undefined): boolean {
+  return String(method || '').trim() === CASH_PAYMENT_METHOD;
+}
+
+/** 银行转账或现金收付款时，入账账户必选 */
+export function requiresLedgerAccount(method: string | null | undefined): boolean {
+  return isBankTransferPaymentMethod(method) || isCashPaymentMethod(method);
 }
 
 export function assertBankAccountForTransfer(
@@ -38,9 +48,46 @@ export function assertBankAccountForTransfer(
   bankAccountId: unknown,
   t: TFunction,
 ): void {
-  if (isBankTransferPaymentMethod(paymentMethod) && (bankAccountId == null || bankAccountId === '')) {
+  assertBankAccountForPaymentMethod(paymentMethod, bankAccountId, t);
+}
+
+export function assertBankAccountForPaymentMethod(
+  paymentMethod: string | null | undefined,
+  bankAccountId: unknown,
+  t: TFunction,
+): void {
+  const missing = bankAccountId == null || bankAccountId === '';
+  if (isBankTransferPaymentMethod(paymentMethod) && missing) {
     throw new Error(t('app.kuaicaiwu.common.bankAccountRequiredForTransfer'));
   }
+  if (isCashPaymentMethod(paymentMethod) && missing) {
+    throw new Error(t('app.kuaicaiwu.common.bankAccountRequiredForCash'));
+  }
+}
+
+export function formatBankAccountOptionLabel(account: {
+  account_name: string;
+  account_number?: string | null;
+  account_type?: string | null;
+}): string {
+  if (String(account.account_type || '').toLowerCase() === 'cash' || !account.account_number) {
+    return account.account_name;
+  }
+  return `${account.account_name} (${account.account_number})`;
+}
+
+/** 按收付款方式过滤入账账户：转账→银行，现金→库存现金 */
+export function filterBankAccountsForPaymentMethod<T extends { account_type?: string | null }>(
+  accounts: T[],
+  paymentMethod: string | null | undefined,
+): T[] {
+  if (isBankTransferPaymentMethod(paymentMethod)) {
+    return accounts.filter((a) => String(a.account_type || 'bank').toLowerCase() !== 'cash');
+  }
+  if (isCashPaymentMethod(paymentMethod)) {
+    return accounts.filter((a) => String(a.account_type || '').toLowerCase() === 'cash');
+  }
+  return accounts;
 }
 
 export function getReceiptSettlementTypeOptions(t: TFunction) {

@@ -8,7 +8,16 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography, Space, Dropdown, Tag, Alert, Spin, Table, Empty, Form } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ModalForm, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import {
+  ModalForm,
+  ProForm,
+  ProFormDatePicker,
+  ProFormDigit,
+  ProFormRadio,
+  ProFormSelect,
+  ProFormText,
+  ProFormTextArea,
+} from '@ant-design/pro-components';
 import { CheckCircleOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, DownOutlined } from '@ant-design/icons';
 import { apiRequest, formatApiErrorDetail } from '../../../../../services/api';
 import { UniTable } from '../../../../../components/uni-table';
@@ -44,6 +53,13 @@ import {
   type SalesInvoicePullPreview,
 } from '../../../services/finance/sales-invoice';
 import { salesInvoiceCapabilityReasonMessage } from '../../../utils/salesInvoiceCapabilityMessages';
+import {
+  convertInvoiceAmountBetweenModes,
+  invoiceInclFromExcl,
+  recalcEnteredAmountOnTaxRateChange,
+  resolveInvoiceAmountsForSubmit,
+  type InvoiceAmountInputMode,
+} from '../../../utils/invoiceAmountInput';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
@@ -77,13 +93,6 @@ function resolveInvoiceExclFromSourceTotal(
   if (!(sourceTotal > 0)) return undefined;
   if (priceType === 'tax_exclusive') return Number(sourceTotal.toFixed(2));
   return Number((sourceTotal / (1 + taxRate / 100)).toFixed(2));
-}
-
-function resolveInvoiceTotalFromExcl(
-  invoiceAmount: number,
-  taxRate: number,
-): number {
-  return Number((invoiceAmount * (1 + taxRate / 100)).toFixed(2));
 }
 
 const P = 'app.kuaicaiwu.salesInvoice';
@@ -125,6 +134,8 @@ const SalesInvoicesPage: React.FC = () => {
   const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
   const [pullPreviewKind, setPullPreviewKind] = useState<PullPreviewKind | null>(null);
   const [pullForm] = Form.useForm();
+  const pullAmountModeRef = useRef<InvoiceAmountInputMode>('tax_exclusive');
+  const pullTaxRateRef = useRef<number>(13);
   const pullFromSalesOrderCloseRef = useRef<(() => void) | null>(null);
   const pullFromSalesDeliveryCloseRef = useRef<(() => void) | null>(null);
   const pullFromReceivableCloseRef = useRef<(() => void) | null>(null);
@@ -332,13 +343,18 @@ const SalesInvoicesPage: React.FC = () => {
       return false;
     }
     const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
-    const invoiceAmount = Number(values.invoice_amount) || 0;
-    if (invoiceAmount <= 0) {
+    const enteredAmount = Number(values.invoice_amount) || 0;
+    if (enteredAmount <= 0) {
       messageApi.warning(t(`${P}.amountRequired`));
       return false;
     }
     const taxRate = Number(values.tax_rate) || 13;
-    const estimatedTotal = resolveInvoiceTotalFromExcl(invoiceAmount, taxRate);
+    const amountMode = (values.amount_input_mode || 'tax_exclusive') as InvoiceAmountInputMode;
+    const { invoiceAmountExcl: invoiceAmount, totalIncl: estimatedTotal } = resolveInvoiceAmountsForSubmit(
+      enteredAmount,
+      taxRate,
+      amountMode,
+    );
     if (estimatedTotal > maxPush) {
       messageApi.warning(t(`${P}.pullExceedMax`, { max: maxPush.toFixed(2) }));
       return false;
@@ -718,6 +734,7 @@ const SalesInvoicesPage: React.FC = () => {
       invoice_date: dayjs(),
       invoice_type: '增值税专用发票',
       tax_rate: taxRate,
+      amount_input_mode: 'tax_exclusive' as InvoiceAmountInputMode,
       invoice_amount: defaultExcl,
       notes: t(`${P}.pullNotes`, { source: sourceLabel, code: pullPreviewData.source_code }),
     };
@@ -739,8 +756,26 @@ const SalesInvoicesPage: React.FC = () => {
 
   useEffect(() => {
     if (!pullPreviewOpen || pullPreviewLoading || !pullFormInitialValues) return;
+    pullAmountModeRef.current = 'tax_exclusive';
+    pullTaxRateRef.current = Number(pullFormInitialValues.tax_rate) || 13;
     pullForm.setFieldsValue(pullFormInitialValues);
   }, [pullPreviewOpen, pullPreviewLoading, pullFormInitialValues, pullForm]);
+
+  const pullAmountInputMode = Form.useWatch('amount_input_mode', pullForm) as InvoiceAmountInputMode | undefined;
+  const pullTaxRateWatch = Form.useWatch('tax_rate', pullForm);
+  const pullInvoiceAmountWatch = Form.useWatch('invoice_amount', pullForm);
+  const pullAmountCounterpartHint = useMemo(() => {
+    const entered = Number(pullInvoiceAmountWatch || 0);
+    const taxRate = Number(pullTaxRateWatch) || 13;
+    if (!(entered > 0)) return '';
+    if ((pullAmountInputMode || 'tax_exclusive') === 'tax_inclusive') {
+      const excl = resolveInvoiceAmountsForSubmit(entered, taxRate, 'tax_inclusive').invoiceAmountExcl;
+      return t(`${P}.form.amountHintExcl`, { amount: excl.toFixed(2) });
+    }
+    return t(`${P}.form.amountHintIncl`, {
+      amount: invoiceInclFromExcl(entered, taxRate).toFixed(2),
+    });
+  }, [pullAmountInputMode, pullInvoiceAmountWatch, pullTaxRateWatch, t]);
 
   const handlePullPreviewOk = async () => {
     if (pullPreviewLoading || !pullPreviewData) {
@@ -1065,12 +1100,56 @@ const SalesInvoicesPage: React.FC = () => {
                   label={t(`${P}.form.taxRate`)}
                   options={TAX_RATE_OPTIONS}
                   rules={[{ required: true, message: t(`${P}.form.selectTaxRate`) }]}
+                  fieldProps={{
+                    onChange: (nextRate: number) => {
+                      const prevRate = pullTaxRateRef.current;
+                      const mode = (pullForm.getFieldValue('amount_input_mode')
+                        || 'tax_exclusive') as InvoiceAmountInputMode;
+                      const current = Number(pullForm.getFieldValue('invoice_amount')) || 0;
+                      const next = Number(nextRate) || 0;
+                      if (current > 0) {
+                        pullForm.setFieldValue(
+                          'invoice_amount',
+                          recalcEnteredAmountOnTaxRateChange(current, prevRate, next, mode),
+                        );
+                      }
+                      pullTaxRateRef.current = next;
+                    },
+                  }}
+                />
+                <ProFormRadio.Group
+                  name="amount_input_mode"
+                  label={t(`${P}.form.amountInputMode`)}
+                  options={[
+                    { label: t(`${P}.form.amountModeExcl`), value: 'tax_exclusive' },
+                    { label: t(`${P}.form.amountModeIncl`), value: 'tax_inclusive' },
+                  ]}
+                  fieldProps={{
+                    onChange: (e) => {
+                      const nextMode = e.target.value as InvoiceAmountInputMode;
+                      const prevMode = pullAmountModeRef.current;
+                      const taxRate = Number(pullForm.getFieldValue('tax_rate')) || 13;
+                      const current = Number(pullForm.getFieldValue('invoice_amount')) || 0;
+                      if (current > 0 && prevMode && prevMode !== nextMode) {
+                        pullForm.setFieldValue(
+                          'invoice_amount',
+                          convertInvoiceAmountBetweenModes(current, taxRate, prevMode, nextMode),
+                        );
+                      }
+                      pullAmountModeRef.current = nextMode;
+                    },
+                  }}
                 />
                 <ProFormDigit
                   name="invoice_amount"
-                  label={t(`${P}.col.exclTax`)}
+                  label={
+                    (pullAmountInputMode || 'tax_exclusive') === 'tax_inclusive'
+                      ? t(`${P}.form.amountModeIncl`)
+                      : t(`${P}.form.amountModeExcl`)
+                  }
                   min={0}
                   rules={[{ required: true, message: t(`${P}.amountRequired`) }]}
+                  extra={pullAmountCounterpartHint || undefined}
                   fieldProps={{ precision: 2, style: { width: '100%' } }}
                 />
                 <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} />

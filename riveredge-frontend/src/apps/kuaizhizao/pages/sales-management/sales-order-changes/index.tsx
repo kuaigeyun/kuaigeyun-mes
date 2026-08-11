@@ -22,6 +22,7 @@ import { UniWorkflowActions } from '../../../../../components/uni-workflow-actio
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import {
   useSalesOrderChangeCapabilities,
@@ -104,6 +105,11 @@ const SalesOrderChangesPage: React.FC = () => {
   );
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>();
+  const invalidateMenuBadge = useInvalidateMenuBadgeCounts();
+  const reloadTable = useCallback(() => {
+    invalidateMenuBadge();
+    actionRef.current?.reload();
+  }, [invalidateMenuBadge]);
   const auditEnabled = useAuditRequired('kuaizhizao', 'sales-order-change');
   const changePerms = useResourcePermissions(SALES_ORDER_CHANGE_RESOURCE);
   const permDeniedTitle = t('common.noPermission');
@@ -248,7 +254,7 @@ const SalesOrderChangesPage: React.FC = () => {
     setEditOpen(false);
     setPendingEditFormValues(null);
     setCreatingSourceOrderId(null);
-    actionRef.current?.reload();
+    reloadTable();
   };
 
   const openCreateFromOrder = async (orderId: number, reason: string) => {
@@ -428,7 +434,7 @@ const SalesOrderChangesPage: React.FC = () => {
     message.success(t('app.kuaizhizao.salesOrderChange.submitSuccess'));
     setImpactOpen(false);
     setPendingSubmitId(null);
-    actionRef.current?.reload();
+    reloadTable();
     if (detail?.id === pendingSubmitId) {
       setDetail(await getSalesOrderChange(pendingSubmitId));
     }
@@ -667,7 +673,7 @@ const SalesOrderChangesPage: React.FC = () => {
                   onOk: async () => {
                     await withdrawSalesOrderChange(record.id!);
                     message.success(t('common.updateSuccess'));
-                    actionRef.current?.reload();
+                    reloadTable();
                   },
                 });
               }}
@@ -685,7 +691,7 @@ const SalesOrderChangesPage: React.FC = () => {
                   onOk: async () => {
                     await deleteSalesOrderChange(record.id!);
                     message.success(t('app.kuaizhizao.salesOrderChange.deleted'));
-                    actionRef.current?.reload();
+                    reloadTable();
                   },
                 });
               }}
@@ -784,7 +790,7 @@ const SalesOrderChangesPage: React.FC = () => {
     if (success > 0) message.success(t('app.kuaizhizao.salesOrderChange.batchDeleteSuccess', { count: success }));
     if (failed > 0) message.warning(t('app.kuaizhizao.salesOrderChange.batchDeletePartial', { count: failed }));
     setSelectedRowKeys([]);
-    actionRef.current?.reload();
+    reloadTable();
   }, [message, t]);
 
   const changeAuditBatchHandlers = useMemo(
@@ -798,8 +804,8 @@ const SalesOrderChangesPage: React.FC = () => {
 
   const handleChangeAuditBatchSuccess = useCallback(() => {
     setSelectedRowKeys([]);
-    actionRef.current?.reload();
-  }, []);
+    reloadTable();
+  }, [reloadTable]);
 
   return (
     <ListPageTemplate>
@@ -975,7 +981,7 @@ const SalesOrderChangesPage: React.FC = () => {
                 approvedStatuses={['AUDITED', '已审核', 'APPLIED', '已生效']}
                 rejectedStatuses={['REJECTED', '已驳回']}
                 onSuccess={async () => {
-                  actionRef.current?.reload();
+                  reloadTable();
                   if (detail.id) setDetail(await getSalesOrderChange(detail.id));
                 }}
               />

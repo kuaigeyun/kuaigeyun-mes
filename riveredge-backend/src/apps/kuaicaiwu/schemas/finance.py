@@ -488,6 +488,15 @@ class PartnerStatementLineResponse(BaseSchema):
     credit: float = 0
     balance: float = 0
     doc_id: Optional[int] = None
+    tree_level: Optional[int] = Field(
+        0, description="层级：0=应收/应付等主单据，1=其下核销的收/付款单"
+    )
+    parent_doc_id: Optional[int] = Field(None, description="父级应收/应付单 ID")
+    parent_doc_code: Optional[str] = Field(None, description="父级应收/应付单号")
+    inbound_detail_doc_type: Optional[str] = Field(
+        None, description="可展开入库明细类型：purchase_receipt / outsource_material_receipt"
+    )
+    inbound_detail_doc_id: Optional[int] = Field(None, description="可展开入库明细单据 ID")
 
 
 class PartnerStatementLineDetailItemResponse(BaseSchema):
@@ -498,10 +507,11 @@ class PartnerStatementLineDetailItemResponse(BaseSchema):
     quantity: float
     unit_price: float
     amount: float
+    inspection_quantity: Optional[float] = Field(None, description="质检数量")
     qualified_quantity: Optional[float] = None
     unqualified_quantity: Optional[float] = None
     quality_status: Optional[str] = None
-    inspection_date: Optional[str] = None
+    inspection_date: Optional[str] = Field(None, description="送检/检验日期")
     inspection_passed: Optional[bool] = None
     defect_reason: Optional[str] = None
     process_waste_qty: Optional[float] = Field(None, description="工废数量")

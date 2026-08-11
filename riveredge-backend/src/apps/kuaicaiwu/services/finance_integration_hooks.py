@@ -125,7 +125,9 @@ async def _resolve_bank_account_label(
     )
     if not account:
         return bank_account_id, None
-    label = f"{account.bank_name} {account.account_number}".strip()
+    if str(getattr(account, "account_type", "") or "").strip().lower() == "cash":
+        return account.id, account.account_name
+    label = f"{account.bank_name or ''} {account.account_number or ''}".strip()
     return account.id, label or account.account_name
 
 

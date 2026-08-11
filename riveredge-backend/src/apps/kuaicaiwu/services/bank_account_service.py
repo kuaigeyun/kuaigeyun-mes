@@ -18,16 +18,67 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 from core.utils.timezone_utils import now_utc
 
+_ACCOUNT_TYPES = frozenset({"bank", "cash"})
+_BANK_TRANSFER_METHOD = "银行转账"
+_CASH_METHOD = "现金"
+
 
 class BankAccountService:
+    @staticmethod
+    def normalize_account_type(account_type: Optional[str]) -> str:
+        value = str(account_type or "bank").strip().lower() or "bank"
+        if value not in _ACCOUNT_TYPES:
+            raise ValidationError("账户类型仅支持 bank（银行）或 cash（库存现金）")
+        return value
+
+    @classmethod
+    def normalize_bank_fields(
+        cls,
+        *,
+        account_type: str,
+        bank_name: Optional[str],
+        account_number: Optional[str],
+    ) -> tuple[Optional[str], Optional[str]]:
+        name = (bank_name or "").strip() or None
+        number = (account_number or "").strip() or None
+        if account_type == "bank":
+            if not name or not number:
+                raise ValidationError("银行账户须填写开户行和银行账号")
+            return name, number
+        return name, number
+
+    async def validate_voucher_account(
+        self,
+        tenant_id: int,
+        *,
+        payment_method: Optional[str],
+        bank_account_id: Optional[int],
+    ) -> None:
+        """收/付款方式与入账账户匹配校验。"""
+        method = str(payment_method or "").strip()
+        if method == _BANK_TRANSFER_METHOD:
+            if not bank_account_id:
+                raise ValidationError("银行转账须选择银行账户")
+            account = await self.get_by_id(tenant_id, int(bank_account_id))
+            if self.normalize_account_type(getattr(account, "account_type", None)) == "cash":
+                raise ValidationError("银行转账不能使用库存现金账户")
+            return
+        if method == _CASH_METHOD:
+            if not bank_account_id:
+                raise ValidationError("现金收付款须选择库存现金账户")
+            account = await self.get_by_id(tenant_id, int(bank_account_id))
+            if self.normalize_account_type(getattr(account, "account_type", None)) != "cash":
+                raise ValidationError("现金收付款请选择库存现金类账户")
+
     async def create(
         self,
         tenant_id: int,
         *,
         account_code: str,
         account_name: str,
-        bank_name: str,
-        account_number: str,
+        bank_name: Optional[str] = None,
+        account_number: Optional[str] = None,
+        account_type: str = "bank",
         currency: str = "CNY",
         opening_balance: Decimal = Decimal("0"),
         notes: Optional[str] = None,
@@ -42,14 +93,22 @@ class BankAccountService:
         if exists:
             raise ValidationError(f"银行账户编码 {account_code} 已存在")
 
+        normalized_type = self.normalize_account_type(account_type)
+        name, number = self.normalize_bank_fields(
+            account_type=normalized_type,
+            bank_name=bank_name,
+            account_number=account_number,
+        )
+
         ob = Decimal(str(opening_balance or 0))
         create_payload = {
             "tenant_id": tenant_id,
             "uuid": str(uuid.uuid4()),
             "account_code": account_code,
             "account_name": account_name,
-            "bank_name": bank_name,
-            "account_number": account_number,
+            "account_type": normalized_type,
+            "bank_name": name,
+            "account_number": number,
             "currency": currency,
             "opening_balance": ob,
             "current_balance": ob,
@@ -117,12 +176,30 @@ class BankAccountService:
     ) -> BankAccount:
         row = await self.get_by_id(tenant_id, account_id)
         allowed = {
-            "account_name", "bank_name", "account_number", "currency",
+            "account_name", "account_type", "bank_name", "account_number", "currency",
             "is_active", "notes", "current_balance", "attachments",
         }
         for key, val in fields.items():
-            if key in allowed and val is not None:
+            if key not in allowed:
+                continue
+            if key in ("bank_name", "account_number") and val is None:
+                setattr(row, key, None)
+            elif val is not None:
                 setattr(row, key, val)
+
+        next_type = self.normalize_account_type(
+            fields.get("account_type", getattr(row, "account_type", None))
+        )
+        row.account_type = next_type
+        name, number = self.normalize_bank_fields(
+            account_type=next_type,
+            bank_name=row.bank_name if "bank_name" not in fields else fields.get("bank_name"),
+            account_number=(
+                row.account_number if "account_number" not in fields else fields.get("account_number")
+            ),
+        )
+        row.bank_name = name
+        row.account_number = number
         apply_update_audit(row, current_user)
         await row.save()
         return row

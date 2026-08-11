@@ -41,10 +41,14 @@ import {
   formatReceiptSettlementType,
   getPaymentMethodOptions,
   getReceiptSettlementTypeOptions,
-  assertBankAccountForTransfer,
-  isBankTransferPaymentMethod,
+  assertBankAccountForPaymentMethod,
+  formatBankAccountOptionLabel,
   BANK_TRANSFER_PAYMENT_METHOD,
 } from '../../../utils/financeSharedOptions';
+import {
+  LedgerAccountFormFields,
+  resolveLedgerAccountNote,
+} from '../../../components/LedgerAccountFormFields';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
@@ -117,16 +121,10 @@ const ReceiptsPage: React.FC = () => {
     bankAccountService.list({ limit: 200, is_active: true }).then((res) => setBankAccounts(res.data)).catch(() => setBankAccounts([]));
   }, []);
 
-  const bankAccountOptions = bankAccounts.map((a) => ({
-    label: `${a.account_name} (${a.account_number})`,
-    value: a.id,
-    account_number: a.account_number,
-  }));
-
   const resolveBankLabel = (id?: number) => {
     if (!id) return '—';
     const acc = bankAccounts.find((a) => a.id === id);
-    return acc ? `${acc.account_name} (${acc.account_number})` : `#${id}`;
+    return acc ? formatBankAccountOptionLabel(acc) : `#${id}`;
   };
 
   const openDetail = async (record: ReceiptVoucher) => {
@@ -145,12 +143,11 @@ const ReceiptsPage: React.FC = () => {
 
   const handleCreate = async (values: any) => {
     try {
-      assertBankAccountForTransfer(values.payment_method, values.bank_account_id, t);
+      assertBankAccountForPaymentMethod(values.payment_method, values.bank_account_id, t);
     } catch (e: unknown) {
       messageApi.warning((e as Error).message);
       return false;
     }
-    const bank = bankAccountOptions.find((o) => o.value === values.bank_account_id);
     const data = {
       customer_id: values.customer_id,
       customer_name: customerOptions.find(o => o.value === values.customer_id)?.label || '',
@@ -158,7 +155,7 @@ const ReceiptsPage: React.FC = () => {
       receipt_date: formatDateTime(values.receipt_date || dayjs(), 'YYYY-MM-DD'),
       payment_method: values.payment_method,
       bank_account_id: values.bank_account_id,
-      bank_account: bank?.account_number || values.bank_account,
+      bank_account: resolveLedgerAccountNote(bankAccounts, values.bank_account_id, values.bank_account),
       settlement_type: values.settlement_type || 'normal',
       notes: values.notes,
       attachments: normalizeDocumentAttachments(values.attachments),
@@ -266,7 +263,7 @@ const ReceiptsPage: React.FC = () => {
     if (!pullPreviewData || !pullPreviewSourceId) return false;
     if (pullPreviewData.has_blocking_issues) return false;
     try {
-      assertBankAccountForTransfer(values.payment_method, values.bank_account_id, t);
+      assertBankAccountForPaymentMethod(values.payment_method, values.bank_account_id, t);
     } catch (e: unknown) {
       messageApi.warning((e as Error).message);
       return false;
@@ -281,7 +278,6 @@ const ReceiptsPage: React.FC = () => {
       messageApi.warning(t(`${R}.pullExceedMax`, { max: maxPush.toFixed(2) }));
       return false;
     }
-    const bank = bankAccountOptions.find((o) => o.value === values.bank_account_id);
     setPullSubmitting(true);
     try {
       await receiptService.create({
@@ -293,7 +289,7 @@ const ReceiptsPage: React.FC = () => {
         receipt_date: formatDateTime(values.receipt_date || dayjs(), 'YYYY-MM-DD'),
         payment_method: values.payment_method,
         bank_account_id: values.bank_account_id,
-        bank_account: bank?.account_number || values.bank_account,
+        bank_account: resolveLedgerAccountNote(bankAccounts, values.bank_account_id, values.bank_account),
         settlement_type: values.settlement_type || 'normal',
         notes:
           String(values.notes ?? '').trim() ||
@@ -847,31 +843,10 @@ const ReceiptsPage: React.FC = () => {
                   options={receiptSettlementTypeOptions}
                   initialValue="normal"
                 />
-                <ProFormSelect
-                  name="bank_account_id"
-                  label={t(`${R}.bankAccount`)}
-                  options={bankAccountOptions}
-                  placeholder={
-                    bankAccountOptions.length > 0
-                      ? t(`${R}.bankAccountPlaceholder`)
-                      : t('app.kuaicaiwu.common.noBankAccountHint')
-                  }
-                  showSearch
-                  allowClear
-                  rules={[
-                    ({ getFieldValue }) => ({
-                      validator: async (_, value) => {
-                        if (isBankTransferPaymentMethod(getFieldValue('payment_method')) && !value) {
-                          throw new Error(t('app.kuaicaiwu.common.bankAccountRequiredForTransfer'));
-                        }
-                      },
-                    }),
-                  ]}
-                />
-                <ProFormText
-                  name="bank_account"
-                  label={t(`${R}.bankAccountNote`)}
-                  placeholder={t(`${R}.bankAccountNotePlaceholder`)}
+                <LedgerAccountFormFields
+                  accounts={bankAccounts}
+                  accountLabel={t(`${R}.bankAccount`)}
+                  noteLabel={t(`${R}.bankAccountNote`)}
                 />
                 <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} />
                 <DocumentAttachmentsField category="receipt_attachments" />
@@ -911,15 +886,11 @@ const ReceiptsPage: React.FC = () => {
           initialValue="normal"
           options={receiptSettlementTypeOptions}
         />
-        <ProFormSelect
-          name="bank_account_id"
-          label={t(`${R}.bankAccount`)}
-          options={bankAccountOptions}
-          placeholder={t(`${R}.bankAccountPlaceholder`)}
-          showSearch
-          allowClear
+        <LedgerAccountFormFields
+          accounts={bankAccounts}
+          accountLabel={t(`${R}.bankAccount`)}
+          noteLabel={t(`${R}.bankAccountNote`)}
         />
-        <ProFormText name="bank_account" label={t(`${R}.bankAccountNote`)} placeholder={t(`${R}.bankAccountNotePlaceholder`)} />
         <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
         <DocumentAttachmentsField category="receipt_attachments" />
       </ModalForm>

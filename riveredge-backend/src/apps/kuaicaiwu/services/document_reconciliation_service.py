@@ -567,5 +567,175 @@ class DocumentReconciliationService:
             "open_balance_total": float(open_balance),
         }
 
+    async def list_chain_document_candidates(
+        self,
+        tenant_id: int,
+        *,
+        document_type: str,
+        keyword: Optional[str] = None,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        """按单据编号模糊搜索链条起始单据，供前端选择（避免手输内码）。"""
+        from tortoise.queryset import Q
+
+        dtype = self._normalize_doc_type(document_type)
+        kw = str(keyword or "").strip()
+        limit = max(1, min(int(limit or 20), 50))
+
+        # document_type -> (model import path attrs handled inline)
+        if dtype == "sales_order":
+            from apps.kuaizhizao.models.sales_order import SalesOrder
+
+            query = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            if kw:
+                query = query.filter(
+                    Q(order_code__icontains=kw) | Q(customer_name__icontains=kw)
+                )
+            rows = await query.order_by("-id").limit(limit)
+            items = [
+                {
+                    "id": int(r.id),
+                    "code": r.order_code,
+                    "partner_name": r.customer_name,
+                    "label": f"{r.order_code} {r.customer_name}".strip(),
+                }
+                for r in rows
+            ]
+        elif dtype == "sales_delivery":
+            from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+
+            query = SalesDelivery.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            if kw:
+                query = query.filter(
+                    Q(delivery_code__icontains=kw) | Q(customer_name__icontains=kw)
+                )
+            rows = await query.order_by("-id").limit(limit)
+            items = [
+                {
+                    "id": int(r.id),
+                    "code": r.delivery_code,
+                    "partner_name": r.customer_name,
+                    "label": f"{r.delivery_code} {r.customer_name}".strip(),
+                }
+                for r in rows
+            ]
+        elif dtype == "receivable":
+            from apps.kuaicaiwu.models.receivable import Receivable
+
+            query = Receivable.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            if kw:
+                query = query.filter(
+                    Q(receivable_code__icontains=kw) | Q(customer_name__icontains=kw)
+                )
+            rows = await query.order_by("-id").limit(limit)
+            items = [
+                {
+                    "id": int(r.id),
+                    "code": r.receivable_code,
+                    "partner_name": r.customer_name,
+                    "label": f"{r.receivable_code} {r.customer_name}".strip(),
+                }
+                for r in rows
+            ]
+        elif dtype == "receipt":
+            from apps.kuaicaiwu.models.receipt import Receipt
+
+            query = Receipt.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            if kw:
+                query = query.filter(
+                    Q(receipt_code__icontains=kw) | Q(customer_name__icontains=kw)
+                )
+            rows = await query.order_by("-id").limit(limit)
+            items = [
+                {
+                    "id": int(r.id),
+                    "code": r.receipt_code,
+                    "partner_name": r.customer_name,
+                    "label": f"{r.receipt_code} {r.customer_name}".strip(),
+                }
+                for r in rows
+            ]
+        elif dtype == "purchase_order":
+            from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+
+            query = PurchaseOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            if kw:
+                query = query.filter(
+                    Q(order_code__icontains=kw) | Q(supplier_name__icontains=kw)
+                )
+            rows = await query.order_by("-id").limit(limit)
+            items = [
+                {
+                    "id": int(r.id),
+                    "code": r.order_code,
+                    "partner_name": r.supplier_name,
+                    "label": f"{r.order_code} {r.supplier_name}".strip(),
+                }
+                for r in rows
+            ]
+        elif dtype == "purchase_receipt":
+            from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+            query = PurchaseReceipt.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            if kw:
+                query = query.filter(
+                    Q(receipt_code__icontains=kw) | Q(supplier_name__icontains=kw)
+                )
+            rows = await query.order_by("-id").limit(limit)
+            items = [
+                {
+                    "id": int(r.id),
+                    "code": r.receipt_code,
+                    "partner_name": r.supplier_name,
+                    "label": f"{r.receipt_code} {r.supplier_name}".strip(),
+                }
+                for r in rows
+            ]
+        elif dtype == "payable":
+            from apps.kuaicaiwu.models.payable import Payable
+
+            query = Payable.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            if kw:
+                query = query.filter(
+                    Q(payable_code__icontains=kw) | Q(supplier_name__icontains=kw)
+                )
+            rows = await query.order_by("-id").limit(limit)
+            items = [
+                {
+                    "id": int(r.id),
+                    "code": r.payable_code,
+                    "partner_name": r.supplier_name,
+                    "label": f"{r.payable_code} {r.supplier_name}".strip(),
+                }
+                for r in rows
+            ]
+        elif dtype == "payment":
+            from apps.kuaicaiwu.models.payment import Payment
+
+            query = Payment.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            if kw:
+                query = query.filter(
+                    Q(payment_code__icontains=kw) | Q(supplier_name__icontains=kw)
+                )
+            rows = await query.order_by("-id").limit(limit)
+            items = [
+                {
+                    "id": int(r.id),
+                    "code": r.payment_code,
+                    "partner_name": r.supplier_name,
+                    "label": f"{r.payment_code} {r.supplier_name}".strip(),
+                }
+                for r in rows
+            ]
+        else:
+            from infra.exceptions.exceptions import ValidationError
+
+            raise ValidationError(
+                "document_type 仅支持 sales_order/sales_delivery/receivable/receipt/"
+                "purchase_order/purchase_receipt/payable/payment"
+            )
+
+        return {"items": items, "total": len(items), "document_type": dtype}
+
     async def get_pipeline_summary(self, tenant_id: int) -> Dict[str, Any]:
         return await self._aggregation.get_pipeline_summary(tenant_id)

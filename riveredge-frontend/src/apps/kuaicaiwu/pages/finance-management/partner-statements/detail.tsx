@@ -18,12 +18,17 @@ import {
   downloadBlob,
 } from '../../../services/finance/partnerStatement';
 import {
+  partnerStatementExpandableProps,
+  usePartnerStatementInboundDetail,
+} from '../../../components/PartnerStatementInboundDetail';
+import {
   buildPartnerStatementStatusEnum,
   formatSentChannel,
   getSentChannelOptions,
 } from '../../../utils/financeSharedOptions';
 import { formatDateTime } from '../../../../../utils/format';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { renderPartnerStatementDocType } from '../../../utils/partnerStatementLineDisplay';
 
 const PS = 'app.kuaicaiwu.partnerStatement';
 const PARTNER_STATEMENT_RESOURCE = 'kuaicaiwu:partner-statement';
@@ -40,9 +45,7 @@ const PartnerStatementDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<PartnerStatement | null>(null);
   const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null);
-  const [lineDetailCache, setLineDetailCache] = useState<
-    Record<string, { loading?: boolean; items?: Array<Record<string, unknown>> }>
-  >({});
+  const { cache: lineDetailCache, loadLineDetail } = usePartnerStatementInboundDetail();
 
   const statusEnum = useMemo(() => buildPartnerStatementStatusEnum(t), [t]);
   const sentChannelOptions = useMemo(() => getSentChannelOptions(t), [t]);
@@ -88,8 +91,8 @@ const PartnerStatementDetailPage: React.FC = () => {
     {
       title: t(`${PS}.col.docType`),
       dataIndex: 'doc_type',
-      width: 100,
-      render: (v: string) => v || '—',
+      width: 120,
+      render: (v: string, record: PartnerStatementLine) => renderPartnerStatementDocType(v, record),
     },
     { title: t(`${PS}.col.docCode`), dataIndex: 'doc_code', width: 150 },
     { title: t(`${PS}.col.summary`), dataIndex: 'summary', ellipsis: true },
@@ -115,51 +118,6 @@ const PartnerStatementDetailPage: React.FC = () => {
       render: (v: unknown) => money(v as number),
     },
   ], [t, balanceLabel]);
-
-  const inboundDetailColumns = useMemo(
-    () => [
-      { title: t(`${PS}.lineDetail.materialCode`), dataIndex: 'material_code', width: 120 },
-      { title: t(`${PS}.lineDetail.materialName`), dataIndex: 'material_name', ellipsis: true },
-      { title: t(`${PS}.lineDetail.quantity`), dataIndex: 'quantity', width: 90, align: 'right' as const },
-      { title: t(`${PS}.lineDetail.unitPrice`), dataIndex: 'unit_price', width: 100, align: 'right' as const, render: (v: number) => money(v) },
-      { title: t(`${PS}.lineDetail.amount`), dataIndex: 'amount', width: 110, align: 'right' as const, render: (v: number) => money(v) },
-      { title: t(`${PS}.lineDetail.qualifiedQty`), dataIndex: 'qualified_quantity', width: 90, align: 'right' as const },
-      { title: t(`${PS}.lineDetail.unqualifiedQty`), dataIndex: 'unqualified_quantity', width: 90, align: 'right' as const },
-      { title: t(`${PS}.lineDetail.inspectionDate`), dataIndex: 'inspection_date', width: 110, render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '—') },
-      { title: t(`${PS}.lineDetail.defectReason`), dataIndex: 'defect_reason', ellipsis: true },
-      { title: t(`${PS}.lineDetail.processWaste`), dataIndex: 'process_waste_qty', width: 80, align: 'right' as const },
-      { title: t(`${PS}.lineDetail.materialWaste`), dataIndex: 'material_waste_qty', width: 80, align: 'right' as const },
-    ],
-    [t],
-  );
-
-  const lineDetailKey = (line: PartnerStatementLine) =>
-    line.inbound_detail_doc_type && line.inbound_detail_doc_id
-      ? `${line.inbound_detail_doc_type}-${line.inbound_detail_doc_id}`
-      : '';
-
-  const loadLineDetail = useCallback(async (line: PartnerStatementLine) => {
-    const key = lineDetailKey(line);
-    if (!key) return;
-    let shouldFetch = false;
-    setLineDetailCache((prev) => {
-      if (prev[key]?.items || prev[key]?.loading) return prev;
-      shouldFetch = true;
-      return { ...prev, [key]: { loading: true } };
-    });
-    if (!shouldFetch) return;
-    try {
-      const res = await partnerStatementService.getLineDetail({
-        doc_type: String(line.inbound_detail_doc_type),
-        doc_id: Number(line.inbound_detail_doc_id),
-      });
-      setLineDetailCache((prev) => ({ ...prev, [key]: { items: res.items || [] } }));
-    } catch (e: unknown) {
-      const err = e as { message?: string };
-      message.error(err?.message || t(`${PS}.lineDetail.loadFailed`));
-      setLineDetailCache((prev) => ({ ...prev, [key]: { items: [] } }));
-    }
-  }, [t]);
 
   const handleConfirm = () => {
     if (!data) return;
@@ -364,30 +322,7 @@ const PartnerStatementDetailPage: React.FC = () => {
             dataSource={lines}
             scroll={{ x: 900 }}
             columns={lineColumns}
-            expandable={{
-              rowExpandable: (record) => Boolean(record.inbound_detail_doc_type && record.inbound_detail_doc_id),
-              onExpand: (expanded, record) => {
-                if (expanded) void loadLineDetail(record);
-              },
-              expandedRowRender: (record) => {
-                const key = lineDetailKey(record);
-                const cached = key ? lineDetailCache[key] : undefined;
-                if (cached?.loading) {
-                  return <Spin size="small" />;
-                }
-                return (
-                  <Table
-                    size="small"
-                    rowKey={(row, idx) => `${record.doc_code}-detail-${idx}`}
-                    pagination={false}
-                    dataSource={cached?.items || []}
-                    columns={inboundDetailColumns}
-                    scroll={{ x: 1200 }}
-                    locale={{ emptyText: t(`${PS}.lineDetail.empty`) }}
-                  />
-                );
-              },
-            }}
+            expandable={partnerStatementExpandableProps(lineDetailCache, loadLineDetail)}
           />
 
           <Typography.Paragraph type="secondary" style={{ marginTop: 16, fontSize: 12 }}>

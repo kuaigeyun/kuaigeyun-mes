@@ -325,6 +325,7 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
         work_order_operation.assigned_station_name = None
         work_order_operation.assigned_worker_id = None
         work_order_operation.assigned_worker_name = None
+        work_order_operation.assigned_worker_ids = []
         work_order_operation.assigned_team_id = None
         work_order_operation.assigned_team_name = None
         work_order_operation.assigned_equipment_id = None

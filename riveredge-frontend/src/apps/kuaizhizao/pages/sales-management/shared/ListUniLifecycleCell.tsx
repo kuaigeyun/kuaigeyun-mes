@@ -14,7 +14,7 @@ export function resolveLifecycleDisplayLabel(lifecycle: LifecycleResult): string
 }
 
 /**
- * 列表「当前阶段」列统一渲染。
+ * 列表「执行状态」列统一渲染。
  * 唯一控制源：LifecycleStageBadge（徽章；无进度圆环；不含审核态）。
  */
 export function ListUniLifecycleCell({

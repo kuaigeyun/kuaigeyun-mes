@@ -51,8 +51,25 @@ def _http_exception_with_trace(
     )
 
 
-def _to_response(obj) -> PartnerStatementResponse:
-    return PartnerStatementResponse.model_validate(obj)
+async def _to_response(obj) -> PartnerStatementResponse:
+    resp = PartnerStatementResponse.model_validate(obj)
+    details = resp.transaction_details
+    if not isinstance(details, dict):
+        return resp
+    lines = details.get("lines")
+    if not isinstance(lines, list) or not lines:
+        return resp
+    hydrated = await service.ensure_statement_line_hierarchy(
+        obj.tenant_id,
+        obj.partner_type,
+        obj.opening_balance,
+        lines,
+    )
+    if hydrated is lines:
+        return resp
+    new_details = dict(details)
+    new_details["lines"] = hydrated
+    return resp.model_copy(update={"transaction_details": new_details})
 
 
 @router.get("/preview", response_model=PartnerStatementPreviewResponse)
@@ -105,7 +122,7 @@ async def create_partner_statement(
             start_date=data.start_date,
             end_date=data.end_date,
         )
-        return _to_response(obj)
+        return await _to_response(obj)
     except (ValidationError, NotFoundError, BusinessLogicError) as e:
         raise _http_exception_with_trace(400, str(e), "/partner-statements", tenant_id)
 
@@ -148,8 +165,9 @@ async def list_partner_statements(
         sort_field=sort_field,
         sort_order=sort_order,
     )
+    # 列表不展开明细层级，避免对每行做核销关联查询
     return PartnerStatementListResponse(
-        items=[_to_response(i) for i in items],
+        items=[PartnerStatementResponse.model_validate(i) for i in items],
         total=total,
         skip=skip,
         limit=limit,
@@ -164,7 +182,7 @@ async def get_partner_statement(
 ):
     try:
         obj = await service.get_statement(tenant_id, id)
-        return _to_response(obj)
+        return await _to_response(obj)
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/partner-statements/{id}", tenant_id)
 
@@ -178,7 +196,7 @@ async def confirm_partner_statement(
 ):
     try:
         obj = await service.confirm_statement(tenant_id, id, current_user.id)
-        return _to_response(obj)
+        return await _to_response(obj)
     except (NotFoundError, BusinessLogicError) as e:
         code = 404 if isinstance(e, NotFoundError) else 400
         raise _http_exception_with_trace(code, str(e), "/partner-statements/{id}/confirm", tenant_id)
@@ -196,7 +214,7 @@ async def mark_partner_statement_sent(
         obj = await service.mark_sent(
             tenant_id, id, current_user.id, body.channel, body.notes
         )
-        return _to_response(obj)
+        return await _to_response(obj)
     except (NotFoundError, BusinessLogicError, ValidationError) as e:
         code = 404 if isinstance(e, NotFoundError) else 400
         raise _http_exception_with_trace(code, str(e), "/partner-statements/{id}/mark-sent", tenant_id)
@@ -212,7 +230,7 @@ async def dispute_partner_statement(
 ):
     try:
         obj = await service.dispute_statement(tenant_id, id, body.reason, user_id=current_user.id)
-        return _to_response(obj)
+        return await _to_response(obj)
     except (NotFoundError, BusinessLogicError) as e:
         code = 404 if isinstance(e, NotFoundError) else 400
         raise _http_exception_with_trace(code, str(e), "/partner-statements/{id}/dispute", tenant_id)
@@ -247,7 +265,7 @@ async def export_partner_statement(
     filename_base = f"对账单-{obj.statement_code}"
 
     if fmt == "xlsx":
-        stream = service.export_excel(obj)
+        stream = await service.export_excel(obj)
         return StreamingResponse(
             stream,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

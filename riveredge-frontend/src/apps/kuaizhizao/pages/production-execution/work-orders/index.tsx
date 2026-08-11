@@ -586,6 +586,28 @@ function isBlankNumericInput(value: unknown): boolean {
 }
 
 /** 报工默认生产人员：优先工序派工，否则当前登录用户 */
+function formatOperationAssignedPersonnel(operation?: any): string {
+  const workerName = String(operation?.assigned_worker_name || '').trim()
+  if (workerName) return workerName
+  const teamName = String(operation?.assigned_team_name || '').trim()
+  if (teamName) return teamName
+  return '-'
+}
+
+/** 解析工序已派工人员 ID（兼容旧单人员字段） */
+function getOperationAssignedWorkerIds(operation?: any): number[] {
+  const raw = operation?.assigned_worker_ids
+  if (Array.isArray(raw) && raw.length > 0) {
+    const ids = raw
+      .map((id: unknown) => Number(id))
+      .filter((id: number) => Number.isInteger(id) && id > 0)
+    if (ids.length > 0) return ids
+  }
+  const single = Number(operation?.assigned_worker_id)
+  return Number.isInteger(single) && single > 0 ? [single] : []
+}
+
+/** 报工默认生产人员：优先工序派工，否则当前登录用户 */
 function getWorkerInfoForReporting(operation?: any) {
   const user = getSessionCurrentUser() || {}
   if (operation?.assigned_worker_id) {
@@ -3206,7 +3228,9 @@ const WorkOrdersPage: React.FC = () => {
     window.setTimeout(() => {
       if (dispatchFormRef.current) {
         const combinedPersonnelValues: string[] = [];
-        if (operation.assigned_worker_id) combinedPersonnelValues.push(`U_${operation.assigned_worker_id}`);
+        getOperationAssignedWorkerIds(operation).forEach((workerId) => {
+          combinedPersonnelValues.push(`U_${workerId}`);
+        });
         if (operation.assigned_team_id) combinedPersonnelValues.push(`T_${operation.assigned_team_id}`);
 
         const combinedResourceValues: string[] = [];
@@ -3239,11 +3263,18 @@ const WorkOrdersPage: React.FC = () => {
       
       let assigned_worker_id: number | undefined;
       let assigned_team_id: number | undefined;
+      const assigned_worker_ids: number[] = [];
       const personnel = Array.isArray(values.assigned_personnel) ? values.assigned_personnel : [values.assigned_personnel].filter(Boolean);
       personnel.forEach((p: string) => {
-        if (p.startsWith('U_')) assigned_worker_id = Number(p.substring(2));
+        if (p.startsWith('U_')) {
+          const workerId = Number(p.substring(2));
+          if (Number.isInteger(workerId) && workerId > 0 && !assigned_worker_ids.includes(workerId)) {
+            assigned_worker_ids.push(workerId);
+          }
+        }
         if (p.startsWith('T_')) assigned_team_id = Number(p.substring(2));
       });
+      assigned_worker_id = assigned_worker_ids[0];
 
       let work_center_id: number | undefined;
       let assigned_station_id: number | undefined;
@@ -3260,9 +3291,15 @@ const WorkOrdersPage: React.FC = () => {
       const tool = toolList.find((t) => Number(t.id) === Number(values.assigned_tool_id))
       const station = stationList.find((s) => Number(s.id) === Number(assigned_station_id))
       const workCenter = workCenterList.find((w) => Number(w.id) === Number(work_center_id))
-      const workerLabel = personnelOptions.find((o) => o.value === `U_${assigned_worker_id}`)?.label
-      const workerNameFromOption =
-        typeof workerLabel === 'string' ? workerLabel.replace(/^\[人员\]\s*/, '').trim() : ''
+      const workerNames = assigned_worker_ids
+        .map((workerId) => {
+          const matchedWorker = workerList.find((w) => Number(w.id) === Number(workerId))
+          const workerLabel = personnelOptions.find((o) => o.value === `U_${workerId}`)?.label
+          const workerNameFromOption =
+            typeof workerLabel === 'string' ? workerLabel.replace(/^\[人员\]\s*/, '').trim() : ''
+          return matchedWorker?.full_name || matchedWorker?.username || workerNameFromOption || ''
+        })
+        .filter(Boolean)
       const teamLabel = personnelOptions.find((o) => o.value === `T_${assigned_team_id}`)?.label
       const teamNameFromOption =
         typeof teamLabel === 'string' ? teamLabel.replace(/^\[小组\]\s*/, '').trim() : ''
@@ -3276,8 +3313,9 @@ const WorkOrdersPage: React.FC = () => {
         assigned_station_id: assigned_station_id ?? null,
         assigned_station_name: station?.name ?? null,
         assigned_worker_id: assigned_worker_id ?? null,
+        assigned_worker_ids: assigned_worker_ids,
         assigned_worker_name:
-          worker?.full_name || worker?.username || workerNameFromOption || null,
+          workerNames.join('、') || worker?.full_name || worker?.username || null,
         assigned_team_id: assigned_team_id ?? null,
         assigned_team_name: team?.name || teamNameFromOption || null,
         assigned_equipment_id: values.assigned_equipment_id ?? null,
@@ -3659,6 +3697,7 @@ const WorkOrdersPage: React.FC = () => {
           : token.colorTextSecondary
     const headerBg = themeAccent
     const statusLabel = isCompleted ? '已完成' : isInProgress ? '进行中' : '待开始'
+    const personnelText = formatOperationAssignedPersonnel(operation)
     /** 标题栏已有底色，徽章需对比色：完成=浅绿底、进行中=金、待开始=灰 */
     const statusTagColor = isCompleted ? 'success' : isInProgress ? 'gold' : 'default'
     const footerBg = isCompleted
@@ -3953,9 +3992,12 @@ const WorkOrdersPage: React.FC = () => {
                 </div>
                 {!isOutsourced ? (
                   <>
-                    <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div
+                      style={{ marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      title={personnelText}
+                    >
                       <strong>人员: </strong>
-                      {operation.assigned_worker_name || operation.assigned_team_name || '-'}
+                      {personnelText}
                     </div>
                     <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       <strong>车间: </strong>

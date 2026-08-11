@@ -57,6 +57,26 @@ async def get_pipeline_summary(current_user: Any = Depends(get_current_user)):
     return await service.get_pipeline_summary(current_user.tenant_id)
 
 
+@router.get("/chain-candidates", summary="Search chain start documents by code")
+async def list_chain_candidates(
+    document_type: str = Query(..., description="起始单据类型"),
+    keyword: Optional[str] = Query(None, description="单据编号或往来单位名称"),
+    limit: int = Query(20, ge=1, le=50),
+    current_user: Any = Depends(get_current_user),
+):
+    from infra.exceptions.exceptions import ValidationError
+
+    try:
+        return await service.list_chain_document_candidates(
+            current_user.tenant_id,
+            document_type=document_type,
+            keyword=keyword,
+            limit=limit,
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/chain/{flow_type}/{document_type}/{document_id}", summary="Standard sales/purchase finance chain")
 async def get_standard_chain(
     flow_type: str,

@@ -17,6 +17,9 @@ export type OutsourceReceiptLine = {
   receiptQuantity: number;
   qualifiedQuantity: number;
   unqualifiedQuantity: number;
+  processWasteQty?: number;
+  materialWasteQty?: number;
+  nonconformanceReason?: string;
 };
 
 export type OutsourceReceiptWorkOrderBrief = {
@@ -166,7 +169,6 @@ const OutsourceReceiptFormContent: React.FC<OutsourceReceiptFormContentProps> = 
       dataIndex: 'unqualifiedQuantity',
       width: 100,
       align: 'right',
-      fixed: 'right',
       render: (_, r) => (
         <InputNumber
           min={0}
@@ -176,6 +178,41 @@ const OutsourceReceiptFormContent: React.FC<OutsourceReceiptFormContentProps> = 
           disabled={r.pendingQuantity <= 0}
           style={{ width: '100%' }}
           onChange={(v) => updateLine({ unqualifiedQuantity: Number(v ?? 0) })}
+        />
+      ),
+    },
+    {
+      title: '工废',
+      dataIndex: 'processWasteQty',
+      width: 90,
+      align: 'right',
+      render: (_, r) => (
+        <InputNumber
+          min={0}
+          max={r.unqualifiedQuantity}
+          precision={2}
+          value={r.processWasteQty ?? 0}
+          disabled={r.pendingQuantity <= 0 || !(r.unqualifiedQuantity > 0)}
+          style={{ width: '100%' }}
+          onChange={(v) => updateLine({ processWasteQty: Number(v ?? 0) })}
+        />
+      ),
+    },
+    {
+      title: '料废',
+      dataIndex: 'materialWasteQty',
+      width: 90,
+      align: 'right',
+      fixed: 'right',
+      render: (_, r) => (
+        <InputNumber
+          min={0}
+          max={r.unqualifiedQuantity}
+          precision={2}
+          value={r.materialWasteQty ?? 0}
+          disabled={r.pendingQuantity <= 0 || !(r.unqualifiedQuantity > 0)}
+          style={{ width: '100%' }}
+          onChange={(v) => updateLine({ materialWasteQty: Number(v ?? 0) })}
         />
       ),
     },

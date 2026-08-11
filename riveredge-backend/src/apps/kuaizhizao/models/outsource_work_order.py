@@ -319,6 +319,9 @@ class OutsourceMaterialReceipt(BaseModel):
     quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="收货数量")
     qualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="合格数量")
     unqualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="不合格数量")
+    process_waste_qty = fields.DecimalField(max_digits=12, decimal_places=2, null=True, description="工废数量")
+    material_waste_qty = fields.DecimalField(max_digits=12, decimal_places=2, null=True, description="料废数量")
+    nonconformance_reason = fields.TextField(null=True, description="不合格原因")
     unit = fields.CharField(max_length=20, description="单位")
 
     # 仓库信息

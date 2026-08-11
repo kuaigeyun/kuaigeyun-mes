@@ -29,9 +29,15 @@ import { MultiTabListPageTemplate } from '../../../../../components/layout-templ
 import {
   partnerStatementService,
   PartnerStatement,
+  PartnerStatementLine,
   PartnerStatementPreview,
 } from '../../../services/finance/partnerStatement';
+import {
+  partnerStatementExpandableProps,
+  usePartnerStatementInboundDetail,
+} from '../../../components/PartnerStatementInboundDetail';
 import { buildPartnerStatementStatusEnum } from '../../../utils/financeSharedOptions';
+import { renderPartnerStatementDocType } from '../../../utils/partnerStatementLineDisplay';
 import { apiRequest } from '../../../../../services/api';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
@@ -63,8 +69,13 @@ const PartnerStatementsPage: React.FC = () => {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [preview, setPreview] = useState<PartnerStatementPreview | null>(null);
+  const { cache: previewLineDetailCache, loadLineDetail: loadPreviewLineDetail } =
+    usePartnerStatementInboundDetail();
   const [partnerId, setPartnerId] = useState<number | null>(null);
-  const [period, setPeriod] = useState<Dayjs>(() => dayjs().subtract(1, 'month').startOf('month'));
+  const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>(() => {
+    const month = dayjs().subtract(1, 'month');
+    return [month.startOf('month'), month.endOf('month')];
+  });
   const [partnerOptions, setPartnerOptions] = useState<{ label: string; value: number }[]>([]);
   const [createForm] = ProForm.useForm();
   const { message: messageApi } = App.useApp();
@@ -97,15 +108,15 @@ const PartnerStatementsPage: React.FC = () => {
   }, [partnerType]);
 
   const periodRange = useMemo(() => {
-    const start = period.startOf('month');
-    const end = period.endOf('month');
-    return { start, end, label: period.format('YYYY-MM') };
-  }, [period]);
+    const [start, end] = dateRange;
+    return { start, end, label: start.format('YYYY-MM') };
+  }, [dateRange]);
 
   const resetCreate = () => {
     setPreview(null);
     setPartnerId(null);
-    setPeriod(dayjs().subtract(1, 'month').startOf('month'));
+    const month = dayjs().subtract(1, 'month');
+    setDateRange([month.startOf('month'), month.endOf('month')]);
     createForm.resetFields();
   };
 
@@ -243,9 +254,15 @@ const PartnerStatementsPage: React.FC = () => {
       {
         title: t(`${PS}.col.period`),
         dataIndex: 'statement_period',
-        width: 110,
+        width: 200,
         hideInSearch: true,
         sorter: true,
+        render: (_, r) => {
+          const start = r.start_date ? String(r.start_date).slice(0, 10) : '';
+          const end = r.end_date ? String(r.end_date).slice(0, 10) : '';
+          if (start && end) return `${start} ~ ${end}`;
+          return r.statement_period || '—';
+        },
       },
       {
         title: t(`${PS}.col.openingBalance`),
@@ -330,7 +347,12 @@ const PartnerStatementsPage: React.FC = () => {
 
   const previewLineColumns = useMemo(() => [
     { title: t(`${PS}.col.date`), dataIndex: 'date', width: 110 },
-    { title: t(`${PS}.col.docType`), dataIndex: 'doc_type', width: 90 },
+    {
+      title: t(`${PS}.col.docType`),
+      dataIndex: 'doc_type',
+      width: 110,
+      render: (v: string, record: PartnerStatementLine) => renderPartnerStatementDocType(v, record),
+    },
     { title: t(`${PS}.col.docCode`), dataIndex: 'doc_code', width: 140, ellipsis: true },
     { title: t(`${PS}.col.summary`), dataIndex: 'summary', ellipsis: true },
     {
@@ -531,13 +553,16 @@ const PartnerStatementsPage: React.FC = () => {
                 String(opt?.label ?? '').toLowerCase().includes(input.toLowerCase())
               }
             />
-            <DatePicker
-              picker="month"
-              value={period}
+            <DatePicker.RangePicker
+              allowClear={false}
+              value={dateRange}
               onChange={(v) => {
-                if (v) setPeriod(v);
+                if (v?.[0] && v?.[1]) {
+                  setDateRange([v[0].startOf('day'), v[1].endOf('day')]);
+                }
                 setPreview(null);
               }}
+              placeholder={[t(`${PS}.startDate`), t(`${PS}.endDate`)]}
             />
           </Space>
 
@@ -553,13 +578,17 @@ const PartnerStatementsPage: React.FC = () => {
                 <Descriptions.Item label={t(`${PS}.col.debitTotal`)}>{money(preview.summary.debit_total)}</Descriptions.Item>
                 <Descriptions.Item label={t(`${PS}.col.creditTotal`)}>{money(preview.summary.credit_total)}</Descriptions.Item>
               </Descriptions>
-              <Table
+              <Table<PartnerStatementLine>
                 size="small"
                 rowKey={(r, i) => `${r.doc_code}-${i}`}
                 pagination={{ pageSize: 8 }}
                 scroll={{ x: 800, y: 280 }}
                 dataSource={preview.lines}
                 columns={previewLineColumns}
+                expandable={partnerStatementExpandableProps(
+                  previewLineDetailCache,
+                  loadPreviewLineDetail,
+                )}
               />
               <ProForm form={createForm} submitter={false}>
                 <DocumentAttachmentsField category="partner_statement_attachments" />

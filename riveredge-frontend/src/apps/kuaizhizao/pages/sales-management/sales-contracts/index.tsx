@@ -15,6 +15,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { toApiDateString, formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -498,6 +499,7 @@ const SalesContractsPage: React.FC = () => {
   );
 
   const actionRef = useRef<ActionType>();
+  const invalidateMenuBadge = useInvalidateMenuBadgeCounts();
   const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>(() =>
     readPersistedUniTableViewType(SALES_CONTRACT_LIST_PERSISTENCE_ID, 'table', [
       'table',
@@ -1068,7 +1070,7 @@ const SalesContractsPage: React.FC = () => {
         );
       }
       if (result.successCount > 0) {
-        actionRef.current?.reload();
+        reload();
       }
     } catch (error: any) {
       messageApi.error(error?.message || t('common.importFailed'));
@@ -1414,7 +1416,7 @@ const SalesContractsPage: React.FC = () => {
             }),
         );
         pullFromQuotationQuery.closeModal();
-        actionRef.current?.reload();
+        reload();
         if (result?.sales_contract?.id) {
           void openDetail(Number(result.sales_contract.id));
         }
@@ -1628,7 +1630,7 @@ const SalesContractsPage: React.FC = () => {
         navigate(SALES_CONTRACT_LIST_PATH);
       } else {
         setEditingId(null);
-        actionRef.current?.reload();
+        reload();
         if (detail?.id === editingId) openDetail(editingId);
       }
     } catch (err: any) {
@@ -1696,7 +1698,7 @@ const SalesContractsPage: React.FC = () => {
 
           if (detail?.id === record.id) setDetailOpen(false);
 
-          actionRef.current?.reload();
+          reload();
 
         } catch (e: any) {
 
@@ -2309,7 +2311,10 @@ const SalesContractsPage: React.FC = () => {
 
 
 
-  const reload = () => actionRef.current?.reload();
+  const reload = useCallback(() => {
+    invalidateMenuBadge();
+    actionRef.current?.reload();
+  }, [invalidateMenuBadge]);
 
   const refreshDetail = async (id: number) => {
     const data = await salesContractApi.get(id);
@@ -2322,7 +2327,7 @@ const SalesContractsPage: React.FC = () => {
   /** 审核流动作成功后：刷新列表；若详情抽屉正打开同一单据则同步详情/生命周期 */
   const handleContractWorkflowSuccess = useCallback(
     (contractId?: number) => {
-      actionRef.current?.reload();
+      reload();
       const openId = detail?.id;
       const targetId = contractId ?? openId;
       if (detailOpen && targetId != null && (contractId == null || openId === contractId)) {
@@ -2331,7 +2336,7 @@ const SalesContractsPage: React.FC = () => {
     },
     // refreshDetail/reload 依赖稳定的 actionRef；detail/detailOpen 决定是否同步抽屉
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshDetail 每次 render 新建，刻意用最新闭包
-    [detail?.id, detailOpen],
+    [detail?.id, detailOpen, reload],
   );
 
   // 统一审核动作由 UniWorkflowActions 接管（提交/撤回提交/审核/驳回/撤销审核）
@@ -2353,11 +2358,11 @@ const SalesContractsPage: React.FC = () => {
 
   const handleContractAuditBatchSuccess = useCallback(() => {
     setSelectedRowKeys([]);
-    actionRef.current?.reload();
+    reload();
     if (detailOpen && detail?.id != null) {
       void refreshDetail(detail.id);
     }
-  }, [detail?.id, detailOpen]);
+  }, [detail?.id, detailOpen, reload]);
 
   const handleBatchDeleteDrafts = useCallback(async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
@@ -2392,8 +2397,8 @@ const SalesContractsPage: React.FC = () => {
     if (success > 0) messageApi.success(t('app.kuaizhizao.salesContract.batchDeleteSuccess', { count: success }));
     if (failed > 0) messageApi.warning(t('app.kuaizhizao.salesContract.batchDeletePartial', { count: failed }));
     setSelectedRowKeys([]);
-    actionRef.current?.reload();
-  }, [contractPerms.canDelete, messageApi, t]);
+    reload();
+  }, [contractPerms.canDelete, messageApi, reload, t]);
 
   const handleCloseContract = async () => {
 

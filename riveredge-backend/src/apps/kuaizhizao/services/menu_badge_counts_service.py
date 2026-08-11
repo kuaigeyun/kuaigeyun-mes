@@ -173,7 +173,7 @@ async def _section_sales(tenant_id: int, now_date) -> BadgeFragment:
     }
 
 
-async def _section_purchase(tenant_id: int) -> BadgeFragment:
+async def _section_purchase(tenant_id: int, now_date) -> BadgeFragment:
     from apps.kuaizhizao.models.purchase_order import PurchaseOrder
     from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
     from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
@@ -195,7 +195,8 @@ async def _section_purchase(tenant_id: int) -> BadgeFragment:
     _pr = PurchaseReceipt.filter(tenant_id=tenant_id, deleted_at__isnull=True)
     inbound_term = list(dict.fromkeys([*_DOC_TERMINAL_STATUSES, "关闭", "已入库"]))
 
-    po_pending, po_prog, prq_pending, prq_prog, pr_pending, pr_exec = await asyncio.gather(
+    po_od, po_pending, po_prog, prq_pending, prq_prog, pr_pending, pr_exec = await asyncio.gather(
+        po.filter(delivery_date__lt=now_date, delivery_date__isnull=False).exclude(status__in=po_terminal).count(),
         po.filter(review_status__in=["PENDING", "PENDING_REVIEW", "待审核"]).exclude(status__in=po_terminal).count(),
         po.filter(status__in=[
             "IN_PROGRESS", "进行中", "APPROVED", "已审核", "CONFIRMED", "已确认",
@@ -213,7 +214,7 @@ async def _section_purchase(tenant_id: int) -> BadgeFragment:
         _pr.filter(status__in=tuple(_INBOUND_PENDING_STATUSES)).exclude(review_status__in=_RV_PENDING).count(),
     )
     return {
-        "purchase_order": {"overdue": 0, "pending": po_pending, "in_progress": po_prog},
+        "purchase_order": {"overdue": po_od, "pending": po_pending, "in_progress": po_prog},
         "purchase_requisition": {"overdue": 0, "pending": prq_pending, "in_progress": prq_prog},
         "inbound": {"overdue": 0, "pending": pr_pending, "in_progress": pr_exec},
     }
@@ -391,6 +392,8 @@ async def _section_sales_docs(tenant_id: int, now_date) -> BadgeFragment:
     qb_done = list(dict.fromkeys([*_DOC_TERMINAL_STATUSES, "已接受", "已拒绝", "已转订单"]))
     rn_done = list(dict.fromkeys([*_DOC_TERMINAL_STATUSES, "已入库", "已签收"]))
     sn_done = list(dict.fromkeys([*_DOC_TERMINAL_STATUSES, "已出库", "已签收"]))
+    # 退货单业务终态是「已退货」（列表阶段亦映射为已完成），须排除，避免待审核+已退货仍进徽章
+    return_done = list(dict.fromkeys([*_DOC_TERMINAL_STATUSES, "已退货", "RETURNED", "returned"]))
     qb_od, qb_p, qb_x, rn_od, rn_p, rn_x, prt_p, prt_x, sn_od, sn_p, sn_x, sr_p, sr_x = await asyncio.gather(
         qb.filter(valid_until__lt=now_date, valid_until__isnull=False)
         .exclude(status__in=qb_done).count(),
@@ -400,13 +403,13 @@ async def _section_sales_docs(tenant_id: int, now_date) -> BadgeFragment:
         .exclude(status__in=rn_done).count(),
         rn.filter(status="待收货").count(),
         rn.filter(status="已通知").count(),
-        prt.filter(review_status__in=_RV_PENDING).exclude(status__in=_DOC_TERMINAL_STATUSES).count(),
+        prt.filter(review_status__in=_RV_PENDING).exclude(status__in=return_done).count(),
         prt.filter(status="待退货").exclude(review_status__in=_RV_PENDING).count(),
         sn.filter(planned_ship_date__lt=now_date, planned_ship_date__isnull=False)
         .exclude(status__in=sn_done).count(),
         sn.filter(status="待发货").count(),
         sn.filter(status="已通知").count(),
-        sr.filter(review_status__in=_RV_PENDING).exclude(status__in=_DOC_TERMINAL_STATUSES).count(),
+        sr.filter(review_status__in=_RV_PENDING).exclude(status__in=return_done).count(),
         sr.filter(status="待退货").exclude(review_status__in=_RV_PENDING).count(),
     )
     return {
@@ -494,6 +497,8 @@ async def _section_finance(tenant_id: int, now_date) -> BadgeFragment:
 
 
 async def fetch_menu_badge_counts(tenant_id: int) -> dict:
+    from apps.kuaizhizao.services.menu_badge_counts_extended import fetch_extended_menu_badge_counts
+
     now = resolve_business_datetime()
     now_date = now.date()
 
@@ -501,7 +506,7 @@ async def fetch_menu_badge_counts(tenant_id: int) -> dict:
         _safe_section("work_orders", lambda: _section_work_orders(tenant_id, now)),
         _safe_section("exceptions", lambda: _section_exceptions(tenant_id)),
         _safe_section("sales", lambda: _section_sales(tenant_id, now_date)),
-        _safe_section("purchase", lambda: _section_purchase(tenant_id)),
+        _safe_section("purchase", lambda: _section_purchase(tenant_id, now_date)),
         _safe_section("quality_inspection", lambda: _section_quality_inspection(tenant_id)),
         _safe_section("equipment_assets", lambda: _section_equipment_assets(tenant_id)),
         _safe_section("spare_part", lambda: _section_spare_part(tenant_id)),
@@ -510,6 +515,7 @@ async def fetch_menu_badge_counts(tenant_id: int) -> dict:
         _safe_section("sales_docs", lambda: _section_sales_docs(tenant_id, now_date)),
         _safe_section("misc_ops", lambda: _section_misc_ops(tenant_id, now, now_date)),
         _safe_section("finance", lambda: _section_finance(tenant_id, now_date)),
+        _safe_section("extended", lambda: fetch_extended_menu_badge_counts(tenant_id, now, now_date)),
     )
 
     counts: dict = {}

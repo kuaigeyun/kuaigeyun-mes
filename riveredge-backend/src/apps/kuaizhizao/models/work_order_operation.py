@@ -110,8 +110,12 @@ class WorkOrderOperation(BaseModel):
     status = fields.CharField(max_length=20, default="pending", description="工序状态（pending/in_progress/completed/cancelled）")
     
     # 派工信息
-    assigned_worker_id = fields.IntField(null=True, description="分配的员工ID")
-    assigned_worker_name = fields.CharField(max_length=100, null=True, description="分配的员工姓名")
+    assigned_worker_id = fields.IntField(null=True, description="分配的员工ID（主责/兼容，取 assigned_worker_ids 首项）")
+    assigned_worker_name = fields.CharField(max_length=500, null=True, description="分配的员工姓名（多人以顿号分隔）")
+    assigned_worker_ids = fields.JSONField(
+        default=list,
+        description="分配的员工ID列表（派工多人时使用）",
+    )
     assigned_team_id = fields.IntField(null=True, description="分配的工作小组ID")
     assigned_team_name = fields.CharField(max_length=100, null=True, description="分配的工作小组名称")
     assigned_station_id = fields.IntField(null=True, description="分配的工位ID")

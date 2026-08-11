@@ -26,8 +26,9 @@ service = BankAccountService()
 class BankAccountCreate(BaseSchema):
     account_code: str = Field(..., max_length=50)
     account_name: str = Field(..., max_length=200)
-    bank_name: str = Field(..., max_length=200)
-    account_number: str = Field(..., max_length=64)
+    account_type: str = Field("bank", max_length=20, description="bank=银行账户 cash=库存现金")
+    bank_name: Optional[str] = Field(None, max_length=200, description="开户行（银行账户必填）")
+    account_number: Optional[str] = Field(None, max_length=64, description="银行账号（银行账户必填）")
     currency: str = Field("CNY", max_length=10)
     opening_balance: Decimal = Field(Decimal("0"))
     notes: Optional[str] = None
@@ -36,6 +37,7 @@ class BankAccountCreate(BaseSchema):
 
 class BankAccountUpdate(BaseSchema):
     account_name: Optional[str] = None
+    account_type: Optional[str] = Field(None, description="bank=银行账户 cash=库存现金")
     bank_name: Optional[str] = None
     account_number: Optional[str] = None
     currency: Optional[str] = None
@@ -44,11 +46,20 @@ class BankAccountUpdate(BaseSchema):
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
-class BankAccountResponse(BankAccountCreate):
+class BankAccountResponse(BaseSchema):
     id: int
     tenant_id: int
+    account_code: str
+    account_name: str
+    account_type: str = "bank"
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    currency: str = "CNY"
+    opening_balance: Decimal = Decimal("0")
     current_balance: Decimal
     is_active: bool
+    notes: Optional[str] = None
+    attachments: Optional[List[dict]] = None
     created_at: Optional[Any] = None
     updated_at: Optional[Any] = None
     created_by_name: Optional[str] = None
@@ -150,6 +161,8 @@ async def update_bank_account(
         return BankAccountResponse.model_validate(row)
     except NotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)

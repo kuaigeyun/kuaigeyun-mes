@@ -117,7 +117,7 @@ export async function getDashboard(): Promise<DashboardResponse> {
  * 左侧菜单业务单据未完成数量（用于报表/大屏/业务单据小徽标）
  * key 与菜单 path 映射见 BasicLayout 中的 MENU_BADGE_PATH_KEY
  *
- * 与销售订单一致的三态：逾期(红) > 待审核(橙) > 进行中(绿)；亦可为单一数字。
+ * 徽章仅两色：逾期(红) > 进行中(蓝)；进行中含 pending + in_progress；亦可为单一数字。
  */
 export interface MenuBadgeTriState {
   overdue: number;

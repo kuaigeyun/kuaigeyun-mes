@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { ProFormMoney, ProFormSelect, ProFormDatePicker, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import { ProFormMoney, ProFormSelect, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { App, Button, Tag, Typography } from 'antd';
+import { App, Button, Tabs, Tag, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { FormModalTemplate, MultiTabListPageTemplate, MODAL_CONFIG, type StatCard } from '../../../../../components/layout-templates';
@@ -17,7 +17,11 @@ import { receivableService } from '../../../services/finance/receivable';
 import { payableService } from '../../../services/finance/payable';
 import { useTranslation } from 'react-i18next';
 import { formatSettlementType } from '../../../utils/financeUiLabels';
-import { buildVoucherStatusEnum, assertBankAccountForTransfer, getPaymentMethodOptions, BANK_TRANSFER_PAYMENT_METHOD, isBankTransferPaymentMethod } from '../../../utils/financeSharedOptions';
+import { buildVoucherStatusEnum, assertBankAccountForPaymentMethod, getPaymentMethodOptions, BANK_TRANSFER_PAYMENT_METHOD } from '../../../utils/financeSharedOptions';
+import {
+  LedgerAccountFormFields,
+  resolveLedgerAccountNote,
+} from '../../../components/LedgerAccountFormFields';
 import { formatDateTime } from '../../../../../utils/format';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
@@ -57,7 +61,9 @@ const PrepaymentsPage: React.FC = () => {
   const paymentRef = useRef<ActionType>();
   const receiptLastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const paymentLastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
-  const [activeTab, setActiveTab] = useState('balance');
+  const [activeTab, setActiveTab] = useState('receipt');
+  const [receiptSubTab, setReceiptSubTab] = useState('summary');
+  const [paymentSubTab, setPaymentSubTab] = useState('summary');
   const [applyReceiptVisible, setApplyReceiptVisible] = useState(false);
   const [applyPaymentVisible, setApplyPaymentVisible] = useState(false);
   const [createReceiptVisible, setCreateReceiptVisible] = useState(false);
@@ -71,14 +77,6 @@ const PrepaymentsPage: React.FC = () => {
   const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
   const prepaymentPerms = useResourcePermissions(PREPAYMENT_RESOURCE);
   const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
-  const bankAccountOptions = useMemo(
-    () => bankAccounts.map((a) => ({
-      label: `${a.bank_name || ''} ${a.account_number || ''}`.trim() || String(a.id),
-      value: a.id,
-      account_number: a.account_number,
-    })),
-    [bankAccounts],
-  );
 
   const { data: balances } = useQuery({
     queryKey: ['prepaymentBalances'],
@@ -340,189 +338,226 @@ const PrepaymentsPage: React.FC = () => {
     supplierBalanceRef.current?.reload();
   };
 
-  const tabs = useMemo(() => [
-    {
-      key: 'balance',
-      label: t(`${P}.tabSummary`),
-      children: (
-        <>
-          <UniTable<PrepaymentRow>
-            actionRef={customerBalanceRef}
-            headerTitle={t(`${P}.customerBalance`)}
-            enableRowSelection
-            rowKey={(r) => `c-${r.partner_id}`}
-            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.customer-balance"
-            columns={balanceColumns}
-            showAdvancedSearch
-            skipFuzzyPinyinClientFilter
-            request={async (params, sort, _filter, searchFormValues) => {
-              const { current, pageSize } = params;
-              const listParams = resolvePrepaymentBalanceListParams(searchFormValues, sort);
-              try {
-                const res = await documentReconciliationService.getPrepaymentBalances({
-                  partner_type: 'customer',
-                  skip: ((current || 1) - 1) * (pageSize || 20),
-                  limit: pageSize || 20,
-                  ...listParams,
-                });
-                return {
-                  data: (res?.items || []) as PrepaymentRow[],
-                  total: res?.total || 0,
-                  success: true,
-                };
-              } catch (error: unknown) {
-                const err = error as { message?: string };
-                messageApi.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
-                return { data: [], total: 0, success: false };
-              }
-            }}
-            pagination={{ pageSize: 20 }}
-            toolBarRender={false}
+  const tabs = useMemo(() => {
+    const receiptCreateBtn = prepaymentPerms.canCreate ? (
+      <Button
+        key="create-prepayment-receipt"
+        type="primary"
+        icon={<PlusOutlined />}
+        onClick={() => setCreateReceiptVisible(true)}
+      >
+        {t(`${P}.createPreReceipt`)}
+      </Button>
+    ) : null;
+    const paymentCreateBtn = prepaymentPerms.canCreate ? (
+      <Button
+        key="create-prepayment-payment"
+        type="primary"
+        icon={<PlusOutlined />}
+        onClick={() => setCreatePaymentVisible(true)}
+      >
+        {t(`${P}.createPrePayment`)}
+      </Button>
+    ) : null;
+
+    return [
+      {
+        key: 'receipt',
+        label: t(`${P}.tabReceipt`),
+        children: (
+          <Tabs
+            activeKey={receiptSubTab}
+            onChange={setReceiptSubTab}
+            destroyOnHidden={false}
+            items={[
+              {
+                key: 'summary',
+                label: t(`${P}.tabSubSummary`),
+                children: (
+                  <UniTable<PrepaymentRow>
+                    actionRef={customerBalanceRef}
+                    enableRowSelection
+                    rowKey={(r) => `c-${r.partner_id}`}
+                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.customer-balance"
+                    columns={balanceColumns}
+                    showAdvancedSearch
+                    skipFuzzyPinyinClientFilter
+                    request={async (params, sort, _filter, searchFormValues) => {
+                      const { current, pageSize } = params;
+                      const listParams = resolvePrepaymentBalanceListParams(searchFormValues, sort);
+                      try {
+                        const res = await documentReconciliationService.getPrepaymentBalances({
+                          partner_type: 'customer',
+                          skip: ((current || 1) - 1) * (pageSize || 20),
+                          limit: pageSize || 20,
+                          ...listParams,
+                        });
+                        return {
+                          data: (res?.items || []) as PrepaymentRow[],
+                          total: res?.total || 0,
+                          success: true,
+                        };
+                      } catch (error: unknown) {
+                        const err = error as { message?: string };
+                        messageApi.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
+                        return { data: [], total: 0, success: false };
+                      }
+                    }}
+                    pagination={{ pageSize: 20 }}
+                    toolBarRender={() => [receiptCreateBtn].filter(Boolean)}
+                  />
+                ),
+              },
+              {
+                key: 'detail',
+                label: t(`${P}.tabSubDetail`),
+                children: (
+                  <UniTable<PrepaymentRow>
+                    actionRef={receiptRef}
+                    enableRowSelection
+                    rowKey="id"
+                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.receipts"
+                    columns={receiptColumns}
+                    showAdvancedSearch
+                    skipFuzzyPinyinClientFilter
+                    pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
+                    request={async (params, sort, _filter, searchFormValues) => {
+                      const { current, pageSize } = params;
+                      const listParams = resolveReceiptListParams(searchFormValues, sort);
+                      receiptLastListParamsRef.current = listParams;
+                      const apiParams: ReceiptListParams = {
+                        skip: ((current || 1) - 1) * (pageSize || 20),
+                        limit: pageSize || 20,
+                        settlement_type: 'prepayment',
+                        unsettled_only: true,
+                        ...listParams,
+                      };
+                      try {
+                        const res = await receiptService.listReceipts(apiParams);
+                        return {
+                          data: (res?.items || []) as PrepaymentRow[],
+                          total: res?.total || 0,
+                          success: true,
+                        };
+                      } catch (error: unknown) {
+                        const err = error as { message?: string };
+                        messageApi.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
+                        return { data: [], total: 0, success: false };
+                      }
+                    }}
+                    pagination={{ pageSize: 20 }}
+                    toolBarRender={() => [receiptCreateBtn].filter(Boolean)}
+                  />
+                ),
+              },
+            ]}
           />
-          <UniTable<PrepaymentRow>
-            actionRef={supplierBalanceRef}
-            headerTitle={t(`${P}.supplierBalance`)}
-            style={{ marginTop: 16 }}
-            enableRowSelection
-            rowKey={(r) => `s-${r.partner_id}`}
-            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.supplier-balance"
-            columns={balanceColumns}
-            showAdvancedSearch
-            skipFuzzyPinyinClientFilter
-            request={async (params, sort, _filter, searchFormValues) => {
-              const { current, pageSize } = params;
-              const listParams = resolvePrepaymentBalanceListParams(searchFormValues, sort);
-              try {
-                const res = await documentReconciliationService.getPrepaymentBalances({
-                  partner_type: 'supplier',
-                  skip: ((current || 1) - 1) * (pageSize || 20),
-                  limit: pageSize || 20,
-                  ...listParams,
-                });
-                return {
-                  data: (res?.items || []) as PrepaymentRow[],
-                  total: res?.total || 0,
-                  success: true,
-                };
-              } catch (error: unknown) {
-                const err = error as { message?: string };
-                messageApi.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
-                return { data: [], total: 0, success: false };
-              }
-            }}
-            pagination={{ pageSize: 20 }}
-            toolBarRender={false}
+        ),
+      },
+      {
+        key: 'payment',
+        label: t(`${P}.tabPayment`),
+        children: (
+          <Tabs
+            activeKey={paymentSubTab}
+            onChange={setPaymentSubTab}
+            destroyOnHidden={false}
+            items={[
+              {
+                key: 'summary',
+                label: t(`${P}.tabSubSummary`),
+                children: (
+                  <UniTable<PrepaymentRow>
+                    actionRef={supplierBalanceRef}
+                    enableRowSelection
+                    rowKey={(r) => `s-${r.partner_id}`}
+                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.supplier-balance"
+                    columns={balanceColumns}
+                    showAdvancedSearch
+                    skipFuzzyPinyinClientFilter
+                    request={async (params, sort, _filter, searchFormValues) => {
+                      const { current, pageSize } = params;
+                      const listParams = resolvePrepaymentBalanceListParams(searchFormValues, sort);
+                      try {
+                        const res = await documentReconciliationService.getPrepaymentBalances({
+                          partner_type: 'supplier',
+                          skip: ((current || 1) - 1) * (pageSize || 20),
+                          limit: pageSize || 20,
+                          ...listParams,
+                        });
+                        return {
+                          data: (res?.items || []) as PrepaymentRow[],
+                          total: res?.total || 0,
+                          success: true,
+                        };
+                      } catch (error: unknown) {
+                        const err = error as { message?: string };
+                        messageApi.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
+                        return { data: [], total: 0, success: false };
+                      }
+                    }}
+                    pagination={{ pageSize: 20 }}
+                    toolBarRender={() => [paymentCreateBtn].filter(Boolean)}
+                  />
+                ),
+              },
+              {
+                key: 'detail',
+                label: t(`${P}.tabSubDetail`),
+                children: (
+                  <UniTable<PrepaymentRow>
+                    actionRef={paymentRef}
+                    enableRowSelection
+                    rowKey="id"
+                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.payments"
+                    columns={paymentColumns}
+                    showAdvancedSearch
+                    skipFuzzyPinyinClientFilter
+                    pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
+                    request={async (params, sort, _filter, searchFormValues) => {
+                      const { current, pageSize } = params;
+                      const listParams = resolvePaymentListParams(searchFormValues, sort);
+                      paymentLastListParamsRef.current = listParams;
+                      const apiParams: PaymentListParams = {
+                        skip: ((current || 1) - 1) * (pageSize || 20),
+                        limit: pageSize || 20,
+                        settlement_type: 'prepayment',
+                        unsettled_only: true,
+                        ...listParams,
+                      };
+                      try {
+                        const res = await paymentService.listPayments(apiParams);
+                        return {
+                          data: (res?.items || []) as PrepaymentRow[],
+                          total: res?.total || 0,
+                          success: true,
+                        };
+                      } catch (error: unknown) {
+                        const err = error as { message?: string };
+                        messageApi.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
+                        return { data: [], total: 0, success: false };
+                      }
+                    }}
+                    pagination={{ pageSize: 20 }}
+                    toolBarRender={() => [paymentCreateBtn].filter(Boolean)}
+                  />
+                ),
+              },
+            ]}
           />
-        </>
-      ),
-    },
-    {
-      key: 'receipt',
-      label: t(`${P}.tabReceiptDetail`),
-      children: (
-        <UniTable<PrepaymentRow>
-          actionRef={receiptRef}
-          enableRowSelection
-          rowKey="id"
-          columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.receipts"
-          columns={receiptColumns}
-          showAdvancedSearch
-          skipFuzzyPinyinClientFilter
-          pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
-          request={async (params, sort, _filter, searchFormValues) => {
-            const { current, pageSize } = params;
-            const listParams = resolveReceiptListParams(searchFormValues, sort);
-            receiptLastListParamsRef.current = listParams;
-            const apiParams: ReceiptListParams = {
-              skip: ((current || 1) - 1) * (pageSize || 20),
-              limit: pageSize || 20,
-              settlement_type: 'prepayment',
-              unsettled_only: true,
-              ...listParams,
-            };
-            try {
-              const res = await receiptService.listReceipts(apiParams);
-              return {
-                data: (res?.items || []) as PrepaymentRow[],
-                total: res?.total || 0,
-                success: true,
-              };
-            } catch (error: unknown) {
-              const err = error as { message?: string };
-              messageApi.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
-              return { data: [], total: 0, success: false };
-            }
-          }}
-          pagination={{ pageSize: 20 }}
-          toolBarRender={() => [
-            prepaymentPerms.canUpdate ? (
-              <Button
-                key="create-prepayment-receipt"
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => setCreateReceiptVisible(true)}
-              >
-                {t(`${P}.createPreReceipt`)}
-              </Button>
-            ) : null,
-          ].filter(Boolean)}
-        />
-      ),
-    },
-    {
-      key: 'payment',
-      label: t(`${P}.tabPaymentDetail`),
-      children: (
-        <UniTable<PrepaymentRow>
-          actionRef={paymentRef}
-          enableRowSelection
-          rowKey="id"
-          columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.payments"
-          columns={paymentColumns}
-          showAdvancedSearch
-          skipFuzzyPinyinClientFilter
-          pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
-          request={async (params, sort, _filter, searchFormValues) => {
-            const { current, pageSize } = params;
-            const listParams = resolvePaymentListParams(searchFormValues, sort);
-            paymentLastListParamsRef.current = listParams;
-            const apiParams: PaymentListParams = {
-              skip: ((current || 1) - 1) * (pageSize || 20),
-              limit: pageSize || 20,
-              settlement_type: 'prepayment',
-              unsettled_only: true,
-              ...listParams,
-            };
-            try {
-              const res = await paymentService.listPayments(apiParams);
-              return {
-                data: (res?.items || []) as PrepaymentRow[],
-                total: res?.total || 0,
-                success: true,
-              };
-            } catch (error: unknown) {
-              const err = error as { message?: string };
-              messageApi.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
-              return { data: [], total: 0, success: false };
-            }
-          }}
-          pagination={{ pageSize: 20 }}
-          toolBarRender={() => [
-            prepaymentPerms.canUpdate ? (
-              <Button
-                key="create-prepayment-payment"
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => setCreatePaymentVisible(true)}
-              >
-                {t(`${P}.createPrePayment`)}
-              </Button>
-            ) : null,
-          ].filter(Boolean)}
-        />
-      ),
-    },
-  ], [balanceColumns, bankAccountOptions, messageApi, paymentColumns, paymentMethodOptions, prepaymentPerms.canUpdate, receiptColumns, t]);
+        ),
+      },
+    ];
+  }, [
+    balanceColumns,
+    messageApi,
+    paymentColumns,
+    paymentSubTab,
+    prepaymentPerms.canCreate,
+    receiptColumns,
+    receiptSubTab,
+    t,
+  ]);
 
   return (
     <>
@@ -620,12 +655,11 @@ const PrepaymentsPage: React.FC = () => {
         }}
         onFinish={async (values) => {
           try {
-            assertBankAccountForTransfer(values.payment_method, values.bank_account_id, t);
+            assertBankAccountForPaymentMethod(values.payment_method, values.bank_account_id, t);
           } catch (e: unknown) {
             messageApi.warning((e as Error).message);
             return false;
           }
-          const bank = bankAccountOptions.find((o) => o.value === values.bank_account_id);
           await receiptService.create({
             customer_id: values.customer_id,
             customer_name: customerOptions.find((o) => o.value === values.customer_id)?.label || '',
@@ -633,7 +667,7 @@ const PrepaymentsPage: React.FC = () => {
             receipt_date: formatDateTime(values.receipt_date || dayjs(), 'YYYY-MM-DD'),
             payment_method: values.payment_method,
             bank_account_id: values.bank_account_id,
-            bank_account: bank?.account_number,
+            bank_account: resolveLedgerAccountNote(bankAccounts, values.bank_account_id, values.bank_account),
             settlement_type: 'prepayment',
             notes: values.notes,
             attachments: normalizeDocumentAttachments(values.attachments),
@@ -642,6 +676,8 @@ const PrepaymentsPage: React.FC = () => {
           reloadBalanceTables();
           receiptRef.current?.reload();
           setCreateReceiptVisible(false);
+          setActiveTab('receipt');
+          setReceiptSubTab('detail');
           return true;
         }}
       >
@@ -659,21 +695,11 @@ const PrepaymentsPage: React.FC = () => {
           fieldProps={{ style: { width: '100%' } }}
         />
         <ProFormMoney name="total_amount" label={t(`${P}.col.receiptAmount`)} min={0.01} rules={[{ required: true }]} />
-        <ProFormSelect name="payment_method" label={t('app.kuaicaiwu.receipt.paymentMethod')} options={paymentMethodOptions} rules={[{ required: true }]} />
-        <ProFormSelect
-          name="bank_account_id"
-          label={t('app.kuaicaiwu.receipt.bankAccount')}
-          options={bankAccountOptions}
-          rules={[
-            ({ getFieldValue }) => ({
-              validator: async (_, value) => {
-                if (!isBankTransferPaymentMethod(getFieldValue('payment_method'))) return;
-                if (value) return;
-                throw new Error(t('app.kuaicaiwu.receipt.bankAccountRequired'));
-              },
-            }),
-          ]}
-          extra={bankAccountOptions.length === 0 ? t('app.kuaicaiwu.receipt.bankAccountEmptyHint') : undefined}
+        <ProFormSelect name="payment_method" label={t('app.kuaicaiwu.receipt.col.paymentMethod')} options={paymentMethodOptions} rules={[{ required: true }]} />
+        <LedgerAccountFormFields
+          accounts={bankAccounts}
+          accountLabel={t('app.kuaicaiwu.receipt.bankAccount')}
+          noteLabel={t('app.kuaicaiwu.receipt.bankAccountNote')}
         />
         <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
         <DocumentAttachmentsField name="attachments" />
@@ -691,12 +717,11 @@ const PrepaymentsPage: React.FC = () => {
         }}
         onFinish={async (values) => {
           try {
-            assertBankAccountForTransfer(values.payment_method, values.bank_account_id, t);
+            assertBankAccountForPaymentMethod(values.payment_method, values.bank_account_id, t);
           } catch (e: unknown) {
             messageApi.warning((e as Error).message);
             return false;
           }
-          const bank = bankAccountOptions.find((o) => o.value === values.bank_account_id);
           await paymentService.create({
             supplier_id: values.supplier_id,
             supplier_name: supplierOptions.find((o) => o.value === values.supplier_id)?.label || '',
@@ -704,7 +729,7 @@ const PrepaymentsPage: React.FC = () => {
             payment_date: formatDateTime(values.payment_date || dayjs(), 'YYYY-MM-DD'),
             payment_method: values.payment_method,
             bank_account_id: values.bank_account_id,
-            bank_account: bank?.account_number,
+            bank_account: resolveLedgerAccountNote(bankAccounts, values.bank_account_id, values.bank_account),
             settlement_type: 'prepayment',
             notes: values.notes,
             attachments: normalizeDocumentAttachments(values.attachments),
@@ -713,6 +738,8 @@ const PrepaymentsPage: React.FC = () => {
           reloadBalanceTables();
           paymentRef.current?.reload();
           setCreatePaymentVisible(false);
+          setActiveTab('payment');
+          setPaymentSubTab('detail');
           return true;
         }}
       >
@@ -730,21 +757,11 @@ const PrepaymentsPage: React.FC = () => {
           fieldProps={{ style: { width: '100%' } }}
         />
         <ProFormMoney name="total_amount" label={t(`${P}.col.paymentAmount`)} min={0.01} rules={[{ required: true }]} />
-        <ProFormSelect name="payment_method" label={t('app.kuaicaiwu.payment.paymentMethod')} options={paymentMethodOptions} rules={[{ required: true }]} />
-        <ProFormSelect
-          name="bank_account_id"
-          label={t('app.kuaicaiwu.payment.bankAccount')}
-          options={bankAccountOptions}
-          rules={[
-            ({ getFieldValue }) => ({
-              validator: async (_, value) => {
-                if (!isBankTransferPaymentMethod(getFieldValue('payment_method'))) return;
-                if (value) return;
-                throw new Error(t('app.kuaicaiwu.payment.bankAccountRequired'));
-              },
-            }),
-          ]}
-          extra={bankAccountOptions.length === 0 ? t('app.kuaicaiwu.payment.bankAccountEmptyHint') : undefined}
+        <ProFormSelect name="payment_method" label={t('app.kuaicaiwu.payment.col.paymentMethod')} options={paymentMethodOptions} rules={[{ required: true }]} />
+        <LedgerAccountFormFields
+          accounts={bankAccounts}
+          accountLabel={t('app.kuaicaiwu.payment.outBankAccount')}
+          noteLabel={t('app.kuaicaiwu.payment.outAccountNote')}
         />
         <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
         <DocumentAttachmentsField name="attachments" />

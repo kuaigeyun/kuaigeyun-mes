@@ -5,7 +5,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { App, Button, Card, Col, DatePicker, Form, InputNumber, Row, Select, Space, Spin, Table, Typography } from 'antd';
+import { App, Button, Card, Col, DatePicker, Form, Input, InputNumber, Row, Select, Space, Spin, Table, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import {
@@ -132,6 +132,9 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
             receiptQuantity: receiptLine.receiptQuantity,
             qualifiedQuantity: receiptLine.qualifiedQuantity,
             unqualifiedQuantity: receiptLine.unqualifiedQuantity,
+            processWasteQty: receiptLine.processWasteQty,
+            materialWasteQty: receiptLine.materialWasteQty,
+            nonconformanceReason: receiptLine.nonconformanceReason,
           }
         : undefined,
       previewQtyByKey:
@@ -389,8 +392,46 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
                   ...prev,
                   unqualifiedQuantity: unqualified,
                   receiptQuantity: qualified + unqualified,
+                  processWasteQty: Math.min(Number(prev.processWasteQty || 0), unqualified),
+                  materialWasteQty: Math.min(Number(prev.materialWasteQty || 0), unqualified),
                 };
               });
+            }}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.processWaste'),
+        width: 100,
+        align: 'right' as const,
+        render: (_: unknown, record: OutsourceReceiptLine) => (
+          <InputNumber
+            min={0}
+            max={record.unqualifiedQuantity}
+            precision={2}
+            value={record.processWasteQty ?? 0}
+            disabled={!(record.unqualifiedQuantity > 0)}
+            style={{ width: '100%' }}
+            onChange={(v) => {
+              setReceiptLine((prev) => (prev ? { ...prev, processWasteQty: Number(v ?? 0) } : prev));
+            }}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.materialWaste'),
+        width: 100,
+        align: 'right' as const,
+        render: (_: unknown, record: OutsourceReceiptLine) => (
+          <InputNumber
+            min={0}
+            max={record.unqualifiedQuantity}
+            precision={2}
+            value={record.materialWasteQty ?? 0}
+            disabled={!(record.unqualifiedQuantity > 0)}
+            style={{ width: '100%' }}
+            onChange={(v) => {
+              setReceiptLine((prev) => (prev ? { ...prev, materialWasteQty: Number(v ?? 0) } : prev));
             }}
           />
         ),
@@ -495,12 +536,22 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
       const createdIds: number[] = [];
 
       if (pullType === 'outsource_receipt') {
+        const processWaste = Number(receiptLine.processWasteQty || 0);
+        const materialWaste = Number(receiptLine.materialWasteQty || 0);
+        const unqualified = Number(receiptLine.unqualifiedQuantity || 0);
+        if (unqualified > 0 && processWaste + materialWaste > unqualified + 1e-9) {
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.outsource.wasteExceedsUnqualified'));
+          return;
+        }
         const created = (await outsourceMaterialReceiptApi.create({
           outsource_work_order_id: woId,
           outsource_work_order_code: woCode,
           quantity: receiptLine.receiptQuantity,
           qualified_quantity: receiptLine.qualifiedQuantity || 0,
-          unqualified_quantity: receiptLine.unqualifiedQuantity || 0,
+          unqualified_quantity: unqualified,
+          process_waste_qty: processWaste > 0 ? processWaste : undefined,
+          material_waste_qty: materialWaste > 0 ? materialWaste : undefined,
+          nonconformance_reason: (receiptLine.nonconformanceReason || '').trim() || undefined,
           unit: receiptLine.unit || '件',
           warehouse_id: warehouseId,
           warehouse_name: whOpt?.name,
@@ -801,6 +852,23 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
 
             {workOrder && (
               <Form layout="vertical" requiredMark={false} style={{ marginTop: PAGE_SPACING.BLOCK_GAP }}>
+                {pullType === 'outsource_receipt' ? (
+                  <Form.Item
+                    label={t('app.kuaizhizao.warehouseInbound.field.nonconformanceReason')}
+                    style={{ marginBottom: 12 }}
+                  >
+                    <Input.TextArea
+                      rows={2}
+                      value={receiptLine?.nonconformanceReason || ''}
+                      placeholder={t('app.kuaizhizao.warehouseInbound.field.nonconformanceReasonPlaceholder')}
+                      onChange={(e) =>
+                        setReceiptLine((prev) =>
+                          prev ? { ...prev, nonconformanceReason: e.target.value } : prev,
+                        )
+                      }
+                    />
+                  </Form.Item>
+                ) : null}
                 <InboundEntryRemarksSection value={notes} onChange={setNotes} />
               </Form>
             )}

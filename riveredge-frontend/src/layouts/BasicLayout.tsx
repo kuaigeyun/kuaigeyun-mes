@@ -222,29 +222,47 @@ const APP_GROUP_TITLE_TEXT_STYLE: React.CSSProperties = {
 
 /**
  * 左侧菜单 path → menu-badge-counts 的 key（与后端 get_menu_badge_counts 一致）
- * 销售式三态：逾期(红) > 待审核(橙) > 进行中(绿)，见 menuItemRender
+ * 徽章仅两色：逾期(红) > 进行中(蓝)；进行中含 pending+in_progress；皆 0 不显示
  */
 const MENU_BADGE_PATH_KEY: Record<string, string> = {
-  '/apps/kuaizhizao/production-execution/work-orders': 'work_order',
-  '/apps/kuaizhizao/production-execution/rework-orders': 'rework_order',
-  '/apps/kuaizhizao/production-execution/material-shortage-exceptions': 'material_shortage_exception',
-  '/apps/kuaizhizao/production-execution/delivery-delay-exceptions': 'delivery_delay_exception',
-  '/apps/kuaizhizao/production-execution/quality-exceptions': 'quality_exception',
-  '/apps/kuaizhizao/production-execution/outsource-management': 'outsource_work_order',
-  '/apps/kuaizhizao/production-execution/packing-binding': 'packing_binding',
-  '/apps/kuaizhizao/purchase-management/purchase-orders': 'purchase_order',
-  '/apps/kuaizhizao/purchase-management/purchase-requisitions': 'purchase_requisition',
-  '/apps/kuaizhizao/purchase-management/receipt-notices': 'receipt_notice',
-  '/apps/kuaizhizao/purchase-management/logistics-tracking': 'purchase_logistics',
-  '/apps/kuaizhizao/purchase-management/purchase-returns': 'purchase_return',
-  '/apps/kuaizhizao/sales-management/sales-orders': 'sales_order',
-  '/apps/kuaizhizao/sales-management/sales-forecasts': 'sales_forecast',
+  // 销售
   '/apps/kuaizhizao/sales-management/customer-pool': 'customer_pool',
   '/apps/kuaizhizao/sales-management/quotations': 'quotation',
   '/apps/kuaizhizao/sales-management/customer-follow-ups': 'customer_follow_up',
-  '/apps/kuaizhizao/sales-management/sample-trials': 'sample_trial',
+  '/apps/kuaizhizao/sales-management/sales-contracts': 'sales_contract',
+  '/apps/kuaizhizao/sales-management/sales-forecasts': 'sales_forecast',
+  '/apps/kuaizhizao/sales-management/sales-orders': 'sales_order',
+  '/apps/kuaizhizao/sales-management/sales-order-changes': 'sales_order_change',
   '/apps/kuaizhizao/sales-management/shipment-notices': 'shipment_notice',
   '/apps/kuaizhizao/sales-management/sales-returns': 'sales_return',
+  // 计划
+  '/apps/kuaizhizao/plan-management/demand-management': 'demand',
+  '/apps/kuaizhizao/plan-management/demand-computation': 'demand_computation',
+  // 采购
+  '/apps/kuaizhizao/purchase-management/purchase-requisitions': 'purchase_requisition',
+  '/apps/kuaizhizao/purchase-management/purchase-inquiries': 'purchase_inquiry',
+  '/apps/kuaizhizao/purchase-management/purchase-orders': 'purchase_order',
+  '/apps/kuaizhizao/purchase-management/purchase-order-changes': 'purchase_order_change',
+  '/apps/kuaizhizao/purchase-management/receipt-notices': 'receipt_notice',
+  '/apps/kuaizhizao/purchase-management/purchase-returns': 'purchase_return',
+  '/apps/kuaizhizao/purchase-management/logistics-tracking': 'freight_tracking',
+  // 生产
+  '/apps/kuaizhizao/production-execution/work-orders': 'work_order',
+  '/apps/kuaizhizao/production-execution/reporting': 'reporting_record',
+  '/apps/kuaizhizao/production-execution/rework-orders': 'rework_order',
+  '/apps/kuaizhizao/production-execution/outsource-management': 'outsource_work_order',
+  '/apps/kuaizhizao/production-execution/packing-binding': 'packing_binding',
+  '/apps/kuaizhizao/production-execution/material-shortage-exceptions': 'material_shortage_exception',
+  '/apps/kuaizhizao/production-execution/delivery-delay-exceptions': 'delivery_delay_exception',
+  '/apps/kuaizhizao/production-execution/quality-exceptions': 'quality_exception',
+  // 质量
+  '/apps/kuaizhizao/quality-management/inspection-center': 'quality_inspection',
+  '/apps/kuaizhizao/quality-management/incoming-inspection': 'incoming_inspection',
+  '/apps/kuaizhizao/quality-management/process-inspection': 'process_inspection',
+  '/apps/kuaizhizao/quality-management/finished-goods-inspection': 'finished_goods_inspection',
+  '/apps/kuaizhizao/quality-management/oqc-inspection': 'oqc_inspection',
+  '/apps/kuaizhizao/quality-management/inspection-plans': 'inspection_plan',
+  // 仓储
   '/apps/kuaizhizao/warehouse-management/inbound': 'inbound',
   '/apps/kuaizhizao/warehouse-management/other-inbound': 'other_inbound',
   '/apps/kuaizhizao/warehouse-management/material-returns': 'material_return',
@@ -253,25 +271,57 @@ const MENU_BADGE_PATH_KEY: Record<string, string> = {
   '/apps/kuaizhizao/warehouse-management/material-borrows': 'material_borrow',
   '/apps/kuaizhizao/warehouse-management/delivery-notes': 'delivery_notice',
   '/apps/kuaizhizao/warehouse-management/batching-center': 'batching_order',
-  '/apps/kuaizhizao/warehouse-management/material-calls': 'batching_order',
+  '/apps/kuaizhizao/warehouse-management/material-calls': 'material_call',
   '/apps/kuaizhizao/warehouse-management/stocktaking': 'stocktaking',
   '/apps/kuaizhizao/warehouse-management/inventory-transfer': 'inventory_transfer',
   '/apps/kuaizhizao/warehouse-management/assembly-orders': 'assembly_order',
   '/apps/kuaizhizao/warehouse-management/disassembly-orders': 'disassembly_order',
   '/apps/kuaizhizao/warehouse-management/customer-material-registration': 'customer_material_registration',
-  '/apps/kuaizhizao/quality-management/inspection-center': 'quality_inspection',
-  '/apps/kuaizhizao/quality-management/incoming-inspection': 'incoming_inspection',
-  '/apps/kuaizhizao/quality-management/process-inspection': 'process_inspection',
-  '/apps/kuaizhizao/quality-management/finished-goods-inspection': 'finished_goods_inspection',
-  '/apps/kuaizhizao/quality-management/inspection-plans': 'inspection_plan',
-  '/apps/kuaizhizao/plan-management/demand-computation': 'demand_computation',
+  '/apps/kuaizhizao/warehouse-management/backflush-records': 'backflush_record',
+  '/apps/kuaizhizao/warehouse-management/inventory-alert': 'inventory_alert',
+  '/apps/kuaizhizao/warehouse-management/replenishment-suggestions': 'replenishment_suggestion',
+  // 设备
   '/apps/kuaizhizao/equipment-management/equipment': 'equipment',
-  '/apps/kuaizhizao/equipment-management/molds': 'mold',
   '/apps/kuaizhizao/equipment-management/inspection': 'equipment_inspection',
-  '/apps/kuaizhizao/equipment-management/spare-parts': 'spare_part',
   '/apps/kuaizhizao/equipment-management/equipment-faults': 'equipment_fault',
+  '/apps/kuaizhizao/equipment-management/equipment-repairs': 'equipment_repair',
+  '/apps/kuaizhizao/equipment-management/equipment-transfers': 'equipment_transfer',
+  '/apps/kuaizhizao/equipment-management/equipment-scrap': 'equipment_scrap',
   '/apps/kuaizhizao/equipment-management/maintenance-plans': 'maintenance_plan',
   '/apps/kuaizhizao/equipment-management/maintenance-reminders': 'maintenance_reminder',
+  '/apps/kuaizhizao/equipment-management/maintenance-executions': 'maintenance_execution',
+  '/apps/kuaizhizao/equipment-management/spare-parts': 'spare_part',
+  '/apps/kuaizhizao/equipment-management/spare-part-requisitions': 'spare_part_requisition',
+  '/apps/kuaizhizao/equipment-management/molds': 'mold',
+  '/apps/kuaizhizao/equipment-management/mold-trials': 'mold_trial',
+  '/apps/kuaizhizao/equipment-management/mold-borrows': 'mold_borrow',
+  '/apps/kuaizhizao/equipment-management/mold-maintenances': 'mold_maintenance',
+  '/apps/kuaizhizao/equipment-management/mold-repairs': 'mold_repair',
+  '/apps/kuaizhizao/equipment-management/mold-scrap-applications': 'mold_scrap',
+  '/apps/kuaizhizao/equipment-management/tool-ledger': 'tool_ledger',
+  '/apps/kuaizhizao/equipment-management/tool-borrows': 'tool_borrow',
+  '/apps/kuaizhizao/equipment-management/tool-maintenances': 'tool_maintenance',
+  '/apps/kuaizhizao/equipment-management/tool-repairs': 'tool_repair',
+  '/apps/kuaizhizao/equipment-management/tool-scrap-applications': 'tool_scrap',
+  // 物流
+  '/apps/kuaizhizao/logistics-management/freight-orders': 'freight_order',
+  '/apps/kuaizhizao/logistics-management/tracking': 'freight_tracking',
+  '/apps/kuaizhizao/logistics-management/freight-bills': 'freight_bill',
+  // 售后
+  '/apps/kuaizhizao/after-sales-service/tickets': 'after_sales_ticket',
+  '/apps/kuaizhizao/after-sales-service/install-execution': 'install_execution',
+  '/apps/kuaizhizao/after-sales-service/repair-orders': 'after_sales_repair_order',
+  '/apps/kuaizhizao/after-sales-service/dispatch-orders': 'service_dispatch',
+  '/apps/kuaizhizao/after-sales-service/spare-part-requisitions': 'after_sales_spare_part_requisition',
+  '/apps/kuaizhizao/after-sales-service/service-settlements': 'service_settlement',
+  // 财务
+  '/apps/kuaicaiwu/finance-management/receivables': 'finance_receivable',
+  '/apps/kuaicaiwu/finance-management/payables': 'finance_payable',
+  '/apps/kuaicaiwu/finance-management/receipts': 'finance_receipt',
+  '/apps/kuaicaiwu/finance-management/payments': 'finance_payment',
+  '/apps/kuaicaiwu/finance-management/sales-invoices': 'sales_invoice',
+  '/apps/kuaicaiwu/finance-management/purchase-invoices': 'purchase_invoice',
+  '/apps/kuaicaiwu/finance-management/prepayments': 'prepayment',
   '/apps/kuaicaiwu/finance-management/settlement': 'finance_settlement',
 };
 
@@ -3404,16 +3454,21 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             let badgeEl: React.ReactNode = null;
             if (badgeData) {
               if (typeof badgeData === 'number' && badgeData > 0) {
-                // 传统形式：仅数字，默认红色（antd Badge 默认）
-                badgeEl = <Badge count={badgeData} size="small" className="menu-item-badge-count" />;
+                badgeEl = (
+                  <Badge count={badgeData} size="small" color="#1677ff" className="menu-item-badge-count" />
+                );
               } else if (typeof badgeData === 'object') {
-                // 拟物化分类徽标，优先级：逾期 (red) > 待审核 (orange) > 进行中 (green)
-                if (badgeData.overdue > 0) {
-                  badgeEl = <Badge count={badgeData.overdue} size="small" color="#f5222d" className="menu-item-badge-count" />;
-                } else if (badgeData.pending > 0) {
-                  badgeEl = <Badge count={badgeData.pending} size="small" color="#fa8c16" className="menu-item-badge-count" />;
-                } else if (badgeData.in_progress > 0) {
-                  badgeEl = <Badge count={badgeData.in_progress} size="small" color="#52c41a" className="menu-item-badge-count" />;
+                const overdue = Number(badgeData.overdue) || 0;
+                const inProgress =
+                  (Number(badgeData.in_progress) || 0) + (Number(badgeData.pending) || 0);
+                if (overdue > 0) {
+                  badgeEl = (
+                    <Badge count={overdue} size="small" color="#f5222d" className="menu-item-badge-count" />
+                  );
+                } else if (inProgress > 0) {
+                  badgeEl = (
+                    <Badge count={inProgress} size="small" color="#1677ff" className="menu-item-badge-count" />
+                  );
                 }
               }
             }

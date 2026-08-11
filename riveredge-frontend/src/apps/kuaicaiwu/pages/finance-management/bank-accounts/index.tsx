@@ -1,8 +1,14 @@
 import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Popconfirm, Tag } from 'antd';
+import {
+  ProFormDependency,
+  ProFormMoney,
+  ProFormSelect,
+  ProFormText,
+  ProFormTextArea,
+} from '@ant-design/pro-components';
+import { App, Popconfirm, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   DetailDrawerTemplate,
@@ -62,8 +68,35 @@ const BankAccountsPage: React.FC = () => {
     }),
     { title: t(`${BA}.col.accountCode`), dataIndex: 'account_code', width: 120, hideInSearch: true, sorter: true },
     { title: t(`${BA}.col.accountName`), dataIndex: 'account_name', ellipsis: true, hideInSearch: true, sorter: true },
-    { title: t(`${BA}.col.bankName`), dataIndex: 'bank_name', ellipsis: true, hideInSearch: true, sorter: true },
-    { title: t(`${BA}.col.accountNumber`), dataIndex: 'account_number', width: 180, ellipsis: true, hideInSearch: true, sorter: true },
+    {
+      title: t(`${BA}.col.accountType`),
+      dataIndex: 'account_type',
+      width: 100,
+      hideInSearch: true,
+      sorter: true,
+      render: (_, r) => (
+        String(r.account_type || 'bank') === 'cash'
+          ? <Tag color="gold">{t(`${BA}.accountType.cash`)}</Tag>
+          : <Tag color="blue">{t(`${BA}.accountType.bank`)}</Tag>
+      ),
+    },
+    {
+      title: t(`${BA}.col.bankName`),
+      dataIndex: 'bank_name',
+      ellipsis: true,
+      hideInSearch: true,
+      sorter: true,
+      render: (_, r) => r.bank_name || '—',
+    },
+    {
+      title: t(`${BA}.col.accountNumber`),
+      dataIndex: 'account_number',
+      width: 180,
+      ellipsis: true,
+      hideInSearch: true,
+      sorter: true,
+      render: (_, r) => r.account_number || '—',
+    },
     { title: t(`${BA}.col.currency`), dataIndex: 'currency', width: 100, hideInSearch: true, sorter: true, render: (_, r) => formatCurrency(String(r.currency ?? ''), t) },
     { title: t(`${BA}.col.balance`), dataIndex: 'current_balance', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
     {
@@ -85,22 +118,27 @@ const BankAccountsPage: React.FC = () => {
       valueType: 'option',
       fixed: 'right',
       width: 180,
-      render: (_, record) => [
-        <a key="tx" onClick={() => { setTxAccount(record); setTxDrawerOpen(true); }}>{t(`${BA}.action.transactions`)}</a>,
-        <a key="import" onClick={() => { setImportAccount(record); setImportOpen(true); }}>{t(`${BA}.action.import`)}</a>,
-        <a key="edit" onClick={() => { setEditing(record); setModalVisible(true); }}>{t('common.edit')}</a>,
-        <Popconfirm {...rowActionKind('delete')}
-          key="del"
-          title={t(`${BA}.confirmDelete`)}
-          onConfirm={async () => {
-            await bankAccountService.delete(record.id);
-            messageApi.success(t('common.deleteSuccess'));
-            actionRef.current?.reload();
-          }}
-        >
-          <a>{t('common.delete')}</a>
-        </Popconfirm>,
-      ],
+      render: (_, record) => {
+        const isCash = String(record.account_type || 'bank') === 'cash';
+        return [
+          <a key="tx" onClick={() => { setTxAccount(record); setTxDrawerOpen(true); }}>{t(`${BA}.action.transactions`)}</a>,
+          isCash ? null : (
+            <a key="import" onClick={() => { setImportAccount(record); setImportOpen(true); }}>{t(`${BA}.action.import`)}</a>
+          ),
+          <a key="edit" onClick={() => { setEditing(record); setModalVisible(true); }}>{t('common.edit')}</a>,
+          <Popconfirm {...rowActionKind('delete')}
+            key="del"
+            title={t(`${BA}.confirmDelete`)}
+            onConfirm={async () => {
+              await bankAccountService.delete(record.id);
+              messageApi.success(t('common.deleteSuccess'));
+              actionRef.current?.reload();
+            }}
+          >
+            <a>{t('common.delete')}</a>
+          </Popconfirm>,
+        ];
+      },
     },
   ], [t, messageApi, activeValueEnum]);
 
@@ -316,8 +354,11 @@ const BankAccountsPage: React.FC = () => {
         width={MODAL_CONFIG.STANDARD_WIDTH}
         isEdit={!!editing}
         onFinish={async (values) => {
+          const isCash = values.account_type === 'cash';
           const payload = {
             ...values,
+            bank_name: isCash ? null : values.bank_name,
+            account_number: isCash ? null : values.account_number,
             attachments: normalizeDocumentAttachments(values.attachments),
           };
           if (editing) {
@@ -332,14 +373,52 @@ const BankAccountsPage: React.FC = () => {
         }}
         initialValues={
           editing
-            ? { ...editing, attachments: mapAttachmentsToUploadList(editing.attachments) }
-            : { currency: 'CNY', is_active: true }
+            ? {
+                ...editing,
+                account_type: editing.account_type || 'bank',
+                attachments: mapAttachmentsToUploadList(editing.attachments),
+              }
+            : { currency: 'CNY', is_active: true, account_type: 'bank' }
         }
       >
         <ProFormText name="account_code" label={t(`${BA}.col.accountCode`)} rules={[{ required: true }]} disabled={!!editing} />
         <ProFormText name="account_name" label={t(`${BA}.col.accountName`)} rules={[{ required: true }]} />
-        <ProFormText name="bank_name" label={t(`${BA}.col.bankName`)} rules={[{ required: true }]} />
-        <ProFormText name="account_number" label={t(`${BA}.form.accountNumber`)} rules={[{ required: true }]} />
+        <ProFormSelect
+          name="account_type"
+          label={t(`${BA}.col.accountType`)}
+          rules={[{ required: true }]}
+          disabled={!!editing}
+          options={[
+            { label: t(`${BA}.accountType.bank`), value: 'bank' },
+            { label: t(`${BA}.accountType.cash`), value: 'cash' },
+          ]}
+        />
+        <ProFormDependency name={['account_type']}>
+          {({ account_type }) => {
+            const isCash = account_type === 'cash';
+            return (
+              <>
+                {isCash ? (
+                  <Typography.Paragraph type="secondary" style={{ marginTop: -8 }}>
+                    {t(`${BA}.cashHint`)}
+                  </Typography.Paragraph>
+                ) : null}
+                <ProFormText
+                  name="bank_name"
+                  label={t(`${BA}.col.bankName`)}
+                  rules={isCash ? [] : [{ required: true }]}
+                  hidden={isCash}
+                />
+                <ProFormText
+                  name="account_number"
+                  label={t(`${BA}.form.accountNumber`)}
+                  rules={isCash ? [] : [{ required: true }]}
+                  hidden={isCash}
+                />
+              </>
+            );
+          }}
+        </ProFormDependency>
         <ProFormSelect name="currency" label={t(`${BA}.col.currency`)} options={getCurrencySelectOptions(t)} />
         {!editing && <ProFormMoney name="opening_balance" label={t(`${BA}.col.openingBalance`)} min={0} />}
         {editing && (

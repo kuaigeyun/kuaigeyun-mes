@@ -8,6 +8,7 @@ from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
 from loguru import logger
 
+from apps.kuaicaiwu.constants.finance_source_types import PAYABLE_SOURCE_PURCHASE_RECEIPT
 from apps.kuaicaiwu.schemas.finance import (
     PayableCreate, PayableUpdate, PayableResponse, PayableListResponse,
     PaymentRecordCreate
@@ -83,7 +84,13 @@ async def create_payable(
             create_payload["supplier_name"] = str(
                 pull_preview.get("supplier_name") or create_payload.get("supplier_name") or ""
             )
-            create_payload["source_type"] = pull_source_type
+            # 应付单 source_type 与 finance_source_types 常量一致；单据关系仍用 pull 英文码
+            if pull_source_type == "purchase_receipt":
+                create_payload["source_type"] = PAYABLE_SOURCE_PURCHASE_RECEIPT
+            elif pull_source_type == "purchase_order":
+                create_payload["source_type"] = "采购订单"
+            else:
+                create_payload["source_type"] = pull_source_type
             create_payload["source_id"] = int(pull_source_id)
             create_payload["source_code"] = str(pull_preview.get("source_code") or create_payload.get("source_code") or "")
 

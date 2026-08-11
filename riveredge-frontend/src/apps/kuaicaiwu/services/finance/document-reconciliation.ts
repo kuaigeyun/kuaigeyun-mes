@@ -77,9 +77,22 @@ export interface FinancePipelineSummary {
 
 const API = '/apps/kuaicaiwu/document-reconciliation';
 
+export interface ChainDocumentCandidate {
+  id: number;
+  code?: string;
+  partner_name?: string;
+  label?: string;
+}
+
 export const documentReconciliationService = {
   listOpenGaps: (params: DocumentReconciliationGapParams) =>
     apiRequest<DocumentReconciliationGapResult>(`${API}/gaps/open`, { method: 'GET', params }),
+
+  listChainCandidates: (params: { document_type: string; keyword?: string; limit?: number }) =>
+    apiRequest<{ items?: ChainDocumentCandidate[]; total?: number }>(`${API}/chain-candidates`, {
+      method: 'GET',
+      params,
+    }),
 
   getStandardChain: (flowType: 'sales' | 'purchase', documentType: string, documentId: number) =>
     apiRequest<Record<string, unknown>>(`${API}/chain/${flowType}/${documentType}/${documentId}`, { method: 'GET' }),

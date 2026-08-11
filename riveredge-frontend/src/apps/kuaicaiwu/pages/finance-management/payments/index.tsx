@@ -40,10 +40,14 @@ import {
   formatPaymentSettlementType,
   getPaymentMethodOptions,
   getPaymentSettlementTypeOptions,
-  assertBankAccountForTransfer,
-  isBankTransferPaymentMethod,
+  assertBankAccountForPaymentMethod,
+  formatBankAccountOptionLabel,
   BANK_TRANSFER_PAYMENT_METHOD,
 } from '../../../utils/financeSharedOptions';
+import {
+  LedgerAccountFormFields,
+  resolveLedgerAccountNote,
+} from '../../../components/LedgerAccountFormFields';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
@@ -117,16 +121,10 @@ const PaymentsPage: React.FC = () => {
     bankAccountService.list({ limit: 200, is_active: true }).then((res) => setBankAccounts(res.data)).catch(() => setBankAccounts([]));
   }, []);
 
-  const bankAccountOptions = bankAccounts.map((a) => ({
-    label: `${a.account_name} (${a.account_number})`,
-    value: a.id,
-    account_number: a.account_number,
-  }));
-
   const resolveBankLabel = (id?: number) => {
     if (!id) return '—';
     const acc = bankAccounts.find((a) => a.id === id);
-    return acc ? `${acc.account_name} (${acc.account_number})` : `#${id}`;
+    return acc ? formatBankAccountOptionLabel(acc) : `#${id}`;
   };
 
   const openDetail = async (record: PaymentVoucher) => {
@@ -145,12 +143,11 @@ const PaymentsPage: React.FC = () => {
 
   const handleCreate = async (values: any) => {
     try {
-      assertBankAccountForTransfer(values.payment_method, values.bank_account_id, t);
+      assertBankAccountForPaymentMethod(values.payment_method, values.bank_account_id, t);
     } catch (e: unknown) {
       messageApi.warning((e as Error).message);
       return false;
     }
-    const bank = bankAccountOptions.find((o) => o.value === values.bank_account_id);
     const data = {
       supplier_id: values.supplier_id,
       supplier_name: supplierOptions.find(o => o.value === values.supplier_id)?.label || '',
@@ -158,7 +155,7 @@ const PaymentsPage: React.FC = () => {
       payment_date: formatDateTime(values.payment_date || dayjs(), 'YYYY-MM-DD'),
       payment_method: values.payment_method,
       bank_account_id: values.bank_account_id,
-      bank_account: bank?.account_number || values.bank_account,
+      bank_account: resolveLedgerAccountNote(bankAccounts, values.bank_account_id, values.bank_account),
       settlement_type: values.settlement_type || 'normal',
       notes: values.notes,
       attachments: normalizeDocumentAttachments(values.attachments),
@@ -266,7 +263,7 @@ const PaymentsPage: React.FC = () => {
     if (!pullPreviewData || !pullPreviewSourceId) return false;
     if (pullPreviewData.has_blocking_issues) return false;
     try {
-      assertBankAccountForTransfer(values.payment_method, values.bank_account_id, t);
+      assertBankAccountForPaymentMethod(values.payment_method, values.bank_account_id, t);
     } catch (e: unknown) {
       messageApi.warning((e as Error).message);
       return false;
@@ -281,7 +278,6 @@ const PaymentsPage: React.FC = () => {
       messageApi.warning(t(`${P}.pullExceedMax`, { max: maxPush.toFixed(2) }));
       return false;
     }
-    const bank = bankAccountOptions.find((o) => o.value === values.bank_account_id);
     setPullSubmitting(true);
     try {
       await paymentService.create({
@@ -293,7 +289,7 @@ const PaymentsPage: React.FC = () => {
         payment_date: formatDateTime(values.payment_date || dayjs(), 'YYYY-MM-DD'),
         payment_method: values.payment_method || '银行转账',
         bank_account_id: values.bank_account_id,
-        bank_account: bank?.account_number || values.bank_account,
+        bank_account: resolveLedgerAccountNote(bankAccounts, values.bank_account_id, values.bank_account),
         settlement_type: values.settlement_type || 'normal',
         notes:
           String(values.notes ?? '').trim() ||
@@ -802,31 +798,10 @@ const PaymentsPage: React.FC = () => {
                   options={paymentSettlementTypeOptions}
                   initialValue="normal"
                 />
-                <ProFormSelect
-                  name="bank_account_id"
-                  label={t(`${P}.outBankAccount`)}
-                  options={bankAccountOptions}
-                  placeholder={
-                    bankAccountOptions.length > 0
-                      ? t('app.kuaicaiwu.receipt.bankAccountPlaceholder')
-                      : t('app.kuaicaiwu.common.noBankAccountHint')
-                  }
-                  showSearch
-                  allowClear
-                  rules={[
-                    ({ getFieldValue }) => ({
-                      validator: async (_, value) => {
-                        if (isBankTransferPaymentMethod(getFieldValue('payment_method')) && !value) {
-                          throw new Error(t('app.kuaicaiwu.common.bankAccountRequiredForTransfer'));
-                        }
-                      },
-                    }),
-                  ]}
-                />
-                <ProFormText
-                  name="bank_account"
-                  label={t(`${P}.outAccountNote`)}
-                  placeholder={t('app.kuaicaiwu.receipt.bankAccountNotePlaceholder')}
+                <LedgerAccountFormFields
+                  accounts={bankAccounts}
+                  accountLabel={t(`${P}.outBankAccount`)}
+                  noteLabel={t(`${P}.outAccountNote`)}
                 />
                 <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} />
                 <DocumentAttachmentsField category="payment_attachments" />
@@ -866,15 +841,11 @@ const PaymentsPage: React.FC = () => {
           initialValue="normal"
           options={paymentSettlementTypeOptions}
         />
-        <ProFormSelect
-          name="bank_account_id"
-          label={t(`${P}.outBankAccount`)}
-          options={bankAccountOptions}
-          placeholder={t('app.kuaicaiwu.receipt.bankAccountPlaceholder')}
-          showSearch
-          allowClear
+        <LedgerAccountFormFields
+          accounts={bankAccounts}
+          accountLabel={t(`${P}.outBankAccount`)}
+          noteLabel={t(`${P}.outAccountNote`)}
         />
-        <ProFormText name="bank_account" label={t(`${P}.outAccountNote`)} placeholder={t('app.kuaicaiwu.receipt.bankAccountNotePlaceholder')} />
         <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
         <DocumentAttachmentsField category="payment_attachments" />
       </ModalForm>

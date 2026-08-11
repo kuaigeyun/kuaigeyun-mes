@@ -4542,7 +4542,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                                 source_type="sales_order",
                                 source_id=sales_order_id,
                                 source_code=so.order_code,
-                                source_name=so.order_name,
+                                source_name=so.order_code,
                                 target_type="sales_delivery",
                                 target_id=delivery.id,
                                 target_code=delivery.delivery_code,

@@ -77,6 +77,18 @@ async def create_receipt(
 ):
     """创建收款单"""
     try:
+        from apps.kuaicaiwu.services.bank_account_service import BankAccountService
+        from infra.exceptions.exceptions import ValidationError as FinanceValidationError
+
+        try:
+            await BankAccountService().validate_voucher_account(
+                tenant_id,
+                payment_method=data.payment_method,
+                bank_account_id=data.bank_account_id,
+            )
+        except FinanceValidationError as exc:
+            raise _http_exception_with_trace(400, str(exc), "/receipts", tenant_id) from exc
+
         pull_preview: Optional[Dict[str, Any]] = None
         if data.source_type and data.source_id:
             pull_preview = await receipt_pull_service.assert_pull_create_allowed(
@@ -283,6 +295,17 @@ async def update_receipt(
     if receipt.status == "Confirmed":
         raise _http_exception_with_trace(400, "已确认的收款单不能修改", "/receipts/{id}", tenant_id)
     update_data = data.model_dump(exclude_unset=True)
+    from apps.kuaicaiwu.services.bank_account_service import BankAccountService
+    from infra.exceptions.exceptions import ValidationError as FinanceValidationError
+
+    method = update_data.get("payment_method", receipt.payment_method)
+    account_id = update_data.get("bank_account_id", receipt.bank_account_id)
+    try:
+        await BankAccountService().validate_voucher_account(
+            tenant_id, payment_method=method, bank_account_id=account_id
+        )
+    except FinanceValidationError as exc:
+        raise _http_exception_with_trace(400, str(exc), "/receipts/{id}", tenant_id) from exc
     apply_update_audit(update_data, current_user)
     await Receipt.filter(id=id).update(**update_data)
     return await _serialize(tenant_id, current_user.id, await _get_or_404(tenant_id, id))
@@ -301,6 +324,15 @@ async def confirm_receipt(
         raise _http_exception_with_trace(400, "只有草稿状态的收款单可以确认", "/receipts/{id}/confirm", tenant_id)
     from apps.kuaicaiwu.services.bank_account_service import BankAccountService
     from infra.exceptions.exceptions import ValidationError
+
+    try:
+        await BankAccountService().validate_voucher_account(
+            tenant_id,
+            payment_method=receipt.payment_method,
+            bank_account_id=receipt.bank_account_id,
+        )
+    except ValidationError as exc:
+        raise _http_exception_with_trace(400, str(exc), "/receipts/{id}/confirm", tenant_id) from exc
 
     try:
         settled = await receipt_pull_service.settle_draft_receipt_if_linked(

@@ -289,7 +289,7 @@ const InstallExecutionPage: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: '当前阶段',
+        title: t('components.uniLifecycle.listColumnTitle'),
         dataIndex: 'current_stage_key',
         hideInSearch: true,
         render: (_, row) => {

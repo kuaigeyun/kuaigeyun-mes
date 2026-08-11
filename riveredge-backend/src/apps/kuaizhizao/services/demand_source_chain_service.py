@@ -146,7 +146,7 @@ class DemandSourceChainService:
             "type": "PurchaseOrder",
             "id": purchase_order.id,
             "code": purchase_order.order_code,
-            "name": purchase_order.order_name,
+            "name": purchase_order.order_code,
         })
         
         # 2. 查找关联的需求计算

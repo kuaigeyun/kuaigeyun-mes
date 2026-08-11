@@ -20,6 +20,7 @@ import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFI
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
@@ -73,6 +74,11 @@ const PurchaseOrderChangesPage: React.FC = () => {
   const pullFromPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order_change.pull_from_purchase_order');
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>();
+  const invalidateMenuBadge = useInvalidateMenuBadgeCounts();
+  const reloadTable = useCallback(() => {
+    invalidateMenuBadge();
+    actionRef.current?.reload();
+  }, [invalidateMenuBadge]);
   const tableRowsRef = useRef<PurchaseOrderChange[]>([]);
   const pullQueryCloseRef = useRef<(() => void) | null>(null);
   const auditEnabled = useAuditRequired('kuaizhizao', 'purchase-order-change');
@@ -116,8 +122,8 @@ const PurchaseOrderChangesPage: React.FC = () => {
 
   const handlePurchaseOrderChangeAuditBatchSuccess = useCallback(() => {
     setSelectedRowKeys([]);
-    actionRef.current?.reload();
-  }, []);
+    reloadTable();
+  }, [reloadTable]);
 
   const openDetail = async (record: PurchaseOrderChange) => {
     const full = await getPurchaseOrderChange(record.id!);
@@ -170,7 +176,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
     message.success(t('common.updateSuccess'));
     setEditOpen(false);
     setPendingEditFormValues(null);
-    actionRef.current?.reload();
+    reloadTable();
   };
 
   const resetPullPreviewModal = useCallback(() => {
@@ -209,7 +215,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
       message.success(t('app.kuaizhizao.purchaseOrderChange.created', { code: created.change_code }));
       resetPullPreviewModal();
       await openEdit(created);
-      actionRef.current?.reload();
+      reloadTable();
     } catch (error: unknown) {
       message.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseOrderChange.pull.createFailed')));
     } finally {
@@ -345,7 +351,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
     message.success(t('app.kuaizhizao.purchaseOrderChange.submitSuccess'));
     setImpactOpen(false);
     setPendingSubmitId(null);
-    actionRef.current?.reload();
+    reloadTable();
     if (detail?.id === pendingSubmitId) setDetail(await getPurchaseOrderChange(pendingSubmitId));
   };
 
@@ -605,7 +611,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
                   onOk: async () => {
                     await deletePurchaseOrderChange(record.id!);
                     message.success(t('app.kuaizhizao.purchaseOrderChange.deleted'));
-                    actionRef.current?.reload();
+                    reloadTable();
                   },
                 });
               }}
@@ -690,7 +696,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
     if (success > 0) message.success(t('app.kuaizhizao.purchaseOrderChange.batchDeleteSuccess', { count: success }));
     if (failed > 0) message.warning(t('app.kuaizhizao.purchaseOrderChange.batchDeletePartial', { count: failed }));
     setSelectedRowKeys([]);
-    actionRef.current?.reload();
+    reloadTable();
   }, [message, t]);
 
   return (
@@ -908,7 +914,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
                 approvedStatuses={['AUDITED', '已审核', 'APPLIED', '已生效']}
                 rejectedStatuses={['REJECTED', '已驳回']}
                 onSuccess={async () => {
-                  actionRef.current?.reload();
+                  reloadTable();
                   if (detail.id) setDetail(await getPurchaseOrderChange(detail.id));
                 }}
               />

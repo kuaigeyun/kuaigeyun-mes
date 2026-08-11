@@ -1,5 +1,5 @@
 /**
- * 列表「当前阶段」唯一展示真源：状态徽章（无进度圆环）。
+ * 列表「执行状态」唯一展示真源：状态徽章（无进度圆环）。
  * 详情全链路请用 UniLifecycleStepper；禁止在列表再挂 Progress circle。
  */
 
@@ -80,7 +80,7 @@ export interface LifecycleStageBadgeProps {
   showTooltip?: boolean;
 }
 
-/** 列表「当前阶段」徽章（唯一控制源） */
+/** 列表「执行状态」徽章（唯一控制源） */
 export function LifecycleStageBadge({
   stageName,
   status,

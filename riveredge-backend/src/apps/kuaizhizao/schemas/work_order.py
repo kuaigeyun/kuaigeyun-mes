@@ -633,8 +633,9 @@ class WorkOrderOperationBase(BaseSchema):
     setup_time: Optional[Decimal] = Field(None, description="准备时间（小时）")
     
     # 派工信息
-    assigned_worker_id: Optional[int] = Field(None, description="分配的员工ID")
-    assigned_worker_name: Optional[str] = Field(None, description="分配的员工姓名")
+    assigned_worker_id: Optional[int] = Field(None, description="分配的员工ID（主责/兼容，取 assigned_worker_ids 首项）")
+    assigned_worker_name: Optional[str] = Field(None, description="分配的员工姓名（多人以顿号分隔）")
+    assigned_worker_ids: List[int] = Field(default_factory=list, description="分配的员工ID列表")
     assigned_team_id: Optional[int] = Field(None, description="分配的工作小组ID")
     assigned_team_name: Optional[str] = Field(None, description="分配的工作小组名称")
     assigned_station_id: Optional[int] = Field(None, description="分配的工位ID")
@@ -661,8 +662,9 @@ class WorkOrderOperationDispatch(BaseModel):
     workshop_name: Optional[str] = Field(None, max_length=200, description="车间名称")
     work_center_id: Optional[int] = Field(None, description="工作中心ID（派工时可调整）")
     work_center_name: Optional[str] = Field(None, max_length=200, description="工作中心名称")
-    assigned_worker_id: Optional[int] = Field(None, description="分配的员工ID")
-    assigned_worker_name: Optional[str] = Field(None, description="分配的员工姓名")
+    assigned_worker_id: Optional[int] = Field(None, description="分配的员工ID（主责/兼容，取 assigned_worker_ids 首项）")
+    assigned_worker_name: Optional[str] = Field(None, description="分配的员工姓名（多人以顿号分隔）")
+    assigned_worker_ids: Optional[List[int]] = Field(None, description="分配的员工ID列表")
     assigned_team_id: Optional[int] = Field(None, description="分配的工作小组ID")
     assigned_team_name: Optional[str] = Field(None, description="分配的工作小组名称")
     assigned_station_id: Optional[int] = Field(None, description="分配的工位ID")

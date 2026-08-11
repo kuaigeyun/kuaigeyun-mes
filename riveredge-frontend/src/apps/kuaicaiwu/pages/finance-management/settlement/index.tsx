@@ -728,7 +728,8 @@ const SettlementPage: React.FC = () => {
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement"
             search={{ labelWidth: 'auto' }}
             showAdvancedSearch
-            skipFuzzyPinyinClientFilterrequest={async (params, sort, _filter, searchFormValues) => {
+            skipFuzzyPinyinClientFilter
+            request={async (params, sort, _filter, searchFormValues) => {
               const { current, pageSize } = params;
               const listParams = resolveReceivableListParams(searchFormValues, sort);
               const apiParams: ReceivableListParams = {
@@ -766,7 +767,8 @@ const SettlementPage: React.FC = () => {
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:2"
             search={{ labelWidth: 'auto' }}
             showAdvancedSearch
-            skipFuzzyPinyinClientFilterrequest={async (params, sort, _filter, searchFormValues) => {
+            skipFuzzyPinyinClientFilter
+            request={async (params, sort, _filter, searchFormValues) => {
               if (partnerCustomerId == null) {
                 return { data: [], total: 0, success: true };
               }
@@ -855,7 +857,8 @@ const SettlementPage: React.FC = () => {
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payable"
             search={{ labelWidth: 'auto' }}
             showAdvancedSearch
-            skipFuzzyPinyinClientFilterrequest={async (params, sort, _filter, searchFormValues) => {
+            skipFuzzyPinyinClientFilter
+            request={async (params, sort, _filter, searchFormValues) => {
               const { current, pageSize } = params;
               const listParams = resolvePayableListParams(searchFormValues, sort);
               const apiParams: PayableListParams = {
@@ -893,7 +896,8 @@ const SettlementPage: React.FC = () => {
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payment"
             search={{ labelWidth: 'auto' }}
             showAdvancedSearch
-            skipFuzzyPinyinClientFilterrequest={async (params, sort, _filter, searchFormValues) => {
+            skipFuzzyPinyinClientFilter
+            request={async (params, sort, _filter, searchFormValues) => {
               if (partnerSupplierId == null) {
                 return { data: [], total: 0, success: true };
               }
