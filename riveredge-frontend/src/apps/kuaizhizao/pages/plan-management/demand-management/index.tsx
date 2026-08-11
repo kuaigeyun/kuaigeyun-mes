@@ -16,7 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation, type TFunction } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Row, Col, Table, Input, InputNumber, Alert, Spin, Form as AntForm, DatePicker, Typography, Tooltip, Dropdown, Empty, Tabs, theme as AntdTheme, Switch } from 'antd';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import {
@@ -1628,6 +1628,25 @@ const DemandManagementPage: React.FC = () => {
             </Space>
           )
         }
+        traceDocument={
+          currentDemand?.id != null
+            ? {
+                documentType: 'demand',
+                documentId: currentDemand.id,
+                selfDocumentId: currentDemand.id,
+                renderBriefActions: (doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDrawerVisible(false);
+                    }}
+                  />
+                ),
+              }
+            : undefined
+        }
       >
         {currentDemand && (
           <div style={{ padding: '0 0 16px 0' }}>
@@ -1747,24 +1766,7 @@ const DemandManagementPage: React.FC = () => {
                     </>
                   );
                 })()}
-                {currentDemand.id != null ? (
-                  <DetailDrawerInlineFullChain
-                    documentType="demand"
-                    documentId={currentDemand.id}
-                    active={drawerVisible}
-                    selfDocumentId={currentDemand.id}
-                    renderBriefActions={(doc) => (
-                      <WarehouseTraceBriefPrimaryActions
-                        doc={doc}
-                        t={t}
-                        navigate={navigate}
-                        closeDrawer={() => {
-                          setDrawerVisible(false);
-                        }}
-                      />
-                    )}
-                  />
-                ) : null}
+                
               </div>
             </DetailDrawerSection>
 

@@ -67,10 +67,16 @@ export function getOperationQualityMetrics(operation: any): {
     Number(operation?.unqualified_quantity ?? operation?.unqualifiedQuantity ?? 0) || 0;
   const completed =
     Number(operation?.completed_quantity ?? operation?.completedQuantity ?? 0) || 0;
+  const inspected = qualified + unqualified;
   return {
     qualified,
     unqualified,
-    rate: completed > 0 ? Math.round((qualified / completed) * 100) : null,
+    rate:
+      inspected > 0
+        ? Math.round((qualified / inspected) * 100)
+        : completed > 0
+          ? Math.round((qualified / completed) * 100)
+          : null,
     fromInspection: false,
   };
 }
@@ -90,14 +96,11 @@ export function getTowardPlanQuantity(operation: any): number {
   return Number(operation?.qualified_quantity ?? operation?.qualifiedQuantity ?? 0) || 0;
 }
 
-/** 计划可报（剩余）：超报头寸与质检不合格补报头寸取较大 */
+/** 计划可报（剩余）：距「计划+超报」累计完成上限的剩余量 */
 export function getPlanRemainingReportableQuantity(operation: any, workOrderQuantity: number): number {
   const cap = getMaxReportableQuantityForOperation(operation, workOrderQuantity);
   const done = Number(operation?.completed_quantity ?? operation?.completedQuantity ?? 0) || 0;
-  const classic = Math.max(0, cap - done);
-  const plan = Number(workOrderQuantity) || 0;
-  const makeup = Math.max(0, plan - getTowardPlanQuantity(operation));
-  return Math.max(classic, makeup);
+  return Math.max(0, cap - done);
 }
 
 /** 物料可报（剩余）：上道合格转出尚未在本工序消耗的数量（首道则为计划剩余在制） */
@@ -151,7 +154,21 @@ export function getReportableQuantityBreakdown(
   };
 }
 
-/** 本次可报上限（计划可报与物料可报之较小值） */
+export type DefaultReportingQuantityMode = 'reportable' | 'zero';
+
+/** 报工弹窗合格/不合格数量默认值（与业务配置 default_reporting_quantity_mode 一致） */
+export function resolveDefaultReportingQuantityFields(
+  remainingReportable: number,
+  mode?: string | null,
+): { qualified_quantity: number; unqualified_quantity: number } {
+  const normalized = String(mode ?? 'reportable').trim();
+  if (normalized === 'zero' || remainingReportable <= 0) {
+    return { qualified_quantity: 0, unqualified_quantity: 0 };
+  }
+  return { qualified_quantity: remainingReportable, unqualified_quantity: 0 };
+}
+
+/** 数量报工：本次可报上限（计划可报与物料可报之较小值） */
 export function getRemainingReportableQuantity(operation: any, workOrderQuantity: number): number {
   return getReportableQuantityBreakdown(operation, workOrderQuantity).effectiveRemaining;
 }
@@ -337,4 +354,33 @@ export function getOperationMaterialLoss(operation: any): number {
 export function getWorkOrderMaterialLossTotal(operations: any[] | undefined | null): number {
   if (!operations?.length) return 0;
   return operations.reduce((sum, op) => sum + getOperationMaterialLoss(op), 0);
+}
+
+function pickLastWorkOrderOperation(operations: any[]): any | null {
+  if (!operations.length) return null;
+  return [...operations].sort((a, b) => {
+    const sa = Number(a.sequence ?? 0);
+    const sb = Number(b.sequence ?? 0);
+    if (sa !== sb) return sa - sb;
+    return Number(a.id ?? 0) - Number(b.id ?? 0);
+  }).at(-1) ?? null;
+}
+
+/** 工单头已完成/合格/不合格：与末道工序卡、后端 sync 口径一致 */
+export function getWorkOrderHeaderQuantitiesFromOperations(
+  operations: any[] | undefined | null,
+): { completed: number; qualified: number; unqualified: number } | null {
+  if (!operations?.length) return null;
+  const lastOp = pickLastWorkOrderOperation(operations);
+  if (!lastOp) return null;
+  const metrics = getOperationQualityMetrics(lastOp);
+  const completed = Number(lastOp.completed_quantity ?? lastOp.completedQuantity ?? 0) || 0;
+  const qualified = metrics.fromInspection
+    ? metrics.qualified
+    : Number(lastOp.qualified_quantity ?? lastOp.qualifiedQuantity ?? 0) || 0;
+  return {
+    completed,
+    qualified,
+    unqualified: metrics.unqualified,
+  };
 }

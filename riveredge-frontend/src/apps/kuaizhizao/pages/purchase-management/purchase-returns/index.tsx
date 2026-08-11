@@ -65,7 +65,7 @@ import {
   ListPageTemplate,
   DetailDrawerTemplate,
   FormModalTemplate,
-  DetailDrawerSection, DetailDrawerInlineFullChain,
+  DetailDrawerSection,
   DetailDrawerActions,
   MODAL_CONFIG,
   DRAWER_CONFIG,
@@ -2566,25 +2566,7 @@ const PurchaseReturnsPage: React.FC = () => {
                       />
                     );
                   })()}
-                  {returnDetail.id != null ? (
-                    <DetailDrawerInlineFullChain
-                      documentType='purchase_return'
-                      documentId={returnDetail.id}
-                      active={detailDrawerVisible}
-                      selfDocumentId={returnDetail.id}
-                      renderBriefActions={(doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailDrawerVisible(false);
-                      setReturnDetail(null);
-                    }}
-                  />
-                )}
-                    />
-                  ) : null}
+                  
                 </div>
               </DetailDrawerSection>
 
@@ -2635,6 +2617,27 @@ const PurchaseReturnsPage: React.FC = () => {
             </>
           )
         }
+      
+                      traceDocument={
+                        returnDetail?.id != null
+                          ? {
+                              documentType: 'purchase_return',
+                              documentId: returnDetail.id,
+                              selfDocumentId: returnDetail.id,
+                            renderBriefActions: (doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDetailDrawerVisible(false);
+                      setReturnDetail(null);
+                    }}
+                  />
+                )
+                            }
+                          : undefined
+                      }
       />
     </>
   );

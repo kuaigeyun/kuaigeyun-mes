@@ -159,6 +159,25 @@ async def test_ipqc_partial_unqualified_still_transfers_qualified_qty():
 
 
 @pytest.mark.asyncio
+async def test_resolve_display_unqualified_simple_uses_reporting_unqualified():
+    from apps.kuaizhizao.services.operation_transfer_service import (
+        resolve_operation_display_unqualified,
+    )
+
+    woo = SimpleNamespace(
+        operation_id=1,
+        qualified_quantity=Decimal("200"),
+        unqualified_quantity=Decimal("100"),
+    )
+    with patch(
+        "apps.kuaizhizao.services.operation_transfer_service.resolve_inspection_policy",
+        new=AsyncMock(return_value=("simple", None, "operation")),
+    ):
+        qty = await resolve_operation_display_unqualified(1, 10, woo)
+    assert qty == Decimal("100")
+
+
+@pytest.mark.asyncio
 async def test_ipqc_requires_review_when_audit_enabled():
     with patch(
         "infra.services.business_config_service.BusinessConfigService.check_audit_required",

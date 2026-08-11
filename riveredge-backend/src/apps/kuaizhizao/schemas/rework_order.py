@@ -199,6 +199,16 @@ class ReworkOrderFromWorkOrderRequest(BaseModel):
     remarks: Optional[str] = Field(None, description="备注")
 
 
+class ReworkFromWorkOrderPreviewResponse(BaseModel):
+    """从工单创建返工单：可返工数量预览"""
+    reworkable_quantity: Decimal = Field(..., description="可返工数量")
+    unqualified_quantity: Decimal = Field(..., description="不合格数量（来源口径）")
+    already_rework_quantity: Decimal = Field(..., description="已创建返工单占用数量")
+    start_work_order_operation_id: Optional[int] = Field(
+        None, description="预览所依据的起始工序"
+    )
+
+
 class ReworkAdvanceNextRequest(BaseModel):
     """动态路线追加下一工序"""
     next_work_order_operation_id: int = Field(..., description="下一道工序 ID")

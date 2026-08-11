@@ -1,7 +1,11 @@
 import React from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
+import type { ColumnsState } from '@ant-design/pro-table';
+import { TableContext } from '@ant-design/pro-table/es/Store/Provide';
+import { columnSort } from '@ant-design/pro-table/es/utils/columnSort';
 import { Table } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { getProColumnStateKey } from '../uni-table/uniTableLayoutEngine';
 import type { SummaryFieldMeta } from './types';
 
 function formatSummaryValue(value: number, format?: string, precision = 2): string {
@@ -38,6 +42,33 @@ export type BuildSummaryFooterOptions = {
 type SummarySlot =
   | { kind: 'empty' }
   | { kind: 'summary'; dataIndex: string; col: ProColumns };
+
+function isIndexColumn(col: ProColumns): boolean {
+  return col.valueType === 'index' || col.valueType === 'indexBorder';
+}
+
+/** 与 ProTable 表体一致：hideInTable + columnsMap.show + columnSort */
+function resolveSummaryVisibleColumns(
+  columns: ProColumns[],
+  columnsMap: Record<string, ColumnsState> | undefined,
+): ProColumns[] {
+  const items = columns
+    .map((col, index) => ({ col, index, key: getProColumnStateKey(col, index) }))
+    .filter(({ col }) => !col.hideInTable)
+    .filter(({ key }) => (columnsMap?.[key]?.show ?? true) !== false);
+
+  if (!items.length) return [];
+
+  const sortable = items.map(({ col, index, key }) => ({
+    ...col,
+    key,
+    index,
+  }));
+  if (columnsMap && Object.keys(columnsMap).length > 0) {
+    sortable.sort(columnSort(columnsMap));
+  }
+  return sortable;
+}
 
 function buildSummarySlots(
   columns: ProColumns[],
@@ -76,13 +107,12 @@ export function buildUniReportSummaryFooter(options: BuildSummaryFooterOptions) 
   if (!summaryFields.length) return undefined;
 
   const metaMap = new Map(fieldMeta.map((m) => [m.field, m]));
-  const visibleColumns = columns.filter((c) => !c.hideInTable && c.dataIndex);
 
   return (pageRows: readonly Record<string, unknown>[]) => {
     const rows = pageRows.length ? [...pageRows] : pageData;
     return (
       <SummaryRowInner
-        columns={visibleColumns}
+        columns={columns}
         summaryFields={summaryFields}
         rows={rows}
         globalSummary={globalSummary}
@@ -111,7 +141,19 @@ const SummaryRowInner: React.FC<SummaryRowInnerProps> = ({
   showIndexColumn,
 }) => {
   const { t } = useTranslation();
-  const slots = buildSummarySlots(columns, summaryFields, showIndexColumn);
+  const counter = React.useContext(TableContext);
+  const columnsMap = counter?.columnsMap as Record<string, ColumnsState> | undefined;
+
+  const tableVisibleColumns = React.useMemo(
+    () => resolveSummaryVisibleColumns(columns, columnsMap),
+    [columns, columnsMap],
+  );
+
+  const includeIndexColumn =
+    !!showIndexColumn && tableVisibleColumns.some(isIndexColumn);
+  const dataColumns = tableVisibleColumns.filter((col) => !isIndexColumn(col));
+
+  const slots = buildSummarySlots(dataColumns, summaryFields, includeIndexColumn);
   const firstSummaryIdx = slots.findIndex((slot) => slot.kind === 'summary');
   if (firstSummaryIdx < 0) return null;
 

@@ -10,6 +10,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { App, Button, Space, Table, Tooltip, Typography, Descriptions, Tag } from 'antd';
 import { CopyOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { NavigateFunction } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import { AmountDisplay } from '../../../../../../components/permission';
@@ -21,7 +22,7 @@ import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle'
 import { DetailAuditPhaseTitleExtra } from '../../../../../../components/uni-audit/DetailAuditPhaseRow';
 import type { LifecycleResult } from '../../../../../../components/uni-lifecycle/types';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
-import { DetailDrawerSection, DetailDrawerInlineFullChain } from '../../../../../../components/layout-templates';
+import { DetailDrawerSection, type TraceBriefDocument } from '../../../../../../components/layout-templates';
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
@@ -365,123 +366,111 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
   );
 };
 
-export interface SalesOrderDetailCollaborationPaneProps {
-  drawerVisible?: boolean;
-  onCloseDrawer?: () => void;
-  navigate?: NavigateFunction;
-  auditEnabled?: boolean;
+/** 销售订单全链路节点简易操作（供 DetailDrawerTemplate.traceDocument 使用） */
+export function renderSalesOrderTraceBriefActions(
+  doc: TraceBriefDocument,
+  opts: {
+    t: TFunction;
+    navigate: NavigateFunction;
+    closeDrawer: () => void;
+  },
+): React.ReactNode {
+  const { t, navigate, closeDrawer } = opts;
+  return (
+    <>
+      {doc.document_type === 'quotation' ? (
+        <Button
+          type="primary"
+          size="small"
+          onClick={() => {
+            closeDrawer();
+            navigate('/apps/kuaizhizao/sales-management/quotations', {
+              state: { openQuotationDetailId: doc.document_id },
+            });
+          }}
+        >
+          {t('components.documentTrackingPanel.traceBriefOpenQuotation')}
+        </Button>
+      ) : null}
+      {doc.document_type === 'sales_invoice' ? (
+        <Button
+          type="primary"
+          size="small"
+          onClick={() => {
+            closeDrawer();
+            navigate(`/apps/kuaicaiwu/finance-management/sales-invoices/${doc.document_id}`);
+          }}
+        >
+          {t('components.documentTrackingPanel.traceBriefOpenSalesInvoice')}
+        </Button>
+      ) : null}
+      {doc.document_type === 'receivable' ? (
+        <Button
+          type="primary"
+          size="small"
+          onClick={() => {
+            closeDrawer();
+            navigate(`/apps/kuaicaiwu/finance-management/receivables/${doc.document_id}`);
+          }}
+        >
+          {t('components.documentTrackingPanel.traceBriefOpenReceivable')}
+        </Button>
+      ) : null}
+      {doc.document_type === 'receipt' ? (
+        <Button
+          type="primary"
+          size="small"
+          onClick={() => {
+            closeDrawer();
+            navigate('/apps/kuaicaiwu/finance-management/receipts');
+          }}
+        >
+          {t('components.documentTrackingPanel.traceBriefOpenReceipt')}
+        </Button>
+      ) : null}
+      {doc.document_type === 'payment' ? (
+        <Button
+          type="primary"
+          size="small"
+          onClick={() => {
+            closeDrawer();
+            navigate('/apps/kuaicaiwu/finance-management/payments');
+          }}
+        >
+          {t('components.documentTrackingPanel.traceBriefOpenPayment')}
+        </Button>
+      ) : null}
+    </>
+  );
 }
 
-export const SalesOrderDetailCollaborationPane: React.FC<SalesOrderDetailCollaborationPaneProps> = ({
-  drawerVisible = true,
-  onCloseDrawer,
-  navigate: navigateProp,
-  auditEnabled = true,
-}) => {
-  const { t } = useTranslation();
-  const navigateHook = useNavigate();
-  const navigate = navigateProp ?? navigateHook;
-  const { order, lifecycle } = useSalesOrderDetailContext();
+export const SalesOrderDetailCollaborationPane: React.FC = () => {
+  const { lifecycle } = useSalesOrderDetailContext();
   const mainStages = lifecycle.mainStages ?? [];
   const subStages = lifecycle.subStages ?? [];
   const hideStepperNext = Boolean(lifecycle.nextStepSuggestions?.length);
-  const closeDrawer = onCloseDrawer ?? (() => {});
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {mainStages.length > 0 && (
-          <UniLifecycleStepper
-            steps={mainStages}
-            status={lifecycle.status}
-            showLabels
-            nextStepSuggestions={lifecycle.nextStepSuggestions}
-            hideNextStepSuggestions={hideStepperNext}
-          />
-        )}
-        {subStages.length > 0 && (
-          <UniLifecycleStepper
-            steps={subStages}
-            status={lifecycle.status}
-            showLabels
-            nodeSize={36}
-            connectorWidth={36}
-            stepLabelMaxWidth={120}
-          />
-        )}
-        {order.id != null ? (
-          <DetailDrawerInlineFullChain
-          documentType="sales_order"
-          documentId={order.id}
-          active={drawerVisible}
-          selfDocumentId={order.id}
-          renderBriefActions={(doc) => (
-            <>
-              {doc.document_type === 'quotation' ? (
-                <Button
-                  type="primary"
-                  size="small"
-                  onClick={() => {
-                    closeDrawer();
-                    navigate('/apps/kuaizhizao/sales-management/quotations', {
-                      state: { openQuotationDetailId: doc.document_id },
-                    });
-                  }}
-                >
-                  {t('components.documentTrackingPanel.traceBriefOpenQuotation')}
-                </Button>
-              ) : null}
-              {doc.document_type === 'sales_invoice' ? (
-                <Button
-                  type="primary"
-                  size="small"
-                  onClick={() => {
-                    closeDrawer();
-                    navigate(`/apps/kuaicaiwu/finance-management/sales-invoices/${doc.document_id}`);
-                  }}
-                >
-                  {t('components.documentTrackingPanel.traceBriefOpenSalesInvoice')}
-                </Button>
-              ) : null}
-              {doc.document_type === 'receivable' ? (
-                <Button
-                  type="primary"
-                  size="small"
-                  onClick={() => {
-                    closeDrawer();
-                    navigate(`/apps/kuaicaiwu/finance-management/receivables/${doc.document_id}`);
-                  }}
-                >
-                  {t('components.documentTrackingPanel.traceBriefOpenReceivable')}
-                </Button>
-              ) : null}
-              {doc.document_type === 'receipt' ? (
-                <Button
-                  type="primary"
-                  size="small"
-                  onClick={() => {
-                    closeDrawer();
-                    navigate('/apps/kuaicaiwu/finance-management/receipts');
-                  }}
-                >
-                  {t('components.documentTrackingPanel.traceBriefOpenReceipt')}
-                </Button>
-              ) : null}
-              {doc.document_type === 'payment' ? (
-                <Button
-                  type="primary"
-                  size="small"
-                  onClick={() => {
-                    closeDrawer();
-                    navigate('/apps/kuaicaiwu/finance-management/payments');
-                  }}
-                >
-                  {t('components.documentTrackingPanel.traceBriefOpenPayment')}
-                </Button>
-              ) : null}
-            </>
-          )}
+      {mainStages.length > 0 && (
+        <UniLifecycleStepper
+          steps={mainStages}
+          status={lifecycle.status}
+          showLabels
+          nextStepSuggestions={lifecycle.nextStepSuggestions}
+          hideNextStepSuggestions={hideStepperNext}
         />
-      ) : null}
+      )}
+      {subStages.length > 0 && (
+        <UniLifecycleStepper
+          steps={subStages}
+          status={lifecycle.status}
+          showLabels
+          nodeSize={36}
+          connectorWidth={36}
+          stepLabelMaxWidth={120}
+        />
+      )}
     </div>
   );
 };

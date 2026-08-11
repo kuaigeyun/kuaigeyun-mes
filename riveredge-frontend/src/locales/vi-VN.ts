@@ -2317,6 +2317,8 @@ export default {
   'app.uniDetail.sectionCollaboration': 'Vòng đời',
   'app.uniDetail.sectionLines': 'Mục hàng',
   'app.uniDetail.sectionTimeline': 'Hoạt động',
+  'app.uniDetail.tabDetail': 'Chi tiết',
+  'app.uniDetail.sectionFullChain': 'Theo dõi chuỗi đầy đủ',
   'app.kuaicaiwu.name': 'Tài chính nhẹ',
   'app.kuaioa.name': 'Văn phòng nhẹ',
   'app.kuaioa.menu.group.approval': 'Phê duyệt',

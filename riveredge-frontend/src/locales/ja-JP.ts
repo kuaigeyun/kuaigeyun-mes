@@ -2317,6 +2317,8 @@ export default {
   'app.uniDetail.sectionCollaboration': 'ライフサイクル',
   'app.uniDetail.sectionLines': '品目',
   'app.uniDetail.sectionTimeline': '活動',
+  'app.uniDetail.tabDetail': '詳細',
+  'app.uniDetail.sectionFullChain': 'フルチェーントレース',
   'app.kuaicaiwu.name': 'ライトファイナンス',
   'app.kuaioa.name': 'ライトオフィス',
   'app.kuaioa.menu.group.approval': '承認協同',

@@ -66,6 +66,7 @@ import {
   SalesOrderDetailLinesPane,
   SalesOrderDetailTimelinePane,
   SalesOrderDetailCollaborationTitleSuffix,
+  renderSalesOrderTraceBriefActions,
 } from './components/SalesOrderDetailBody';
 import {
   alignProColumns,
@@ -180,6 +181,8 @@ import {
 import { listQuotations, type Quotation, type QuotationCapabilities } from '../../../services/quotation';
 import { salesContractApi, type SalesContract, type SalesContractCapabilities } from '../../../services/sales-contract';
 import { bankAccountService, type BankAccount } from '../../../../kuaicaiwu/services/finance/bank-account';
+import { formatBankAccountOptionLabel } from '../../../../kuaicaiwu/utils/financeSharedOptions';
+import { formatApiErrorDetail } from '../../../../../services/api';
 import {
   quotationCapabilityAllowed,
   quotationCapabilityReasonMessage,
@@ -206,7 +209,6 @@ import {
 import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
 import { parseVariantAttributesValue } from '../../../../master-data/components/VariantAttributeFields';
 import dayjs from 'dayjs';
-import { formatApiErrorDetail } from '../../../../../services/api';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { coerceFormDate, toApiDateString, formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -736,10 +738,11 @@ const SalesOrdersPage: React.FC = () => {
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const bankAccountOptions = useMemo(
-    () => bankAccounts.map((a) => ({
-      label: `${a.bank_name || ''} ${a.account_number || ''}`.trim() || String(a.id),
-      value: a.id,
-    })),
+    () =>
+      bankAccounts.map((a) => ({
+        label: formatBankAccountOptionLabel(a),
+        value: a.id,
+      })),
     [bankAccounts],
   );
 
@@ -800,10 +803,26 @@ const SalesOrdersPage: React.FC = () => {
 
   React.useEffect(() => {
     if (!isFormPage) return;
-    bankAccountService.list({ limit: 500, is_active: true })
-      .then((res) => setBankAccounts(res.data || []))
-      .catch(() => setBankAccounts([]));
-  }, [isFormPage]);
+    let cancelled = false;
+    bankAccountService
+      .list({ limit: 500, is_active: true })
+      .then((res) => {
+        if (!cancelled) setBankAccounts(res.data || []);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setBankAccounts([]);
+        const err = e as { response?: { data?: { detail?: unknown } }; message?: string };
+        messageApi.error(
+          formatApiErrorDetail(err?.response?.data?.detail) ||
+            err?.message ||
+            t('app.kuaizhizao.salesOrder.loadBankAccountsFailed'),
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isFormPage, messageApi, t]);
 
   /**
    * 加载发货方式、付款条件数据字典
@@ -4865,16 +4884,24 @@ const SalesOrdersPage: React.FC = () => {
               </Space>
             }
             basic={<SalesOrderDetailBasicPane />}
-            collaboration={
-              <SalesOrderDetailCollaborationPane
-                drawerVisible={drawerVisible}
-                onCloseDrawer={() => setDrawerVisible(false)}
-                navigate={navigate}
-                auditEnabled={auditEnabled}
-              />
-            }
+            collaboration={<SalesOrderDetailCollaborationPane />}
             lines={<SalesOrderDetailLinesPane />}
             timeline={<SalesOrderDetailTimelinePane />}
+            traceDocument={
+              currentSalesOrder.id != null
+                ? {
+                    documentType: 'sales_order',
+                    documentId: currentSalesOrder.id,
+                    selfDocumentId: currentSalesOrder.id,
+                    renderBriefActions: (doc) =>
+                      renderSalesOrderTraceBriefActions(doc, {
+                        t,
+                        navigate,
+                        closeDrawer: () => setDrawerVisible(false),
+                      }),
+                  }
+                : undefined
+            }
           />
         </SalesOrderDetailProvider>
       ) : null}

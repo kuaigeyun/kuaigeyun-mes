@@ -133,3 +133,15 @@ def status_reporting_complete_delta(work_order: Any, work_order_operation: Any) 
     target = status_reporting_target_quantity(work_order, work_order_operation)
     current = to_decimal(getattr(work_order_operation, "completed_quantity", None))
     return max(Decimal("0"), target - current)
+
+
+def remaining_completed_headroom(
+    plan_qty: Any,
+    current_completed: Any,
+    mode: str,
+    value: Decimal,
+) -> Decimal:
+    """数量报工：距「计划+超报」累计完成上限的剩余可报量（不含质检补报突破上限）。"""
+    cap = max_completed_quantity_for_plan(plan_qty, mode, value)
+    current = to_decimal(current_completed)
+    return max(Decimal("0"), cap - current)

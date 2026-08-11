@@ -41,6 +41,99 @@ export interface MindMapNode {
   [key: string]: any;
 }
 
+/** 与后端 IntField / PostgreSQL int4 一致；禁止用 Date.now() 当组 ID */
+export const BOM_GROUP_ID_INT32_MAX = 2147483647;
+
+export function isSafeBomGroupId(id: unknown): id is number {
+  return typeof id === 'number' && Number.isInteger(id) && id > 0 && id <= BOM_GROUP_ID_INT32_MAX;
+}
+
+/** 在已占用 ID 中取最小正整数（与 BOM 列表页 getNextAlternativeGroupId 一致） */
+export function nextBomGroupId(usedIds: Iterable<number>): number {
+  const used = new Set<number>();
+  for (const id of usedIds) {
+    if (isSafeBomGroupId(id)) used.add(id);
+  }
+  let next = 1;
+  while (used.has(next)) next += 1;
+  if (next > BOM_GROUP_ID_INT32_MAX) {
+    throw new Error('BOM group id exhausted within int32 range');
+  }
+  return next;
+}
+
+/** 收集整棵树内已占用的替代料 / 配置位组 ID（仅 int32 安全值） */
+export function collectBomGroupIds(root: MindMapNode | null | undefined): {
+  alternative: number[];
+  configurable: number[];
+} {
+  const alternative: number[] = [];
+  const configurable: number[] = [];
+  const walk = (n: MindMapNode) => {
+    if (isSafeBomGroupId(n.alternativeGroupId)) alternative.push(n.alternativeGroupId);
+    if (isSafeBomGroupId(n.configurableGroupId)) configurable.push(n.configurableGroupId);
+    n.children?.forEach(walk);
+  };
+  if (root) walk(root);
+  return { alternative, configurable };
+}
+
+type BomGroupIdItem = {
+  isAlternative?: boolean;
+  alternativeGroupId?: number | null;
+  isConfigurable?: boolean;
+  configurableGroupId?: number | null;
+};
+
+/**
+ * 导出前将超出 int32 的组 ID（历史 Date.now()）映射为安全正整数，同组保持同一映射。
+ */
+export function remapUnsafeBomGroupIdsInItems<T extends BomGroupIdItem>(items: T[]): T[] {
+  const altMap = new Map<number, number>();
+  const cfgMap = new Map<number, number>();
+  const usedAlt = new Set<number>();
+  const usedCfg = new Set<number>();
+
+  for (const it of items) {
+    if (it.isAlternative && isSafeBomGroupId(it.alternativeGroupId)) {
+      usedAlt.add(it.alternativeGroupId);
+    }
+    if (it.isConfigurable && isSafeBomGroupId(it.configurableGroupId)) {
+      usedCfg.add(it.configurableGroupId);
+    }
+  }
+
+  const mapOne = (
+    raw: number | null | undefined,
+    map: Map<number, number>,
+    used: Set<number>,
+  ): number | undefined => {
+    if (raw == null || !Number.isFinite(Number(raw))) return undefined;
+    const n = Number(raw);
+    if (isSafeBomGroupId(n)) return n;
+    let mapped = map.get(n);
+    if (mapped == null) {
+      mapped = nextBomGroupId(used);
+      map.set(n, mapped);
+      used.add(mapped);
+    }
+    return mapped;
+  };
+
+  return items.map((it) => {
+    const next = { ...it };
+    if (next.isAlternative) {
+      const mapped = mapOne(next.alternativeGroupId, altMap, usedAlt);
+      if (mapped != null) next.alternativeGroupId = mapped;
+    }
+    if (next.isConfigurable) {
+      const mapped = mapOne(next.configurableGroupId, cfgMap, usedCfg);
+      if (mapped != null) next.configurableGroupId = mapped;
+    }
+    return next;
+  });
+}
+
 /**
  * 查找节点（递归）
  */

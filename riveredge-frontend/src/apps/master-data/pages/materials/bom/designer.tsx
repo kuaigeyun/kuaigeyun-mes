@@ -49,6 +49,10 @@ import {
   handleMoveNodeLogic,
   removeNode,
   resolveIssueMethodForNode,
+  collectBomGroupIds,
+  isSafeBomGroupId,
+  nextBomGroupId,
+  remapUnsafeBomGroupIdsInItems,
 } from './utils';
 import { bomApi, materialApi, materialGroupApi } from '../../../services/material';
 import { processRouteApi, unwrapProcessPagedList } from '../../../services/process';
@@ -459,11 +463,11 @@ const BOMDesignerPage: React.FC = () => {
     return null;
   }, [formatCyclePath]);
   const convertMindMapToBOMItems = useCallback((data: MindMapNode, parentMaterial: Material): any[] => {
-    const items: any[] = [];
-    const parentCode = (parentMaterial as any).mainCode ?? (parentMaterial as any).main_code ?? parentMaterial.code ?? '';
-
-    if (data.children) {
-      data.children.forEach((child: MindMapNode, index: number) => {
+    const walk = (node: MindMapNode, parent: Material): any[] => {
+      const items: any[] = [];
+      const parentCode = (parent as any).mainCode ?? (parent as any).main_code ?? parent.code ?? '';
+      if (!node.children) return items;
+      node.children.forEach((child: MindMapNode, index: number) => {
         if (child.material && child.componentId) {
           const compCode = (child.material as any).mainCode ?? (child.material as any).main_code ?? child.material.code ?? '';
           items.push({
@@ -481,15 +485,15 @@ const BOMDesignerPage: React.FC = () => {
             priority: child.priority ?? index,
             issueMethod: resolveIssueMethodForNode(child.issueMethod, child.material),
           });
-
           if (child.children && child.children.length > 0) {
-            items.push(...convertMindMapToBOMItems(child, child.material!));
+            items.push(...walk(child, child.material!));
           }
         }
       });
-    }
-
-    return items;
+      return items;
+    };
+    // Date.now() 组 ID 超出 int32，整树导出后统一映射为安全正整数
+    return remapUnsafeBomGroupIdsInItems(walk(data, parentMaterial));
   }, []);
 
   /**
@@ -1002,8 +1006,10 @@ const BOMDesignerPage: React.FC = () => {
       const node = findNode(mindMapDataRef.current, selectedNodeId);
       const parent = findParentNode(mindMapDataRef.current, selectedNodeId);
       if (!node || !parent) return;
-      const groupId = node.configurableGroupId ?? Date.now();
-      const gid = typeof groupId === 'number' ? groupId : Date.now();
+      const groupId = isSafeBomGroupId(node.configurableGroupId)
+        ? node.configurableGroupId
+        : nextBomGroupId(collectBomGroupIds(mindMapDataRef.current).configurable);
+      const gid = groupId;
       const code = (material as any).mainCode ?? (material as any).main_code ?? material.code ?? '';
       const baseUnit = (material as any).baseUnit ?? (material as any).base_unit ?? '';
       const newNode: MindMapNode = {
@@ -1113,9 +1119,9 @@ const BOMDesignerPage: React.FC = () => {
       if (!node || !parent) return;
       const formSaysAlternative = nodeConfigForm.getFieldValue('isAlternative');
       if (!node.isAlternative && !formSaysAlternative) return;
-      let gid = node.alternativeGroupId ?? null;
-      if (gid == null) gid = Date.now();
-      const needWriteNode = !node.isAlternative || node.alternativeGroupId == null;
+      let gid = isSafeBomGroupId(node.alternativeGroupId) ? node.alternativeGroupId : null;
+      if (gid == null) gid = nextBomGroupId(collectBomGroupIds(mindMapDataRef.current).alternative);
+      const needWriteNode = !node.isAlternative || !isSafeBomGroupId(node.alternativeGroupId);
       if (needWriteNode) {
         tree = updateNode(tree, selectedNodeId, (n) => ({
           ...n,
@@ -1301,10 +1307,21 @@ const BOMDesignerPage: React.FC = () => {
       const material = materials.find(m => m.id === values.materialId);
       const code = material ? ((material as any).mainCode ?? (material as any).main_code ?? material.code ?? '') : '';
 
+      const groupIds = collectBomGroupIds(mindMapDataRef.current);
       const updated = updateNode(mindMapDataRef.current!, selectedNodeId, (node: MindMapNode) => {
         let configurableGroupId = values.configurableGroupId ?? node.configurableGroupId;
-        if (values.isConfigurable && !configurableGroupId) {
-          configurableGroupId = Date.now();
+        if (values.isConfigurable && !isSafeBomGroupId(configurableGroupId)) {
+          configurableGroupId = nextBomGroupId(groupIds.configurable);
+          groupIds.configurable.push(configurableGroupId);
+        }
+        let alternativeGroupId: number | null = null;
+        if (values.isAlternative) {
+          alternativeGroupId = isSafeBomGroupId(node.alternativeGroupId)
+            ? node.alternativeGroupId
+            : nextBomGroupId(groupIds.alternative);
+          if (!isSafeBomGroupId(node.alternativeGroupId)) {
+            groupIds.alternative.push(alternativeGroupId);
+          }
         }
         return {
           ...node,
@@ -1320,7 +1337,7 @@ const BOMDesignerPage: React.FC = () => {
           configurableGroupId: values.isConfigurable ? configurableGroupId : null,
           isDefaultConfigurable: false,
           isAlternative: values.isAlternative ?? false,
-          alternativeGroupId: values.isAlternative ? (node.alternativeGroupId ?? Date.now()) : null,
+          alternativeGroupId,
         };
       });
 
@@ -1367,7 +1384,7 @@ const BOMDesignerPage: React.FC = () => {
         });
       }
     });
-    return items;
+    return remapUnsafeBomGroupIdsInItems(items);
   }, []);
 
   /**
@@ -1399,7 +1416,7 @@ const BOMDesignerPage: React.FC = () => {
         });
       }
     });
-    return items;
+    return remapUnsafeBomGroupIdsInItems(items);
   }, []);
 
   /**

@@ -69,7 +69,7 @@ const PartnerStatementsPage: React.FC = () => {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [preview, setPreview] = useState<PartnerStatementPreview | null>(null);
-  const { cache: previewLineDetailCache, loadLineDetail: loadPreviewLineDetail } =
+  const { cache: previewLineDetailCache, loadLineDetail: loadPreviewLineDetail, clearCache: clearPreviewLineDetailCache } =
     usePartnerStatementInboundDetail();
   const [partnerId, setPartnerId] = useState<number | null>(null);
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>(() => {
@@ -113,6 +113,7 @@ const PartnerStatementsPage: React.FC = () => {
   }, [dateRange]);
 
   const resetCreate = () => {
+    clearPreviewLineDetailCache();
     setPreview(null);
     setPartnerId(null);
     const month = dayjs().subtract(1, 'month');
@@ -126,6 +127,7 @@ const PartnerStatementsPage: React.FC = () => {
       return;
     }
     setPreviewLoading(true);
+    clearPreviewLineDetailCache();
     try {
       const data = await partnerStatementService.preview({
         partner_id: partnerId,
@@ -547,6 +549,7 @@ const PartnerStatementsPage: React.FC = () => {
               value={partnerId ?? undefined}
               onChange={(v) => {
                 setPartnerId(v);
+                clearPreviewLineDetailCache();
                 setPreview(null);
               }}
               filterOption={(input, opt) =>
@@ -560,6 +563,7 @@ const PartnerStatementsPage: React.FC = () => {
                 if (v?.[0] && v?.[1]) {
                   setDateRange([v[0].startOf('day'), v[1].endOf('day')]);
                 }
+                clearPreviewLineDetailCache();
                 setPreview(null);
               }}
               placeholder={[t(`${PS}.startDate`), t(`${PS}.endDate`)]}

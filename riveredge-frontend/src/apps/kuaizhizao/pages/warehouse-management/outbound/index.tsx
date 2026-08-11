@@ -627,10 +627,11 @@ const OutboundPage: React.FC = () => {
     () => alignProColumns<OutboundOrder>([
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.subjectDocNo'),
-      key: 'delivery_code',
+      key: 'subject_doc',
       dataIndex: ['delivery_code', 'picking_code'],
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
+      hideInSearch: true,
       render: (_, record) => (
         <UniTableStackedPrimaryCell
           primary={getOutboundStackedPrimary(record)}
@@ -639,8 +640,13 @@ const OutboundPage: React.FC = () => {
       ),
     },
     {
+      title: t('app.kuaizhizao.warehouseOutbound.col.subjectDocNo'),
+      dataIndex: 'keyword',
+      hideInTable: true,
+    },
+    {
       title: t('app.kuaizhizao.warehouseOutbound.col.outboundCode'),
-      dataIndex: ['delivery_code', 'picking_code'],
+      dataIndex: 'delivery_code',
       hideInTable: true,
       sorter: true,
     },
@@ -695,6 +701,7 @@ const OutboundPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseOutbound.col.outboundProgress'),
       dataIndex: 'fulfillment_progress',
       ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
+      hideInSearch: true,
       render: (_, record) => {
         let done = 0;
         let required = 0;
@@ -779,6 +786,8 @@ const OutboundPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseOutbound.col.actions'),
       width: 260,
       fixed: 'right',
+      hideInSearch: true,
+      search: false,
       render: (_, record) => (
         <Space wrap>
           <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />

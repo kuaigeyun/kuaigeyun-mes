@@ -90,7 +90,7 @@ const PrepaymentsPage: React.FC = () => {
         const [customerRes, supplierRes, bankRes] = await Promise.all([
           apiRequest<unknown>('/apps/master-data/supply-chain/customers', { params: { limit: 1000, is_active: true } }),
           apiRequest<unknown>('/apps/master-data/supply-chain/suppliers', { params: { limit: 1000, is_active: true } }),
-          bankAccountService.list({ skip: 0, limit: 500, is_active: true }),
+          bankAccountService.list({ skip: 0, limit: 500, is_active: true }), // API le=500
         ]);
         if (cancelled) return;
         setBankAccounts(bankRes?.data || []);

@@ -26,6 +26,7 @@ from apps.kuaizhizao.models.material_stock_movement import (
     MaterialStockMovement,
 )
 from apps.kuaizhizao.utils.inventory_helper import get_material_inventory_info
+from apps.master_data.constants.batch_quality_status import QUALIFIED
 from infra.services.business_config_service import BusinessConfigService
 
 
@@ -198,6 +199,7 @@ class InventoryService:
         *,
         for_update: bool = False,
         include_unassigned: bool = False,
+        quality_status: str = QUALIFIED,
     ):
         from apps.master_data.models.material_batch import MaterialBatch
 
@@ -208,6 +210,7 @@ class InventoryService:
             material_id=material_id,
             deleted_at__isnull=True,
             status="in_stock",
+            quality_status=quality_status,
             **own,
         )
         query = MaterialBatch.filter(**filters).filter(q)
@@ -296,6 +299,7 @@ class InventoryService:
         material=None,
         warehouse_id: Optional[int] = None,
         warehouse_name: Optional[str] = None,
+        quality_status: str = QUALIFIED,
     ) -> None:
         """
         主仓批次数量增加（按 warehouse_id 拆分）。包含软删行：若唯一键已存在但 deleted_at 有值，
@@ -321,6 +325,7 @@ class InventoryService:
             material_id=material_id,
             batch_no=bn,
             warehouse_id=wh_id,
+            quality_status=quality_status,
             **own,
         ).select_for_update().first()
         # 历史未归属行（warehouse_id=0）：首次带仓入库时认领，避免同批双行
@@ -330,6 +335,7 @@ class InventoryService:
                 material_id=material_id,
                 batch_no=bn,
                 warehouse_id=0,
+                quality_status=quality_status,
                 **own,
             ).select_for_update().first()
             if batch:
@@ -369,6 +375,7 @@ class InventoryService:
                 batch_no=bn,
                 quantity=quantity,
                 status="in_stock",
+                quality_status=quality_status,
                 production_date=create_production_date,
                 expiry_date=create_expiry_date,
                 ownership_type=own["ownership_type"],
@@ -385,6 +392,7 @@ class InventoryService:
                 material_id=material_id,
                 batch_no=bn,
                 warehouse_id=wh_id,
+                quality_status=quality_status,
                 **own,
             ).select_for_update().first()
             if not batch:
@@ -511,6 +519,7 @@ class InventoryService:
         operator_name: Optional[str] = None,
         remark: Optional[str] = None,
         idempotency_key: Optional[str] = None,
+        quality_status: str = QUALIFIED,
     ) -> bool:
         """
         增加库存（不开启独立事务）。
@@ -599,6 +608,7 @@ class InventoryService:
                     customer_id=customer_id,
                     warehouse_id=main_wh_id,
                     for_update=True,
+                    quality_status=quality_status,
                 )
                 qty_before = Decimal(str(existing_batch.quantity or 0)) if existing_batch else Decimal(0)
                 await InventoryService._material_batch_increase_or_restore(
@@ -616,6 +626,7 @@ class InventoryService:
                     material=material,
                     warehouse_id=main_wh_id,
                     warehouse_name=main_wh_name,
+                    quality_status=quality_status,
                 )
                 qty_after = qty_before + quantity
                 await InventoryService._record_stock_movement(
@@ -771,6 +782,7 @@ class InventoryService:
         operator_name: Optional[str] = None,
         remark: Optional[str] = None,
         idempotency_key: Optional[str] = None,
+        quality_status: str = QUALIFIED,
     ) -> bool:
         """
         增加库存（独立事务包装）。
@@ -801,6 +813,7 @@ class InventoryService:
             operator_name=operator_name,
             remark=remark,
             idempotency_key=idempotency_key,
+            quality_status=quality_status,
         )
 
     @staticmethod
@@ -827,6 +840,7 @@ class InventoryService:
         operator_name: Optional[str] = None,
         remark: Optional[str] = None,
         idempotency_key: Optional[str] = None,
+        stock_quality_status: str = QUALIFIED,
     ) -> bool:
         """
         扣减库存（不开启独立事务）。见 `_increase_stock_no_atomic` 说明。
@@ -897,6 +911,7 @@ class InventoryService:
 
                 own = InventoryService._ownership_filter(ownership_type, customer_id)
                 main_wh_id = InventoryService._normalize_main_warehouse_id(warehouse_id)
+                stock_qs_filter = {"quality_status": stock_quality_status}
                 # 非批号管理物料：空批号或 DEFAULT 表示未指定，按 FIFO/LIFO 跨批扣减。
                 # 禁止把 DEFAULT 当成真实批号去查（前端曾把空串 normalize 成 DEFAULT 导致误报库存不足）。
                 ledger_bn = InventoryService._normalize_batch_no_for_ledger(raw_batch) if raw_batch else ""
@@ -913,6 +928,7 @@ class InventoryService:
                         warehouse_id=main_wh_id,
                         for_update=True,
                         include_unassigned=True,
+                        quality_status=stock_quality_status,
                     )
                     if batch and int(getattr(batch, "warehouse_id", 0) or 0) == 0 and main_wh_id > 0:
                         batch.warehouse_id = main_wh_id
@@ -928,6 +944,7 @@ class InventoryService:
                             status="in_stock",
                             quantity__gt=0,
                             **own,
+                            **stock_qs_filter,
                         ).filter(
                             InventoryService._main_warehouse_balance_q(main_wh_id)
                         ).values_list("batch_no", "quantity")
@@ -949,7 +966,8 @@ class InventoryService:
                             deleted_at__isnull=True,
                             status="in_stock",
                             quantity__gt=0,
-                            id__lt=batch.id
+                            id__lt=batch.id,
+                            **stock_qs_filter,
                         ).filter(
                             InventoryService._main_warehouse_balance_q(main_wh_id)
                         ).order_by("id").first()
@@ -968,6 +986,7 @@ class InventoryService:
                             status="in_stock",
                             quantity__gt=0,
                             id__gt=batch.id,
+                            **stock_qs_filter,
                         ).filter(
                             InventoryService._main_warehouse_balance_q(main_wh_id)
                         ).order_by("-id").first()
@@ -1027,6 +1046,7 @@ class InventoryService:
                             status="in_stock",
                             quantity__gt=0,
                             **own,
+                            **stock_qs_filter,
                         )
                         .filter(InventoryService._main_warehouse_balance_q(main_wh_id))
                         .select_for_update()
@@ -1190,6 +1210,7 @@ class InventoryService:
         operator_name: Optional[str] = None,
         remark: Optional[str] = None,
         idempotency_key: Optional[str] = None,
+        stock_quality_status: str = QUALIFIED,
     ) -> bool:
         """
         扣减库存（独立事务包装）。
@@ -1219,6 +1240,7 @@ class InventoryService:
             operator_name=operator_name,
             remark=remark,
             idempotency_key=idempotency_key,
+            stock_quality_status=stock_quality_status,
         )
 
     @staticmethod

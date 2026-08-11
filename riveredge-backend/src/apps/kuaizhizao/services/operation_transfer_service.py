@@ -71,6 +71,38 @@ async def resolve_operation_transfer_qualified(
     return await sum_plan_transfer_qualified_from_inspections(tenant_id, inspections)
 
 
+async def resolve_operation_display_unqualified(
+    tenant_id: int,
+    work_order_id: int,
+    woo: WorkOrderOperation,
+    *,
+    policy_cache: Optional[Dict[int, Tuple[str, Optional[int], str]]] = None,
+    inspections_by_op: Optional[Dict[int, List[Any]]] = None,
+) -> Decimal:
+    """工序卡片/工单头展示用不合格数量（与前端 getOperationQualityMetrics 一致）。"""
+    master_op_id = int(woo.operation_id) if woo.operation_id is not None else 0
+    if master_op_id <= 0:
+        return Decimal(str(woo.unqualified_quantity or 0))
+
+    cache = policy_cache if policy_cache is not None else {}
+    if master_op_id not in cache:
+        cache[master_op_id] = await resolve_inspection_policy(
+            tenant_id, "ipqc", operation_id=master_op_id
+        )
+    mode, _, _ = cache[master_op_id]
+
+    if mode == "plan":
+        if inspections_by_op is None:
+            inspections_by_op = await load_process_inspections_by_operation(
+                tenant_id, work_order_id
+            )
+        inspections = inspections_by_op.get(master_op_id, [])
+        _, unqualified = sum_process_inspection_quality_quantities(inspections)
+        return unqualified
+
+    return Decimal(str(woo.unqualified_quantity or 0))
+
+
 async def load_process_inspections_by_operation(
     tenant_id: int,
     work_order_id: int,

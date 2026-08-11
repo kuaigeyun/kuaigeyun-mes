@@ -103,6 +103,12 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                 defect_record.processed_by_name = user_info["name"]
                 await defect_record.save()
 
+                await self._release_defect_quantity_as_qualified(
+                    tenant_id=tenant_id,
+                    defect_record=defect_record,
+                    operator_id=approved_by,
+                )
+
                 # 获取工单和工序信息
                 work_order = await WorkOrder.get_or_none(
                     id=defect_record.work_order_id,
@@ -520,6 +526,161 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         warehouse_name = warehouse.name or ""
         return material_id, material_code, material_name, material_unit, warehouse_id, warehouse_name
 
+    async def _resolve_defect_stock_warehouse(
+        self,
+        tenant_id: int,
+        defect_record: DefectRecord,
+        *,
+        prefer_quarantine: bool = False,
+    ) -> tuple[int, str]:
+        from apps.master_data.models.warehouse import Warehouse
+        from apps.master_data.models.material import Material
+        from apps.master_data.services.material_service import (
+            resolve_primary_default_warehouse_from_material,
+        )
+
+        if prefer_quarantine:
+            wh = await Warehouse.filter(
+                tenant_id=tenant_id,
+                warehouse_type="quarantine",
+                is_active=True,
+                deleted_at__isnull=True,
+            ).order_by("id").first()
+            if wh:
+                return int(wh.id), str(wh.name or "")
+
+        if defect_record.downgrade_warehouse_id:
+            wh = await Warehouse.get_or_none(
+                tenant_id=tenant_id,
+                id=int(defect_record.downgrade_warehouse_id),
+                deleted_at__isnull=True,
+            )
+            if wh:
+                return int(wh.id), str(wh.name or "")
+
+        material = await Material.get_or_none(
+            tenant_id=tenant_id,
+            id=int(defect_record.product_id),
+            deleted_at__isnull=True,
+        )
+        resolved = await resolve_primary_default_warehouse_from_material(
+            tenant_id, material=material
+        )
+        if resolved:
+            wh_id, wh_name = resolved
+            return int(wh_id), str(wh_name or "")
+        raise BusinessLogicError("未配置隔离仓或产品默认仓，无法处理不合格品库存")
+
+    async def _release_defect_quantity_as_qualified(
+        self,
+        tenant_id: int,
+        defect_record: DefectRecord,
+        operator_id: int,
+    ) -> None:
+        from decimal import Decimal
+        from apps.kuaizhizao.services.inventory_service import InventoryService
+        from apps.master_data.constants.batch_quality_status import QUALIFIED
+
+        qty = Decimal(str(defect_record.defect_quantity or 0))
+        if qty <= 0:
+            return
+        wh_id, wh_name = await self._resolve_defect_stock_warehouse(tenant_id, defect_record)
+        await InventoryService.increase_stock(
+            tenant_id=tenant_id,
+            material_id=int(defect_record.product_id),
+            quantity=qty,
+            warehouse_id=wh_id,
+            source_type="defect_accept",
+            source_doc_id=int(defect_record.id),
+            source_doc_code=defect_record.code,
+            work_order_id=defect_record.work_order_id,
+            work_order_code=defect_record.work_order_code,
+            movement_type="defect_accept",
+            to_warehouse_id=wh_id,
+            to_warehouse_name=wh_name,
+            operator_id=operator_id,
+            remark=f"让步接收放行 {defect_record.code}",
+            idempotency_key=f"defect_accept:{defect_record.id}:qualified",
+            quality_status=QUALIFIED,
+        )
+
+    async def _inbound_defect_quantity_as(
+        self,
+        tenant_id: int,
+        defect_record: DefectRecord,
+        *,
+        quality_status: str,
+        operator_id: int,
+        prefer_quarantine: bool = False,
+        movement_type: str,
+        idempotency_suffix: str,
+    ) -> None:
+        from decimal import Decimal
+        from apps.kuaizhizao.services.inventory_service import InventoryService
+
+        qty = Decimal(str(defect_record.defect_quantity or 0))
+        if qty <= 0:
+            raise ValidationError("不合格品数量必须大于0")
+        wh_id, wh_name = await self._resolve_defect_stock_warehouse(
+            tenant_id, defect_record, prefer_quarantine=prefer_quarantine
+        )
+        await InventoryService.increase_stock(
+            tenant_id=tenant_id,
+            material_id=int(defect_record.product_id),
+            quantity=qty,
+            warehouse_id=wh_id,
+            source_type="defect_disposition",
+            source_doc_id=int(defect_record.id),
+            source_doc_code=defect_record.code,
+            work_order_id=defect_record.work_order_id,
+            work_order_code=defect_record.work_order_code,
+            movement_type=movement_type,
+            to_warehouse_id=wh_id,
+            to_warehouse_name=wh_name,
+            operator_id=operator_id,
+            remark=f"不合格品处置 {defect_record.code}",
+            idempotency_key=f"defect:{defect_record.id}:{idempotency_suffix}",
+            quality_status=quality_status,
+        )
+
+    async def _write_off_defect_product_stock(
+        self,
+        tenant_id: int,
+        defect_record: DefectRecord,
+        operator_id: int,
+    ) -> None:
+        from decimal import Decimal
+        from apps.kuaizhizao.services.inventory_service import InventoryService
+        from apps.master_data.constants.batch_quality_status import QUARANTINE, UNQUALIFIED
+        from infra.exceptions.exceptions import BusinessLogicError
+
+        qty = Decimal(str(defect_record.defect_quantity or 0))
+        if qty <= 0:
+            return
+        wh_id, _ = await self._resolve_defect_stock_warehouse(tenant_id, defect_record)
+        for status in (UNQUALIFIED, QUARANTINE):
+            try:
+                await InventoryService.decrease_stock(
+                    tenant_id=tenant_id,
+                    material_id=int(defect_record.product_id),
+                    quantity=qty,
+                    warehouse_id=wh_id,
+                    source_type="defect_downgrade",
+                    source_doc_id=int(defect_record.id),
+                    source_doc_code=defect_record.code,
+                    work_order_id=defect_record.work_order_id,
+                    work_order_code=defect_record.work_order_code,
+                    movement_type="defect_downgrade_writeoff",
+                    from_warehouse_id=wh_id,
+                    operator_id=operator_id,
+                    remark=f"降级改判核销原产品 {defect_record.code}",
+                    idempotency_key=f"defect_downgrade:{defect_record.id}:writeoff:{status}",
+                    stock_quality_status=status,
+                )
+                return
+            except BusinessLogicError:
+                continue
+
     async def _execute_downgrade_reuse(
         self,
         tenant_id: int,
@@ -541,6 +702,12 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             warehouse_id,
             warehouse_name,
         ) = await self._resolve_downgrade_targets(tenant_id, defect_record)
+
+        await self._write_off_defect_product_stock(
+            tenant_id=tenant_id,
+            defect_record=defect_record,
+            operator_id=updated_by,
+        )
 
         defect_record.downgrade_material_code = material_code
         defect_record.downgrade_material_name = material_name
@@ -704,6 +871,17 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                     raise BusinessLogicError("未配置待检仓（quarantine）且未指定隔离库位")
             defect_record.quarantine_location = location
             await defect_record.save()
+            from apps.master_data.constants.batch_quality_status import QUARANTINE
+
+            await self._inbound_defect_quantity_as(
+                tenant_id=tenant_id,
+                defect_record=defect_record,
+                quality_status=QUARANTINE,
+                operator_id=updated_by,
+                prefer_quarantine=True,
+                movement_type="defect_quarantine",
+                idempotency_suffix="quarantine",
+            )
             logger.info(f"不合格品 {defect_record.code} 已隔离至 {location}")
 
         elif disposition == "downgrade":

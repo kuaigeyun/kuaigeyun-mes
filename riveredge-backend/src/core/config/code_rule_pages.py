@@ -4,7 +4,9 @@
 定义系统中所有有编码字段的功能页面，用于在编码规则页面展示和配置。
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
+
+from core.config.code_rule_entity_models import ENTITY_MODEL_BY_RULE_CODE
 
 # 页面代码 -> 固定字符预设（汉语拼音缩写）
 # 用于编码规则默认前缀和重置
@@ -524,6 +526,7 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "page_name": "报价单",
         "page_path": "/apps/kuaizhizao/sales-management/quotations",
         "code_field": "quotation_code",
+        "seq_sync_code_field": "quotation_series_code",
         "code_field_label": "报价单编码",
         "module": "快格轻制造",
         "module_icon": "tool",
@@ -1552,104 +1555,58 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
 ]
 
 
-# 规则代码 -> 实体模型（用于序列号校准：导入数据后从库中取最大序号，使新生成的序号接着往后）
-# 格式: rule_code -> (模块路径, 模型类名, 编码字段名)
-# 仅配置支持“前缀+序号”且可查库的实体，用于 generate_code 时自动校准 current_seq
-RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
-    "DEFECT_TYPE_CODE": ("apps.master_data.models.process", "DefectType", "code"),
-    "OPERATION_CODE": ("apps.master_data.models.process", "Operation", "code"),
-    "SOP_CODE": ("apps.master_data.models.process", "SOP", "code"),
-    "ENGINEERING_DRAWING_CODE": ("apps.master_data.models.drawing", "EngineeringDrawing", "code"),
-    "MASTER_DATA_FACTORY_PLANT": ("apps.master_data.models.factory", "Plant", "code"),
-    "MASTER_DATA_FACTORY_WORKSHOP": ("apps.master_data.models.factory", "Workshop", "code"),
-    "MASTER_DATA_FACTORY_PRODUCTION_LINE": ("apps.master_data.models.factory", "ProductionLine", "code"),
-    "MASTER_DATA_FACTORY_WORKSTATION": ("apps.master_data.models.factory", "Workstation", "code"),
-    "MASTER_DATA_WAREHOUSE_WAREHOUSE": ("apps.master_data.models.warehouse", "Warehouse", "code"),
-    "MASTER_DATA_WAREHOUSE_STORAGE_AREA": ("apps.master_data.models.warehouse", "StorageArea", "code"),
-    "MASTER_DATA_WAREHOUSE_STORAGE_LOCATION": ("apps.master_data.models.warehouse", "StorageLocation", "code"),
-    "MASTER_DATA_MATERIAL_GROUP": ("apps.master_data.models.material", "MaterialGroup", "code"),
-    "MATERIAL_CODE": ("apps.master_data.models.material", "Material", "main_code"),
-    "customer": ("apps.master_data.models.customer", "Customer", "code"),
-    "supplier": ("apps.master_data.models.supplier", "Supplier", "code"),
-    "DEPARTMENT_CODE": ("core.models.department", "Department", "code"),
-    "POSITION_CODE": ("core.models.position", "Position", "code"),
-    "ROLE_CODE": ("core.models.role", "Role", "code"),
-    "EQUIPMENT_CODE": ("apps.kuaizhizao.models.equipment", "Equipment", "code"),
-    "MOLD_CODE": ("apps.kuaizhizao.models.mold", "Mold", "code"),
-    "TOOL_CODE": ("apps.kuaizhizao.models.tool", "Tool", "code"),
-    "PURCHASE_ORDER_CODE": ("apps.kuaizhizao.models.purchase_order", "PurchaseOrder", "order_code"),
-    "PURCHASE_ORDER_CHANGE_CODE": ("apps.kuaizhizao.models.purchase_order_change_order", "PurchaseOrderChangeOrder", "change_code"),
-    "PURCHASE_REQUISITION_CODE": ("apps.kuaizhizao.models.purchase_requisition", "PurchaseRequisition", "requisition_code"),
-    "PURCHASE_INQUIRY_CODE": ("apps.kuaizhizao.models.purchase_inquiry", "PurchaseInquiry", "inquiry_code"),
-    "PURCHASE_RECEIPT_CODE": ("apps.kuaizhizao.models.purchase_receipt", "PurchaseReceipt", "receipt_code"),
-    "PURCHASE_RETURN_CODE": ("apps.kuaizhizao.models.purchase_return", "PurchaseReturn", "return_code"),
-    "SALES_ORDER_CHANGE_CODE": ("apps.kuaizhizao.models.sales_order_change_order", "SalesOrderChangeOrder", "change_code"),
-    "WORK_ORDER_CODE": ("apps.kuaizhizao.models.work_order", "WorkOrder", "code"),
-    "REWORK_ORDER_CODE": ("apps.kuaizhizao.models.rework_order", "ReworkOrder", "code"),
-    "OUTSOURCE_WORK_ORDER_CODE": ("apps.kuaizhizao.models.outsource_work_order", "OutsourceWorkOrder", "code"),
-    "OQC_INSPECTION_CODE": ("apps.kuaizhizao.models.oqc_inspection", "OQCInspection", "inspection_code"),
-    "EIGHT_D_REPORT_CODE": ("apps.kuaizhizao.models.quality_8d_report", "Quality8DReport", "report_code"),
-    "DEFECT_RECORD_CODE": ("apps.kuaizhizao.models.defect_record", "DefectRecord", "code"),
-    "SCRAP_RECORD_CODE": ("apps.kuaizhizao.models.scrap_record", "ScrapRecord", "code"),
-    "MATERIAL_CALL_CODE": ("apps.kuaizhizao.models.material_call_request", "MaterialCallRequest", "code"),
-    "WORK_CENTER_CODE": ("apps.master_data.models.factory", "WorkCenter", "code"),
-    "HAOLIGO_MOLD_TRIAL_SHEET_NO": ("apps.haoligo.models.mold_trial_sheet", "HaoligoMoldTrialSheet", "sheet_no"),
-    "HAOLIGO_MOLD_BORROW_SHEET_NO": ("apps.haoligo.models.mold_borrow_sheet", "HaoligoMoldBorrowSheet", "sheet_no"),
-    "HAOLIGO_MOLD_RETURN_SHEET_NO": ("apps.haoligo.models.mold_return_sheet", "HaoligoMoldReturnSheet", "sheet_no"),
-    "HAOLIGO_MOLD_MAINTENANCE_REPAIR_SHEET_NO": ("apps.haoligo.models.mold_maintenance_sheet", "HaoligoMoldMaintenanceSheet", "sheet_no"),
-    "HAOLIGO_MOLD_MAINTENANCE_UPKEEP_SHEET_NO": ("apps.haoligo.models.mold_maintenance_sheet", "HaoligoMoldMaintenanceSheet", "sheet_no"),
-    "HAOLIGO_MOLD_MAINTENANCE_COMPLETE_SHEET_NO": (
-        "apps.haoligo.models.mold_maintenance_complete_sheet",
-        "HaoligoMoldMaintenanceCompleteSheet",
-        "sheet_no",
-    ),
-    "HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_SHEET_NO": (
-        "apps.haoligo.models.mold_outsource_maintenance_sheet",
-        "HaoligoMoldOutsourceMaintenanceSheet",
-        "sheet_no",
-    ),
-    "HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_COMPLETE_SHEET_NO": (
-        "apps.haoligo.models.mold_outsource_maintenance_complete_sheet",
-        "HaoligoMoldOutsourceMaintenanceCompleteSheet",
-        "sheet_no",
-    ),
-    "HAOLIGO_EQUIPMENT_SPOT_CHECK_NO": ("apps.haoligo.models.equipment_operations", "HaoligoEquipmentSpotCheck", "sheet_no"),
-    "HAOLIGO_EQUIPMENT_ROUTE_PATROL_NO": ("apps.haoligo.models.equipment_operations", "HaoligoEquipmentRoutePatrol", "sheet_no"),
-    "HAOLIGO_PATROL_HAZARD_REPORT_NO": ("apps.haoligo.models.patrol", "HaoligoHazardReport", "sheet_no"),
-    "HAOLIGO_EQUIPMENT_UPKEEP_SHEET_NO": ("apps.haoligo.models.equipment_upkeep", "HaoligoEquipmentUpkeepSheet", "sheet_no"),
-    "HAOLIGO_EQUIPMENT_MAINTENANCE_REPAIR_SHEET_NO": (
-        "apps.haoligo.models.equipment_upkeep",
-        "HaoligoEquipmentUpkeepSheet",
-        "sheet_no",
-    ),
-    "HAOLIGO_EQUIPMENT_UPKEEP_COMPLETE_SHEET_NO": (
-        "apps.haoligo.models.equipment_upkeep",
-        "HaoligoEquipmentUpkeepCompleteSheet",
-        "sheet_no",
-    ),
-    "HAOLIGO_EQUIPMENT_OUTPUT_RECORD_NO": ("apps.haoligo.models.equipment_operations", "HaoligoEquipmentOutputRecord", "sheet_no"),
-    "HAOLIGO_EQUIPMENT_STATUS_ADJUSTMENT_NO": ("apps.haoligo.models.equipment_operations", "HaoligoEquipmentStatusAdjustment", "sheet_no"),
-    "HAOLIGO_EQUIPMENT_ACCEPTANCE_NO": ("apps.haoligo.models.equipment_acceptance", "HaoligoEquipmentAcceptanceSheet", "sheet_no"),
-    "HAOLIGO_FINANCE_MATERIAL_ACCEPTANCE_NO": ("apps.haoligo.models.finance_invoice", "HaoligoFinanceMaterialAcceptance", "sheet_no"),
-    "WORK_GROUP_CODE": ("apps.master_data.models.factory", "WorkGroup", "code"),
-    "RECEIVABLE_CODE": ("apps.kuaicaiwu.models.receivable", "Receivable", "receivable_code"),
-    "PAYABLE_CODE": ("apps.kuaicaiwu.models.payable", "Payable", "payable_code"),
-    "PURCHASE_INVOICE_CODE": ("apps.kuaicaiwu.models.purchase_invoice", "PurchaseInvoice", "invoice_code"),
-    "SALES_INVOICE_CODE": ("apps.kuaicaiwu.models.invoice", "Invoice", "invoice_code"),
-    "SETTLEMENT_CODE": ("apps.kuaicaiwu.models.settlement", "Settlement", "settlement_code"),
-    "PARTNER_STATEMENT_CODE": ("apps.kuaicaiwu.models.partner_statement", "PartnerStatement", "statement_code"),
-    "COST_CALCULATION_CODE": ("apps.kuaicaiwu.models.cost_calculation", "CostCalculation", "calculation_no"),
-    "COST_RULE_CODE": ("apps.kuaicaiwu.models.cost_rule", "CostRule", "code"),
-    "SALES_ORDER_CODE": ("apps.kuaizhizao.models.sales_order", "SalesOrder", "order_code"),
-    "DEMAND_COMPUTATION_CODE": (
-        "apps.kuaizhizao.models.demand_computation",
-        "DemandComputation",
-        "computation_code",
-    ),
-    "RD_PROJECT_CODE": ("apps.kuaiplm.models.rd_project", "RdProject", "project_code"),
-    "DELIVERY_PROJECT_CODE": ("apps.kuaiplm.models.rd_project", "RdProject", "project_code"),
-    "ALERT_RULE_CODE": ("apps.kuaizhizao.models.inventory_alert", "InventoryAlertRule", "code"),
-}
+def build_rule_code_entity_for_seq_sync() -> Dict[str, Tuple[str, str, str]]:
+    """
+    由 CODE_RULE_PAGES + ENTITY_MODEL_BY_RULE_CODE 派生序号校准映射（唯一路径）。
+
+    - 每个 auto_generate 页面必须在 ENTITY_MODEL_BY_RULE_CODE 有 ORM 绑定
+    - 校准字段默认取页面 code_field；修订版等场景用 seq_sync_code_field 覆盖
+    """
+    auto_pages: Dict[str, CodeRulePageConfig] = {}
+    for page in CODE_RULE_PAGES:
+        rule_code = (page.get("rule_code") or "").strip()
+        if not rule_code or not page.get("auto_generate"):
+            continue
+        auto_pages[rule_code] = page
+
+    missing_entity = sorted(set(auto_pages) - set(ENTITY_MODEL_BY_RULE_CODE))
+    if missing_entity:
+        raise RuntimeError(
+            "编码规则页面已启用 auto_generate，但未配置 ENTITY_MODEL_BY_RULE_CODE: "
+            + ", ".join(missing_entity)
+        )
+
+    orphan_entity = sorted(set(ENTITY_MODEL_BY_RULE_CODE) - set(auto_pages))
+    if orphan_entity:
+        raise RuntimeError(
+            "ENTITY_MODEL_BY_RULE_CODE 存在无对应页面的 rule_code（请补 CODE_RULE_PAGES 或删除多余项）: "
+            + ", ".join(orphan_entity)
+        )
+
+    mapping: Dict[str, Tuple[str, str, str]] = {}
+    for rule_code, page in auto_pages.items():
+        module_path, class_name = ENTITY_MODEL_BY_RULE_CODE[rule_code]
+        sync_field = (page.get("seq_sync_code_field") or page.get("code_field") or "").strip()
+        if not sync_field:
+            raise RuntimeError(
+                f"编码规则 {rule_code} 页面 {page.get('page_code')} 缺少 code_field / seq_sync_code_field"
+            )
+        mapping[rule_code] = (module_path, class_name, sync_field)
+    return mapping
+
+
+# 规则代码 -> 实体模型（用于序列号校准：从库中取最大已用序号，使新编号为 max+1）
+RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, Tuple[str, str, str]] = build_rule_code_entity_for_seq_sync()
+
+
+def get_seq_sync_entity_for_rule(rule_code: str) -> Optional[Tuple[str, str, str]]:
+    """按 rule_code 获取 (module_path, model_class, code_field)。"""
+    if not rule_code:
+        return None
+    key = rule_code.strip()
+    if key in RULE_CODE_ENTITY_FOR_SEQ_SYNC:
+        return RULE_CODE_ENTITY_FOR_SEQ_SYNC[key]
+    return None
 
 
 def get_page_config_by_code(page_code: str) -> Optional[CodeRulePageConfig]:

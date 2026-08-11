@@ -16,6 +16,7 @@ export function buildQualityInspectionQualityStatusValueEnum(
   t: (key: string) => string,
 ): Record<string, { text: string }> {
   return {
+    待判定: { text: t('app.kuaizhizao.quality.common.qualityStatus.pending') },
     合格: { text: t('app.kuaizhizao.quality.common.qualityStatus.qualified') },
     不合格: { text: t('app.kuaizhizao.quality.common.qualityStatus.unqualified') },
   };
@@ -58,6 +59,10 @@ export function resolveQualityInspectionListParams(
       typeof s.quality_status === 'string' && s.quality_status ? s.quality_status : undefined,
     supplier_id: s.supplier_id != null && s.supplier_id !== '' ? Number(s.supplier_id) : undefined,
     material_id: s.material_id != null && s.material_id !== '' ? Number(s.material_id) : undefined,
+    purchase_receipt_id:
+      s.purchase_receipt_id != null && s.purchase_receipt_id !== ''
+        ? Number(s.purchase_receipt_id)
+        : undefined,
     work_order_id:
       s.work_order_id != null && s.work_order_id !== '' ? Number(s.work_order_id) : undefined,
     operation_id:

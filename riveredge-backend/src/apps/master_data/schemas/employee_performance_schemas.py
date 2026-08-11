@@ -10,6 +10,8 @@ from typing import Optional, Any, List, Dict
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from core.schemas.base import BaseSchema
+
 
 # ==================== 员工绩效配置 ====================
 
@@ -175,7 +177,7 @@ class PerformanceSummaryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
-class PerformanceDetailItem(BaseModel):
+class PerformanceDetailItem(BaseSchema):
     """绩效明细项（单条报工记录）"""
     reporting_record_id: int = Field(..., description="报工记录ID")
     work_order_code: str = Field(..., description="工单编码")

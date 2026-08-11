@@ -31,7 +31,9 @@ from apps.master_data.services.employee_performance_service import (
     HourlyRateService,
 )
 from apps.master_data.services.kpi_evaluator_service import KPIEvaluatorService
+from core.utils.timezone_utils import site_period_bounds_utc, to_site_date
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from loguru import logger
 
 
 class PerformanceCalcService:
@@ -84,17 +86,49 @@ class PerformanceCalcService:
         return int(wo.product_id) if wo and wo.product_id else None
 
     @staticmethod
+    def _period_from_reported_at(reported_at: datetime) -> str:
+        return PerformanceCalcService._period_from_date(to_site_date(reported_at))
+
+    @staticmethod
+    async def _effective_work_hours(
+        tenant_id: int,
+        record: ReportingRecord,
+        *,
+        op_cache: Optional[Dict[tuple, Any]] = None,
+    ) -> Decimal:
+        wh = Decimal(str(record.work_hours or 0))
+        if wh > 0:
+            return wh
+        if not record.work_order_id or not record.operation_id:
+            return Decimal("0")
+        cache_key = (int(record.work_order_id), int(record.operation_id))
+        op = (op_cache or {}).get(cache_key)
+        if op is None:
+            from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+
+            op = await WorkOrderOperation.get_or_none(
+                tenant_id=tenant_id,
+                work_order_id=int(record.work_order_id),
+                operation_id=int(record.operation_id),
+                deleted_at__isnull=True,
+            )
+            if op_cache is not None:
+                op_cache[cache_key] = op
+        std = getattr(op, "standard_time", None) if op else None
+        if std is None or Decimal(str(std)) <= 0:
+            return Decimal("0")
+        qty = Decimal(str(record.reported_quantity or record.qualified_quantity or 0))
+        if qty <= 0:
+            return Decimal("0")
+        return (Decimal(str(std)) * qty).quantize(Decimal("0.01"))
+
+    @staticmethod
     async def aggregate_reporting_by_employee(
         tenant_id: int,
         period: str,
         status_filter: Optional[str] = "approved",
     ) -> Dict[int, Dict[str, Any]]:
-        year, month = map(int, period.split("-"))
-        start_dt = datetime(year, month, 1)
-        if month == 12:
-            end_dt = datetime(year + 1, 1, 1)
-        else:
-            end_dt = datetime(year, month + 1, 1)
+        start_dt, end_dt = site_period_bounds_utc(period)
 
         query = ReportingRecord.filter(
             tenant_id=tenant_id,
@@ -107,6 +141,7 @@ class PerformanceCalcService:
 
         records = await query.all()
         result: Dict[int, Dict[str, Any]] = {}
+        op_cache: Dict[tuple, Any] = {}
         for r in records:
             wid = r.worker_id
             if wid not in result:
@@ -118,7 +153,9 @@ class PerformanceCalcService:
                     "total_unqualified": Decimal("0"),
                     "records": [],
                 }
-            result[wid]["total_hours"] += r.work_hours or Decimal("0")
+            result[wid]["total_hours"] += await PerformanceCalcService._effective_work_hours(
+                tenant_id, r, op_cache=op_cache
+            )
             result[wid]["total_pieces"] += r.qualified_quantity or Decimal("0")
             result[wid]["total_unqualified"] += r.unqualified_quantity or Decimal("0")
             result[wid]["records"].append(r)
@@ -284,6 +321,61 @@ class PerformanceCalcService:
         return results
 
     @staticmethod
+    async def refresh_employee_period_from_reporting(
+        tenant_id: int,
+        employee_id: int,
+        period: str,
+        *,
+        operator: Optional[User] = None,
+    ) -> None:
+        """报工审核通过后同步重算该员工当月绩效（已确认周期不覆盖）。"""
+        existing = await PerformanceSummary.filter(
+            tenant_id=tenant_id,
+            employee_id=employee_id,
+            period=period,
+            deleted_at__isnull=True,
+        ).first()
+        if existing and existing.status == "confirmed":
+            return
+
+        agg = await PerformanceCalcService.aggregate_reporting_by_employee(
+            tenant_id, period, status_filter="approved"
+        )
+        data = agg.get(int(employee_id))
+        if not data:
+            if existing and existing.status != "confirmed":
+                existing.total_hours = Decimal("0")
+                existing.total_pieces = Decimal("0")
+                existing.total_unqualified = Decimal("0")
+                existing.time_amount = Decimal("0")
+                existing.piece_amount = Decimal("0")
+                existing.total_amount = Decimal("0")
+                existing.status = "calculated"
+                apply_update_audit(existing, operator)
+                await existing.save()
+            return
+
+        try:
+            await PerformanceCalcService.calculate_employee_performance(
+                tenant_id=tenant_id,
+                employee_id=int(employee_id),
+                employee_name=data["worker_name"] or "",
+                period=period,
+                total_hours=data["total_hours"],
+                total_pieces=data["total_pieces"],
+                total_unqualified=data["total_unqualified"],
+                records=data["records"],
+                operator=operator,
+            )
+        except ValidationError as exc:
+            logger.warning(
+                "报工后绩效重算跳过金额（{} 周期 {}）: {}",
+                employee_id,
+                period,
+                exc,
+            )
+
+    @staticmethod
     async def confirm_summary(tenant_id: int, summary_id: int, operator: Optional[User] = None) -> PerformanceSummaryResponse:
         summary = await PerformanceSummary.filter(
             id=summary_id, tenant_id=tenant_id, deleted_at__isnull=True,
@@ -421,12 +513,7 @@ class PerformanceCalcService:
         employee_id: int,
         period: str,
     ) -> PerformanceDetailResponse:
-        year, month = map(int, period.split("-"))
-        start_dt = datetime(year, month, 1)
-        if month == 12:
-            end_dt = datetime(year + 1, 1, 1)
-        else:
-            end_dt = datetime(year, month + 1, 1)
+        start_dt, end_dt = site_period_bounds_utc(period)
 
         records = await ReportingRecord.filter(
             tenant_id=tenant_id,
@@ -457,13 +544,17 @@ class PerformanceCalcService:
         as_of = PerformanceCalcService._period_as_of_date(period)
 
         items = []
+        op_cache: Dict[tuple, Any] = {}
         for r in records:
             material_id = await PerformanceCalcService._material_id_for_record(tenant_id, r)
             piece_rate = await PieceRateService.get_rate_for_operation(
                 tenant_id, r.operation_id, material_id=material_id, as_of_date=as_of,
             )
             piece_amt = (r.qualified_quantity or Decimal("0")) * (piece_rate or Decimal("0")) if piece_rate else None
-            time_amt = (r.work_hours or Decimal("0")) * hourly_rate
+            effective_hours = await PerformanceCalcService._effective_work_hours(
+                tenant_id, r, op_cache=op_cache
+            )
+            time_amt = effective_hours * hourly_rate
             items.append(PerformanceDetailItem(
                 reporting_record_id=r.id,
                 work_order_code=r.work_order_code or "",
@@ -472,7 +563,7 @@ class PerformanceCalcService:
                 reported_quantity=r.reported_quantity or Decimal("0"),
                 qualified_quantity=r.qualified_quantity or Decimal("0"),
                 unqualified_quantity=r.unqualified_quantity or Decimal("0"),
-                work_hours=r.work_hours or Decimal("0"),
+                work_hours=effective_hours,
                 piece_rate=piece_rate,
                 piece_amount=piece_amt,
                 time_amount=time_amt,

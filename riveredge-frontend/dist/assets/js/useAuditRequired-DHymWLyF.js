@@ -1,1 +1,0 @@
-import{c as i}from"./clearSessionQueries-Cz0-jNIL.js";import{a as s}from"./businessConfig-DuEHKJwe.js";function n(){return i({queryKey:["businessConfigAuditRequiredMap"],queryFn:s,staleTime:5*60*1e3})}function d(e,u=!1){const{data:t}=n();if(!e)return u;const r=t?.[e];return typeof r=="boolean"?r:u}export{d as u};

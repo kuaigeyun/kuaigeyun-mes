@@ -621,15 +621,159 @@ async def resolve_ipqc_plan_label_for_operation(
 
 
 async def fqc_inspection_passed_for_inbound(tenant_id: int, inspection: Any) -> bool:
-    """成品检验是否满足成品入库确认条件（合格 + 已检验；需审核时另须审核通过）。"""
-    if getattr(inspection, "quality_status", None) != "合格":
+    """
+    成品检验是否满足成品入库确认条件。
+
+    口径：检验已执行且合格数量 > 0；需审核时另须审核通过。
+    整单 quality_status 可为「不合格」（部分不合格），仍放行其中的合格数量。
+    """
+    st = str(getattr(inspection, "status", "") or "").strip()
+    if st not in _FQC_CONDUCTED_STATUSES:
+        return False
+    if _fqc_transferable_qualified_quantity(inspection) <= 0:
         return False
     from infra.services.business_config_service import BusinessConfigService
 
     audit_required = await BusinessConfigService().check_audit_required(tenant_id, "finished_goods_inspection")
     if not audit_required:
-        return str(getattr(inspection, "status", "") or "").strip() in _FQC_CONDUCTED_STATUSES
+        return True
     return getattr(inspection, "review_status", None) in _IQC_PASSED_REVIEW_STATUSES
+
+
+def _fqc_transferable_qualified_quantity(inspection: Any) -> Decimal:
+    try:
+        return Decimal(str(getattr(inspection, "qualified_quantity", None) or 0))
+    except Exception:
+        return Decimal("0")
+
+
+async def sum_fqc_inbound_qualified_quantity(
+    tenant_id: int,
+    work_order_id: int,
+    material_id: Optional[int] = None,
+) -> Decimal:
+    """汇总工单成品检验可用于入库的合格数量（已检验/已审核且合格数>0）。"""
+    from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+
+    query = FinishedGoodsInspection.filter(
+        tenant_id=tenant_id,
+        work_order_id=int(work_order_id),
+        deleted_at__isnull=True,
+    )
+    if material_id is not None:
+        query = query.filter(material_id=int(material_id))
+    inspections = await query.all()
+    total = Decimal("0")
+    for inspection in inspections:
+        if await fqc_inspection_passed_for_inbound(tenant_id, inspection):
+            total += _fqc_transferable_qualified_quantity(inspection)
+    return total
+
+
+async def sum_finished_goods_receipt_quantity_for_work_order(
+    tenant_id: int,
+    work_order_id: int,
+    material_id: Optional[int] = None,
+    *,
+    exclude_receipt_id: Optional[int] = None,
+) -> Decimal:
+    """汇总工单已确认成品入库数量（按物料可选过滤）。"""
+    from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+    from apps.kuaizhizao.models.finished_goods_receipt_item import FinishedGoodsReceiptItem
+
+    receipt_ids = await FinishedGoodsReceipt.filter(
+        tenant_id=tenant_id,
+        work_order_id=int(work_order_id),
+        deleted_at__isnull=True,
+        status="已入库",
+    ).values_list("id", flat=True)
+    ids = [int(rid) for rid in receipt_ids if int(rid) != int(exclude_receipt_id or 0)]
+    if not ids:
+        return Decimal("0")
+    item_query = FinishedGoodsReceiptItem.filter(
+        tenant_id=tenant_id,
+        receipt_id__in=ids,
+    )
+    if material_id is not None:
+        item_query = item_query.filter(material_id=int(material_id))
+    items = await item_query.all()
+    total = Decimal("0")
+    for item in items:
+        qty = getattr(item, "receipt_quantity", None) or getattr(item, "qualified_quantity", None) or 0
+        try:
+            total += Decimal(str(qty))
+        except Exception:
+            continue
+    return total
+
+
+async def get_fqc_inbound_remaining_quantity(
+    tenant_id: int,
+    work_order_id: int,
+    material_id: int,
+    *,
+    exclude_receipt_id: Optional[int] = None,
+) -> Decimal:
+    """FQC 合格可入余量 = 已审合格数 − 已确认入库数。"""
+    cap = await sum_fqc_inbound_qualified_quantity(tenant_id, work_order_id, material_id)
+    received = await sum_finished_goods_receipt_quantity_for_work_order(
+        tenant_id,
+        work_order_id,
+        material_id,
+        exclude_receipt_id=exclude_receipt_id,
+    )
+    return max(Decimal("0"), cap - received)
+
+
+async def assert_fqc_for_finished_goods_receipt(
+    tenant_id: int,
+    receipt_id: int,
+    work_order_id: Optional[int],
+    lines: List[Any],
+) -> None:
+    """成品入库确认：fqc≠none 时须已审 FQC 且入库数量不超过合格数。"""
+    from infra.exceptions.exceptions import BusinessLogicError
+
+    cfg = await get_quality_effective_config(tenant_id)
+    gate_enabled = bool(cfg["gate"]["require_fqc_before_finished_goods_receipt"])
+
+    if not work_order_id:
+        return
+
+    for item in lines:
+        mid = getattr(item, "material_id", None)
+        if not mid:
+            continue
+        qty = getattr(item, "receipt_quantity", None) or getattr(item, "qualified_quantity", None) or 0
+        try:
+            qty_dec = Decimal(str(qty))
+        except (TypeError, ValueError):
+            continue
+        if qty_dec <= 0:
+            continue
+        eff, _, _ = await resolve_inspection_policy(tenant_id, "fqc", material_id=int(mid))
+        if eff == "none":
+            continue
+
+        qualified_cap = await sum_fqc_inbound_qualified_quantity(
+            tenant_id, int(work_order_id), int(mid)
+        )
+        if gate_enabled and qualified_cap <= 0:
+            raise BusinessLogicError(
+                "已启用「需已审 FQC 且入库数量不超过合格数」，请先完成成品检验"
+                "（需审核时须审核通过）且存在合格数量后再确认成品入库"
+            )
+
+        remaining = await get_fqc_inbound_remaining_quantity(
+            tenant_id,
+            int(work_order_id),
+            int(mid),
+            exclude_receipt_id=receipt_id,
+        )
+        if qty_dec > remaining + Decimal("1e-9"):
+            raise BusinessLogicError(
+                f"入库数量 {qty_dec} 超过成品检验合格可入余量 {remaining}（合格合计 {qualified_cap}）"
+            )
 
 
 _OQC_CONDUCTED_STATUSES = frozenset({"已检验", "已审核"})
@@ -657,12 +801,14 @@ async def assert_iqc_for_purchase_receipt_lines(
     receipt_id: int,
     lines: List[Any],
 ) -> None:
-    """采购入库确认：对 iqc≠none 的行要求来料检验合格（需审核时须审核通过）。"""
+    """采购入库确认：门禁开启时，对 iqc≠none 的行要求来料检验合格（需审核时须审核通过）。"""
     from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
     from infra.exceptions.exceptions import BusinessLogicError
 
     cfg = await get_quality_effective_config(tenant_id)
-    gate_enabled = bool(cfg["gate"]["require_iqc_before_receipt_confirm"])
+    # 与代工来料一致：组织「收货前必须来料检验」关闭时不卡确认入库
+    if not cfg["gate"]["require_iqc_before_receipt_confirm"]:
+        return
 
     needs_qc_mids: List[int] = []
     for item in lines:
@@ -688,12 +834,9 @@ async def assert_iqc_for_purchase_receipt_lines(
         deleted_at__isnull=True,
     ).all()
     if not inspections:
-        msg = (
+        raise BusinessLogicError(
             "已启用「收货前必须来料检验」，请先创建并完成来料检验，检验合格后再确认入库"
-            if gate_enabled
-            else "请先创建并完成来料检验，检验合格后再确认入库"
         )
-        raise BusinessLogicError(msg)
 
     passed_by_material: Dict[int, bool] = {}
     for i in inspections:
@@ -703,11 +846,9 @@ async def assert_iqc_for_purchase_receipt_lines(
     for mid in needs_qc_mids:
         if passed_by_material.get(mid):
             continue
-        if gate_enabled:
-            raise BusinessLogicError(
-                "已启用「收货前必须来料检验」，相关物料的来料检验须审核通过且质量状态为合格后才能确认入库"
-            )
-        raise BusinessLogicError("相关物料须完成来料检验并合格后方可确认入库")
+        raise BusinessLogicError(
+            "已启用「收货前必须来料检验」，相关物料的来料检验须审核通过且质量状态为合格后才能确认入库"
+        )
 
 
 async def assert_iqc_for_customer_material_registration_lines(
@@ -762,52 +903,6 @@ async def assert_iqc_for_customer_material_registration_lines(
             raise BusinessLogicError(
                 "已启用「代工来料入库前必须来料检验」，相关物料的来料检验须审核通过且质量状态为合格后才能确认入库"
             )
-
-
-async def assert_fqc_for_finished_goods_receipt(
-    tenant_id: int,
-    receipt_id: int,
-    work_order_id: Optional[int],
-    lines: List[Any],
-) -> None:
-    """成品入库确认：门禁开启时，对 fqc≠none 的行要求工单 FQC 合格且已审核。"""
-    from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
-    from infra.exceptions.exceptions import BusinessLogicError
-
-    cfg = await get_quality_effective_config(tenant_id)
-    if not cfg["gate"]["require_fqc_before_finished_goods_receipt"]:
-        return
-
-    needs_fqc = False
-    for item in lines:
-        mid = getattr(item, "material_id", None)
-        if not mid:
-            continue
-        qty = getattr(item, "receipt_quantity", None) or getattr(item, "qualified_quantity", None) or 0
-        try:
-            if float(qty) <= 0:
-                continue
-        except (TypeError, ValueError):
-            continue
-        eff, _, _ = await resolve_inspection_policy(tenant_id, "fqc", material_id=int(mid))
-        if eff != "none":
-            needs_fqc = True
-            break
-
-    if not needs_fqc or not work_order_id:
-        return
-
-    qc_ok = await FinishedGoodsInspection.filter(
-        tenant_id=tenant_id,
-        work_order_id=int(work_order_id),
-        quality_status="合格",
-        review_status__in=("已审核", "通过", "APPROVED"),
-        deleted_at__isnull=True,
-    ).exists()
-    if not qc_ok:
-        raise BusinessLogicError(
-            "已启用「成品检验合格才入库」，请先完成成品检验且审核通过后再确认成品入库"
-        )
 
 
 async def _shipment_notice_ids_for_sales_delivery(

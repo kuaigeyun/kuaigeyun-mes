@@ -2317,6 +2317,8 @@ export default {
   'app.uniDetail.sectionCollaboration': '生命週期',
   'app.uniDetail.sectionLines': '明細資訊',
   'app.uniDetail.sectionTimeline': '操作記錄',
+  'app.uniDetail.tabDetail': '詳情',
+  'app.uniDetail.sectionFullChain': '全鏈路跟蹤',
   'app.kuaicaiwu.name': '輕財務',
   'app.kuaioa.name': '輕辦公',
   'app.kuaioa.menu.group.approval': '審批協同',

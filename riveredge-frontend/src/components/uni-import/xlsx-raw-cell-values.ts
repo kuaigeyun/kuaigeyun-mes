@@ -126,10 +126,15 @@ function parseWorksheetCells(
     while ((cellMatch = cellRe.exec(rowInner)) !== null) {
       const attrs = cellMatch[1];
       const inner = cellMatch[2] ?? '';
-      const addressMatch = /\br="([A-Za-z]+[0-9]+)"/.exec(attrs);
-      let addr = addressMatch?.[1] ?? '';
+      const fullAddressMatch = /\br="([A-Za-z]+[0-9]+)"/.exec(attrs);
+      const colOnlyMatch =
+        !fullAddressMatch && rowIndex0 != null ? /\br="([A-Za-z]+)"/.exec(attrs) : null;
+      let addr = fullAddressMatch?.[1] ?? '';
+      if (!addr && colOnlyMatch) {
+        // WPS 等工具常见 r="F"（仅列字母），须与当前行号拼成 F3，否则会按 nextCol 误落到 E 列
+        addr = `${colOnlyMatch[1]}${rowIndex0 + 1}`;
+      }
       if (!addr && rowIndex0 != null) {
-        const colMatch = /\br="([A-Za-z]+)"/.exec(attrs);
         // 无 r 时按行内顺序推进列
         const col = nextCol;
         const letters = (() => {
@@ -143,7 +148,6 @@ function parseWorksheetCells(
           return s;
         })();
         addr = `${letters}${rowIndex0 + 1}`;
-        void colMatch;
       }
       if (!addr) continue;
 

@@ -76,6 +76,8 @@ export interface WorkOrderExecutionConfig {
   last_operation_auto_inbound_mode?: string;
   /** 报工生产人员默认：current_user | operation_assigned | auto */
   default_production_worker_mode?: string;
+  /** 报工数量默认：reportable=本次可报，zero=0 */
+  default_reporting_quantity_mode?: string;
 }
 
 export interface WorkOrderGroupMember {
@@ -455,6 +457,14 @@ export const reworkOrderApi = {
   get: async (id: string) => apiRequest(`/apps/kuaizhizao/rework-orders/${id}`, { method: 'GET' }),
   createFromWorkOrder: async (workOrderId: string, data: any) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/rework`, { method: 'POST', data }),
+  previewFromWorkOrder: async (
+    workOrderId: string,
+    params?: { start_work_order_operation_id?: number },
+  ) =>
+    apiRequest<{ reworkable_quantity: number; unqualified_quantity: number; already_rework_quantity: number }>(
+      `/apps/kuaizhizao/work-orders/${workOrderId}/rework-preview`,
+      { method: 'GET', params },
+    ),
   getReportingOptions: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/rework-orders/${id}/reporting-options`, { method: 'GET' }),
   report: async (id: string, data: any) =>

@@ -40,7 +40,7 @@ import {
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE, PAGE_SPACING } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE, PAGE_SPACING } from '../../../../../components/layout-templates';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
@@ -2678,25 +2678,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                       />
                     ) : null;
                   })()}
-                  {currentReq.id != null ? (
-                    <DetailDrawerInlineFullChain
-                      documentType="purchase_requisition"
-                      documentId={currentReq.id}
-                      active={detailVisible}
-                      selfDocumentId={currentReq.id}
-                      renderBriefActions={(doc) => (
-                        <WarehouseTraceBriefPrimaryActions
-                          doc={doc}
-                          t={t}
-                          navigate={navigate}
-                          closeDrawer={() => {
-                            setDetailVisible(false);
-                            setCurrentReq(null);
-                          }}
-                        />
-                      )}
-                    />
-                  ) : null}
+                  
                 </div>
               </DetailDrawerSection>
 
@@ -2785,6 +2767,27 @@ const PurchaseRequisitionsPage: React.FC = () => {
             </>
           )
         }
+      
+              traceDocument={
+                currentReq?.id != null
+                  ? {
+                      documentType: 'purchase_requisition',
+                      documentId: currentReq.id,
+                      selfDocumentId: currentReq.id,
+                    renderBriefActions: (doc) => (
+                        <WarehouseTraceBriefPrimaryActions
+                          doc={doc}
+                          t={t}
+                          navigate={navigate}
+                          closeDrawer={() => {
+                            setDetailVisible(false);
+                            setCurrentReq(null);
+                          }}
+                        />
+                      )
+                    }
+                  : undefined
+              }
       />
       <UniMaterialBatchPicker
         open={materialPickerOpen}

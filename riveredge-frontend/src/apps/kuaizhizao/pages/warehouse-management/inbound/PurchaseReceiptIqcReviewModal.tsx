@@ -122,7 +122,16 @@ export const PurchaseReceiptIqcReviewModal: React.FC<Props> = ({
               type="primary"
               onClick={() => {
                 onCancel();
-                navigate(`${ROUTES.INCOMING_INSPECTION}?purchase_receipt_id=${purchaseReceiptId}`);
+                const pending = (ensure?.line_summaries ?? []).find(
+                  (row) => row.iqc_required && !row.passed && row.inspection_id != null,
+                );
+                const qs = new URLSearchParams({
+                  purchase_receipt_id: String(purchaseReceiptId),
+                });
+                if (pending?.inspection_id != null) {
+                  qs.set('incoming_inspection_id', String(pending.inspection_id));
+                }
+                navigate(`${ROUTES.INCOMING_INSPECTION}?${qs.toString()}`);
               }}
             >
               {t('app.kuaizhizao.warehouseInbound.iqc.ensureBlocked.goInspect')}

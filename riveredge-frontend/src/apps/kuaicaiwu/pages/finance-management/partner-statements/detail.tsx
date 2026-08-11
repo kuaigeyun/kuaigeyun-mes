@@ -45,7 +45,7 @@ const PartnerStatementDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<PartnerStatement | null>(null);
   const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null);
-  const { cache: lineDetailCache, loadLineDetail } = usePartnerStatementInboundDetail();
+  const { cache: lineDetailCache, loadLineDetail, clearCache: clearLineDetailCache } = usePartnerStatementInboundDetail();
 
   const statusEnum = useMemo(() => buildPartnerStatementStatusEnum(t), [t]);
   const sentChannelOptions = useMemo(() => getSentChannelOptions(t), [t]);
@@ -53,6 +53,7 @@ const PartnerStatementDetailPage: React.FC = () => {
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
+    clearLineDetailCache();
     try {
       const res = await partnerStatementService.get(Number(id));
       setData(res);
@@ -61,7 +62,7 @@ const PartnerStatementDetailPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [id, t]);
+  }, [clearLineDetailCache, id, t]);
 
   useEffect(() => {
     void load();

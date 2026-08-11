@@ -2390,12 +2390,15 @@ class ReportService:
     ) -> Dict[str, Any]:
         """批次库存查询"""
         logger.info(f"query_batch_inventory: material_id={material_id}, material_ids={material_ids}, include_sales_commitment={include_sales_commitment}")
+        from apps.master_data.constants.batch_quality_status import QUALIFIED
         from apps.master_data.models.material_batch import MaterialBatch
         from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
-        from apps.kuaizhizao.models.sales_order import SalesOrder
-        from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
         from tortoise.expressions import Q
-        query = MaterialBatch.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        query = MaterialBatch.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            quality_status=QUALIFIED,
+        )
         if material_ids: query = query.filter(material_id__in=material_ids)
         elif material_id: query = query.filter(material_id=material_id)
         if batch_number: query = query.filter(batch_no__icontains=batch_number)
@@ -2415,7 +2418,10 @@ class ReportService:
                 include_main_batches = False
             elif wh:
                 main_warehouse_filter_id = int(wh.id)
-        batches = await query.prefetch_related('material').all()
+        if summary_only:
+            batches = await query.all()
+        else:
+            batches = await query.prefetch_related('material').all()
         line_query = LineSideInventory.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="available")
         if material_ids: line_query = line_query.filter(material_id__in=material_ids)
         elif material_id: line_query = line_query.filter(material_id=material_id)
@@ -2456,6 +2462,9 @@ class ReportService:
                     continue
                 totals[key] = totals.get(key, 0) + avail
             if include_sales_commitment:
+                from apps.kuaizhizao.models.sales_order import SalesOrder
+                from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+
                 logger.info("query_batch_inventory: including sales commitment")
                 active_order_ids = await SalesOrder.filter(
                     tenant_id=tenant_id,
@@ -3542,6 +3551,8 @@ class ReportService:
         normalized = alias_map.get(normalized, normalized)
 
         if normalized == "employee-efficiency-ranking":
+            from apps.master_data.services.performance_calc_service import PerformanceCalcService
+
             query = ReportingRecord.filter(
                 tenant_id=tenant_id,
                 status="approved",
@@ -3553,6 +3564,7 @@ class ReportService:
                 query = query.filter(reported_at__lte=date_end)
             records = await query.all()
             agg: Dict[int, Dict[str, Any]] = {}
+            op_cache: Dict[tuple, Any] = {}
             for r in records:
                 wid = r.worker_id
                 if wid not in agg:
@@ -3563,7 +3575,9 @@ class ReportService:
                         "total_hours": D("0"),
                     }
                 agg[wid]["total_pieces"] += r.qualified_quantity or D("0")
-                agg[wid]["total_hours"] += r.work_hours or D("0")
+                agg[wid]["total_hours"] += await PerformanceCalcService._effective_work_hours(
+                    tenant_id, r, op_cache=op_cache
+                )
             stats = []
             for row in agg.values():
                 hours = row["total_hours"]
@@ -3571,10 +3585,12 @@ class ReportService:
                 pph = float(pieces / hours) if hours > 0 else 0.0
                 pieces_f = float(pieces)
                 stats.append({
+                    "worker_id": row["worker_id"],
                     "worker_name": row["worker_name"],
                     "total_pieces": pieces_f,
                     # 与生产域 worker-efficiency-ranking 的 total_qty 对齐，避免前端列绑错时空白
                     "total_qty": pieces_f,
+                    "qualified_quantity": pieces_f,
                     "total_hours": float(hours),
                     "pieces_per_hour": round(pph, 4),
                 })

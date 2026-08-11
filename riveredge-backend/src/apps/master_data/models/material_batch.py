@@ -10,6 +10,10 @@ Date: 2026-01-27
 from datetime import datetime
 from tortoise import fields
 from core.models.base import BaseModel
+from apps.master_data.constants.batch_quality_status import (
+    BATCH_QUALITY_STATUS_CHOICES,
+    QUALIFIED,
+)
 
 
 class MaterialBatch(BaseModel):
@@ -48,10 +52,19 @@ class MaterialBatch(BaseModel):
             ("batch_no",),
             ("warehouse_id",),
             ("status",),
+            ("quality_status",),
             ("expiry_date",),
         ]
         unique_together = [
-            ("tenant_id", "material_id", "batch_no", "ownership_type", "customer_id", "warehouse_id")
+            (
+                "tenant_id",
+                "material_id",
+                "batch_no",
+                "ownership_type",
+                "customer_id",
+                "warehouse_id",
+                "quality_status",
+            )
         ]
     
     # 主键
@@ -98,6 +111,12 @@ class MaterialBatch(BaseModel):
         max_length=20,
         default="in_stock",
         description="批号状态（在库、已出库、已过期、已报废等）"
+    )
+
+    quality_status = fields.CharField(
+        max_length=20,
+        default=QUALIFIED,
+        description="库存质量态（qualified=可售放行, pending_qc=待检, quarantine=隔离, unqualified=不合格未处置）",
     )
     
     # 备注

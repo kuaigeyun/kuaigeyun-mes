@@ -1,0 +1,188 @@
+"""
+编码规则 rule_code → ORM 实体映射（序号校准唯一真源之一）。
+
+与 ``CODE_RULE_PAGES`` 中 ``auto_generate=True`` 的 ``rule_code`` 一一对应；
+``code_rule_pages.build_rule_code_entity_for_seq_sync`` 启动时校验完整性并派生
+``RULE_CODE_ENTITY_FOR_SEQ_SYNC``（含 ``seq_sync_code_field``，默认取页面 ``code_field``）。
+"""
+
+from typing import Dict, Tuple
+
+ENTITY_MODEL_BY_RULE_CODE: Dict[str, Tuple[str, str]] = {
+    "ALERT_RULE_CODE": ("apps.kuaizhizao.models.inventory_alert", "InventoryAlertRule"),
+    "ASSEMBLY_ORDER_CODE": ("apps.kuaizhizao.models.assembly_order", "AssemblyOrder"),
+    "ASSEMBLY_TEMPLATE_CODE": ("apps.kuaizhizao.models.assembly_template", "AssemblyTemplate"),
+    "BATCHING_ORDER_CODE": ("apps.kuaizhizao.models.batching_order", "BatchingOrder"),
+    "COST_CALCULATION_CODE": ("apps.kuaicaiwu.models.cost_calculation", "CostCalculation"),
+    "COST_RULE_CODE": ("apps.kuaicaiwu.models.cost_rule", "CostRule"),
+    "CUSTOMER_MATERIAL_REGISTRATION_CODE": (
+        "apps.kuaizhizao.models.customer_material_registration",
+        "CustomerMaterialRegistration",
+    ),
+    "DEFECT_RECORD_CODE": ("apps.kuaizhizao.models.defect_record", "DefectRecord"),
+    "DEFECT_TYPE_CODE": ("apps.master_data.models.process", "DefectType"),
+    "DELIVERY_NOTICE_CODE": ("apps.kuaizhizao.models.delivery_notice", "DeliveryNotice"),
+    "DELIVERY_PROJECT_CODE": ("apps.kuaiplm.models.rd_project", "RdProject"),
+    "DEMAND_COMPUTATION_CODE": ("apps.kuaizhizao.models.demand_computation", "DemandComputation"),
+    "DEMAND_PLAN_CODE": ("apps.kuaizhizao.models.demand", "Demand"),
+    "DEPARTMENT_CODE": ("core.models.department", "Department"),
+    "DISASSEMBLY_ORDER_CODE": ("apps.kuaizhizao.models.disassembly_order", "DisassemblyOrder"),
+    "EIGHT_D_REPORT_CODE": ("apps.kuaizhizao.models.quality_8d_report", "Quality8DReport"),
+    "ENGINEERING_BOM_CODE": ("apps.master_data.models.material", "BOM"),
+    "ENGINEERING_DRAWING_CODE": ("apps.master_data.models.drawing", "EngineeringDrawing"),
+    "EQUIPMENT_CODE": ("apps.kuaizhizao.models.equipment", "Equipment"),
+    "FINISHED_GOODS_INSPECTION_CODE": (
+        "apps.kuaizhizao.models.finished_goods_inspection",
+        "FinishedGoodsInspection",
+    ),
+    "FINISHED_GOODS_RECEIPT_CODE": (
+        "apps.kuaizhizao.models.finished_goods_receipt",
+        "FinishedGoodsReceipt",
+    ),
+    "HAOLIGO_EQUIPMENT_ACCEPTANCE_NO": (
+        "apps.haoligo.models.equipment_acceptance",
+        "HaoligoEquipmentAcceptanceSheet",
+    ),
+    "HAOLIGO_EQUIPMENT_MAINTENANCE_REPAIR_SHEET_NO": (
+        "apps.haoligo.models.equipment_upkeep",
+        "HaoligoEquipmentUpkeepSheet",
+    ),
+    "HAOLIGO_EQUIPMENT_OUTPUT_RECORD_NO": (
+        "apps.haoligo.models.equipment_operations",
+        "HaoligoEquipmentOutputRecord",
+    ),
+    "HAOLIGO_EQUIPMENT_ROUTE_PATROL_NO": (
+        "apps.haoligo.models.equipment_operations",
+        "HaoligoEquipmentRoutePatrol",
+    ),
+    "HAOLIGO_EQUIPMENT_SPOT_CHECK_NO": (
+        "apps.haoligo.models.equipment_operations",
+        "HaoligoEquipmentSpotCheck",
+    ),
+    "HAOLIGO_EQUIPMENT_STATUS_ADJUSTMENT_NO": (
+        "apps.haoligo.models.equipment_operations",
+        "HaoligoEquipmentStatusAdjustment",
+    ),
+    "HAOLIGO_EQUIPMENT_UPKEEP_COMPLETE_SHEET_NO": (
+        "apps.haoligo.models.equipment_upkeep",
+        "HaoligoEquipmentUpkeepCompleteSheet",
+    ),
+    "HAOLIGO_EQUIPMENT_UPKEEP_SHEET_NO": (
+        "apps.haoligo.models.equipment_upkeep",
+        "HaoligoEquipmentUpkeepSheet",
+    ),
+    "HAOLIGO_FINANCE_MATERIAL_ACCEPTANCE_NO": (
+        "apps.haoligo.models.finance_invoice",
+        "HaoligoFinanceMaterialAcceptance",
+    ),
+    "HAOLIGO_MOLD_BORROW_SHEET_NO": ("apps.haoligo.models.mold_borrow_sheet", "HaoligoMoldBorrowSheet"),
+    "HAOLIGO_MOLD_MAINTENANCE_COMPLETE_SHEET_NO": (
+        "apps.haoligo.models.mold_maintenance_complete_sheet",
+        "HaoligoMoldMaintenanceCompleteSheet",
+    ),
+    "HAOLIGO_MOLD_MAINTENANCE_REPAIR_SHEET_NO": (
+        "apps.haoligo.models.mold_maintenance_sheet",
+        "HaoligoMoldMaintenanceSheet",
+    ),
+    "HAOLIGO_MOLD_MAINTENANCE_UPKEEP_SHEET_NO": (
+        "apps.haoligo.models.mold_maintenance_sheet",
+        "HaoligoMoldMaintenanceSheet",
+    ),
+    "HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_COMPLETE_SHEET_NO": (
+        "apps.haoligo.models.mold_outsource_maintenance_complete_sheet",
+        "HaoligoMoldOutsourceMaintenanceCompleteSheet",
+    ),
+    "HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_SHEET_NO": (
+        "apps.haoligo.models.mold_outsource_maintenance_sheet",
+        "HaoligoMoldOutsourceMaintenanceSheet",
+    ),
+    "HAOLIGO_MOLD_RETURN_SHEET_NO": ("apps.haoligo.models.mold_return_sheet", "HaoligoMoldReturnSheet"),
+    "HAOLIGO_MOLD_TRIAL_SHEET_NO": ("apps.haoligo.models.mold_trial_sheet", "HaoligoMoldTrialSheet"),
+    "HAOLIGO_PATROL_HAZARD_REPORT_NO": ("apps.haoligo.models.patrol", "HaoligoHazardReport"),
+    "INCOMING_INSPECTION_CODE": ("apps.kuaizhizao.models.incoming_inspection", "IncomingInspection"),
+    "INSPECTION_PLAN_CODE": ("apps.kuaizhizao.models.inspection_plan", "InspectionPlan"),
+    "INVENTORY_TRANSFER_CODE": ("apps.kuaizhizao.models.inventory_transfer", "InventoryTransfer"),
+    "KUAIZHIZAO_SALES_CONTRACT": ("apps.kuaizhizao.models.sales_contract", "SalesContract"),
+    "KUAIZHIZAO_SALES_CONTRACT_CHANGE": (
+        "apps.kuaizhizao.models.sales_contract_change",
+        "SalesContractChange",
+    ),
+    "MASTER_DATA_FACTORY_PLANT": ("apps.master_data.models.factory", "Plant"),
+    "MASTER_DATA_FACTORY_PRODUCTION_LINE": ("apps.master_data.models.factory", "ProductionLine"),
+    "MASTER_DATA_FACTORY_WORKSHOP": ("apps.master_data.models.factory", "Workshop"),
+    "MASTER_DATA_FACTORY_WORKSTATION": ("apps.master_data.models.factory", "Workstation"),
+    "MASTER_DATA_MATERIAL_GROUP": ("apps.master_data.models.material", "MaterialGroup"),
+    "MASTER_DATA_WAREHOUSE_STORAGE_AREA": ("apps.master_data.models.warehouse", "StorageArea"),
+    "MASTER_DATA_WAREHOUSE_STORAGE_LOCATION": (
+        "apps.master_data.models.warehouse",
+        "StorageLocation",
+    ),
+    "MASTER_DATA_WAREHOUSE_WAREHOUSE": ("apps.master_data.models.warehouse", "Warehouse"),
+    "MATERIAL_BORROW_CODE": ("apps.kuaizhizao.models.material_borrow", "MaterialBorrow"),
+    "MATERIAL_CALL_CODE": ("apps.kuaizhizao.models.material_call_request", "MaterialCallRequest"),
+    "MATERIAL_CODE": ("apps.master_data.models.material", "Material"),
+    "MATERIAL_RETURN_CODE": ("apps.kuaizhizao.models.material_return", "MaterialReturn"),
+    "MOLD_CODE": ("apps.kuaizhizao.models.mold", "Mold"),
+    "OPERATION_CODE": ("apps.master_data.models.process", "Operation"),
+    "OQC_INSPECTION_CODE": ("apps.kuaizhizao.models.oqc_inspection", "OQCInspection"),
+    "OTHER_INBOUND_CODE": ("apps.kuaizhizao.models.other_inbound", "OtherInbound"),
+    "OTHER_OUTBOUND_CODE": ("apps.kuaizhizao.models.other_outbound", "OtherOutbound"),
+    "OUTSOURCE_MATERIAL_RECEIPT_CODE": (
+        "apps.kuaizhizao.models.outsource_work_order",
+        "OutsourceMaterialReceipt",
+    ),
+    "OUTSOURCE_MATERIAL_RETURN_CODE": (
+        "apps.kuaizhizao.models.outsource_work_order",
+        "OutsourceMaterialReturn",
+    ),
+    "OUTSOURCE_ORDER_CODE": ("apps.kuaizhizao.models.outsource_order", "OutsourceOrder"),
+    "OUTSOURCE_PRODUCT_RETURN_CODE": (
+        "apps.kuaizhizao.models.outsource_work_order",
+        "OutsourceProductReturn",
+    ),
+    "OUTSOURCE_WORK_ORDER_CODE": ("apps.kuaizhizao.models.outsource_work_order", "OutsourceWorkOrder"),
+    "PARTNER_STATEMENT_CODE": ("apps.kuaicaiwu.models.partner_statement", "PartnerStatement"),
+    "PAYABLE_CODE": ("apps.kuaicaiwu.models.payable", "Payable"),
+    "POSITION_CODE": ("core.models.position", "Position"),
+    "PROCESS_INSPECTION_CODE": ("apps.kuaizhizao.models.process_inspection", "ProcessInspection"),
+    "PROCESS_ROUTE_CODE": ("apps.master_data.models.process", "ProcessRoute"),
+    "PRODUCTION_PICKING_CODE": ("apps.kuaizhizao.models.production_picking", "ProductionPicking"),
+    "PRODUCTION_RETURN_CODE": ("apps.kuaizhizao.models.production_return", "ProductionReturn"),
+    "PURCHASE_INQUIRY_CODE": ("apps.kuaizhizao.models.purchase_inquiry", "PurchaseInquiry"),
+    "PURCHASE_INVOICE_CODE": ("apps.kuaicaiwu.models.purchase_invoice", "PurchaseInvoice"),
+    "PURCHASE_ORDER_CHANGE_CODE": (
+        "apps.kuaizhizao.models.purchase_order_change_order",
+        "PurchaseOrderChangeOrder",
+    ),
+    "PURCHASE_ORDER_CODE": ("apps.kuaizhizao.models.purchase_order", "PurchaseOrder"),
+    "PURCHASE_RECEIPT_CODE": ("apps.kuaizhizao.models.purchase_receipt", "PurchaseReceipt"),
+    "PURCHASE_REQUISITION_CODE": ("apps.kuaizhizao.models.purchase_requisition", "PurchaseRequisition"),
+    "PURCHASE_RETURN_CODE": ("apps.kuaizhizao.models.purchase_return", "PurchaseReturn"),
+    "QUOTATION_CODE": ("apps.kuaizhizao.models.quotation", "Quotation"),
+    "RD_PROJECT_CODE": ("apps.kuaiplm.models.rd_project", "RdProject"),
+    "RECEIPT_NOTICE_CODE": ("apps.kuaizhizao.models.receipt_notice", "ReceiptNotice"),
+    "RECEIVABLE_CODE": ("apps.kuaicaiwu.models.receivable", "Receivable"),
+    "REWORK_ORDER_CODE": ("apps.kuaizhizao.models.rework_order", "ReworkOrder"),
+    "ROLE_CODE": ("core.models.role", "Role"),
+    "SALES_DELIVERY_CODE": ("apps.kuaizhizao.models.sales_delivery", "SalesDelivery"),
+    "SALES_FORECAST_CODE": ("apps.kuaizhizao.models.sales_forecast", "SalesForecast"),
+    "SALES_INVOICE_CODE": ("apps.kuaicaiwu.models.invoice", "Invoice"),
+    "SALES_ORDER_CHANGE_CODE": ("apps.kuaizhizao.models.sales_order_change_order", "SalesOrderChangeOrder"),
+    "SALES_ORDER_CODE": ("apps.kuaizhizao.models.sales_order", "SalesOrder"),
+    "SALES_RETURN_CODE": ("apps.kuaizhizao.models.sales_return", "SalesReturn"),
+    "SCRAP_RECORD_CODE": ("apps.kuaizhizao.models.scrap_record", "ScrapRecord"),
+    "SEMI_FINISHED_GOODS_RECEIPT_CODE": (
+        "apps.kuaizhizao.models.semi_finished_goods_receipt",
+        "SemiFinishedGoodsReceipt",
+    ),
+    "SETTLEMENT_CODE": ("apps.kuaicaiwu.models.settlement", "SettlementRecord"),
+    "SHIPMENT_NOTICE_CODE": ("apps.kuaizhizao.models.shipment_notice", "ShipmentNotice"),
+    "SOP_CODE": ("apps.master_data.models.process", "SOP"),
+    "STOCKTAKING_CODE": ("apps.kuaizhizao.models.stocktaking", "Stocktaking"),
+    "TOOL_CODE": ("apps.kuaizhizao.models.tool", "Tool"),
+    "WORK_CENTER_CODE": ("apps.master_data.models.factory", "WorkCenter"),
+    "WORK_GROUP_CODE": ("apps.master_data.models.factory", "WorkGroup"),
+    "WORK_ORDER_CODE": ("apps.kuaizhizao.models.work_order", "WorkOrder"),
+    "customer": ("apps.master_data.models.customer", "Customer"),
+    "supplier": ("apps.master_data.models.supplier", "Supplier"),
+}

@@ -48,7 +48,6 @@ import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-mo
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
-  DetailDrawerInlineFullChain,
   DetailDrawerActions,
   MODAL_CONFIG,
   DRAWER_CONFIG,
@@ -138,6 +137,8 @@ import {
 import { listPurchaseOrderChangesByOrder, type PurchaseOrderChange } from '../../../services/purchase-order-change';
 import LandingCostAllocationModal from './LandingCostAllocationModal';
 import { bankAccountService, type BankAccount } from '../../../../kuaicaiwu/services/finance/bank-account';
+import { formatBankAccountOptionLabel } from '../../../../kuaicaiwu/utils/financeSharedOptions';
+import { formatApiErrorDetail } from '../../../../../services/api';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import {
   applyPurchaseDocumentLineMaterialPricing,
@@ -595,10 +596,11 @@ const PurchaseOrdersPage: React.FC = () => {
   const [currencyLoading, setCurrencyLoading] = useState(false);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const bankAccountOptions = useMemo(
-    () => bankAccounts.map((a) => ({
-      label: `${a.bank_name || ''} ${a.account_number || ''}`.trim() || String(a.id),
-      value: a.id,
-    })),
+    () =>
+      bankAccounts.map((a) => ({
+        label: formatBankAccountOptionLabel(a),
+        value: a.id,
+      })),
     [bankAccounts],
   );
   const [users, setUsers] = useState<User[]>([]);
@@ -646,14 +648,20 @@ const PurchaseOrdersPage: React.FC = () => {
       try {
         const res = await bankAccountService.list({ limit: 500, is_active: true });
         setBankAccounts(res.data || []);
-      } catch {
+      } catch (e: unknown) {
         setBankAccounts([]);
+        const err = e as { response?: { data?: { detail?: unknown } }; message?: string };
+        messageApi.error(
+          formatApiErrorDetail(err?.response?.data?.detail) ||
+            err?.message ||
+            t('app.kuaizhizao.purchaseOrder.loadBankAccountsFailed'),
+        );
       }
     };
     loadSuppliers();
     loadUsers();
     loadBankAccounts();
-  }, [currentUser]);
+  }, [currentUser, messageApi, t]);
 
   const purchaseOrderSupplierSearchOptions = useMemo(
     () =>
@@ -4317,90 +4325,6 @@ const PurchaseOrdersPage: React.FC = () => {
                   hideNextStepSuggestions={Boolean(purchaseOrderLifecycle.nextStepSuggestions?.length)}
                 />
               ) : null}
-              {orderDetail.id != null ? (
-                <DetailDrawerInlineFullChain
-                  documentType="purchase_order"
-                  documentId={orderDetail.id}
-                  active={detailDrawerVisible}
-                  selfDocumentId={orderDetail.id}
-                  renderBriefActions={(doc) => (
-                    <>
-                      {doc.document_type === 'purchase_requisition' ? (
-                        <Button
-                          type="primary"
-                          size="small"
-                          onClick={() => {
-                            setDetailDrawerVisible(false);
-                            navigate(ROUTES.PURCHASE_REQUISITIONS);
-                          }}
-                        >
-                          {t('components.documentTrackingPanel.traceBriefOpenPurchaseRequisition')}
-                        </Button>
-                      ) : null}
-                      {doc.document_type === 'receipt_notice' ? (
-                        <Button
-                          type="primary"
-                          size="small"
-                          onClick={() => {
-                            setDetailDrawerVisible(false);
-                            navigate(ROUTES.RECEIPT_NOTICES);
-                          }}
-                        >
-                          {t('components.documentTrackingPanel.traceBriefOpenReceiptNotice')}
-                        </Button>
-                      ) : null}
-                      {doc.document_type === 'purchase_return' ? (
-                        <Button
-                          type="primary"
-                          size="small"
-                          onClick={() => {
-                            setDetailDrawerVisible(false);
-                            navigate(ROUTES.PURCHASE_RETURNS);
-                          }}
-                        >
-                          {t('components.documentTrackingPanel.traceBriefOpenPurchaseReturn')}
-                        </Button>
-                      ) : null}
-                      {doc.document_type === 'purchase_invoice' ? (
-                        <Button
-                          type="primary"
-                          size="small"
-                          onClick={() => {
-                            setDetailDrawerVisible(false);
-                            navigate(`/apps/kuaicaiwu/finance-management/purchase-invoices/${doc.document_id}`);
-                          }}
-                        >
-                          {t('components.documentTrackingPanel.traceBriefOpenPurchaseInvoice')}
-                        </Button>
-                      ) : null}
-                      {doc.document_type === 'payable' ? (
-                        <Button
-                          type="primary"
-                          size="small"
-                          onClick={() => {
-                            setDetailDrawerVisible(false);
-                            navigate(`/apps/kuaicaiwu/finance-management/payables/${doc.document_id}`);
-                          }}
-                        >
-                          {t('components.documentTrackingPanel.traceBriefOpenPayable')}
-                        </Button>
-                      ) : null}
-                      {doc.document_type === 'payment' ? (
-                        <Button
-                          type="primary"
-                          size="small"
-                          onClick={() => {
-                            setDetailDrawerVisible(false);
-                            navigate('/apps/kuaicaiwu/finance-management/payments');
-                          }}
-                        >
-                          {t('components.documentTrackingPanel.traceBriefOpenPayment')}
-                        </Button>
-                      ) : null}
-                    </>
-                  )}
-                />
-              ) : null}
             </div>
           ) : null
         }
@@ -4577,6 +4501,92 @@ const PurchaseOrdersPage: React.FC = () => {
             </>
           ) : null
         }
+      
+                        traceDocument={
+                          orderDetail?.id != null
+                            ? {
+                                documentType: 'purchase_order',
+                                documentId: orderDetail.id,
+                                selfDocumentId: orderDetail.id,
+                              renderBriefActions: (doc) => (
+                    <>
+                      {doc.document_type === 'purchase_requisition' ? (
+                        <Button
+                          type="primary"
+                          size="small"
+                          onClick={() => {
+                            setDetailDrawerVisible(false);
+                            navigate(ROUTES.PURCHASE_REQUISITIONS);
+                          }}
+                        >
+                          {t('components.documentTrackingPanel.traceBriefOpenPurchaseRequisition')}
+                        </Button>
+                      ) : null}
+                      {doc.document_type === 'receipt_notice' ? (
+                        <Button
+                          type="primary"
+                          size="small"
+                          onClick={() => {
+                            setDetailDrawerVisible(false);
+                            navigate(ROUTES.RECEIPT_NOTICES);
+                          }}
+                        >
+                          {t('components.documentTrackingPanel.traceBriefOpenReceiptNotice')}
+                        </Button>
+                      ) : null}
+                      {doc.document_type === 'purchase_return' ? (
+                        <Button
+                          type="primary"
+                          size="small"
+                          onClick={() => {
+                            setDetailDrawerVisible(false);
+                            navigate(ROUTES.PURCHASE_RETURNS);
+                          }}
+                        >
+                          {t('components.documentTrackingPanel.traceBriefOpenPurchaseReturn')}
+                        </Button>
+                      ) : null}
+                      {doc.document_type === 'purchase_invoice' ? (
+                        <Button
+                          type="primary"
+                          size="small"
+                          onClick={() => {
+                            setDetailDrawerVisible(false);
+                            navigate(`/apps/kuaicaiwu/finance-management/purchase-invoices/${doc.document_id}`);
+                          }}
+                        >
+                          {t('components.documentTrackingPanel.traceBriefOpenPurchaseInvoice')}
+                        </Button>
+                      ) : null}
+                      {doc.document_type === 'payable' ? (
+                        <Button
+                          type="primary"
+                          size="small"
+                          onClick={() => {
+                            setDetailDrawerVisible(false);
+                            navigate(`/apps/kuaicaiwu/finance-management/payables/${doc.document_id}`);
+                          }}
+                        >
+                          {t('components.documentTrackingPanel.traceBriefOpenPayable')}
+                        </Button>
+                      ) : null}
+                      {doc.document_type === 'payment' ? (
+                        <Button
+                          type="primary"
+                          size="small"
+                          onClick={() => {
+                            setDetailDrawerVisible(false);
+                            navigate('/apps/kuaicaiwu/finance-management/payments');
+                          }}
+                        >
+                          {t('components.documentTrackingPanel.traceBriefOpenPayment')}
+                        </Button>
+                      ) : null}
+                    </>
+                  )
+                              }
+                            : undefined
+                        }
       />
 
       <SyncFromDatasetModal
@@ -4666,7 +4676,5 @@ const PurchaseOrdersPage: React.FC = () => {
 };
 
 export default PurchaseOrdersPage;
-
-
 
 

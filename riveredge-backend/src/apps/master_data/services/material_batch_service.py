@@ -95,6 +95,7 @@ class MaterialBatchService:
             supplier_batch_no=batch.supplier_batch_no,
             quantity=batch.quantity or Decimal(0),
             status=batch.status,
+            quality_status=getattr(batch, "quality_status", None) or "qualified",
             remark=batch.remark,
             created_at=batch.created_at,
             updated_at=batch.updated_at,

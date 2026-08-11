@@ -174,6 +174,19 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
             },
         ],
     },
+    "parameters.reporting.default_reporting_quantity_mode": {
+        "type": "select",
+        "options": [
+            {
+                "value": "reportable",
+                "labelKey": "pages.system.configCenter.param.reporting_default_reporting_quantity_mode_opt_reportable",
+            },
+            {
+                "value": "zero",
+                "labelKey": "pages.system.configCenter.param.reporting_default_reporting_quantity_mode_opt_zero",
+            },
+        ],
+    },
     "parameters.common.quantity_decimal_places": {"type": "number", "min": 0, "max": 2},
     "parameters.common.price_decimal_places": {"type": "number", "min": 0, "max": 4},
     "parameters.common.amount_decimal_places": {"type": "number", "min": 0, "max": 2},
@@ -269,7 +282,7 @@ PARAMETER_KEYS = {
     "parameters.work_order.score_stale_minutes",
     "parameters.reporting.quick_reporting",
     "parameters.reporting.parameter_reporting",
-    "parameters.reporting.auto_fill",
+    "parameters.reporting.default_reporting_quantity_mode",
     "parameters.reporting.auto_approve",
     "parameters.reporting.default_production_worker_mode",
     "parameters.reporting.data_correction",
@@ -336,6 +349,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.work_order.score_stale_minutes",
     "parameters.reporting.quick_reporting",
     "parameters.reporting.parameter_reporting",
+    "parameters.reporting.default_reporting_quantity_mode",
     "parameters.reporting.auto_approve",
     "parameters.reporting.default_production_worker_mode",
     "parameters.reporting.data_correction",
@@ -456,7 +470,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
     "reporting": {
         "quick_reporting": True,
         "parameter_reporting": True,
-        "auto_fill": True,
+        "default_reporting_quantity_mode": "reportable",
         "default_production_worker_mode": "auto",
         "data_correction": True,
         "auto_approve": False,
@@ -474,7 +488,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "incoming_inspection": True,
         "require_incoming_inspection_for_receipt": False,
         "require_incoming_inspection_for_customer_material": False,
-        "require_fqc_before_finished_goods_receipt": False,
+        "require_fqc_before_finished_goods_receipt": True,
         "process_inspection": True,
         "finished_inspection": True,
         "defect_handling": True,
@@ -1037,6 +1051,19 @@ class BusinessConfigService:
         raw = config["parameters"].get("reporting", {}).get("default_production_worker_mode", "auto")
         v = str(raw or "auto").strip()
         return v if v in ("current_user", "operation_assigned", "auto") else "auto"
+
+    async def get_reporting_default_quantity_mode(self, tenant_id: int) -> str:
+        """报工弹窗合格/不合格数量默认值：reportable=本次可报，zero=0。"""
+        config = await self.get_business_config(tenant_id)
+        reporting = config["parameters"].get("reporting", {}) or {}
+        raw = reporting.get("default_reporting_quantity_mode")
+        if raw is not None:
+            v = str(raw).strip()
+            if v in ("reportable", "zero"):
+                return v
+        if reporting.get("auto_fill") is False:
+            return "zero"
+        return "reportable"
 
     # ========================================================
     # 参数写入

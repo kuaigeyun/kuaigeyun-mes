@@ -96,7 +96,8 @@ async def create_bank_account(
 @router.get("", response_model=BankAccountListResponse)
 async def list_bank_accounts(
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    # 销售/采购订单等下拉需一次拉全量启用账户；上限与前端 dropdown 一致
+    limit: int = Query(50, ge=1, le=500),
     is_active: Optional[bool] = None,
     keyword: Optional[str] = Query(None),
     account_code: Optional[str] = Query(None),

@@ -31,6 +31,16 @@ class BankAccountService:
             raise ValidationError("账户类型仅支持 bank（银行）或 cash（库存现金）")
         return value
 
+    @staticmethod
+    def resolve_payment_method_for_account_type(account_type: Optional[str]) -> Optional[str]:
+        """按账户类型推断收/付款方式（bank→银行转账，cash→现金）。"""
+        value = str(account_type or "bank").strip().lower() or "bank"
+        if value == "cash":
+            return _CASH_METHOD
+        if value == "bank":
+            return _BANK_TRANSFER_METHOD
+        return None
+
     @classmethod
     def normalize_bank_fields(
         cls,

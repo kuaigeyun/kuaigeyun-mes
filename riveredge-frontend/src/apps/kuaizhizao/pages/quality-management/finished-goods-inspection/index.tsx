@@ -71,7 +71,7 @@ import {
   buildFinishedWorkOrderPullColumns,
   type QualityPullCandidateBase,
 } from '../components/qualityPullQueryColumns';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -1025,7 +1025,8 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     );
     if (gates.createDefect.allowed) {
       nodes.push(
-        <Button {...rowActionKind('create')}
+        <Button
+          {...rowActionKind('skip')}
           key="defect"
           size="small"
           type="link"
@@ -1536,25 +1537,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
                       />
                     );
                   })()}
-                  {inspectionDetail.id != null ? (
-                    <DetailDrawerInlineFullChain
-                      documentType='finished_goods_inspection'
-                      documentId={inspectionDetail.id}
-                      active={detailDrawerVisible}
-                      selfDocumentId={inspectionDetail.id}
-                      renderBriefActions={(doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailDrawerVisible(false);
-                      setInspectionDetail(null);
-                    }}
-                  />
-                )}
-                    />
-                  ) : null}
+                  
                 </div>
               </DetailDrawerSection>
 
@@ -1588,6 +1571,27 @@ const FinishedGoodsInspectionPage: React.FC = () => {
             </>
           ) : null
         }
+      
+                        traceDocument={
+                          inspectionDetail?.id != null
+                            ? {
+                                documentType: 'finished_goods_inspection',
+                                documentId: inspectionDetail.id,
+                                selfDocumentId: inspectionDetail.id,
+                              renderBriefActions: (doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDetailDrawerVisible(false);
+                      setInspectionDetail(null);
+                    }}
+                  />
+                )
+                              }
+                            : undefined
+                        }
       />
 
       {/* 创建不合格品记录Modal */}

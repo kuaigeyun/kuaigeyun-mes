@@ -1,1 +1,0 @@
-import{j as e}from"./vendor-DAiJhq0I.js";import{N as t}from"./clearSessionQueries-Cz0-jNIL.js";function r(){return e.jsx(t,{to:"/apps/haoligo/molds/documents/upkeep",replace:!0})}export{r as default};

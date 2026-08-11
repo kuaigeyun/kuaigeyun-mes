@@ -25,7 +25,7 @@ import { getPerformanceSummaryStatusValueEnum } from '../components/performanceM
 import { employeePerformanceApi } from '../../../services/performance';
 import type { PerformanceSummary, PerformanceDetail, PerformanceDetailItem } from '../../../types/performance';
 import { getPerformanceSummaryLifecycle } from '../../../utils/performanceLifecycle';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
   normalizePerformanceListResponse,
@@ -398,7 +398,7 @@ const SummariesPage: React.FC = () => {
                 { title: t('app.kuaizhizao.performance.summaries.columns.reportingRecord'), dataIndex: 'reporting_record_id', width: 88 },
                 { title: t('app.kuaizhizao.performance.summaries.columns.workOrder'), dataIndex: 'work_order_code', width: 120, ellipsis: true },
                 { title: t('app.kuaizhizao.performance.summaries.columns.operation'), dataIndex: 'operation_name', width: 120, ellipsis: true },
-                { title: t('app.kuaizhizao.performance.summaries.columns.reportedAt'), dataIndex: 'reported_at', width: 160 },
+                { title: t('app.kuaizhizao.performance.summaries.columns.reportedAt'), dataIndex: 'reported_at', width: 160, render: (text) => formatDateTimeBySiteSetting(text) || '-' },
                 { title: t('app.kuaizhizao.performance.common.columns.qualifiedQty'), dataIndex: 'qualified_quantity', width: 80, align: 'right' },
                 { title: t('app.kuaizhizao.performance.summaries.columns.workHours'), dataIndex: 'work_hours', width: 80, align: 'right' },
               ]}

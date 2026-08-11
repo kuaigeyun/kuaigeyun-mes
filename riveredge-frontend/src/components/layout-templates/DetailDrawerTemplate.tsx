@@ -1,11 +1,14 @@
 /**
  * 详情 Drawer：优先使用结构化插槽（basic / collaboration / supplementary / lines / timeline）。
  * 未使用插槽时兼容原有 columns + dataSource、customContent / plainBody、children。
+ *
+ * 传入 traceDocument 时：全链路（含节点简易明细）独立为「全链路跟踪」Tab，
+ * 默认不挂载；用户切到该 Tab 后才开始加载，以加快抽屉首屏。
  */
 
 import type { CSSProperties } from 'react';
-import React, { useMemo } from 'react';
-import { Drawer, Descriptions, Spin, theme } from 'antd';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Drawer, Descriptions, Spin, Tabs, theme } from 'antd';
 import type { DrawerProps } from 'antd';
 import type { ReactNode } from 'react';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
@@ -100,8 +103,8 @@ export interface DetailDrawerTemplateProps<T extends Record<string, any> = Recor
   afterOpenChange?: DrawerProps['afterOpenChange'];
 
   /**
-   * 协作区内嵌全链路（替代抽屉外左侧浮层）。
-   * 与 collaborationRelations 同时传入时，全链路叠在 relations 之后。
+   * 全链路跟踪（含节点简易明细）：独立 Tab，默认不加载，切到该 Tab 后才挂载。
+   * 请勿再在 collaborationLifecycle 内嵌 DetailDrawerInlineFullChain。
    */
   traceDocument?: {
     documentType: string;
@@ -123,6 +126,9 @@ function stackCollaborationParts(...nodes: (ReactNode | undefined)[]): ReactNode
     </div>
   );
 }
+
+const DETAIL_TAB_KEY = 'detail';
+const FULL_CHAIN_TAB_KEY = 'fullChain';
 
 export const DetailDrawerTemplate = <T extends Record<string, any> = Record<string, unknown>,>({
   title,
@@ -214,40 +220,41 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   }, [collaborationAuditRecord, collaborationTitleExtra]);
 
   const isOpen = open ?? visible ?? false;
+  const hasTraceDocument = Boolean(traceDocument?.documentId);
+
+  const [activeTab, setActiveTab] = useState<string>(DETAIL_TAB_KEY);
+  /** 仅在用户首次切到全链路 Tab 后挂载，避免抽屉打开即拉图 */
+  const [fullChainMounted, setFullChainMounted] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setActiveTab(DETAIL_TAB_KEY);
+      setFullChainMounted(false);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    setActiveTab(DETAIL_TAB_KEY);
+    setFullChainMounted(false);
+  }, [traceDocument?.documentType, traceDocument?.documentId]);
+
+  const handleTabChange = (key: string) => {
+    setActiveTab(key);
+    if (key === FULL_CHAIN_TAB_KEY) {
+      setFullChainMounted(true);
+    }
+  };
 
   const hasBasicContent = basic != null && basic !== false;
   const showBasic = basicVisible !== false && (basicVisible === true || hasBasicContent);
 
-  const inlineFullChain = useMemo(() => {
-    if (!traceDocument?.documentId) return null;
-    return (
-      <DetailDrawerInlineFullChain
-        documentType={traceDocument.documentType}
-        documentId={traceDocument.documentId}
-        active={isOpen}
-        selfDocumentId={traceDocument.selfDocumentId}
-        height={traceDocument.height}
-        renderBriefActions={traceDocument.renderBriefActions}
-      />
-    );
-  }, [isOpen, traceDocument]);
-
-  const stackedCollaboration = useMemo(() => {
-    const base =
+  const stackedCollaboration = useMemo(
+    () =>
       collaboration ??
-      stackCollaborationParts(collaborationMetrics, collaborationLifecycle, collaborationRelations);
-    if (inlineFullChain == null || inlineFullChain === false) return base;
-    return stackCollaborationParts(base, inlineFullChain);
-  }, [
-    collaboration,
-    collaborationMetrics,
-    collaborationLifecycle,
-    collaborationRelations,
-    inlineFullChain,
-  ]);
-  const hasCollaborationContent =
-    (stackedCollaboration != null && stackedCollaboration !== false) ||
-    (inlineFullChain != null && inlineFullChain !== false);
+      stackCollaborationParts(collaborationMetrics, collaborationLifecycle, collaborationRelations),
+    [collaboration, collaborationMetrics, collaborationLifecycle, collaborationRelations],
+  );
+  const hasCollaborationContent = stackedCollaboration != null && stackedCollaboration !== false;
   const showCollaboration =
     collaborationVisible !== false &&
     (collaborationVisible === true || hasCollaborationContent);
@@ -320,7 +327,44 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
     </>
   );
 
-  const drawerBody = usesStructuredSections ? sectionedBody : legacyBody;
+  const detailBody = usesStructuredSections ? sectionedBody : legacyBody;
+
+  const fullChainPane =
+    hasTraceDocument && fullChainMounted && traceDocument ? (
+      <DetailDrawerInlineFullChain
+        documentType={traceDocument.documentType}
+        documentId={traceDocument.documentId}
+        active={isOpen && activeTab === FULL_CHAIN_TAB_KEY}
+        selfDocumentId={traceDocument.selfDocumentId}
+        height={traceDocument.height}
+        renderBriefActions={traceDocument.renderBriefActions}
+      />
+    ) : null;
+
+  const drawerBody = hasTraceDocument ? (
+    <Tabs
+      activeKey={activeTab}
+      onChange={handleTabChange}
+      size="small"
+      style={{ marginTop: -4 }}
+      items={[
+        {
+          key: DETAIL_TAB_KEY,
+          label: t('app.uniDetail.tabDetail'),
+          children: detailBody,
+        },
+        {
+          key: FULL_CHAIN_TAB_KEY,
+          label: t('app.uniDetail.sectionFullChain'),
+          children: fullChainPane ?? (
+            <div style={{ minHeight: 120 }} />
+          ),
+        },
+      ]}
+    />
+  ) : (
+    detailBody
+  );
   const showLoadingOverlay = !!loading && isOpen;
 
   return (

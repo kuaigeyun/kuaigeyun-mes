@@ -1,8 +1,8 @@
 /**
  * 收/付款单入账账户字段：按付款方式过滤银行账户 / 库存现金。
  */
-import React from 'react';
-import { ProFormDependency, ProFormSelect, ProFormText } from '@ant-design/pro-components';
+import React, { useEffect, useRef } from 'react';
+import { ProForm, ProFormDependency, ProFormSelect, ProFormText } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import type { BankAccount } from '../services/finance/bank-account';
 import {
@@ -19,6 +19,44 @@ type Props = {
   noteName?: string;
 };
 
+function SyncLedgerAccountWithPaymentMethod({ accounts }: { accounts: BankAccount[] }) {
+  const form = ProForm.useFormInstance();
+  const paymentMethod = ProForm.useWatch('payment_method', form);
+  const bankAccountId = ProForm.useWatch('bank_account_id', form);
+  const prevPaymentMethodRef = useRef<string | undefined>();
+
+  useEffect(() => {
+    if (paymentMethod === undefined) return;
+
+    const methodChanged = prevPaymentMethodRef.current !== paymentMethod;
+    prevPaymentMethodRef.current = paymentMethod;
+
+    const filtered = filterBankAccountsForPaymentMethod(accounts, paymentMethod);
+    const validIds = new Set(filtered.map((a) => a.id));
+    const currentId =
+      bankAccountId != null && bankAccountId !== '' ? Number(bankAccountId) : null;
+
+    if (currentId != null && !validIds.has(currentId)) {
+      form.setFieldValue('bank_account_id', undefined);
+      if (requiresLedgerAccount(paymentMethod) && filtered.length === 1) {
+        form.setFieldValue('bank_account_id', filtered[0].id);
+      }
+      return;
+    }
+
+    if (
+      methodChanged &&
+      requiresLedgerAccount(paymentMethod) &&
+      filtered.length === 1 &&
+      currentId == null
+    ) {
+      form.setFieldValue('bank_account_id', filtered[0].id);
+    }
+  }, [paymentMethod, accounts, bankAccountId, form]);
+
+  return null;
+}
+
 export const LedgerAccountFormFields: React.FC<Props> = ({
   accounts,
   accountLabel,
@@ -29,6 +67,7 @@ export const LedgerAccountFormFields: React.FC<Props> = ({
 
   return (
     <>
+      <SyncLedgerAccountWithPaymentMethod accounts={accounts} />
       <ProFormDependency name={['payment_method']}>
         {({ payment_method }) => {
           const filtered = filterBankAccountsForPaymentMethod(accounts, payment_method);

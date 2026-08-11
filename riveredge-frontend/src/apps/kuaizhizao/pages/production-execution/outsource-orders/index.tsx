@@ -55,7 +55,7 @@ import {
   ListPageTemplate,
   FormModalTemplate,
   DetailDrawerTemplate,
-  DetailDrawerSection, DetailDrawerInlineFullChain,
+  DetailDrawerSection,
   MODAL_CONFIG,
   DRAWER_CONFIG,
   type StatCard,
@@ -1588,25 +1588,7 @@ export const OutsourceOrdersTable: React.FC = () => {
                       />
                     );
                   })()}
-                  {outsourceOrderDetail.id != null ? (
-                    <DetailDrawerInlineFullChain
-                      documentType='outsource_order'
-                      documentId={outsourceOrderDetail.id}
-                      active={detailDrawerVisible}
-                      selfDocumentId={outsourceOrderDetail.id}
-                      renderBriefActions={(doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailDrawerVisible(false);
-                      setOutsourceOrderDetail(null);
-                    }}
-                  />
-                )}
-                    />
-                  ) : null}
+                  
                 </div>
               </DetailDrawerSection>
 
@@ -1633,6 +1615,27 @@ export const OutsourceOrdersTable: React.FC = () => {
             </>
           )
         }
+      
+                        traceDocument={
+                          outsourceOrderDetail?.id != null
+                            ? {
+                                documentType: 'outsource_order',
+                                documentId: outsourceOrderDetail.id,
+                                selfDocumentId: outsourceOrderDetail.id,
+                              renderBriefActions: (doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDetailDrawerVisible(false);
+                      setOutsourceOrderDetail(null);
+                    }}
+                  />
+                )
+                              }
+                            : undefined
+                        }
       />
     </>
   );

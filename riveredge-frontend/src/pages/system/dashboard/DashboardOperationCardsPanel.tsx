@@ -115,7 +115,7 @@ export function DashboardOperationCardsPanel({
                 }
                 onClick={() => {
                   if (hasMoreItems) {
-                    setVisibleCount((prev) => Math.min(totalCount, prev + columnCount));
+                    setVisibleCount(totalCount);
                   } else {
                     setVisibleCount(initialVisibleCount);
                   }

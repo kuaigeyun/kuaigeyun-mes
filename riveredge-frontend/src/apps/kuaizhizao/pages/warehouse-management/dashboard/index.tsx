@@ -31,6 +31,7 @@ import {
   ModuleTrendLine,
 } from '../../../components/module-center';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
+import { inventoryAlertLevelLabel, inventoryAlertLevelTagColor } from '../../../utils/warehouseListCore';
 
 const WarehouseDashboard: React.FC = () => {
   const { t } = useTranslation();
@@ -232,8 +233,8 @@ const WarehouseDashboard: React.FC = () => {
         dataIndex: 'alert_level',
         width: 72,
         render: (level: string) => (
-          <Tag color={String(level).includes('缺') || level === 'out_of_stock' ? 'error' : 'warning'}>
-            {level || '—'}
+          <Tag color={inventoryAlertLevelTagColor(level)}>
+            {inventoryAlertLevelLabel(level, t)}
           </Tag>
         ),
       },

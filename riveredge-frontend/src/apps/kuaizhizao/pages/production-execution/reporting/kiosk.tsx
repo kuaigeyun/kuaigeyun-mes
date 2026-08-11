@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { App, Card, Button, Space, Input, Alert, Spin, Form, Radio, InputNumber, Row, Col, Tag, Divider, Modal } from 'antd';
 import { QrcodeOutlined, ScanOutlined, CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
@@ -19,7 +20,7 @@ import { QRCodeScanner } from '../../../../../components/qrcode';
 import { qrcodeApi } from '../../../../../services/qrcode';
 import { useTouchScreen } from '../../../../../hooks/useTouchScreen';
 import dayjs from 'dayjs';
-import { getRemainingReportableQuantity, getStatusReportingCompleteQuantity } from '../../../utils/workOrderReporting';
+import { getRemainingReportableQuantity, getStatusReportingCompleteQuantity, resolveDefaultReportingQuantityFields } from '../../../utils/workOrderReporting';
 
 const { TextArea } = Input;
 
@@ -73,6 +74,11 @@ const ReportingKioskPage: React.FC = () => {
   const [workOrderOperations, setWorkOrderOperations] = useState<Operation[]>([]);
   const [currentOperation, setCurrentOperation] = useState<Operation | null>(null);
   const [jumpRuleError, setJumpRuleError] = useState<string>('');
+  const { data: executionConfig } = useQuery({
+    queryKey: ['workOrderExecutionConfig'],
+    queryFn: () => workOrderApi.getExecutionConfig(),
+    staleTime: 60_000,
+  });
 
   /**
    * 处理扫码报工
@@ -200,11 +206,15 @@ const ReportingKioskPage: React.FC = () => {
     // 按数量报工时，自动填充完成数量
     if (operation.reporting_type === 'quantity' && workOrder.quantity) {
       const remainingQuantity = getRemainingReportableQuantity(operation, Number(workOrder.quantity) || 0);
-      if (remainingQuantity > 0) {
-        formValues.reported_quantity = remainingQuantity;
-        formValues.qualified_quantity = remainingQuantity;
-        formValues.unqualified_quantity = 0;
+      const defaults = resolveDefaultReportingQuantityFields(
+        remainingQuantity,
+        executionConfig?.default_reporting_quantity_mode,
+      );
+      if (defaults.qualified_quantity > 0) {
+        formValues.reported_quantity = defaults.qualified_quantity;
       }
+      formValues.qualified_quantity = defaults.qualified_quantity;
+      formValues.unqualified_quantity = defaults.unqualified_quantity;
     }
 
     // 按状态报工时，默认选择"完成"

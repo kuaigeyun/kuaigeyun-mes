@@ -60,7 +60,7 @@ import {
   FormModalTemplate,
   MODAL_CONFIG,
   DetailDrawerTemplate,
-  DetailDrawerSection, DetailDrawerInlineFullChain,
+  DetailDrawerSection,
   DRAWER_CONFIG,
   type StatCard,
 } from '../../../../../components/layout-templates';
@@ -82,12 +82,14 @@ import { getSessionCurrentUser } from '../../../../../utils/sessionCurrentUser';
 import { hasModulePermission } from '../../../../../utils/permissionContract';
 import { useGlobalStore } from '../../../../../stores';
 import type { User } from '../../../../../services/user';
-import { getRemainingReportableQuantity, getStatusReportingCompleteQuantity, getReportableQuantityBreakdown } from '../../../utils/workOrderReporting';
+import { getRemainingReportableQuantity, getStatusReportingCompleteQuantity, getReportableQuantityBreakdown, resolveDefaultReportingQuantityFields } from '../../../utils/workOrderReporting';
 import { coerceReportingCreateStrings } from '../../../utils/reportingPayload';
+import { resolveReportingWorkTimeForSubmit } from '../../../utils/reportingWorkTime';
 import ReportableQuantityPanel from '../../../components/ReportableQuantityPanel';
 import type { PushPreviewResponse } from '../../../services/sales-order';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import ReportingInboundWarehouseField from '../../../components/ReportingInboundWarehouseField';
+import { ReportingWorkTimeFields } from '../../../components/ReportingWorkTimeFields';
 import { ReportingProducerField } from '../../../components/ReportingProducerField';
 import {
   isInboundWarehouseRequiredForLastOperation,
@@ -873,20 +875,20 @@ const ReportingPage: React.FC = () => {
         parseFloat(workOrder.quantity?.toString() || '0') || 0,
       )
       const remaining = convertBaseQtyToProductionDisplay(remainingBase, workOrder)
-      if (remaining > 0) {
-        autoFillValues.qualified_quantity = remaining;
-        autoFillValues.unqualified_quantity = 0;
-      } else {
-        autoFillValues.qualified_quantity = 0;
-        autoFillValues.unqualified_quantity = 0;
-      }
+      Object.assign(
+        autoFillValues,
+        resolveDefaultReportingQuantityFields(
+          remaining,
+          executionConfig?.default_reporting_quantity_mode,
+        ),
+      )
     }
     if (operation.reporting_type === 'status') {
       autoFillValues.completed_status = 'completed';
     }
     formRef.current?.setFieldsValue(autoFillValues);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportingModalVisible, reportOperationId, reportWorkOrderId, reportOperations, reportWorkOrders]);
+  }, [reportingModalVisible, reportOperationId, reportWorkOrderId, reportOperations, reportWorkOrders, executionConfig?.default_reporting_quantity_mode]);
 
   /**
    * 处理报工提交
@@ -921,6 +923,7 @@ const ReportingPage: React.FC = () => {
       if (!canContinue) return;
       const producerMode =
         canProxyReporting && standardValues.producer_mode === 'team' ? 'team' : 'worker';
+      const workTime = resolveReportingWorkTimeForSubmit(standardValues);
       const reportingData: any = {
         work_order_id: Number(workOrder.id),
         work_order_code: workOrder.code,
@@ -929,9 +932,9 @@ const ReportingPage: React.FC = () => {
         operation_code: operation.operation_code,
         operation_name: operation.operation_name,
         status: 'pending',
-        reported_at: new Date().toISOString(),
+        reported_at: workTime.reported_at,
         remarks: standardValues.remarks,
-        work_hours: standardValues.work_hours || 0,
+        work_hours: workTime.work_hours,
       };
       if (producerMode === 'team') {
         const team = createModalTeamRef.current;
@@ -1893,14 +1896,7 @@ const ReportingPage: React.FC = () => {
             </ProFormDependency>
           </>
         )}
-        <ProFormDigit
-          name="work_hours"
-          label={t('app.kuaizhizao.workReporting.colWorkHours')}
-          placeholder={t('app.kuaizhizao.workReporting.formWorkHoursPlaceholder')}
-          min={0}
-          fieldProps={{ step: 0.1 }}
-          colProps={{ span: 12 }}
-        />
+        <ReportingWorkTimeFields />
         <ReportingInboundWarehouseField
           isLastOperation={reportIsLastOperation}
           warehouseRequired={reportWarehouseRequired}
@@ -2395,26 +2391,7 @@ const ReportingPage: React.FC = () => {
                       />
                     );
                   })()}
-                  {reportingDetail.id != null ? (
-                    <DetailDrawerInlineFullChain
-                      documentType='reporting_record'
-                      documentId={reportingDetail.id}
-                      active={detailDrawerVisible}
-                      selfDocumentId={reportingDetail.id}
-                      renderBriefActions={(doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailDrawerVisible(false);
-                      setReportingDetail(null);
-                      setDetailMaterialBindings([]);
-                    }}
-                  />
-                )}
-                    />
-                  ) : null}
+                  
                 </div>
               </DetailDrawerSection>
 
@@ -2472,6 +2449,28 @@ const ReportingPage: React.FC = () => {
             </>
           )
         }
+      
+                      traceDocument={
+                        reportingDetail?.id != null
+                          ? {
+                              documentType: 'reporting_record',
+                              documentId: reportingDetail.id,
+                              selfDocumentId: reportingDetail.id,
+                            renderBriefActions: (doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDetailDrawerVisible(false);
+                      setReportingDetail(null);
+                      setDetailMaterialBindings([]);
+                    }}
+                  />
+                )
+                            }
+                          : undefined
+                      }
       />
 
     </ListPageTemplate>

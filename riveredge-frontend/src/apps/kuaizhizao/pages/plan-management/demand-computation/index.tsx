@@ -62,7 +62,6 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import {
   MultiTabListPageTemplate,
   DetailDrawerSection,
-  DetailDrawerInlineFullChain,
   DetailDrawerTemplate,
   DRAWER_CONFIG,
   MODAL_CONFIG,
@@ -4318,24 +4317,7 @@ const DemandComputationPage: React.FC = () => {
                             <Typography.Text type="secondary">{t('app.kuaizhizao.demandComputation.noStageData')}</Typography.Text>
                           )
                         })()}
-                        {currentComputation.id != null ? (
-                          <DetailDrawerInlineFullChain
-                            documentType="demand_computation"
-                            documentId={currentComputation.id}
-                            active={drawerVisible && detailTabKey === 'detail'}
-                            selfDocumentId={currentComputation.id}
-                            renderBriefActions={(doc) => (
-                              <WarehouseTraceBriefPrimaryActions
-                                doc={doc}
-                                t={t}
-                                navigate={navigate}
-                                closeDrawer={() => {
-                                  setDrawerVisible(false)
-                                }}
-                              />
-                            )}
-                          />
-                        ) : null}
+                        
                       </div>
                     </DetailDrawerSection>
 
@@ -4746,6 +4728,26 @@ const DemandComputationPage: React.FC = () => {
           />
           ) : null
         }
+      
+                        traceDocument={
+                          currentComputation?.id != null
+                            ? {
+                                documentType: 'demand_computation',
+                                documentId: currentComputation.id,
+                                selfDocumentId: currentComputation.id,
+                              renderBriefActions: (doc) => (
+                              <WarehouseTraceBriefPrimaryActions
+                                doc={doc}
+                                t={t}
+                                navigate={navigate}
+                                closeDrawer={() => {
+                                  setDrawerVisible(false)
+                                }}
+                              />
+                            )
+                              }
+                            : undefined
+                        }
       />
 
       </>

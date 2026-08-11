@@ -14,6 +14,9 @@ from decimal import Decimal
 
 from apps.kuaizhizao.services.document_action_policy.types import PackingBindingCapabilities
 
+# 与模型 DecimalField(max_digits=12, decimal_places=2) 一致
+MAX_DECIMAL_12_2 = Decimal("9999999999.99")
+
 
 class PackingBindingBase(BaseModel):
     """
@@ -32,7 +35,12 @@ class PackingBindingBase(BaseModel):
     packing_material_id: Optional[int] = Field(None, description="包装物料ID（可选）")
     packing_material_code: Optional[str] = Field(None, description="包装物料编码（可选）")
     packing_material_name: Optional[str] = Field(None, description="包装物料名称（可选）")
-    packing_quantity: Decimal = Field(..., gt=0, description="装箱数量")
+    packing_quantity: Decimal = Field(
+        ...,
+        gt=0,
+        le=MAX_DECIMAL_12_2,
+        description="装箱数量",
+    )
     box_no: Optional[str] = Field(None, description="箱号（可选）")
     binding_method: str = Field("manual", description="绑定方式（scan/manual）")
     barcode: Optional[str] = Field(None, description="条码（可选，用于扫码绑定）")
@@ -61,7 +69,12 @@ class PackingBindingCreateFromDelivery(BaseModel):
     packing_material_id: Optional[int] = Field(None, description="包装物料ID（可选）")
     packing_material_code: Optional[str] = Field(None, description="包装物料编码（可选）")
     packing_material_name: Optional[str] = Field(None, description="包装物料名称（可选）")
-    packing_quantity: Decimal = Field(..., gt=0, description="装箱数量")
+    packing_quantity: Decimal = Field(
+        ...,
+        gt=0,
+        le=MAX_DECIMAL_12_2,
+        description="装箱数量",
+    )
     box_no: Optional[str] = Field(None, description="箱号（可选）")
     binding_method: str = Field("manual", description="绑定方式（scan/manual）")
     barcode: Optional[str] = Field(None, description="条码（可选，用于扫码绑定）")
@@ -82,7 +95,12 @@ class PackingBindingCreateFromReceipt(BaseModel):
     packing_material_id: Optional[int] = Field(None, description="包装物料ID（可选）")
     packing_material_code: Optional[str] = Field(None, description="包装物料编码（可选）")
     packing_material_name: Optional[str] = Field(None, description="包装物料名称（可选）")
-    packing_quantity: Decimal = Field(..., gt=0, description="装箱数量")
+    packing_quantity: Decimal = Field(
+        ...,
+        gt=0,
+        le=MAX_DECIMAL_12_2,
+        description="装箱数量",
+    )
     box_no: Optional[str] = Field(None, description="箱号（可选）")
     binding_method: str = Field("manual", description="绑定方式（scan/manual）")
     barcode: Optional[str] = Field(None, description="条码（可选，用于扫码绑定）")
@@ -98,7 +116,12 @@ class PackingBindingUpdate(BaseModel):
     """
     model_config = ConfigDict(from_attributes=True)
 
-    packing_quantity: Optional[Decimal] = Field(None, gt=0, description="装箱数量")
+    packing_quantity: Optional[Decimal] = Field(
+        None,
+        gt=0,
+        le=MAX_DECIMAL_12_2,
+        description="装箱数量",
+    )
     box_no: Optional[str] = Field(None, description="箱号")
     remarks: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")

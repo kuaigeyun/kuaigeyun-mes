@@ -30,7 +30,6 @@ import {
   ListPageTemplate,
   DetailDrawerTemplate,
   DetailDrawerSection,
-  DetailDrawerInlineFullChain,
   DRAWER_CONFIG,
   DocumentFormPageLayout,
   DocumentFormPageHeaderActions,
@@ -2250,6 +2249,25 @@ export default function SalesForecastsPage() {
             </Space>
           )
         }
+        traceDocument={
+          currentForecast?.id != null
+            ? {
+                documentType: 'sales_forecast',
+                documentId: currentForecast.id,
+                selfDocumentId: currentForecast.id,
+                renderBriefActions: (doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDrawerVisible(false);
+                    }}
+                  />
+                ),
+              }
+            : undefined
+        }
       >
         {currentForecast && (
           <>
@@ -2286,24 +2304,6 @@ export default function SalesForecastsPage() {
                     />
                   );
                 })()}
-                {currentForecast.id != null ? (
-                  <DetailDrawerInlineFullChain
-                    documentType="sales_forecast"
-                    documentId={currentForecast.id}
-                    active={drawerVisible}
-                    selfDocumentId={currentForecast.id}
-                    renderBriefActions={(doc) => (
-                      <WarehouseTraceBriefPrimaryActions
-                        doc={doc}
-                        t={t}
-                        navigate={navigate}
-                        closeDrawer={() => {
-                          setDrawerVisible(false);
-                        }}
-                      />
-                    )}
-                  />
-                ) : null}
               </div>
             </DetailDrawerSection>
 

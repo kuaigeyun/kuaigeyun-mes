@@ -70,7 +70,7 @@ import {
   buildProcessWorkOrderPullColumns,
   type QualityPullCandidateBase,
 } from '../components/qualityPullQueryColumns';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -891,7 +891,8 @@ const ProcessInspectionPage: React.FC = () => {
     );
     if (gates.createDefect.allowed) {
       nodes.push(
-        <Button {...rowActionKind('create')}
+        <Button
+          {...rowActionKind('skip')}
           key="defect"
           size="small"
           type="link"
@@ -1414,25 +1415,7 @@ const ProcessInspectionPage: React.FC = () => {
                       />
                     );
                   })()}
-                  {inspectionDetail.id != null ? (
-                    <DetailDrawerInlineFullChain
-                      documentType='process_inspection'
-                      documentId={inspectionDetail.id}
-                      active={detailDrawerVisible}
-                      selfDocumentId={inspectionDetail.id}
-                      renderBriefActions={(doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailDrawerVisible(false);
-                      setInspectionDetail(null);
-                    }}
-                  />
-                )}
-                    />
-                  ) : null}
+                  
                 </div>
               </DetailDrawerSection>
 
@@ -1466,6 +1449,27 @@ const ProcessInspectionPage: React.FC = () => {
             </>
           ) : null
         }
+      
+                        traceDocument={
+                          inspectionDetail?.id != null
+                            ? {
+                                documentType: 'process_inspection',
+                                documentId: inspectionDetail.id,
+                                selfDocumentId: inspectionDetail.id,
+                              renderBriefActions: (doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDetailDrawerVisible(false);
+                      setInspectionDetail(null);
+                    }}
+                  />
+                )
+                              }
+                            : undefined
+                        }
       />
 
       {/* 创建不合格品记录Modal */}

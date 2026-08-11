@@ -1510,6 +1510,11 @@ class MaterialBatchBase(BaseModel):
     supplier_batch_no: Optional[str] = Field(None, alias="supplierBatchNo", max_length=100, description="供应商批号（可选）")
     quantity: Decimal = Field(0, description="批号数量（当前库存数量）")
     status: str = Field("in_stock", description="批号状态（在库、已出库、已过期、已报废等）")
+    quality_status: str = Field(
+        "qualified",
+        alias="qualityStatus",
+        description="库存质量态（qualified=可售放行, pending_qc=待检, quarantine=隔离, unqualified=不合格未处置）",
+    )
     remark: Optional[str] = Field(None, description="备注（可选）")
 
     model_config = ConfigDict(populate_by_name=True)

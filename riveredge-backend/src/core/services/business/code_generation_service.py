@@ -22,7 +22,7 @@ from core.models.code_sequence import CodeSequence
 from core.models.model_fields import model_has_field
 from core.services.business.code_rule_service import CodeRuleService
 from core.services.code_rule.code_rule_component_service import CodeRuleComponentService
-from core.config.code_rule_pages import RULE_CODE_ENTITY_FOR_SEQ_SYNC
+from core.config.code_rule_pages import get_seq_sync_entity_for_rule
 from infra.exceptions.exceptions import ValidationError
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 
@@ -318,6 +318,10 @@ class CodeGenerationService:
             seq_start = rule.seq_start
             seq_step = rule.seq_step
             seq_reset_rule = rule.seq_reset_rule or "never"
+
+        CodeGenerationService._assert_seq_sync_entity_bound(
+            rule, rule_code, context, components
+        )
         
         # 事务内对序号行加锁再递增，否则 FOR UPDATE 在语句结束后立即释放
         async with in_transaction():
@@ -401,7 +405,7 @@ class CodeGenerationService:
         return CodeRuleComponentService.render_components(
             components, current_seq, context
         )
-    
+
     @staticmethod
     async def test_generate_code(
         tenant_id: int,
@@ -478,6 +482,10 @@ class CodeGenerationService:
             seq_start = rule.seq_start
             seq_step = rule.seq_step
             seq_reset_rule = rule.seq_reset_rule or "never"
+
+        CodeGenerationService._assert_seq_sync_entity_bound(
+            rule, rule_code, context, components
+        )
         
         # 获取当前序号（不更新）
         sequence = await CodeSequence.get_or_none(
@@ -703,30 +711,61 @@ class CodeGenerationService:
         return None
 
     @staticmethod
-    def _rule_code_key_for_seq_sync(rule_code: str) -> Optional[str]:
-        """manifest rule_code 精确匹配 RULE_CODE_ENTITY_FOR_SEQ_SYNC。"""
-        if not rule_code:
-            return None
-        if rule_code in RULE_CODE_ENTITY_FOR_SEQ_SYNC:
-            return rule_code
+    def _resolve_entity_config_for_rule(
+        rule: CodeRule,
+        request_rule_code: str,
+    ) -> Optional[tuple]:
+        for key in (getattr(rule, "code", None), request_rule_code):
+            if not key:
+                continue
+            cfg = get_seq_sync_entity_for_rule(str(key))
+            if cfg:
+                return cfg
         return None
+
+    @staticmethod
+    def _material_seq_sync_deferred(
+        rule_code: str,
+        context: Optional[Dict[str, Any]],
+    ) -> bool:
+        _rc = (rule_code or "").upper()
+        if "MATERIAL" not in _rc and _rc != "MATERIAL_CODE":
+            return False
+        return not _get_leaf_group_code(context)
+
+    @staticmethod
+    def _assert_seq_sync_entity_bound(
+        rule: CodeRule,
+        request_rule_code: str,
+        context: Optional[Dict[str, Any]],
+        components: Optional[List[Dict[str, Any]]],
+    ) -> None:
+        counter = CodeRuleComponentService.get_counter_component_config(components or [])
+        if not counter:
+            return
+        rc = request_rule_code or getattr(rule, "code", "") or ""
+        if CodeGenerationService._material_seq_sync_deferred(rc, context):
+            return
+        if CodeGenerationService._resolve_entity_config_for_rule(rule, request_rule_code):
+            return
+        raise ValidationError(
+            f"编码规则 {rc} 未绑定库内序号校准实体。"
+            "请在 code_rule_entity_models.py 注册 ENTITY_MODEL_BY_RULE_CODE，"
+            "并在 CODE_RULE_PAGES 启用 auto_generate。"
+        )
 
     @staticmethod
     async def _get_max_sequence_from_db(
         tenant_id: int,
-        rule_code: str,
+        entity_config: tuple,
         prefix: str,
+        *,
+        rule_code: str = "",
     ) -> Optional[int]:
         """
         从库中查询该规则对应实体的编码字段，解析流水号数字，返回当前最大序号。
         用于校准 CodeSequence：删除记录后仍能根据库中最大号回落。
         """
-        rc_key = CodeGenerationService._rule_code_key_for_seq_sync(rule_code)
-        if not rc_key:
-            return None
-        entity_config = RULE_CODE_ENTITY_FOR_SEQ_SYNC.get(rc_key)
-        if not entity_config:
-            return None
         module_path, class_name, attr_name = entity_config
         try:
             mod = importlib.import_module(module_path)
@@ -790,18 +829,16 @@ class CodeGenerationService:
         if not scan_prefix and "MATERIAL" in _rc and context and _get_leaf_group_code(context):
             return None
 
-        entity_config = RULE_CODE_ENTITY_FOR_SEQ_SYNC.get(rule.code) or RULE_CODE_ENTITY_FOR_SEQ_SYNC.get(
-            request_rule_code or ""
+        entity_config = CodeGenerationService._resolve_entity_config_for_rule(
+            rule, request_rule_code
         )
         if not entity_config:
             return None
-        rule_code_for_lookup = rule.code if rule.code in RULE_CODE_ENTITY_FOR_SEQ_SYNC else request_rule_code
-        if rule_code_for_lookup not in RULE_CODE_ENTITY_FOR_SEQ_SYNC:
-            return None
         return await CodeGenerationService._get_max_sequence_from_db(
             tenant_id=tenant_id,
-            rule_code=rule_code_for_lookup,
+            entity_config=entity_config,
             prefix=scan_prefix,
+            rule_code=request_rule_code or getattr(rule, "code", "") or "",
         )
 
     @staticmethod

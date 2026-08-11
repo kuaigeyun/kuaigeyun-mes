@@ -737,13 +737,22 @@ async def list_production_pickings(
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     status: Optional[str] = Query(None, description="领料状态"),
     work_order_id: Optional[int] = Query(None, description="工单ID"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    warehouse_name: Optional[str] = Query(None, description="仓库名称（模糊）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（领料单号/工单号/领料人）"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日起"),
+    created_end_date: Optional[str] = Query(None, description="创建日止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日止"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> List[ProductionPickingListResponse]:
     """
     获取生产领料单列表
 
-    支持状态和工单筛选。
+    支持状态、工单、仓库与关键词筛选。
     """
     return await ProductionPickingService().list_production_pickings(
         tenant_id=tenant_id,
@@ -751,6 +760,15 @@ async def list_production_pickings(
         limit=limit,
         status=status,
         work_order_id=work_order_id,
+        warehouse_id=warehouse_id,
+        warehouse_name=warehouse_name,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
 
 
@@ -3369,13 +3387,24 @@ async def list_sales_deliveries(
     status: Optional[str] = Query(None, description="出库状态"),
     sales_order_id: Optional[int] = Query(None, description="销售订单ID"),
     customer_id: Optional[int] = Query(None, description="客户ID"),
+    customer_name: Optional[str] = Query(None, description="客户名称（模糊）"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    warehouse_name: Optional[str] = Query(None, description="仓库名称（模糊）"),
+    total_quantity: Optional[float] = Query(None, description="出库数量（精确）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（出库单号/客户/仓库/订单号）"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日起"),
+    created_end_date: Optional[str] = Query(None, description="创建日止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日止"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> List[SalesDeliveryResponse]:
     """
     获取销售出库单列表
 
-    支持状态和销售订单筛选。
+    支持状态、客户、仓库、数量与关键词筛选。
     """
     return await SalesDeliveryService().list_sales_deliveries(
         tenant_id=tenant_id,
@@ -3384,6 +3413,17 @@ async def list_sales_deliveries(
         status=status,
         sales_order_id=sales_order_id,
         customer_id=customer_id,
+        customer_name=customer_name,
+        warehouse_id=warehouse_id,
+        warehouse_name=warehouse_name,
+        total_quantity=total_quantity,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
     )
 
 

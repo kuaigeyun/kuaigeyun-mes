@@ -218,6 +218,8 @@ const ReworkOrdersPage: React.FC = () => {
   const [createFromWorkOrderSubmitLoading, setCreateFromWorkOrderSubmitLoading] = useState(false);
   const [pullWorkOrderDetail, setPullWorkOrderDetail] = useState<Record<string, any> | null>(null);
   const [pullWorkOrderOperations, setPullWorkOrderOperations] = useState<Array<Record<string, any>>>([]);
+  const [pullWorkOrderReworkableQty, setPullWorkOrderReworkableQty] = useState(0);
+  const [pullWorkOrderDefaultStartOpId, setPullWorkOrderDefaultStartOpId] = useState<number | undefined>();
 
   const {
     customFields: reworkFormCustomFields,
@@ -915,8 +917,10 @@ const ReworkOrdersPage: React.FC = () => {
       rework_type: reworkTypeOptions[0]?.value,
       routing_mode: 'DYNAMIC',
       verification_required: false,
+      start_work_order_operation_id: pullWorkOrderDefaultStartOpId,
+      quantity: pullWorkOrderReworkableQty > 0 ? pullWorkOrderReworkableQty : undefined,
     }),
-    [reworkTypeOptions, pullWorkOrderDetail?.id],
+    [reworkTypeOptions, pullWorkOrderDetail?.id, pullWorkOrderDefaultStartOpId, pullWorkOrderReworkableQty],
   );
 
   const resetCreateFromWorkOrderModal = () => {
@@ -925,7 +929,19 @@ const ReworkOrdersPage: React.FC = () => {
     setCreateFromWorkOrderSubmitLoading(false);
     setPullWorkOrderDetail(null);
     setPullWorkOrderOperations([]);
+    setPullWorkOrderReworkableQty(0);
+    setPullWorkOrderDefaultStartOpId(undefined);
   };
+
+  const refreshPullWorkOrderReworkPreview = useCallback(
+    async (workOrderId: number, startWorkOrderOperationId?: number) => {
+      const preview = await reworkOrderApi.previewFromWorkOrder(String(workOrderId), {
+        start_work_order_operation_id: startWorkOrderOperationId,
+      });
+      setPullWorkOrderReworkableQty(Number(preview.reworkable_quantity) || 0);
+    },
+    [],
+  );
 
   const openCreateFromWorkOrderModal = async (workOrderId: number) => {
     setCreateFromWorkOrderVisible(true);
@@ -941,6 +957,13 @@ const ReworkOrdersPage: React.FC = () => {
       const operations = Array.isArray(operationsRaw) ? operationsRaw : [];
       setPullWorkOrderDetail(detail as Record<string, any>);
       setPullWorkOrderOperations(operations as Array<Record<string, any>>);
+      const defaultStartOp = operations.find(
+        (op) => Number(op.unqualified_quantity ?? op.unqualifiedQuantity ?? 0) > 0,
+      );
+      const defaultStartOpId =
+        defaultStartOp?.id != null ? Number(defaultStartOp.id) : undefined;
+      setPullWorkOrderDefaultStartOpId(defaultStartOpId);
+      await refreshPullWorkOrderReworkPreview(workOrderId, defaultStartOpId);
     } catch (error: any) {
       messageApi.error(error?.message || t('app.kuaizhizao.reworkOrder.loadWorkOrderFailed'));
       resetCreateFromWorkOrderModal();
@@ -1256,6 +1279,8 @@ const ReworkOrdersPage: React.FC = () => {
         );
         return;
       }
+      // 先关掉选单弹窗，再打开预览，避免同标题双层 Modal
+      pullFromFinishedGoodsQuery.closeModal();
       await openPullPreview(selectedId);
     },
   });
@@ -1295,6 +1320,8 @@ const ReworkOrdersPage: React.FC = () => {
         );
         return;
       }
+      // 先关掉选单弹窗，再打开创建表单，避免同标题双层 Modal 叠在一起
+      pullFromWorkOrderQuery.closeModal();
       await openCreateFromWorkOrderModal(selectedId);
     },
   });
@@ -1422,6 +1449,7 @@ const ReworkOrdersPage: React.FC = () => {
         initialValues={createFromWorkOrderInitialValues}
         workOrderCode={pullWorkOrderDetail?.code as string | undefined}
         productName={pullWorkOrderDetail?.product_name as string | undefined}
+        reworkableQuantity={pullWorkOrderReworkableQty}
         operations={pullWorkOrderOperations.map((op) => ({
           id: op.id as number,
           sequence: op.sequence as number | undefined,
@@ -1433,6 +1461,10 @@ const ReworkOrdersPage: React.FC = () => {
         reworkTypeOptions={reworkTypeOptions}
         reworkTypeLoading={reworkTypeLoading}
         onClose={resetCreateFromWorkOrderModal}
+        onStartOperationChange={(startOpId) => {
+          if (!pullWorkOrderDetail?.id) return;
+          void refreshPullWorkOrderReworkPreview(Number(pullWorkOrderDetail.id), startOpId);
+        }}
         onFinish={handleSubmitFromWorkOrder}
       />
 

@@ -22,6 +22,27 @@ function pickString(searchFormValues: Record<string, unknown> | null | undefined
   return typeof v === 'string' && v.trim() ? v.trim() : undefined;
 }
 
+function pickFirstString(
+  searchFormValues: Record<string, unknown> | null | undefined,
+  keys: string[],
+) {
+  for (const key of keys) {
+    const v = pickString(searchFormValues, key);
+    if (v) return v;
+  }
+  return undefined;
+}
+
+function pickFiniteNumber(
+  searchFormValues: Record<string, unknown> | null | undefined,
+  key: string,
+): number | undefined {
+  const v = searchFormValues?.[key];
+  if (v == null || v === '') return undefined;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 function resolveOrderBy(sort?: Record<string, unknown>) {
   const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
   return sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
@@ -521,6 +542,32 @@ export function buildInventoryAlertStatusValueEnum(t: TFunction): Record<string,
   };
 }
 
+export function buildInventoryAlertLevelValueEnum(
+  t: TFunction,
+): Record<string, { text: string; status: 'error' | 'warning' | 'default' }> {
+  return {
+    critical: { text: t('app.kuaizhizao.inventoryAlert.alertLevelCritical'), status: 'error' },
+    warning: { text: t('app.kuaizhizao.inventoryAlert.alertLevelWarning'), status: 'warning' },
+    info: { text: t('app.kuaizhizao.inventoryAlert.alertLevelInfo'), status: 'default' },
+  };
+}
+
+export function inventoryAlertLevelLabel(
+  level: string | null | undefined,
+  t: TFunction,
+): string {
+  const key = String(level ?? '').trim().toLowerCase();
+  return buildInventoryAlertLevelValueEnum(t)[key]?.text ?? (level || '—');
+}
+
+export function inventoryAlertLevelTagColor(level: string | null | undefined): string {
+  const key = String(level ?? '').trim().toLowerCase();
+  if (key === 'critical') return 'error';
+  if (key === 'warning') return 'warning';
+  if (key === 'info') return 'default';
+  return 'warning';
+}
+
 export function buildBackflushRecordStatusValueEnum(t: TFunction): Record<string, { text: string }> {
   return {
     pending: { text: t('app.kuaizhizao.warehouseCommon.statusPending') },
@@ -667,16 +714,97 @@ export function resolveOutboundHubListParams(
     resolveCommonDateRanges(s);
   return {
     order_by: resolveOrderBy(sort),
-    keyword: pickString(s, 'keyword'),
+    // 主体/单号、出库单号列 dataIndex 可能为 delivery_code / picking_code
+    keyword: pickFirstString(s, [
+      'keyword',
+      'delivery_code',
+      'picking_code',
+      'outbound_code',
+      'borrow_code',
+    ]),
     status: typeof s.status === 'string' && s.status && s.status !== 'all' ? s.status : undefined,
     outbound_type: typeof s.outbound_type === 'string' && s.outbound_type ? s.outbound_type : undefined,
     warehouse_id: s.warehouse_id != null && s.warehouse_id !== '' ? Number(s.warehouse_id) : undefined,
+    warehouse_name: pickString(s, 'warehouse_name'),
     customer_name: pickString(s, 'customer_name'),
+    total_quantity: pickFiniteNumber(s, 'total_quantity'),
+    total_items: pickFiniteNumber(s, 'total_items'),
     created_start_date,
     created_end_date,
     updated_start_date,
     updated_end_date,
   };
+}
+
+/** 出库 Hub 合并多源后的字段级筛选（补齐各源 API 未覆盖的条件） */
+export function filterOutboundHubRows(
+  rows: Record<string, unknown>[],
+  params: Record<string, unknown>,
+): Record<string, unknown>[] {
+  const keyword = typeof params.keyword === 'string' ? params.keyword.trim().toLowerCase() : '';
+  const customerName =
+    typeof params.customer_name === 'string' ? params.customer_name.trim().toLowerCase() : '';
+  const warehouseName =
+    typeof params.warehouse_name === 'string' ? params.warehouse_name.trim().toLowerCase() : '';
+  const warehouseId =
+    params.warehouse_id != null && params.warehouse_id !== ''
+      ? Number(params.warehouse_id)
+      : undefined;
+  const totalQuantity =
+    params.total_quantity != null && params.total_quantity !== ''
+      ? Number(params.total_quantity)
+      : undefined;
+  const totalItems =
+    params.total_items != null && params.total_items !== ''
+      ? Number(params.total_items)
+      : undefined;
+
+  return rows.filter((row) => {
+    if (keyword) {
+      const hay = [
+        row.delivery_code,
+        row.picking_code,
+        row.outbound_code,
+        row.borrow_code,
+        row.code,
+        row.customer_name,
+        row.warehouse_name,
+        row.sales_order_code,
+        row.work_order_code,
+        row.source_doc_no,
+        row.deliverer_name,
+        row.picker_name,
+        row.borrower_name,
+      ]
+        .map((x) => String(x ?? '').toLowerCase())
+        .join(' ');
+      if (!hay.includes(keyword)) return false;
+    }
+    if (customerName) {
+      if (!String(row.customer_name ?? '')
+        .toLowerCase()
+        .includes(customerName)) {
+        return false;
+      }
+    }
+    if (warehouseName) {
+      if (!String(row.warehouse_name ?? '')
+        .toLowerCase()
+        .includes(warehouseName)) {
+        return false;
+      }
+    }
+    if (warehouseId != null && Number.isFinite(warehouseId)) {
+      if (Number(row.warehouse_id) !== warehouseId) return false;
+    }
+    if (totalQuantity != null && Number.isFinite(totalQuantity)) {
+      if (Number(row.total_quantity) !== totalQuantity) return false;
+    }
+    if (totalItems != null && Number.isFinite(totalItems)) {
+      if (Number(row.total_items) !== totalItems) return false;
+    }
+    return true;
+  });
 }
 
 export function sortInboundHubRows(rows: Record<string, unknown>[], orderBy?: string) {

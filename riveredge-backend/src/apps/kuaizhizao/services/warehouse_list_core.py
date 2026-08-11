@@ -60,6 +60,27 @@ OTHER_INBOUND_KEYWORD_FIELDS = ["inbound_code", "warehouse_name", "reason_desc",
 OTHER_OUTBOUND_KEYWORD_FIELDS = ["outbound_code", "warehouse_name", "reason_desc", "deliverer_name"]
 MATERIAL_BORROW_KEYWORD_FIELDS = ["borrow_code", "warehouse_name", "borrower_name", "department"]
 MATERIAL_RETURN_KEYWORD_FIELDS = ["return_code", "borrow_code", "warehouse_name", "returner_name"]
+SALES_DELIVERY_KEYWORD_FIELDS = [
+    "delivery_code",
+    "customer_name",
+    "warehouse_name",
+    "sales_order_code",
+    "deliverer_name",
+]
+PRODUCTION_PICKING_KEYWORD_FIELDS = [
+    "picking_code",
+    "work_order_code",
+    "picker_name",
+    "workshop_name",
+]
+SALES_DELIVERY_SORTABLE_FIELDS = frozenset({
+    "delivery_code", "customer_name", "warehouse_name", "status", "delivery_time",
+    "total_quantity", "total_amount", "created_at", "updated_at",
+})
+PRODUCTION_PICKING_SORTABLE_FIELDS = frozenset({
+    "picking_code", "work_order_code", "status", "picking_time",
+    "picker_name", "created_at", "updated_at",
+})
 CUSTOMER_MATERIAL_REGISTRATION_KEYWORD_FIELDS = [
     "registration_code",
     "customer_name",

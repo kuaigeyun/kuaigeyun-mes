@@ -124,7 +124,6 @@ import {
   FormModalTemplate,
   DetailDrawerTemplate,
   DetailDrawerSection,
-  DetailDrawerInlineFullChain,
   MODAL_CONFIG,
   TOUCH_SCREEN_CONFIG,
   type StatCard,
@@ -279,8 +278,10 @@ import {
   getProcessInspectionStatusTagColor,
   getRemainingReportableQuantity,
   getStatusReportingCompleteQuantity,
+  getWorkOrderHeaderQuantitiesFromOperations,
   isOperationEffectivelyCompleted,
   isReportBlockedByUpstreamQc,
+  resolveDefaultReportingQuantityFields,
 } from '../../../utils/workOrderReporting'
 import ReportableQuantityPanel from '../../../components/ReportableQuantityPanel'
 import ReportingInboundWarehouseField from '../../../components/ReportingInboundWarehouseField'
@@ -2173,6 +2174,7 @@ const WorkOrdersPage: React.FC = () => {
   const [currentWorkOrderForRework, setCurrentWorkOrderForRework] = useState<WorkOrder | null>(null)
   const [reworkModalOperations, setReworkModalOperations] = useState<any[]>([])
   const [reworkableQuantity, setReworkableQuantity] = useState<number>(0)
+  const [reworkDefaultStartOpId, setReworkDefaultStartOpId] = useState<number | undefined>()
   const [reworkSubmitLoading, setReworkSubmitLoading] = useState(false)
 
   // 创建工序委外相关状态
@@ -2270,8 +2272,10 @@ const WorkOrdersPage: React.FC = () => {
     const remBase = getRemainingReportableQuantity(quickReportingOperation, qtyBase)
     const rem = convertBaseQtyToProductionDisplay(remBase, quickReportingWorkOrder)
     return {
-      qualified_quantity: rem,
-      unqualified_quantity: 0,
+      ...resolveDefaultReportingQuantityFields(
+        rem,
+        executionConfig?.default_reporting_quantity_mode,
+      ),
       defect_type: undefined,
       defect_reason_text: undefined,
       work_hours: stdH,
@@ -2279,22 +2283,27 @@ const WorkOrdersPage: React.FC = () => {
       producer_mode: 'worker',
       report_team_id: undefined,
     }
-  }, [quickReportingModalVisible, quickReportingWorkOrder, quickReportingOperation])
+  }, [
+    quickReportingModalVisible,
+    quickReportingWorkOrder,
+    quickReportingOperation,
+    executionConfig?.default_reporting_quantity_mode,
+  ])
 
   /** 创建返工单：通过 initialValues 在挂载时填入（避免 destroyOnHidden 下 setFieldsValue 时序问题） */
   const reworkFormInitialValues = useMemo(() => {
     if (!reworkModalVisible || !currentWorkOrderForRework) {
       return undefined
     }
-    const defaultQty =
-      reworkableQuantity > 0 ? Math.min(1, reworkableQuantity) : undefined
+    const defaultQty = reworkableQuantity > 0 ? reworkableQuantity : undefined
     return {
       quantity: defaultQty,
       rework_type: '返工',
       routing_mode: 'DYNAMIC',
       verification_required: false,
+      start_work_order_operation_id: reworkDefaultStartOpId,
     }
-  }, [reworkModalVisible, currentWorkOrderForRework, reworkableQuantity])
+  }, [reworkModalVisible, currentWorkOrderForRework, reworkableQuantity, reworkDefaultStartOpId])
 
   /** 快速报工：解析路线工序列表（用于判断是否末道） */
   useEffect(() => {
@@ -3440,9 +3449,18 @@ const WorkOrdersPage: React.FC = () => {
         quickReportingOperation,
         Number(quickReportingWorkOrder.quantity) || 0
       )
-      f.setFieldValue('qualified_quantity', rem)
+      const remDisplay = convertBaseQtyToProductionDisplay(rem, quickReportingWorkOrder)
+      const fallback = resolveDefaultReportingQuantityFields(
+        remDisplay,
+        executionConfig?.default_reporting_quantity_mode,
+      ).qualified_quantity
+      f.setFieldValue('qualified_quantity', fallback)
     }, 0)
-  }, [quickReportingOperation, quickReportingWorkOrder])
+  }, [
+    quickReportingOperation,
+    quickReportingWorkOrder,
+    executionConfig?.default_reporting_quantity_mode,
+  ])
 
   const handleQuickReportUnqualifiedFocus = useCallback(() => {
     quickReportingFormRef.current?.setFieldValue('unqualified_quantity', null)
@@ -4294,6 +4312,7 @@ const WorkOrdersPage: React.FC = () => {
       try {
         const operations = await workOrderApi.getOperations(record.id!.toString())
         setWorkOrderOperations(operations)
+        setExpandedOperationsMap((prev) => ({ ...prev, [record.id!]: operations }))
       } catch (error) {
         console.error('获取工单工序列表失败:', error)
         setWorkOrderOperations([])
@@ -4803,7 +4822,12 @@ const WorkOrdersPage: React.FC = () => {
   /**
    * 详情列定义
    */
-  const detailColumns: ProDescriptionsItemProps<WorkOrder>[] = [
+  const detailHeaderQuantities = useMemo(
+    () => getWorkOrderHeaderQuantitiesFromOperations(workOrderOperations),
+    [workOrderOperations],
+  );
+
+  const detailColumns: ProDescriptionsItemProps<WorkOrder>[] = useMemo(() => [
     {
       title: t('app.kuaizhizao.workOrder.colCode'),
       dataIndex: 'code',
@@ -4913,17 +4937,17 @@ const WorkOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.workOrder.colCompletedQty'),
       dataIndex: 'completed_quantity',
-      render: text => text || 0,
+      render: (_, record) => detailHeaderQuantities?.completed ?? record.completed_quantity ?? 0,
     },
     {
       title: t('app.kuaizhizao.workOrder.colQualifiedQty'),
       dataIndex: 'qualified_quantity',
-      render: text => text || 0,
+      render: (_, record) => detailHeaderQuantities?.qualified ?? record.qualified_quantity ?? 0,
     },
     {
       title: t('app.kuaizhizao.workOrder.colUnqualifiedQty'),
       dataIndex: 'unqualified_quantity',
-      render: text => text || 0,
+      render: (_, record) => detailHeaderQuantities?.unqualified ?? record.unqualified_quantity ?? 0,
     },
     {
       title: t('app.kuaizhizao.workOrder.colRemarks'),
@@ -4953,7 +4977,7 @@ const WorkOrdersPage: React.FC = () => {
         )
       },
     },
-  ]
+  ], [t, detailHeaderQuantities])
 
   // 批量下达相关状态
   const [batchReleaseModalVisible, setBatchReleaseModalVisible] = useState(false)
@@ -5298,17 +5322,29 @@ const WorkOrdersPage: React.FC = () => {
   /**
    * 处理创建返工单
    */
+  const refreshReworkablePreview = useCallback(
+    async (workOrderId: number, startWorkOrderOperationId?: number) => {
+      const preview = await reworkOrderApi.previewFromWorkOrder(String(workOrderId), {
+        start_work_order_operation_id: startWorkOrderOperationId,
+      })
+      setReworkableQuantity(Number(preview.reworkable_quantity) || 0)
+    },
+    [],
+  )
+
   const handleCreateRework = async (record: WorkOrder) => {
     try {
       const detail = await workOrderApi.get(record.id!.toString())
       const operations = await workOrderApi.getOperations(record.id!.toString())
       setReworkModalOperations(operations || [])
 
-      const existingReworkQty = (record.children || [])
-        .filter((child) => child.row_kind === 'rework' && child.status !== 'cancelled')
-        .reduce((sum, child) => sum + Number(child.quantity || 0), 0)
-      const woQty = Number(detail.quantity || 0)
-      setReworkableQuantity(Math.max(0, woQty - existingReworkQty))
+      const defaultStartOp = (operations || []).find(
+        (op: any) => getOperationQualityMetrics(op).unqualified > 0,
+      )
+      const defaultStartOpId =
+        defaultStartOp?.id != null ? Number(defaultStartOp.id) : undefined
+      setReworkDefaultStartOpId(defaultStartOpId)
+      await refreshReworkablePreview(record.id!, defaultStartOpId)
 
       setCurrentWorkOrderForRework(detail)
       setReworkModalVisible(true)
@@ -5356,6 +5392,7 @@ const WorkOrdersPage: React.FC = () => {
       setCurrentWorkOrderForRework(null)
       setReworkModalOperations([])
       setReworkableQuantity(0)
+      setReworkDefaultStartOpId(undefined)
       actionRef.current?.reload()
     } catch (error: any) {
       messageApi.error(error.message || '创建返工单失败')
@@ -9523,6 +9560,7 @@ const WorkOrdersPage: React.FC = () => {
         onClose={() => {
           setDrawerVisible(false)
           setWorkOrderDetail(null)
+          setWorkOrderOperations([])
           resetWorkOrderDetailFieldValues()
         }}
         dataSource={workOrderDetail || undefined}
@@ -9652,25 +9690,6 @@ const WorkOrdersPage: React.FC = () => {
                           nextStepSuggestions={lifecycle.nextStepSuggestions}
                           hideNextStepSuggestions
                         />
-                        {workOrderDetail.id != null ? (
-                          <DetailDrawerInlineFullChain
-                            documentType="work_order"
-                            documentId={workOrderDetail.id}
-                            active={drawerVisible}
-                            selfDocumentId={workOrderDetail.id}
-                            renderBriefActions={(doc) => (
-                              <WarehouseTraceBriefPrimaryActions
-                                doc={doc}
-                                t={t}
-                                navigate={navigate}
-                                closeDrawer={() => {
-                                  setDrawerVisible(false);
-                                  setWorkOrderDetail(null);
-                                }}
-                              />
-                            )}
-                          />
-                        ) : null}
                       </div>
                     </DetailDrawerSection>
                   )
@@ -9726,6 +9745,27 @@ const WorkOrdersPage: React.FC = () => {
             </Suspense>
           ) : null
         }
+      
+                      traceDocument={
+                        workOrderDetail?.id != null
+                          ? {
+                              documentType: 'work_order',
+                              documentId: workOrderDetail.id,
+                              selfDocumentId: workOrderDetail.id,
+                            renderBriefActions: (doc) => (
+                              <WarehouseTraceBriefPrimaryActions
+                                doc={doc}
+                                t={t}
+                                navigate={navigate}
+                                closeDrawer={() => {
+                                  setDrawerVisible(false);
+                                  setWorkOrderDetail(null);
+                                }}
+                              />
+                            )
+                            }
+                          : undefined
+                      }
       />
 
       <ReworkOrderCreateModal
@@ -9754,6 +9794,11 @@ const WorkOrdersPage: React.FC = () => {
           setCurrentWorkOrderForRework(null)
           setReworkModalOperations([])
           setReworkableQuantity(0)
+          setReworkDefaultStartOpId(undefined)
+        }}
+        onStartOperationChange={(startOpId) => {
+          if (!currentWorkOrderForRework?.id) return
+          void refreshReworkablePreview(currentWorkOrderForRework.id, startOpId)
         }}
         onFinish={handleSubmitRework}
       />

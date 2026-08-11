@@ -219,6 +219,24 @@ function isClickableVisibleAction(node: React.ReactNode): boolean {
   return !p.disabled
 }
 
+/** Menu 项 onClick 传入 MenuInfo（含 domEvent），行内 Button 常写 e.stopPropagation()，须兼容两种调用形态。 */
+function invokeRowActionClick(
+  rawOnClick: unknown,
+  menuInfo?: { domEvent?: React.MouseEvent },
+): void {
+  if (typeof rawOnClick !== 'function') return
+  const handler = rawOnClick as React.MouseEventHandler
+  const domEvent = menuInfo?.domEvent
+  if (domEvent && typeof domEvent.stopPropagation === 'function') {
+    handler(domEvent)
+    return
+  }
+  handler({
+    stopPropagation: () => {},
+    preventDefault: () => {},
+  } as React.MouseEvent)
+}
+
 function toMenuItem(node: React.ReactNode, key: string) {
   const text = normalizeActionLabelText(readNodeText(node)) || '操作'
   const interactive = findInteractiveElement(node)
@@ -228,7 +246,11 @@ function toMenuItem(node: React.ReactNode, key: string) {
 
   if (interactive) {
     const props = (interactive.props || {}) as Record<string, unknown>
-    let onClick = typeof props.onClick === 'function' ? (props.onClick as () => void) : undefined
+    const rawOnClick = props.onClick
+    let onClick =
+      typeof rawOnClick === 'function'
+        ? (info?: { domEvent?: React.MouseEvent }) => invokeRowActionClick(rawOnClick, info)
+        : undefined
     const destructive = tone.mode === 'destructive'
 
     // 折叠到「更多」后，Popconfirm 不会自动触发；转成与 Popconfirm 同构的确认（问句贴图标，避免空正文 Modal）。

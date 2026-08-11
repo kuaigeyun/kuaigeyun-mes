@@ -38,6 +38,8 @@ export type ReworkOrderCreateModalProps = {
   formatOperationOption?: (op: ReworkRouteOperationRow) => { label: string; value: number };
   onClose: () => void;
   onFinish: (values: Record<string, unknown>) => Promise<void>;
+  /** 动态路线起始工序变化时刷新可返工数量（由父组件调 preview API） */
+  onStartOperationChange?: (startWorkOrderOperationId?: number) => void;
 };
 
 const defaultReworkTypeOptions = (t: TFunction): ReworkTypeOption[] => [
@@ -65,12 +67,23 @@ const ReworkOrderCreateModal: React.FC<ReworkOrderCreateModalProps> = ({
   formatOperationOption = defaultFormatOperationOption,
   onClose,
   onFinish,
+  onStartOperationChange,
 }) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
   const [form] = Form.useForm();
   const routingMode = Form.useWatch('routing_mode', form);
+  const startOperationId = Form.useWatch('start_work_order_operation_id', form);
   const typeOptions = reworkTypeOptions ?? defaultReworkTypeOptions(t);
+
+  React.useEffect(() => {
+    if (!open || routingMode !== 'DYNAMIC') return;
+    onStartOperationChange?.(
+      startOperationId != null && startOperationId !== ''
+        ? Number(startOperationId)
+        : undefined,
+    );
+  }, [open, routingMode, startOperationId, onStartOperationChange]);
 
   const operationSelectOptions = useMemo(
     () => operations.map((op) => formatOperationOption(op)),

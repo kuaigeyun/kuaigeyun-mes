@@ -154,25 +154,12 @@ class ScrapRecordService(AppBaseService[ScrapRecord]):
         work_order_id: int,
         work_order: WorkOrder
     ) -> None:
-        """
-        更新工单的不合格数量（从报废记录统计）
+        """报废审批后：重算工单头数量，与末道工序/工序卡口径一致。"""
+        from apps.kuaizhizao.services.reporting_service import ReportingService
 
-        从该工单的所有报废记录中统计报废数量，更新工单的unqualified_quantity字段。
-        统计所有confirmed状态的报废记录，不包括cancelled状态。
-        """
-        # 查询该工单的所有报废记录（不包括cancelled状态和已删除的）
-        scrap_records = await ScrapRecord.filter(
-            tenant_id=tenant_id,
-            work_order_id=work_order_id,
-            deleted_at__isnull=True,
-            status='confirmed'  # 只统计已确认的报废记录
-        ).all()
-
-        # 累加报废数量
-        total_scrap_quantity = sum(r.scrap_quantity for r in scrap_records)
-
-        # 更新工单的不合格数量
-        work_order.unqualified_quantity = total_scrap_quantity
+        await ReportingService()._sync_work_order_header_quantities_from_last_operation(
+            tenant_id, work_order
+        )
 
     async def get_scrap_statistics(
         self,

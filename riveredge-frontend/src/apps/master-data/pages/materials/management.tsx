@@ -326,6 +326,7 @@ import {
   buildMaterialDefaultsImportColumnIndex,
   parseMaterialDefaultsImportRows,
 } from '../../utils/materialDefaultsImport'
+import { pickMaterialMainCode, resolveMasterByMainCode } from '../../utils/materialImportResolve'
 import {
   buildMaterialInspectionImportColumnIndex,
   parseMaterialInspectionImportRows,
@@ -2054,7 +2055,7 @@ const MaterialsManagementPage: React.FC = () => {
           {
             field: 'defaultTaxRate',
             labelKey: 'app.master-data.defaults.defaultTaxRate',
-            aliases: ['默认税率', '税率'],
+            aliases: ['默认税率', '税率', '默认税率(%)'],
           },
           {
             field: 'defaultWarehouseCodes',

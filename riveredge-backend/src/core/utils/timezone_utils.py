@@ -129,6 +129,26 @@ def resolve_business_datetime(value: datetime | None = None) -> datetime:
     return coerced
 
 
+def site_period_bounds_utc(period: str) -> tuple[datetime, datetime]:
+    """站点日历月 [start, end) 转为 UTC aware，供报工/绩效按周期聚合。"""
+    year, month = map(int, period.split("-"))
+    tz = ZoneInfo(site_timezone_name())
+    start = datetime(year, month, 1, tzinfo=tz)
+    if month == 12:
+        end = datetime(year + 1, 1, 1, tzinfo=tz)
+    else:
+        end = datetime(year, month + 1, 1, tzinfo=tz)
+    return start.astimezone(timezone.utc), end.astimezone(timezone.utc)
+
+
+def site_day_bounds_utc(day: date) -> tuple[datetime, datetime]:
+    """站点日历日 [start, end) 转为 UTC aware，供报表按日筛选。"""
+    tz = ZoneInfo(site_timezone_name())
+    start = datetime(day.year, day.month, day.day, tzinfo=tz)
+    end = start + timedelta(days=1)
+    return start.astimezone(timezone.utc), end.astimezone(timezone.utc)
+
+
 def to_api_isoformat(value: datetime | date | None) -> str | None:
     """
     API 输出统一格式：
@@ -157,5 +177,7 @@ __all__ = [
     "to_site_date",
     "coerce_business_datetime_to_utc",
     "resolve_business_datetime",
+    "site_period_bounds_utc",
+    "site_day_bounds_utc",
     "to_api_isoformat",
 ]

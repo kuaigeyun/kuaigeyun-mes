@@ -258,16 +258,21 @@ const RollingSchedulingPage: React.FC = () => {
   const closeSummary = closePlan?.close_summary;
   const capacity = targetPlan?.capacity_advisory;
 
+  const nowrapHeaderCell = () => ({ style: { whiteSpace: 'nowrap' as const } });
+
   const columns = useMemo(
     () => [
       {
         title: t('app.kuaizhizao.rollingScheduling.col.sequence'),
-        width: 48,
+        width: 52,
+        onHeaderCell: nowrapHeaderCell,
         render: (_: unknown, __: RollingScheduleLine, index: number) => index + 1,
       },
       {
         title: t('app.kuaizhizao.rollingScheduling.col.workOrder'),
         dataIndex: 'work_order_code',
+        minWidth: 128,
+        onHeaderCell: nowrapHeaderCell,
         render: (_: unknown, row: RollingScheduleLine) => (
           <Space direction="vertical" size={0}>
             <Typography.Text strong>{row.work_order_code}</Typography.Text>
@@ -280,19 +285,22 @@ const RollingSchedulingPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.rollingScheduling.col.source'),
         dataIndex: 'source_type',
-        width: 72,
+        width: 80,
+        onHeaderCell: nowrapHeaderCell,
         render: (v: string) => <Tag>{sourceLabels[v as keyof typeof sourceLabels] || v}</Tag>,
       },
       {
         title: t('app.kuaizhizao.rollingScheduling.col.readiness'),
         dataIndex: 'readiness_rate_snapshot',
-        width: 72,
+        width: 76,
+        onHeaderCell: nowrapHeaderCell,
         render: (v: number | string | null) => (v != null ? `${Number(v).toFixed(0)}%` : '—'),
       },
       {
         title: t('app.kuaizhizao.rollingScheduling.col.score'),
         dataIndex: 'scheduling_score',
-        width: 64,
+        width: 72,
+        onHeaderCell: nowrapHeaderCell,
         render: (v: number | null, row: RollingScheduleLine) =>
           v != null ? (
             <Space size={4}>
@@ -306,7 +314,8 @@ const RollingSchedulingPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.rollingScheduling.col.diagnostics'),
         dataIndex: 'scheduling_diagnostics',
-        width: 160,
+        width: 168,
+        onHeaderCell: nowrapHeaderCell,
         render: (_: unknown, row: RollingScheduleLine) => {
           const items = row.scheduling_diagnostics ?? [];
           if (!items.length) return '—';
@@ -325,12 +334,14 @@ const RollingSchedulingPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.rollingScheduling.col.status'),
         dataIndex: 'work_order_status',
-        width: 80,
+        width: 72,
+        onHeaderCell: nowrapHeaderCell,
         render: (v: string) => translateWorkOrderLifecycleStatus(t, v),
       },
       {
         title: t('app.kuaizhizao.rollingScheduling.col.actions'),
         width: 120,
+        onHeaderCell: nowrapHeaderCell,
         render: (_: unknown, row: RollingScheduleLine, index: number) =>
           targetPlan?.status === 'draft' && perms.canUpdate ? (
             <Space size={4}>
@@ -493,7 +504,7 @@ const RollingSchedulingPage: React.FC = () => {
                   ? t('app.kuaizhizao.rollingScheduling.emptyGenerated')
                   : t('app.kuaizhizao.rollingScheduling.emptyGenerateFirst'),
               }}
-              scroll={{ y: 420 }}
+              scroll={{ x: 'max-content', y: 420 }}
             />
             {targetPlan && lines.length === 0 ? (
               <Alert

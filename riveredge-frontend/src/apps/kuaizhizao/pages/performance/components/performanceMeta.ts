@@ -153,7 +153,7 @@ export function buildPerformanceEfficiencyReportColumns(t: TFunction): ProColumn
       align: 'right',
       // 兼容列持久化旧 key total_qty 与后端双字段
       render: (_, row) => {
-        const v = row?.total_pieces ?? row?.total_qty;
+        const v = row?.total_pieces ?? row?.total_qty ?? row?.qualified_quantity;
         return v == null || v === '' ? '-' : v;
       },
     },

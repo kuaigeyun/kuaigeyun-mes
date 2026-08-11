@@ -20,7 +20,7 @@ function getDateFormatFromSiteSetting(): string {
 }
 
 /** 从站点设置获取时区（配置真源；未下发时用与后端一致的默认，禁止业务侧再写死） */
-function getTimezoneFromSiteSetting(): string {
+export function getTimezoneFromSiteSetting(): string {
   const tz = useConfigStore.getState().configs?.timezone;
   return (tz && String(tz).trim()) || 'Asia/Shanghai';
 }

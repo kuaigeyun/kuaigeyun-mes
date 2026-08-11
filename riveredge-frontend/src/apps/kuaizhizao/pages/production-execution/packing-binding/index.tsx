@@ -47,7 +47,7 @@ import {
   ListPageTemplate,
   FormModalTemplate,
   DetailDrawerTemplate,
-  DetailDrawerSection, DetailDrawerInlineFullChain,
+  DetailDrawerSection,
   MODAL_CONFIG,
   DRAWER_CONFIG,
   type StatCard,
@@ -76,6 +76,9 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+
+/** 与后端 DECIMAL(12,2) 一致 */
+const MAX_PACKING_QUANTITY = 9999999999.99;
 
 interface PackingBinding {
   id?: number;
@@ -236,6 +239,31 @@ const PB_STAT_SPARK_3 = [1, 2, 1, 2, 1, 2, 2];
 
 const PB_RESOURCE = 'kuaizhizao:production-execution-packing-binding';
 
+function buildPackingQuantityRules(t: (key: string, options?: Record<string, unknown>) => string, required = true) {
+  const rules: Array<{ required?: boolean; message?: string; validator?: (_: unknown, value: number) => Promise<void> }> = [];
+  if (required) {
+    rules.push({ required: true, message: t('app.kuaizhizao.packingBinding.ruleEnterPackingQty') });
+  }
+  rules.push({
+    validator: (_rule, value) => {
+      if (value == null || value === '') {
+        return Promise.resolve();
+      }
+      const n = Number(value);
+      if (!Number.isFinite(n) || n <= 0) {
+        return Promise.reject(new Error(t('app.kuaizhizao.packingBinding.rulePackingQtyPositive')));
+      }
+      if (n > MAX_PACKING_QUANTITY) {
+        return Promise.reject(
+          new Error(t('app.kuaizhizao.packingBinding.rulePackingQtyMax', { max: MAX_PACKING_QUANTITY })),
+        );
+      }
+      return Promise.resolve();
+    },
+  });
+  return rules;
+}
+
 const PackingBindingPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -274,6 +302,8 @@ const PackingBindingPage: React.FC = () => {
     },
     [t],
   );
+
+  const packingQuantityRules = useMemo(() => buildPackingQuantityRules(t), [t]);
 
   const bindingSourceTag = useCallback(
     (record: PackingBinding) => {
@@ -1261,9 +1291,10 @@ const PackingBindingPage: React.FC = () => {
           name="packing_quantity"
           label={t('app.kuaizhizao.packingBinding.fieldPackingQty')}
           placeholder={t('app.kuaizhizao.packingBinding.placeholderPackingQty')}
-          rules={[{ required: true, message: t('app.kuaizhizao.packingBinding.ruleEnterPackingQty') }]}
-          min={0.000001}
-          fieldProps={{ precision: 6 }}
+          rules={packingQuantityRules}
+          min={0.01}
+          max={MAX_PACKING_QUANTITY}
+          fieldProps={{ precision: 2, step: 0.01 }}
         />
         <ProFormText name="box_no" label={t('app.kuaizhizao.packingBinding.fieldBoxNo')} />
         <ProFormSelect
@@ -1301,9 +1332,10 @@ const PackingBindingPage: React.FC = () => {
           name="packing_quantity"
           label={t('app.kuaizhizao.packingBinding.fieldPackingQty')}
           placeholder={t('app.kuaizhizao.packingBinding.placeholderPackingQty')}
-          rules={[{ required: true, message: t('app.kuaizhizao.packingBinding.ruleEnterPackingQty') }]}
-          min={0}
-          fieldProps={{ precision: 2 }}
+          rules={packingQuantityRules}
+          min={0.01}
+          max={MAX_PACKING_QUANTITY}
+          fieldProps={{ precision: 2, step: 0.01 }}
         />
         <ProFormText
           name="box_no"
@@ -1362,25 +1394,7 @@ const PackingBindingPage: React.FC = () => {
                       />
                     );
                   })()}
-                  {currentBinding.id != null ? (
-                    <DetailDrawerInlineFullChain
-                      documentType='packing_binding'
-                      documentId={currentBinding.id}
-                      active={detailDrawerVisible}
-                      selfDocumentId={currentBinding.id}
-                      renderBriefActions={(doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailDrawerVisible(false);
-                      setCurrentBinding(null);
-                    }}
-                  />
-                )}
-                    />
-                  ) : null}
+                  
                 </div>
               </DetailDrawerSection>
 
@@ -1456,6 +1470,27 @@ const PackingBindingPage: React.FC = () => {
             </>
           )
         }
+      
+                    traceDocument={
+                      currentBinding?.id != null
+                        ? {
+                            documentType: 'packing_binding',
+                            documentId: currentBinding.id,
+                            selfDocumentId: currentBinding.id,
+                          renderBriefActions: (doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDetailDrawerVisible(false);
+                      setCurrentBinding(null);
+                    }}
+                  />
+                )
+                          }
+                        : undefined
+                    }
       />
 
       <Modal

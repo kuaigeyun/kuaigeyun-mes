@@ -61,7 +61,7 @@ import {
 } from '../../../../master-data/utils/resolve-partner-material-price';
 import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
 import { parseVariantAttributesValue } from '../../../../master-data/components/VariantAttributeFields';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DRAWER_CONFIG, MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET, PAGE_SPACING, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET, PAGE_SPACING, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE } from '../../../../../components/layout-templates';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
@@ -95,7 +95,10 @@ import {
 } from '../../../services/quotation';
 import { getSalesOrder, type SalesOrder } from '../../../services/sales-order';
 import { salesContractApi } from '../../../services/sales-contract';
-import { SalesOrderDetailBody } from '../sales-orders/components/SalesOrderDetailBody';
+import {
+  SalesOrderDetailBody,
+  renderSalesOrderTraceBriefActions,
+} from '../sales-orders/components/SalesOrderDetailBody';
 import { getQuotationLifecycle, buildQuotationLifecycleValueEnum, resolveQuotationListLifecycleParams } from '../../../utils/quotationLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import {
@@ -4126,25 +4129,6 @@ const QuotationsPage: React.FC = () => {
                         hideNextStepSuggestions={hideQuotationStepperNextRow}
                       />
                     ) : null}
-                    {quotationDetail.id != null ? (
-                      <DetailDrawerInlineFullChain
-                      documentType="quotation"
-                      documentId={quotationDetail.id}
-                      active={detailDrawerVisible}
-                      selfDocumentId={quotationDetail.id}
-                      renderBriefActions={(doc) =>
-                        doc.document_type === 'sales_order' ? (
-                          <Button
-                            type="primary"
-                            size="small"
-                            onClick={() => openLinkedSalesOrderDrawer(doc.document_id)}
-                          >
-                            {t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
-                          </Button>
-                        ) : null
-                      }
-                    />
-                  ) : null}
                   </div>
                 );
               })()
@@ -4296,6 +4280,26 @@ const QuotationsPage: React.FC = () => {
             </>
           ) : undefined
         }
+      
+        traceDocument={
+          quotationDetail?.id != null
+            ? {
+                documentType: 'quotation',
+                documentId: quotationDetail.id,
+                selfDocumentId: quotationDetail.id,
+              renderBriefActions: (doc) =>
+                        doc.document_type === 'sales_order' ? (
+                          <Button
+                            type="primary"
+                            size="small"
+                            onClick={() => openLinkedSalesOrderDrawer(doc.document_id)}
+                          >
+                            {t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
+                          </Button>
+                        ) : null
+              }
+            : undefined
+        }
       />
 
       <Modal
@@ -4413,6 +4417,21 @@ const QuotationsPage: React.FC = () => {
               <Spin />
             </div>
           ) : null
+        }
+        traceDocument={
+          linkedSalesOrder?.id != null
+            ? {
+                documentType: 'sales_order',
+                documentId: linkedSalesOrder.id,
+                selfDocumentId: linkedSalesOrder.id,
+                renderBriefActions: (doc) =>
+                  renderSalesOrderTraceBriefActions(doc, {
+                    t,
+                    navigate,
+                    closeDrawer: closeLinkedSalesOrderDrawer,
+                  }),
+              }
+            : undefined
         }
       />
 

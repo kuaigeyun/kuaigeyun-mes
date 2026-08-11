@@ -10,7 +10,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import type { DescriptionsProps } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   ActionType,
@@ -72,7 +72,7 @@ import {
   buildIncomingPurchaseReceiptPullColumns,
   type QualityPullCandidateBase,
 } from '../components/qualityPullQueryColumns';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -223,10 +223,13 @@ interface IncomingInspection {
 
 const IncomingInspectionPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { t, i18n } = useTranslation();
   const pushToPurchaseReturnAction = resolveKuaizhizaoDocumentAction(t, 'purchase_return.pull_from_incoming_inspection');
   const pullFromPurchaseReceiptAction = resolveKuaizhizaoDocumentAction(t, 'incoming_inspection.pull_from_purchase_receipt');
   const pullFromCustomerMaterialAction = resolveKuaizhizaoDocumentAction(t, 'incoming_inspection.pull_from_customer_material_registration');
+  const urlListFiltersRef = useRef<{ purchase_receipt_id?: number }>({});
+  const deepLinkOpenedRef = useRef(false);
 
   const importDictOptions = useImportDictionaryOptions(['DISPOSAL_METHOD']);
   const disposalImportOptions = importDictOptions.DISPOSAL_METHOD ?? [];
@@ -490,6 +493,41 @@ const IncomingInspectionPage: React.FC = () => {
       messageApi.error(t('app.kuaizhizao.quality.common.messages.loadDetailFailed'));
     }
   };
+
+  // URL 深链：入库确认「前往来料检验」带 purchase_receipt_id / incoming_inspection_id
+  useEffect(() => {
+    if (deepLinkOpenedRef.current) return;
+    const receiptId = searchParams.get('purchase_receipt_id');
+    const inspId = searchParams.get('incoming_inspection_id') || searchParams.get('id');
+
+    if (inspId && /^\d+$/.test(inspId)) {
+      deepLinkOpenedRef.current = true;
+      void (async () => {
+        try {
+          const detail = await qualityApi.incomingInspection.get(inspId);
+          if (detail.purchase_receipt_id != null) {
+            urlListFiltersRef.current = { purchase_receipt_id: Number(detail.purchase_receipt_id) };
+          }
+          setInspectionDetail(detail);
+          setDetailVisible(true);
+          setIiTrackingRefreshKey((k) => k + 1);
+          if (detail.id != null) {
+            await loadInspectionFieldValuesForDetail(detail.id);
+          }
+          actionRef.current?.reload();
+        } catch {
+          messageApi.error(t('app.kuaizhizao.quality.common.messages.loadDetailFailed'));
+        }
+      })();
+      return;
+    }
+
+    if (receiptId && /^\d+$/.test(receiptId)) {
+      deepLinkOpenedRef.current = true;
+      urlListFiltersRef.current = { purchase_receipt_id: Number(receiptId) };
+      actionRef.current?.reload();
+    }
+  }, [searchParams, messageApi, t, loadInspectionFieldValuesForDetail]);
 
   // 处理批量导入（UniTable 内置）
   const handleImport = async (data: any[][]) => {
@@ -1035,7 +1073,8 @@ const IncomingInspectionPage: React.FC = () => {
     );
     if (gates.createDefect.allowed) {
       nodes.push(
-        <Button {...rowActionKind('create')}
+        <Button
+          {...rowActionKind('skip')}
           key="defect"
           size="small"
           type="link"
@@ -1223,6 +1262,7 @@ const IncomingInspectionPage: React.FC = () => {
               skip: (params.current! - 1) * params.pageSize!,
               limit: params.pageSize,
               ...listParams,
+              ...urlListFiltersRef.current,
             });
             const { data: raw, total } = normalizeQualityInspectionListResponse(response);
             const data = await enrichInspectionRecordsWithCustomFields(raw as IncomingInspection[]);
@@ -1482,25 +1522,7 @@ const IncomingInspectionPage: React.FC = () => {
                       />
                     );
                   })()}
-                    {inspectionDetail.id != null ? (
-                      <DetailDrawerInlineFullChain
-                      documentType='incoming_inspection'
-                      documentId={inspectionDetail.id}
-                      active={detailVisible}
-                      selfDocumentId={inspectionDetail.id}
-                      renderBriefActions={(doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailVisible(false);
-                      setInspectionDetail(null);
-                    }}
-                  />
-                )}
-                    />
-                  ) : null}
+                    
                 </div>
               </DetailDrawerSection>
 
@@ -1534,6 +1556,27 @@ const IncomingInspectionPage: React.FC = () => {
             </>
           ) : null
         }
+      
+                        traceDocument={
+                          inspectionDetail?.id != null
+                            ? {
+                                documentType: 'incoming_inspection',
+                                documentId: inspectionDetail.id,
+                                selfDocumentId: inspectionDetail.id,
+                              renderBriefActions: (doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDetailVisible(false);
+                      setInspectionDetail(null);
+                    }}
+                  />
+                )
+                              }
+                            : undefined
+                        }
       />
 
       <UniPullQueryModal<PullSourceCandidate>

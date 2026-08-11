@@ -1190,37 +1190,80 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             if max_push <= 0:
                 raise BusinessLogicError("不合格数量已全部下推采购退货，无可下推数量")
 
-            from apps.kuaizhizao.services.warehouse_service import PurchaseReturnService
-            from apps.kuaizhizao.schemas.warehouse import PurchaseReturnCreate, PurchaseReturnItemCreate
-            
-            return_svc = PurchaseReturnService()
-            
-            # 生成采购退货单
-            return_data = PurchaseReturnCreate(
-                supplier_id=inspection.supplier_id,
-                supplier_name=inspection.supplier_name,
-                purchase_receipt_id=inspection.purchase_receipt_id,
-                purchase_receipt_code=inspection.purchase_receipt_code,
-                return_date=to_site_date(resolve_business_datetime()),
-                status="待退项",
-                notes=f"由来料检验单 {inspection.inspection_code} 不合格项自动生成"
+            from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+            from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+            from apps.kuaizhizao.services.warehouse_service import (
+                PurchaseReturnService,
+                _resolve_warehouse_name_by_id,
             )
-            
+            from apps.kuaizhizao.schemas.warehouse import PurchaseReturnCreate, PurchaseReturnItemCreate
+
+            if not inspection.purchase_receipt_id:
+                raise BusinessLogicError("来料检验单未关联采购入库单，无法下推采购退货单")
+
+            receipt = await PurchaseReceipt.get_or_none(
+                tenant_id=tenant_id,
+                id=int(inspection.purchase_receipt_id),
+                deleted_at__isnull=True,
+            )
+            if not receipt:
+                raise NotFoundError(f"采购入库单不存在: {inspection.purchase_receipt_id}")
+
+            receipt_item = await PurchaseReceiptItem.filter(
+                tenant_id=tenant_id,
+                receipt_id=receipt.id,
+                material_id=inspection.material_id,
+                deleted_at__isnull=True,
+            ).order_by("id").first()
+
+            unit_price = float(receipt_item.unit_price or 0) if receipt_item else 0.0
+            total_amount = float(max_push) * unit_price
+
+            supplier_id = inspection.supplier_id or receipt.supplier_id
+            supplier_name = str(inspection.supplier_name or receipt.supplier_name or "").strip()
+            if not supplier_id or not supplier_name:
+                raise BusinessLogicError("来料检验单缺少供应商信息，无法下推采购退货单")
+
+            warehouse_id = int(receipt.warehouse_id)
+            warehouse_name = await _resolve_warehouse_name_by_id(
+                tenant_id, warehouse_id, receipt.warehouse_name
+            )
+
+            defect_reason = str(inspection.nonconformance_reason or "质量检验不合格").strip()
             item_data = PurchaseReturnItemCreate(
+                purchase_receipt_item_id=receipt_item.id if receipt_item else None,
                 material_id=inspection.material_id,
                 material_code=inspection.material_code,
                 material_name=inspection.material_name,
+                material_spec=getattr(inspection, "material_spec", None),
                 material_unit=inspection.material_unit or "个",
                 return_quantity=max_push,
-                reason=inspection.nonconformance_reason or "质量检验不合格",
-                batch_number=getattr(inspection, "batch_number", None)
+                unit_price=unit_price,
+                total_amount=total_amount,
+                notes=defect_reason,
             )
-            
+
+            return_svc = PurchaseReturnService()
+            return_data = PurchaseReturnCreate(
+                purchase_receipt_id=receipt.id,
+                purchase_receipt_code=receipt.receipt_code,
+                purchase_order_id=receipt.purchase_order_id,
+                purchase_order_code=receipt.purchase_order_code,
+                supplier_id=int(supplier_id),
+                supplier_name=supplier_name,
+                warehouse_id=warehouse_id,
+                warehouse_name=warehouse_name,
+                return_reason=defect_reason,
+                return_type="质量问题",
+                status="待退货",
+                notes=f"由来料检验单 {inspection.inspection_code} 不合格项自动生成",
+                items=[item_data],
+            )
+
             ret_bill = await return_svc.create_purchase_return(
                 tenant_id=tenant_id,
                 return_data=return_data,
                 created_by=created_by,
-                items=[item_data]
             )
             
             # 建立 质检 -> 采购退货单 的关联
@@ -1514,25 +1557,29 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             pending_inspections.append(IncomingInspectionResponse.model_validate(i))
 
         all_iqc_passed = (not requires_iqc) or all(passed_by_material.get(mid) for mid in needs_qc_mids)
-        can_confirm_inbound = all_iqc_passed
+        # 门禁关闭：可确认入库（行上仍展示检验进度，便于对照）
+        can_confirm_inbound = (not gate_enabled) or all_iqc_passed
         message: Optional[str] = None
-        if requires_iqc and not all_iqc_passed:
+        if gate_enabled and requires_iqc and not all_iqc_passed:
             if not inspections:
-                message = (
-                    "已启用「收货前必须来料检验」，请先创建并完成来料检验，检验合格后再确认入库"
-                    if gate_enabled
-                    else "请先创建并完成来料检验，检验合格后再确认入库"
-                )
-            elif gate_enabled:
+                message = "已启用「收货前必须来料检验」，请先创建并完成来料检验，检验合格后再确认入库"
+            else:
                 message = (
                     "已启用「收货前必须来料检验」，相关物料的来料检验须合格"
                     "（需审核时须审核通过）后才能确认入库"
                 )
-            else:
-                message = "相关物料须完成来料检验并合格后方可确认入库"
 
+        # 同物料多张检验单时优先已执行/较新的，避免误挂未检草稿
+        _conducted = frozenset({"已检验", "已审核"})
         inspection_by_material: Dict[int, IncomingInspection] = {}
-        for inspection in inspections:
+        for inspection in sorted(
+            inspections,
+            key=lambda row: (
+                0 if str(getattr(row, "status", "") or "").strip() in _conducted else 1,
+                -(getattr(row, "updated_at", None).timestamp() if getattr(row, "updated_at", None) else 0),
+                -int(getattr(row, "id", 0) or 0),
+            ),
+        ):
             mid = getattr(inspection, "material_id", None)
             if mid and int(mid) not in inspection_by_material:
                 inspection_by_material[int(mid)] = inspection
@@ -1582,7 +1629,8 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     quality_status=getattr(linked, "quality_status", None) if linked else None,
                     review_status=getattr(linked, "review_status", None) if linked else None,
                     passed=passed,
-                    can_inbound=passed,
+                    # 行「可入库」：门禁关闭时可确认；门禁开启须检验合格
+                    can_inbound=(not gate_enabled) or passed,
                 )
             )
 
@@ -1764,22 +1812,16 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             pending_inspections.append(IncomingInspectionResponse.model_validate(i))
 
         all_iqc_passed = (not requires_iqc) or all(passed_by_material.get(mid) for mid in needs_qc_mids)
-        can_confirm_inbound = all_iqc_passed
+        can_confirm_inbound = (not gate_enabled) or all_iqc_passed
         message: Optional[str] = None
-        if requires_iqc and not all_iqc_passed:
+        if gate_enabled and requires_iqc and not all_iqc_passed:
             if not inspections:
-                message = (
-                    "已启用「代工来料入库前必须来料检验」，请先创建并完成来料检验，检验合格后再确认入库"
-                    if gate_enabled
-                    else "请先创建并完成来料检验，检验合格后再确认入库"
-                )
-            elif gate_enabled:
+                message = "已启用「代工来料入库前必须来料检验」，请先创建并完成来料检验，检验合格后再确认入库"
+            else:
                 message = (
                     "已启用「代工来料入库前必须来料检验」，相关物料的来料检验须合格"
                     "（需审核时须审核通过）后才能确认入库"
                 )
-            else:
-                message = "相关物料须完成来料检验并合格后方可确认入库"
 
         inspection_by_material: Dict[int, IncomingInspection] = {}
         for inspection in inspections:

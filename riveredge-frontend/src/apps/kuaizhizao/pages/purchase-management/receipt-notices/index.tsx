@@ -52,7 +52,7 @@ import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
-  DetailDrawerSection, DetailDrawerInlineFullChain,
+  DetailDrawerSection,
   DetailDrawerActions,
   FormModalTemplate,
   DRAWER_CONFIG,
@@ -1917,25 +1917,7 @@ const ReceiptNoticesPage: React.FC = () => {
                       />
                     );
                   })()}
-                  {noticeDetail.id != null ? (
-                    <DetailDrawerInlineFullChain
-                      documentType='receipt_notice'
-                      documentId={noticeDetail.id}
-                      active={detailDrawerVisible}
-                      selfDocumentId={noticeDetail.id}
-                      renderBriefActions={(doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailDrawerVisible(false);
-                      setNoticeDetail(null);
-                    }}
-                  />
-                )}
-                    />
-                  ) : null}
+                  
                 </div>
               </DetailDrawerSection>
 
@@ -1986,6 +1968,27 @@ const ReceiptNoticesPage: React.FC = () => {
             </>
           )
         }
+      
+                      traceDocument={
+                        noticeDetail?.id != null
+                          ? {
+                              documentType: 'receipt_notice',
+                              documentId: noticeDetail.id,
+                              selfDocumentId: noticeDetail.id,
+                            renderBriefActions: (doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
+                      setDetailDrawerVisible(false);
+                      setNoticeDetail(null);
+                    }}
+                  />
+                )
+                            }
+                          : undefined
+                      }
       />
 
       <FormModalTemplate

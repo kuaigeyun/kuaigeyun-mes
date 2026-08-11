@@ -38,7 +38,7 @@ const LazyUniImport = lazy(() =>
 import type { Material } from '../../../../master-data/types/material';
 import { DocumentAmountSummaryWatch } from '../../../components/document-amount-summary/DocumentAmountSummary';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, DetailDrawerSection } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
@@ -2001,25 +2001,7 @@ const ShipmentNoticesPage: React.FC = () => {
                       />
                     );
                   })()}
-                  {noticeDetail.id != null ? (
-                    <DetailDrawerInlineFullChain
-                      documentType="shipment_notice"
-                      documentId={noticeDetail.id}
-                      active={detailDrawerVisible}
-                      selfDocumentId={noticeDetail.id}
-                      renderBriefActions={(doc) => (
-                        <WarehouseTraceBriefPrimaryActions
-                          doc={doc}
-                          t={t}
-                          navigate={navigate}
-                          closeDrawer={() => {
-                            setDetailDrawerVisible(false);
-                            setNoticeDetail(null);
-                          }}
-                        />
-                      )}
-                    />
-                  ) : null}
+                  
                 </div>
               </DetailDrawerSection>
 
@@ -2077,6 +2059,27 @@ const ShipmentNoticesPage: React.FC = () => {
             </>
           ) : null
         }
+      
+                    traceDocument={
+                      noticeDetail?.id != null
+                        ? {
+                            documentType: 'shipment_notice',
+                            documentId: noticeDetail.id,
+                            selfDocumentId: noticeDetail.id,
+                          renderBriefActions: (doc) => (
+                        <WarehouseTraceBriefPrimaryActions
+                          doc={doc}
+                          t={t}
+                          navigate={navigate}
+                          closeDrawer={() => {
+                            setDetailDrawerVisible(false);
+                            setNoticeDetail(null);
+                          }}
+                        />
+                      )
+                          }
+                        : undefined
+                    }
       />
 
       <FormModalTemplate

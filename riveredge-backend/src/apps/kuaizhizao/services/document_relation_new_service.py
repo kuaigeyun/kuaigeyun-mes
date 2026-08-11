@@ -515,7 +515,25 @@ class DocumentRelationNewService:
         if direction in ["upstream", "both"]:
             upstream_chain = await self._apply_work_order_reporting_timeline(tenant_id, upstream_chain)
         if direction in ["downstream", "both"]:
-            downstream_chain = await self._apply_work_order_reporting_timeline(tenant_id, downstream_chain)
+            # 根单据是工单时，downstream_chain 是「工单的直接下游」扁平列表，
+            # 其中不含 work_order 节点本身；须把根工单包一层再合并报工，否则每条
+            # reporting_record 会作为兄弟节点铺开，全链路图出现密集平行连线。
+            if document_type == "work_order":
+                synth_root = DocumentTraceNode(
+                    document_type="work_order",
+                    document_id=document_id,
+                    document_code=root_code,
+                    document_name=root_name,
+                    created_at=root_created_at,
+                    level=0,
+                    children=downstream_chain,
+                )
+                merged_root = await self._transform_reporting_timeline_node(tenant_id, synth_root)
+                downstream_chain = merged_root.children
+            else:
+                downstream_chain = await self._apply_work_order_reporting_timeline(
+                    tenant_id, downstream_chain
+                )
 
         return DocumentTraceResponse(
             document_type=document_type,

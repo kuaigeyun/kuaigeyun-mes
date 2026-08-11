@@ -16,6 +16,8 @@ from tortoise.expressions import Q
 
 from loguru import logger
 
+from apps.master_data.constants.batch_quality_status import QUALIFIED
+
 
 def _decimal_or_zero(v: Any) -> Decimal:
     if v is None:
@@ -375,6 +377,7 @@ async def get_material_inventory_info(
             material_id=material_id,
             deleted_at__isnull=True,
             quantity__gt=0,
+            quality_status=QUALIFIED,
         ).filter(~Q(status__in=["out_stock", "scrapped", "expired"]))
         if ownership_type:
             batch_query = batch_query.filter(ownership_type=ownership_type)
@@ -907,6 +910,7 @@ async def get_outbound_available_quantity(
         deleted_at__isnull=True,
         status="in_stock",
         quantity__gt=0,
+        quality_status=QUALIFIED,
         **own,
     ).filter(Q(expiry_date__isnull=True) | Q(expiry_date__gte=today))
     if use_specific_batch:

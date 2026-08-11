@@ -1347,6 +1347,12 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
 
     async def list_production_pickings(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[ProductionPickingListResponse]:
         """获取生产领料单列表"""
+        from apps.kuaizhizao.services.warehouse_list_core import (
+            PRODUCTION_PICKING_KEYWORD_FIELDS,
+            PRODUCTION_PICKING_SORTABLE_FIELDS,
+            apply_warehouse_doc_list_filters,
+        )
+
         query = ProductionPicking.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         # 应用过滤条件
@@ -1354,8 +1360,37 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             query = query.filter(status=filters['status'])
         if filters.get('work_order_id'):
             query = query.filter(work_order_id=filters['work_order_id'])
+        if filters.get("warehouse_id"):
+            wh_picking_ids = await ProductionPickingItem.filter(
+                tenant_id=tenant_id,
+                warehouse_id=filters["warehouse_id"],
+            ).values_list("picking_id", flat=True)
+            query = query.filter(id__in=list({int(x) for x in wh_picking_ids}))
+        warehouse_name = (filters.get("warehouse_name") or "").strip()
+        if warehouse_name:
+            wh_picking_ids = await ProductionPickingItem.filter(
+                tenant_id=tenant_id,
+                warehouse_name__icontains=warehouse_name,
+            ).values_list("picking_id", flat=True)
+            query = query.filter(id__in=list({int(x) for x in wh_picking_ids}))
 
-        pickings = await query.offset(skip).limit(limit).order_by('-created_at')
+        query, order_clause = apply_warehouse_doc_list_filters(
+            query,
+            keyword=filters.get("keyword"),
+            search=filters.get("search"),
+            order_by=filters.get("order_by"),
+            allowed_fields=PRODUCTION_PICKING_SORTABLE_FIELDS,
+            default_order="-created_at",
+            keyword_fields=PRODUCTION_PICKING_KEYWORD_FIELDS,
+            doc_date_field="picking_time",
+            doc_start_date=filters.get("picking_start_date"),
+            doc_end_date=filters.get("picking_end_date"),
+            created_start_date=filters.get("created_start_date"),
+            created_end_date=filters.get("created_end_date"),
+            updated_start_date=filters.get("updated_start_date"),
+            updated_end_date=filters.get("updated_end_date"),
+        )
+        pickings = await query.offset(skip).limit(limit).order_by(order_clause)
         from tortoise.functions import Count, Sum
         from apps.kuaizhizao.services.document_action_policy.enricher import enrich_outbound_hub_list_capabilities
         from apps.kuaizhizao.services.document_lifecycle_service import get_production_picking_lifecycle
@@ -3619,6 +3654,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                         movement_type="fg_receipt",
                         to_warehouse_id=wh_id,
                         idempotency_key=f"finished_goods_receipt:{receipt_id}:inc:{item.id}",
+                        quality_status="qualified",
                     )
                 from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
                 await InventoryCostService().apply_finished_goods_receipt_cost(
@@ -3933,11 +3969,31 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
 
         received = max(0.0, received)
         pending = max(0.0, max_qty - received)
+        fqc_qualified_remaining: Optional[float] = None
+        from apps.kuaizhizao.services.inspection_policy_service import (
+            get_fqc_inbound_remaining_quantity,
+            resolve_inspection_policy,
+        )
+
+        eff, _, _ = await resolve_inspection_policy(
+            tenant_id, "fqc", material_id=int(work_order.product_id)
+        )
+        if eff != "none":
+            fqc_remaining = await get_fqc_inbound_remaining_quantity(
+                tenant_id,
+                work_order_id,
+                int(work_order.product_id),
+                exclude_receipt_id=exclude_finished_receipt_id,
+            )
+            fqc_qualified_remaining = float(fqc_remaining)
+            pending = min(pending, fqc_qualified_remaining)
+
         return {
             "planned": planned,
             "max_quantity": max_qty,
             "received": received,
             "pending": pending,
+            "fqc_qualified_remaining": fqc_qualified_remaining,
         }
 
     async def _assert_work_order_inbound_quantity(
@@ -3987,10 +4043,38 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         """
         from apps.kuaizhizao.models.reporting_record import ReportingRecord
         from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
-        from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+        from apps.kuaizhizao.services.inspection_policy_service import (
+            get_fqc_inbound_remaining_quantity,
+            resolve_inspection_policy,
+            sum_fqc_inbound_qualified_quantity,
+        )
+        from apps.kuaizhizao.models.work_order import WorkOrder
 
         if receipt_quantity is not None:
             return float(receipt_quantity)
+
+        work_order = await WorkOrder.get_or_none(
+            tenant_id=tenant_id, id=work_order_id, deleted_at__isnull=True
+        )
+        if work_order:
+            eff, _, _ = await resolve_inspection_policy(
+                tenant_id, "fqc", material_id=int(work_order.product_id)
+            )
+            if eff != "none":
+                fqc_total = await sum_fqc_inbound_qualified_quantity(
+                    tenant_id, work_order_id, int(work_order.product_id)
+                )
+                if fqc_total > 0:
+                    remaining = await get_fqc_inbound_remaining_quantity(
+                        tenant_id, work_order_id, int(work_order.product_id)
+                    )
+                    if remaining > 0:
+                        return float(remaining)
+                    if not strict:
+                        return 0.0
+                    raise ValidationError("成品检验合格数量已全部入库，无法再次入库")
+
+        from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
 
         qc_records = await FinishedGoodsInspection.filter(
             tenant_id=tenant_id,
@@ -4073,9 +4157,15 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         receipt_qty = min(suggested, pending) if pending > 0 else 0.0
         hint = None
         if pending <= 0:
-            hint = "工单可入库数量已用尽，无法再取单入库"
+            if quota.get("fqc_qualified_remaining") is not None and float(quota["fqc_qualified_remaining"]) <= 0:
+                hint = "成品检验合格可入数量已用尽，无法再取单入库"
+            else:
+                hint = "工单可入库数量已用尽，无法再取单入库"
         elif suggested <= 0:
             hint = "暂无质检合格或末道已审报工数量，请手工填写入库数量"
+        elif quota.get("fqc_qualified_remaining") is not None:
+            fqc_rem = quota["fqc_qualified_remaining"]
+            hint = f"本次最多可入 {pending}（FQC 合格剩余 {fqc_rem}）"
 
         material = await Material.get_or_none(
             tenant_id=tenant_id,
@@ -4646,6 +4736,12 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
 
     async def list_sales_deliveries(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[SalesDeliveryResponse]:
         """获取销售出库单列表"""
+        from apps.kuaizhizao.services.warehouse_list_core import (
+            SALES_DELIVERY_KEYWORD_FIELDS,
+            SALES_DELIVERY_SORTABLE_FIELDS,
+            apply_warehouse_doc_list_filters,
+        )
+
         query = SalesDelivery.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         # 应用过滤条件
@@ -4655,13 +4751,39 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             query = query.filter(sales_order_id=filters['sales_order_id'])
         if filters.get('customer_id'):
             query = query.filter(customer_id=filters['customer_id'])
+        if filters.get("warehouse_id"):
+            query = query.filter(warehouse_id=filters["warehouse_id"])
+        customer_name = (filters.get("customer_name") or "").strip()
+        if customer_name:
+            query = query.filter(customer_name__icontains=customer_name)
+        warehouse_name = (filters.get("warehouse_name") or "").strip()
+        if warehouse_name:
+            query = query.filter(warehouse_name__icontains=warehouse_name)
+        if filters.get("total_quantity") is not None and filters.get("total_quantity") != "":
+            query = query.filter(total_quantity=filters["total_quantity"])
         if filters.get("scoped_sales_order_ids") is not None:
             query = query.filter(
                 Q(sales_order_id__isnull=True)
                 | Q(sales_order_id__in=filters["scoped_sales_order_ids"])
             )
 
-        deliveries = await query.offset(skip).limit(limit).order_by('-created_at')
+        query, order_clause = apply_warehouse_doc_list_filters(
+            query,
+            keyword=filters.get("keyword"),
+            search=filters.get("search"),
+            order_by=filters.get("order_by"),
+            allowed_fields=SALES_DELIVERY_SORTABLE_FIELDS,
+            default_order="-created_at",
+            keyword_fields=SALES_DELIVERY_KEYWORD_FIELDS,
+            doc_date_field="delivery_time",
+            doc_start_date=filters.get("delivery_start_date"),
+            doc_end_date=filters.get("delivery_end_date"),
+            created_start_date=filters.get("created_start_date"),
+            created_end_date=filters.get("created_end_date"),
+            updated_start_date=filters.get("updated_start_date"),
+            updated_end_date=filters.get("updated_end_date"),
+        )
+        deliveries = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             batch_document_item_counts,
             enrich_outbound_hub_list_capabilities,

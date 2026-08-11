@@ -83,6 +83,7 @@ from apps.kuaizhizao.schemas.rework_order import (
     ReworkOrderResponse,
     ReworkOrderListResponse,
     ReworkOrderFromWorkOrderRequest,
+    ReworkFromWorkOrderPreviewResponse,
     ReworkReportingCreate,
     ReworkReportingOptionsResponse,
     ReworkAdvanceNextRequest,
@@ -595,6 +596,9 @@ async def get_work_order_execution_config(
     default_production_worker_mode = await BusinessConfigService().get_reporting_default_production_worker_mode(
         tenant_id
     )
+    default_reporting_quantity_mode = await BusinessConfigService().get_reporting_default_quantity_mode(
+        tenant_id
+    )
     can_confirm_picking, role_codes, functional_domains = await ProductionPickingService().can_user_confirm_picking(
         tenant_id=tenant_id,
         user_id=current_user.id,
@@ -603,6 +607,7 @@ async def get_work_order_execution_config(
         **policy,
         "last_operation_auto_inbound_mode": last_inbound_mode,
         "default_production_worker_mode": default_production_worker_mode,
+        "default_reporting_quantity_mode": default_reporting_quantity_mode,
         "current_user_role_codes": sorted(role_codes),
         "current_user_functional_domains": sorted(functional_domains),
         "current_user_can_confirm_picking": can_confirm_picking,
@@ -1322,6 +1327,26 @@ async def dissolve_work_order_groups(
         updated_by=current_user.id,
     )
     return WorkOrderDissolveGroupResponse.model_validate(result)
+
+
+@router.get(
+    "/work-orders/{work_order_id}/rework-preview",
+    response_model=ReworkFromWorkOrderPreviewResponse,
+    summary="Preview reworkable quantity from work order",
+)
+async def preview_rework_from_work_order(
+    work_order_id: int,
+    start_work_order_operation_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReworkFromWorkOrderPreviewResponse:
+    """预览从工单创建返工单时的可返工数量（按不合格数 − 已占用返工数）。"""
+    payload = await ReworkOrderService().preview_rework_from_work_order(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        start_work_order_operation_id=start_work_order_operation_id,
+    )
+    return ReworkFromWorkOrderPreviewResponse.model_validate(payload)
 
 
 @router.post("/work-orders/{work_order_id}/rework", response_model=ReworkOrderResponse, summary="Create rework order from work order")

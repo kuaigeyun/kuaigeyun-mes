@@ -5,7 +5,6 @@
  */
 
 
-
 import React, { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -134,8 +133,6 @@ import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with
 import {
 
   DetailDrawerTemplate,
-
-  DetailDrawerInlineFullChain,
 
   DRAWER_CONFIG,
 
@@ -299,7 +296,6 @@ const SALES_CONTRACT_RESOURCE = SC;
 const CONTRACT_ITEMS_REQUIRED = 'contract_items_required';
 
 
-
 function remainingItemQty(item: { contract_quantity?: number; released_quantity?: number }): number {
 
   return Math.max(0, Number(item.contract_quantity ?? 0) - Number(item.released_quantity ?? 0));
@@ -332,9 +328,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 
-
 type ContractPushTarget = 'sales_order' | 'work_order';
-
 
 
 const SALES_CONTRACT_LIST_PATH = '/apps/kuaizhizao/sales-management/sales-contracts';
@@ -554,7 +548,6 @@ const SalesContractsPage: React.FC = () => {
   const [trackingRefreshKey, setTrackingRefreshKey] = useState(0);
 
 
-
   const [pushPreviewOpen, setPushPreviewOpen] = useState(false);
   const [pushPreviewLoading, setPushPreviewLoading] = useState(false);
   const [pushPreviewConfirming, setPushPreviewConfirming] = useState(false);
@@ -566,11 +559,9 @@ const SalesContractsPage: React.FC = () => {
   const [workOrderPushMode, setWorkOrderPushMode] = useState<'draft' | 'confirm'>('draft');
 
 
-
   const [closeModalOpen, setCloseModalOpen] = useState(false);
 
   const [closeReason, setCloseReason] = useState('');
-
 
 
   const [changeDrawerOpen, setChangeDrawerOpen] = useState(false);
@@ -628,7 +619,6 @@ const SalesContractsPage: React.FC = () => {
   );
 
 
-
   const contractTracking = useDocumentTracking(
 
     detailOpen && detail?.id ? 'sales_contract' : undefined,
@@ -638,7 +628,6 @@ const SalesContractsPage: React.FC = () => {
     trackingRefreshKey,
 
   );
-
 
 
   useEffect(() => {
@@ -768,14 +757,12 @@ const SalesContractsPage: React.FC = () => {
   }, [isFormPage, termsManageOpen, loadTermGroupOptions]);
 
 
-
   const handleContractPriceTypeChange = useCallback((nextChecked: boolean) => {
     const nextType: PriceTypeValue = nextChecked ? 'tax_inclusive' : 'tax_exclusive';
     const fromType: PriceTypeValue = nextChecked ? 'tax_exclusive' : 'tax_inclusive';
     setFormPriceType(formRef.current, nextType);
     deferConvertLineItemsByPriceType(formRef.current, fromType, nextType, convertUnitPriceByPriceType);
   }, []);
-
 
 
   const refreshContractLinePriceByVariant = useCallback(
@@ -842,7 +829,6 @@ const SalesContractsPage: React.FC = () => {
     [materialList],
 
   );
-
 
 
   const appendContractItemsFromMaterials = useCallback(
@@ -1235,7 +1221,6 @@ const SalesContractsPage: React.FC = () => {
   };
 
 
-
   async function initSalesContractCreateForm() {
     setEditingId(null);
     setPreviewCode(null);
@@ -1574,7 +1559,6 @@ const SalesContractsPage: React.FC = () => {
   useSubmitShortcut(() => triggerContractFormSubmit(), isFormPage);
 
 
-
   const handleFormSubmit = async (values: any, options?: { asDraft?: boolean }) => {
     const asDraft = options?.asDraft ?? false;
     try {
@@ -1673,7 +1657,6 @@ const SalesContractsPage: React.FC = () => {
   };
 
 
-
   const handleDeleteDraft = (record: SalesContract) => {
 
     Modal.confirm({
@@ -1711,7 +1694,6 @@ const SalesContractsPage: React.FC = () => {
     });
 
   };
-
 
 
   const contractCodeAutoEnabled = effectiveAutoGen ?? isAutoGenerateEnabled('kuaizhizao-sales-contract');
@@ -2244,7 +2226,6 @@ const SalesContractsPage: React.FC = () => {
   );
 
 
-
   const loadPaymentSummary = async (id: number) => {
 
     try {
@@ -2260,7 +2241,6 @@ const SalesContractsPage: React.FC = () => {
     }
 
   };
-
 
 
   const openDetail = async (id: number) => {
@@ -2294,7 +2274,6 @@ const SalesContractsPage: React.FC = () => {
   };
 
 
-
   useEffect(() => {
 
     const raw = (location.state as { openContractId?: unknown } | null)?.openContractId;
@@ -2308,7 +2287,6 @@ const SalesContractsPage: React.FC = () => {
     void openDetail(id);
 
   }, [location.state, location.pathname, location.search, navigate]);
-
 
 
   const reload = useCallback(() => {
@@ -2423,7 +2401,6 @@ const SalesContractsPage: React.FC = () => {
     }
 
   };
-
 
 
   const resetPushPreviewModal = () => {
@@ -2699,7 +2676,6 @@ const SalesContractsPage: React.FC = () => {
   );
 
 
-
   const loadChanges = async (contractId: number) => {
 
     setChangesLoading(true);
@@ -2725,7 +2701,6 @@ const SalesContractsPage: React.FC = () => {
   };
 
 
-
   const openChangeDrawer = () => {
 
     if (!detail?.id) return;
@@ -2739,7 +2714,6 @@ const SalesContractsPage: React.FC = () => {
     void loadChanges(detail.id);
 
   };
-
 
 
   const handleCreateChange = async (values: any) => {
@@ -2783,7 +2757,6 @@ const SalesContractsPage: React.FC = () => {
   };
 
 
-
   const handleChangeAction = async (changeId: number, action: 'submit' | 'approve' | 'reject') => {
 
     if (!detail?.id) return;
@@ -2811,7 +2784,6 @@ const SalesContractsPage: React.FC = () => {
   };
 
 
-
   const handleGenerateReceivable = async (milestoneId: number) => {
 
     if (!detail?.id) return;
@@ -2835,11 +2807,9 @@ const SalesContractsPage: React.FC = () => {
   };
 
 
-
   const renderLifecycleCell = (record: SalesContract) => (
     <ListUniLifecycleCell lifecycle={getSalesContractLifecycle(record as Record<string, unknown>, t)} />
   );
-
 
 
   const columns: ProColumns<SalesContract>[] = useMemo(
@@ -3228,7 +3198,6 @@ const SalesContractsPage: React.FC = () => {
   );
 
 
-
   const detailBasicColumns: ProDescriptionsItemProps<SalesContract>[] = useMemo(
     () => [
     { title: t('app.kuaizhizao.salesContract.contractCode'), dataIndex: 'contract_code' },
@@ -3464,12 +3433,10 @@ const SalesContractsPage: React.FC = () => {
   );
 
 
-
   const detailLifecycle = useMemo(
     () => (detail ? getSalesContractLifecycle(detail as Record<string, unknown>, t) : null),
     [detail, t],
   );
-
 
 
   if (isFormPage) {
@@ -3813,7 +3780,6 @@ const SalesContractsPage: React.FC = () => {
       />
 
 
-
       <DetailDrawerTemplate
 
         title={
@@ -3943,23 +3909,6 @@ const SalesContractsPage: React.FC = () => {
                 />
 
               ) : null}
-
-              {detail.id != null ? (
-
-                <DetailDrawerInlineFullChain
-
-                  documentType="sales_contract"
-
-                  documentId={detail.id}
-
-                  active={detailOpen}
-
-                  selfDocumentId={detail.id}
-
-                />
-
-              ) : null}
-
             </div>
 
           ) : undefined
@@ -4109,8 +4058,17 @@ const SalesContractsPage: React.FC = () => {
 
         }
 
+      
+        traceDocument={
+          detail?.id != null
+            ? {
+                documentType: 'sales_contract',
+                documentId: detail.id,
+                selfDocumentId: detail.id
+              }
+            : undefined
+        }
       />
-
 
 
       <Drawer
@@ -4242,7 +4200,6 @@ const SalesContractsPage: React.FC = () => {
         />
 
       </Drawer>
-
 
 
       <Modal
@@ -4443,7 +4400,6 @@ const SalesContractsPage: React.FC = () => {
       </Modal>
 
 
-
       <Modal
 
         title={t('app.kuaizhizao.salesContract.closeContract')}
@@ -4489,7 +4445,6 @@ const SalesContractsPage: React.FC = () => {
         />
 
       </Modal>
-
 
 
       <UniPullQueryModal<PullQuotationCandidate>
@@ -4562,7 +4517,6 @@ const SalesContractsPage: React.FC = () => {
   );
 
 };
-
 
 
 export default SalesContractsPage;

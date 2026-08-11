@@ -106,22 +106,138 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         super().__init__(ReworkOrder)
         self.business_config_service = BusinessConfigService()
 
+    async def _sum_operation_display_unqualified(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        operations: List[WorkOrderOperation],
+    ) -> Decimal:
+        """与工序卡一致的不合格合计（方案质检取检验不合格）。"""
+        from apps.kuaizhizao.services.operation_transfer_service import (
+            build_operation_policy_cache,
+            load_process_inspections_by_operation,
+            resolve_operation_display_unqualified,
+        )
+
+        if not operations:
+            return Decimal("0")
+        master_ids = [
+            int(op.operation_id) for op in operations if op.operation_id is not None
+        ]
+        policy_cache = await build_operation_policy_cache(tenant_id, master_ids)
+        inspections_by_op = await load_process_inspections_by_operation(
+            tenant_id, work_order_id
+        )
+        total = Decimal("0")
+        for op in operations:
+            total += await resolve_operation_display_unqualified(
+                tenant_id,
+                work_order_id,
+                op,
+                policy_cache=policy_cache,
+                inspections_by_op=inspections_by_op,
+            )
+        return total
+
+    async def _sum_existing_rework_quantity(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        *,
+        start_work_order_operation_id: Optional[int] = None,
+    ) -> Decimal:
+        qs = ReworkOrder.filter(
+            tenant_id=tenant_id,
+            original_work_order_id=work_order_id,
+            deleted_at__isnull=True,
+        ).exclude(status="cancelled")
+        if start_work_order_operation_id is not None:
+            qs = qs.filter(start_work_order_operation_id=start_work_order_operation_id)
+        rows = await qs.all()
+        return sum(Decimal(str(row.quantity or 0)) for row in rows)
+
     async def _compute_reworkable_quantity(
         self,
         tenant_id: int,
         work_order_id: int,
         original_work_order: WorkOrder,
+        *,
+        start_work_order_operation_id: Optional[int] = None,
     ) -> Decimal:
-        """原工单数量减去未取消返工单已占用数量。"""
-        wo_qty = Decimal(str(original_work_order.quantity or 0))
-        existing_rows = await ReworkOrder.filter(
+        """可返工数量 = 不合格数量（指定工序或全工单）− 未取消返工单已占用数量。"""
+        _ = original_work_order
+        operations = await WorkOrderOperation.filter(
             tenant_id=tenant_id,
-            original_work_order_id=work_order_id,
+            work_order_id=work_order_id,
             deleted_at__isnull=True,
-        ).exclude(status="cancelled").all()
-        already = sum(Decimal(str(row.quantity or 0)) for row in existing_rows)
-        reworkable = wo_qty - already
+        ).all()
+        if start_work_order_operation_id is not None:
+            source_ops = [
+                op for op in operations if op.id == start_work_order_operation_id
+            ]
+            if not source_ops:
+                return Decimal("0")
+        else:
+            source_ops = operations
+
+        unqualified = await self._sum_operation_display_unqualified(
+            tenant_id, work_order_id, source_ops
+        )
+        already = await self._sum_existing_rework_quantity(
+            tenant_id,
+            work_order_id,
+            start_work_order_operation_id=start_work_order_operation_id,
+        )
+        reworkable = unqualified - already
         return reworkable if reworkable > 0 else Decimal("0")
+
+    async def preview_rework_from_work_order(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        *,
+        start_work_order_operation_id: Optional[int] = None,
+    ) -> dict:
+        original_work_order = await WorkOrder.get_or_none(
+            tenant_id=tenant_id,
+            id=work_order_id,
+            deleted_at__isnull=True,
+        )
+        if not original_work_order:
+            raise NotFoundError(f"工单不存在: {work_order_id}")
+
+        operations = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+        ).all()
+        if start_work_order_operation_id is not None:
+            source_ops = [
+                op for op in operations if op.id == start_work_order_operation_id
+            ]
+        else:
+            source_ops = operations
+
+        unqualified = await self._sum_operation_display_unqualified(
+            tenant_id, work_order_id, source_ops
+        )
+        already = await self._sum_existing_rework_quantity(
+            tenant_id,
+            work_order_id,
+            start_work_order_operation_id=start_work_order_operation_id,
+        )
+        reworkable = await self._compute_reworkable_quantity(
+            tenant_id,
+            work_order_id,
+            original_work_order,
+            start_work_order_operation_id=start_work_order_operation_id,
+        )
+        return {
+            "reworkable_quantity": reworkable,
+            "unqualified_quantity": unqualified,
+            "already_rework_quantity": already,
+            "start_work_order_operation_id": start_work_order_operation_id,
+        }
 
     async def _validate_rework_quantity(
         self,
@@ -129,11 +245,16 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         work_order_id: int,
         original_work_order: WorkOrder,
         quantity: Decimal,
+        *,
+        start_work_order_operation_id: Optional[int] = None,
     ) -> None:
         if quantity <= 0:
             raise ValidationError("返工数量必须大于 0")
         reworkable = await self._compute_reworkable_quantity(
-            tenant_id, work_order_id, original_work_order
+            tenant_id,
+            work_order_id,
+            original_work_order,
+            start_work_order_operation_id=start_work_order_operation_id,
         )
         if quantity > reworkable:
             raise ValidationError(
@@ -481,17 +602,32 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             prefix=f"返工-{original_work_order.code}-{sequence:03d}"
         )
 
+        start_op_id = request_data.start_work_order_operation_id
+        if (
+            start_op_id is None
+            and request_data.predefined_operation_ids
+            and len(request_data.predefined_operation_ids) > 0
+        ):
+            start_op_id = request_data.predefined_operation_ids[0]
+
         if request_data.quantity is not None:
             quantity = request_data.quantity
         else:
             quantity = await self._compute_reworkable_quantity(
-                tenant_id, work_order_id, original_work_order
+                tenant_id,
+                work_order_id,
+                original_work_order,
+                start_work_order_operation_id=start_op_id,
             )
             if quantity <= 0:
                 raise ValidationError("该工单已无可返工数量")
 
         await self._validate_rework_quantity(
-            tenant_id, work_order_id, original_work_order, quantity
+            tenant_id,
+            work_order_id,
+            original_work_order,
+            quantity,
+            start_work_order_operation_id=start_op_id,
         )
         if request_data.start_work_order_operation_id is not None:
             await self._validate_rework_operation_ids(
@@ -982,14 +1118,21 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             approved_by_name = recorder_name or reporting_data.worker_name
 
         async with in_transaction():
+            # WorkOrder.name 可为 null；ReportingRecord.work_order_name 非空，须有展示名
+            trusted_work_order_name = (
+                (work_order.name or "").strip()
+                or (work_order.product_name or "").strip()
+                or (work_order.code or "").strip()
+                or f"WO-{work_order.id}"
+            )
             reporting_record = await ReportingRecord.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
                 work_order_id=work_order.id,
                 rework_order_id=rework_order.id,
                 rework_order_operation_id=current_link.id,
-                work_order_code=work_order.code,
-                work_order_name=work_order.name,
+                work_order_code=work_order.code or f"WO-{work_order.id}",
+                work_order_name=trusted_work_order_name,
                 operation_id=work_order_operation.id,
                 operation_code=work_order_operation.operation_code,
                 operation_name=work_order_operation.operation_name,

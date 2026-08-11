@@ -113,22 +113,30 @@ async def link_finance_document_relation(
         )
 
 
-async def _resolve_bank_account_label(
+async def _resolve_bank_account_for_voucher(
     tenant_id: int, bank_account_id: Optional[int]
-) -> tuple[Optional[int], Optional[str]]:
+) -> tuple[Optional[int], Optional[str], str]:
+    """解析入账账户及对应收/付款方式。"""
     if not bank_account_id:
-        return None, None
+        return None, None, "其他"
     from apps.kuaicaiwu.models.bank_account import BankAccount
+    from apps.kuaicaiwu.services.bank_account_service import BankAccountService
 
     account = await BankAccount.get_or_none(
         tenant_id=tenant_id, id=bank_account_id, deleted_at__isnull=True
     )
     if not account:
-        return bank_account_id, None
-    if str(getattr(account, "account_type", "") or "").strip().lower() == "cash":
-        return account.id, account.account_name
+        return bank_account_id, None, "其他"
+    account_type = BankAccountService.normalize_account_type(
+        getattr(account, "account_type", None)
+    )
+    payment_method = (
+        BankAccountService.resolve_payment_method_for_account_type(account_type) or "其他"
+    )
+    if account_type == "cash":
+        return account.id, account.account_name, payment_method
     label = f"{account.bank_name or ''} {account.account_number or ''}".strip()
-    return account.id, label or account.account_name
+    return account.id, label or account.account_name, payment_method
 
 
 async def _existing_order_prepayment_relation(
@@ -173,9 +181,17 @@ async def ensure_prepayment_payment_for_purchase_order(
         from apps.kuaicaiwu.models.payment import Payment
 
         user_info = await AppBaseService().get_user_info(operator_id)
-        bank_account_id, bank_account_label = await _resolve_bank_account_label(
+        bank_account_id, bank_account_label, payment_method = await _resolve_bank_account_for_voucher(
             tenant_id, prepayment_bank_account_id
         )
+        if bank_account_id:
+            from apps.kuaicaiwu.services.bank_account_service import BankAccountService
+
+            await BankAccountService().validate_voucher_account(
+                tenant_id,
+                payment_method=payment_method,
+                bank_account_id=bank_account_id,
+            )
         today = today_site_str()
         count = await Payment.filter(tenant_id=tenant_id).count()
         payment_code = f"PK{today}{count + 1:04d}"
@@ -190,7 +206,7 @@ async def ensure_prepayment_payment_for_purchase_order(
             settled_amount=Decimal("0.00"),
             unsettled_amount=amount,
             payment_date=biz_date,
-            payment_method="银行转账" if bank_account_id else "其他",
+            payment_method=payment_method,
             bank_account=bank_account_label,
             bank_account_id=bank_account_id,
             settlement_type="prepayment",
@@ -264,9 +280,17 @@ async def ensure_prepayment_receipt_for_sales_order(
         from apps.kuaicaiwu.models.receipt import Receipt
 
         user_info = await AppBaseService().get_user_info(operator_id)
-        bank_account_id, bank_account_label = await _resolve_bank_account_label(
+        bank_account_id, bank_account_label, payment_method = await _resolve_bank_account_for_voucher(
             tenant_id, prepayment_bank_account_id
         )
+        if bank_account_id:
+            from apps.kuaicaiwu.services.bank_account_service import BankAccountService
+
+            await BankAccountService().validate_voucher_account(
+                tenant_id,
+                payment_method=payment_method,
+                bank_account_id=bank_account_id,
+            )
         today = today_site_str()
         count = await Receipt.filter(tenant_id=tenant_id).count()
         receipt_code = f"SK{today}{count + 1:04d}"
@@ -281,7 +305,7 @@ async def ensure_prepayment_receipt_for_sales_order(
             settled_amount=Decimal("0.00"),
             unsettled_amount=amount,
             receipt_date=biz_date,
-            payment_method="银行转账" if bank_account_id else "其他",
+            payment_method=payment_method,
             bank_account=bank_account_label,
             bank_account_id=bank_account_id,
             settlement_type="prepayment",

@@ -2,6 +2,7 @@ import type { CurrentUser } from '../../../../../types/api';
 import { warehouseApi } from '../../../services/warehouse-execution';
 import { outsourceMaterialIssueApi } from '../../../services/production';
 import {
+  filterOutboundHubRows,
   normalizeWarehouseListResponse,
   sortOutboundHubRows,
 } from '../../../utils/warehouseListCore';
@@ -45,6 +46,14 @@ export async function fetchOutboundHubList(
   const skip = (((params.current as number) || 1) - 1) * ((params.pageSize as number) || 20);
   const limit = (params.pageSize as number) || 20;
   const typeFilter = params.outbound_type as string | undefined;
+  const hasFieldFilters = Boolean(
+    params.keyword ||
+      params.customer_name ||
+      params.warehouse_name ||
+      params.warehouse_id ||
+      params.total_quantity != null ||
+      params.total_items != null,
+  );
 
   const fetchPicking = shouldFetchOutboundHubType(user, typeFilter, 'production_picking');
   const fetchDelivery = shouldFetchOutboundHubType(user, typeFilter, 'sales_delivery');
@@ -52,13 +61,17 @@ export async function fetchOutboundHubList(
   const fetchOther = shouldFetchOutboundHubType(user, typeFilter, 'other_outbound');
   const fetchBorrow = shouldFetchOutboundHubType(user, typeFilter, 'material_borrow');
 
+  // 有字段筛选时拉大窗口，避免只取首页后客户端过滤漏数；上限与后端 le=1000 对齐
+  const fetchLimit = hasFieldFilters ? 1000 : Math.max(limit * 3, 60);
   const listParams = {
     skip: 0,
-    limit: Math.max(limit * 3, 60),
+    limit: fetchLimit,
     keyword: params.keyword,
     order_by: params.order_by,
     warehouse_id: params.warehouse_id,
+    warehouse_name: params.warehouse_name,
     customer_name: params.customer_name,
+    total_quantity: params.total_quantity,
     created_start_date: params.created_start_date,
     created_end_date: params.created_end_date,
     updated_start_date: params.updated_start_date,
@@ -148,6 +161,11 @@ export async function fetchOutboundHubList(
       ['已出库', '已领料', '已借出', '已完成', 'completed', '已确认', 'confirmed'].includes(String(r.status || '')),
     );
   }
+
+  combinedData = filterOutboundHubRows(
+    combinedData as Record<string, unknown>[],
+    params,
+  ) as OutboundHubOrder[];
 
   const sorted = sortOutboundHubRows(
     combinedData as Record<string, unknown>[],
