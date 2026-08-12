@@ -5,10 +5,14 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Space, Typography, theme as AntdTheme } from 'antd';
+import { App, Popconfirm, Button, Space, theme as AntdTheme } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import { ProFormSelect, ProFormDigit, ProFormSwitch } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UniTableStackedPrimaryCell,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { rowActionKind } from '../../../../../components/uni-action';
 import {
   ListPageTemplate,
@@ -119,29 +123,35 @@ const HourlyRatesPage: React.FC = () => {
     () => alignProColumns<HourlyRate>([
       {
         title: t('app.kuaizhizao.performance.common.columns.department'),
+        key: 'performance_dept_pos_stacked',
         dataIndex: 'department_name',
-        width: 120,
-        ellipsis: true,
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        fixed: 'left',
         sorter: true,
         render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.department_name ?? '') }} ellipsis>
-            {r.department_name ?? '-'}
-          </Typography.Text>
+          <UniTableStackedPrimaryCell
+            primary={String(r.department_name ?? '').trim() || '-'}
+            secondary={String(r.position_name ?? '').trim() || '-'}
+            secondaryCopyable={false}
+          />
         ),
       },
       {
         title: t('app.kuaizhizao.performance.common.columns.position'),
         dataIndex: 'position_name',
-        width: 120,
-        ellipsis: true,
+        hideInTable: true,
         sorter: true,
-        render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.position_name ?? '') }} ellipsis>
-            {r.position_name ?? '-'}
-          </Typography.Text>
-        ),
       },
-      { title: t('app.kuaizhizao.performance.hourlyRates.columns.rate'), dataIndex: 'rate', width: 120, align: 'right', sorter: true },
+      {
+        title: t('app.kuaizhizao.performance.hourlyRates.columns.rate'),
+        dataIndex: 'rate',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+        sorter: true,
+      },
       {
         title: t('app.kuaizhizao.performance.common.form.active'),
         dataIndex: 'is_active',
@@ -150,10 +160,22 @@ const HourlyRatesPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<HourlyRate>(t),
       {
+        title: t('app.kuaizhizao.performance.common.columns.status'),
+        dataIndex: 'is_active',
+        width: 88,
+        minWidth: 88,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, r) => renderActiveTag(t, r.is_active),
+      },
+      {
         title: t('app.kuaizhizao.performance.common.columns.actions'),
+        key: 'action',
         valueType: 'option',
         width: 160,
         fixed: 'right',
+        hideInSearch: true,
         render: (_, record) => (
           <Space>
             <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
@@ -182,7 +204,7 @@ const HourlyRatesPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.performance.hourly-rates"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.hourly-rates.v1"
           showAdvancedSearch
           skipFuzzyPinyinClientFilter
           pinnedTabsField={PERFORMANCE_PINNED_IS_ACTIVE_FIELD}

@@ -112,6 +112,9 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaicaiwu-cost-rules": "CR",                   # 成本核算规则
     "kuaiplm-rd-project": "YFXM",                   # 研发项目
     "kuaiplm-delivery-project": "JFXM",             # 交付项目
+    "kuaiplm-rd-requirement": "YFXQ",               # 研发需求
+    "kuaiplm-design-review": "SJPJ",                # 设计评审
+    "kuaiplm-fmea": "FMEA",                         # 失效分析 FMEA
 }
 
 # 页面配置数据结构
@@ -1550,6 +1553,42 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "layers",
         "auto_generate": True,
         "rule_code": "DELIVERY_PROJECT_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaiplm-rd-requirement",
+        "page_name": "研发需求",
+        "page_path": "/apps/kuaiplm/phase2/requirements",
+        "code_field": "requirement_code",
+        "code_field_label": "需求编码",
+        "module": "快研发",
+        "module_icon": "layers",
+        "auto_generate": True,
+        "rule_code": "RD_REQUIREMENT_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaiplm-design-review",
+        "page_name": "设计评审",
+        "page_path": "/apps/kuaiplm/phase2/design-reviews",
+        "code_field": "review_code",
+        "code_field_label": "评审编码",
+        "module": "快研发",
+        "module_icon": "layers",
+        "auto_generate": True,
+        "rule_code": "RD_DESIGN_REVIEW_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaiplm-fmea",
+        "page_name": "失效分析 (FMEA)",
+        "page_path": "/apps/kuaiplm/phase2/fmea",
+        "code_field": "fmea_code",
+        "code_field_label": "FMEA编码",
+        "module": "快研发",
+        "module_icon": "layers",
+        "auto_generate": True,
+        "rule_code": "RD_FMEA_CODE",
         "allow_manual_edit": True,
     },
 ]

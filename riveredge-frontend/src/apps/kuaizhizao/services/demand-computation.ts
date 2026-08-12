@@ -22,6 +22,8 @@ export interface DemandComputation {
   demand_ids?: number[];  // 多需求合并支持
   demand_code?: string;
   demand_type?: 'sales_forecast' | 'sales_order' | 'demand_plan';
+  /** 来源单据 ID：SO/预测为上游单据；需求计划为 Demand.id；多来源合并为空 */
+  source_id?: number | null;
   business_mode?: 'MTS' | 'MTO' | 'ATO';
   /** 恒为 MRP；业务模式见 business_mode */
   computation_type?: 'MRP';

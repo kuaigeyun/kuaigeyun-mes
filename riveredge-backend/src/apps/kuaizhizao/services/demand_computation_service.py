@@ -872,15 +872,18 @@ class DemandComputationService(AppBaseService):
                 demands.append(d)
 
             demand = demands[0]
-            # 展示“来源单号”：订单/预测优先使用 source_code，手工需求计划回退 demand_code
+            # 展示“来源单号”：首个来源单号；多来源为「第一个等N个」
             source_codes = [
                 (str(getattr(x, "source_code", "") or "").strip() or str(getattr(x, "demand_code", "") or "").strip())
                 for x in demands
             ]
             source_codes = [c for c in source_codes if c]
-            demand_codes = ",".join(source_codes[:3]) if source_codes else (demand.demand_code or "")
-            if len(demands) > 3:
-                demand_codes += f"等{len(demands)}个"
+            if not source_codes:
+                demand_codes = demand.demand_code or ""
+            elif len(demands) == 1:
+                demand_codes = source_codes[0]
+            else:
+                demand_codes = f"{source_codes[0]}等{len(demands)}个"
 
             user = await User.get_or_none(id=created_by)
             create_data: Dict[str, Any] = {
@@ -1022,13 +1025,65 @@ class DemandComputationService(AppBaseService):
             computation, items, exclusions
         )
 
+        # 来源单号抽屉链接：按首个需求解析上游单据 ID（勿用 demand_id 冒充销售订单/预测 ID）
+        source_id: Optional[int] = None
+        raw_ids = computation.demand_ids
+        if isinstance(raw_ids, list) and len(raw_ids) > 0:
+            demand_id_list = [int(x) for x in raw_ids if x is not None and str(x).strip() != ""]
+        elif computation.demand_id:
+            demand_id_list = [int(computation.demand_id)]
+        else:
+            demand_id_list = []
+        # 去重保序（JSON 异常重复时仍可链接）
+        seen_demand_ids: set[int] = set()
+        uniq_demand_ids: List[int] = []
+        for did in demand_id_list:
+            if did in seen_demand_ids:
+                continue
+            seen_demand_ids.add(did)
+            uniq_demand_ids.append(did)
+        demand_id_list = uniq_demand_ids
+
+        display_demand_code = computation.demand_code or ""
+        first_demand_row: Optional[Demand] = None
+        if demand_id_list:
+            first_demand_row = await Demand.get_or_none(
+                tenant_id=computation.tenant_id,
+                id=demand_id_list[0],
+                deleted_at__isnull=True,
+            )
+            if first_demand_row:
+                dtype = computation.demand_type or first_demand_row.demand_type
+                if dtype == "demand_plan":
+                    source_id = first_demand_row.id
+                elif dtype in ("sales_order", "sales_forecast") and first_demand_row.source_id:
+                    source_id = int(first_demand_row.source_id)
+
+        # 多来源统一展示：第一个等N个（兼容历史逗号拼接）
+        source_count = len(demand_id_list)
+        if source_count > 1:
+            first_code = ""
+            if first_demand_row:
+                first_code = (
+                    str(getattr(first_demand_row, "source_code", "") or "").strip()
+                    or str(getattr(first_demand_row, "demand_code", "") or "").strip()
+                )
+            if not first_code and display_demand_code:
+                head = display_demand_code.split(",")[0].split("，")[0].strip()
+                if "等" in head:
+                    head = head.split("等", 1)[0].strip()
+                first_code = head
+            if first_code:
+                display_demand_code = f"{first_code}等{source_count}个"
+
         response = DemandComputationResponse(
             id=computation.id,
             uuid=str(computation.uuid),
             tenant_id=computation.tenant_id,
             computation_code=computation.computation_code,
             demand_id=computation.demand_id,
-            demand_code=computation.demand_code,
+            demand_ids=computation.demand_ids if computation.demand_ids else None,
+            demand_code=display_demand_code,
             demand_type=computation.demand_type,
             business_mode=computation.business_mode,
             computation_type=computation.computation_type,
@@ -1042,6 +1097,7 @@ class DemandComputationService(AppBaseService):
             created_at=computation.created_at,
             updated_at=computation.updated_at,
             **audit_response_fields(computation),
+            source_id=source_id,
             items=item_responses,
             lifecycle=lifecycle,
             downstream_push_progress=downstream_push_progress,

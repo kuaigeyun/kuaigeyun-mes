@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Form } from 'antd';
 import { ProFormDigit, ProFormItem } from '@ant-design/pro-components';
 import type { TFunction } from 'i18next';
 import type { Material } from '../../apps/master-data/types/material';
@@ -66,6 +67,7 @@ export function InspectionConductQuantityFields({
   inspectionQuantity,
   t,
 }: InspectionConductQuantityFieldsProps) {
+  const form = Form.useFormInstance();
   const [material, setMaterial] = useState<Material | null>(null);
   const [unitLabelMap, setUnitLabelMap] = useState<Record<string, string>>({});
 
@@ -105,6 +107,28 @@ export function InspectionConductQuantityFields({
   const addonProps = unitAddonFieldProps(documentUnit, unitLabelMap);
   const useMultiUnit = Boolean(materialId) && materialHasAuxiliaryUnits(material, baseUnit);
 
+  // 多单位路径：默认带出单据单位与检验数量（与检验数量展示口径一致）
+  useEffect(() => {
+    if (!useMultiUnit || !documentUnit || !form) return;
+    const q = (form.getFieldValue('qualified_qty_with_unit') || {}) as QuantityWithUnitValue;
+    const u = (form.getFieldValue('unqualified_qty_with_unit') || {}) as QuantityWithUnitValue;
+    const needQUnit = !String(q.unit || '').trim();
+    const needUUnit = !String(u.unit || '').trim();
+    const needQQty = q.quantity == null;
+    const needUQty = u.quantity == null;
+    if (!needQUnit && !needUUnit && !needQQty && !needUQty) return;
+    form.setFieldsValue({
+      qualified_qty_with_unit: {
+        quantity: needQQty ? inspectionQuantity : q.quantity,
+        unit: needQUnit ? documentUnit : q.unit,
+      },
+      unqualified_qty_with_unit: {
+        quantity: needUQty ? 0 : u.quantity,
+        unit: needUUnit ? documentUnit : u.unit,
+      },
+    });
+  }, [useMultiUnit, documentUnit, inspectionQuantity, materialId, form]);
+
   if (useMultiUnit && materialId) {
     return (
       <>
@@ -130,7 +154,12 @@ export function InspectionConductQuantityFields({
             }),
           ]}
         >
-          <QuantityWithUnit materialId={materialId} material={material} scenario={scenario} />
+          <QuantityWithUnit
+            materialId={materialId}
+            material={material}
+            scenario={scenario}
+            preferredUnit={documentUnit}
+          />
         </ProFormItem>
         <ProFormItem
           name="unqualified_qty_with_unit"
@@ -154,7 +183,12 @@ export function InspectionConductQuantityFields({
             }),
           ]}
         >
-          <QuantityWithUnit materialId={materialId} material={material} scenario={scenario} />
+          <QuantityWithUnit
+            materialId={materialId}
+            material={material}
+            scenario={scenario}
+            preferredUnit={documentUnit}
+          />
         </ProFormItem>
         <div style={{ width: '100%', marginBottom: 8, color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>
           {t('app.kuaizhizao.quality.common.label.inspectionQty')}: {inspectionQuantity} {displayUnitLabel}

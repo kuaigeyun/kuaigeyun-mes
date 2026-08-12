@@ -6,7 +6,12 @@ import type { NavigateFunction } from 'react-router-dom';
 import {
   detailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
+import { StatusTag } from '../../../../../constants/statusBadges';
 import { formatDateTime } from '../../../../../utils/format';
+import {
+  resolveQualityExceptionStatusTagColor,
+  resolveStandardProductionExceptionStatusTagColor,
+} from '../../../utils/productionExceptionList';
 import { buildInspectionDetailPath } from '../../quality-management/components/inspectionTemplateUtils';
 
 const P = 'app.kuaizhizao.productionException';
@@ -79,20 +84,6 @@ function alertLevelTagColor(level?: string): string {
   if (level === 'critical') return 'red';
   if (level === 'high') return 'orange';
   if (level === 'medium') return 'gold';
-  return 'default';
-}
-
-function standardStatusTagColor(status?: string): string {
-  if (status === 'resolved' || status === 'closed') return 'success';
-  if (status === 'processing' || status === 'investigating' || status === 'correcting') return 'processing';
-  if (status === 'cancelled') return 'error';
-  return 'default';
-}
-
-function qualityStatusTagColor(status?: string): string {
-  if (status === 'closed') return 'success';
-  if (status === 'correcting' || status === 'investigating') return 'processing';
-  if (status === 'cancelled') return 'error';
   return 'default';
 }
 
@@ -177,7 +168,9 @@ export function MaterialShortageExceptionDetailContent({
         dataIndex: 'status',
         showInDescriptions: true,
         render: (_, row) => (
-          <Tag color={standardStatusTagColor(row.status)}>{statusLabel(row.status)}</Tag>
+          <StatusTag color={resolveStandardProductionExceptionStatusTagColor(row.status)}>
+            {statusLabel(row.status)}
+          </StatusTag>
         ),
       },
       {
@@ -250,7 +243,9 @@ export function DeliveryDelayExceptionDetailContent({
         dataIndex: 'status',
         showInDescriptions: true,
         render: (_, row) => (
-          <Tag color={standardStatusTagColor(row.status)}>{statusLabel(row.status)}</Tag>
+          <StatusTag color={resolveStandardProductionExceptionStatusTagColor(row.status)}>
+            {statusLabel(row.status)}
+          </StatusTag>
         ),
       },
       {
@@ -318,7 +313,9 @@ export function QualityExceptionDetailBasicContent({
         dataIndex: 'status',
         showInDescriptions: true,
         render: (_, row) => (
-          <Tag color={qualityStatusTagColor(row.status)}>{statusLabel(row.status)}</Tag>
+          <StatusTag color={resolveQualityExceptionStatusTagColor(row.status)}>
+            {statusLabel(row.status)}
+          </StatusTag>
         ),
       },
     ],

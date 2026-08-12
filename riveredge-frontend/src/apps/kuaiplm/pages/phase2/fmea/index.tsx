@@ -3,8 +3,15 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * FMEA 记录（Phase2）
  */
 
-import React, { useRef, useState, useCallback, useMemo } from 'react';
-import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
+import {
+  ActionType,
+  ProColumns,
+  ProFormInstance,
+  ProFormSelect,
+  ProFormText,
+  ProFormTextArea,
+} from '@ant-design/pro-components';
 import { useSearchParams } from 'react-router-dom';
 import { App, Button, Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -20,7 +27,9 @@ import {
 } from '../../../services/phase2';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { testGenerateCode } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   plmCodeTitleSearchColumns,
   plmCreatedUpdatedColumns,
@@ -35,6 +44,8 @@ import {
   renderPhase2FmeaTypeMarker,
 } from '../../../components/phase2Meta';
 
+const PAGE_CODE = 'kuaiplm-fmea';
+
 const FmeaPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
@@ -43,14 +54,38 @@ const FmeaPage: React.FC = () => {
     ? Number(searchParams.get('project_id'))
     : undefined;
   const actionRef = useRef<ActionType>(null);
+  const createFormRef = useRef<ProFormInstance>(null);
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [editingRecord, setEditingRecord] = useState<RdFmeaRecord | null>(null);
   const [detailRecord, setDetailRecord] = useState<RdFmeaRecord | null>(null);
 
   const handleCreate = useCallback(() => setCreateOpen(true), []);
   useNewShortcut(handleCreate);
+
+  useEffect(() => {
+    if (!createOpen) return;
+    (async () => {
+      if (!isAutoGenerateEnabled(PAGE_CODE)) {
+        setPreviewCode(null);
+        return;
+      }
+      try {
+        const ruleCode = getPageRuleCode(PAGE_CODE);
+        if (!ruleCode) {
+          setPreviewCode(null);
+          return;
+        }
+        const res = await testGenerateCode({ rule_code: ruleCode });
+        setPreviewCode(res.code);
+        createFormRef.current?.setFieldsValue({ fmea_code: res.code });
+      } catch {
+        setPreviewCode(null);
+      }
+    })();
+  }, [createOpen]);
 
   const toFmeaIds = (keys: React.Key[]) =>
     keys.map((key) => Number(key)).filter((id) => Number.isFinite(id) && id > 0);
@@ -119,6 +154,9 @@ const FmeaPage: React.FC = () => {
         title: t('app.kuaiplm.phase2.fmea.columns.code'),
         dataIndex: 'fmea_code',
         width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
       },
@@ -133,6 +171,9 @@ const FmeaPage: React.FC = () => {
         title: t('app.kuaiplm.phase2.fmea.columns.type'),
         dataIndex: 'fmea_type',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, row) => renderPhase2FmeaTypeMarker(row.fmea_type),
@@ -145,14 +186,19 @@ const FmeaPage: React.FC = () => {
         hideInSearch: true,
         render: (_, row) => row.material_name || row.material_code || '-',
       },
+      ...plmCreatedUpdatedColumns<RdFmeaRecord>(t),
       {
         title: t('app.kuaiplm.phase2.fmea.columns.status'),
+        key: 'lifecycle',
         dataIndex: 'status',
         width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
+        fixed: 'right',
         valueEnum: fmeaStatusValueEnum,
         render: (_, row) => renderPhase2FmeaStatusTag(t, row.status),
       },
-      ...plmCreatedUpdatedColumns<RdFmeaRecord>(t),
       plmListActionColumn<RdFmeaRecord>(t, (_, row) => [
             <Button
               {...rowActionKind('read')}
@@ -212,8 +258,8 @@ const FmeaPage: React.FC = () => {
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
-        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.phase2.fmea"
+        columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
+        columnPersistenceId="apps.kuaiplm.pages.phase2.fmea.list-v1"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={PLM_PHASE2_PINNED_STATUS_FIELD}
@@ -269,14 +315,33 @@ const FmeaPage: React.FC = () => {
       <FormModalTemplate
         title={t('app.kuaiplm.phase2.fmea.createTitle')}
         open={createOpen}
-        onClose={() => setCreateOpen(false)}
+        formRef={createFormRef}
+        onClose={() => {
+          setCreateOpen(false);
+          setPreviewCode(null);
+        }}
         onFinish={async (values) => {
-          await createFmeaRecord(values);
+          await createFmeaRecord({
+            ...values,
+            project_id: filterProjectId,
+          });
           messageApi.success(t('common.createSuccess'));
           setCreateOpen(false);
+          setPreviewCode(null);
           actionRef.current?.reload();
         }}
       >
+        <ProFormText
+          name="fmea_code"
+          label={t('app.kuaiplm.phase2.fmea.columns.code')}
+          rules={[{ required: !isAutoGenerateEnabled(PAGE_CODE) }]}
+          disabled={isAutoGenerateEnabled(PAGE_CODE)}
+          extra={
+            previewCode
+              ? `${t('app.kuaiplm.phase2.fmea.columns.code')}: ${previewCode}`
+              : undefined
+          }
+        />
         <ProFormText name="title" label={t('app.kuaiplm.phase2.fmea.form.title')} rules={[{ required: true }]} />
         <ProFormSelect
           name="fmea_type"

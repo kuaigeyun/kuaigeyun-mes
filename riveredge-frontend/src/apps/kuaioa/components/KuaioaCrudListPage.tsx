@@ -10,6 +10,17 @@ import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate } from '../../../components/layout-templates';
 import { useResourcePermissions } from '../../../hooks/useResourcePermissions';
+import {
+  alignProColumns,
+  GLOBAL_DOC_LIST_FIELD_RANK,
+} from '../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import {
+  renderOaActiveTag,
+  renderOaApprovalStatusTag,
+  renderOaStatusMarker,
+  renderOaTypeMarker,
+  renderOaYesNoTag,
+} from '../utils/oaListPresentation';
 
 export type KuaioaFieldConfig = {
   name: string;
@@ -28,6 +39,9 @@ export type KuaioaActionConfig = {
   visible?: (record: Record<string, unknown>) => boolean;
 };
 
+/** lifecycle：审批流程态右固定 StatusTag；marker：台账/启用类 MarkerTag */
+export type KuaioaStatusPresentation = 'lifecycle' | 'marker';
+
 type Props = {
   createButtonKey: string;
   resource: string;
@@ -42,8 +56,16 @@ type Props = {
   deleteFn?: (id: number) => Promise<void>;
   extraActions?: KuaioaActionConfig[];
   statusEnum?: Record<string, { text: string; status?: string }>;
+  statusPresentation?: KuaioaStatusPresentation;
   autoGenerateCode?: boolean;
 };
+
+const TYPE_MARKER_FIELDS = new Set([
+  'category',
+  'plan_type',
+  'license_type',
+  'asset_category',
+]);
 
 const KuaioaCrudListPage: React.FC<Props> = ({
   createButtonKey,
@@ -59,6 +81,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
   deleteFn,
   extraActions = [],
   statusEnum,
+  statusPresentation = 'marker',
   autoGenerateCode = false,
 }) => {
   const { t } = useTranslation();
@@ -70,7 +93,8 @@ const KuaioaCrudListPage: React.FC<Props> = ({
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [form] = Form.useForm();
 
-  const persistenceId = columnPersistenceId ?? `apps.kuaioa.${resource.replace(':', '.')}`;
+  const persistenceId =
+    columnPersistenceId ?? `apps.kuaioa.${resource.replace(':', '.')}.list-v1`;
 
   const openCreate = () => {
     setEditing(null);
@@ -136,21 +160,87 @@ const KuaioaCrudListPage: React.FC<Props> = ({
   );
 
   const columns = useMemo<ProColumns<Record<string, unknown>>[]>(() => {
-    const base: ProColumns<Record<string, unknown>>[] = fields
-      .filter((f) => !f.hideInTable)
-      .map((field) => ({
+    const keepWidthProps = (width?: number) =>
+      width
+        ? {
+            width,
+            minWidth: width,
+            uniTableKeepWidth: true as const,
+            resizable: false as const,
+          }
+        : {};
+
+    const statusField = fields.find((f) => !f.hideInTable && f.name === 'status');
+    const businessFields = fields.filter((f) => !f.hideInTable && f.name !== 'status');
+
+    const base: ProColumns<Record<string, unknown>>[] = businessFields.map((field) => {
+      const col: ProColumns<Record<string, unknown>> = {
         title: t(field.labelKey),
         dataIndex: field.name,
-        width: field.width,
-        valueType: field.name === 'status' && statusEnum ? 'select' : undefined,
-        valueEnum: field.name === 'status' ? statusEnum : undefined,
-        render: field.type === 'switch' ? (_, row) => (row[field.name] ? t('app.kuaioa.common.yes') : t('app.kuaioa.common.no')) : undefined,
-      }));
+        ...keepWidthProps(field.width),
+        ellipsis: !field.width || field.name === nameField || field.name === 'title',
+      };
+
+      if (field.type === 'switch') {
+        col.hideInSearch = true;
+        col.render = (_, row) =>
+          field.name === 'is_active'
+            ? renderOaActiveTag(t, Boolean(row[field.name]))
+            : renderOaYesNoTag(t, Boolean(row[field.name]));
+        return col;
+      }
+
+      if (TYPE_MARKER_FIELDS.has(field.name)) {
+        col.hideInSearch = true;
+        col.render = (_, row) => {
+          const raw = row[field.name];
+          const text = raw == null || raw === '' ? '' : String(raw);
+          if (!text) return '-';
+          const fromOptions = field.options?.find((o) => String(o.value) === text)?.label;
+          const label =
+            fromOptions ||
+            t(`${field.labelKey}.${text}`, { defaultValue: text });
+          return renderOaTypeMarker(label);
+        };
+        return col;
+      }
+
+      if (field.name === codeField) {
+        col.hideInSearch = true;
+      }
+
+      return col;
+    });
+
+    if (statusField) {
+      const statusCol: ProColumns<Record<string, unknown>> = {
+        title: t(statusField.labelKey),
+        dataIndex: 'status',
+        valueType: statusEnum ? 'select' : undefined,
+        valueEnum: statusEnum,
+        ...keepWidthProps(statusField.width ?? 100),
+        render: (_, row) => {
+          const value = row.status == null ? null : String(row.status);
+          if (statusPresentation === 'lifecycle') {
+            return renderOaApprovalStatusTag(statusEnum, value);
+          }
+          return renderOaStatusMarker(statusEnum, value);
+        },
+      };
+      if (statusPresentation === 'lifecycle') {
+        statusCol.key = 'lifecycle';
+        statusCol.fixed = 'right';
+      }
+      base.push(statusCol);
+    }
 
     base.push({
       title: t('app.kuaioa.common.actions'),
+      key: 'action',
       valueType: 'option',
+      fixed: 'right',
       width: 180,
+      hideInSearch: true,
       render: (_, record) => {
         const actions = [];
         if (perms.canUpdate) {
@@ -190,8 +280,22 @@ const KuaioaCrudListPage: React.FC<Props> = ({
         return actions;
       },
     });
-    return base;
-  }, [deleteFn, extraActions, fields, handleDelete, messageApi, perms.canDelete, perms.canUpdate, statusEnum, t]);
+
+    return alignProColumns(base, GLOBAL_DOC_LIST_FIELD_RANK);
+  }, [
+    codeField,
+    deleteFn,
+    extraActions,
+    fields,
+    handleDelete,
+    messageApi,
+    nameField,
+    perms.canDelete,
+    perms.canUpdate,
+    statusEnum,
+    statusPresentation,
+    t,
+  ]);
 
   if (!perms.canRead) {
     return <ListPageTemplate>{t('app.kuaioa.common.noPermission')}</ListPageTemplate>;

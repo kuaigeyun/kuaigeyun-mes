@@ -21,6 +21,8 @@ import {
 } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { App, Card, Tag, Space, message, Modal, Descriptions, Popconfirm, Button, Badge, Typography, Alert, Progress, Tooltip, theme, Upload, InputNumber, Form } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemStatusTag, renderSystemTypeMarker } from '../utils/systemListPresentation';
 import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea';
 import { EyeOutlined, PlusOutlined, ReloadOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined, SyncOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
@@ -315,7 +317,7 @@ const DataBackupsPage: React.FC = () => {
       failed: { color: 'error', text: t('pages.system.dataBackups.statusFailed') },
     };
     const statusInfo = statusMap[status] || { color: 'default', text: status };
-    return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+    return renderSystemStatusTag(statusInfo.text, statusInfo.color);
   };
 
   const getBackupTypeInfo = (backupType: string) => {
@@ -328,7 +330,7 @@ const DataBackupsPage: React.FC = () => {
 
   const getBackupTypeTag = (backupType: string) => {
     const typeInfo = getBackupTypeInfo(backupType);
-    return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
+    return renderSystemTypeMarker(typeInfo.text, typeInfo.color);
   };
 
   /**
@@ -532,7 +534,7 @@ const DataBackupsPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<DataBackup>[] = [
+  const columns = useMemo<ProColumns<DataBackup>[]>(() => alignProColumns([
     {
       title: t('pages.system.dataBackups.columnName'),
       dataIndex: 'name',
@@ -550,12 +552,18 @@ const DataBackupsPage: React.FC = () => {
       },
       render: (_: any, record: DataBackup) => getBackupTypeTag(record.backup_type),
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
       title: t('pages.system.dataBackups.columnScope'),
       dataIndex: 'include_files',
       key: 'include_files',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('pages.system.dataBackups.contentDataAndFiles') },
@@ -564,25 +572,15 @@ const DataBackupsPage: React.FC = () => {
       render: (_: unknown, record: DataBackup) => getBackupContentScopeText(record.include_files),
     },
     {
-      title: t('pages.system.dataBackups.columnStatus'),
-      dataIndex: 'status',
-      key: 'status',
-      valueEnum: {
-        pending: { text: t('pages.system.dataBackups.statusPending') },
-        running: { text: t('pages.system.dataBackups.statusRunning') },
-        success: { text: t('pages.system.dataBackups.statusSuccess') },
-        failed: { text: t('pages.system.dataBackups.statusFailed') },
-      },
-      render: (_: any, record: DataBackup) => getStatusTag(record.status),
-      width: 100,
-    },
-    {
       title: t('pages.system.dataBackups.columnRestoreStatus'),
       dataIndex: 'restore_status',
       key: 'restore_status',
       search: false,
       render: (_: any, record: DataBackup) => getRestoreStatusTag(record.restore_status, record.restore_error_message),
       width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
       title: t('pages.system.dataBackups.columnFileSize'),
@@ -591,6 +589,9 @@ const DataBackupsPage: React.FC = () => {
       search: false,
       render: (_: any, record: DataBackup) => formatFileSize(record.file_size),
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
       title: t('pages.system.dataBackups.columnCreatedAt'),
@@ -600,12 +601,34 @@ const DataBackupsPage: React.FC = () => {
       sorter: true,
       search: false,
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+    },
+    {
+      title: t('pages.system.dataBackups.columnStatus'),
+      dataIndex: 'status',
+      key: 'lifecycle',
+      valueEnum: {
+        pending: { text: t('pages.system.dataBackups.statusPending') },
+        running: { text: t('pages.system.dataBackups.statusRunning') },
+        success: { text: t('pages.system.dataBackups.statusSuccess') },
+        failed: { text: t('pages.system.dataBackups.statusFailed') },
+      },
+      render: (_: any, record: DataBackup) => getStatusTag(record.status),
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      fixed: 'right',
+      hideInSearch: true,
     },
     {
       title: t('pages.system.dataBackups.columnActions'),
-      key: 'option',
+      key: 'action',
       valueType: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_: any, record: DataBackup) => {
         const actions: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="view" onClick={() => handleViewDetail(record)}>
@@ -646,7 +669,7 @@ const DataBackupsPage: React.FC = () => {
         return actions;
       },
     },
-  ];
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleViewDetail, handleDownload, handleRestore, handleDelete]);
 
   /**
    * 详情列定义
@@ -708,7 +731,7 @@ const DataBackupsPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<DataBackup>
-          columnPersistenceId="pages.system.data-backups"
+          columnPersistenceId="pages.system.data-backups.list-v1"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

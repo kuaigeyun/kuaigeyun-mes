@@ -8,7 +8,8 @@ import {
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import type { ColumnsType } from 'antd/es/table';
-import { App, Button, Modal, Row, Col, Tag, Input, Table, InputNumber, Select } from 'antd';
+import { App, Button, Modal, Row, Col, Input, Table, InputNumber, Select } from 'antd';
+import { StatusTag } from '../../../../../constants/statusBadges';
 import { SendOutlined, CheckOutlined, CloseOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -206,7 +207,7 @@ const SparePartRequisitionsPage: React.FC = () => {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
         render: (_, r) => (
-          <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>
+          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
         ),
       },
       { title: t(`${P}.form.remark`, { defaultValue: '备注' }), dataIndex: 'remark', span: 2 },
@@ -273,20 +274,23 @@ const SparePartRequisitionsPage: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: t(`${P}.col.status`),
-        dataIndex: 'status',
-        width: 90,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, r) => <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>,
-      },
-      {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
         hideInTable: true,
         hideInSearch: true,
       },
       ...buildDocumentAuditColumns<SparePartRequisition>(t),
+      {
+        title: t(`${P}.col.status`),
+        key: 'lifecycle',
+        dataIndex: 'status',
+        sorter: true,
+        hideInSearch: true,
+        fixed: 'right',
+        render: (_, r) => (
+          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
+        ),
+      },
       {
         title: t('common.actions'),
         key: 'action',
@@ -371,7 +375,7 @@ const SparePartRequisitionsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<SparePartRequisition>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spare-part-requisitions"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spare-part-requisitions-equip-rank-v1"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

@@ -292,6 +292,8 @@ class InventoryAlertCapabilities(BaseModel):
 class ReplenishmentSuggestionCapabilities(BaseModel):
     process: ActionCapability
     ignore: ActionCapability
+    push_purchase_requisition: ActionCapability
+    push_purchase_order: ActionCapability
     print: ActionCapability
 
 
@@ -620,6 +622,9 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "outbound_hub.withdraw.outsource_issue": "委外发料不支持撤回",
     "inventory_alert.handle.already_handled": "该预警已处理，无法再次标记",
     "replenishment_suggestion.process.not_pending": "仅待处理状态的补货建议可处理",
+    "replenishment_suggestion.push.not_pending": "仅待处理状态的补货建议可下推",
+    "replenishment_suggestion.push.no_quantity": "建议补货数量须大于 0 才可下推",
+    "replenishment_suggestion.push_purchase_order.require_requisition": "当前组织要求先采购申请后下单，请下推采购申请",
     "quality_inspection.conduct.not_pending": "只有待检验状态的检验单才能执行检验",
     "quality_inspection.conduct.approved_locked": "已审核的检验单不可执行检验，请先撤销审核",
     "quality_inspection.approve.not_pending": "检验单审核状态不是待审核",

@@ -6,7 +6,7 @@ import { rowActionKind } from '../../../../components/uni-action';
  * 支持消息模板的 CRUD 操作。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -21,6 +21,8 @@ import {
 } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Button, Descriptions, Modal, Popconfirm, Tag } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
@@ -238,7 +240,7 @@ const MessageTemplateListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<MessageTemplate>[] = [
+  const columns = useMemo<ProColumns<MessageTemplate>[]>(() => alignProColumns([
     {
       title: t('pages.system.messageTemplate.templateName'),
       dataIndex: 'name',
@@ -250,11 +252,17 @@ const MessageTemplateListPage: React.FC = () => {
       title: t('pages.system.messageTemplate.templateCode'),
       dataIndex: 'code',
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
       title: t('pages.system.messageConfig.type'),
       dataIndex: 'type',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         email: { text: t('pages.system.messageConfig.typeEmail'), status: 'Success' },
@@ -264,13 +272,13 @@ const MessageTemplateListPage: React.FC = () => {
       },
       render: (_, record) => {
         const typeMap: Record<string, { color: string; text: string }> = {
-          email: { color: 'blue', text: t('pages.system.messageConfig.typeEmail') },
-          sms: { color: 'orange', text: t('pages.system.messageConfig.typeSms') },
-          internal: { color: 'green', text: t('pages.system.messageConfig.typeInternal') },
+          email: { color: 'processing', text: t('pages.system.messageConfig.typeEmail') },
+          sms: { color: 'warning', text: t('pages.system.messageConfig.typeSms') },
+          internal: { color: 'success', text: t('pages.system.messageConfig.typeInternal') },
           push: { color: 'default', text: t('pages.system.messageConfig.typePush') },
         };
         const typeInfo = typeMap[record.type] || { color: 'default', text: record.type };
-        return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
+        return renderSystemTypeMarker(typeInfo.text, typeInfo.color);
       },
     },
     {
@@ -290,29 +298,34 @@ const MessageTemplateListPage: React.FC = () => {
       title: t('pages.system.messageConfig.activeStatus'),
       dataIndex: 'is_active',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('pages.system.applications.enabled'), status: 'Success' },
         false: { text: t('pages.system.applications.disabled'), status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('pages.system.applications.enabled') : t('pages.system.applications.disabled')}
-        </Tag>
-      ),
+      render: (_, record) =>
+        renderSystemActiveTag(t, record.is_active, 'pages.system.applications.enabled', 'pages.system.applications.disabled'),
     },
     {
       title: t('pages.system.messageConfig.createdAt'),
       dataIndex: 'created_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
     },
     {
       title: t('pages.system.messageConfig.actions'),
+      key: 'action',
       valueType: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => [
             <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
               {t('pages.system.messageConfig.view')}
@@ -331,7 +344,7 @@ const MessageTemplateListPage: React.FC = () => {
             </Popconfirm>,
           ],
     },
-  ];
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleView, handleEdit, handleDelete]);
 
   /**
    * 详情列定义
@@ -414,7 +427,7 @@ const MessageTemplateListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MessageTemplate>
-        columnPersistenceId="pages.system.messages.template"
+        columnPersistenceId="pages.system.messages.template.list-v1"
         actionRef={actionRef}
         columns={columns}
         request={async (params, _sort, _filter, searchFormValues) => {

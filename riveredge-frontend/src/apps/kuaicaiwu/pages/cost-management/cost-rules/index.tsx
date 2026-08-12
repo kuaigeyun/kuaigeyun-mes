@@ -11,10 +11,14 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Descriptions, Typography, Timeline, Popconfirm } from 'antd';
+import { App, Button, Space, Descriptions, Typography, Timeline, Popconfirm } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import {
   ListPageTemplate,
@@ -27,6 +31,7 @@ import {
 import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDetailDescriptionItems';
 import { costRuleApi } from '../../../services/cost';
 import { getRuleTypeSelectOptions, getRuleTypeTag } from '../../../utils/costUiLabels';
+import { renderFinanceActiveTag } from '../../../utils/financeListPresentation';
 import dayjs from 'dayjs';
 import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
@@ -260,39 +265,84 @@ const CostRulePage: React.FC = () => {
         },
       },
       {
-        title: t('app.kuaicaiwu.costRule.col.code'),
-        dataIndex: 'code',
-        key: 'code',
-        width: 150,
+        title: t('app.kuaicaiwu.costRule.col.name'),
+        key: 'finance_doc_partner_stacked',
+        dataIndex: 'name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         fixed: 'left',
         hideInSearch: true,
         sorter: true,
         render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
-            {r.code ?? '-'}
-          </Typography.Text>
+          <UniTableStackedPrimaryCell
+            primary={String(r.name ?? '')}
+            secondary={String(r.code ?? '')}
+          />
         ),
       },
-      { title: t('app.kuaicaiwu.costRule.col.name'), dataIndex: 'name', key: 'name', width: 200, hideInSearch: true, sorter: true },
+      { title: t('app.kuaicaiwu.costRule.col.code'), dataIndex: 'code', key: 'code', hideInTable: true },
       {
         title: t('app.kuaicaiwu.costRule.col.ruleType'),
         dataIndex: 'rule_type',
         key: 'rule_type',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
         render: (dom) => getRuleTypeTag(String(dom ?? ''), t),
       },
-      { title: t('app.kuaicaiwu.costRule.col.costType'), dataIndex: 'cost_type', key: 'cost_type', width: 120, hideInSearch: true, sorter: true },
-      { title: t('app.kuaicaiwu.costRule.col.calculationMethod'), dataIndex: 'calculation_method', key: 'calculation_method', width: 120, hideInSearch: true, sorter: true },
-      { title: t('app.kuaicaiwu.costRule.col.allocationBasis'), dataIndex: 'allocation_basis', key: 'allocation_basis', width: 120, hideInSearch: true, sorter: true },
-      { title: t('app.kuaicaiwu.costRule.col.sourceModule'), dataIndex: 'source_module', key: 'source_module', width: 120, hideInSearch: true, sorter: true },
+      {
+        title: t('app.kuaicaiwu.costRule.col.costType'),
+        dataIndex: 'cost_type',
+        key: 'cost_type',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('app.kuaicaiwu.costRule.col.calculationMethod'),
+        dataIndex: 'calculation_method',
+        key: 'calculation_method',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('app.kuaicaiwu.costRule.col.allocationBasis'),
+        dataIndex: 'allocation_basis',
+        key: 'allocation_basis',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('app.kuaicaiwu.costRule.col.sourceModule'),
+        dataIndex: 'source_module',
+        key: 'source_module',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
+      },
       ...costDocCreatedUpdatedColumns<CostRule>(t),
       {
         title: t('app.kuaicaiwu.costCommon.action'),
+        key: 'action',
         valueType: 'option',
-        width: 150,
         fixed: 'right',
+        hideInSearch: true,
         render: (_: any, record: CostRule) => (
           <Space>
             <Button key="view" {...rowActionKind('read')} size="small" onClick={() => handleDetail(record)}>
@@ -338,11 +388,13 @@ const CostRulePage: React.FC = () => {
       {
         title: t('app.kuaicaiwu.costRule.col.isActive'),
         dataIndex: 'is_active',
-        render: (text: boolean) => (
-          <Tag color={text ? 'green' : 'red'}>
-            {text ? t('app.kuaicaiwu.costRule.status.enabled') : t('app.kuaicaiwu.costRule.status.disabled')}
-          </Tag>
-        ),
+        render: (text: boolean) =>
+          renderFinanceActiveTag(
+            t,
+            text,
+            'app.kuaicaiwu.costRule.status.enabled',
+            'app.kuaicaiwu.costRule.status.disabled',
+          ),
       },
       { title: t('app.kuaicaiwu.costCommon.description'), dataIndex: 'description' },
       { title: t('app.kuaicaiwu.costCommon.col.createdBy'), dataIndex: 'created_by_name' },
@@ -401,7 +453,7 @@ const CostRulePage: React.FC = () => {
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
-        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-rules"
+        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-rules.list-v1"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={COST_CRUD_PINNED_ACTIVE_FIELD}

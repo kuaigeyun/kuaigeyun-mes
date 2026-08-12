@@ -309,11 +309,22 @@ export function buildQualityReportFinishedColumns(t: TFunction): ProColumns[] {
 }
 
 export function buildQualityReportNonconformingColumns(t: TFunction): ProColumns[] {
+  const disposalEnum = getQualityDispositionValueEnum(t);
   return [
     { title: t('app.kuaizhizao.quality.reports.columns.handleCode'), dataIndex: 'handle_code', width: 150 },
     { title: t('app.kuaizhizao.quality.common.columns.materialName'), dataIndex: 'material_name', width: 200 },
     { title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'), dataIndex: 'unqualified_qty', valueType: 'digit', width: 100 },
-    { title: t('app.kuaizhizao.quality.reports.columns.disposalMethod'), dataIndex: 'disposal_method', width: 120 },
+    {
+      title: t('app.kuaizhizao.quality.reports.columns.disposalMethod'),
+      dataIndex: 'disposal_method',
+      width: 120,
+      valueEnum: disposalEnum,
+      render: (_, row) => {
+        const raw = String(row.disposal_method ?? '').trim();
+        if (!raw) return '-';
+        return disposalEnum[raw] ?? raw;
+      },
+    },
     { title: t('app.kuaizhizao.quality.reports.columns.disposalDate'), dataIndex: 'disposal_date', valueType: 'date', width: 120 },
   ];
 }

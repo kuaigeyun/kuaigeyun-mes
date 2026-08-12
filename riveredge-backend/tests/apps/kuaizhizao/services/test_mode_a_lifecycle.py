@@ -104,6 +104,23 @@ def test_shipment_notice_effective_shows_pending_ship():
     assert lc["current_stage_key"] == "pending_ship"
 
 
+def test_shipment_notice_linked_pending_delivery_stays_notified():
+    """通知仓库已生成待出库单时，生命周期仍为已通知，不得显示已出库。"""
+    lc = get_shipment_notice_lifecycle(
+        SimpleNamespace(status="已通知", sales_delivery_id=99, sales_delivery_code="XSFH1")
+    )
+    assert lc["current_stage_key"] == "notified"
+    assert lc["current_stage_name"] == "已通知"
+
+
+def test_shipment_notice_shipped_status_shows_shipped():
+    lc = get_shipment_notice_lifecycle(
+        SimpleNamespace(status="已出库", sales_delivery_id=99)
+    )
+    assert lc["current_stage_key"] == "shipped"
+    assert lc["current_stage_name"] == "已出库"
+
+
 def test_sales_delivery_effective_shows_pending_outbound():
     lc = get_sales_delivery_lifecycle(SimpleNamespace(status="待出库"))
     assert lc["current_stage_name"] == "待出库"

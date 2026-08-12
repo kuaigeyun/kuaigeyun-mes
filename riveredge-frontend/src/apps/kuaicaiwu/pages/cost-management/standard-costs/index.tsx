@@ -9,10 +9,14 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Popconfirm, Space, Tag } from 'antd';
+import { App, Button, Popconfirm, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { standardCostService, type StandardCost } from '../../../services/cost/standard-cost';
 import {
@@ -20,6 +24,7 @@ import {
   formatTargetType,
   getCostItemTypeSelectOptions,
 } from '../../../utils/financeUiLabels';
+import { renderFinanceActiveTag } from '../../../utils/financeListPresentation';
 import {
   COST_CRUD_PINNED_ACTIVE_FIELD,
   costDocCreatedUpdatedColumns,
@@ -67,32 +72,72 @@ const StandardCostsPage: React.FC = () => {
         targetName: t('app.kuaicaiwu.standardCost.col.targetName'),
       }),
       {
+        title: t('app.kuaicaiwu.standardCost.col.targetName'),
+        key: 'finance_doc_partner_stacked',
+        dataIndex: 'target_name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        fixed: 'left',
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => (
+          <UniTableStackedPrimaryCell
+            primary={String(r.target_name ?? '')}
+            secondary={String(r.target_code ?? '')}
+          />
+        ),
+      },
+      { title: t('app.kuaicaiwu.standardCost.col.targetCode'), dataIndex: 'target_code', hideInTable: true },
+      {
         title: t('app.kuaicaiwu.standardCost.col.targetType'),
         dataIndex: 'target_type',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
         render: (_, r) => formatTargetType(r.target_type, t),
       },
-      { title: t('app.kuaicaiwu.standardCost.col.targetCode'), dataIndex: 'target_code', width: 120, ellipsis: true, hideInSearch: true, sorter: true },
-      { title: t('app.kuaicaiwu.standardCost.col.targetName'), dataIndex: 'target_name', ellipsis: true, hideInSearch: true, sorter: true },
       {
         title: t('app.kuaicaiwu.standardCost.col.costItemType'),
         dataIndex: 'cost_item_type',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
         render: (_, r) => formatCostItemType(r.cost_item_type, t),
       },
       { title: t('app.kuaicaiwu.standardCost.col.standardValue'), dataIndex: 'standard_value', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
-      { title: t('app.kuaicaiwu.standardCost.col.unit'), dataIndex: 'unit', width: 80, hideInSearch: true, sorter: true },
-      { title: t('app.kuaicaiwu.standardCost.col.version'), dataIndex: 'version', width: 80, hideInSearch: true, sorter: true },
+      {
+        title: t('app.kuaicaiwu.standardCost.col.unit'),
+        dataIndex: 'unit',
+        width: 80,
+        minWidth: 80,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('app.kuaicaiwu.standardCost.col.version'),
+        dataIndex: 'version',
+        width: 80,
+        minWidth: 80,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
+      },
       {
         title: t('app.kuaicaiwu.standardCost.field.effectiveDate'),
         dataIndex: 'effective_date',
         valueType: 'date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
       },
@@ -108,6 +153,9 @@ const StandardCostsPage: React.FC = () => {
         title: t('app.kuaicaiwu.standardCost.col.status'),
         dataIndex: 'is_active',
         width: 80,
+        minWidth: 80,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
         valueType: 'select',
@@ -116,10 +164,11 @@ const StandardCostsPage: React.FC = () => {
           false: { text: t('app.kuaicaiwu.standardCost.status.inactive') },
         },
         render: (_, r) =>
-          r.is_active ? (
-            <Tag color="success">{t('app.kuaicaiwu.standardCost.status.active')}</Tag>
-          ) : (
-            <Tag>{t('app.kuaicaiwu.standardCost.status.inactive')}</Tag>
+          renderFinanceActiveTag(
+            t,
+            r.is_active,
+            'app.kuaicaiwu.standardCost.status.active',
+            'app.kuaicaiwu.standardCost.status.inactive',
           ),
       },
       ...costDocCreatedUpdatedColumns<StandardCost>(t),
@@ -127,7 +176,6 @@ const StandardCostsPage: React.FC = () => {
         title: t('app.kuaicaiwu.costCommon.action'),
         key: 'action',
         valueType: 'option',
-        width: 120,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => (
@@ -178,7 +226,7 @@ const StandardCostsPage: React.FC = () => {
       <UniTable<StandardCost>
         actionRef={actionRef}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.standard-costs"
+        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.standard-costs.list-v1"
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter

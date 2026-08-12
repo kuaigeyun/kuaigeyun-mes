@@ -7,9 +7,10 @@
 import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Tag, Typography } from 'antd';
+import { App, Button, Descriptions, Typography } from 'antd';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { PlusOutlined } from '@ant-design/icons';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
@@ -142,7 +143,7 @@ const ToolCalibrationsPage: React.FC = () => {
         render: (_, r) => {
           const color = r.result === '合格' ? 'success' : r.result === '不合格' ? 'error' : 'warning';
           const labelKey = r.result ? CALIBRATION_RESULT_LABEL_KEYS[r.result] : undefined;
-          return <Tag color={color}>{labelKey ? t(labelKey) : r.result || '-'}</Tag>;
+          return <MarkerTag color={color}>{labelKey ? t(labelKey) : r.result || '-'}</MarkerTag>;
         },
       },
       { title: t(`${P}.colCertificateNo`), dataIndex: 'certificate_no' },
@@ -199,6 +200,7 @@ const ToolCalibrationsPage: React.FC = () => {
       },
       {
         title: t(`${P}.colResult`),
+        key: 'equipment_calibration_result',
         dataIndex: 'result',
         width: 100,
         sorter: true,
@@ -206,7 +208,7 @@ const ToolCalibrationsPage: React.FC = () => {
         render: (_, r) => {
           const color = r.result === '合格' ? 'success' : r.result === '不合格' ? 'error' : 'warning';
           const labelKey = r.result ? CALIBRATION_RESULT_LABEL_KEYS[r.result] : undefined;
-          return <Tag color={color}>{labelKey ? t(labelKey) : r.result || '-'}</Tag>;
+          return <MarkerTag color={color}>{labelKey ? t(labelKey) : r.result || '-'}</MarkerTag>;
         },
       },
       {
@@ -258,7 +260,7 @@ const ToolCalibrationsPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<ToolCalibration>
         headerTitle={t(`${P}.title`)}
-        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-calibrations"
+        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-calibrations-equip-rank-v1"
         actionRef={actionRef}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}

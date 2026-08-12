@@ -24,7 +24,6 @@ import {
 import {
   App,
   Button,
-  Tag,
   Space,
   Tabs,
   Card,
@@ -52,6 +51,11 @@ import {
   BulbOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
@@ -619,16 +623,18 @@ const CostCalculationPage: React.FC = () => {
       }),
       {
         title: t('app.kuaicaiwu.costCalculation.col.calculationNo'),
+        key: 'finance_doc_partner_stacked',
         dataIndex: 'calculation_no',
-        key: 'calculation_no',
-        width: 150,
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         fixed: 'left',
         hideInSearch: true,
         sorter: true,
         render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.calculation_no ?? '') }} ellipsis>
-            {r.calculation_no ?? '-'}
-          </Typography.Text>
+          <UniTableStackedPrimaryCell
+            primary={String(r.product_name || r.product_code || '')}
+            secondary={String(r.calculation_no ?? '')}
+            onSecondaryClick={() => handleDetail(r)}
+          />
         ),
       },
       {
@@ -636,11 +642,18 @@ const CostCalculationPage: React.FC = () => {
         dataIndex: 'calculation_type',
         key: 'calculation_type',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
         render: (_, r) => {
           const text = r.calculation_type || '';
-          return <Tag color={calcTypeColor[text] || 'default'}>{formatCalculationType(text, t)}</Tag>;
+          return (
+            <MarkerTag color={calcTypeColor[text] || 'default'}>
+              {formatCalculationType(text, t)}
+            </MarkerTag>
+          );
         },
       },
       {
@@ -648,6 +661,9 @@ const CostCalculationPage: React.FC = () => {
         dataIndex: 'work_order_code',
         key: 'work_order_code',
         width: 150,
+        minWidth: 150,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
         render: (_, r) =>
@@ -662,6 +678,9 @@ const CostCalculationPage: React.FC = () => {
         dataIndex: 'product_code',
         key: 'product_code',
         width: 150,
+        minWidth: 150,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
         render: (_, r) =>
@@ -671,12 +690,15 @@ const CostCalculationPage: React.FC = () => {
             '-'
           ),
       },
-      { title: t('app.kuaicaiwu.costCalculation.col.productName'), dataIndex: 'product_name', key: 'product_name', width: 200, hideInSearch: true, sorter: true },
+      { title: t('app.kuaicaiwu.costCalculation.col.productName'), dataIndex: 'product_name', key: 'product_name', hideInTable: true },
       {
         title: t('app.kuaicaiwu.costCommon.col.quantity'),
         dataIndex: 'quantity',
         key: 'quantity',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
         render: (_, r) => formatQuantity(r.quantity),
@@ -686,6 +708,9 @@ const CostCalculationPage: React.FC = () => {
         dataIndex: 'material_cost',
         key: 'material_cost',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
         render: (_, r) => `¥${r.material_cost != null ? Number(r.material_cost).toFixed(2) : '0.00'}`,
@@ -695,6 +720,9 @@ const CostCalculationPage: React.FC = () => {
         dataIndex: 'labor_cost',
         key: 'labor_cost',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
         render: (_, r) => `¥${r.labor_cost != null ? Number(r.labor_cost).toFixed(2) : '0.00'}`,
@@ -704,6 +732,9 @@ const CostCalculationPage: React.FC = () => {
         dataIndex: 'manufacturing_cost',
         key: 'manufacturing_cost',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
         render: (_, r) => `¥${r.manufacturing_cost != null ? Number(r.manufacturing_cost).toFixed(2) : '0.00'}`,
@@ -713,6 +744,9 @@ const CostCalculationPage: React.FC = () => {
         dataIndex: 'total_cost',
         key: 'total_cost',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
         render: (_, r) => `¥${r.total_cost != null ? Number(r.total_cost).toFixed(2) : '0.00'}`,
@@ -722,6 +756,9 @@ const CostCalculationPage: React.FC = () => {
         dataIndex: 'unit_cost',
         key: 'unit_cost',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
         render: (_, r) => `¥${r.unit_cost != null ? Number(r.unit_cost).toFixed(2) : '0.00'}`,
@@ -731,7 +768,9 @@ const CostCalculationPage: React.FC = () => {
         dataIndex: 'calculation_date',
         key: 'calculation_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
         render: (_, r) => (r.calculation_date ? formatDateTime(r.calculation_date as string, 'YYYY-MM-DD') : '-'),
@@ -757,8 +796,8 @@ const CostCalculationPage: React.FC = () => {
         title: t('app.kuaicaiwu.costCommon.action'),
         valueType: 'option',
         key: 'action',
-        width: 100,
         fixed: 'right',
+        hideInSearch: true,
         render: (_: any, record: CostCalculation) => (
           <Button {...rowActionKind('read')} size="small" onClick={() => handleDetail(record)}>
             {t('app.kuaicaiwu.costCommon.detail')}
@@ -766,7 +805,7 @@ const CostCalculationPage: React.FC = () => {
         ),
       },
     ],
-    [t, calculationStatusEnum],
+    [t, calculationStatusEnum, handleDetail],
   );
 
   const detailItems: ProDescriptionsItemProps<CostCalculation>[] = useMemo(
@@ -843,7 +882,7 @@ const CostCalculationPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<CostCalculation>
         actionRef={actionRef}
-        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-calculations"
+        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-calculations.list-v1"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={COST_CALCULATION_PINNED_STATUS_FIELD}

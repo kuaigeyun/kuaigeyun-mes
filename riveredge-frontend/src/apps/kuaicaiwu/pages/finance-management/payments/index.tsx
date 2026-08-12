@@ -6,7 +6,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Tag, Drawer, Descriptions, Spin, Alert, Table, Empty, Form } from 'antd';
+import { App, Button, Modal, Typography, Drawer, Descriptions, Spin, Alert, Table, Empty, Form } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { PlusOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
@@ -62,6 +62,11 @@ import {
 } from '../../../utils/financeListCore';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
 type PullPayableCandidate = PaymentPullCandidate;
@@ -382,7 +387,7 @@ const PaymentsPage: React.FC = () => {
         align: 'center' as const,
         render: (v: unknown) => {
           const { text, color } = getStatusDisplay(v);
-          return text === '-' ? '-' : <Tag color={color}>{text}</Tag>;
+          return text === '-' ? '-' : <MarkerTag color={color}>{text}</MarkerTag>;
         },
       },
       { title: t('app.kuaicaiwu.common.reviewStatus'), dataIndex: 'review_status', width: 120, align: 'center' as const },
@@ -437,23 +442,24 @@ const PaymentsPage: React.FC = () => {
     }),
     {
       title: t(`${P}.col.code`),
+      key: 'finance_doc_partner_stacked',
       dataIndex: 'payment_code',
-      width: 168,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
       hideInSearch: true,
       sorter: true,
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.payment_code ?? '') }} ellipsis>
-          {r.payment_code ?? '-'}
-        </Typography.Text>
+        <UniTableStackedPrimaryCell
+          primary={String(r.supplier_name ?? '')}
+          secondary={String(r.payment_code ?? '')}
+          onSecondaryClick={() => openDetail(r)}
+        />
       ),
     },
     {
       title: t('app.kuaicaiwu.common.supplier'),
       dataIndex: 'supplier_name',
-      width: 200,
-      hideInSearch: true,
-      sorter: true,
+      hideInTable: true,
     },
     {
       title: t(`${P}.col.totalAmount`),
@@ -461,6 +467,9 @@ const PaymentsPage: React.FC = () => {
       valueType: 'money',
       align: 'right',
       width: 130,
+      minWidth: 130,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
     },
@@ -470,6 +479,9 @@ const PaymentsPage: React.FC = () => {
       valueType: 'money',
       align: 'right',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
     },
@@ -478,6 +490,9 @@ const PaymentsPage: React.FC = () => {
       dataIndex: 'unsettled_amount',
       align: 'right',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
       render: (_, record) => (
@@ -491,6 +506,9 @@ const PaymentsPage: React.FC = () => {
       dataIndex: 'payment_date',
       valueType: 'date',
       width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
     },
@@ -506,6 +524,9 @@ const PaymentsPage: React.FC = () => {
       title: t(`${P}.col.paymentMethod`),
       dataIndex: 'payment_method',
       width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
       render: (_, record) => formatPaymentMethod(record.payment_method, t),
@@ -531,6 +552,7 @@ const PaymentsPage: React.FC = () => {
     ...financeDocCreatedUpdatedColumns<PaymentVoucher>(t),
     {
       title: t('app.kuaicaiwu.common.lifecycle'),
+      key: 'lifecycle',
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       hideInSearch: true,
@@ -550,9 +572,10 @@ const PaymentsPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
       fixed: 'right',
-      width: 220,
+      hideInSearch: true,
       render: (_, record) => [
             <Button {...rowActionKind('read')} key="det" onClick={() => openDetail(record)}>
               {t('common.detail')}
@@ -583,7 +606,7 @@ const PaymentsPage: React.FC = () => {
             ) : null,
           ].filter(Boolean) as React.ReactNode[],
     },
-  ], [t, navigate, supplierOptions, paymentSettlementTypeOptions, paymentPerms]);
+  ], [t, navigate, supplierOptions, paymentSettlementTypeOptions, paymentPerms, openDetail]);
 
   return (
     <ListPageTemplate>
@@ -594,7 +617,7 @@ const PaymentsPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payments"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payments.list-v1"
         showAdvancedSearch
         search={{ labelWidth: 120 }}
         showCreateButton={false}

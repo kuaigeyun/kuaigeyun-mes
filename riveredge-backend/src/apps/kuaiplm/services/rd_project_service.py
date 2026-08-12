@@ -112,12 +112,52 @@ class RdProjectService(AppBaseService[RdProject]):
         ).all()
         return {s.id: s.project_code for s in sources}
 
+    @staticmethod
+    def _resolve_current_gate_name(
+        current_gate_key: Optional[str],
+        gates: Optional[List[RdProjectGate]] = None,
+    ) -> Optional[str]:
+        if not gates:
+            return current_gate_key
+        if current_gate_key:
+            for gate in gates:
+                if gate.gate_key == current_gate_key:
+                    return gate.gate_name or current_gate_key
+            return current_gate_key
+        first_open = next(
+            (g for g in gates if g.status not in ("PASSED", "SKIPPED")),
+            None,
+        )
+        if first_open:
+            return first_open.gate_name or first_open.gate_key
+        return gates[0].gate_name or gates[0].gate_key
+
+    async def _load_gates_by_project(
+        self, tenant_id: int, project_ids: List[int]
+    ) -> Dict[int, List[RdProjectGate]]:
+        if not project_ids:
+            return {}
+        gates = await RdProjectGate.filter(
+            tenant_id=tenant_id, project_id__in=project_ids
+        ).order_by("sort_order", "id").all()
+        by_project: Dict[int, List[RdProjectGate]] = {}
+        for gate in gates:
+            by_project.setdefault(gate.project_id, []).append(gate)
+        return by_project
+
     def _to_project_response(
-        self, project: RdProject, source_codes: Optional[Dict[int, str]] = None
+        self,
+        project: RdProject,
+        source_codes: Optional[Dict[int, str]] = None,
+        gates_by_project: Optional[Dict[int, List[RdProjectGate]]] = None,
     ) -> RdProjectResponse:
         data = RdProjectResponse.model_validate(project)
         if project.source_project_id and source_codes:
             data.source_project_code = source_codes.get(project.source_project_id)
+        gates = (gates_by_project or {}).get(project.id)
+        data.current_gate_name = self._resolve_current_gate_name(
+            project.current_gate_key, gates
+        )
         return data
 
     async def _resolve_gate_template(
@@ -345,12 +385,18 @@ class RdProjectService(AppBaseService[RdProject]):
         total = await qs.count()
         rows = await qs.order_by(order_expr).offset(skip).limit(limit).all()
         source_codes = await self._load_source_project_codes(tenant_id, rows)
-        return [self._to_project_response(r, source_codes) for r in rows], total
+        gates_by_project = await self._load_gates_by_project(
+            tenant_id, [int(r.id) for r in rows]
+        )
+        return [
+            self._to_project_response(r, source_codes, gates_by_project) for r in rows
+        ], total
 
     async def get_project(self, tenant_id: int, project_id: int) -> RdProjectResponse:
         project = await self._get_project_or_404(tenant_id, project_id)
         source_codes = await self._load_source_project_codes(tenant_id, [project])
-        return self._to_project_response(project, source_codes)
+        gates_by_project = await self._load_gates_by_project(tenant_id, [int(project.id)])
+        return self._to_project_response(project, source_codes, gates_by_project)
 
     async def get_workbench(self, tenant_id: int, project_id: int) -> RdProjectWorkbenchResponse:
         project = await self._get_project_or_404(tenant_id, project_id)
@@ -394,7 +440,9 @@ class RdProjectService(AppBaseService[RdProject]):
         ).count()
         progress = compute_project_progress(gates, tasks, deliverables)
         source_codes = await self._load_source_project_codes(tenant_id, [project])
-        base = self._to_project_response(project, source_codes)
+        base = self._to_project_response(
+            project, source_codes, {int(project.id): gates}
+        )
         return RdProjectWorkbenchResponse.model_validate({
             **base.model_dump(),
             "gates": [RdProjectGateResponse.model_validate(g) for g in gates],
@@ -457,7 +505,10 @@ class RdProjectService(AppBaseService[RdProject]):
                 gate_template_id=data.gate_template_id,
             )
             source_codes = await self._load_source_project_codes(tenant_id, [project])
-            return self._to_project_response(project, source_codes)
+            gates_by_project = await self._load_gates_by_project(
+                tenant_id, [int(project.id)]
+            )
+            return self._to_project_response(project, source_codes, gates_by_project)
 
     async def spawn_delivery_project(
         self,
@@ -488,7 +539,9 @@ class RdProjectService(AppBaseService[RdProject]):
             if val is not None:
                 update_fields[field] = val
         await project.update_from_dict(update_fields).save()
-        return RdProjectResponse.model_validate(project)
+        source_codes = await self._load_source_project_codes(tenant_id, [project])
+        gates_by_project = await self._load_gates_by_project(tenant_id, [int(project.id)])
+        return self._to_project_response(project, source_codes, gates_by_project)
 
     async def delete_project(self, tenant_id: int, project_id: int, deleted_by: int) -> None:
         project = await self._get_project_or_404(tenant_id, project_id)

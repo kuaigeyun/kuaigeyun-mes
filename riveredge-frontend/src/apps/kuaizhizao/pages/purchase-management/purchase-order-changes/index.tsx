@@ -524,8 +524,11 @@ const PurchaseOrderChangesPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.purchaseOrderChange.colSourceOrder'),
         dataIndex: 'source_order_code',
-        width: 132,
+        width: 180,
+        minWidth: 180,
         uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: false,
         sorter: true,
         hideInSearch: false,
         render: (_, record) => (
@@ -727,7 +730,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
         onTableDataChange={(rows) => {
           tableRowsRef.current = rows;
         }}
-        columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-order-changes"
+        columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-order-changes.list-v1"
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
         pinnedTabsValueEnum={orderChangeLifecycleValueEnum}
         showAdvancedSearch={true}

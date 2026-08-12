@@ -10,6 +10,8 @@ import { rowActionKind } from '../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Badge, Tag, Button, Space, Typography } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemStatusTag } from '../../system/utils/systemListPresentation';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
@@ -186,7 +188,7 @@ const UserTasksPage: React.FC = () => {
       cancelled: { color: 'default', text: t('pages.personal.tasks.statusCancelled') },
     };
     const statusInfo = statusMap[status] || { color: 'default', text: status };
-    return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+    return renderSystemStatusTag(statusInfo.text, statusInfo.color);
   }, [t]);
 
   /**
@@ -278,7 +280,7 @@ const UserTasksPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<UserTask>[]>(() => [
+  const columns = useMemo<ProColumns<UserTask>[]>(() => alignProColumns([
     {
       title: t('pages.personal.tasks.title'),
       dataIndex: 'title',
@@ -305,23 +307,13 @@ const UserTasksPage: React.FC = () => {
       render: (_: any, record: UserTask) => formatApprovalTaskContent(record.content, t),
     },
     {
-      title: t('pages.personal.tasks.status'),
-      dataIndex: 'status',
-      key: 'status',
-      width: 100,
-      valueEnum: {
-        pending: { text: t('pages.personal.tasks.statusPending') },
-        approved: { text: t('pages.personal.tasks.statusApproved') },
-        rejected: { text: t('pages.personal.tasks.statusRejected') },
-        cancelled: { text: t('pages.personal.tasks.statusCancelled') },
-      },
-      render: (_: any, record: UserTask) => getStatusTag(record.status),
-    },
-    {
       title: taskType === 'submitted' ? t('pages.personal.tasks.currentApproverId') : t('pages.personal.tasks.submitter'),
       dataIndex: taskType === 'submitted' ? 'current_approver_name' : 'submitter_name',
       key: 'relation',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       render: (_: any, record: UserTask) => {
         if (taskType === 'submitted') {
@@ -338,12 +330,34 @@ const UserTasksPage: React.FC = () => {
       hideInSearch: true,
       sorter: true,
       width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+    },
+    {
+      title: t('pages.personal.tasks.status'),
+      dataIndex: 'status',
+      key: 'lifecycle',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      fixed: 'right',
+      hideInSearch: true,
+      valueEnum: {
+        pending: { text: t('pages.personal.tasks.statusPending') },
+        approved: { text: t('pages.personal.tasks.statusApproved') },
+        rejected: { text: t('pages.personal.tasks.statusRejected') },
+        cancelled: { text: t('pages.personal.tasks.statusCancelled') },
+      },
+      render: (_: any, record: UserTask) => getStatusTag(record.status),
     },
     {
       title: t('pages.personal.tasks.actions'),
+      key: 'action',
       valueType: 'option',
-      width: 160,
       fixed: 'right',
+      hideInSearch: true,
       render: (_: any, record: UserTask) => {
         const isPending = record.status === 'pending' && taskType === 'pending';
         return (
@@ -397,7 +411,7 @@ const UserTasksPage: React.FC = () => {
         );
       },
     },
-  ], [taskType, t, handleView, handleProcessTask, handleDeleteTask, getStatusTag, modalApi]);
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [taskType, t, handleView, handleProcessTask, handleDeleteTask, getStatusTag, modalApi]);
 
   /**
    * 详情列定义
@@ -505,7 +519,7 @@ const UserTasksPage: React.FC = () => {
         ]}
       >
         <UniTable<UserTask>
-          columnPersistenceId="pages.personal.tasks"
+          columnPersistenceId="pages.personal.tasks.list-v1"
           headerTitle={t('pages.personal.tasks.headerTitle')}
           actionRef={actionRef}
           columns={columns}

@@ -265,7 +265,7 @@ const ToolReturnsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<ToolReturn>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-returns"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-returns-equip-rank-v1"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

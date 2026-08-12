@@ -120,19 +120,19 @@ class DemandComputationBase(BaseModel):
             raise ValueError("demand_ids 不能为空列表")
         return v
 
+
+class DemandComputationCreate(DemandComputationBase):
+    """创建需求计算Schema"""
+    items: Optional[List[DemandComputationItemBase]] = Field(default_factory=list, description="计算结果明细列表")
+
     @model_validator(mode="after")
     def validate_demand_source(self):
-        """demand_id 与 demand_ids 二选一，至少提供一个"""
+        """创建时 demand_id 与 demand_ids 二选一，至少提供一个"""
         if self.demand_id is None and (self.demand_ids is None or len(self.demand_ids) == 0):
             raise ValueError("必须提供 demand_id 或 demand_ids")
         if self.demand_id is not None and self.demand_ids is not None:
             raise ValueError("demand_id 与 demand_ids 二选一，不能同时提供")
         return self
-
-
-class DemandComputationCreate(DemandComputationBase):
-    """创建需求计算Schema"""
-    items: Optional[List[DemandComputationItemBase]] = Field(default_factory=list, description="计算结果明细列表")
 
 
 class ExecuteComputationRequest(BaseModel):
@@ -245,6 +245,10 @@ class DemandComputationResponse(DemandComputationBase):
     created_by_name: Optional[str] = Field(None, description="创建人姓名")
     updated_by: Optional[int] = None
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
+    source_id: Optional[int] = Field(
+        None,
+        description="首个来源单据ID：销售订单/销售预测为上游单据ID；需求计划为 Demand.id",
+    )
     items: Optional[List[DemandComputationItemResponse]] = Field(default_factory=list)
     downstream_push_progress: Optional[float] = Field(
         None, description="下推进度 0-100（列表用）"

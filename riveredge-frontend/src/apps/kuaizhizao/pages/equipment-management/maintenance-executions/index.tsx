@@ -2,7 +2,8 @@ import React, { useRef, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Modal, Tag, Typography } from 'antd';
+import { App, Button, Descriptions, Modal, Typography } from 'antd';
+import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   ListPageTemplate,
@@ -110,10 +111,16 @@ const MaintenanceExecutionsPage: React.FC = () => {
         title: t(`${P}.col.executionResult`),
         dataIndex: 'execution_result',
         render: (_, r) => (
-          <Tag color={RESULT_COLORS[r.execution_result ?? ''] ?? 'default'}>{r.execution_result ?? '-'}</Tag>
+          <MarkerTag color={RESULT_COLORS[r.execution_result ?? ''] ?? 'default'}>
+            {r.execution_result ?? '-'}
+          </MarkerTag>
         ),
       },
-      { title: t(`${P}.col.status`), dataIndex: 'status' },
+      {
+        title: t(`${P}.col.status`),
+        dataIndex: 'status',
+        render: (_, r) => <StatusTag>{r.status ?? '-'}</StatusTag>,
+      },
       { title: t(`${P}.col.executionContent`), dataIndex: 'execution_content', span: 2 },
       {
         title: t(`${P}.col.source`),
@@ -225,17 +232,10 @@ const MaintenanceExecutionsPage: React.FC = () => {
         sorter: true,
         hideInSearch: true,
         render: (_, r) => (
-          <Tag color={RESULT_COLORS[r.execution_result ?? ''] ?? 'default'}>
+          <MarkerTag color={RESULT_COLORS[r.execution_result ?? ''] ?? 'default'}>
             {r.execution_result ?? '-'}
-          </Tag>
+          </MarkerTag>
         ),
-      },
-      {
-        title: t(`${P}.col.status`),
-        dataIndex: 'status',
-        width: 100,
-        sorter: true,
-        hideInSearch: true,
       },
       {
         title: t(`${P}.col.source`),
@@ -260,6 +260,15 @@ const MaintenanceExecutionsPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<MaintenanceExecution>(t),
       {
+        title: t(`${P}.col.status`),
+        key: 'lifecycle',
+        dataIndex: 'status',
+        sorter: true,
+        hideInSearch: true,
+        fixed: 'right',
+        render: (_, r) => <StatusTag>{r.status ?? '-'}</StatusTag>,
+      },
+      {
         title: t('common.actions'),
         valueType: 'option',
         fixed: 'right',
@@ -280,7 +289,7 @@ const MaintenanceExecutionsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<MaintenanceExecution>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-executions"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-executions-equip-rank-v1"
           actionRef={actionRef}
           rowKey="uuid"
           enableRowSelection={perms.canDelete}

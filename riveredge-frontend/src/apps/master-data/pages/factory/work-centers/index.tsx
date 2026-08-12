@@ -8,7 +8,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { Alert, App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
+import { Alert, App, Button, Descriptions, List, Modal, Popconfirm, Space, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -29,6 +29,9 @@ import {
   normalizeMasterListResponse,
   resolveMasterCrudListParams,
 } from '../../../utils/masterListCore';
+import {
+  renderMasterActiveTag,
+} from '../../../utils/masterListPresentation';
 import { WorkCenterFormModal } from '../../../components/WorkCenterFormModal';
 import type { WorkCenter, WorkCenterCreate, Workstation } from '../../../types/factory';
 import { downloadFile } from '../../../../../utils';
@@ -460,7 +463,10 @@ const WorkCentersPage: React.FC = () => {
     {
       title: t('field.workCenter.code'),
       dataIndex: 'code',
-      width: 150,
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       fixed: 'left',
       ellipsis: true,
       copyable: true,
@@ -470,7 +476,10 @@ const WorkCentersPage: React.FC = () => {
     {
       title: t('field.workCenter.name'),
       dataIndex: 'name',
-      width: 200,
+      width: 168,
+      minWidth: 168,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
@@ -478,7 +487,10 @@ const WorkCentersPage: React.FC = () => {
     {
       title: t('field.workCenter.description'),
       dataIndex: 'description',
-      width: 250,
+      width: 168,
+      minWidth: 168,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
     },
@@ -495,19 +507,19 @@ const WorkCentersPage: React.FC = () => {
     {
       title: t('field.workCenter.isActive'),
       dataIndex: 'isActive',
-      width: 100,
+      width: 88,
+      minWidth: 88,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
       valueEnum: workCenterActiveValueEnum,
-      render: (_, record) => (
-        <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
-          {record?.isActive ? t('common.enabled') : t('common.disabled')}
-        </Tag>
-      ),
+      render: (_, record) => renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled'),
     },
     ...masterCrudCreatedUpdatedColumns<WorkCenter>(t),
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
       width: 150,
       fixed: 'right',
@@ -567,11 +579,7 @@ const WorkCentersPage: React.FC = () => {
     {
       title: t('field.workCenter.isActive'),
       dataIndex: 'isActive',
-      render: (_: React.ReactNode, record: WorkCenter) => (
-        <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
-          {record?.isActive ? t('common.enabled') : t('common.disabled')}
-        </Tag>
-      ),
+      render: (_: React.ReactNode, record: WorkCenter) => renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled'),
     },
     { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
     { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
@@ -588,7 +596,7 @@ const WorkCentersPage: React.FC = () => {
           message={t('app.master-data.workCenters.dimensionHint')}
         />
         <UniTable<WorkCenter>
-          columnPersistenceId="apps.master-data.pages.factory.work-centers.status-v2"
+          columnPersistenceId="apps.master-data.pages.factory.work-centers.list-v1"
           actionRef={actionRef}
           columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
           viewTypes={['table', 'help']}

@@ -15,6 +15,8 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProFormItem, ProFormDependency } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Badge, Button, Col, Descriptions, Form, Input, Popconfirm, Row, Space, Spin, Tag, Tooltip, theme } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SearchOutlined, DatabaseOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
@@ -932,7 +934,7 @@ const CustomFieldListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<CustomField>[] = [
+  const columns = useMemo<ProColumns<CustomField>[]>(() => alignProColumns([
     {
       title: t('field.customField.name'),
       dataIndex: 'name',
@@ -943,6 +945,9 @@ const CustomFieldListPage: React.FC = () => {
       title: t('field.customField.code'),
       dataIndex: 'code',
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
       title: t('field.customField.tableName'),
@@ -954,6 +959,9 @@ const CustomFieldListPage: React.FC = () => {
       title: t('field.customField.fieldType'),
       dataIndex: 'field_type',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         text: { text: t('field.customField.typeText'), status: 'Default' },
@@ -974,22 +982,22 @@ const CustomFieldListPage: React.FC = () => {
       render: (_, record) => {
         const typeMap: Record<string, { color: string; textKey: string }> = {
           text: { color: 'default', textKey: 'field.customField.typeText' },
-          number: { color: 'blue', textKey: 'field.customField.typeNumber' },
-          image: { color: 'green', textKey: 'field.customField.typeImage' },
-          file: { color: 'orange', textKey: 'field.customField.typeFile' },
-          date: { color: 'green', textKey: 'field.customField.typeDate' },
+          number: { color: 'processing', textKey: 'field.customField.typeNumber' },
+          image: { color: 'success', textKey: 'field.customField.typeImage' },
+          file: { color: 'warning', textKey: 'field.customField.typeFile' },
+          date: { color: 'success', textKey: 'field.customField.typeDate' },
           time: { color: 'cyan', textKey: 'field.customField.typeTime' },
-          datetime: { color: 'blue', textKey: 'field.customField.typeDatetime' },
-          select: { color: 'orange', textKey: 'field.customField.typeSelect' },
+          datetime: { color: 'processing', textKey: 'field.customField.typeDatetime' },
+          select: { color: 'warning', textKey: 'field.customField.typeSelect' },
           multiselect: { color: 'purple', textKey: 'field.customField.typeMultiselect' },
-          associated_object: { color: 'geekblue', textKey: 'field.customField.typeAssociatedObject' },
+          associated_object: { color: 'processing', textKey: 'field.customField.typeAssociatedObject' },
           associated_attribute: { color: 'purple', textKey: 'field.customField.typeAssociatedAttribute' },
-          formula: { color: 'red', textKey: 'field.customField.typeFormula' },
-          textarea: { color: 'red', textKey: 'field.customField.typeTextarea' },
+          formula: { color: 'error', textKey: 'field.customField.typeFormula' },
+          textarea: { color: 'error', textKey: 'field.customField.typeTextarea' },
           json: { color: 'purple', textKey: 'field.customField.typeJson' },
         };
         const typeInfo = typeMap[record.field_type] || { color: 'default', textKey: record.field_type };
-        return <Tag color={typeInfo.color}>{t(typeInfo.textKey)}</Tag>;
+        return renderSystemTypeMarker(t(typeInfo.textKey), typeInfo.color);
       },
     },
     {
@@ -1002,21 +1010,23 @@ const CustomFieldListPage: React.FC = () => {
       title: t('field.customField.isRequired'),
       dataIndex: 'is_required',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('field.customField.yes'), status: 'Success' },
         false: { text: t('field.customField.no'), status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_required ? 'success' : 'default'}>
-          {record.is_required ? t('field.customField.yes') : t('field.customField.no')}
-        </Tag>
-      ),
+      render: (_, record) => renderSystemYesNoTag(t, record.is_required),
     },
     {
       title: t('field.customField.sortOrder'),
       dataIndex: 'sort_order',
       width: 80,
+      minWidth: 80,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
     },
@@ -1024,29 +1034,34 @@ const CustomFieldListPage: React.FC = () => {
       title: t('field.customField.status'),
       dataIndex: 'is_active',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('field.customField.enabled'), status: 'Success' },
         false: { text: t('field.customField.disabled'), status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('field.customField.enabled') : t('field.customField.disabled')}
-        </Tag>
-      ),
+      render: (_, record) =>
+        renderSystemActiveTag(t, record.is_active, 'field.customField.enabled', 'field.customField.disabled'),
     },
     {
       title: t('field.customField.createdAt'),
       dataIndex: 'created_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
     },
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => [
             <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
               {t('field.customField.view')}
@@ -1061,7 +1076,7 @@ const CustomFieldListPage: React.FC = () => {
             </Popconfirm>,
           ],
     },
-  ];
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleView, handleEdit, handleDelete]);
 
   // 获取过滤后的页面列表和选中的页面配置
   const filteredPages = React.useMemo(() => {
@@ -1340,7 +1355,7 @@ const CustomFieldListPage: React.FC = () => {
                 {/* 字段列表 */}
                 <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '24px' }}>
                   <UniTable<CustomField>
-                    columnPersistenceId="pages.system.custom-fields.list"
+                    columnPersistenceId="pages.system.custom-fields.list-v1"
                     actionRef={actionRef}
                     params={{ table_name: selectedPage.tableName }}
                     columns={columns}

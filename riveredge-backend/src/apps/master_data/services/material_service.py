@@ -2404,7 +2404,14 @@ class MaterialService:
             
             if existing:
                 raise ValidationError(f"物料编码 {data.code} 已存在")
-        
+
+        # 主编号创建后不可修改（允许请求体带回原值；禁止改成其它值）
+        if data.main_code is not None:
+            incoming_main = str(data.main_code).strip()
+            current_main = str(material.main_code or "").strip()
+            if incoming_main and incoming_main != current_main:
+                raise ValidationError("物料主编号不可修改")
+
         # 如果是属性物料，验证属性组合唯一性和属性值
         if data.variant_managed is not None and data.variant_managed and data.variant_attributes is not None:
             # 验证属性值
@@ -2444,6 +2451,8 @@ class MaterialService:
             update_data = data.model_dump(exclude_unset=True, exclude={"department_codes", "customer_codes", "supplier_codes", "defaults"})
         else:
             update_data = data.dict(exclude_unset=True, exclude={"department_codes", "customer_codes", "supplier_codes", "defaults"})
+        # 主编号不可改：从更新字典移除，避免空串/同值覆盖
+        update_data.pop("main_code", None)
 
         from apps.kuaizhizao.services.inspection_policy_service import (
             assert_master_data_inspection_stages_allowed,

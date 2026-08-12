@@ -1,7 +1,8 @@
 import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Tag, Typography } from 'antd';
+import { App, Button, Descriptions, Typography } from 'antd';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -136,7 +137,7 @@ const EquipmentCalibrationsPage: React.FC = () => {
         render: (_, r) => {
           const color = r.result === '合格' ? 'success' : r.result === '不合格' ? 'error' : 'warning';
           const labelKey = r.result ? CALIBRATION_RESULT_LABEL_KEYS[r.result] : undefined;
-          return <Tag color={color}>{labelKey ? t(labelKey) : r.result || '-'}</Tag>;
+          return <MarkerTag color={color}>{labelKey ? t(labelKey) : r.result || '-'}</MarkerTag>;
         },
       },
       { title: t(`${P}.colCertificateNo`), dataIndex: 'certificate_no' },
@@ -192,6 +193,7 @@ const EquipmentCalibrationsPage: React.FC = () => {
       },
       {
         title: t(`${P}.colResult`),
+        key: 'equipment_calibration_result',
         dataIndex: 'result',
         width: 100,
         sorter: true,
@@ -199,7 +201,7 @@ const EquipmentCalibrationsPage: React.FC = () => {
         render: (_, r) => {
           const color = r.result === '合格' ? 'success' : r.result === '不合格' ? 'error' : 'warning';
           const labelKey = r.result ? CALIBRATION_RESULT_LABEL_KEYS[r.result] : undefined;
-          return <Tag color={color}>{labelKey ? t(labelKey) : r.result || '-'}</Tag>;
+          return <MarkerTag color={color}>{labelKey ? t(labelKey) : r.result || '-'}</MarkerTag>;
         },
       },
       {
@@ -250,7 +252,7 @@ const EquipmentCalibrationsPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<EquipmentCalibration>
         headerTitle={t(`${P}.title`)}
-        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-calibrations"
+        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-calibrations-equip-rank-v1"
         actionRef={actionRef}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}

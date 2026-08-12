@@ -11,6 +11,8 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Badge, Button, Card, Descriptions, Form, Modal, Popconfirm, Space, Tag, Tooltip, Typography, theme } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PrinterOutlined, CheckCircleOutlined, PrinterFilled } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
@@ -523,7 +525,7 @@ const PrintDeviceListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<PrintDevice>[] = [
+  const columns = useMemo<ProColumns<PrintDevice>[]>(() => alignProColumns([
     {
       title: t('pages.system.printDevices.columnName'),
       dataIndex: 'name',
@@ -534,12 +536,18 @@ const PrintDeviceListPage: React.FC = () => {
       title: t('pages.system.printDevices.columnCode'),
       dataIndex: 'code',
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
     },
     {
       title: t('pages.system.printDevices.columnType'),
       dataIndex: 'type',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         local: { text: t('pages.system.printDevices.typeLocal') },
@@ -549,56 +557,67 @@ const PrintDeviceListPage: React.FC = () => {
       },
       render: (_, record) => {
         const typeInfo = getTypeInfo(record.type, t);
-        return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
+        return renderSystemTypeMarker(typeInfo.text, typeInfo.color);
       },
     },
     {
       title: t('pages.system.printDevices.columnActive'),
       dataIndex: 'is_active',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('pages.system.printDevices.enabled'), status: 'Success' },
         false: { text: t('pages.system.printDevices.disabled'), status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('pages.system.printDevices.enabled') : t('pages.system.printDevices.disabled')}
-        </Tag>
-      ),
+      render: (_, record) =>
+        renderSystemActiveTag(t, record.is_active, 'pages.system.printDevices.enabled', 'pages.system.printDevices.disabled'),
     },
     {
       title: t('pages.system.printDevices.columnOnline'),
       dataIndex: 'is_online',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
-      render: (_, record) => (
-        <Tag color={record.is_online ? 'success' : 'error'}>
-          {record.is_online ? t('pages.system.printDevices.statusOnline') : t('pages.system.printDevices.statusOffline')}
-        </Tag>
-      ),
+      render: (_, record) =>
+        renderSystemTypeMarker(
+          record.is_online ? t('pages.system.printDevices.statusOnline') : t('pages.system.printDevices.statusOffline'),
+          record.is_online ? 'success' : 'error',
+        ),
     },
     {
       title: t('pages.system.printDevices.columnDefault'),
       dataIndex: 'is_default',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
-      render: (_, record) => (
-        <Tag color={record.is_default ? 'processing' : 'default'}>
-          {record.is_default ? t('pages.system.printDevices.defaultTag') : '-'}
-        </Tag>
-      ),
+      render: (_, record) =>
+        record.is_default
+          ? renderSystemTypeMarker(t('pages.system.printDevices.defaultTag'), 'processing')
+          : '-',
     },
     {
       title: t('pages.system.printDevices.columnUsage'),
       dataIndex: 'usage_count',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
     },
     {
       title: t('pages.system.printDevices.columnLastUsed'),
       dataIndex: 'last_used_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
     },
@@ -606,14 +625,18 @@ const PrintDeviceListPage: React.FC = () => {
       title: t('pages.system.printDevices.columnCreatedAt'),
       dataIndex: 'created_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
     },
     {
       title: t('pages.system.printDevices.columnActions'),
-      dataIndex: 'option',
+      key: 'action',
       valueType: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) =>
         [
             <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
@@ -665,7 +688,7 @@ const PrintDeviceListPage: React.FC = () => {
             </Button>,
           ],
     },
-  ];
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleView, handleEdit, handleDelete, handlePrintTestPage]);
 
   /**
    * 详情列定义
@@ -722,7 +745,7 @@ const PrintDeviceListPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<PrintDevice>
-          columnPersistenceId="pages.system.print-devices.list"
+          columnPersistenceId="pages.system.print-devices.list-v1"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

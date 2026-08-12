@@ -18,6 +18,8 @@ import {
 } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Modal, Badge, Table, Descriptions } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined, CopyOutlined, HighlightOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../components/uni-table';
@@ -483,7 +485,7 @@ const DatasetListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<Dataset>[] = [
+  const columns = useMemo<ProColumns<Dataset>[]>(() => alignProColumns([
     {
       title: t('pages.system.datasets.columnName'),
       dataIndex: 'name',
@@ -494,6 +496,9 @@ const DatasetListPage: React.FC = () => {
       title: t('pages.system.datasets.columnCode'),
       dataIndex: 'code',
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
       title: t('pages.system.datasets.columnDataConnection'),
@@ -509,22 +514,28 @@ const DatasetListPage: React.FC = () => {
       title: t('pages.system.datasets.columnOutputType'),
       dataIndex: 'output_type',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       render: (_, record) => {
         const typeMap: Record<string, { color: string; text: string }> = {
           list: { color: 'default', text: t('pages.system.datasets.outputTypeList') },
-          metric: { color: 'blue', text: t('pages.system.datasets.outputTypeMetric') },
-          multi_metric: { color: 'green', text: t('pages.system.datasets.outputTypeMultiMetric') },
+          metric: { color: 'processing', text: t('pages.system.datasets.outputTypeMetric') },
+          multi_metric: { color: 'success', text: t('pages.system.datasets.outputTypeMultiMetric') },
         };
         const ot = (record as any).output_type || 'list';
         const info = typeMap[ot] || { color: 'default', text: ot };
-        return <Tag color={info.color}>{info.text}</Tag>;
+        return renderSystemTypeMarker(info.text, info.color);
       },
     },
     {
       title: t('pages.system.datasets.columnQueryType'),
       dataIndex: 'query_type',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         sql: { text: t('pages.system.datasets.queryTypeSql'), status: 'Success' },
@@ -532,11 +543,11 @@ const DatasetListPage: React.FC = () => {
       },
       render: (_, record) => {
         const typeMap: Record<string, { color: string; text: string }> = {
-          sql: { color: 'blue', text: t('pages.system.datasets.queryTypeSql') },
-          api: { color: 'orange', text: t('pages.system.datasets.queryTypeApi') },
+          sql: { color: 'processing', text: t('pages.system.datasets.queryTypeSql') },
+          api: { color: 'warning', text: t('pages.system.datasets.queryTypeApi') },
         };
         const typeInfo = typeMap[record.query_type] || { color: 'default', text: record.query_type };
-        return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
+        return renderSystemTypeMarker(typeInfo.text, typeInfo.color);
       },
     },
     {
@@ -549,21 +560,24 @@ const DatasetListPage: React.FC = () => {
       title: t('pages.system.datasets.columnEnabled'),
       dataIndex: 'is_active',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('pages.system.datasets.enabled'), status: 'Success' },
         false: { text: t('pages.system.datasets.disabled'), status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('pages.system.datasets.enabled') : t('pages.system.datasets.disabled')}
-        </Tag>
-      ),
+      render: (_, record) =>
+        renderSystemActiveTag(t, record.is_active, 'pages.system.datasets.enabled', 'pages.system.datasets.disabled'),
     },
     {
       title: t('pages.system.datasets.columnLastExecuted'),
       dataIndex: 'last_executed_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
@@ -572,14 +586,19 @@ const DatasetListPage: React.FC = () => {
       title: t('pages.system.datasets.columnCreatedAt'),
       dataIndex: 'created_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
     },
     {
       title: t('pages.system.datasets.columnActions'),
+      key: 'action',
       valueType: 'option',
       fixed: 'right',
+      hideInSearch: true,
       uniActionRenderOptions: { directMax: 5 },
       render: (_, record) => [
             <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)}>
@@ -619,13 +638,13 @@ const DatasetListPage: React.FC = () => {
             </Popconfirm>,
           ],
     },
-  ];
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, dataConnectionsFlat, executingUuid, handleView, handleDesign, handleEdit, handleExecute, handleCopy, handleDelete]);
 
   return (
     <>
       <ListPageTemplate>
         <UniTable<Dataset>
-          columnPersistenceId="pages.system.datasets.list"
+          columnPersistenceId="pages.system.datasets.list-v1"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

@@ -1,10 +1,21 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Form, Input, InputNumber, Modal, Select, Switch, message } from 'antd';
+import { Button, Form, Input, InputNumber, Modal, Select, Switch, message } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UniTableStackedPrimaryCell,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import {
+  renderLogisticsEnabledTag,
+  renderLogisticsOwnershipTag,
+  renderVehicleStatusTag,
+} from '../shared/logisticsListPresentation';
 import { createVehicle, deleteVehicle, listVehicles, updateVehicle, type Vehicle } from '../../../services/logistics';
 
 const VehiclesPage: React.FC = () => {
@@ -14,40 +25,6 @@ const VehiclesPage: React.FC = () => {
   const [form] = Form.useForm();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Vehicle | null>(null);
-
-  const columns: ProColumns<Vehicle>[] = [
-    { title: t('app.kuaizhizao.logistics.field.plateNumber'), dataIndex: 'plate_number' },
-    { title: t('app.kuaizhizao.logistics.field.vehicleType'), dataIndex: 'vehicle_type' },
-    {
-      title: t('app.kuaizhizao.logistics.field.ownership'),
-      dataIndex: 'ownership',
-      render: (_, row) =>
-        row.ownership === 'internal'
-          ? t('app.kuaizhizao.logistics.option.ownership.internal')
-          : t('app.kuaizhizao.logistics.option.ownership.external'),
-    },
-    { title: t('app.kuaizhizao.logistics.field.status'), dataIndex: 'status' },
-    {
-      title: t('common.action'),
-      valueType: 'option',
-      width: 160,
-      render: (_, row) => [
-        perms.canUpdate ? <a key="edit" onClick={() => openEdit(row)}>{t('common.edit')}</a> : null,
-        perms.canDelete ? (
-          <a
-            key="delete"
-            onClick={async () => {
-              await deleteVehicle(row.id);
-              message.success(t('common.deleteSuccess'));
-              actionRef.current?.reload();
-            }}
-          >
-            {t('common.delete')}
-          </a>
-        ) : null,
-      ],
-    },
-  ];
 
   const openCreate = () => {
     setEditing(null);
@@ -75,11 +52,99 @@ const VehiclesPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
+  const columns: ProColumns<Vehicle>[] = useMemo(
+    () =>
+      alignProColumns<Vehicle>([
+        {
+          title: t('app.kuaizhizao.logistics.field.plateNumber'),
+          dataIndex: 'plate_number',
+          ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+          fixed: 'left',
+          render: (_, row) => (
+            <UniTableStackedPrimaryCell
+              primary={String(row.plate_number ?? '').trim() || '-'}
+              secondary={String(row.vehicle_type ?? '').trim() || '-'}
+              secondaryCopyable={false}
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.vehicleType'),
+          dataIndex: 'vehicle_type',
+          hideInTable: true,
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.ownership'),
+          dataIndex: 'ownership',
+          width: 96,
+          minWidth: 96,
+          uniTableKeepWidth: true,
+          resizable: false,
+          render: (_, row) => renderLogisticsOwnershipTag(t, row.ownership),
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.enabled'),
+          dataIndex: 'is_enabled',
+          width: 88,
+          minWidth: 88,
+          uniTableKeepWidth: true,
+          resizable: false,
+          hideInSearch: true,
+          render: (_, row) => renderLogisticsEnabledTag(t, row.is_enabled),
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.status'),
+          key: 'lifecycle',
+          dataIndex: 'status',
+          fixed: 'right',
+          hideInSearch: true,
+          render: (_, row) => renderVehicleStatusTag(t, row.status),
+        },
+        {
+          title: t('common.action'),
+          key: 'action',
+          valueType: 'option',
+          fixed: 'right',
+          hideInSearch: true,
+          render: (_, row) => {
+            const nodes: React.ReactNode[] = [];
+            if (perms.canUpdate) {
+              nodes.push(
+                <Button key="edit" {...rowActionKind('update')} type="link" size="small" onClick={() => openEdit(row)}>
+                  {t('common.edit')}
+                </Button>,
+              );
+            }
+            if (perms.canDelete) {
+              nodes.push(
+                <Button
+                  key="delete"
+                  {...rowActionKind('delete')}
+                  type="link"
+                  size="small"
+                  onClick={async () => {
+                    await deleteVehicle(row.id);
+                    message.success(t('common.deleteSuccess'));
+                    actionRef.current?.reload();
+                  }}
+                >
+                  {t('common.delete')}
+                </Button>,
+              );
+            }
+            return nodes;
+          },
+        },
+      ]),
+    [perms.canDelete, perms.canUpdate, t],
+  );
+
   return (
     <ListPageTemplate>
       <UniTable<Vehicle>
         actionRef={actionRef}
         columns={columns}
+        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.vehicles.v1"
         rowKey="id"
         request={async (params) => {
           const res = await listVehicles({
@@ -106,7 +171,16 @@ const VehiclesPage: React.FC = () => {
             <Input />
           </Form.Item>
           <Form.Item name="vehicle_type" label={t('app.kuaizhizao.logistics.field.vehicleType')}>
-            <Input />
+            <Select
+              allowClear
+              options={[
+                { value: 'van', label: t('app.kuaizhizao.logistics.option.vehicleType.van') },
+                { value: 'flatbed', label: t('app.kuaizhizao.logistics.option.vehicleType.flatbed') },
+                { value: 'refrigerated', label: t('app.kuaizhizao.logistics.option.vehicleType.refrigerated') },
+                { value: 'trailer', label: t('app.kuaizhizao.logistics.option.vehicleType.trailer') },
+                { value: 'other', label: t('app.kuaizhizao.logistics.option.vehicleType.other') },
+              ]}
+            />
           </Form.Item>
           <Form.Item name="ownership" label={t('app.kuaizhizao.logistics.field.ownership')}>
             <Select

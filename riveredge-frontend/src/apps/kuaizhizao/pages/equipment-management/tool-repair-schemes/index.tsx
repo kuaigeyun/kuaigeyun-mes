@@ -272,7 +272,7 @@ const ToolRepairSchemesPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<RepairScheme>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-repair-schemes"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-repair-schemes-equip-rank-v1"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

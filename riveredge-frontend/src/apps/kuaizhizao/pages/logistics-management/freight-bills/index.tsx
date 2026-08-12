@@ -1,11 +1,20 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Button, Form, Input, InputNumber, Modal, Select, Space, Table, message } from 'antd';
+import { Form, Input, InputNumber, Modal, Select, Table, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UniTableStackedPrimaryCell,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import {
+  renderFreightBillReviewStatusTag,
+  renderFreightOrderStatusTag,
+} from '../shared/logisticsListPresentation';
 import {
   createFreightBill,
   deleteFreightBill,
@@ -27,22 +36,95 @@ const FreightBillsPage: React.FC = () => {
   const [carriers, setCarriers] = useState<{ label: string; value: number }[]>([]);
   const [billItems, setBillItems] = useState<{ freight_order_id: number; freight_order_code: string; amount: number }[]>([]);
 
-  const billColumns: ProColumns<FreightBill>[] = [
-    { title: t('app.kuaizhizao.logistics.field.billCode'), dataIndex: 'bill_code' },
-    { title: t('app.kuaizhizao.logistics.field.carrierName'), dataIndex: 'carrier_name' },
-    { title: t('app.kuaizhizao.logistics.field.totalAmount'), dataIndex: 'total_amount' },
-    { title: t('app.kuaizhizao.logistics.field.reviewStatus'), dataIndex: 'review_status' },
-    {
-      title: t('app.kuaizhizao.logistics.field.payableCode'),
-      dataIndex: 'payable_code',
-      render: (_, row) =>
-        row.payable_id ? (
-          <Link to={`/apps/kuaicaiwu/finance-management/payables/${row.payable_id}`}>{row.payable_code}</Link>
-        ) : (
-          '-'
-        ),
-    },
-  ];
+  const billColumns: ProColumns<FreightBill>[] = useMemo(
+    () =>
+      alignProColumns<FreightBill>([
+        {
+          title: t('app.kuaizhizao.logistics.field.billCode'),
+          dataIndex: 'bill_code',
+          ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+          fixed: 'left',
+          render: (_, row) => (
+            <UniTableStackedPrimaryCell
+              primary={String(row.bill_code ?? '').trim() || '-'}
+              secondary={String(row.carrier_name ?? '').trim() || '-'}
+              secondaryCopyable={false}
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.carrierName'),
+          dataIndex: 'carrier_name',
+          hideInTable: true,
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.totalAmount'),
+          dataIndex: 'total_amount',
+          width: 120,
+          minWidth: 120,
+          uniTableKeepWidth: true,
+          resizable: false,
+          align: 'right',
+          render: (_, row) => (row.total_amount != null ? row.total_amount : '-'),
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.payableCode'),
+          dataIndex: 'payable_code',
+          width: 148,
+          minWidth: 148,
+          uniTableKeepWidth: true,
+          resizable: false,
+          render: (_, row) =>
+            row.payable_id ? (
+              <Link to={`/apps/kuaicaiwu/finance-management/payables/${row.payable_id}`}>{row.payable_code}</Link>
+            ) : (
+              '-'
+            ),
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.reviewStatus'),
+          key: 'lifecycle',
+          dataIndex: 'review_status',
+          fixed: 'right',
+          hideInSearch: true,
+          render: (_, row) => renderFreightBillReviewStatusTag(t, row.review_status),
+        },
+      ]),
+    [t],
+  );
+
+  const pendingColumns: ProColumns<FreightOrder>[] = useMemo(
+    () =>
+      alignProColumns<FreightOrder>([
+        {
+          title: t('app.kuaizhizao.logistics.field.orderCode'),
+          dataIndex: 'order_code',
+          ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+          fixed: 'left',
+          render: (_, row) => (
+            <UniTableStackedPrimaryCell
+              primary={String(row.order_code ?? '').trim() || '-'}
+              secondary={String(row.carrier_name ?? '').trim() || '-'}
+              secondaryCopyable={false}
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.carrierName'),
+          dataIndex: 'carrier_name',
+          hideInTable: true,
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.status'),
+          key: 'lifecycle',
+          dataIndex: 'status',
+          fixed: 'right',
+          hideInSearch: true,
+          render: (_, row) => renderFreightOrderStatusTag(t, row.status),
+        },
+      ]),
+    [t],
+  );
 
   const openCreate = async () => {
     const res = await listCarriers({ limit: 200 });
@@ -98,6 +180,7 @@ const FreightBillsPage: React.FC = () => {
               <UniTable<FreightBill>
                 actionRef={billsActionRef}
                 columns={billColumns}
+                columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-bills.v1"
                 rowKey="id"
                 request={async (params) => {
                   const res = await listFreightBills({
@@ -127,11 +210,8 @@ const FreightBillsPage: React.FC = () => {
               <UniTable<FreightOrder>
                 actionRef={pendingActionRef}
                 search={false}
-                columns={[
-                  { title: t('app.kuaizhizao.logistics.field.orderCode'), dataIndex: 'order_code' },
-                  { title: t('app.kuaizhizao.logistics.field.carrierName'), dataIndex: 'carrier_name' },
-                  { title: t('app.kuaizhizao.logistics.field.status'), dataIndex: 'status' },
-                ]}
+                columns={pendingColumns}
+                columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-bills.pending.v1"
                 rowKey="id"
                 request={async () => {
                   const res = await listPendingFreightOrdersForBill({ limit: 100 });

@@ -23,7 +23,8 @@ import {
   ProFormDigit,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Tag, Modal, Row, Col, Descriptions, Typography, Empty, Spin, theme as AntdTheme, Checkbox, Table, Select, InputNumber, Input } from 'antd';
+import { App, Button, Modal, Row, Col, Descriptions, Typography, Empty, Spin, theme as AntdTheme, Checkbox, Table, Select, InputNumber, Input } from 'antd';
+import { StatusTag } from '../../../../../constants/statusBadges';
 import { PlusOutlined } from '@ant-design/icons';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
@@ -467,7 +468,7 @@ const MaintenancePlansPage: React.FC = () => {
         const key = status ? PLAN_STATUS_KEYS[status] : undefined;
         const text = key ? t(key) : (status || '-');
         const color = status ? (PLAN_STATUS_COLORS[status] || 'default') : 'default';
-        return <Tag color={color}>{text}</Tag>;
+        return <StatusTag color={color}>{text}</StatusTag>;
       },
     },
     {
@@ -694,6 +695,7 @@ const MaintenancePlansPage: React.FC = () => {
     ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     {
       title: t(`${P}.col.lifecycle`),
+      key: 'lifecycle',
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       hideInSearch: true,
@@ -715,7 +717,7 @@ const MaintenancePlansPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<MaintenancePlan>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-plans"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-plans-equip-rank-v1"
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}

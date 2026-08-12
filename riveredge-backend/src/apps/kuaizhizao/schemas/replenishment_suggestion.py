@@ -86,3 +86,16 @@ class ReplenishmentSuggestionProcessRequest(BaseModel):
     """
     status: str = Field(..., description="处理状态（processed/ignored）")
     processing_notes: Optional[str] = Field(None, description="处理备注")
+
+
+class ReplenishmentSuggestionGenerateResult(BaseModel):
+    """生成补货建议结果。"""
+    items: list[ReplenishmentSuggestionResponse] = Field(default_factory=list)
+    created: int = Field(0, description="新建条数")
+    skipped_existing: int = Field(0, description="因已有待处理而跳过")
+    skipped_zero_qty: int = Field(0, description="因建议量为 0 而跳过")
+
+
+class ReplenishmentSuggestionPushRequest(BaseModel):
+    """补货建议批量下推请求。"""
+    suggestion_ids: list[int] = Field(..., min_length=1, description="补货建议 ID 列表")

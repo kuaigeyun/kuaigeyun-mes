@@ -26,7 +26,9 @@ import {
   Button,
   Descriptions,
 } from 'antd';
-import { MarkerTag, StatusTag } from '../../../../constants/statusBadges';
+import { MarkerTag } from '../../../../constants/statusBadges';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import {
   DeleteOutlined,
   ApiOutlined,
@@ -917,13 +919,16 @@ const ApplicationConnectionsListPage: React.FC = () => {
     ].includes(type);
   };
 
-  const columns: ProColumns<ApplicationConnection>[] = [
+  const columns = useMemo<ProColumns<ApplicationConnection>[]>(() => alignProColumns([
     { title: t('pages.system.applicationConnections.columnName'), dataIndex: 'name', width: 180, fixed: 'left' },
-    { title: t('pages.system.applicationConnections.columnCode'), dataIndex: 'code', width: 140 },
+    { title: t('pages.system.applicationConnections.columnCode'), dataIndex: 'code', width: 140, minWidth: 140, uniTableKeepWidth: true, resizable: false },
     {
       title: t('pages.system.applicationConnections.columnType'),
       dataIndex: 'type',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       render: (_, record) => {
         const info = getTypeInfo(record.type);
         return <MarkerTag color={info.color}>{info.text}</MarkerTag>;
@@ -945,6 +950,9 @@ const ApplicationConnectionsListPage: React.FC = () => {
       title: t('pages.system.applicationConnections.columnConnectionStatus'),
       dataIndex: 'is_connected',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       render: (_, record) => {
         const s = getConnectionStatus(record);
         return <Badge status={s.status} text={s.text} />;
@@ -954,16 +962,24 @@ const ApplicationConnectionsListPage: React.FC = () => {
       title: t('pages.system.applicationConnections.columnActive'),
       dataIndex: 'is_active',
       width: 80,
-      render: (_, record) => (
-        <StatusTag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('pages.system.applicationConnections.actionEnable') : t('pages.system.applicationConnections.actionDisable')}
-        </StatusTag>
-      ),
+      minWidth: 80,
+      uniTableKeepWidth: true,
+      resizable: false,
+      render: (_, record) =>
+        renderSystemActiveTag(
+          t,
+          record.is_active,
+          'pages.system.applicationConnections.actionEnable',
+          'pages.system.applicationConnections.actionDisable',
+        ),
     },
     {
       title: t('pages.system.applicationConnections.columnLastConnected'),
       dataIndex: 'last_connected_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
@@ -972,14 +988,19 @@ const ApplicationConnectionsListPage: React.FC = () => {
       title: t('pages.system.applicationConnections.columnCreatedAt'),
       dataIndex: 'created_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
     },
     {
       title: t('pages.system.applicationConnections.columnActions'),
+      key: 'action',
       valueType: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) =>
         [
             <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
@@ -1028,7 +1049,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
             </Popconfirm>,
           ].filter(Boolean),
     },
-  ];
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, canSyncContacts, syncingContactsUuid, handleView, handleEdit, handleTestConnection, handleSyncContacts, handleDelete]);
 
   const detailColumns = [
     { title: t('pages.system.applicationConnections.columnName'), dataIndex: 'name' },
@@ -1076,17 +1097,19 @@ const ApplicationConnectionsListPage: React.FC = () => {
     {
       title: t('pages.system.applicationConnections.columnActive'),
       dataIndex: 'is_active',
-      render: (v: boolean) => (
-        <StatusTag color={v ? 'success' : 'default'}>
-          {v ? t('pages.system.applicationConnections.actionEnable') : t('pages.system.applicationConnections.actionDisable')}
-        </StatusTag>
-      ),
+      render: (v: boolean) =>
+        renderSystemActiveTag(
+          t,
+          v,
+          'pages.system.applicationConnections.actionEnable',
+          'pages.system.applicationConnections.actionDisable',
+        ),
     },
     { title: t('pages.system.applicationConnections.columnLastConnected'), dataIndex: 'last_connected_at', valueType: 'dateTime' },
     {
       title: t('pages.system.applicationConnections.columnLastError'),
       dataIndex: 'last_error',
-      render: (v: string) => (v ? <StatusTag color="error">{v}</StatusTag> : t('common.dash')),
+      render: (v: string) => (v ? renderSystemTypeMarker(v, 'error') : t('common.dash')),
     },
     { title: t('pages.system.applicationConnections.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
     { title: t('pages.system.applicationConnections.columnUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
@@ -1096,7 +1119,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<ApplicationConnection>
-          columnPersistenceId="pages.system.application-connections.list"
+          columnPersistenceId="pages.system.application-connections.list-v1"
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {

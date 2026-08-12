@@ -152,6 +152,58 @@ async def _existing_order_prepayment_relation(
     ).exists()
 
 
+async def backfill_missing_purchase_order_prepayments(
+    tenant_id: int, *, operator_id: int
+) -> int:
+    """
+    补齐历史缺口：已确认采购订单填写了预付金额，但提交时未生成预付付款单。
+    幂等（已有 purchase_order→payment 关联则跳过）。
+    """
+    from apps.kuaizhizao.constants import DocumentStatus, LEGACY_AUDITED_VALUES, normalize_status
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+
+    orders = await PurchaseOrder.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        prepayment_amount__gt=0,
+    ).all()
+    created = 0
+    for order in orders:
+        raw_status = str(order.status or "").strip()
+        normalized = normalize_status(raw_status)
+        confirmed = (
+            normalized
+            in (DocumentStatus.CONFIRMED.value, DocumentStatus.AUDITED.value)
+            or raw_status in LEGACY_AUDITED_VALUES
+        )
+        if not confirmed:
+            continue
+        if await _existing_order_prepayment_relation(
+            tenant_id, "purchase_order", int(order.id), "payment"
+        ):
+            continue
+        try:
+            payment_id = await ensure_prepayment_payment_for_purchase_order(
+                tenant_id=tenant_id,
+                order_id=int(order.id),
+                order_code=str(order.order_code or ""),
+                supplier_id=int(order.supplier_id),
+                supplier_name=str(order.supplier_name or ""),
+                prepayment_amount=order.prepayment_amount,
+                prepayment_bank_account_id=order.prepayment_bank_account_id,
+                operator_id=operator_id,
+            )
+            if payment_id:
+                created += 1
+        except Exception as e:
+            logger.warning(
+                "补齐采购订单 %s 预付付款单失败: %s",
+                getattr(order, "order_code", order.id),
+                e,
+            )
+    return created
+
+
 async def ensure_prepayment_payment_for_purchase_order(
     *,
     tenant_id: int,
@@ -248,7 +300,11 @@ async def ensure_prepayment_payment_for_purchase_order(
         logger.error(
             "采购订单 %s 自动生成预付付款单失败: %s", order_code, e
         )
-        return None
+        from infra.exceptions.exceptions import BusinessLogicError
+
+        raise BusinessLogicError(
+            f"采购订单 {order_code} 自动生成预付付款单失败: {e}"
+        ) from e
 
 
 async def ensure_prepayment_receipt_for_sales_order(
@@ -347,4 +403,8 @@ async def ensure_prepayment_receipt_for_sales_order(
         logger.error(
             "销售订单 %s 自动生成预收收款单失败: %s", order_code, e
         )
-        return None
+        from infra.exceptions.exceptions import BusinessLogicError
+
+        raise BusinessLogicError(
+            f"销售订单 {order_code} 自动生成预收收款单失败: {e}"
+        ) from e

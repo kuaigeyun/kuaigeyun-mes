@@ -17,7 +17,6 @@ import {
   Modal,
   Popconfirm,
   Switch,
-  Tag,
   Typography,
   Row,
   Col,
@@ -56,6 +55,10 @@ import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/
 import { convertUnitPriceByPriceType } from '../../../utils/resolve-partner-material-price';
 import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import {
+  renderMasterActiveTag,
+  renderMasterTypeMarker,
+} from '../../../utils/masterListPresentation';
 import {
   buildMasterCrudActiveValueEnum,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
@@ -439,11 +442,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
       {
         title: t('field.defectType.isActive', '状态'),
         dataIndex: 'isActive',
-        render: (_, r) => (
-          <Tag color={r?.isActive ? 'success' : 'default'} variant="solid">
-            {r?.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
-          </Tag>
-        ),
+        render: (_, r) => renderMasterActiveTag(t, r?.isActive, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
       },
     ],
     [detail, isCustomer, t],
@@ -459,6 +458,9 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         title: isCustomer ? t('field.customer.code', '客户') : t('field.supplier.code', '供应商'),
         dataIndex: 'partnerName',
         width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         hideInSearch: true,
         sorter: true,
@@ -467,7 +469,10 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
       {
         title: t('app.master-data.materialForm.mainCode', '内部物料'),
         dataIndex: 'materialName',
-        width: 180,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         render: (_, r) => `${r.materialCode ?? ''} ${r.materialName ?? ''}`.trim() || '—',
       },
@@ -477,6 +482,9 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
           : t('app.master-data.priceBook.supplierMaterialCode'),
         dataIndex: 'partnerMaterialCode',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
       },
       {
@@ -485,12 +493,18 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
           : t('app.master-data.priceBook.supplierMaterialName'),
         dataIndex: 'partnerMaterialName',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
       },
       {
         title: t('app.master-data.priceBook.standardUnitPrice', '标准价'),
         dataIndex: 'unitPrice',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         align: 'right',
         hideInSearch: true,
         sorter: true,
@@ -500,20 +514,25 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         title: t('app.master-data.priceBook.variantPricesSection', 'SKU 价'),
         dataIndex: 'variantPrices',
         width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
         search: false,
         render: (_, r) =>
-          r.variantPrices?.length ? (
-            <Tag color="purple">
-              {t('app.master-data.priceBook.variantPriceCount', { count: r.variantPrices.length })}
-            </Tag>
-          ) : (
-            '—'
-          ),
+          r.variantPrices?.length
+            ? renderMasterTypeMarker(
+                t('app.master-data.priceBook.variantPriceCount', { count: r.variantPrices.length }),
+                'purple',
+              )
+            : '—',
       },
       {
         title: t('app.master-data.priceBook.effectiveFrom', '生效起始'),
         dataIndex: 'effectiveFrom',
         width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
       },
@@ -521,6 +540,9 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         title: t('app.master-data.priceBook.effectiveTo', '生效截止'),
         dataIndex: 'effectiveTo',
         width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
       },
@@ -536,19 +558,19 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
       {
         title: t('field.defectType.isActive', '状态'),
         dataIndex: 'isActive',
-        width: 80,
+        width: 88,
+        minWidth: 88,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
         valueEnum: priceBookActiveValueEnum,
-        render: (_, r) => (
-          <Tag color={r.isActive ? 'success' : 'default'} variant="solid">
-            {r.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
-          </Tag>
-        ),
+        render: (_, r) => renderMasterActiveTag(t, r.isActive, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
       },
       ...masterCrudCreatedUpdatedColumns<PartnerPriceBook>(t),
       {
         title: t('common.actions', '操作'),
+        key: 'action',
         valueType: 'option',
         width: 220,
         fixed: 'right',
@@ -607,7 +629,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-          columnPersistenceId={`apps.master-data.pages.supply-chain.partner-price-books.${partnerType}.status-v2`}
+          columnPersistenceId={`apps.master-data.pages.supply-chain.partner-price-books.${partnerType}.list-v1`}
           headerTitle={pageTitle}
           showCreateButton
           createButtonText={createButtonLabel}

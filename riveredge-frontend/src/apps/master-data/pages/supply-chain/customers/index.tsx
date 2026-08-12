@@ -9,7 +9,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -73,6 +73,10 @@ import {
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import {
+  renderMasterActiveTag,
+} from '../../../utils/masterListPresentation';
+import { UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
@@ -723,7 +727,10 @@ const CustomersPage: React.FC = () => {
       title: t('field.customer.code'),
       dataIndex: 'code',
       copyable: true,
-      width: 150,
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       fixed: 'left',
       sorter: true,
       hideInSearch: true,
@@ -731,62 +738,100 @@ const CustomersPage: React.FC = () => {
     {
       title: t('field.customer.name'),
       dataIndex: 'name',
-      width: 200,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      // 主数据名单行：可省略，禁止撑破单元格导致右固定错位
+      ellipsis: true,
       sorter: true,
       hideInSearch: true,
     },
     {
       title: t('field.customer.shortName'),
       dataIndex: 'shortName',
-      width: 150,
+      width: 96,
+      minWidth: 96,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
+      ellipsis: true,
+      // @ts-expect-error UniTable defaultShow：列设置可再打开
+      defaultShow: false,
     },
     {
       title: t('field.customer.category'),
       dataIndex: 'category',
-      width: 120,
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
+      ellipsis: true,
       render: (_, r) => dictLabel('CUSTOMER_CATEGORY', r.category),
+    },
+    {
+      title: t('field.customer.salesman'),
+      dataIndex: 'salesmanName',
+      width: 132,
+      minWidth: 132,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      sorter: true,
+      ellipsis: true,
     },
     {
       title: t('field.customer.contactPerson'),
       dataIndex: 'contactPerson',
-      width: 120,
+      width: 88,
+      minWidth: 88,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
+      ellipsis: true,
     },
     {
       title: t('field.customer.contactTitle'),
       dataIndex: 'contactTitle',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
+      ellipsis: true,
+      // @ts-expect-error UniTable defaultShow：列设置可再打开
+      defaultShow: false,
       render: (_, r) => dictLabel('CONTACT_TITLE', r.contactTitle),
     },
     {
       title: t('field.customer.phone'),
       dataIndex: 'phone',
-      width: 150,
+      width: 132,
+      minWidth: 132,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
     },
     {
       title: t('field.customer.email'),
       dataIndex: 'email',
-      width: 200,
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
+      ellipsis: true,
+      // @ts-expect-error UniTable defaultShow：列设置可再打开
+      defaultShow: false,
     },
     {
       title: t('field.partner.deliveryAddress'),
       dataIndex: 'deliveryAddress',
-      width: 220,
+      width: 200,
+      minWidth: 200,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       ellipsis: true,
-    },
-    {
-      title: t('field.customer.salesman'),
-      dataIndex: 'salesmanName',
-      width: 120,
-      hideInSearch: true,
-      sorter: true,
     },
     {
       title: t('field.customer.salesman'),
@@ -818,23 +863,23 @@ const CustomersPage: React.FC = () => {
     {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
-      width: 100,
+      width: 88,
+      minWidth: 88,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       valueEnum: customerActiveValueEnum,
-      render: (_, record) => (
-        <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'} variant="solid">
-          {(record?.isActive ?? (record as any)?.is_active) ? t('common.enabled') : t('common.disabled')}
-        </Tag>
-      ),
+      render: (_, record) => renderMasterActiveTag(t, record?.isActive ?? (record as any)?.is_active, 'common.enabled', 'common.disabled'),
       sorter: true,
     },
     ...customFieldColumns,
     ...masterCrudCreatedUpdatedColumns<Customer>(t),
     {
       title: t('app.master-data.warehouses.action'),
+      key: 'action',
       valueType: 'option',
-      width: 150,
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => (
         <Space>
           <Button key="view" {...rowActionKind('read')}
@@ -900,11 +945,7 @@ const CustomersPage: React.FC = () => {
     {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
-      render: (_, record) => (
-        <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'} variant="solid">
-          {(record?.isActive ?? (record as any)?.is_active) ? t('common.enabled') : t('common.disabled')}
-        </Tag>
-      ),
+      render: (_, record) => renderMasterActiveTag(t, record?.isActive ?? (record as any)?.is_active, 'common.enabled', 'common.disabled'),
     },
   ];
 
@@ -992,7 +1033,7 @@ const CustomersPage: React.FC = () => {
     <>
       <ListPageTemplate>
       <UniTable<Customer>
-        columnPersistenceId="apps.master-data.pages.supply-chain.customers.delivery-address-v3"
+        columnPersistenceId="apps.master-data.pages.supply-chain.customers.list-v2"
         actionRef={actionRef}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
         request={async (params, sort, __filter, searchFormValues) => {

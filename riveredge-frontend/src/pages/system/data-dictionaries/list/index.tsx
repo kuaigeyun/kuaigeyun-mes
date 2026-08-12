@@ -22,6 +22,8 @@ import {
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Drawer, Modal, Table, Tooltip, Descriptions, theme, Space } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag } from '../../utils/systemListPresentation';
 import { SettingOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import {
@@ -353,7 +355,7 @@ const DataDictionaryListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<DataDictionary>[] = [
+  const columns = useMemo<ProColumns<DataDictionary>[]>(() => alignProColumns([
     {
       title: t('field.dataDictionary.name'),
       dataIndex: 'name',
@@ -365,6 +367,9 @@ const DataDictionaryListPage: React.FC = () => {
       title: t('field.dataDictionary.code'),
       dataIndex: 'code',
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
       title: t('field.dataDictionary.description'),
@@ -377,44 +382,48 @@ const DataDictionaryListPage: React.FC = () => {
       title: t('field.dataDictionary.systemDictionary'),
       dataIndex: 'is_system',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('field.role.yes'), status: 'Default' },
         false: { text: t('field.role.no'), status: 'Processing' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_system ? 'default' : 'blue'}>
-          {record.is_system ? t('field.role.yes') : t('field.role.no')}
-        </Tag>
-      ),
+      render: (_, record) => renderSystemYesNoTag(t, record.is_system),
     },
     {
       title: t('field.role.status'),
       dataIndex: 'is_active',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('field.role.enabled'), status: 'Success' },
         false: { text: t('field.role.disabled'), status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('field.role.enabled') : t('field.role.disabled')}
-        </Tag>
-      ),
+      render: (_, record) =>
+        renderSystemActiveTag(t, record.is_active, 'field.role.enabled', 'field.role.disabled'),
     },
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
     },
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => [
             <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
               {t('common.detail')}
@@ -449,7 +458,7 @@ const DataDictionaryListPage: React.FC = () => {
             </Popconfirm>,
           ],
     },
-  ];
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleView, handleEdit, handleManageItems, handleDelete]);
 
   /**
    * 字典项表格列定义
@@ -505,17 +514,15 @@ const DataDictionaryListPage: React.FC = () => {
       dataIndex: 'is_active',
       key: 'is_active',
       width: 88,
-      render: (isActive: boolean) => (
-        <Tag color={isActive ? 'success' : 'default'}>
-          {isActive ? t('field.role.enabled') : t('field.role.disabled')}
-        </Tag>
-      ),
+      render: (isActive: boolean) =>
+        renderSystemActiveTag(t, isActive, 'field.role.enabled', 'field.role.disabled'),
     },
     {
       title: t('common.actions'),
       key: 'action',
       width: 120,
       fixed: 'right' as const,
+      hideInSearch: true,
       render: (_: any, record: DictionaryItem) => {
         const isPresetItem = Boolean(record.is_system_managed);
         return (
@@ -556,7 +563,7 @@ const DataDictionaryListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<DataDictionary>
-        columnPersistenceId="pages.system.data-dictionaries.list"
+        columnPersistenceId="pages.system.data-dictionaries.list-v1"
         actionRef={actionRef}
         searchParamsRef={searchParamsRef}
         columns={columns}

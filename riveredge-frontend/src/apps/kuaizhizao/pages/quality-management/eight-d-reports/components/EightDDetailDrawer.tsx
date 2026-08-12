@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { App, Button, Descriptions, Form, Space, Tag } from 'antd';
+import { App, Button, Descriptions, Form, Space } from 'antd';
+import { MarkerTag } from '../../../../../../constants/statusBadges';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { DetailDrawerTemplate, DRAWER_CONFIG, detailDrawerDescriptionItems } from '../../../../../../components/layout-templates';
@@ -96,7 +97,8 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
         dataIndex: 'severity',
         render: (_, record) => {
           const { label, color } = resolveEightDSeverityDisplay(t, record.severity);
-          return <Tag color={color}>{label}</Tag>;
+          if (label === '-') return '-';
+          return <MarkerTag color={color}>{label}</MarkerTag>;
         },
       },
       {
@@ -167,9 +169,9 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
   const collaborationTitleExtra = useMemo(() => {
     if (!report?.status) return undefined;
     return (
-      <Tag color={report.status === 'closed' ? 'default' : 'processing'}>
+      <MarkerTag color={report.status === 'closed' ? 'default' : 'processing'}>
         {getEightDStatusText(t, report.status)}
-      </Tag>
+      </MarkerTag>
     );
   }, [report?.status, t]);
 

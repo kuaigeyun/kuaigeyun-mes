@@ -13,11 +13,15 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormItem, ProFormDependency } from '@ant-design/pro-components';
-import { App, Alert, Button, Card, Col, Descriptions, Empty, InputNumber, Modal, Row, Spin, Table, Tag, Typography, message } from 'antd';
+import { App, Alert, Button, Card, Col, Descriptions, Empty, InputNumber, Modal, Row, Spin, Table, Typography, message } from 'antd';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { EditOutlined, DeleteOutlined, FormOutlined, PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniPullLoadButton } from '../../../../../components/uni-pull';
@@ -277,7 +281,7 @@ const ReworkOrdersPage: React.FC = () => {
       dataIndex: 'rework_type',
       render: (_, record) => {
         const { label, color } = resolveReworkTypeDisplay(t, record.rework_type);
-        return <Tag color={color}>{label}</Tag>;
+        return <MarkerTag color={color}>{label}</MarkerTag>;
       },
     },
     {
@@ -438,8 +442,7 @@ const ReworkOrdersPage: React.FC = () => {
       title: `${t('app.kuaizhizao.reworkOrder.colPlannedStart')} / ${t('app.kuaizhizao.reworkOrder.colPlannedEnd')}`,
       key: 'planned_start_end_stacked',
       dataIndex: 'planned_start_date',
-      width: 188,
-      uniTableKeepWidth: true,
+      ...UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
       sorter: true,
       hideInSearch: true,
       render: (_, record) => (
@@ -491,7 +494,7 @@ const ReworkOrdersPage: React.FC = () => {
       valueEnum: reworkTypeValueEnum,
       render: (_, record) => {
         const { label, color } = resolveReworkTypeDisplay(t, record.rework_type);
-        return <Tag color={color}>{label}</Tag>;
+        return <MarkerTag color={color}>{label}</MarkerTag>;
       },
       ellipsis: true,
     },

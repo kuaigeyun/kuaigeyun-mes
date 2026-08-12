@@ -149,7 +149,7 @@ type ReceiptNoticeItemRow = {
 };
 
 const RECEIPT_NOTICE_LIST_PERSISTENCE_ID =
-  'apps.kuaizhizao.pages.purchase-management.receipt-notices.v2';
+  'apps.kuaizhizao.pages.purchase-management.receipt-notices.list-v3';
 
 type PullPurchaseOrderCandidate = {
   id: number;
@@ -732,11 +732,14 @@ const ReceiptNoticesPage: React.FC = () => {
         title: t('app.kuaizhizao.receiptNotice.purchaseOrderCode'),
         key: 'receipt_purchase_order_code',
         dataIndex: 'purchase_order_code',
-        width: 140,
+        width: 180,
+        minWidth: 180,
         uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: false,
-        ellipsis: true,
+        // 单号由 LinkedDocumentCode 自行省略；列上 ellipsis 会与链接量宽冲突导致「完全折叠」
+        ellipsis: false,
         render: (_, r) => (
           <LinkedDocumentCode
             documentType="purchase_order"

@@ -10,6 +10,8 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormItem, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Button, Descriptions, Input, Space, Tag, Tooltip, Typography } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemStatusTag } from '../../utils/systemListPresentation';
 import { EyeOutlined, CheckOutlined, CloseOutlined, StopOutlined, SwapOutlined } from '@ant-design/icons';
 import { useGlobalStore } from '../../../../stores';
 import { UniTable } from '../../../../components/uni-table';
@@ -184,7 +186,18 @@ const ApprovalInstanceListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<ApprovalInstance>[] = [
+  const renderApprovalStatusTag = (status: string) => {
+    const statusMap = {
+      pending: { color: 'processing', text: t('pages.system.approvalInstances.statusPending') },
+      approved: { color: 'success', text: t('pages.system.approvalInstances.statusApproved') },
+      rejected: { color: 'error', text: t('pages.system.approvalInstances.statusRejected') },
+      cancelled: { color: 'default', text: t('pages.system.approvalInstances.statusCancelled') },
+    };
+    const statusInfo = statusMap[status as keyof typeof statusMap] || { color: 'default', text: status };
+    return renderSystemStatusTag(statusInfo.text, statusInfo.color);
+  };
+
+  const columns = useMemo<ProColumns<ApprovalInstance>[]>(() => alignProColumns([
     {
       title: t('pages.system.approvalInstances.title'),
       dataIndex: 'title',
@@ -199,28 +212,6 @@ const ApprovalInstanceListPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('pages.system.approvalInstances.status'),
-      dataIndex: 'status',
-      width: 100,
-      valueType: 'select',
-      valueEnum: {
-        pending: { text: t('pages.system.approvalInstances.statusPending'), status: 'Processing' },
-        approved: { text: t('pages.system.approvalInstances.statusApproved'), status: 'Success' },
-        rejected: { text: t('pages.system.approvalInstances.statusRejected'), status: 'Error' },
-        cancelled: { text: t('pages.system.approvalInstances.statusCancelled'), status: 'Default' },
-      },
-      render: (_, record) => {
-        const statusMap = {
-          pending: { color: 'processing', text: t('pages.system.approvalInstances.statusPending') },
-          approved: { color: 'success', text: t('pages.system.approvalInstances.statusApproved') },
-          rejected: { color: 'error', text: t('pages.system.approvalInstances.statusRejected') },
-          cancelled: { color: 'default', text: t('pages.system.approvalInstances.statusCancelled') },
-        };
-        const statusInfo = statusMap[record.status as keyof typeof statusMap] || { color: 'default', text: record.status };
-        return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
-      },
-    },
-    {
       title: t('pages.system.approvalInstances.currentNode'),
       dataIndex: 'current_node',
       width: 150,
@@ -231,6 +222,9 @@ const ApprovalInstanceListPage: React.FC = () => {
       title: t('pages.system.approvalInstances.submittedAt'),
       dataIndex: 'submitted_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
     },
@@ -238,13 +232,37 @@ const ApprovalInstanceListPage: React.FC = () => {
       title: t('pages.system.approvalInstances.completedAt'),
       dataIndex: 'completed_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
     },
     {
+      title: t('pages.system.approvalInstances.status'),
+      dataIndex: 'status',
+      key: 'lifecycle',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'select',
+      valueEnum: {
+        pending: { text: t('pages.system.approvalInstances.statusPending'), status: 'Processing' },
+        approved: { text: t('pages.system.approvalInstances.statusApproved'), status: 'Success' },
+        rejected: { text: t('pages.system.approvalInstances.statusRejected'), status: 'Error' },
+        cancelled: { text: t('pages.system.approvalInstances.statusCancelled'), status: 'Default' },
+      },
+      fixed: 'right',
+      hideInSearch: true,
+      render: (_, record) => renderApprovalStatusTag(record.status),
+    },
+    {
       title: t('pages.system.approvalInstances.actions'),
+      key: 'action',
       valueType: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => {
         const actions = [
           <Button
@@ -317,7 +335,7 @@ const ApprovalInstanceListPage: React.FC = () => {
         return actions;
       },
     },
-  ];
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, currentUser?.id, handleAction, handleView]);
 
   /**
    * 渲染看板卡片
@@ -479,7 +497,7 @@ const ApprovalInstanceListPage: React.FC = () => {
         }
       >
         <UniTable<ApprovalInstance>
-          columnPersistenceId="pages.system.approval-processes.instances"
+          columnPersistenceId="pages.system.approval-processes.instances.list-v1"
           headerTitle={t('pages.system.approvalInstances.headerTitle')}
           actionRef={actionRef}
           columns={columns}

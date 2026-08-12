@@ -935,6 +935,8 @@ const ReportingPage: React.FC = () => {
         reported_at: workTime.reported_at,
         remarks: standardValues.remarks,
         work_hours: workTime.work_hours,
+        work_start_time: workTime.work_start_time,
+        work_end_time: workTime.work_end_time,
       };
       if (producerMode === 'team') {
         const team = createModalTeamRef.current;
@@ -1497,6 +1499,28 @@ const ReportingPage: React.FC = () => {
       hideInSearch: true,
     },
     {
+      title: t('app.kuaizhizao.workReporting.colWorkStartEndStacked'),
+      key: 'work_start_end_stacked',
+      dataIndex: 'work_start_time',
+      width: 148,
+      uniTableKeepWidth: true,
+      hideInSearch: true,
+      render: (_, record) => {
+        const startRaw = record.work_start_time ?? record.workStartTime
+        const endRaw = record.work_end_time ?? record.workEndTime
+        const start = startRaw ? formatDateTime(String(startRaw), 'YYYY-MM-DD HH:mm') : '—'
+        const end = endRaw ? formatDateTime(String(endRaw), 'YYYY-MM-DD HH:mm') : '—'
+        return (
+          <UniTableStackedPrimaryCell
+            primary={start}
+            secondary={end}
+            secondaryCopyable={false}
+            primaryBold={false}
+          />
+        )
+      },
+    },
+    {
       title: t('app.kuaizhizao.workReporting.colReportedAt'),
       dataIndex: 'reported_at',
       width: 148,
@@ -1576,6 +1600,16 @@ const ReportingPage: React.FC = () => {
       { title: t('app.kuaizhizao.workReporting.colUnqualifiedQty'), dataIndex: 'unqualified_quantity' },
       { title: t('app.kuaizhizao.workReporting.colReportedQty'), dataIndex: 'reported_quantity' },
       { title: t('app.kuaizhizao.workReporting.colWorkHours'), dataIndex: 'work_hours' },
+      {
+        title: t('app.kuaizhizao.workReporting.colWorkStartTime'),
+        dataIndex: 'work_start_time',
+        valueType: 'dateTime',
+      },
+      {
+        title: t('app.kuaizhizao.workReporting.colWorkEndTime'),
+        dataIndex: 'work_end_time',
+        valueType: 'dateTime',
+      },
       { title: t('app.kuaizhizao.workReporting.colReportedAt'), dataIndex: 'reported_at', valueType: 'dateTime' },
       { title: t('app.kuaizhizao.workReporting.colApprovedAt'), dataIndex: 'approved_at', valueType: 'dateTime' },
       { title: t('app.kuaizhizao.workReporting.colApprovedBy'), dataIndex: 'approved_by_name' },
@@ -1595,7 +1629,7 @@ const ReportingPage: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
       <UniTable
         headerTitle={t('app.kuaizhizao.menu.production-execution.reporting')}
-        columnPersistenceId="apps.kuaizhizao.pages.production-execution.reporting.worker-qty-v2"
+        columnPersistenceId="apps.kuaizhizao.pages.production-execution.reporting.work-start-end-v1"
         actionRef={actionRef}
         rowKey="id"
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
@@ -1738,14 +1772,14 @@ const ReportingPage: React.FC = () => {
             </Col>
             <Col span={24}>
               <Card size="small" style={{ marginBottom: 12 }}>
-                <Descriptions column={2} size="small">
+                <Descriptions column={3} size="small">
                   <Descriptions.Item label={t('app.kuaizhizao.workReporting.colWorkOrderCode')}>
                     {reportSelectedWorkOrder.code || '—'}
                   </Descriptions.Item>
                   <Descriptions.Item label={t('app.kuaizhizao.workReporting.colWorkOrderName')}>
                     {resolveWorkOrderDisplayName(reportSelectedWorkOrder) || '—'}
                   </Descriptions.Item>
-                  <Descriptions.Item label={t('app.kuaizhizao.workReporting.formOperation')} span={2}>
+                  <Descriptions.Item label={t('app.kuaizhizao.workReporting.formOperation')}>
                     {`${reportSelectedOperation.operation_name || reportSelectedOperation.name || '—'} (${reportSelectedOperation.operation_code || '—'})`}
                   </Descriptions.Item>
                 </Descriptions>
@@ -1765,7 +1799,7 @@ const ReportingPage: React.FC = () => {
         <ProFormDigit name="work_order_id" hidden fieldProps={{ precision: 0 }} />
         <ProFormDigit name="operation_id" hidden fieldProps={{ precision: 0 }} />
         {canProxyReporting && (
-          <Col span={24}>
+          <>
             <ReportingProducerField
               colProps={{ span: 24 }}
               onWorkerChange={(u) => {
@@ -1776,11 +1810,15 @@ const ReportingPage: React.FC = () => {
               }}
             />
             {currentUser ? (
-              <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-                {t('app.kuaizhizao.workReporting.formRecordedByLogin', { name: currentUser.full_name || currentUser.username || '—' })}
-              </Typography.Text>
+              <Col span={24}>
+                <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+                  {t('app.kuaizhizao.workReporting.formRecordedByLogin', {
+                    name: currentUser.full_name || currentUser.username || '—',
+                  })}
+                </Typography.Text>
+              </Col>
             ) : null}
-          </Col>
+          </>
         )}
         {(Array.isArray(reportOperations) ? reportOperations : []).find(
           (op: any) => Number(op.operation_id) === Number(reportOperationId),

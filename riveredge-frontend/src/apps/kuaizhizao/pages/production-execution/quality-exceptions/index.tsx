@@ -15,6 +15,10 @@ import { ActionType, ProColumns, ProFormTextArea, ProFormDatePicker } from '@ant
 import { App, Button, Divider, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
+import {
+  MaterialStackedCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { apiRequest } from '../../../../../services/api';
@@ -37,9 +41,12 @@ import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { StatusTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH } from '../../../../../utils/uniTableLayoutColumns';
 import {
   buildQualityExceptionStatusValueEnum,
   resolveProductionExceptionListStatusParams,
+  resolveQualityExceptionStatusTagColor,
 } from '../../../utils/productionExceptionList';
 
 const P = 'app.kuaizhizao.productionException';
@@ -236,6 +243,31 @@ const QualityExceptionsPage: React.FC = () => {
       formItemProps: formDateRangeFormItemProps,
     },
     {
+      title: t(`${P}.col.workOrderCode`),
+      key: 'exception_doc_work_order_code',
+      dataIndex: 'work_order_code',
+      width: 180,
+      uniTableKeepWidth: true,
+      fixed: 'left',
+      ellipsis: false,
+      sorter: true,
+      hideInSearch: false,
+    },
+    {
+      title: t(`${P}.col.material`),
+      key: 'exception_material_stacked',
+      dataIndex: 'material_name',
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      render: (_, record) => (
+        <MaterialStackedCell
+          material_name={record.material_name}
+          material_code={record.material_code}
+        />
+      ),
+    },
+    { title: t(`${P}.col.materialCode`), dataIndex: 'material_code', hideInTable: true },
+    { title: t(`${P}.col.materialName`), dataIndex: 'material_name', hideInTable: true },
+    {
       title: t(`${P}.col.exceptionType`),
       dataIndex: 'exception_type',
       width: 120,
@@ -246,30 +278,14 @@ const QualityExceptionsPage: React.FC = () => {
       },
     },
     {
-      title: t(`${P}.col.workOrderCode`),
-      dataIndex: 'work_order_code',
-      width: 140,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.work_order_code ?? '') }} ellipsis>
-          {r.work_order_code ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: t(`${P}.col.materialCode`),
-      dataIndex: 'material_code',
-      width: 120,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.material_code ?? '') }} ellipsis>
-          {r.material_code ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: t(`${P}.col.materialName`),
-      dataIndex: 'material_name',
-      width: 150,
-      ellipsis: true,
+      title: t(`${Q}.col.severity`),
+      dataIndex: 'severity',
+      width: 100,
+      valueEnum: {
+        minor: { text: t(`${Q}.severity.minor`), status: 'default' },
+        major: { text: t(`${Q}.severity.major`), status: 'warning' },
+        critical: { text: t(`${Q}.severity.critical`), status: 'error' },
+      },
     },
     {
       title: t(`${P}.col.batchNo`),
@@ -288,32 +304,31 @@ const QualityExceptionsPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: t(`${Q}.col.severity`),
-      dataIndex: 'severity',
-      width: 100,
-      valueEnum: {
-        minor: { text: t(`${Q}.severity.minor`), status: 'default' },
-        major: { text: t(`${Q}.severity.major`), status: 'warning' },
-        critical: { text: t(`${Q}.severity.critical`), status: 'error' },
-      },
-    },
-    {
-      title: t(`${P}.col.status`),
-      dataIndex: 'status',
-      width: 100,
-      hideInSearch: false,
-      valueType: 'select',
-      valueEnum: qualityStatusValueEnum,
-    },
-    {
       title: t(`${P}.col.responsiblePerson`),
       dataIndex: 'responsible_person_name',
       width: 100,
     },
     ...buildDocumentAuditColumns<QualityException>(t),
     {
+      title: t(`${P}.col.status`),
+      // 搜索仍绑 status；key 声明列身份，UniTable 右固定于操作列之前
+      key: 'lifecycle',
+      dataIndex: 'status',
+      width: UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH,
+      uniTableKeepWidth: true,
+      fixed: 'right',
+      hideInSearch: false,
+      valueType: 'select',
+      valueEnum: qualityStatusValueEnum,
+      render: (_, record) => (
+        <StatusTag color={resolveQualityExceptionStatusTagColor(record.status)}>
+          {statusLabel(record.status)}
+        </StatusTag>
+      ),
+    },
+    {
       title: t('common.actions'),
-      valueType: 'option',
+      key: 'option',
       fixed: 'right',
       render: (_, record) => [
         <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
@@ -329,7 +344,7 @@ const QualityExceptionsPage: React.FC = () => {
         }),
       ],
     },
-  ], SALES_DOC_LIST_FIELD_RANK), [qualityStatusValueEnum, t, canCreate8D, handleStart8D]);
+  ], SALES_DOC_LIST_FIELD_RANK), [qualityStatusValueEnum, statusLabel, t, canCreate8D, handleStart8D]);
 
   return (
     <ListPageTemplate>
@@ -338,7 +353,7 @@ const QualityExceptionsPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.production-execution.quality-exceptions"
+        columnPersistenceId="apps.kuaizhizao.pages.production-execution.quality-exceptions.v3"
         request={async (params, sort, _filter, searchFormValues) => {
           try {
             const s = searchFormValues ?? {};

@@ -577,6 +577,18 @@
       "pageName": "Delivery Projects",
       "codeFieldLabel": "Project code"
     },
+    "kuaiplm-rd-requirement": {
+      "pageName": "R&D Requirements",
+      "codeFieldLabel": "Requirement code"
+    },
+    "kuaiplm-design-review": {
+      "pageName": "Design Reviews",
+      "codeFieldLabel": "Review code"
+    },
+    "kuaiplm-fmea": {
+      "pageName": "FMEA",
+      "codeFieldLabel": "FMEA code"
+    },
     "kuaizhizao-purchase-order-change": {
       "pageName": "Purchase Order Changes",
       "codeFieldLabel": "Purchase change code"

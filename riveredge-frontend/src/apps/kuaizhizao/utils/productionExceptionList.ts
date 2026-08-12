@@ -83,6 +83,24 @@ export function buildExceptionProcessStatusValueEnum(
   );
 }
 
+/** 缺料 / 延期异常状态 → StatusTag color */
+export function resolveStandardProductionExceptionStatusTagColor(status?: string): string {
+  if (status === 'resolved' || status === 'closed') return 'success';
+  if (status === 'processing' || status === 'investigating' || status === 'correcting') {
+    return 'processing';
+  }
+  if (status === 'cancelled') return 'error';
+  return 'default';
+}
+
+/** 质量异常状态 → StatusTag color */
+export function resolveQualityExceptionStatusTagColor(status?: string): string {
+  if (status === 'closed') return 'success';
+  if (status === 'correcting' || status === 'investigating') return 'processing';
+  if (status === 'cancelled') return 'error';
+  return 'default';
+}
+
 export function resolveProductionExceptionListStatusParams(
   searchFormValues?: Record<string, unknown> | null,
   statusField: 'status' | 'process_status' = 'status',

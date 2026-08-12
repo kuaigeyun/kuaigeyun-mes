@@ -37,13 +37,13 @@ function sortByRank<T>(
  * 新增/调序：只改本对象；同类字段必须落在同一段位。
  *
  * 段位约定（语义聚类）：
- * - 10–14 单据名称 / 编号 / 主标识叠列
+ * - 10–14 单据名称 / 编号 / 主标识叠列；报工：workOrderStacked→operation；返工：product_name_code_stacked→rework_type→original_work_order_code；异常单据：exception_doc_work_order_code→物料/计划结束；检验四单据（同来料）：inspection_code→第二业务叠列→quality_inspection_material；设备单据：单号→设备/路线/计划名
  * - 15–19 伙伴主称谓（客户/供应商等，非叠列时）
- * - 20–29 类型类（合同类型、预测周期、版本、业务模式、分类等）
- * - 30–49 品种数 / 数量 / 金额 / 价税度量
+ * - 20–29 类型类（合同类型、预测周期、版本、业务模式、分类等）；工单委外：owo_product_stacked→priority；异常：exception_type/alert_level/severity；设备：fault/repair/plan 类型→级别/结果标识
+ * - 30–49 品种数 / 数量 / 金额 / 价税度量；报工：work_hours(32) → worker_name(32.5)；work_start_end_stacked(67.05)→reported_at
  * - 50–59 下推 / 进度类
- * - 60–74 时间相关（业务日、计划日、跟进日等）
- * - 75–84 责任人 / 正文 / 关联单号
+ * - 60–74 时间相关（业务日、计划日、跟进日等）；设备：点检/巡检/故障/维修/执行/调拨/报废/校准日
+ * - 75–84 责任人 / 正文 / 关联单号；设备：维修人/执行人/申请人、校准证书号
  * - 88–91.4 审核相位 / 生命周期 / 状态
  * - 91.5 未登记字段（保持声明顺序）
  * - 91.6 isActive
@@ -63,12 +63,37 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   inquiry_code: 10,
   purchase_order_code: 10,
   purchase_receipt_code: 10,
+  /** 质量检验单号（来料/工序/成品/OQC） */
+  inspection_code: 10,
   receipt_code: 10,
+  /** 轻财务单据主标识叠列（伙伴名 + 单号） */
+  finance_doc_partner_stacked: 10,
+  receivable_code: 10,
+  payment_code: 10,
+  invoice_code: 10,
+  account_code: 10,
+  statement_code: 10,
+  /** 系统配置：账户/应用/字典等编码列 */
+  username: 10,
+  account: 10,
+  app_code: 10,
+  dict_code: 10,
+  locale: 10,
   return_code: 10,
   change_code: 10,
+  project_code: 10,
   requirement_code: 10,
   review_code: 10,
   fmea_code: 10,
+  /** 轻办公：申请/采买/模板/计划/证照编码（asset_code 见资产段） */
+  request_code: 10,
+  purchase_code: 10,
+  template_code: 10,
+  plan_code: 10,
+  record_code: 10,
+  license_code: 10,
+  document_code: 10,
+  document_type: 21,
   demand_code: 10,
   computation_code: 10,
   ticket_code: 10,
@@ -80,18 +105,31 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   title: 10.4,
   shortName: 10.5,
   source_code: 10.6,
+  /** 报工等：工单名称/编号叠列（列上须设 key=workOrderStacked） */
+  workOrderStacked: 10,
+  /** 返工工单：产品名称/返工单编号叠列 */
+  product_name_code_stacked: 10,
+  /** 报工等：工序紧跟主标识，固定为第二业务列 */
+  operation_name: 11,
+  outsource_operation: 11.1,
+  /** 工序委外：供应商/单号叠列 → 工序名称/工单编号叠列（第二业务列） */
+  supplier_code_stacked: 10,
+  operation_work_order_stacked: 11,
+  /** 返工工单：返工类型 → 原工单号（第二、第三业务列） */
+  rework_type: 11,
+  original_work_order_code: 12,
   /**
    * 发货/收货通知、销退/采退：仓库与关联单号紧跟主标识（列上须设同名 key）。
    * 销售：出库仓库 + 销售订单/关联单据；采购：入库仓库 + 采购订单/关联单据。
    */
-  outbound_warehouse: 11,
-  inbound_warehouse: 11,
-  sales_return_warehouse: 11,
-  purchase_return_warehouse: 11,
-  shipment_sales_order_code: 12,
-  receipt_purchase_order_code: 12,
-  sales_return_related_docs: 12,
-  purchase_return_related_docs: 12,
+  outbound_warehouse: 12,
+  inbound_warehouse: 12,
+  sales_return_warehouse: 12,
+  purchase_return_warehouse: 12,
+  shipment_sales_order_code: 12.5,
+  receipt_purchase_order_code: 12.5,
+  sales_return_related_docs: 12.5,
+  purchase_return_related_docs: 12.5,
 
   // —— 15 伙伴主称谓 ——
   customer_name: 15,
@@ -99,7 +137,157 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   partnerId: 15.1,
   supplier_name: 15.2,
 
+  /**
+   * 异常单据（缺料/延期/质量）：工单编号 → 第二业务列（物料叠列 / 计划结束）→ 类型/级别 → …
+   * 异常处理流程：exception_doc_work_order_code → exception_process_type → exception_process_steps
+   */
+  exception_doc_work_order_code: 10,
+  exception_material_stacked: 11,
+  exception_planned_end: 11,
+  /** 异常处理流程：类型（filled）→ 步骤节点轴 */
+  exception_process_type: 11,
+  exception_process_steps: 12,
+  /**
+   * 检验四单据列表段位（以来料检验为准，四页共用同一 map，勿页面浅覆盖）：
+   * inspection_code → supplierReceipt / quality_inspection_partner_stacked → quality_inspection_material
+   * → 数量类 → quality_inspection_extra → downstream_push_progress → inspector_name → lifecycle
+   */
+  supplierReceipt: 11,
+  quality_inspection_partner_stacked: 11,
+  quality_inspection_material: 12,
+  /**
+   * 8D 管理：标题/编号叠列 → 严重度 → 阶段节点轴 → 来源 → 负责人 → 验证结果 → 计划完成
+   */
+  eightDStacked: 10,
+  eight_d_stages: 23,
+  eight_d_source: 24,
+  eight_d_owner: 25,
+  verification_result: 26,
+  /**
+   * 设备/模具/工装单据：单号 → 资产编码/名称 → 类型/级别/紧急度 → 结果标识 → 日期 → 人员 → lifecycle/status → action
+   */
+  document_no: 10,
+  fault_no: 10,
+  repair_no: 10,
+  plan_no: 10,
+  execution_no: 10,
+  requisition_no: 10,
+  application_no: 10,
+  route_name: 11,
+  plan_name: 11,
+  equipment_code: 12,
+  equipment_name: 12.5,
+  mold_code: 12,
+  mold_name: 12.5,
+  tool_code: 12,
+  tool_name: 12.5,
+  fault_type: 20,
+  repair_type: 20,
+  plan_type: 20,
+  maintenance_type: 20.5,
+  fault_level: 21,
+  urgency: 21,
+  repair_required: 22,
+  has_abnormality: 23,
+  execution_result: 23.5,
+  repair_result: 23.5,
+  trial_result: 23.5,
+  /** 校准结果列 dataIndex 为 result，须设 key=equipment_calibration_result */
+  equipment_calibration_result: 23.5,
+  purpose: 40,
+  check_date: 60,
+  patrol_date: 60,
+  fault_date: 60,
+  repair_date: 60,
+  execution_date: 60,
+  transfer_date: 60,
+  scrap_date: 60,
+  calibration_date: 60,
+  maintenance_date: 60,
+  trial_date: 60,
+  borrow_date: 60,
+  return_date: 60,
+  certificate_no: 81,
+  repairer_name: 76.6,
+  executor_name: 76.6,
+  applicant_name: 76.7,
+  /**
+   * 物流：货运单/运费单 → 主单号 → 方向/类型 → 承运商 → 运单号 → 金额/应付 → lifecycle
+   * 主数据：车牌/承运商名码/驾驶员名码 → 类型/归属 → 联系人 → 启用/状态 → action
+   */
+  bill_code: 10,
+  plate_number: 10,
+  logistics_carrier_stacked: 10,
+  logistics_driver_stacked: 10,
+  business_direction: 20,
+  transport_mode: 20.1,
+  vehicle_type: 20,
+  carrier_type: 20,
+  ownership: 21,
+  carrier_name: 22,
+  tracking_number: 23,
+  payable_code: 24,
+  contact_name: 77,
+  is_enabled: 91.6,
+  review_status: 90,
+  lifecycle: 91,
+  /**
+   * 售后：工单/安装/维修/派工/备件/结算/回访/装机档案
+   * 主单号(+客户) → 类型/方式 → 来源/工程师 → 时间 → lifecycle
+   */
+  asset_code: 10,
+  job_code: 10,
+  dispatch_code: 10,
+  settlement_code: 10,
+  visit_code: 10,
+  after_sales_ticket_stacked: 10,
+  after_sales_install_stacked: 10,
+  after_sales_asset_stacked: 10,
+  repair_mode: 20.4,
+  supply_source: 20.4,
+  visit_method: 20.4,
+  current_stage_key: 23,
+  engineer_name: 76.3,
+  satisfaction_score: 35,
+  planned_start_at: 71,
+  visited_at: 71,
+  site_address: 77.6,
+  serial_number: 28,
+  /**
+   * 绩效：主数据名码/员工叠列 → 类型 → 数量金额 → 日期/时段 → 启用/汇总状态 → action
+   */
+  performance_name_code_stacked: 10,
+  performance_employee_stacked: 10,
+  performance_dept_pos_stacked: 10,
+  performance_holiday_stacked: 10,
+  calc_mode: 20.4,
+  description: 82,
+  hourly_rate: 34.05,
+  default_piece_rate: 34.15,
+  base_salary: 34.25,
+  overtimeDate: 60,
+  startAt: 70,
+  endAt: 70.5,
+  stationId: 22,
+  reason: 82.1,
   // —— 20 类型类（同类靠拢，均在数量之前）——
+  /** 质量异常等：异常子类型（非流程页首列） */
+  exception_type: 20,
+  exception_work_order_code: 21,
+  alert_level: 22,
+  severity: 22,
+  /** 快数采：连接/点位/规则/边缘类型与健康类 MarkerTag 列 */
+  tag_key: 10.15,
+  connection_type: 20,
+  protocol: 20.05,
+  rule_type: 20.1,
+  value_type: 20.15,
+  map_target: 20.2,
+  health_status: 22.1,
+  agent_status: 22.15,
+  is_online: 91.55,
+  last_seen_at: 70,
+  last_agent_heartbeat_at: 70.1,
   contract_type: 20,
   forecast_period: 20,
   period: 20,
@@ -118,6 +306,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   calc_type: 21.1,
   target_type: 21.2,
   cost_item_type: 21.3,
+  /** 工单委外：产品名称/编码叠列（列上须设 key=owo_product_stacked），优先级紧随其后 */
+  owo_product_stacked: 21.9,
   priority: 22,
   activity_type_code: 22,
   /** 客户跟进：跟进内容紧跟跟进方式；售后工单等同名字段同段 */
@@ -133,20 +323,32 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   requirement_source_type: 23,
   change_category: 23,
   calculation_status: 23.5,
+  /** 轻财务：开票/收票状态（MarkerTag） */
+  invoice_status: 23.6,
+  batch_no: 25,
 
   // —— 30 品种数 / 数量 / 金额 ——
   items_count: 30,
   total_quantity: 31,
   quantity: 31,
+  required_quantity: 31,
+  available_quantity: 31.1,
+  shortage_quantity: 31.2,
+  delay_days: 31,
   outsource_quantity: 31.1,
   received_quantity: 31.2,
   inspection_quantity: 31.3,
   sample_qty: 31.3,
   qualified_quantity: 31.4,
   unqualified_quantity: 31.5,
+  /** 检验四单据：数量类之后、下推进度之前的专属结论列（如 OQC 放行） */
+  quality_inspection_extra: 32,
   reported_quantity: 31.6,
   total_hours: 32,
   standardHours: 32,
+  /** 报工工时；生产人员紧随其后 */
+  work_hours: 32,
+  worker_name: 32.5,
   total_pieces: 32.1,
   unit_price: 33,
   unitPrice: 33,
@@ -154,6 +356,9 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   standard_value: 33.2,
   unit: 33.3,
   total_amount: 34,
+  /** 工单委外：已发料数量（紧接金额；下推进度 50 须排在其后） */
+  issued_quantity: 34.5,
+  issuedQuantity: 34.5,
   time_amount: 34.1,
   piece_amount: 34.2,
   released_amount: 34.3,
@@ -167,8 +372,13 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   manufacturing_cost: 36.2,
   unit_cost: 36.3,
   effective_date: 37,
+  /** 异常单据：延期原因 / 问题描述 */
+  delay_reason: 40,
+  problem_description: 40,
+  /** 异常单据：建议动作 */
+  suggested_action: 50,
 
-  // —— 50 下推 / 进度 ——
+  // —— 50 下推 / 进度（工单委外：须在 issued_quantity 34.5 之后）——
   work_order_push_progress: 50,
   order_push_progress: 50,
   downstream_push_progress: 50,
@@ -191,6 +401,10 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   end_date: 60.6,
   planned_start_date: 61,
   planned_end_date: 61.1,
+  /** 返工等：计划开始/结束叠列 */
+  planned_start_end_stacked: 61,
+  /** 工单委外 / 工序委外：计划起止叠列 */
+  planned_range_stacked: 61,
   required_date: 61.2,
   delivery_date: 62,
   planned_ship_date: 62.1,
@@ -213,6 +427,9 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   timeRange: 66,
   occurred_at: 67,
   registered_at: 67,
+  /** 报工：工序开始/完成时间叠列（须在 reported_at / 更新时间之前） */
+  work_start_end_stacked: 67.05,
+  reported_at: 67.1,
   next_follow_up_at: 68,
   last_follow_up_at: 68.1,
   closed_at: 68.5,
@@ -231,8 +448,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   employee_name: 76,
   reviewer_name: 76.1,
   owner_name: 76.2,
-  worker_name: 76.3,
   inspector_name: 76.4,
+  responsible_person_name: 76.5,
   inspectorName: 76.4,
   contact_person: 77,
   contactPerson: 77,
@@ -244,8 +461,6 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   address: 77.5,
   department_name: 78,
   position_name: 78.1,
-  operation_name: 78.2,
-  outsource_operation: 78.3,
   warehouse_name: 78.5,
   product_code: 79,
   product_name: 79.1,

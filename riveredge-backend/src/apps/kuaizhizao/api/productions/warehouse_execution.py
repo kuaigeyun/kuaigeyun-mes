@@ -132,6 +132,8 @@ from apps.kuaizhizao.schemas.replenishment_suggestion import (
     ReplenishmentSuggestionResponse,
     ReplenishmentSuggestionListResponse,
     ReplenishmentSuggestionProcessRequest,
+    ReplenishmentSuggestionGenerateResult,
+    ReplenishmentSuggestionPushRequest,
 )
 from apps.kuaizhizao.schemas.inventory_alert import (
     InventoryAlertRuleCreate,
@@ -4792,12 +4794,23 @@ async def get_replenishment_suggestion_statistics(
     )
 
 
-@router.post("/replenishment-suggestions/generate-from-alerts", response_model=List[ReplenishmentSuggestionResponse], summary="Generate replenishment from inventory alerts")
+@router.post(
+    "/replenishment-suggestions/generate-from-alerts",
+    response_model=ReplenishmentSuggestionGenerateResult,
+    summary="Generate replenishment from inventory alerts",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-replenishment-suggestions:create",
+            )
+        )
+    ],
+)
 async def generate_replenishment_suggestions_from_alerts(
     request: Dict[str, Any] = Body(default={}),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[ReplenishmentSuggestionResponse]:
+) -> ReplenishmentSuggestionGenerateResult:
     """
     基于库存预警生成补货建议
 
@@ -4807,6 +4820,132 @@ async def generate_replenishment_suggestions_from_alerts(
     return await ReplenishmentSuggestionService().generate_suggestions_from_alerts(
         tenant_id=tenant_id,
         alert_ids=alert_ids,
+        created_by=current_user.id,
+    )
+
+
+@router.post(
+    "/replenishment-suggestions/generate-from-demand-computation",
+    response_model=ReplenishmentSuggestionGenerateResult,
+    summary="Generate replenishment from demand computation",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-replenishment-suggestions:create",
+            )
+        )
+    ],
+)
+async def generate_replenishment_suggestions_from_demand_computation(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReplenishmentSuggestionGenerateResult:
+    """基于已完成需求计算生成补货建议。"""
+    demand_computation_id = request.get("demand_computation_id")
+    if not demand_computation_id:
+        raise ValidationError("demand_computation_id 必填")
+    return await ReplenishmentSuggestionService().generate_suggestions_from_demand_computation(
+        tenant_id=tenant_id,
+        demand_computation_id=int(demand_computation_id),
+        created_by=current_user.id,
+    )
+
+
+@router.post(
+    "/replenishment-suggestions/push-to-purchase-requisition/preview",
+    summary="Preview push replenishment to purchase requisition",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-replenishment-suggestions:update",
+                "kuaizhizao:purchase-requisition:create",
+                require_all=True,
+            )
+        )
+    ],
+)
+async def preview_push_replenishment_to_purchase_requisition(
+    body: ReplenishmentSuggestionPushRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await ReplenishmentSuggestionService().preview_push_to_purchase_requisition(
+        tenant_id=tenant_id,
+        suggestion_ids=body.suggestion_ids,
+    )
+
+
+@router.post(
+    "/replenishment-suggestions/push-to-purchase-requisition",
+    summary="Push replenishment to purchase requisition",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-replenishment-suggestions:update",
+                "kuaizhizao:purchase-requisition:create",
+                require_all=True,
+            )
+        )
+    ],
+)
+async def push_replenishment_to_purchase_requisition(
+    body: ReplenishmentSuggestionPushRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await ReplenishmentSuggestionService().push_to_purchase_requisition(
+        tenant_id=tenant_id,
+        suggestion_ids=body.suggestion_ids,
+        created_by=current_user.id,
+    )
+
+
+@router.post(
+    "/replenishment-suggestions/push-to-purchase-order/preview",
+    summary="Preview push replenishment to purchase order",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-replenishment-suggestions:update",
+                "kuaizhizao:purchase-order:create",
+                require_all=True,
+            )
+        )
+    ],
+)
+async def preview_push_replenishment_to_purchase_order(
+    body: ReplenishmentSuggestionPushRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await ReplenishmentSuggestionService().preview_push_to_purchase_order(
+        tenant_id=tenant_id,
+        suggestion_ids=body.suggestion_ids,
+    )
+
+
+@router.post(
+    "/replenishment-suggestions/push-to-purchase-order",
+    summary="Push replenishment to purchase order",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-replenishment-suggestions:update",
+                "kuaizhizao:purchase-order:create",
+                require_all=True,
+            )
+        )
+    ],
+)
+async def push_replenishment_to_purchase_order(
+    body: ReplenishmentSuggestionPushRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await ReplenishmentSuggestionService().push_to_purchase_order(
+        tenant_id=tenant_id,
+        suggestion_ids=body.suggestion_ids,
         created_by=current_user.id,
     )
 

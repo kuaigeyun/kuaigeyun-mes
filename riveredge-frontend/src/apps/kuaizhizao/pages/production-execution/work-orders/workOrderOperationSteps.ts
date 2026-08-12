@@ -11,7 +11,8 @@ export interface WorkOrderOperationStep {
   name: string;
   sequence?: number;
   status: WorkOrderOperationStepStatus;
-  progress: number;
+  /** 进行中节点进度；缺省时节点内不展示百分比（如异常处理步骤轴） */
+  progress?: number;
 }
 
 export type WorkOrderOperationStepSlot = {

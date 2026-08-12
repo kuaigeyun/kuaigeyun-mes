@@ -524,6 +524,7 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                     "created_by",
                     "source_type",
                     "source_id",
+                    "concurrent_settlement",
                     "review_status",
                     "reviewer_id",
                     "reviewer_name",
@@ -532,8 +533,8 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 },
             )
             _, tax_amount, total_amount = compute_tax_from_excluding(
-                Decimal(payload["invoice_amount"]),
-                Decimal(payload["tax_rate"]),
+                Decimal(str(payload["invoice_amount"])),
+                Decimal(str(payload["tax_rate"])),
             )
             payload["tax_amount"] = tax_amount
             payload["total_amount"] = total_amount

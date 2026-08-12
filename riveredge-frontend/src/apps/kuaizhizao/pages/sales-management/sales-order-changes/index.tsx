@@ -572,9 +572,11 @@ const SalesOrderChangesPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesOrderChange.colSourceOrder'),
       dataIndex: 'source_order_code',
-      width: 150,
-      minWidth: 150,
+      width: 180,
+      minWidth: 180,
       uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: false,
       sorter: true,
       fieldProps: { placeholder: t('app.kuaizhizao.salesOrderChange.colSourceOrder') },
       render: (_, record) => (
@@ -837,7 +839,7 @@ const SalesOrderChangesPage: React.FC = () => {
         onTableDataChange={(rows) => {
           tableRowsRef.current = rows;
         }}
-        columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-order-changes"
+        columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-order-changes.list-v1"
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
         pinnedTabsValueEnum={orderChangeLifecycleValueEnum}
         toolBarRender={() => [

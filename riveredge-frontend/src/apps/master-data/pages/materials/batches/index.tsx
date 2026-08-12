@@ -22,6 +22,11 @@ import {
 import { materialBatchApi, materialApi } from '../../../services/material';
 import type { MaterialBatch, MaterialBatchCreate, MaterialBatchUpdate } from '../../../types/material';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import {
+  renderMasterActiveTag,
+  renderMasterYesNoTag,
+  renderMasterTypeMarker,
+} from '../../../utils/masterListPresentation';
 
 const BATCH_STATUS_PINNED_FIELD = 'status';
 
@@ -157,7 +162,10 @@ const BatchesPage: React.FC = () => {
     {
       title: t('app.master-data.batches.batchNo'),
       dataIndex: 'batchNo',
-      width: 180,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       copyable: true,
@@ -167,6 +175,9 @@ const BatchesPage: React.FC = () => {
       title: t('app.master-data.batches.materialCode'),
       dataIndex: 'materialCode',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       sorter: true,
@@ -175,7 +186,10 @@ const BatchesPage: React.FC = () => {
     {
       title: t('app.master-data.batches.materialName'),
       dataIndex: 'materialName',
-      width: 180,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       sorter: true,
@@ -184,6 +198,9 @@ const BatchesPage: React.FC = () => {
       title: t('app.master-data.batches.materialModel'),
       dataIndex: 'materialModel',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       sorter: true,
@@ -201,14 +218,33 @@ const BatchesPage: React.FC = () => {
       title: t('app.master-data.batches.status'),
       dataIndex: 'status',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       valueEnum: batchStatusValueEnum,
+      render: (_, r) => {
+        const color =
+          r.status === 'in_stock'
+            ? 'success'
+            : r.status === 'expired'
+              ? 'error'
+              : r.status === 'scrapped'
+                ? 'warning'
+                : 'default';
+        const text =
+          batchStatusValueEnum[r.status as keyof typeof batchStatusValueEnum]?.text || r.status || '-';
+        return renderMasterTypeMarker(text, color);
+      },
     },
     {
       title: t('app.master-data.batches.quantity'),
       dataIndex: 'quantity',
-      width: 100,
+      width: 90,
+      minWidth: 90,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'digit',
       sorter: true,
       hideInSearch: true,
@@ -217,6 +253,9 @@ const BatchesPage: React.FC = () => {
       title: t('app.master-data.batches.productionDate'),
       dataIndex: 'productionDate',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'date',
       sorter: true,
       hideInSearch: true,
@@ -226,6 +265,9 @@ const BatchesPage: React.FC = () => {
       title: t('app.master-data.batches.expiryDate'),
       dataIndex: 'expiryDate',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'date',
       sorter: true,
       hideInSearch: true,
@@ -234,6 +276,7 @@ const BatchesPage: React.FC = () => {
     ...masterCrudCreatedUpdatedColumns<MaterialBatch>(t),
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
       width: 150,
       fixed: 'right',
@@ -266,7 +309,7 @@ const BatchesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<MaterialBatch>
-        columnPersistenceId="apps.master-data.pages.materials.batches.v2"
+        columnPersistenceId="apps.master-data.pages.materials.batches.list-v1"
         headerTitle={t('app.master-data.menu.materials.batches')}
         actionRef={actionRef}
         rowKey="uuid"

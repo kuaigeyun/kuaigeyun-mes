@@ -71,9 +71,11 @@ export function WarehouseTraceBriefPrimaryActions(props: {
         />
       ) : null}
       {brief.document_type === 'sales_forecast' ? (
-        <Button type="primary" size="small" onClick={() => go(ROUTES.SALES_FORECASTS)}>
-          {t('components.documentTrackingPanel.traceBriefOpenSalesForecast')}
-        </Button>
+        <LinkedDetailOpenButton
+          documentType="sales_forecast"
+          documentId={brief.document_id}
+          label={t('components.documentTrackingPanel.traceBriefOpenSalesForecast')}
+        />
       ) : null}
       {brief.document_type === 'sales_return' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.SALES_RETURNS)}>
@@ -86,14 +88,18 @@ export function WarehouseTraceBriefPrimaryActions(props: {
         </Button>
       ) : null}
       {brief.document_type === 'demand' ? (
-        <Button type="primary" size="small" onClick={() => go(ROUTES.DEMAND_MANAGEMENT)}>
-          {t('components.documentTrackingPanel.traceBriefOpenDemand')}
-        </Button>
+        <LinkedDetailOpenButton
+          documentType="demand"
+          documentId={brief.document_id}
+          label={t('components.documentTrackingPanel.traceBriefOpenDemand')}
+        />
       ) : null}
       {brief.document_type === 'demand_computation' ? (
-        <Button type="primary" size="small" onClick={() => go(ROUTES.DEMAND_COMPUTATION)}>
-          {t('components.documentTrackingPanel.traceBriefOpenDemandComputation')}
-        </Button>
+        <LinkedDetailOpenButton
+          documentType="demand_computation"
+          documentId={brief.document_id}
+          label={t('components.documentTrackingPanel.traceBriefOpenDemandComputation')}
+        />
       ) : null}
       {brief.document_type === 'quotation' ? (
         <LinkedDetailOpenButton
@@ -103,9 +109,11 @@ export function WarehouseTraceBriefPrimaryActions(props: {
         />
       ) : null}
       {brief.document_type === 'purchase_requisition' ? (
-        <Button type="primary" size="small" onClick={() => go(ROUTES.PURCHASE_REQUISITIONS)}>
-          {t('components.documentTrackingPanel.traceBriefOpenPurchaseRequisition')}
-        </Button>
+        <LinkedDetailOpenButton
+          documentType="purchase_requisition"
+          documentId={brief.document_id}
+          label={t('components.documentTrackingPanel.traceBriefOpenPurchaseRequisition')}
+        />
       ) : null}
       {brief.document_type === 'outsource_order' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.OUTSOURCE_ORDERS)}>
@@ -133,9 +141,11 @@ export function WarehouseTraceBriefPrimaryActions(props: {
         </Button>
       ) : null}
       {brief.document_type === 'work_order' ? (
-        <Button type="primary" size="small" onClick={() => go(ROUTES.WORK_ORDERS)}>
-          {t('components.documentTrackingPanel.traceBriefOpenWorkOrder')}
-        </Button>
+        <LinkedDetailOpenButton
+          documentType="work_order"
+          documentId={brief.document_id}
+          label={t('components.documentTrackingPanel.traceBriefOpenWorkOrder')}
+        />
       ) : null}
       {brief.document_type === 'receipt_notice' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.RECEIPT_NOTICES)}>

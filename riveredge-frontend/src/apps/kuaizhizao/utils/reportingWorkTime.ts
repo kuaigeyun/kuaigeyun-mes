@@ -70,11 +70,19 @@ export function deriveReportingWorkTimeUpdates(
 export function resolveReportingWorkTimeForSubmit(values: Record<string, unknown>): {
   work_hours: number;
   reported_at: string;
+  work_start_time?: string;
+  work_end_time?: string;
 } {
-  const start = toReportingDayjs(values.work_start_time);
-  const end = toReportingDayjs(values.work_end_time);
+  let start = toReportingDayjs(values.work_start_time);
+  let end = toReportingDayjs(values.work_end_time);
   let hours = Number(values.work_hours);
   if (!Number.isFinite(hours) || hours < 0) hours = 0;
+
+  if (start && !end && hours > 0) {
+    end = start.add(hours, 'hour');
+  } else if (end && !start && hours > 0) {
+    start = end.subtract(hours, 'hour');
+  }
 
   if (start && end && !end.isBefore(start)) {
     hours = roundReportingWorkHours(end.diff(start, 'minute') / 60);
@@ -89,5 +97,10 @@ export function resolveReportingWorkTimeForSubmit(values: Record<string, unknown
     reportedAt = formatReportingDateTime(start.add(hours, 'hour'));
   }
 
-  return { work_hours: hours, reported_at: reportedAt };
+  return {
+    work_hours: hours,
+    reported_at: reportedAt,
+    work_start_time: start ? formatReportingDateTime(start) : undefined,
+    work_end_time: end ? formatReportingDateTime(end) : undefined,
+  };
 }

@@ -1,7 +1,7 @@
 import React from 'react';
-import { Tag } from 'antd';
 import type { ProColumns } from '@ant-design/pro-components';
 import type { TFunction } from 'i18next';
+import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 
 export const PERFORMANCE_CALC_MODE_I18N: Record<string, string> = {
   time: 'app.kuaizhizao.performance.common.calcMode.time',
@@ -108,14 +108,37 @@ export function renderActiveTag(t: TFunction, active?: boolean, variant: 'enable
           ? 'app.kuaizhizao.performance.common.active.inactive'
           : 'app.kuaizhizao.performance.common.active.disabled',
       );
-  return React.createElement(Tag, { color: active ? 'success' : 'default' }, text);
+  return React.createElement(MarkerTag, { color: active ? 'success' : 'default' }, text);
 }
 
 export function renderYesNoTag(t: TFunction, value?: boolean): React.ReactNode {
   const text = value
     ? t('app.kuaizhizao.performance.common.yesNo.yes')
     : t('app.kuaizhizao.performance.common.yesNo.no');
-  return React.createElement(Tag, null, text);
+  return React.createElement(MarkerTag, { color: value ? 'processing' : 'default' }, text);
+}
+
+const SUMMARY_STATUS_COLOR: Record<string, string> = {
+  draft: 'default',
+  pending: 'warning',
+  calculated: 'processing',
+  confirmed: 'success',
+};
+
+/** 绩效汇总流程状态（solid） */
+export function renderSummaryStatusTag(t: TFunction, status?: string | null): React.ReactNode {
+  const code = String(status ?? '').trim();
+  if (!code) return '-';
+  const label = PERFORMANCE_SUMMARY_STATUS_I18N[code]
+    ? t(PERFORMANCE_SUMMARY_STATUS_I18N[code])
+    : code;
+  return React.createElement(StatusTag, { color: SUMMARY_STATUS_COLOR[code] || 'default' }, label);
+}
+
+export function renderPerformanceTypeMarker(text?: string | null, color = 'processing'): React.ReactNode {
+  const value = String(text ?? '').trim();
+  if (!value || value === '-') return '-';
+  return React.createElement(MarkerTag, { color }, value);
 }
 
 export function buildPerformanceSalaryReportColumns(t: TFunction): ProColumns[] {

@@ -7,7 +7,7 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
-import { App, Tag, Space, Button, Popconfirm, Modal, Table } from 'antd';
+import { App, Space, Button, Popconfirm, Modal, Table } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
@@ -23,9 +23,15 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useTrialRunMode } from '../../../../../hooks/useTrialRunMode';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import type { VariantAttributeDefinition } from '../../../types/variant-attribute';
 import { variantAttributeApi, type PresetAttributeItem } from '../../../services/variant-attribute';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import {
+  renderMasterActiveTag,
+  renderMasterYesNoTag,
+  renderMasterTypeMarker,
+} from '../../../utils/masterListPresentation';
 
 const VariantAttributesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -96,6 +102,9 @@ const VariantAttributesPage: React.FC = () => {
       title: t('app.master-data.variantAttributes.attributeType'),
       dataIndex: 'attribute_type',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         enum: { text: t('app.master-data.variantAttributes.typeEnum'), status: 'Default' },
@@ -109,53 +118,65 @@ const VariantAttributesPage: React.FC = () => {
           text: record.attribute_type,
           color: 'default',
         };
-        return <Tag color={type.color}>{type.text}</Tag>;
+        return <MarkerTag color={type.color}>{type.text}</MarkerTag>;
       },
     },
     {
       title: t('app.master-data.variantAttributes.allowMultiple'),
       dataIndex: 'allow_multiple',
       width: 90,
+      minWidth: 90,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       render: (_, record) =>
         record.attribute_type === 'enum' ? (
-          <Tag color={record.allow_multiple ? 'blue' : 'default'}>
+          <MarkerTag color={record.allow_multiple ? 'blue' : 'default'}>
             {record.allow_multiple ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
-          </Tag>
+          </MarkerTag>
         ) : '-',
     },
     {
       title: t('app.master-data.variantAttributes.isRequired'),
       dataIndex: 'is_required',
-      width: 100,
+      width: 90,
+      minWidth: 90,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('app.master-data.bom.yes'), status: 'Error' },
         false: { text: t('app.master-data.bom.no'), status: 'Success' },
       },
       render: (_, record) => (
-        <Tag color={record.is_required ? 'red' : 'green'}>
+        <MarkerTag color={record.is_required ? 'red' : 'green'}>
           {record.is_required ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
-        </Tag>
+        </MarkerTag>
       ),
     },
     {
       title: t('app.master-data.variantAttributes.displayOrder'),
       dataIndex: 'display_order',
-      width: 100,
+      width: 90,
+      minWidth: 90,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
     },
     {
       title: t('app.master-data.variantAttributes.enumValues'),
       dataIndex: 'enum_values',
-      width: 200,
+      width: 168,
+      minWidth: 168,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInTable: false,
       render: (_, record) => {
         if (record.attribute_type === 'enum' && record.enum_values && record.enum_values.length > 0) {
           return (
             <Space wrap>
               {record.enum_values.map((value, index) => (
-                <Tag key={index}>{value}</Tag>
+                <MarkerTag key={index}>{value}</MarkerTag>
               ))}
             </Space>
           );
@@ -175,20 +196,22 @@ const VariantAttributesPage: React.FC = () => {
     {
       title: t('app.master-data.variantAttributes.status'),
       dataIndex: 'is_active',
-      width: 100,
+      width: 88,
+      minWidth: 88,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       valueEnum: attributeActiveValueEnum,
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'} variant="solid">
-          {record.is_active ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
-        </Tag>
-      ),
+      render: (_, record) => renderMasterActiveTag(t, record.is_active, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
     },
     {
       title: t('app.master-data.variantAttributes.version'),
       dataIndex: 'version',
       width: 80,
+      minWidth: 80,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
       title: t('app.master-data.variantAttributes.description'),
@@ -199,6 +222,7 @@ const VariantAttributesPage: React.FC = () => {
     ...masterCrudCreatedUpdatedSnakeColumns<VariantAttributeDefinition>(t),
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
       width: 160,
       fixed: 'right',
@@ -369,7 +393,7 @@ const VariantAttributesPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<VariantAttributeDefinition>
-          columnPersistenceId="apps.master-data.pages.materials.variant-attributes.status-v2"
+          columnPersistenceId="apps.master-data.pages.materials.variant-attributes.list-v1"
           headerTitle={t('app.master-data.menu.materials.variant-attributes')}
           actionRef={actionRef}
           columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
@@ -602,9 +626,14 @@ const VariantAttributesPage: React.FC = () => {
             {
               title: t('app.master-data.variantAttributes.presetColType'),
               dataIndex: 'attribute_type',
-              width: 80,
+              width: 100,
+              minWidth: 100,
+              uniTableKeepWidth: true,
+              resizable: false,
               render: (type: string) => (
-                <Tag color="blue">{attributeTypeOptions.find((o) => o.value === type)?.label ?? type}</Tag>
+                <MarkerTag color="blue">
+                  {attributeTypeOptions.find((o) => o.value === type)?.label ?? type}
+                </MarkerTag>
               ),
             },
             {

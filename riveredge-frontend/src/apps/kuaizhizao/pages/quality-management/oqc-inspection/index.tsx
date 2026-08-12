@@ -21,7 +21,8 @@ import {
   buildQualityInspectionListMaterialHiddenColumns,
   buildQualityInspectionListQuantityResultColumns,
   buildQualityInspectionListSearchColumns,
-  stackedPrimarySecondaryColumn,
+  buildQualityInspectionPartnerStackedColumn,
+  QUALITY_INSPECTION_EXTRA_KEY,
 } from '../components/qualityTableColumns';
 import {
   buildQualityInspectionDetailCodeColumn,
@@ -66,7 +67,6 @@ import {
   getQualityQualityStatusValueEnum,
   getQualityReleaseDecisionValueEnum,
   qualityInspectionUniAuditProps,
-  renderQualityResultTag,
   renderReleaseDecisionTag,
 } from '../components/qualityMeta';
 import {
@@ -547,9 +547,8 @@ const OQCInspectionPage: React.FC = () => {
         inspectionQualityStatusValueEnum,
       ),
       buildQualityInspectionListCodeColumn<OQCInspection>(t),
-      stackedPrimarySecondaryColumn<OQCInspection>(
+      buildQualityInspectionPartnerStackedColumn<OQCInspection>(
         t('app.kuaizhizao.quality.oqc.columns.customer'),
-        'customerShipmentNotice',
         ['customer_name'],
         ['shipment_notice_code', 'shipmentNoticeCode'],
         { dataIndex: 'customer_name' },
@@ -559,9 +558,10 @@ const OQCInspectionPage: React.FC = () => {
       buildQualityInspectionListMaterialColumn<OQCInspection>(t),
       ...buildQualityInspectionListMaterialHiddenColumns<OQCInspection>(t),
       buildInspectorTimeStackedColumn<OQCInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
-      ...buildQualityInspectionListQuantityResultColumns<OQCInspection>(t, renderQualityResultTag, [
+      ...buildQualityInspectionListQuantityResultColumns<OQCInspection>(t, [
         {
           title: t('app.kuaizhizao.quality.oqc.columns.releaseDecision'),
+          key: QUALITY_INSPECTION_EXTRA_KEY,
           dataIndex: 'release_decision',
           width: 100,
           sorter: true,
@@ -619,7 +619,7 @@ const OQCInspectionPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           permissionResource={OQC_RESOURCE}
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.oqc-inspection.material-qty-v2"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.oqc-inspection.rank-v3"
           showAdvancedSearch
           pinnedTabsField={QUALITY_INSPECTION_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter

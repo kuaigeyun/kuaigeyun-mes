@@ -71,4 +71,13 @@ export interface PurchaseInvoiceCreateData {
     attachments?: unknown;
     source_type?: 'purchase_order' | 'purchase_receipt' | 'payable';
     source_id?: number;
+    concurrent_settlement?: {
+        enabled: boolean;
+        total_amount: number;
+        payment_method: string;
+        bank_account_id?: number | null;
+        bank_account?: string | null;
+        voucher_date?: string | null;
+        notes?: string | null;
+    };
 }

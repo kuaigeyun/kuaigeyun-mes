@@ -27,27 +27,34 @@ export function SalesOrderLinkedDetailDrawer({
   const auditRequired = useAuditRequired('kuaizhizao:sales-order');
   const [order, setOrder] = useState<SalesOrder | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const load = useCallback(async () => {
     if (!open || documentId <= 0) {
       setOrder(null);
+      setLoadError(null);
       setLoading(false);
       return;
     }
     setLoading(true);
-    setOrder(null);
+    setLoadError(null);
+    // 同单刷新时保留旧数据，避免壳层闪空；换单时再清空
+    setOrder((prev) => (prev?.id === documentId ? prev : null));
     try {
       const data = await getSalesOrder(documentId, true, true);
       setOrder(data);
     } catch (e: unknown) {
       const err = e as { message?: string; detail?: string };
-      message.error(err?.message || err?.detail || t('app.kuaizhizao.quotation.loadSalesOrderFailed'));
-      onClose();
+      const msg =
+        err?.message || err?.detail || t('app.kuaizhizao.quotation.loadSalesOrderFailed');
+      setOrder(null);
+      setLoadError(msg);
+      message.error(msg);
     } finally {
       setLoading(false);
     }
-  }, [open, documentId, message, onClose, t]);
+  }, [open, documentId, message, t]);
 
   useEffect(() => {
     void load();
@@ -59,6 +66,8 @@ export function SalesOrderLinkedDetailDrawer({
       onClose={onClose}
       order={order}
       loading={loading}
+      error={loadError}
+      onRetry={() => setRefreshKey((k) => k + 1)}
       zIndex={zIndex}
       auditRequired={auditRequired}
       trackingRefreshKey={refreshKey}

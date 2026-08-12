@@ -8,7 +8,8 @@ import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { Button, Tag, Typography } from 'antd';
+import { Button, Typography } from 'antd';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UniTable } from '../../../../../components/uni-table';
 import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 import { rowActionKind } from '../../../../../components/uni-action';
@@ -120,9 +121,9 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
           const v = r.usages_until_due ?? 0;
           if (v <= 0) {
             return (
-              <Tag color="error">
+              <MarkerTag color="error">
                 {t(`${P}.overdueUsages`, { count: Math.abs(v) || 0 })}
-              </Tag>
+              </MarkerTag>
             );
           }
           return v;
@@ -133,7 +134,7 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
         dataIndex: 'reminder_type',
         render: (_, r) => {
           const color = r.reminder_type === 'overdue' ? 'error' : r.reminder_type === 'due_soon' ? 'warning' : 'default';
-          return <Tag color={color}>{reminderStatusLabel(r.reminder_type)}</Tag>;
+          return <MarkerTag color={color}>{reminderStatusLabel(r.reminder_type)}</MarkerTag>;
         },
       },
     ],
@@ -155,7 +156,7 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
         render: (_, r) => {
           const v = r.days_until_due ?? 0;
           if (v < 0) {
-            return <Tag color="error">{t(`${P}.overdueDays`, { count: Math.abs(v) })}</Tag>;
+            return <MarkerTag color="error">{t(`${P}.overdueDays`, { count: Math.abs(v) })}</MarkerTag>;
           }
           return t(`${P}.daysRemaining`, { count: v });
         },
@@ -171,7 +172,7 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
         dataIndex: 'due_type',
         render: (_, r) => {
           const color = r.due_type === 'overdue' ? 'error' : r.due_type === 'due_soon' ? 'warning' : 'default';
-          return <Tag color={color}>{reminderStatusLabel(r.due_type)}</Tag>;
+          return <MarkerTag color={color}>{reminderStatusLabel(r.due_type)}</MarkerTag>;
         },
       },
     ],
@@ -243,7 +244,7 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
           if (r.trigger_type !== 'usage_count') return '-';
           const v = r.usages_until_due ?? 0;
           if (v <= 0) {
-            return <Tag color="red">{t(`${P}.overdueUsages`, { count: Math.abs(v) || 0 })}</Tag>;
+            return <MarkerTag color="error">{t(`${P}.overdueUsages`, { count: Math.abs(v) || 0 })}</MarkerTag>;
           }
           return <span>{v}</span>;
         },
@@ -254,8 +255,12 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
         width: 100,
         valueType: 'select',
         valueEnum: {
-          due_soon: { text: t(`${P}.statusDueSoon`), status: 'Warning' },
-          overdue: { text: t(`${P}.statusOverdue`), status: 'Error' },
+          due_soon: { text: t(`${P}.statusDueSoon`) },
+          overdue: { text: t(`${P}.statusOverdue`) },
+        },
+        render: (_, r) => {
+          const color = r.reminder_type === 'overdue' ? 'error' : r.reminder_type === 'due_soon' ? 'warning' : 'default';
+          return <MarkerTag color={color}>{reminderStatusLabel(r.reminder_type)}</MarkerTag>;
         },
       },
       {
@@ -307,7 +312,7 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
         render: (_, r) => {
           const v = r.days_until_due ?? 0;
           if (v < 0) {
-            return <Tag color="red">{t(`${P}.overdueDays`, { count: Math.abs(v) })}</Tag>;
+            return <MarkerTag color="error">{t(`${P}.overdueDays`, { count: Math.abs(v) })}</MarkerTag>;
           }
           return <span>{t(`${P}.daysRemaining`, { count: v })}</span>;
         },
@@ -318,8 +323,12 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
         width: 100,
         valueType: 'select',
         valueEnum: {
-          due_soon: { text: t(`${P}.statusDueSoon`), status: 'Warning' },
-          overdue: { text: t(`${P}.statusOverdue`), status: 'Error' },
+          due_soon: { text: t(`${P}.statusDueSoon`) },
+          overdue: { text: t(`${P}.statusOverdue`) },
+        },
+        render: (_, r) => {
+          const color = r.due_type === 'overdue' ? 'error' : r.due_type === 'due_soon' ? 'warning' : 'default';
+          return <MarkerTag color={color}>{reminderStatusLabel(r.due_type)}</MarkerTag>;
         },
       },
       {
@@ -358,7 +367,7 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
             label: t(`${P}.tabMaintenance`),
             children: (
               <UniTable<ToolMaintenanceReminder>
-                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-reminders.maintenance"
+                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-reminders.maintenance-equip-rank-v1"
                 actionRef={maintenanceActionRef}
                 showAdvancedSearch
                 skipFuzzyPinyinClientFilter
@@ -404,7 +413,7 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
             label: t(`${P}.tabCalibration`),
             children: (
               <UniTable<ToolCalibrationReminder>
-                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-reminders.calibration"
+                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-reminders.calibration-equip-rank-v1"
                 actionRef={calibrationActionRef}
                 showAdvancedSearch
                 skipFuzzyPinyinClientFilter

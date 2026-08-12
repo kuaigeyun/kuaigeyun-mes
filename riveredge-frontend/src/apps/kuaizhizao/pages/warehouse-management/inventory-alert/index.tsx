@@ -7,12 +7,12 @@
  * Date: 2026-01-15
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormDependency } from '@ant-design/pro-components';
 import { App, Button, Space, Popconfirm, Typography, Row, Col, Descriptions, Tag } from 'antd';
-import { WarningOutlined, ReloadOutlined } from '@ant-design/icons';
+import { CheckOutlined, WarningOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -20,6 +20,11 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import {
+  inventoryAlertBatchIgnoreAllowed,
+  inventoryAlertBatchResolveAllowed,
+} from '../../../../../hooks/useDocumentCapabilities';
+import { UniBatchMenuButton, runCapabilityBatchLoop } from '../../../../../components/uni-batch';
 import { FormModalTemplate, DetailDrawerTemplate, detailDrawerDescriptionItems, MODAL_CONFIG, DRAWER_CONFIG, MultiTabListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { inventoryAlertApi } from '../../../services/inventory-alert';
@@ -121,9 +126,11 @@ const InventoryAlertPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const alertActionRef = useRef<ActionType>(null);
   const ruleActionRef = useRef<ActionType>(null);
+  const alertTableRowsRef = useRef<InventoryAlert[]>([]);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const alertPerms = useResourcePermissions('kuaizhizao:warehouse-management-inventory-alert');
   const [activeTabKey, setActiveTabKey] = useState<'alerts' | 'rules'>('alerts');
+  const [selectedAlertRowKeys, setSelectedAlertRowKeys] = useState<React.Key[]>([]);
 
   // Modal 相关状态
   const [ruleModalVisible, setRuleModalVisible] = useState(false);
@@ -191,6 +198,42 @@ const InventoryAlertPage: React.FC = () => {
       loadStatistics();
     }
   }, [activeTabKey]);
+
+  const selectedAlertsForBatch = useMemo(
+    () =>
+      selectedAlertRowKeys
+        .map((key) => alertTableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is InventoryAlert => row != null),
+    [selectedAlertRowKeys],
+  );
+
+  const handleAlertBatchSuccess = useCallback(() => {
+    setSelectedAlertRowKeys([]);
+    invalidateMenuBadgeCounts();
+    alertActionRef.current?.reload();
+    void loadStatistics();
+  }, [invalidateMenuBadgeCounts]);
+
+  const runAlertBatchMark = useCallback(
+    async (keys: React.Key[], status: 'resolved' | 'ignored') => {
+      const capabilityKey = status === 'resolved' ? 'resolve' : 'ignore';
+      await runCapabilityBatchLoop({
+        keys,
+        records: selectedAlertsForBatch,
+        capabilityKey,
+        permAllowed: alertPerms.canUpdate,
+        notAllowedMessage: t('app.kuaizhizao.inventoryAlert.msgSelectAlerts'),
+        onRun: (id) =>
+          inventoryAlertApi.handle(String(id), {
+            status,
+          }),
+        message: messageApi,
+        t,
+        onSuccess: handleAlertBatchSuccess,
+      });
+    },
+    [alertPerms.canUpdate, handleAlertBatchSuccess, messageApi, selectedAlertsForBatch, t],
+  );
 
   const alertStatCards = useMemo<StatCard[] | undefined>(() => {
     if (activeTabKey !== 'alerts' || !statistics) return undefined;
@@ -417,10 +460,7 @@ const InventoryAlertPage: React.FC = () => {
       setCurrentAlertId(null);
       setPendingHandleFormValues(null);
       handleFormRef.current?.resetFields();
-      invalidateMenuBadgeCounts();
-
-      alertActionRef.current?.reload();
-      loadStatistics();
+      handleAlertBatchSuccess();
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaizhizao.inventoryAlert.msgHandleFailed'));
       throw error;
@@ -719,6 +759,15 @@ const InventoryAlertPage: React.FC = () => {
                 showAdvancedSearch
                 pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
                 skipFuzzyPinyinClientFilter
+                enableRowSelection={alertPerms.canUpdate}
+                selectedRowKeys={selectedAlertRowKeys}
+                onRowSelectionChange={setSelectedAlertRowKeys}
+                rowSelectionGetCheckboxProps={(record) => ({
+                  disabled: !record.capabilities?.resolve?.allowed,
+                })}
+                onTableDataChange={(rows) => {
+                  alertTableRowsRef.current = rows;
+                }}
                 toolBarRender={() =>
                   alertPerms.canAction?.('execute')
                     ? [
@@ -730,6 +779,45 @@ const InventoryAlertPage: React.FC = () => {
                         >
                           {t('app.kuaizhizao.inventoryAlert.runCheckButton')}
                         </Button>,
+                      ]
+                    : []
+                }
+                toolBarActionsAfterDelete={
+                  alertPerms.canUpdate
+                    ? [
+                        <UniBatchMenuButton
+                          key="inventory-alert-batch-ops"
+                          selectedRowKeys={selectedAlertRowKeys}
+                          buttonText={t('app.kuaizhizao.warehouseCommon.batchOps')}
+                          menuItems={[
+                            {
+                              key: 'mark-resolved',
+                              label: t('app.kuaizhizao.warehouseCommon.batchMarkResolved'),
+                              icon: <CheckOutlined />,
+                              disabled: !inventoryAlertBatchResolveAllowed(
+                                selectedAlertsForBatch,
+                                alertPerms.canUpdate,
+                              ),
+                              requireConfirm: true,
+                              confirmTitle: (count) =>
+                                t('app.kuaizhizao.inventoryAlert.msgBatchResolveConfirm', { count }),
+                              onClick: (keys) => runAlertBatchMark(keys, 'resolved'),
+                            },
+                            {
+                              key: 'mark-ignored',
+                              label: t('app.kuaizhizao.warehouseCommon.batchMarkIgnored'),
+                              icon: <StopOutlined />,
+                              disabled: !inventoryAlertBatchIgnoreAllowed(
+                                selectedAlertsForBatch,
+                                alertPerms.canUpdate,
+                              ),
+                              requireConfirm: true,
+                              confirmTitle: (count) =>
+                                t('app.kuaizhizao.inventoryAlert.msgBatchIgnoreConfirm', { count }),
+                              onClick: (keys) => runAlertBatchMark(keys, 'ignored'),
+                            },
+                          ]}
+                        />,
                       ]
                     : []
                 }

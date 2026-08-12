@@ -10,17 +10,17 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Modal, Row, Col, Tag } from 'antd';
+import { App, Button, Modal, Row, Col } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { rowActionKind } from '../../../../../components/uni-action';
-import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { moldApi } from '../../../services/equipment';
 import { trialsApi } from '../../../services/moldOps';
 import { formatDateTime } from '../../../../../utils/format';
@@ -191,7 +191,11 @@ const MoldTrialsPage: React.FC = () => {
       {
         title: t(`${P}.col.result`),
         dataIndex: 'trial_result',
-        render: (_, r) => renderDocumentStatusTag(r.trial_result ?? '-', r.trial_result),
+        render: (_, r) => {
+          const color =
+            r.trial_result === '合格' ? 'success' : r.trial_result === '不合格' ? 'error' : 'warning';
+          return <MarkerTag color={color}>{r.trial_result ?? '-'}</MarkerTag>;
+        },
       },
       { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
     ],
@@ -242,7 +246,11 @@ const MoldTrialsPage: React.FC = () => {
         width: 100,
         sorter: true,
         hideInSearch: true,
-        render: (_, r) => renderDocumentStatusTag(r.trial_result ?? '-', r.trial_result),
+        render: (_, r) => {
+          const color =
+            r.trial_result === '合格' ? 'success' : r.trial_result === '不合格' ? 'error' : 'warning';
+          return <MarkerTag color={color}>{r.trial_result ?? '-'}</MarkerTag>;
+        },
       },
       {
         title: t('common.updatedAt'),
@@ -314,7 +322,7 @@ const MoldTrialsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<MoldTrial>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-trials"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-trials-equip-rank-v1"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

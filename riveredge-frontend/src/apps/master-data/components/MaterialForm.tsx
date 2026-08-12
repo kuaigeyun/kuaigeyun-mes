@@ -2117,6 +2117,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
             name="mainCode"
             label={t('app.master-data.materialForm.mainCode')}
             placeholder={isAutoGenerateEnabled('master-data-material') ? t('app.master-data.materialForm.mainCodeAuto') : t('app.master-data.materialForm.mainCodePlaceholder')}
+            disabled={isEdit}
             rules={[
               { required: true, message: t('app.master-data.materialForm.mainCodeRequired') },
               { max: 50, message: t('app.master-data.materialForm.mainCodeMax') },

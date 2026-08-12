@@ -3,9 +3,16 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * 研发需求（Phase2）
  */
 
-import React, { useRef, useState, useCallback, useMemo } from 'react';
-import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { ProFormDigit } from '@ant-design/pro-components';
+import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
+import {
+  ActionType,
+  ProColumns,
+  ProFormInstance,
+  ProFormSelect,
+  ProFormText,
+  ProFormTextArea,
+  ProFormDigit,
+} from '@ant-design/pro-components';
 import { App, Button, Alert } from 'antd';
 import { LinkOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
@@ -23,7 +30,9 @@ import {
 import { buildPurchaseInquiryUrl } from '../../../services/master-data-links';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { testGenerateCode } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   plmCodeTitleSearchColumns,
   plmCreatedUpdatedColumns,
@@ -39,6 +48,8 @@ import {
   renderPhase2RequirementStatusTag,
 } from '../../../components/phase2Meta';
 
+const PAGE_CODE = 'kuaiplm-rd-requirement';
+
 const RequirementsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
@@ -46,14 +57,38 @@ const RequirementsPage: React.FC = () => {
   const projectIdFilter = searchParams.get('project_id');
   const filterProjectId = projectIdFilter ? Number(projectIdFilter) : undefined;
   const actionRef = useRef<ActionType>(null);
+  const createFormRef = useRef<ProFormInstance>(null);
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [editingRecord, setEditingRecord] = useState<RdRequirement | null>(null);
   const [detailRecord, setDetailRecord] = useState<RdRequirement | null>(null);
 
   const handleCreate = useCallback(() => setCreateOpen(true), []);
   useNewShortcut(handleCreate);
+
+  useEffect(() => {
+    if (!createOpen) return;
+    (async () => {
+      if (!isAutoGenerateEnabled(PAGE_CODE)) {
+        setPreviewCode(null);
+        return;
+      }
+      try {
+        const ruleCode = getPageRuleCode(PAGE_CODE);
+        if (!ruleCode) {
+          setPreviewCode(null);
+          return;
+        }
+        const res = await testGenerateCode({ rule_code: ruleCode });
+        setPreviewCode(res.code);
+        createFormRef.current?.setFieldsValue({ requirement_code: res.code });
+      } catch {
+        setPreviewCode(null);
+      }
+    })();
+  }, [createOpen]);
 
   const toRequirementIds = (keys: React.Key[]) =>
     keys.map((key) => Number(key)).filter((id) => Number.isFinite(id) && id > 0);
@@ -130,6 +165,9 @@ const RequirementsPage: React.FC = () => {
         title: t('app.kuaiplm.phase2.requirements.columns.code'),
         dataIndex: 'requirement_code',
         width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
       },
@@ -145,27 +183,27 @@ const RequirementsPage: React.FC = () => {
         dataIndex: 'project_name',
         width: 140,
         hideInSearch: true,
+        ellipsis: true,
       },
       {
         title: t('app.kuaiplm.phase2.requirements.columns.priority'),
         dataIndex: 'priority',
         width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         valueEnum: priorityValueEnum,
         render: (_, row) => renderPhase2PriorityMarker(t, row.priority),
-      },
-      {
-        title: t('app.kuaiplm.phase2.requirements.columns.status'),
-        dataIndex: 'status',
-        width: 90,
-        valueEnum: requirementStatusValueEnum,
-        render: (_, row) => renderPhase2RequirementStatusTag(t, row.status),
       },
       {
         title: t('app.kuaiplm.phase2.requirements.columns.source'),
         key: 'requirement_source_type',
         dataIndex: 'source_type',
         width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, row) => {
           if (row.source_type === 'purchase_inquiry' && row.source_id) {
@@ -184,6 +222,18 @@ const RequirementsPage: React.FC = () => {
         },
       },
       ...plmCreatedUpdatedColumns<RdRequirement>(t),
+      {
+        title: t('app.kuaiplm.phase2.requirements.columns.status'),
+        key: 'lifecycle',
+        dataIndex: 'status',
+        width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
+        fixed: 'right',
+        valueEnum: requirementStatusValueEnum,
+        render: (_, row) => renderPhase2RequirementStatusTag(t, row.status),
+      },
       plmListActionColumn<RdRequirement>(t, (_, row) => [
           <Button
             {...rowActionKind('read')}
@@ -248,8 +298,8 @@ const RequirementsPage: React.FC = () => {
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
-        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.phase2.requirements"
+        columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
+        columnPersistenceId="apps.kuaiplm.pages.phase2.requirements.list-v1"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={PLM_PHASE2_PINNED_STATUS_FIELD}
@@ -307,14 +357,33 @@ const RequirementsPage: React.FC = () => {
       <FormModalTemplate
         title={t('app.kuaiplm.phase2.requirements.createTitle')}
         open={createOpen}
-        onClose={() => setCreateOpen(false)}
+        formRef={createFormRef}
+        onClose={() => {
+          setCreateOpen(false);
+          setPreviewCode(null);
+        }}
         onFinish={async (values) => {
-          await createRequirement(values);
+          await createRequirement({
+            ...values,
+            project_id: filterProjectId,
+          });
           messageApi.success(t('common.createSuccess'));
           setCreateOpen(false);
+          setPreviewCode(null);
           actionRef.current?.reload();
         }}
       >
+        <ProFormText
+          name="requirement_code"
+          label={t('app.kuaiplm.phase2.requirements.columns.code')}
+          rules={[{ required: !isAutoGenerateEnabled(PAGE_CODE) }]}
+          disabled={isAutoGenerateEnabled(PAGE_CODE)}
+          extra={
+            previewCode
+              ? `${t('app.kuaiplm.phase2.requirements.columns.code')}: ${previewCode}`
+              : undefined
+          }
+        />
         <ProFormText
           name="title"
           label={t('app.kuaiplm.phase2.requirements.form.title')}

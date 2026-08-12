@@ -10,6 +10,8 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDependency, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Tag, Space, Badge, Typography, Alert, Tooltip, Card, Button, theme, Descriptions } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { DeleteOutlined, EyeOutlined, DatabaseOutlined, ThunderboltOutlined, EditOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { rowActionKind } from '../../../../components/uni-action';
@@ -621,7 +623,7 @@ const DataSourceListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<DataSource>[] = [
+  const columns = useMemo<ProColumns<DataSource>[]>(() => alignProColumns([
     {
       title: t('pages.system.dataSources.columnName'),
       dataIndex: 'name',
@@ -631,7 +633,7 @@ const DataSourceListPage: React.FC = () => {
         <Space size="small">
           <span>{record.name}</span>
           {record.is_system_default && (
-            <Tag color="blue">{t('pages.system.dataSources.systemDefault', '系统默认')}</Tag>
+            renderSystemTypeMarker(t('pages.system.dataSources.systemDefault', '系统默认'), 'processing')
           )}
         </Space>
       ),
@@ -640,18 +642,24 @@ const DataSourceListPage: React.FC = () => {
       title: t('pages.system.dataSources.columnCode'),
       dataIndex: 'code',
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
       title: t('pages.system.dataSources.columnType'),
       dataIndex: 'type',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: Object.fromEntries(
         CONNECTOR_DEFINITIONS.map((c) => [c.type, { text: c.name }]),
       ),
       render: (_, record) => {
         const typeInfo = getTypeInfo(record.type);
-        return <Tag color={typeInfo.color} variant="filled">{typeInfo.text}</Tag>;
+        return renderSystemTypeMarker(typeInfo.text, typeInfo.color);
       },
     },
     {
@@ -664,6 +672,9 @@ const DataSourceListPage: React.FC = () => {
       title: t('pages.system.dataSources.columnConnectionStatus'),
       dataIndex: 'is_connected',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('pages.system.dataSources.statusConnected'), status: 'Success' },
@@ -677,9 +688,7 @@ const DataSourceListPage: React.FC = () => {
             <Badge status="default" text={t('pages.system.dataSources.statusNotConnected')} />
           )}
           {record.last_error && (
-            <Tag color="error" style={{ fontSize: 11 }}>
-              {t('pages.system.dataSources.errorTag')}
-            </Tag>
+            renderSystemTypeMarker(t('pages.system.dataSources.errorTag'), 'error')
           )}
         </Space>
       ),
@@ -688,21 +697,24 @@ const DataSourceListPage: React.FC = () => {
       title: t('pages.system.dataSources.columnActive'),
       dataIndex: 'is_active',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('pages.system.dataSources.enabled'), status: 'Success' },
         false: { text: t('pages.system.dataSources.disabled'), status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('pages.system.dataSources.enabled') : t('pages.system.dataSources.disabled')}
-        </Tag>
-      ),
+      render: (_, record) =>
+        renderSystemActiveTag(t, record.is_active, 'pages.system.dataSources.enabled', 'pages.system.dataSources.disabled'),
     },
     {
       title: t('pages.system.dataSources.columnLastConnected'),
       dataIndex: 'last_connected_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
@@ -711,14 +723,19 @@ const DataSourceListPage: React.FC = () => {
       title: t('pages.system.dataSources.columnCreatedAt'),
       dataIndex: 'created_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
     },
     {
       title: t('pages.system.dataSources.columnActions'),
+      key: 'action',
       valueType: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => {
         const actions: React.ReactNode[] = [
           <Button
@@ -777,7 +794,7 @@ const DataSourceListPage: React.FC = () => {
         return actions;
       },
     },
-  ];
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleView, handleEdit, handleTestConnection, handleDelete]);
 
   /**
    * 详情列定义
@@ -882,7 +899,7 @@ const DataSourceListPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<DataSource>
-          columnPersistenceId="pages.system.data-sources.list"
+          columnPersistenceId="pages.system.data-sources.list-v1"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

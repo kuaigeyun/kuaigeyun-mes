@@ -37,6 +37,15 @@ class Phase2Service(AppBaseService[RdRequirement]):
     def __init__(self):
         super().__init__(RdRequirement)
 
+    async def _generate_requirement_code(self, tenant_id: int) -> str:
+        return await self.generate_code(tenant_id, "RD_REQUIREMENT_CODE", prefix="YFXQ")
+
+    async def _generate_design_review_code(self, tenant_id: int) -> str:
+        return await self.generate_code(tenant_id, "RD_DESIGN_REVIEW_CODE", prefix="SJPJ")
+
+    async def _generate_fmea_code(self, tenant_id: int) -> str:
+        return await self.generate_code(tenant_id, "RD_FMEA_CODE", prefix="FMEA")
+
     # ---------- Requirements ----------
 
     async def list_requirements(
@@ -89,10 +98,13 @@ class Phase2Service(AppBaseService[RdRequirement]):
         self, tenant_id: int, data: RdRequirementCreate, created_by: int
     ) -> RdRequirementResponse:
         user_info = await self.get_user_info(created_by)
+        code = (data.requirement_code or "").strip() or await self._generate_requirement_code(
+            tenant_id
+        )
         row = await RdRequirement.create(
             tenant_id=tenant_id,
             project_id=data.project_id,
-            requirement_code=data.requirement_code,
+            requirement_code=code,
             title=data.title,
             description=data.description,
             priority=data.priority,
@@ -193,10 +205,13 @@ class Phase2Service(AppBaseService[RdRequirement]):
         self, tenant_id: int, data: RdDesignReviewCreate, created_by: int
     ) -> RdDesignReviewResponse:
         user_info = await self.get_user_info(created_by)
+        code = (data.review_code or "").strip() or await self._generate_design_review_code(
+            tenant_id
+        )
         row = await RdDesignReview.create(
             tenant_id=tenant_id,
             project_id=data.project_id,
-            review_code=data.review_code,
+            review_code=code,
             title=data.title,
             review_type=data.review_type,
             status=data.status,
@@ -305,10 +320,11 @@ class Phase2Service(AppBaseService[RdRequirement]):
         self, tenant_id: int, data: RdFmeaRecordCreate, created_by: int
     ) -> RdFmeaRecordResponse:
         user_info = await self.get_user_info(created_by)
+        code = (data.fmea_code or "").strip() or await self._generate_fmea_code(tenant_id)
         row = await RdFmeaRecord.create(
             tenant_id=tenant_id,
             project_id=data.project_id,
-            fmea_code=data.fmea_code,
+            fmea_code=code,
             title=data.title,
             fmea_type=data.fmea_type,
             status=data.status,

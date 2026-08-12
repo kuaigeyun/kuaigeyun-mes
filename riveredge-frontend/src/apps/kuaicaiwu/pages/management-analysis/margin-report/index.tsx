@@ -73,6 +73,9 @@ const MarginTable: React.FC<{ dimension: Dimension; days: number }> = ({ dimensi
           title: t('app.kuaicaiwu.marginReport.col.productCode'),
           dataIndex: 'product_code',
           width: 120,
+          minWidth: 120,
+          uniTableKeepWidth: true,
+          resizable: false,
           hideInSearch: true,
           sorter: true,
         },
@@ -108,6 +111,9 @@ const MarginTable: React.FC<{ dimension: Dimension; days: number }> = ({ dimensi
         title: t('app.kuaicaiwu.marginReport.col.orderNo'),
         dataIndex: 'sales_order_code',
         width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
       },
@@ -115,6 +121,9 @@ const MarginTable: React.FC<{ dimension: Dimension; days: number }> = ({ dimensi
         title: t('app.kuaicaiwu.marginReport.col.deliveryNote'),
         dataIndex: 'delivery_code',
         width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
       },
@@ -126,7 +135,7 @@ const MarginTable: React.FC<{ dimension: Dimension; days: number }> = ({ dimensi
     <UniTable<MarginReportRow>
       actionRef={actionRef}
       rowKey={(r, i) => String(r.product_id ?? r.customer_id ?? r.delivery_id ?? i)}
-      columnPersistenceId={`apps.kuaicaiwu.pages.management-analysis.margin-report.${dimension}`}
+      columnPersistenceId={`apps.kuaicaiwu.pages.management-analysis.margin-report.${dimension}.list-v1`}
       columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
       showAdvancedSearch
       skipFuzzyPinyinClientFilter

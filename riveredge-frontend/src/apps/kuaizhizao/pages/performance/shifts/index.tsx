@@ -5,9 +5,13 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Popconfirm, Space, Typography, theme as AntdTheme } from 'antd';
+import { App, Button, Popconfirm, Space, theme as AntdTheme } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UniTableStackedPrimaryCell,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { PerformanceConfigDetailDrawer } from '../shared/performanceConfigDetailDrawer';
@@ -106,36 +110,52 @@ const ShiftsPage: React.FC = () => {
   const columns: ProColumns<Shift>[] = useMemo(
     () => alignProColumns<Shift>([
       {
-        title: t('app.kuaizhizao.performance.shifts.columns.shiftCode'),
-        dataIndex: 'code',
-        width: 120,
+        title: t('app.kuaizhizao.performance.shifts.columns.shiftName'),
+        key: 'performance_name_code_stacked',
+        dataIndex: 'name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         fixed: 'left',
         sorter: true,
         render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
-            {r.code ?? '-'}
-          </Typography.Text>
+          <UniTableStackedPrimaryCell
+            primary={String(r.name ?? '').trim() || '-'}
+            secondary={String(r.code ?? '').trim() || '-'}
+          />
         ),
       },
-      { title: t('app.kuaizhizao.performance.shifts.columns.shiftName'), dataIndex: 'name', width: 160, ellipsis: true, sorter: true },
+      {
+        title: t('app.kuaizhizao.performance.shifts.columns.shiftCode'),
+        dataIndex: 'code',
+        hideInTable: true,
+        sorter: true,
+      },
       {
         title: t('app.kuaizhizao.performance.shifts.columns.timeRange'),
         key: 'timeRange',
-        width: 160,
+        width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, r) => `${r.startTime?.slice(0, 5) ?? '-'} ~ ${r.endTime?.slice(0, 5) ?? '-'}`,
       },
       {
         title: t('app.kuaizhizao.performance.shifts.columns.crossesMidnight'),
         dataIndex: 'crossesMidnight',
-        width: 80,
+        width: 88,
+        minWidth: 88,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, r) => renderYesNoTag(t, r.crossesMidnight),
       },
       {
         title: t('app.kuaizhizao.performance.shifts.columns.standardHours'),
         dataIndex: 'standardHours',
-        width: 100,
+        width: 96,
+        minWidth: 96,
+        uniTableKeepWidth: true,
+        resizable: false,
         align: 'right',
         hideInSearch: true,
         sorter: true,
@@ -143,7 +163,10 @@ const ShiftsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.performance.common.columns.status'),
         dataIndex: 'isActive',
-        width: 90,
+        width: 88,
+        minWidth: 88,
+        uniTableKeepWidth: true,
+        resizable: false,
         valueType: 'select',
         valueEnum: getPerformanceInactiveActiveValueEnum(t),
         sorter: true,
@@ -202,7 +225,7 @@ const ShiftsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<Shift>
           headerTitle={t('app.kuaizhizao.performance.shifts.pageTitle')}
-          columnPersistenceId="apps.kuaizhizao.pages.performance.shifts"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.shifts.v1"
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}

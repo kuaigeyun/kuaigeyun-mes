@@ -29,6 +29,8 @@ import {
   Typography,
   Descriptions,
 } from 'antd'
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment'
+import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation'
 import {
   EditOutlined,
   DeleteOutlined,
@@ -492,7 +494,7 @@ const APIListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<API>[] = [
+  const columns = useMemo<ProColumns<API>[]>(() => alignProColumns([
     {
       title: t('pages.system.apis.columnName'),
       dataIndex: 'name',
@@ -503,11 +505,17 @@ const APIListPage: React.FC = () => {
       title: t('pages.system.apis.columnCode'),
       dataIndex: 'code',
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
       title: t('pages.system.apis.columnMethod'),
       dataIndex: 'method',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         GET: { text: 'GET', status: 'Success' },
@@ -518,13 +526,13 @@ const APIListPage: React.FC = () => {
       },
       render: (_, record) => {
         const methodColors: Record<string, string> = {
-          GET: 'green',
-          POST: 'blue',
-          PUT: 'orange',
-          DELETE: 'red',
-          PATCH: 'purple',
+          GET: 'success',
+          POST: 'processing',
+          PUT: 'warning',
+          DELETE: 'error',
+          PATCH: 'default',
         }
-        return <Tag color={methodColors[record.method] || 'default'}>{record.method}</Tag>
+        return renderSystemTypeMarker(record.method, methodColors[record.method] || 'default')
       },
     },
     {
@@ -543,41 +551,48 @@ const APIListPage: React.FC = () => {
       title: t('pages.system.apis.columnActive'),
       dataIndex: 'is_active',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('pages.system.apis.enabled'), status: 'Success' },
         false: { text: t('pages.system.apis.disabled'), status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('pages.system.apis.enabled') : t('pages.system.apis.disabled')}
-        </Tag>
-      ),
+      render: (_, record) =>
+        renderSystemActiveTag(t, record.is_active, 'pages.system.apis.enabled', 'pages.system.apis.disabled'),
     },
     {
       title: t('pages.system.apis.columnSystem'),
       dataIndex: 'is_system',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       render: (_, record) =>
-        record.is_system ? (
-          <Tag color="purple">{t('pages.system.apis.systemTag')}</Tag>
-        ) : (
-          <Tag>{t('pages.system.apis.customTag')}</Tag>
+        renderSystemTypeMarker(
+          record.is_system ? t('pages.system.apis.systemTag') : t('pages.system.apis.customTag'),
+          record.is_system ? 'purple' : 'default',
         ),
     },
     {
       title: t('pages.system.apis.columnCreatedAt'),
       dataIndex: 'created_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
     },
     {
       title: t('pages.system.apis.columnActions'),
+      key: 'action',
       valueType: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => {
         const actions: React.ReactNode[] = [
           <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)}>
@@ -602,13 +617,13 @@ const APIListPage: React.FC = () => {
         return actions;
       },
     },
-  ]
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleView, handleEdit, handleTest, handleDelete])
 
   return (
     <>
       <ListPageTemplate>
         <UniTable<API>
-          columnPersistenceId="pages.system.apis.list"
+          columnPersistenceId="pages.system.apis.list-v1"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

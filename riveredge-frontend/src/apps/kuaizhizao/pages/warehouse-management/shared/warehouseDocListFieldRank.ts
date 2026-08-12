@@ -20,9 +20,11 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   registration_code: 10,
 
   // 类型 / 来源（picking_code 在入库列表作来源展示时走 source 段，勿与主单号抢 10）
+  task_type: 20,
   receipt_type: 20,
   outbound_type: 20,
   reason_type: 20,
+  return_reason: 24,
   transfer_mode: 20,
   stocktaking_type: 20,
   call_type: 20,
@@ -32,7 +34,7 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   sales_order_code: 21,
   sales_delivery_code: 21,
   work_order_code: 21,
-  reserved_work_order_code: 75,
+  reserved_work_order_code: 40,
   outsource_work_order_code: 21,
   customer_name: 22,
   mapped_material_name: 23,
@@ -59,10 +61,11 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   receipt_progress: 41,
   lifecycle_stage: 88,
 
-  // 状态
+  // 状态（表内流程状态用 key=lifecycle→91；此处 status 仅兜底）
   status: 50,
   alert_label: 51,
-  priority: 52,
+  // 优先级紧挨进度/齐套等徽章段，勿落到仓库段之后
+  priority: 42,
 
   // 仓库
   warehouse_name: 60,
@@ -100,6 +103,8 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   tracking_number: 78,
 
   // 物料信息（库存/配料）
+  /** 物料中心任务队列：产品/物料叠列（列上须设 key=material） */
+  material: 22,
   material_name: 22,
   material_code: 22,
   material_spec: 23,
@@ -109,6 +114,15 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   material_unit: 27,
   product_material_name: 22,
   in_transit_quantity: 31,
+
+  /**
+   * 线边仓库存：物料 → 线边仓 → 批号/效期 → 可用/库存/预留叠列 → 预留工单 → 状态
+   * （列上须设同名 key；勿用 warehouse_name 以免与其它仓储单据仓库段位冲突）
+   */
+  line_side_warehouse: 23,
+  line_side_batch: 28,
+  line_side_qty: 30,
+  lifecycle: 91,
 
   // 审计
   updated_at: 92,

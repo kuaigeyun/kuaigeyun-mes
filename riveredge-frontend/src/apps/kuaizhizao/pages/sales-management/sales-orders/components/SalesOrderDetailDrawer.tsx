@@ -1,10 +1,13 @@
 /**
  * 销售订单原版详情抽屉（DetailDrawerTemplate 插槽壳）。
  * 列表页 / 关联单据嵌套共用，禁止再走 SalesOrderDetailBody plainBody。
+ *
+ * 须保持单一 Drawer 壳：加载中 / 失败 / 有数据时不得切换两棵 DetailDrawerTemplate，
+ * 否则 Ant Design Drawer 会连续滑入两次。
  */
 
-import React from 'react';
-import { App, Button, Space, Spin, Tooltip } from 'antd';
+import React, { useMemo } from 'react';
+import { App, Button, Result, Space, Tooltip } from 'antd';
 import { CopyOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -27,6 +30,9 @@ export type SalesOrderDetailDrawerProps = {
   onClose: () => void;
   order: SalesOrder | null;
   loading?: boolean;
+  /** 取数失败文案；与 order 互斥展示 */
+  error?: string | null;
+  onRetry?: () => void;
   zIndex?: number;
   auditRequired: boolean;
   trackingRefreshKey?: number;
@@ -42,11 +48,16 @@ export type SalesOrderDetailDrawerProps = {
   showReadonlyActions?: boolean;
 };
 
+/** Provider 在 order 尚未返回时的占位（仅用于挂载壳，不展示业务内容） */
+const PLACEHOLDER_ORDER: SalesOrder = { id: 0 };
+
 export const SalesOrderDetailDrawer: React.FC<SalesOrderDetailDrawerProps> = ({
   open,
   onClose,
   order,
   loading = false,
+  error = null,
+  onRetry,
   zIndex,
   auditRequired,
   trackingRefreshKey = 0,
@@ -62,6 +73,11 @@ export const SalesOrderDetailDrawer: React.FC<SalesOrderDetailDrawerProps> = ({
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
+
+  const effectiveOrder = order ?? PLACEHOLDER_ORDER;
+  const contentReady = Boolean(order);
+  const showError = Boolean(error) && !contentReady && !loading;
+  const showLoading = loading || (!contentReady && !showError);
 
   const title = (
     <Space size={4}>
@@ -89,56 +105,71 @@ export const SalesOrderDetailDrawer: React.FC<SalesOrderDetailDrawerProps> = ({
     </Space>
   );
 
+  const providerProps = useMemo(
+    () => ({
+      order: effectiveOrder,
+      auditRequired,
+      trackingRefreshKey,
+      shippingMethodOptions,
+      paymentTermsOptions,
+      feeTypeOptions: feeTypeOptions as any[],
+      customFields,
+      customFieldValues,
+    }),
+    [
+      effectiveOrder,
+      auditRequired,
+      trackingRefreshKey,
+      shippingMethodOptions,
+      paymentTermsOptions,
+      feeTypeOptions,
+      customFields,
+      customFieldValues,
+    ],
+  );
+
   if (!open) return null;
 
-  if (loading || !order) {
-    return (
-      <DetailDrawerTemplate
-        title={title}
-        open={open}
-        onClose={onClose}
-        width={DRAWER_CONFIG.HALF_WIDTH}
-        zIndex={zIndex}
-        plainBody={
-          <div style={{ textAlign: 'center', padding: 48 }}>
-            <Spin />
-          </div>
-        }
-      />
-    );
-  }
-
   return (
-    <SalesOrderDetailProvider
-      order={order}
-      auditRequired={auditRequired}
-      trackingRefreshKey={trackingRefreshKey}
-      shippingMethodOptions={shippingMethodOptions}
-      paymentTermsOptions={paymentTermsOptions}
-      feeTypeOptions={feeTypeOptions as any[]}
-      customFields={customFields}
-      customFieldValues={customFieldValues}
-    >
+    <SalesOrderDetailProvider {...providerProps}>
       <DetailDrawerTemplate
         title={title}
         open={open}
         onClose={onClose}
         width={DRAWER_CONFIG.HALF_WIDTH}
         zIndex={zIndex}
-        collaborationTitleSuffix={<SalesOrderDetailCollaborationTitleSuffix />}
-        collaborationAuditRecord={order}
-        extra={
-          extra ??
-          (showReadonlyActions ? (
-            <SalesOrderDetailReadonlyExtra onWorkflowSuccess={onWorkflowSuccess} />
-          ) : null)
+        loading={showLoading}
+        plainBody={
+          showError ? (
+            <Result
+              status="error"
+              title={error}
+              extra={
+                onRetry ? (
+                  <Button type="primary" onClick={onRetry}>
+                    {t('common.retry', { defaultValue: '重试' })}
+                  </Button>
+                ) : null
+              }
+            />
+          ) : undefined
         }
-        basic={<SalesOrderDetailBasicPane />}
-        collaboration={<SalesOrderDetailCollaborationPane />}
-        lines={<SalesOrderDetailLinesPane />}
-        timeline={<SalesOrderDetailTimelinePane />}
+        collaborationTitleSuffix={contentReady ? <SalesOrderDetailCollaborationTitleSuffix /> : null}
+        collaborationAuditRecord={contentReady ? order : null}
+        extra={
+          contentReady
+            ? extra ??
+              (showReadonlyActions ? (
+                <SalesOrderDetailReadonlyExtra onWorkflowSuccess={onWorkflowSuccess} />
+              ) : null)
+            : null
+        }
+        basic={contentReady ? <SalesOrderDetailBasicPane /> : showError ? null : <div style={{ minHeight: 80 }} />}
+        collaboration={contentReady ? <SalesOrderDetailCollaborationPane /> : null}
+        lines={contentReady ? <SalesOrderDetailLinesPane /> : null}
+        timeline={contentReady ? <SalesOrderDetailTimelinePane /> : null}
         traceDocument={
-          order.id != null
+          contentReady && order?.id != null
             ? {
                 documentType: 'sales_order',
                 documentId: order.id,

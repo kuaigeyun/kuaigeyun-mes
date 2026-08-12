@@ -8,7 +8,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -35,6 +35,9 @@ import {
   pickOptionalId,
   resolveMasterCrudListParams,
 } from '../../../utils/masterListCore';
+import {
+  renderMasterActiveTag,
+} from '../../../utils/masterListPresentation';
 import type { Workshop, WorkshopCreate, Plant } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
@@ -584,7 +587,10 @@ const WorkshopsPage: React.FC = () => {
       {
         title: t('app.master-data.workshops.code'),
         dataIndex: 'code',
-        width: 150,
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         fixed: 'left' as const,
         ellipsis: true,
         copyable: true,
@@ -594,7 +600,10 @@ const WorkshopsPage: React.FC = () => {
       {
         title: t('app.master-data.workshops.name'),
         dataIndex: 'name',
-        width: 200,
+        width: 168,
+        minWidth: 168,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         sorter: true,
         hideInSearch: true,
@@ -629,23 +638,23 @@ const WorkshopsPage: React.FC = () => {
       {
         title: t('app.master-data.workshops.statusLabel'),
         dataIndex: 'isActive',
-        width: 100,
+        width: 88,
+        minWidth: 88,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         valueEnum: workshopActiveValueEnum,
         render: (_text, record) => {
           const isActive = record?.isActive ?? (record as any)?.is_active;
-          return (
-            <Tag color={isActive ? 'success' : 'default'} variant="solid">
-              {isActive ? t('common.enabled') : t('common.disabled')}
-            </Tag>
-          );
+          return renderMasterActiveTag(t, isActive, 'common.enabled', 'common.disabled');
         },
       },
       ...customFieldColumns,
       ...masterCrudCreatedUpdatedColumns<Workshop>(t),
       {
         title: t('common.actions'),
+        key: 'action',
         valueType: 'option',
         width: 150,
         fixed: 'right' as const,
@@ -709,11 +718,7 @@ const WorkshopsPage: React.FC = () => {
       dataIndex: 'isActive',
       render: (_, record) => {
         const isActive = record?.isActive ?? (record as any)?.is_active;
-        return (
-          <Tag color={isActive ? 'success' : 'default'} variant="solid">
-            {isActive ? t('common.enabled') : t('common.disabled')}
-          </Tag>
-        );
+        return renderMasterActiveTag(t, isActive, 'common.enabled', 'common.disabled');
       },
     },
     {
@@ -733,7 +738,7 @@ const WorkshopsPage: React.FC = () => {
       <ListPageTemplate>
         {customFieldsLoaded ? (
         <UniTable<Workshop>
-        columnPersistenceId="apps.master-data.pages.factory.workshops.status-v2"
+        columnPersistenceId="apps.master-data.pages.factory.workshops.list-v1"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         viewTypes={['table', 'help']}

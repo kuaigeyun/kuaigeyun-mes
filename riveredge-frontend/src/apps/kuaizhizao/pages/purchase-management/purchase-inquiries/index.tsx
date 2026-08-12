@@ -18,6 +18,7 @@ import {
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, FORM_LAYOUT, MODAL_CONFIG, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
+import { SourceDocumentCode } from '../../../../../components/linked-document-code/SourceDocumentCode';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import {
@@ -738,7 +739,22 @@ const PurchaseInquiriesPage: React.FC = () => {
     },
     { title: t('app.kuaizhizao.purchaseInquiry.colInquiryCode'), dataIndex: 'inquiry_code', hideInTable: true, hideInSearch: false },
     { title: t('app.kuaizhizao.purchaseInquiry.colName'), dataIndex: 'inquiry_name', hideInTable: true, hideInSearch: false, ellipsis: true },
-    { title: t('app.kuaizhizao.purchaseInquiry.colSourceCode'), dataIndex: 'source_code', width: 132, uniTableKeepWidth: true, sorter: true, hideInSearch: false, ellipsis: true },
+    {
+      title: t('app.kuaizhizao.purchaseInquiry.colSourceCode'),
+      dataIndex: 'source_code',
+      width: 148,
+      uniTableKeepWidth: true,
+      sorter: true,
+      hideInSearch: false,
+      ellipsis: true,
+      render: (_, r) => (
+        <SourceDocumentCode
+          sourceType={r.source_type}
+          sourceId={r.source_id}
+          sourceCode={r.source_code}
+        />
+      ),
+    },
     { title: t('app.kuaizhizao.purchaseInquiry.colBuyer'), dataIndex: 'buyer_name', width: 100, sorter: true, hideInSearch: true },
     {
       title: t('app.kuaizhizao.purchaseInquiry.colQuoteDeadline'),
@@ -1331,6 +1347,13 @@ const PurchaseInquiriesPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.purchaseInquiry.source'),
         dataIndex: 'source_code',
+        render: (_, r) => (
+          <SourceDocumentCode
+            sourceType={r?.source_type}
+            sourceId={r?.source_id}
+            sourceCode={r?.source_code}
+          />
+        ),
       },
       {
         title: t('app.kuaizhizao.purchaseInquiry.colBuyer'),

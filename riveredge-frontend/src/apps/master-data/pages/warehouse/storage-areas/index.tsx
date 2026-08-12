@@ -8,7 +8,7 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography, theme } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Typography, theme } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -26,6 +26,9 @@ import {
   pickOptionalId,
   resolveMasterCrudListParams,
 } from '../../../utils/masterListCore';
+import {
+  renderMasterActiveTag,
+} from '../../../utils/masterListPresentation';
 import { StorageAreaFormModal } from '../../../components/StorageAreaFormModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { StorageArea, StorageAreaCreate, Warehouse } from '../../../types/warehouse';
@@ -579,7 +582,10 @@ const StorageAreasPage: React.FC = () => {
     {
       title: t('app.master-data.storageAreas.code'),
       dataIndex: 'code',
-      width: 150,
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       fixed: 'left',
       ellipsis: true,
       copyable: true,
@@ -589,7 +595,10 @@ const StorageAreasPage: React.FC = () => {
     {
       title: t('app.master-data.storageAreas.name'),
       dataIndex: 'name',
-      width: 200,
+      width: 168,
+      minWidth: 168,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
     },
@@ -629,21 +638,21 @@ const StorageAreasPage: React.FC = () => {
     {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
-      width: 100,
+      width: 88,
+      minWidth: 88,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
       valueEnum: storageAreaActiveValueEnum,
       render: (_, record) => {
-        return (
-          <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
-            {record?.isActive ? t('common.enabled') : t('common.disabled')}
-          </Tag>
-        );
+        return renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled');
       },
     },
     ...masterCrudCreatedUpdatedColumns<StorageArea>(t),
     {
       title: t('app.master-data.warehouses.action'),
+      key: 'action',
       valueType: 'option',
       width: 150,
       fixed: 'right',
@@ -706,11 +715,7 @@ const StorageAreasPage: React.FC = () => {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
       render: (_, record) => {
-        return (
-          <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
-            {record?.isActive ? t('common.enabled') : t('common.disabled')}
-          </Tag>
-        );
+        return renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled');
       },
     },
     {
@@ -729,7 +734,7 @@ const StorageAreasPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<StorageArea>
-        columnPersistenceId="apps.master-data.pages.warehouse.storage-areas.status-v2"
+        columnPersistenceId="apps.master-data.pages.warehouse.storage-areas.list-v1"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {

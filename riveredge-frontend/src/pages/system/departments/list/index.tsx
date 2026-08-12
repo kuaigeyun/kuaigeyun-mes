@@ -25,8 +25,9 @@ import {
   Select,
   Space,
   Table,
-  Tag,
 } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import { flushDrawerOpen, ListPageTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
@@ -80,11 +81,8 @@ const DepartmentListPage: React.FC = () => {
       {
         title: t('field.role.status'),
         dataIndex: 'is_active',
-        render: (_: unknown, entity: Department) => (
-          <Tag color={entity?.is_active ? 'success' : 'default'}>
-            {entity?.is_active ? t('field.role.enabled') : t('field.role.disabled')}
-          </Tag>
-        ),
+        render: (_: unknown, entity: Department) =>
+          renderSystemActiveTag(t, entity?.is_active, 'field.role.enabled', 'field.role.disabled'),
       },
       { title: t('field.department.userCount'), dataIndex: 'user_count' },
       { title: t('field.department.sortOrder'), dataIndex: 'sort_order' },
@@ -520,7 +518,7 @@ const DepartmentListPage: React.FC = () => {
     }
   };
 
-  const columns: ProColumns<Department>[] = [
+  const columns = useMemo<ProColumns<Department>[]>(() => alignProColumns([
     {
       title: t('field.department.name'),
       dataIndex: 'name',
@@ -530,9 +528,7 @@ const DepartmentListPage: React.FC = () => {
         <Space>
           <span style={{ fontWeight: 500 }}>{resolvePresetDepartmentName(record, t)}</span>
           {(record.children_count || 0) > 0 && (
-            <Tag color="blue" style={{ marginLeft: 4 }}>
-              {t('field.department.childrenCount', { count: record.children_count })}
-            </Tag>
+            renderSystemTypeMarker(t('field.department.childrenCount', { count: record.children_count }), 'processing')
           )}
         </Space>
       ),
@@ -541,6 +537,9 @@ const DepartmentListPage: React.FC = () => {
       title: t('field.department.code'),
       dataIndex: 'code',
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
       copyable: true,
     },
     {
@@ -561,19 +560,23 @@ const DepartmentListPage: React.FC = () => {
       title: t('field.department.userCount'),
       dataIndex: 'user_count',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'center',
       hideInSearch: true,
       render: (_, record) =>
-        record.user_count ? (
-          <Tag color="blue">{t('field.department.userCountTag', { count: record.user_count })}</Tag>
-        ) : (
-          '-'
-        ),
+        record.user_count
+          ? renderSystemTypeMarker(t('field.department.userCountTag', { count: record.user_count }), 'processing')
+          : '-',
     },
     {
       title: t('field.department.sortOrder'),
       dataIndex: 'sort_order',
       width: 80,
+      minWidth: 80,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'digit',
       hideInSearch: true,
       sorter: (a, b) => a.sort_order - b.sort_order,
@@ -582,21 +585,24 @@ const DepartmentListPage: React.FC = () => {
       title: t('field.role.status'),
       dataIndex: 'is_active',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('field.role.enabled'), status: 'Success' },
         false: { text: t('field.role.disabled'), status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('field.role.enabled') : t('field.role.disabled')}
-        </Tag>
-      ),
+      render: (_, record) =>
+        renderSystemActiveTag(t, record.is_active, 'field.role.enabled', 'field.role.disabled'),
     },
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
@@ -605,15 +611,19 @@ const DepartmentListPage: React.FC = () => {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: (a, b) => new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime(),
     },
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
-      width: 300,
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => {
         const actions: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
@@ -652,12 +662,12 @@ const DepartmentListPage: React.FC = () => {
         return actions;
       },
     },
-  ];
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleView, handleEdit, handleCreate, handleDelete]);
 
   return (
     <ListPageTemplate>
       <UniTable<Department>
-        columnPersistenceId="pages.system.departments.list"
+        columnPersistenceId="pages.system.departments.list-v1"
         permissionResource="system:department"
         viewTypes={['table', 'help']}
         actionRef={actionRef}

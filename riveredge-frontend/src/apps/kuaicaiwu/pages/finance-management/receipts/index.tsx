@@ -6,7 +6,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Tag, Drawer, Descriptions, Spin, Alert, Table, Empty, Form } from 'antd';
+import { App, Button, Modal, Typography, Drawer, Descriptions, Spin, Alert, Table, Empty, Form } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
@@ -63,6 +63,11 @@ import {
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 
 type PullReceivableCandidate = ReceiptPullCandidate;
 
@@ -412,7 +417,7 @@ const ReceiptsPage: React.FC = () => {
         align: 'center' as const,
         render: (v: unknown) => {
           const { text, color } = getStatusDisplay(v);
-          return text === '-' ? '-' : <Tag color={color}>{text}</Tag>;
+          return text === '-' ? '-' : <MarkerTag color={color}>{text}</MarkerTag>;
         },
       },
       {
@@ -472,23 +477,24 @@ const ReceiptsPage: React.FC = () => {
     }),
     {
       title: t(`${R}.col.code`),
+      key: 'finance_doc_partner_stacked',
       dataIndex: 'receipt_code',
-      width: 168,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
       hideInSearch: true,
       sorter: true,
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.receipt_code ?? '') }} ellipsis>
-          {r.receipt_code ?? '-'}
-        </Typography.Text>
+        <UniTableStackedPrimaryCell
+          primary={String(r.customer_name ?? '')}
+          secondary={String(r.receipt_code ?? '')}
+          onSecondaryClick={() => openDetail(r)}
+        />
       ),
     },
     {
       title: t('app.kuaicaiwu.common.customer'),
       dataIndex: 'customer_name',
-      width: 200,
-      hideInSearch: true,
-      sorter: true,
+      hideInTable: true,
     },
     {
       title: t(`${R}.col.totalAmount`),
@@ -496,6 +502,9 @@ const ReceiptsPage: React.FC = () => {
       valueType: 'money',
       align: 'right',
       width: 130,
+      minWidth: 130,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
     },
@@ -505,6 +514,9 @@ const ReceiptsPage: React.FC = () => {
       valueType: 'money',
       align: 'right',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
     },
@@ -513,6 +525,9 @@ const ReceiptsPage: React.FC = () => {
       dataIndex: 'unsettled_amount',
       align: 'right',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
       render: (_, record) => (
@@ -526,6 +541,9 @@ const ReceiptsPage: React.FC = () => {
       dataIndex: 'receipt_date',
       valueType: 'date',
       width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
     },
@@ -541,6 +559,9 @@ const ReceiptsPage: React.FC = () => {
       title: t(`${R}.col.paymentMethod`),
       dataIndex: 'payment_method',
       width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
       render: (_, record) => formatPaymentMethod(record.payment_method, t),
@@ -566,6 +587,7 @@ const ReceiptsPage: React.FC = () => {
     ...financeDocCreatedUpdatedColumns<ReceiptVoucher>(t),
     {
       title: t('app.kuaicaiwu.common.lifecycle'),
+      key: 'lifecycle',
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       hideInSearch: true,
@@ -585,9 +607,10 @@ const ReceiptsPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
       fixed: 'right',
-      width: 220,
+      hideInSearch: true,
       render: (_, record) => [
             <Button {...rowActionKind('read')} key="det" onClick={() => openDetail(record)}>
               {t('common.detail')}
@@ -623,7 +646,7 @@ const ReceiptsPage: React.FC = () => {
             ) : null,
           ].filter(Boolean) as React.ReactNode[],
     },
-  ], [t, navigate, customerOptions, receiptSettlementTypeOptions, receiptPerms]);
+  ], [t, navigate, customerOptions, receiptSettlementTypeOptions, receiptPerms, openDetail]);
 
   return (
     <ListPageTemplate>
@@ -634,7 +657,7 @@ const ReceiptsPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receipts"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receipts.list-v1"
         showAdvancedSearch
         search={{ labelWidth: 120 }}
         showCreateButton={false}

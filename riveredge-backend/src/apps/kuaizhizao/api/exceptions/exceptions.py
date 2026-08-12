@@ -137,8 +137,17 @@ _STATISTICS_READ = _require_perm(
 _PROCESS_READ = _require_perm(
     "kuaizhizao:production-execution-exception-process:read",
 )
-_PROCESS_WRITE = _require_perm(
-    "kuaizhizao:production-execution-exception-process:read",
+_PROCESS_CREATE = _require_perm(
+    "kuaizhizao:production-execution-exception-process:create",
+)
+_PROCESS_ASSIGN = _require_perm(
+    "kuaizhizao:production-execution-exception-process:assign",
+)
+_PROCESS_EXECUTE = _require_perm(
+    "kuaizhizao:production-execution-exception-process:execute",
+)
+_PROCESS_REVOKE = _require_perm(
+    "kuaizhizao:production-execution-exception-process:revoke",
 )
 
 
@@ -615,7 +624,7 @@ async def trigger_exception_detection(
     "/exceptions/process/start",
     response_model=ExceptionProcessRecordResponse,
     summary="Start exception process",
-    dependencies=[_PROCESS_WRITE],
+    dependencies=[_PROCESS_CREATE],
 )
 async def start_exception_process(
     data: ExceptionProcessRecordCreate,
@@ -703,7 +712,7 @@ async def get_exception_process(
     "/exceptions/process/{process_record_id}/assign",
     response_model=ExceptionProcessRecordResponse,
     summary="Assign exception process",
-    dependencies=[_PROCESS_WRITE],
+    dependencies=[_PROCESS_ASSIGN],
 )
 async def assign_exception_process(
     process_record_id: int = Path(..., description="处理记录ID"),
@@ -728,7 +737,7 @@ async def assign_exception_process(
     "/exceptions/process/{process_record_id}/step-transition",
     response_model=ExceptionProcessRecordResponse,
     summary="Exception process step transition",
-    dependencies=[_PROCESS_WRITE],
+    dependencies=[_PROCESS_EXECUTE],
 )
 async def transition_exception_process_step(
     process_record_id: int = Path(..., description="处理记录ID"),
@@ -753,7 +762,7 @@ async def transition_exception_process_step(
     "/exceptions/process/{process_record_id}/resolve",
     response_model=ExceptionProcessRecordResponse,
     summary="Resolve exception process",
-    dependencies=[_PROCESS_WRITE],
+    dependencies=[_PROCESS_EXECUTE],
 )
 async def resolve_exception_process(
     process_record_id: int = Path(..., description="处理记录ID"),
@@ -778,7 +787,7 @@ async def resolve_exception_process(
     "/exceptions/process/{process_record_id}/cancel",
     response_model=ExceptionProcessRecordResponse,
     summary="Cancel exception process",
-    dependencies=[_PROCESS_WRITE],
+    dependencies=[_PROCESS_REVOKE],
 )
 async def cancel_exception_process(
     process_record_id: int = Path(..., description="处理记录ID"),

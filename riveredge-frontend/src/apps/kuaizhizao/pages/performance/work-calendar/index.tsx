@@ -24,6 +24,10 @@ import {
 import { DeleteOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UniTableStackedPrimaryCell,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -31,6 +35,7 @@ import { workCalendarApi, overtimeApi, stationUnavailableApi } from '../../../se
 import type { OvertimePlan, StationUnavailableWindow, WorkCalendarConfig } from '../../../types/performance';
 import { renderActiveTag } from '../components/performanceMeta';
 import { normalizePerformanceListResponse } from '../../../utils/performanceListCore';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 
 const CALENDAR_RESOURCE = 'kuaizhizao:performance-work-calendar';
 const OVERTIME_RESOURCE = 'kuaizhizao:performance-overtimes';
@@ -202,164 +207,213 @@ const WorkCalendarPage: React.FC = () => {
   };
 
   const columns: ProColumns<OvertimePlan>[] = useMemo(
-    () => [
-      {
-        title: t('app.kuaizhizao.performance.workCalendar.columns.overtimeDate'),
-        dataIndex: 'overtimeDate',
-        valueType: 'date',
-        width: 140,
-        hideInSearch: true,
-      },
-      {
-        title: t('app.kuaizhizao.performance.workCalendar.columns.timeRange'),
-        dataIndex: 'startTime',
-        hideInSearch: true,
-        width: 160,
-        render: (_, r) =>
-          `${(r.startTime || '').slice(0, 5)} ~ ${(r.endTime || '').slice(0, 5)}`,
-      },
-      {
-        title: t('app.kuaizhizao.performance.workCalendar.columns.name'),
-        dataIndex: 'name',
-        hideInSearch: true,
-        ellipsis: true,
-      },
-      {
-        title: t('app.kuaizhizao.performance.common.columns.status'),
-        dataIndex: 'isActive',
-        hideInSearch: true,
-        width: 100,
-        render: (_, r) => renderActiveTag(t, r.isActive, 'inactive'),
-      },
-      {
-        title: t('app.kuaizhizao.performance.common.columns.actions'),
-        key: 'action',
-        valueType: 'option',
-        width: 160,
-        fixed: 'right',
-        hideInSearch: true,
-        render: (_, row) => (
-          <Space>
-            {overtimePerms.canUpdate ? (
-              <Button key="edit" {...rowActionKind('update')} onClick={() => openEdit(row)}>
-                {t('app.kuaizhizao.performance.common.actions.edit')}
-              </Button>
-            ) : null}
-            {overtimePerms.canDelete ? (
-              <Popconfirm
-                key="delete"
-                {...rowActionKind('delete')}
-                title={t('app.kuaizhizao.performance.workCalendar.messages.deleteConfirm')}
-                onConfirm={async () => {
-                  try {
-                    await overtimeApi.delete(row.uuid);
-                    messageApi.success(
-                      t('app.kuaizhizao.performance.workCalendar.messages.overtimeDeleted'),
-                    );
-                    actionRef.current?.reload();
-                  } catch (e: any) {
-                    messageApi.error(
-                      e?.message ||
-                        t('app.kuaizhizao.performance.workCalendar.messages.saveFailed'),
-                    );
-                  }
-                }}
-              >
-                <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                  {t('app.kuaizhizao.performance.common.actions.delete')}
-                </Button>
-              </Popconfirm>
-            ) : null}
-          </Space>
-        ),
-      },
-    ],
+    () =>
+      alignProColumns<OvertimePlan>(
+        [
+          {
+            title: t('app.kuaizhizao.performance.workCalendar.columns.name'),
+            key: 'performance_holiday_stacked',
+            dataIndex: 'name',
+            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            fixed: 'left',
+            hideInSearch: true,
+            render: (_, r) => (
+              <UniTableStackedPrimaryCell
+                primary={String(r.name ?? '').trim() || '-'}
+                secondary={r.overtimeDate ? String(r.overtimeDate) : '-'}
+                secondaryCopyable={false}
+              />
+            ),
+          },
+          {
+            title: t('app.kuaizhizao.performance.workCalendar.columns.overtimeDate'),
+            dataIndex: 'overtimeDate',
+            valueType: 'date',
+            width: 132,
+            minWidth: 132,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            hideInTable: true,
+          },
+          {
+            title: t('app.kuaizhizao.performance.workCalendar.columns.timeRange'),
+            key: 'timeRange',
+            dataIndex: 'startTime',
+            hideInSearch: true,
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            render: (_, r) =>
+              `${(r.startTime || '').slice(0, 5)} ~ ${(r.endTime || '').slice(0, 5)}`,
+          },
+          {
+            title: t('app.kuaizhizao.performance.common.columns.status'),
+            dataIndex: 'isActive',
+            hideInSearch: true,
+            width: 88,
+            minWidth: 88,
+            uniTableKeepWidth: true,
+            resizable: false,
+            render: (_, r) => renderActiveTag(t, r.isActive, 'inactive'),
+          },
+          {
+            title: t('app.kuaizhizao.performance.common.columns.actions'),
+            key: 'action',
+            valueType: 'option',
+            width: 160,
+            fixed: 'right',
+            hideInSearch: true,
+            render: (_, row) => (
+              <Space>
+                {overtimePerms.canUpdate ? (
+                  <Button key="edit" {...rowActionKind('update')} onClick={() => openEdit(row)}>
+                    {t('app.kuaizhizao.performance.common.actions.edit')}
+                  </Button>
+                ) : null}
+                {overtimePerms.canDelete ? (
+                  <Popconfirm
+                    key="delete"
+                    {...rowActionKind('delete')}
+                    title={t('app.kuaizhizao.performance.workCalendar.messages.deleteConfirm')}
+                    onConfirm={async () => {
+                      try {
+                        await overtimeApi.delete(row.uuid);
+                        messageApi.success(
+                          t('app.kuaizhizao.performance.workCalendar.messages.overtimeDeleted'),
+                        );
+                        actionRef.current?.reload();
+                      } catch (e: any) {
+                        messageApi.error(
+                          e?.message ||
+                            t('app.kuaizhizao.performance.workCalendar.messages.saveFailed'),
+                        );
+                      }
+                    }}
+                  >
+                    <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                      {t('app.kuaizhizao.performance.common.actions.delete')}
+                    </Button>
+                  </Popconfirm>
+                ) : null}
+              </Space>
+            ),
+          },
+        ],
+        SALES_DOC_LIST_FIELD_RANK,
+      ),
     [messageApi, overtimePerms.canDelete, overtimePerms.canUpdate, t],
   );
 
   const downtimeColumns: ProColumns<StationUnavailableWindow>[] = useMemo(
-    () => [
-      {
-        title: t('app.kuaizhizao.performance.workCalendar.columns.stationId'),
-        dataIndex: 'stationId',
-        width: 100,
-      },
-      {
-        title: t('app.kuaizhizao.performance.workCalendar.columns.startAt'),
-        dataIndex: 'startAt',
-        width: 170,
-        render: (_, r) => dayjs(r.startAt).format('YYYY-MM-DD HH:mm'),
-      },
-      {
-        title: t('app.kuaizhizao.performance.workCalendar.columns.endAt'),
-        dataIndex: 'endAt',
-        width: 170,
-        render: (_, r) => dayjs(r.endAt).format('YYYY-MM-DD HH:mm'),
-      },
-      {
-        title: t('app.kuaizhizao.performance.workCalendar.columns.reason'),
-        dataIndex: 'reason',
-        ellipsis: true,
-      },
-      {
-        title: t('app.kuaizhizao.performance.common.columns.status'),
-        dataIndex: 'isActive',
-        width: 90,
-        render: (_, r) => renderActiveTag(t, r.isActive, 'inactive'),
-      },
-      {
-        title: t('app.kuaizhizao.performance.common.columns.actions'),
-        valueType: 'option',
-        width: 140,
-        render: (_, row) => (
-          <Space>
-            {calendarPerms.canUpdate ? (
-              <Button
-                key="edit"
-                {...rowActionKind('update')}
-                onClick={() => {
-                  setEditingDowntime(row);
-                  downtimeForm.setFieldsValue({
-                    stationId: row.stationId,
-                    range: [dayjs(row.startAt), dayjs(row.endAt)],
-                    reason: row.reason || undefined,
-                    isActive: row.isActive,
-                  });
-                  setDowntimeOpen(true);
-                }}
-              >
-                {t('app.kuaizhizao.performance.common.actions.edit')}
-              </Button>
-            ) : null}
-            {calendarPerms.canDelete ? (
-              <Popconfirm
-                key="delete"
-                {...rowActionKind('delete')}
-                title={t('app.kuaizhizao.performance.workCalendar.messages.deleteConfirm')}
-                onConfirm={async () => {
-                  try {
-                    await stationUnavailableApi.delete(row.uuid);
-                    messageApi.success(
-                      t('app.kuaizhizao.performance.workCalendar.messages.downtimeDeleted'),
-                    );
-                    downtimeActionRef.current?.reload();
-                  } catch (e: any) {
-                    messageApi.error(
-                      e?.message ||
-                        t('app.kuaizhizao.performance.workCalendar.messages.saveFailed'),
-                    );
-                  }
-                }}
-              >
-                <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                  {t('app.kuaizhizao.performance.common.actions.delete')}
-                </Button>
-              </Popconfirm>
-            ) : null}
-          </Space>
-        ),
-      },
-    ],
+    () =>
+      alignProColumns<StationUnavailableWindow>(
+        [
+          {
+            title: t('app.kuaizhizao.performance.workCalendar.columns.stationId'),
+            dataIndex: 'stationId',
+            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            fixed: 'left',
+            render: (_, r) => (
+              <UniTableStackedPrimaryCell
+                primary={String(r.stationId ?? '-')}
+                secondary={String(r.reason ?? '').trim() || '-'}
+                secondaryCopyable={false}
+              />
+            ),
+          },
+          {
+            title: t('app.kuaizhizao.performance.workCalendar.columns.startAt'),
+            dataIndex: 'startAt',
+            width: 156,
+            minWidth: 156,
+            uniTableKeepWidth: true,
+            resizable: false,
+            render: (_, r) => dayjs(r.startAt).format('YYYY-MM-DD HH:mm'),
+          },
+          {
+            title: t('app.kuaizhizao.performance.workCalendar.columns.endAt'),
+            dataIndex: 'endAt',
+            width: 156,
+            minWidth: 156,
+            uniTableKeepWidth: true,
+            resizable: false,
+            render: (_, r) => dayjs(r.endAt).format('YYYY-MM-DD HH:mm'),
+          },
+          {
+            title: t('app.kuaizhizao.performance.workCalendar.columns.reason'),
+            dataIndex: 'reason',
+            hideInTable: true,
+            ellipsis: true,
+          },
+          {
+            title: t('app.kuaizhizao.performance.common.columns.status'),
+            dataIndex: 'isActive',
+            width: 88,
+            minWidth: 88,
+            uniTableKeepWidth: true,
+            resizable: false,
+            render: (_, r) => renderActiveTag(t, r.isActive, 'inactive'),
+          },
+          {
+            title: t('app.kuaizhizao.performance.common.columns.actions'),
+            key: 'action',
+            valueType: 'option',
+            width: 140,
+            fixed: 'right',
+            hideInSearch: true,
+            render: (_, row) => (
+              <Space>
+                {calendarPerms.canUpdate ? (
+                  <Button
+                    key="edit"
+                    {...rowActionKind('update')}
+                    onClick={() => {
+                      setEditingDowntime(row);
+                      downtimeForm.setFieldsValue({
+                        stationId: row.stationId,
+                        range: [dayjs(row.startAt), dayjs(row.endAt)],
+                        reason: row.reason || undefined,
+                        isActive: row.isActive,
+                      });
+                      setDowntimeOpen(true);
+                    }}
+                  >
+                    {t('app.kuaizhizao.performance.common.actions.edit')}
+                  </Button>
+                ) : null}
+                {calendarPerms.canDelete ? (
+                  <Popconfirm
+                    key="delete"
+                    {...rowActionKind('delete')}
+                    title={t('app.kuaizhizao.performance.workCalendar.messages.deleteConfirm')}
+                    onConfirm={async () => {
+                      try {
+                        await stationUnavailableApi.delete(row.uuid);
+                        messageApi.success(
+                          t('app.kuaizhizao.performance.workCalendar.messages.downtimeDeleted'),
+                        );
+                        downtimeActionRef.current?.reload();
+                      } catch (e: any) {
+                        messageApi.error(
+                          e?.message ||
+                            t('app.kuaizhizao.performance.workCalendar.messages.saveFailed'),
+                        );
+                      }
+                    }}
+                  >
+                    <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                      {t('app.kuaizhizao.performance.common.actions.delete')}
+                    </Button>
+                  </Popconfirm>
+                ) : null}
+              </Space>
+            ),
+          },
+        ],
+        SALES_DOC_LIST_FIELD_RANK,
+      ),
     [calendarPerms.canDelete, calendarPerms.canUpdate, downtimeForm, messageApi, t],
   );
 
@@ -456,7 +510,7 @@ const WorkCalendarPage: React.FC = () => {
                 </Typography.Paragraph>
                 <UniTable<OvertimePlan>
                   headerTitle={t('app.kuaizhizao.performance.workCalendar.overtimeTableTitle')}
-                  columnPersistenceId="apps.kuaizhizao.pages.performance.work-calendar"
+                  columnPersistenceId="apps.kuaizhizao.pages.performance.work-calendar.v1"
                   actionRef={actionRef}
                   columns={columns}
                   rowKey="uuid"
@@ -491,7 +545,7 @@ const WorkCalendarPage: React.FC = () => {
                 </Typography.Paragraph>
                 <UniTable<StationUnavailableWindow>
                   headerTitle={t('app.kuaizhizao.performance.workCalendar.downtimeTableTitle')}
-                  columnPersistenceId="apps.kuaizhizao.pages.performance.work-calendar.downtime"
+                  columnPersistenceId="apps.kuaizhizao.pages.performance.work-calendar.downtime.v1"
                   actionRef={downtimeActionRef}
                   rowKey="uuid"
                   search={false}

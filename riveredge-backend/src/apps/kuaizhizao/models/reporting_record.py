@@ -30,6 +30,8 @@ class ReportingRecord(BaseModel):
         qualified_quantity: 合格数量
         unqualified_quantity: 不合格数量
         work_hours: 工时（小时）
+        work_start_time: 工序开始时间
+        work_end_time: 工序完成时间
         status: 审核状态（pending/approved/rejected）
         reported_at: 报工时间
         approved_at: 审核时间
@@ -96,6 +98,8 @@ class ReportingRecord(BaseModel):
     qualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="合格数量")
     unqualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="不合格数量")
     work_hours = fields.DecimalField(max_digits=6, decimal_places=2, description="工时（小时）")
+    work_start_time = fields.DatetimeField(null=True, description="工序开始时间")
+    work_end_time = fields.DatetimeField(null=True, description="工序完成时间")
 
     # 审核状态
     status = fields.CharField(max_length=20, description="审核状态", default="pending")

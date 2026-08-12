@@ -6,16 +6,22 @@ import uuid
 from datetime import date
 from decimal import Decimal
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Path, Request
 from loguru import logger
+
+from tortoise.transactions import in_transaction
 
 from apps.kuaicaiwu.schemas.finance import (
     PurchaseInvoiceCreate, PurchaseInvoiceUpdate, PurchaseInvoiceResponse, PurchaseInvoiceListResponse,
 )
 from apps.kuaicaiwu.services.finance_service import PurchaseInvoiceService
+from apps.kuaicaiwu.services.finance_tax import compute_tax_from_excluding
+from apps.kuaicaiwu.services.invoice_concurrent_settlement import (
+    create_concurrent_payment_for_payable,
+)
 from apps.kuaicaiwu.services.purchase_invoice_pull_service import PurchaseInvoicePullService
 from apps.kuaicaiwu.models.payable import Payable
-from core.api.deps.access import require_permission_codes
+from core.api.deps.access import AuthContext, ensure_permission_codes, require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
@@ -51,18 +57,39 @@ def _http_exception_with_trace(
 @router.post("", response_model=PurchaseInvoiceResponse, status_code=status.HTTP_201_CREATED)
 async def create_purchase_invoice(
     data: PurchaseInvoiceCreate,
-    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:create")),
+    request: Request,
+    auth: AuthContext = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:create")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
     try:
+        # 价税合计由服务端按未税×税率计算；拉单门禁不得依赖可选入参 total_amount。
+        _, _, total_for_gate = compute_tax_from_excluding(
+            Decimal(str(data.invoice_amount)),
+            Decimal(str(data.tax_rate)),
+        )
+        concurrent = data.concurrent_settlement
+        want_payment = bool(concurrent and concurrent.enabled)
+        settle_amount = Decimal("0")
+        if want_payment:
+            if str(data.source_type or "").strip() != "payable" or not data.source_id:
+                raise BusinessLogicError("仅从应付单开票时可同时付款")
+            await ensure_permission_codes(
+                auth, tenant_id, request, ["kuaicaiwu:payment:create"]
+            )
+            if not concurrent.payment_method or concurrent.voucher_date is None:
+                raise BusinessLogicError("同时付款须填写付款方式与付款日期")
+            settle_amount = Decimal(str(concurrent.total_amount or total_for_gate))
+            if settle_amount <= 0:
+                raise BusinessLogicError("同时付款金额须大于 0")
+
         pull_preview: Optional[Dict[str, Any]] = None
         if data.source_type and data.source_id:
             pull_preview = await purchase_invoice_pull_service.assert_pull_create_allowed(
                 tenant_id=tenant_id,
                 source_type=str(data.source_type).strip(),
                 source_id=int(data.source_id),
-                total_amount=Decimal(data.total_amount),
+                total_amount=total_for_gate,
             )
             if pull_preview:
                 po_id = pull_preview.get("purchase_order_id")
@@ -101,30 +128,44 @@ async def create_purchase_invoice(
                             }
                         )
 
-        invoice = await invoice_service.create_purchase_invoice(
-            tenant_id,
-            data,
-            current_user.id,
-            skip_legacy_amount_gate=bool(pull_preview),
-        )
-        if pull_preview and data.source_type and data.source_id:
-            await purchase_invoice_pull_service.create_pull_relation(
-                tenant_id=tenant_id,
-                source_type=str(data.source_type).strip(),
-                source_id=int(data.source_id),
-                source_code=str(pull_preview.get("source_code") or ""),
-                invoice_id=int(invoice.id),
-                invoice_code=str(invoice.invoice_code),
-                created_by=current_user.id,
+        async with in_transaction():
+            invoice = await invoice_service.create_purchase_invoice(
+                tenant_id,
+                data,
+                current_user.id,
+                skip_legacy_amount_gate=bool(pull_preview),
             )
-        if pull_preview and str(data.source_type or "").strip() == "payable" and data.payable_id:
-            payable_update: dict = {
-                "invoice_received": True,
-                "updated_by": current_user.id,
-            }
-            if data.invoice_number:
-                payable_update["invoice_number"] = data.invoice_number
-            await Payable.filter(tenant_id=tenant_id, id=int(data.payable_id)).update(**payable_update)
+            if pull_preview and data.source_type and data.source_id:
+                await purchase_invoice_pull_service.create_pull_relation(
+                    tenant_id=tenant_id,
+                    source_type=str(data.source_type).strip(),
+                    source_id=int(data.source_id),
+                    source_code=str(pull_preview.get("source_code") or ""),
+                    invoice_id=int(invoice.id),
+                    invoice_code=str(invoice.invoice_code),
+                    created_by=current_user.id,
+                )
+            if pull_preview and str(data.source_type or "").strip() == "payable" and data.payable_id:
+                payable_update: dict = {
+                    "invoice_received": True,
+                    "updated_by": current_user.id,
+                }
+                if data.invoice_number:
+                    payable_update["invoice_number"] = data.invoice_number
+                await Payable.filter(tenant_id=tenant_id, id=int(data.payable_id)).update(**payable_update)
+                if want_payment and concurrent:
+                    await create_concurrent_payment_for_payable(
+                        tenant_id=tenant_id,
+                        payable_id=int(data.payable_id),
+                        total_amount=settle_amount,
+                        payment_method=str(concurrent.payment_method),
+                        bank_account_id=concurrent.bank_account_id,
+                        bank_account=concurrent.bank_account,
+                        payment_date=concurrent.voucher_date,
+                        notes=concurrent.notes
+                        or f"进项发票 {invoice.invoice_code} 开票同时付款",
+                        current_user=current_user,
+                    )
         return invoice
     except ValidationError as e:
         raise _http_exception_with_trace(422, str(e), "/purchase-invoices", tenant_id) from e

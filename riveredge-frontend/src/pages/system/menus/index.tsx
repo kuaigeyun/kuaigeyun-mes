@@ -21,7 +21,9 @@ import {
   NodeCollapseOutlined,
   NodeExpandOutlined,
 } from '@ant-design/icons';
-import { App, Button, Tag, Space, Popconfirm, Tooltip, Descriptions, Col, Modal, Spin, Switch, Typography } from 'antd';
+import { App, Button, Space, Popconfirm, Tooltip, Descriptions, Col, Modal, Spin, Switch, Typography } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemActiveTag, renderSystemTypeMarker } from '../utils/systemListPresentation';
 import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
 import { UniTable } from '../../../components/uni-table';
@@ -144,20 +146,17 @@ const MenuListPage: React.FC = () => {
       {
         title: t('pages.system.menus.status'),
         dataIndex: 'is_active',
-        render: (_: unknown, entity: Menu) => (
-          <Tag color={entity?.is_active ? 'success' : 'default'}>
-            {entity?.is_active ? t('pages.system.menus.enabled') : t('pages.system.menus.disabled')}
-          </Tag>
-        ),
+        render: (_: unknown, entity: Menu) =>
+          renderSystemActiveTag(t, entity?.is_active, 'pages.system.menus.enabled', 'pages.system.menus.disabled'),
       },
       {
         title: t('pages.system.menus.externalLink'),
         dataIndex: 'is_external',
-        render: (_: unknown, entity: Menu) => (
-          <Tag color={entity?.is_external ? 'blue' : 'default'}>
-            {entity?.is_external ? t('pages.system.menus.externalYes') : t('pages.system.menus.externalNo')}
-          </Tag>
-        ),
+        render: (_: unknown, entity: Menu) =>
+          renderSystemTypeMarker(
+            entity?.is_external ? t('pages.system.menus.externalYes') : t('pages.system.menus.externalNo'),
+            entity?.is_external ? 'processing' : 'default',
+          ),
       },
       { title: t('pages.system.menus.externalUrl'), dataIndex: 'external_url' },
       { title: t('pages.system.menus.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
@@ -655,7 +654,7 @@ const MenuListPage: React.FC = () => {
     }
   }, [currentMenuUuid, isEdit, menuTreeData, messageApi, refreshLayoutMenus, t]);
 
-  const columns: ProColumns<Menu>[] = useMemo(() => [
+  const columns: ProColumns<Menu>[] = useMemo(() => alignProColumns([
     {
         title: t('pages.system.menus.menuName'),
         dataIndex: 'name',
@@ -682,7 +681,7 @@ const MenuListPage: React.FC = () => {
                    <span style={{ fontWeight: 500 }}>{displayName}</span>
                  )}
                  {backendHome?.menu_uuid === record.uuid ? (
-                   <Tag color="gold">{t('pages.system.menus.backendHomeCurrent')}</Tag>
+                   renderSystemTypeMarker(t('pages.system.menus.backendHomeCurrent'), 'warning')
                  ) : null}
                </Space>
              );
@@ -724,11 +723,8 @@ const MenuListPage: React.FC = () => {
             true: { text: t('pages.system.applications.enabled'), status: 'Success' },
             false: { text: t('pages.system.applications.disabled'), status: 'Default' },
         },
-        render: (_: any, record: Menu) => (
-            <Tag color={record.is_active ? 'success' : 'default'}>
-                {record.is_active ? t('pages.system.applications.enabled') : t('pages.system.applications.disabled')}
-            </Tag>
-        )
+        render: (_: any, record: Menu) =>
+            renderSystemActiveTag(t, record.is_active, 'pages.system.applications.enabled', 'pages.system.applications.disabled'),
     },
     {
         title: t('pages.system.menus.source'),
@@ -746,9 +742,10 @@ const MenuListPage: React.FC = () => {
     },
     {
         title: t('common.actions'),
+        key: 'action',
         valueType: 'option',
-        minWidth: 120,
         fixed: 'right',
+        hideInSearch: true,
         render: (_: any, record: Menu) => {
             const isAppMenu = !!record.application_uuid;
             const deleteCheck = checkCanDelete(record);
@@ -811,14 +808,14 @@ const MenuListPage: React.FC = () => {
             return actions;
         }
     }
-  ], [backendHome?.menu_uuid, checkCanDelete, handleCreate, handleDelete, handleEdit, handleSetBackendHome, handleView, t]);
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [backendHome?.menu_uuid, checkCanDelete, handleCreate, handleDelete, handleEdit, handleSetBackendHome, handleView, t]);
 
   if (!currentUser) return null;
 
   return (
     <ListPageTemplate>
         <UniTable<Menu>
-            columnPersistenceId="pages.system.menus"
+            columnPersistenceId="pages.system.menus.list-v1"
             actionRef={actionRef}
             headerTitle={t('pages.system.menus.listTitle')}
             rowKey="uuid"

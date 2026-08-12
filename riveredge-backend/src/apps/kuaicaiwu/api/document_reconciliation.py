@@ -114,6 +114,7 @@ async def get_prepayment_balances(
         limit=limit,
         sort_field=sort_field,
         sort_order=sort_order,
+        operator_id=getattr(current_user, "id", None),
     )
 
 

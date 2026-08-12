@@ -24,6 +24,8 @@ class ExceptionProcessRecordBase(BaseModel):
 
     exception_type: str = Field(..., description="异常类型")
     exception_id: int = Field(..., description="异常记录ID")
+    work_order_code: Optional[str] = Field(None, description="关联工单编号（由源异常记录解析）")
+    work_order_id: Optional[int] = Field(None, description="关联工单ID（由源异常记录解析）")
     process_status: str = Field("pending", description="处理流程状态")
     current_step: str = Field("detected", description="当前步骤")
     assigned_to: Optional[int] = Field(None, description="分配给（用户ID）")

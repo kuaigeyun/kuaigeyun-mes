@@ -11,6 +11,10 @@ import { App, Button, DatePicker, Descriptions, Select, Space, Typography, Table
 import { CalculatorOutlined, CheckOutlined, RollbackOutlined, DownloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UniTableStackedPrimaryCell,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import {
@@ -21,7 +25,10 @@ import {
 } from '../../../../../components/layout-templates';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { PerformanceTraceBriefPrimaryActions } from '../PerformanceTraceBriefFooter';
-import { getPerformanceSummaryStatusValueEnum } from '../components/performanceMeta';
+import {
+  getPerformanceSummaryStatusValueEnum,
+  renderSummaryStatusTag,
+} from '../components/performanceMeta';
 import { employeePerformanceApi } from '../../../services/performance';
 import type { PerformanceSummary, PerformanceDetail, PerformanceDetailItem } from '../../../types/performance';
 import { getPerformanceSummaryLifecycle } from '../../../utils/performanceLifecycle';
@@ -195,24 +202,99 @@ const SummariesPage: React.FC = () => {
     () => alignProColumns<PerformanceSummary>([
       {
         title: t('app.kuaizhizao.performance.common.columns.employee'),
+        key: 'performance_employee_stacked',
         dataIndex: 'employee_name',
-        width: 120,
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         fixed: 'left',
         sorter: true,
         render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.employee_name ?? '') }} ellipsis>
-            {r.employee_name ?? '-'}
-          </Typography.Text>
+          <UniTableStackedPrimaryCell
+            primary={String(r.employee_name ?? '').trim() || '-'}
+            secondary={String(r.period ?? '').trim() || '-'}
+            secondaryCopyable={false}
+          />
         ),
       },
-      { title: t('app.kuaizhizao.performance.common.columns.period'), dataIndex: 'period', width: 100, sorter: true },
-      { title: t('app.kuaizhizao.performance.common.columns.totalHours'), dataIndex: 'total_hours', width: 100, align: 'right', sorter: true },
-      { title: t('app.kuaizhizao.performance.common.columns.totalPieces'), dataIndex: 'total_pieces', width: 100, align: 'right', sorter: true },
-      { title: t('app.kuaizhizao.performance.common.columns.timeAmount'), dataIndex: 'time_amount', width: 110, align: 'right', sorter: true },
-      { title: t('app.kuaizhizao.performance.common.columns.pieceAmount'), dataIndex: 'piece_amount', width: 110, align: 'right', sorter: true },
-      { title: t('app.kuaizhizao.performance.common.columns.totalAmount'), dataIndex: 'total_amount', width: 110, align: 'right', sorter: true },
-      { title: t('app.kuaizhizao.performance.common.columns.kpiScore'), dataIndex: 'kpi_score', width: 100, align: 'right', sorter: true },
-      { title: t('app.kuaizhizao.performance.common.columns.kpiCoefficient'), dataIndex: 'kpi_coefficient', width: 90, align: 'right', sorter: true },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.period'),
+        dataIndex: 'period',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        sorter: true,
+        hideInTable: true,
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.totalHours'),
+        dataIndex: 'total_hours',
+        width: 96,
+        minWidth: 96,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+        sorter: true,
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.totalPieces'),
+        dataIndex: 'total_pieces',
+        width: 96,
+        minWidth: 96,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+        sorter: true,
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.timeAmount'),
+        dataIndex: 'time_amount',
+        width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+        sorter: true,
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.pieceAmount'),
+        dataIndex: 'piece_amount',
+        width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+        sorter: true,
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.totalAmount'),
+        dataIndex: 'total_amount',
+        width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+        sorter: true,
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.kpiScore'),
+        dataIndex: 'kpi_score',
+        width: 96,
+        minWidth: 96,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+        sorter: true,
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.kpiCoefficient'),
+        dataIndex: 'kpi_coefficient',
+        width: 96,
+        minWidth: 96,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+        sorter: true,
+      },
       {
         title: t('app.kuaizhizao.performance.common.columns.status'),
         dataIndex: 'status',
@@ -221,9 +303,19 @@ const SummariesPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<PerformanceSummary>(t),
       {
+        title: t('app.kuaizhizao.performance.common.columns.status'),
+        key: 'lifecycle',
+        dataIndex: 'status',
+        fixed: 'right',
+        hideInSearch: true,
+        render: (_, r) => renderSummaryStatusTag(t, r.status),
+      },
+      {
         title: t('app.kuaizhizao.performance.common.columns.actions'),
+        key: 'action',
         width: 220,
         fixed: 'right',
+        hideInSearch: true,
         render: (_, record) => (
           <Space size={0}>
             <Button key="view" {...rowActionKind('read')} onClick={() => handleViewDetail(record)}>
@@ -254,7 +346,7 @@ const SummariesPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.performance.summaries"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.summaries.v1"
           showAdvancedSearch
           skipFuzzyPinyinClientFilter
           pinnedTabsField={PERFORMANCE_SUMMARY_PINNED_STATUS_FIELD}

@@ -8,6 +8,7 @@ export type KuaizhizaoDocumentActionKey =
   | 'purchase_order.pull_from_requisition'
   | 'purchase_order.pull_from_inquiry'
   | 'purchase_order.pull_from_demand_computation'
+  | 'purchase_order.pull_from_replenishment_suggestion'
   | 'purchase_inquiry.pull_from_requisition'
   | 'batching_order.pull_from_work_order'
   | 'shipment_notice.pull_from_sales_order'
@@ -33,6 +34,7 @@ export type KuaizhizaoDocumentActionKey =
   | 'rework_order.pull_from_finished_goods_inspection'
   | 'rework_order.pull_from_work_order'
   | 'purchase_requisition.pull_from_demand_computation'
+  | 'purchase_requisition.pull_from_replenishment_suggestion'
   | 'demand_computation.pull_from_sales_forecast'
   | 'demand_computation.pull_from_demand'
   | 'demand_computation.pull_from_sales_order'
@@ -143,6 +145,14 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     labelKey: documentActionI18n('purchase_order.pull_from_demand_computation', 'label'),
     sourceLabelKey: documentActionI18n('purchase_order.pull_from_demand_computation', 'source'),
     targetLabelKey: documentActionI18n('purchase_order.pull_from_demand_computation', 'target'),
+  },
+  'purchase_order.pull_from_replenishment_suggestion': {
+    key: 'purchase_order.pull_from_replenishment_suggestion',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('purchase_order.pull_from_replenishment_suggestion', 'label'),
+    sourceLabelKey: documentActionI18n('purchase_order.pull_from_replenishment_suggestion', 'source'),
+    targetLabelKey: documentActionI18n('purchase_order.pull_from_replenishment_suggestion', 'target'),
   },
   'purchase_inquiry.pull_from_requisition': {
     key: 'purchase_inquiry.pull_from_requisition',
@@ -343,6 +353,14 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     labelKey: documentActionI18n('purchase_requisition.pull_from_demand_computation', 'label'),
     sourceLabelKey: documentActionI18n('purchase_requisition.pull_from_demand_computation', 'source'),
     targetLabelKey: documentActionI18n('purchase_requisition.pull_from_demand_computation', 'target'),
+  },
+  'purchase_requisition.pull_from_replenishment_suggestion': {
+    key: 'purchase_requisition.pull_from_replenishment_suggestion',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('purchase_requisition.pull_from_replenishment_suggestion', 'label'),
+    sourceLabelKey: documentActionI18n('purchase_requisition.pull_from_replenishment_suggestion', 'source'),
+    targetLabelKey: documentActionI18n('purchase_requisition.pull_from_replenishment_suggestion', 'target'),
   },
   'demand_computation.pull_from_sales_forecast': {
     key: 'demand_computation.pull_from_sales_forecast',

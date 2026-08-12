@@ -16,6 +16,8 @@ export type PurchaseInvoicePullPreview = DocumentPushPreview & {
   purchase_order_code?: string | null;
   payable_id?: number;
   payable_code?: string;
+  /** 同时付款上限（应付剩余可付） */
+  remaining_settle_amount?: number;
 };
 
 export type PurchaseInvoicePullCandidate = {

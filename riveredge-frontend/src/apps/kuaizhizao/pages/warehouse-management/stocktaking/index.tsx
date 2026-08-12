@@ -37,6 +37,7 @@ import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { renderStocktakingTypeMarkerTag } from '../shared/warehouseMarkerTags';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
@@ -510,6 +511,7 @@ const StocktakingPage: React.FC = () => {
       sorter: true,
       hideInSearch: true,
       valueEnum: stocktakingTypeValueEnum,
+      render: (_, record) => renderStocktakingTypeMarkerTag(t, record.stocktaking_type),
     },
     {
       title: t('app.kuaizhizao.stocktaking.colTotalItems'),
@@ -631,11 +633,8 @@ const StocktakingPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.stocktaking.colStocktakingType'),
       dataIndex: 'stocktaking_type',
-      valueEnum: {
-        full: t('app.kuaizhizao.stocktaking.typeFull'),
-        partial: t('app.kuaizhizao.stocktaking.typePartial'),
-        cycle: t('app.kuaizhizao.stocktaking.typeCycle'),
-      },
+      render: (_: unknown, entity: Stocktaking) =>
+        renderStocktakingTypeMarkerTag(t, entity.stocktaking_type),
     },
     {
       title: t('app.kuaizhizao.stocktaking.formLineGranularity'),

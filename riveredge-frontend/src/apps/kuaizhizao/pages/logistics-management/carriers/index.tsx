@@ -1,10 +1,21 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Form, Input, Modal, Select, Switch, message } from 'antd';
+import { Button, Form, Input, Modal, Select, Switch, message } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UniTableStackedPrimaryCell,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import {
+  renderLogisticsCarrierTypeTag,
+  renderLogisticsEnabledTag,
+} from '../shared/logisticsListPresentation';
 import {
   createCarrier,
   deleteCarrier,
@@ -13,6 +24,16 @@ import {
   type LogisticsCarrier,
 } from '../../../services/logistics';
 
+const SETTLEMENT_METHOD_OPTIONS: Array<{ value: string; labelKey: string }> = [
+  { value: 'cash', labelKey: 'field.partner.settlementMethod.cash' },
+  { value: 'bank_transfer', labelKey: 'field.partner.settlementMethod.bankTransfer' },
+  { value: 'bank_acceptance', labelKey: 'field.partner.settlementMethod.bankAcceptance' },
+  { value: 'commercial_acceptance', labelKey: 'field.partner.settlementMethod.commercialAcceptance' },
+  { value: 'monthly', labelKey: 'field.partner.settlementMethod.monthly' },
+  { value: 'prepaid', labelKey: 'field.partner.settlementMethod.prepaid' },
+  { value: 'other', labelKey: 'field.partner.settlementMethod.other' },
+];
+
 const CarriersPage: React.FC = () => {
   const { t } = useTranslation();
   const perms = useResourcePermissions('kuaizhizao:logistics-carrier');
@@ -20,49 +41,6 @@ const CarriersPage: React.FC = () => {
   const [form] = Form.useForm();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<LogisticsCarrier | null>(null);
-
-  const columns: ProColumns<LogisticsCarrier>[] = [
-    { title: t('app.kuaizhizao.logistics.field.code'), dataIndex: 'code' },
-    { title: t('app.kuaizhizao.logistics.field.name'), dataIndex: 'name' },
-    { title: t('app.kuaizhizao.logistics.field.carrierType'), dataIndex: 'carrier_type' },
-    { title: t('app.kuaizhizao.logistics.field.contactName'), dataIndex: 'contact_name' },
-    { title: t('app.kuaizhizao.logistics.field.contactPhone'), dataIndex: 'contact_phone' },
-    {
-      title: t('app.kuaizhizao.logistics.field.enabled'),
-      dataIndex: 'is_enabled',
-      render: (_, row) => (row.is_enabled ? t('common.yes') : t('common.no')),
-    },
-    {
-      title: t('common.action'),
-      valueType: 'option',
-      width: 160,
-      render: (_, row) => {
-        const nodes: React.ReactNode[] = [];
-        if (perms.canUpdate) {
-          nodes.push(
-            <a key="edit" onClick={() => openEdit(row)}>
-              {t('common.edit')}
-            </a>,
-          );
-        }
-        if (perms.canDelete) {
-          nodes.push(
-            <a
-              key="delete"
-              onClick={async () => {
-                await deleteCarrier(row.id);
-                message.success(t('common.deleteSuccess'));
-                actionRef.current?.reload();
-              }}
-            >
-              {t('common.delete')}
-            </a>,
-          );
-        }
-        return nodes;
-      },
-    },
-  ];
 
   const openCreate = () => {
     setEditing(null);
@@ -90,11 +68,112 @@ const CarriersPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
+  const columns: ProColumns<LogisticsCarrier>[] = useMemo(
+    () =>
+      alignProColumns<LogisticsCarrier>([
+        {
+          title: t('app.kuaizhizao.logistics.field.name'),
+          key: 'logistics_carrier_stacked',
+          dataIndex: 'name',
+          ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+          fixed: 'left',
+          render: (_, row) => (
+            <UniTableStackedPrimaryCell
+              primary={String(row.name ?? '').trim() || '-'}
+              secondary={String(row.code ?? '').trim() || '-'}
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.code'),
+          dataIndex: 'code',
+          hideInTable: true,
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.carrierType'),
+          dataIndex: 'carrier_type',
+          width: 96,
+          minWidth: 96,
+          uniTableKeepWidth: true,
+          resizable: false,
+          render: (_, row) => renderLogisticsCarrierTypeTag(t, row.carrier_type),
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.contactName'),
+          dataIndex: 'contact_name',
+          width: 148,
+          minWidth: 148,
+          uniTableKeepWidth: true,
+          resizable: false,
+          render: (_, row) => (
+            <UniTableStackedPrimaryCell
+              primary={String(row.contact_name ?? '').trim() || '-'}
+              secondary={String(row.contact_phone ?? '').trim() || '-'}
+              secondaryCopyable={Boolean(String(row.contact_phone ?? '').trim())}
+              primaryBold={false}
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.contactPhone'),
+          dataIndex: 'contact_phone',
+          hideInTable: true,
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.enabled'),
+          dataIndex: 'is_enabled',
+          width: 88,
+          minWidth: 88,
+          uniTableKeepWidth: true,
+          resizable: false,
+          hideInSearch: true,
+          render: (_, row) => renderLogisticsEnabledTag(t, row.is_enabled),
+        },
+        {
+          title: t('common.action'),
+          key: 'action',
+          valueType: 'option',
+          fixed: 'right',
+          hideInSearch: true,
+          render: (_, row) => {
+            const nodes: React.ReactNode[] = [];
+            if (perms.canUpdate) {
+              nodes.push(
+                <Button key="edit" {...rowActionKind('update')} type="link" size="small" onClick={() => openEdit(row)}>
+                  {t('common.edit')}
+                </Button>,
+              );
+            }
+            if (perms.canDelete) {
+              nodes.push(
+                <Button
+                  key="delete"
+                  {...rowActionKind('delete')}
+                  type="link"
+                  size="small"
+                  onClick={async () => {
+                    await deleteCarrier(row.id);
+                    message.success(t('common.deleteSuccess'));
+                    actionRef.current?.reload();
+                  }}
+                >
+                  {t('common.delete')}
+                </Button>,
+              );
+            }
+            return nodes;
+          },
+        },
+      ]),
+    [perms.canDelete, perms.canUpdate, t],
+  );
+
   return (
     <ListPageTemplate>
       <UniTable<LogisticsCarrier>
         actionRef={actionRef}
         columns={columns}
+        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.carriers.v1"
         rowKey="id"
         request={async (params) => {
           const res = await listCarriers({
@@ -146,11 +225,22 @@ const CarriersPage: React.FC = () => {
           <Form.Item name="contact_phone" label={t('app.kuaizhizao.logistics.field.contactPhone')}>
             <Input />
           </Form.Item>
-          <Form.Item name="supplier_id" label={t('app.kuaizhizao.logistics.field.supplierId')}>
-            <Input type="number" />
+          <Form.Item name="supplier_id" label={t('app.kuaizhizao.logistics.field.supplier')}>
+            <SupplierSelectDropdown
+              hostResource="kuaizhizao:logistics-carrier"
+              allowClear
+              placeholder={t('app.kuaizhizao.logistics.placeholder.selectSupplier')}
+              style={{ width: '100%' }}
+            />
           </Form.Item>
           <Form.Item name="settlement_method" label={t('app.kuaizhizao.logistics.field.settlementMethod')}>
-            <Input />
+            <Select
+              allowClear
+              options={SETTLEMENT_METHOD_OPTIONS.map((item) => ({
+                value: item.value,
+                label: t(item.labelKey),
+              }))}
+            />
           </Form.Item>
           <Form.Item name="remark" label={t('common.remark')}>
             <Input.TextArea rows={2} />

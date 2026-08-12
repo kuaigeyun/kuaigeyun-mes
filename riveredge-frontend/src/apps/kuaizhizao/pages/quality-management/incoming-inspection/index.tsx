@@ -135,7 +135,6 @@ import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActi
 import {
   getQualityIncomingDisposalFallback,
   mergeQualityDisposalOptions,
-  renderQualityResultTag,
   renderQualityDocStatusTag,
   renderQualityQualityStatusTag,
   getQualityDefectTypeOptions,
@@ -1162,9 +1161,10 @@ const IncomingInspectionPage: React.FC = () => {
     buildQualityInspectionListMaterialColumn<IncomingInspection>(t),
     ...buildQualityInspectionListMaterialHiddenColumns<IncomingInspection>(t),
     buildInspectorTimeStackedColumn<IncomingInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
-    ...buildQualityInspectionListQuantityResultColumns<IncomingInspection>(t, renderQualityResultTag, [
+    ...buildQualityInspectionListQuantityResultColumns<IncomingInspection>(t, [
       {
         title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+        key: 'downstream_push_progress',
         dataIndex: 'pushed_purchase_return_quantity',
         ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
         render: (_, record) => {
@@ -1248,7 +1248,7 @@ const IncomingInspectionPage: React.FC = () => {
     >
       <UniTable<IncomingInspection>
         headerTitle={t('app.kuaizhizao.quality.incoming.pageTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.quality-management.incoming-inspection.material-qty-v2"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.incoming-inspection.rank-v3"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

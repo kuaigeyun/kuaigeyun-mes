@@ -8,7 +8,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -24,6 +24,9 @@ import {
   normalizeMasterListResponse,
   resolveMasterCrudListParams,
 } from '../../../utils/masterListCore';
+import {
+  renderMasterActiveTag,
+} from '../../../utils/masterListPresentation';
 import { WorkGroupFormModal } from '../../../components/WorkGroupFormModal';
 import type { WorkGroup, WorkGroupCreate } from '../../../types/factory';
 import { downloadFile } from '../../../../../utils';
@@ -445,7 +448,10 @@ const WorkGroupsPage: React.FC = () => {
     {
       title: t('field.workGroup.code'),
       dataIndex: 'code',
-      width: 150,
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       fixed: 'left',
       ellipsis: true,
       copyable: true,
@@ -455,7 +461,10 @@ const WorkGroupsPage: React.FC = () => {
     {
       title: t('field.workGroup.name'),
       dataIndex: 'name',
-      width: 200,
+      width: 168,
+      minWidth: 168,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
@@ -474,7 +483,10 @@ const WorkGroupsPage: React.FC = () => {
     {
       title: t('field.workGroup.description'),
       dataIndex: 'description',
-      width: 200,
+      width: 168,
+      minWidth: 168,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
     },
@@ -490,19 +502,19 @@ const WorkGroupsPage: React.FC = () => {
     {
       title: t('field.workGroup.isActive'),
       dataIndex: 'isActive',
-      width: 100,
+      width: 88,
+      minWidth: 88,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
       valueEnum: workGroupActiveValueEnum,
-      render: (_, record) => (
-        <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
-          {record?.isActive ? t('common.enabled') : t('common.disabled')}
-        </Tag>
-      ),
+      render: (_, record) => renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled'),
     },
     ...masterCrudCreatedUpdatedColumns<WorkGroup>(t),
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
       width: 150,
       fixed: 'right',
@@ -558,11 +570,7 @@ const WorkGroupsPage: React.FC = () => {
     {
       title: t('field.workGroup.isActive'),
       dataIndex: 'isActive',
-      render: (_: React.ReactNode, record: WorkGroup) => (
-        <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
-          {record?.isActive ? t('common.enabled') : t('common.disabled')}
-        </Tag>
-      ),
+      render: (_: React.ReactNode, record: WorkGroup) => renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled'),
     },
     { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
     { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
@@ -572,7 +580,7 @@ const WorkGroupsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<WorkGroup>
-          columnPersistenceId="apps.master-data.pages.factory.work-groups.status-v2"
+          columnPersistenceId="apps.master-data.pages.factory.work-groups.list-v1"
           actionRef={actionRef}
           columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
           viewTypes={['table', 'help']}

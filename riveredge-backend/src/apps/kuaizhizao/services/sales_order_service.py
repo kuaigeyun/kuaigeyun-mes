@@ -2389,6 +2389,21 @@ class SalesOrderService:
                     submitted_by, submitter_name, "提交并自动确认",
                 )
                 # 不再在提交时自动创建/同步 Demand，避免形成「订单→需求计划」隐式链路。
+            order_row = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
+            from apps.kuaicaiwu.services.finance_integration_hooks import (
+                ensure_prepayment_receipt_for_sales_order,
+            )
+
+            await ensure_prepayment_receipt_for_sales_order(
+                tenant_id=tenant_id,
+                order_id=sales_order_id,
+                order_code=order_row.order_code,
+                customer_id=order_row.customer_id,
+                customer_name=order_row.customer_name,
+                prepayment_amount=order_row.prepayment_amount,
+                prepayment_bank_account_id=order_row.prepayment_bank_account_id,
+                operator_id=submitted_by,
+            )
             return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
         from core.services.approval.approval_instance_service import ApprovalInstanceService

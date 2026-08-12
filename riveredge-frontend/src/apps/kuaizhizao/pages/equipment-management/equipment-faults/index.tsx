@@ -21,7 +21,8 @@ import {
   ProFormTextArea,
   ProFormText,
 } from '@ant-design/pro-components';
-import { App, Button, Tag, Modal, Row, Col, Descriptions, Typography, Empty, Spin, theme as AntdTheme } from 'antd';
+import { App, Button, Modal, Row, Col, Descriptions, Typography, Empty, Spin, theme as AntdTheme } from 'antd';
+import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
@@ -450,8 +451,8 @@ const EquipmentFaultsPage: React.FC = () => {
       render: (_, record) => {
         const level = record.fault_level;
         const config = level ? FAULT_LEVEL_KEYS[level] : undefined;
-        if (!config) return <Tag>{level || '-'}</Tag>;
-        return <Tag color={config.color}>{t(config.key)}</Tag>;
+        if (!config) return <MarkerTag>{level || '-'}</MarkerTag>;
+        return <MarkerTag color={config.color}>{t(config.key)}</MarkerTag>;
       },
     },
     {
@@ -466,16 +467,16 @@ const EquipmentFaultsPage: React.FC = () => {
         const key = status ? FAULT_STATUS_KEYS[status] : undefined;
         const text = key ? t(key) : (status || '-');
         const color = status ? (FAULT_STATUS_COLORS[status] || 'default') : 'default';
-        return <Tag color={color}>{text}</Tag>;
+        return <StatusTag color={color}>{text}</StatusTag>;
       },
     },
     {
       title: t(`${P}.col.repairRequired`),
       dataIndex: 'repair_required',
       render: (_, record) => (
-        <Tag color={record.repair_required ? 'warning' : 'success'}>
+        <MarkerTag color={record.repair_required ? 'warning' : 'success'}>
           {record.repair_required ? t(`${P}.yes`) : t(`${P}.no`)}
-        </Tag>
+        </MarkerTag>
       ),
     },
     {
@@ -688,8 +689,8 @@ const EquipmentFaultsPage: React.FC = () => {
       render: (_, record) => {
         const level = record.fault_level;
         const config = level ? FAULT_LEVEL_KEYS[level] : undefined;
-        if (!config) return <Tag>{level || '-'}</Tag>;
-        return <Tag color={config.color}>{t(config.key)}</Tag>;
+        if (!config) return <MarkerTag>{level || '-'}</MarkerTag>;
+        return <MarkerTag color={config.color}>{t(config.key)}</MarkerTag>;
       },
     },
     {
@@ -699,14 +700,15 @@ const EquipmentFaultsPage: React.FC = () => {
       sorter: true,
       hideInSearch: true,
       render: (_, record) => (
-        <Tag color={record.repair_required ? 'warning' : 'success'}>
+        <MarkerTag color={record.repair_required ? 'warning' : 'success'}>
           {record.repair_required ? t(`${P}.yes`) : t(`${P}.no`)}
-        </Tag>
+        </MarkerTag>
       ),
     },
     ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     {
       title: t(`${P}.col.lifecycle`),
+      key: 'lifecycle',
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       hideInSearch: true,
@@ -728,7 +730,7 @@ const EquipmentFaultsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<EquipmentFault>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-faults"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-faults-equip-rank-v1"
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}

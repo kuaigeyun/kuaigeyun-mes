@@ -33,6 +33,7 @@ import {formatDateTime, formatQuantity} from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { renderInventoryTransferModeMarkerTag } from '../shared/warehouseMarkerTags';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
@@ -493,14 +494,9 @@ const InventoryTransferPage: React.FC = () => {
       width: 110,
       sorter: true,
       hideInSearch: true,
-      render: (_, record) => (
-        <Tag color={record.transfer_mode === 'bin_relocation' ? 'gold' : 'blue'}>
-          {record.transfer_mode === 'bin_relocation'
-            ? t('app.kuaizhizao.inventoryTransfer.transferModeBinRelocation')
-            : t('app.kuaizhizao.inventoryTransfer.transferModeCross')}
-        </Tag>
-      ),
+      render: (_, record) => renderInventoryTransferModeMarkerTag(t, record.transfer_mode),
     },
+
     {
       title: t('app.kuaizhizao.warehouseReports.colFromWarehouse'),
       dataIndex: 'from_warehouse_name',

@@ -279,7 +279,7 @@ const MoldReturnsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<MoldReturn>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-returns"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-returns-equip-rank-v1"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

@@ -66,7 +66,7 @@ import { getPackingBindingLifecycle, buildPackingBindingMethodValueEnum, resolve
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime } from '../../../../../utils/format';
-import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
@@ -971,13 +971,6 @@ const PackingBindingPage: React.FC = () => {
         valueType: 'select',
         valueEnum: packingBindingSourceValueEnum,
         render: (_, r) => bindingSourceTag(r),
-      },
-      {
-        title: t('app.kuaizhizao.packingBinding.colStatus'),
-        dataIndex: 'binding_status',
-        width: 90,
-        hideInSearch: true,
-        render: () => <StatusTag color="processing">{t('app.kuaizhizao.packingBinding.statusBound')}</StatusTag>,
       },
       {
         title: `${t('app.kuaizhizao.packingBinding.colBoundBy')}/${t('app.kuaizhizao.packingBinding.colBoundAt')}`,

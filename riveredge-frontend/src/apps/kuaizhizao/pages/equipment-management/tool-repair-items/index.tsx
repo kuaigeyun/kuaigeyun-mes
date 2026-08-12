@@ -440,7 +440,7 @@ const ToolRepairItemsPage: React.FC = () => {
 
           headerTitle={t(`${P}.title`)}
 
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-repair-items"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-repair-items-equip-rank-v1"
 
           actionRef={actionRef}
 

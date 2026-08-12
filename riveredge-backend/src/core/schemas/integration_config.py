@@ -8,6 +8,8 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
+from core.config.integration_type_spec import assert_allowed_integration_type
+
 
 class IntegrationConfigBase(BaseModel):
     """
@@ -17,7 +19,7 @@ class IntegrationConfigBase(BaseModel):
     """
     name: str = Field(..., min_length=1, max_length=100, description="集成名称")
     code: str = Field(..., min_length=1, max_length=50, description="集成代码（唯一，用于程序识别）")
-    type: str = Field(..., min_length=1, max_length=20, description="集成类型：OAuth、API、Webhook、Database等")
+    type: str = Field(..., min_length=1, max_length=40, description="集成类型：OAuth、API、Webhook、Database等")
     description: Optional[str] = Field(None, description="集成描述")
     config: Dict[str, Any] = Field(default_factory=dict, description="配置信息（JSON）")
     is_active: bool = Field(default=True, description="是否启用")
@@ -25,45 +27,8 @@ class IntegrationConfigBase(BaseModel):
     @field_validator('type')
     @classmethod
     def validate_type(cls, v: str) -> str:
-        """验证集成类型（含数据源、应用连接器类型）"""
-        allowed_types = [
-            'OAuth', 'API', 'Webhook', 'Database',
-            'postgresql', 'mysql', 'mongodb', 'oracle', 'sqlserver',
-            'redis', 'clickhouse', 'influxdb', 'doris', 'starrocks',
-            'elasticsearch', 'mariadb', 'sqlite', 'tidb', 'couchbase',
-            'oceanbase', 'opengauss', 'dameng', 'kingbase', 'gaussdb',
-            'sequoiadb', 'gbase',
-            'timescaledb', 'tdengine', 'prometheus', 'opensearch', 'druid', 'trino',
-            'memcached', 'etcd', 'keydb', 'milvus', 'qdrant', 'weaviate', 'chroma',
-            'api',
-            # 应用连接器：协作
-            'feishu', 'dingtalk', 'wecom',
-            # 应用连接器：ERP（具体产品）
-            'kingdee_galaxy', 'kingdee_xingchen', 'kingdee_kis_cloud', 'kingdee_kis',
-            'yonyou_yonbip', 'yonyou_u8', 'yonyou_u9', 'yonyou_nc',
-            'sap_s4hana', 'sap_b1', 'oracle_netsuite', 'odoo',
-            'inspur_gs', 'inspur_ps',
-            'digiwin_t100', 'digiwin_yifei', 'digiwin_yizhu', 'digiwin_yituo', 'digiwin_e10',
-            'chanjet_tplus', 'grasp_huihuang', 'super_erp', 'erpnext', 'sunlike_erp',
-            # 应用连接器：PLM
-            'teamcenter', 'windchill', 'caxa', 'sanpin_plm', 'sunlike_plm', 'sipm', 'inteplm',
-            # 应用连接器：CRM
-            'salesforce', 'xiaoshouyi', 'fenxiang', 'qidian', 'supra_crm',
-            # 应用连接器：OA
-            'weaver', 'seeyon', 'landray', 'cloudhub', 'tongda_oa',
-            # 应用连接器：IoT
-            'rootcloud', 'casicloud', 'alicloud_iot', 'huaweicloud_iot', 'thingsboard', 'jetlinks',
-            # 应用连接器：WMS
-            'flux_wms', 'kejian_wms', 'digiwin_wms', 'openwms',
-            # 应用连接器：存储
-            'alicloud_oss', 'tencent_cos', 'huaweicloud_obs', 'aws_s3', 'minio', 'qiniu_kodo',
-            'nas_webdav', 'nas_smb',
-            # 应用连接器：AI（OpenAI 兼容；同一 type 可多条）
-            'deepseek', 'openai', 'qwen', 'zhipu', 'moonshot', 'siliconflow',
-        ]
-        if v not in allowed_types:
-            raise ValueError(f"集成类型必须是以下之一: {', '.join(allowed_types)}")
-        return v
+        """验证集成类型（含数据源、应用连接器；历史伞型先归一）"""
+        return assert_allowed_integration_type(v)
 
 
 class IntegrationConfigCreate(IntegrationConfigBase):
@@ -117,6 +82,11 @@ class TestConfigRequest(BaseModel):
     type: str = Field(..., description="集成类型：postgresql、mysql、mongodb、api 等")
     config: Dict[str, Any] = Field(default_factory=dict, description="连接配置（JSON）")
 
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, v: str) -> str:
+        return assert_allowed_integration_type(v)
+
 
 class TestConnectionResponse(BaseModel):
     """
@@ -138,4 +108,3 @@ class SyncContactsResponse(BaseModel):
     users: Optional[Dict[str, int]] = Field(None, description="成员同步统计")
     synced_at: Optional[str] = Field(None, description="同步完成时间（ISO8601）")
     error: Optional[str] = Field(None, description="错误信息")
-

@@ -243,7 +243,11 @@ export function applyColumnWidthPolicy(
 function applyPrimaryFlexWidthPatch(
   columns: Record<string, unknown>[],
   containerWidth: number,
-  options: { includeSelection: boolean; reserveVerticalScrollbar: boolean },
+  options: {
+    includeSelection: boolean
+    includeExpandable?: boolean
+    reserveVerticalScrollbar: boolean
+  },
 ): Record<string, unknown>[] {
   if (containerWidth <= 0 || !columns?.length) return columns
 
@@ -255,6 +259,7 @@ function applyPrimaryFlexWidthPatch(
 
   const baseScrollX = computeUniTableMinScrollX(columns, {
     includeSelection: options.includeSelection,
+    includeExpandable: options.includeExpandable === true,
   })
   if (layoutWidth <= baseScrollX) return columns
 
@@ -281,6 +286,8 @@ function applyPrimaryFlexWidthPatch(
       remaining -= add
     }
   }
+  // 余量必须受 uniTablePrimaryFlexMaxWidth 约束；禁止再把剩余像素无上限灌进首列，
+  // 否则所有使用 UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS 的物料/主列会被撑到半屏。
   return next
 }
 
@@ -288,6 +295,8 @@ export interface ResolveLayoutPlanInput {
   columns: Record<string, unknown>[]
   containerWidth: number
   includeSelection: boolean
+  /** 存在 expandable 时须计入展开列，否则 scroll.x 偏短 → 表头/表体列错位 */
+  includeExpandable?: boolean
   scrollYEnabled: boolean
 }
 
@@ -324,11 +333,13 @@ export function resolveLayoutPlan(input: ResolveLayoutPlanInput): UniTableLayout
   const withFixedWidths = ensureFixedColumnWidths(prepared)
   const columns = applyPrimaryFlexWidthPatch(withFixedWidths, input.containerWidth, {
     includeSelection: input.includeSelection,
+    includeExpandable: input.includeExpandable === true,
     reserveVerticalScrollbar: input.scrollYEnabled,
   })
 
   const scrollX = computeUniTableMinScrollX(columns, {
     includeSelection: input.includeSelection,
+    includeExpandable: input.includeExpandable === true,
   })
 
   return { columns, scrollX, mode, scrollbarSlotPx }

@@ -49,6 +49,7 @@ from apps.kuaizhizao.services.document_action_policy.rework_order import (
     derive_rework_order_capabilities,
 )
 from apps.kuaizhizao.services.rework_order_workflow import (
+    activate_operation_link,
     advance_next_operation,
     after_rework_report_approved,
     build_operation_items,
@@ -983,7 +984,28 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             raise BusinessLogicError("返工单未关联原工单，无法报工")
 
         current_link = ctx["current_link"]
+        if not current_link and rework_order.status == "released" and ctx["links"]:
+            # 下达后指针偶发丢失时，按起始工序行自愈激活
+            start_link = ctx["links"][0]
+            actor_id = int(rework_order.updated_by or rework_order.created_by or 0)
+            actor_name = (
+                rework_order.updated_by_name
+                or rework_order.created_by_name
+                or ""
+            )
+            await activate_operation_link(
+                tenant_id,
+                rework_order,
+                start_link,
+                input_quantity=_dec(rework_order.quantity),
+                actor_id=actor_id,
+                actor_name=actor_name,
+            )
+            ctx = await compute_capability_context(tenant_id, rework_order)
+            current_link = ctx["current_link"]
         if not current_link:
+            if ctx.get("awaiting_route_decision"):
+                raise BusinessLogicError("当前工序已完成，请选择下一工序或申请完修")
             raise BusinessLogicError("当前无激活工序，请先下达或选择下一工序")
 
         ops = await WorkOrderOperation.filter(
@@ -1056,6 +1078,8 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
 
         current_link = ctx["current_link"]
         if not current_link:
+            if ctx.get("awaiting_route_decision"):
+                raise BusinessLogicError("当前工序已完成，请选择下一工序或申请完修")
             raise BusinessLogicError("当前无激活工序，无法报工")
         if reporting_data.work_order_operation_id != current_link.work_order_operation_id:
             raise BusinessLogicError("报工必须落在当前激活工序上")

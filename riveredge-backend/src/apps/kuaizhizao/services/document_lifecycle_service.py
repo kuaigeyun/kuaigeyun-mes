@@ -1415,8 +1415,12 @@ def get_shipment_notice_lifecycle(
             milestones=milestones,
         )
 
-    is_shipped = status in ("已出库", "completed", "已完成") or bool(getattr(notice, "sales_delivery_id", None))
-    is_notified = status in ("已通知", "notified") or is_shipped
+    # 「已出库」仅以通知单自身 status 为准。
+    # 通知仓库时会生成待出库销售出库单并回填 sales_delivery_id，不得据此跳过「已通知」。
+    is_shipped = status in ("已出库", "completed", "已完成")
+    is_notified = status in ("已通知", "notified") or is_shipped or bool(
+        getattr(notice, "sales_delivery_id", None)
+    )
 
     key = "shipped" if is_shipped else ("notified" if is_notified else "pending_ship")
     stage_name = "已出库" if key == "shipped" else ("已通知" if key == "notified" else "待发货")

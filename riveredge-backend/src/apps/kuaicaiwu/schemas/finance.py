@@ -111,6 +111,18 @@ class PurchaseInvoiceBase(BaseSchema):
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
+class ConcurrentSettlementCreate(BaseSchema):
+    """开票同时收款/付款（仅拉单自应收/应付时生效）"""
+
+    enabled: bool = Field(False, description="是否同时生成收/付款单")
+    total_amount: Optional[Decimal] = Field(None, gt=0, description="收/付款金额（可与开票价税合计不同）")
+    payment_method: Optional[str] = Field(None, max_length=50, description="收/付款方式")
+    bank_account_id: Optional[int] = Field(None, description="入账/出款账户ID")
+    bank_account: Optional[str] = Field(None, max_length=100, description="账户备注")
+    voucher_date: Optional[date] = Field(None, description="收/付款日期")
+    notes: Optional[str] = Field(None, description="收/付款备注")
+
+
 class PurchaseInvoiceCreate(PurchaseInvoiceBase):
     """采购发票创建schema"""
 
@@ -122,6 +134,9 @@ class PurchaseInvoiceCreate(PurchaseInvoiceBase):
     )
     source_type: Optional[str] = Field(None, description="加载源单类型 purchase_order|purchase_receipt|payable")
     source_id: Optional[int] = Field(None, description="加载源单ID")
+    concurrent_settlement: Optional[ConcurrentSettlementCreate] = Field(
+        None, description="从应付开票时可选：同时生成付款单"
+    )
 
 
 class PurchaseInvoiceUpdate(PurchaseInvoiceBase):
@@ -402,6 +417,9 @@ class SalesInvoiceCreate(SalesInvoiceBase):
     )
     source_type: Optional[str] = Field(None, description="加载源单类型 sales_order|sales_delivery|receivable")
     source_id: Optional[int] = Field(None, description="加载源单ID")
+    concurrent_settlement: Optional[ConcurrentSettlementCreate] = Field(
+        None, description="从应收开票时可选：同时生成收款单"
+    )
 
 
 class SalesInvoiceUpdate(BaseSchema):

@@ -57,6 +57,44 @@ EXCEPTION_PROCESS_SORTABLE_FIELDS = frozenset({
 })
 
 
+async def _load_work_order_ref_map(
+    tenant_id: int,
+    records: List[ExceptionProcessRecord],
+) -> Dict[tuple[str, int], Dict[str, Any]]:
+    """按异常类型批量解析源异常上的工单编号与工单ID。"""
+    ids_by_type: Dict[str, List[int]] = {}
+    for record in records:
+        et = str(record.exception_type or "").strip()
+        eid = record.exception_id
+        if not et or eid is None:
+            continue
+        ids_by_type.setdefault(et, []).append(int(eid))
+
+    ref_map: Dict[tuple[str, int], Dict[str, Any]] = {}
+    for exception_type, ids in ids_by_type.items():
+        unique_ids = list(dict.fromkeys(ids))
+        if exception_type == "material_shortage":
+            rows = await MaterialShortageException.filter(
+                tenant_id=tenant_id, id__in=unique_ids
+            ).values("id", "work_order_code", "work_order_id")
+        elif exception_type == "delivery_delay":
+            rows = await DeliveryDelayException.filter(
+                tenant_id=tenant_id, id__in=unique_ids
+            ).values("id", "work_order_code", "work_order_id")
+        elif exception_type == "quality":
+            rows = await QualityException.filter(
+                tenant_id=tenant_id, id__in=unique_ids
+            ).values("id", "work_order_code", "work_order_id")
+        else:
+            continue
+        for row in rows:
+            ref_map[(exception_type, int(row["id"]))] = {
+                "work_order_code": row.get("work_order_code"),
+                "work_order_id": row.get("work_order_id"),
+            }
+    return ref_map
+
+
 class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
     """
     异常处理流程服务类
@@ -104,22 +142,25 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
         if existing:
             raise ValidationError("该异常已有处理流程正在进行中")
 
-        # 获取分配给的用户信息
+        # 获取分配给的用户信息；创建时已指定处理人则直接进入执行中
         assigned_to_name = None
         if data.assigned_to:
             user_info = await self.work_order_service.get_user_info(data.assigned_to)
             assigned_to_name = user_info.get("name")
+        has_assignee = bool(data.assigned_to)
+        process_status = "processing" if has_assignee else "pending"
+        current_step = "assigned" if has_assignee else "detected"
 
         # 创建处理记录
         process_record = await ExceptionProcessRecord.create(
             tenant_id=tenant_id,
             exception_type=data.exception_type,
             exception_id=data.exception_id,
-            process_status="pending",
-            current_step="detected",
+            process_status=process_status,
+            current_step=current_step,
             assigned_to=data.assigned_to,
             assigned_to_name=assigned_to_name,
-            assigned_at=resolve_business_datetime() if data.assigned_to else None,
+            assigned_at=resolve_business_datetime() if has_assignee else None,
             process_config=data.process_config,
             started_at=resolve_business_datetime(),
             remarks=data.remarks,
@@ -416,8 +457,15 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
         from apps.kuaizhizao.services.document_lifecycle_service import get_exception_process_lifecycle, get_document_milestones
         milestones = await get_document_milestones(process_record.tenant_id, "exception_process", process_record.id)
         
+        ref_map = await _load_work_order_ref_map(tenant_id, [process_record])
+        base = ExceptionProcessRecordResponse.model_validate(process_record)
+        ref = ref_map.get(
+            (str(process_record.exception_type or "").strip(), int(process_record.exception_id))
+        ) or {}
+        base.work_order_code = ref.get("work_order_code")
+        base.work_order_id = ref.get("work_order_id")
         detail = ExceptionProcessRecordDetailResponse(
-            **ExceptionProcessRecordResponse.model_validate(process_record).model_dump(),
+            **base.model_dump(),
             histories=[ExceptionProcessHistoryResponse.model_validate(h) for h in histories],
         )
         detail.lifecycle = get_exception_process_lifecycle(process_record, milestones=milestones)
@@ -480,7 +528,14 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
         total = await query.count()
         order_clause = order_by if order_by else "-created_at"
         records = await query.order_by(order_clause).offset(skip).limit(limit)
-        responses = [ExceptionProcessRecordListResponse.model_validate(r) for r in records]
+        ref_map = await _load_work_order_ref_map(tenant_id, list(records))
+        responses: List[ExceptionProcessRecordListResponse] = []
+        for r in records:
+            item = ExceptionProcessRecordListResponse.model_validate(r)
+            ref = ref_map.get((str(r.exception_type or "").strip(), int(r.exception_id))) or {}
+            item.work_order_code = ref.get("work_order_code")
+            item.work_order_id = ref.get("work_order_id")
+            responses.append(item)
         return enrich_exception_process_record_list_capabilities(records, responses), total
 
     async def _validate_exception_exists(

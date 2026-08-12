@@ -13,7 +13,8 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
-import { App, Button, Tag, Space, message, Modal, Tabs, Table, Form, Input, InputNumber, DatePicker, Select, Row, Col, Typography, Spin, Empty, Upload } from 'antd';
+import { App, Button, Space, message, Modal, Tabs, Table, Form, Input, InputNumber, DatePicker, Select, Row, Col, Typography, Spin, Empty, Upload } from 'antd';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { PlusOutlined, UploadOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { uploadMultipleFiles } from '../../../../../services/file';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
@@ -70,6 +71,7 @@ import {
   buildDetailDrawerEditExtra,
   EquipmentMasterDetailDrawer,
   renderEquipmentMasterRowActions,
+  renderIsActiveTag,
 } from '../shared/equipmentMasterDataDetail';
 
 const MOLD_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_molds';
@@ -619,17 +621,13 @@ const MoldsPage: React.FC = () => {
           '报废': { text: t('app.kuaizhizao.mold.statusScrapped'), color: 'error' },
         };
         const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
+        return <MarkerTag color={config.color}>{config.text}</MarkerTag>;
       },
     },
     {
       title: t('app.kuaizhizao.mold.colIsActive'),
       dataIndex: 'is_active',
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('app.kuaizhizao.mold.isActiveEnabled') : t('app.kuaizhizao.mold.isActiveDisabled')}
-        </Tag>
-      ),
+      render: (_, record) => renderIsActiveTag(t, record.is_active),
     },
     {
       title: t('app.kuaizhizao.mold.colCavityCount'),
@@ -799,11 +797,7 @@ const MoldsPage: React.FC = () => {
       width: 100,
       sorter: true,
       hideInSearch: true,
-      render: (isActive) => (
-        <Tag color={isActive ? 'success' : 'default'}>
-          {isActive ? t('app.kuaizhizao.mold.isActiveEnabled') : t('app.kuaizhizao.mold.isActiveDisabled')}
-        </Tag>
-      ),
+      render: (_, r) => renderIsActiveTag(t, r.is_active),
     },
     {
       title: t('app.kuaizhizao.mold.colTotalUsageCount'),
@@ -822,8 +816,8 @@ const MoldsPage: React.FC = () => {
         const lifetime = record.design_lifetime;
         if (!lifetime || lifetime <= 0) return '-';
         const pct = Math.round((total / lifetime) * 100);
-        if (pct >= 100) return <Tag color="error">{pct}%</Tag>;
-        if (pct >= 90) return <Tag color="warning">{pct}%</Tag>;
+        if (pct >= 100) return <MarkerTag color="error">{pct}%</MarkerTag>;
+        if (pct >= 90) return <MarkerTag color="warning">{pct}%</MarkerTag>;
         return `${pct}%`;
       },
     },
@@ -946,7 +940,7 @@ const MoldsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<Mold>
           headerTitle={t('app.kuaizhizao.mold.title')}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.molds"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.molds-equip-rank-v1"
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}
@@ -1380,10 +1374,10 @@ const MoldsPage: React.FC = () => {
                 const total = moldDetail.total_usage_count ?? 0;
                 const threshold = moldDetail.design_lifetime * 0.9;
                 if (total >= moldDetail.design_lifetime) {
-                  return <Tag color="error" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.lifetimeExpired')}</Tag>;
+                  return <MarkerTag color="error" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.lifetimeExpired')}</MarkerTag>;
                 }
                 if (total >= threshold) {
-                  return <Tag color="warning" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.lifetimeExpiring')}</Tag>;
+                  return <MarkerTag color="warning" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.lifetimeExpiring')}</MarkerTag>;
                 }
                 return null;
               })()}
@@ -1392,7 +1386,7 @@ const MoldsPage: React.FC = () => {
                 const nextAt = (Math.floor(total / moldDetail.maintenance_interval) + 1) * moldDetail.maintenance_interval;
                 const left = nextAt - total;
                 if (left > 0 && left <= moldDetail.maintenance_interval * 0.2) {
-                  return <Tag color="warning" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.maintenanceDueSoon', { count: left })}</Tag>;
+                  return <MarkerTag color="warning" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.maintenanceDueSoon', { count: left })}</MarkerTag>;
                 }
                 return null;
               })()}
@@ -1401,10 +1395,10 @@ const MoldsPage: React.FC = () => {
                 const now = dayjs();
                 const daysLeft = next.diff(now, 'day');
                 if (daysLeft < 0) {
-                  return <Tag color="error" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.calibrationExpired')}</Tag>;
+                  return <MarkerTag color="error" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.calibrationExpired')}</MarkerTag>;
                 }
                 if (daysLeft <= 7) {
-                  return <Tag color="warning" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.calibrationExpiringSoon', { days: daysLeft })}</Tag>;
+                  return <MarkerTag color="warning" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.calibrationExpiringSoon', { days: daysLeft })}</MarkerTag>;
                 }
                 return null;
               })()}

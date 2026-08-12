@@ -546,7 +546,7 @@ const MoldRepairSchemesPage: React.FC = () => {
 
           headerTitle={t(`${P}.title`)}
 
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-repair-schemes"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-repair-schemes-equip-rank-v1"
 
           actionRef={actionRef}
 

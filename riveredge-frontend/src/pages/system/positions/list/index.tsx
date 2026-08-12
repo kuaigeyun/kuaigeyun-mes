@@ -10,7 +10,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, message, Modal, Table, Descriptions } from 'antd';
+import { App, Popconfirm, Button, Space, message, Modal, Table, Descriptions } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemActiveTag } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { flushDrawerOpen, ListPageTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -62,11 +64,8 @@ const PositionListPage: React.FC = () => {
       {
         title: t('field.position.status'),
         dataIndex: 'is_active',
-        render: (_: unknown, entity: Position) => (
-          <Tag color={entity?.is_active ? 'success' : 'default'}>
-            {entity?.is_active ? t('field.role.enabled') : t('field.role.disabled')}
-          </Tag>
-        ),
+        render: (_: unknown, entity: Position) =>
+          renderSystemActiveTag(t, entity?.is_active, 'field.role.enabled', 'field.role.disabled'),
       },
       { title: t('field.position.userCount'), dataIndex: 'user_count' },
       { title: t('field.position.sortOrder'), dataIndex: 'sort_order' },
@@ -191,11 +190,15 @@ const PositionListPage: React.FC = () => {
     }
   };
 
-  const columns: ProColumns<Position>[] = [
+  const columns = useMemo<ProColumns<Position>[]>(() => alignProColumns([
     {
       title: t('field.position.name'),
       dataIndex: 'name',
+      key: 'name',
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
       fixed: 'left',
       sorter: true,
       render: (_, record) => resolvePresetPositionName(record, t),
@@ -203,7 +206,11 @@ const PositionListPage: React.FC = () => {
     {
       title: t('field.position.code'),
       dataIndex: 'code',
+      key: 'code',
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
       copyable: true,
     },
     {
@@ -227,6 +234,9 @@ const PositionListPage: React.FC = () => {
       title: t('field.position.userCount'),
       dataIndex: 'user_count',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
     },
@@ -234,28 +244,35 @@ const PositionListPage: React.FC = () => {
       title: t('field.position.sortOrder'),
       dataIndex: 'sort_order',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
     },
     {
       title: t('field.position.status'),
       dataIndex: 'is_active',
+      key: 'is_active',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('field.role.enabled'), status: 'Success' },
         false: { text: t('field.role.disabled'), status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('field.role.enabled') : t('field.role.disabled')}
-        </Tag>
-      ),
+      render: (_, record) =>
+        renderSystemActiveTag(t, record.is_active, 'field.role.enabled', 'field.role.disabled'),
     },
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
@@ -264,14 +281,19 @@ const PositionListPage: React.FC = () => {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
     },
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => [
             <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
               {t('field.position.view')}
@@ -286,13 +308,13 @@ const PositionListPage: React.FC = () => {
             </Popconfirm>,
           ],
     },
-  ];
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, deptTreeData, handleView, handleEdit, handleDelete]);
 
   return (
     <>
       <ListPageTemplate>
         <UniTable<Position>
-          columnPersistenceId="pages.system.positions.list"
+          columnPersistenceId="pages.system.positions.list-v1"
           viewTypes={['table', 'help']}
           actionRef={actionRef}
           columns={columns}

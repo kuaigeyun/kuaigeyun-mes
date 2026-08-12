@@ -6,7 +6,7 @@
 
 import uuid
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Path, Request
 from datetime import date, datetime
 from decimal import Decimal
 from loguru import logger
@@ -31,9 +31,12 @@ from apps.kuaicaiwu.models.receivable import Receivable
 from apps.kuaicaiwu.constants import RECEIVABLE_SOURCE_SALES_INVOICE
 from apps.kuaicaiwu.services.finance_service import ReceivableService
 from apps.kuaicaiwu.services.invoice_service import InvoiceService
+from apps.kuaicaiwu.services.invoice_concurrent_settlement import (
+    create_concurrent_receipt_for_receivable,
+)
 from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
 from infra.exceptions.exceptions import BusinessLogicError
-from core.api.deps.access import require_permission_codes
+from core.api.deps.access import AuthContext, ensure_permission_codes, require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from core.services.authorization.permission_policy_service import PermissionPolicyService
 from infra.api.deps.deps import get_current_user
@@ -250,11 +253,12 @@ async def _maybe_auto_generate_receivable_for_sales_invoice(
 @router.post("", response_model=SalesInvoiceResponse, status_code=status.HTTP_201_CREATED)
 async def create_sales_invoice(
     data: SalesInvoiceCreate,
-    _auth: object = Depends(require_permission_codes("kuaicaiwu:sales-invoice:create")),
+    request: Request,
+    auth: AuthContext = Depends(require_permission_codes("kuaicaiwu:sales-invoice:create")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
-    """创建销售发票"""
+    """创建销售发票（从应收拉单时可同时收款）"""
     try:
         from apps.kuaicaiwu.services.finance_tax import compute_tax_from_excluding
 
@@ -262,6 +266,20 @@ async def create_sales_invoice(
             Decimal(data.invoice_amount),
             Decimal(data.tax_rate),
         )
+
+        concurrent = data.concurrent_settlement
+        want_receipt = bool(concurrent and concurrent.enabled)
+        if want_receipt:
+            if str(data.source_type or "").strip() != "receivable" or not data.source_id:
+                raise BusinessLogicError("仅从应收单开票时可同时收款")
+            await ensure_permission_codes(
+                auth, tenant_id, request, ["kuaicaiwu:receipt:create"]
+            )
+            if not concurrent.payment_method or concurrent.voucher_date is None:
+                raise BusinessLogicError("同时收款须填写收款方式与收款日期")
+            settle_amount = Decimal(str(concurrent.total_amount or total_amount))
+            if settle_amount <= 0:
+                raise BusinessLogicError("同时收款金额须大于 0")
 
         pull_preview: Optional[Dict[str, Any]] = None
         if data.source_type and data.source_id:
@@ -310,31 +328,45 @@ async def create_sales_invoice(
             "status": "未审核",
         }
         apply_create_audit(create_payload, current_user)
-        invoice = await Invoice.create(**create_payload)
-        if pull_preview and data.source_type and data.source_id:
-            await sales_invoice_service.create_pull_relation(
-                tenant_id=tenant_id,
-                source_type=str(data.source_type).strip(),
-                source_id=int(data.source_id),
-                source_code=str(pull_preview.get("source_code") or source_document_code or ""),
-                invoice_id=int(invoice.id),
-                invoice_code=str(invoice.invoice_code),
-                created_by=current_user.id,
-            )
-        if pull_preview and str(data.source_type or "").strip() == "receivable" and receivable_id:
-            receivable_update: dict = {
-                "invoice_issued": True,
-                "updated_by": current_user.id,
-            }
-            if data.invoice_number:
-                receivable_update["invoice_number"] = data.invoice_number
-            await Receivable.filter(tenant_id=tenant_id, id=int(receivable_id)).update(**receivable_update)
-        elif not (pull_preview and str(data.source_type or "").strip() == "receivable"):
-            await _maybe_auto_generate_receivable_for_sales_invoice(
-                tenant_id=tenant_id,
-                invoice=invoice,
-                created_by=current_user.id,
-            )
+        async with in_transaction():
+            invoice = await Invoice.create(**create_payload)
+            if pull_preview and data.source_type and data.source_id:
+                await sales_invoice_service.create_pull_relation(
+                    tenant_id=tenant_id,
+                    source_type=str(data.source_type).strip(),
+                    source_id=int(data.source_id),
+                    source_code=str(pull_preview.get("source_code") or source_document_code or ""),
+                    invoice_id=int(invoice.id),
+                    invoice_code=str(invoice.invoice_code),
+                    created_by=current_user.id,
+                )
+            if pull_preview and str(data.source_type or "").strip() == "receivable" and receivable_id:
+                receivable_update: dict = {
+                    "invoice_issued": True,
+                    "updated_by": current_user.id,
+                }
+                if data.invoice_number:
+                    receivable_update["invoice_number"] = data.invoice_number
+                await Receivable.filter(tenant_id=tenant_id, id=int(receivable_id)).update(**receivable_update)
+                if want_receipt and concurrent:
+                    await create_concurrent_receipt_for_receivable(
+                        tenant_id=tenant_id,
+                        receivable_id=int(receivable_id),
+                        total_amount=settle_amount,
+                        payment_method=str(concurrent.payment_method),
+                        bank_account_id=concurrent.bank_account_id,
+                        bank_account=concurrent.bank_account,
+                        receipt_date=concurrent.voucher_date,
+                        notes=concurrent.notes
+                        or f"销项发票 {invoice.invoice_code} 开票同时收款",
+                        current_user=current_user,
+                    )
+            elif not (pull_preview and str(data.source_type or "").strip() == "receivable"):
+                await _maybe_auto_generate_receivable_for_sales_invoice(
+                    tenant_id=tenant_id,
+                    invoice=invoice,
+                    created_by=current_user.id,
+                )
         invoice = await _get_or_404(tenant_id, invoice.id)
         return await _serialize(tenant_id, current_user.id, invoice)
     except BusinessLogicError as e:

@@ -76,6 +76,7 @@ import { isVariantSkuMaterial } from '../../../components/MaterialVariantCombina
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH } from '../../../../../utils/uniTableLayoutColumns';
+import { flattenBomGroupsForExport, resolveBomExportGroup } from './utils';
 
 const BOM_CUSTOM_FIELD_TABLE = 'master_data_boms';
 const BOM_RESOURCE = 'master-data:process:engineering-bom';
@@ -3419,11 +3420,96 @@ const BOMPage: React.FC = () => {
               messageApi.warning(t('app.master-data.noExportData'));
               return;
             }
+
+            const resolvedGroups = toExport
+              .map((row) => resolveBomExportGroup(row))
+              .filter((g): g is NonNullable<ReturnType<typeof resolveBomExportGroup>> => g != null);
+            if (!resolvedGroups.length) {
+              messageApi.warning(t('app.master-data.noExportData'));
+              return;
+            }
+
+            const lineItems = resolvedGroups.flatMap((g) => g.items);
+            const enrichedLines = lineItems.length
+              ? await enrichBomRecordsWithCustomFields(
+                  lineItems.map((it) => ({
+                    ...it,
+                    id: Number((it as { id?: unknown }).id),
+                  })) as Array<BOM & { id?: number }>,
+                )
+              : [];
+            const enrichedById = new Map<number, Record<string, unknown>>();
+            enrichedLines.forEach((it) => {
+              const id = Number((it as { id?: unknown }).id);
+              if (Number.isFinite(id) && id > 0) {
+                enrichedById.set(id, it as unknown as Record<string, unknown>);
+              }
+            });
+            const groupsForFlat = resolvedGroups.map((g) => ({
+              groupKey: `export:${g.materialId}|${g.version}|${g.bomCode}`,
+              materialId: g.materialId,
+              bomCode: g.bomCode,
+              version: g.version,
+              bomName: g.bomName,
+              approvalStatus: g.approvalStatus as BOM['approvalStatus'],
+              firstItem: (g.items[0] as unknown as BOM) ?? ({} as BOM),
+              items: g.items.map((it) => {
+                const id = Number((it as { id?: unknown }).id);
+                return (Number.isFinite(id) && enrichedById.has(id) ? enrichedById.get(id)! : it) as BOM;
+              }),
+            }));
+
+            const materialsForExport = await ensureMaterialsByIds(collectBomMaterialIds(groupsForFlat));
+            const flatRows = flattenBomGroupsForExport(groupsForFlat, materialsForExport, {
+              unitValueToLabel,
+              yesLabel: IMPORT_YES_NO_OPTIONS[0],
+              noLabel: IMPORT_YES_NO_OPTIONS[1],
+              approvalStatusLabels: {
+                draft: t('app.master-data.bom.statusDraft'),
+                pending: t('app.master-data.bom.statusPending'),
+                approved: t('app.master-data.bom.statusApproved'),
+                rejected: t('app.master-data.bom.statusRejected'),
+              },
+            });
+            if (!flatRows.length) {
+              messageApi.warning(t('app.master-data.noExportData'));
+              return;
+            }
+
+            const exportColumns = [
+              { key: 'bomCode', title: t('app.master-data.bom.importHeaderBomCode') },
+              { key: 'bomName', title: t('app.master-data.bom.importHeaderBomName') },
+              { key: 'version', title: t('app.master-data.bom.importHeaderVersion') },
+              { key: 'approvalStatus', title: t('app.master-data.bom.approvalStatusTitle') },
+              { key: 'baseQuantity', title: t('app.master-data.bom.importHeaderBaseQuantity') },
+              { key: 'parentCode', title: t('app.master-data.bom.importHeaderParentCode') },
+              { key: 'componentCode', title: t('app.master-data.bom.importHeaderComponentCode') },
+              { key: 'quantity', title: t('app.master-data.bom.importHeaderQuantity') },
+              { key: 'unit', title: t('app.master-data.bom.importHeaderUnit') },
+              { key: 'wasteRate', title: t('app.master-data.bom.importHeaderWasteRate') },
+              { key: 'isRequired', title: t('app.master-data.bom.importHeaderIsRequired') },
+              { key: 'isActive', title: t('app.master-data.bom.importHeaderIsActive') },
+              { key: 'remark', title: t('app.master-data.bom.importHeaderRemark') },
+              { key: 'materialName', title: t('app.master-data.bom.importHeaderMaterialName') },
+              { key: 'specification', title: t('app.master-data.bom.importHeaderSpecification') },
+              { key: 'baseUnit', title: t('app.master-data.bom.importHeaderBaseUnit') },
+              { key: 'processRouteCode', title: t('app.master-data.bom.importHeaderProcessRouteCode') },
+              { key: 'processRouteName', title: t('app.master-data.bom.importHeaderProcessRouteName') },
+              ...[...bomListCustomFields]
+                .filter((f) => f?.is_active !== false && f?.code)
+                .sort((a, b) => Number(a?.sort_order ?? 0) - Number(b?.sort_order ?? 0))
+                .map((f) => ({
+                  key: `custom_${f.code}`,
+                  title: String(f.label || f.name || f.code),
+                })),
+            ];
+
             await downloadRecordsAsXlsx(
-              toExport as Array<Record<string, unknown>>,
+              flatRows as Array<Record<string, unknown>>,
               `BOM_${new Date().toISOString().slice(0, 10)}.xlsx`,
+              { columns: exportColumns },
             );
-            messageApi.success(t('common.exportSuccess', { count: toExport.length }));
+            messageApi.success(t('common.exportSuccess', { count: flatRows.length }));
           } catch (error: any) {
             messageApi.error(error?.message || t('app.master-data.exportFailed'));
           }

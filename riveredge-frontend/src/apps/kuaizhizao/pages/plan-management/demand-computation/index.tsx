@@ -119,6 +119,7 @@ import {
 } from '../../../utils/demandComputationLifecycle'
 import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor, buildDemandBusinessModeValueEnum } from '../../../utils/businessMode'
 import { getDemandTypeLabel, renderDemandTypeMarkerTag } from '../../../utils/demandType'
+import { DemandComputationSourceCode } from '../../../../../components/linked-document-code/DemandComputationSourceCode'
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag'
 import { listDemands, getDemand, pushDemandToComputation, previewPushDemandToComputation, Demand, DemandStatus, ReviewStatus } from '../../../services/demand'
 import {
@@ -2408,29 +2409,17 @@ const DemandComputationPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.demandComputation.colSourceNo'),
       dataIndex: 'demand_code',
-      width: 168,
+      width: 200,
       hideInSearch: false,
       sorter: true,
       render: (_: unknown, record: DemandComputation) => (
-        <Space size={4}>
-          <span>{record.demand_code ?? '-'}</span>
-          {record.demand_code ? (
-            <Tooltip title={t('field.invitationCode.copy')}>
-              <Button
-                type="link"
-                size="small"
-                icon={<CopyOutlined style={{ fontSize: 12 }} />}
-                onClick={e => {
-                  e.stopPropagation()
-                  void navigator.clipboard.writeText(record.demand_code!).then(
-                    () => messageApi.success(t('app.kuaizhizao.demandComputation.copied')),
-                    () => messageApi.error(t('app.kuaizhizao.demandComputation.copyFailed'))
-                  )
-                }}
-              />
-            </Tooltip>
-          ) : null}
-        </Space>
+        <DemandComputationSourceCode
+          demandCode={record.demand_code}
+          demandType={record.demand_type}
+          demandId={record.demand_id}
+          demandIds={record.demand_ids}
+          sourceId={record.source_id}
+        />
       ),
     },
     {
@@ -2450,10 +2439,15 @@ const DemandComputationPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.demandComputation.colBusinessMode'),
       dataIndex: 'business_mode',
-      width: 100,
+      width: 140,
+      uniTableKeepWidth: true,
       valueType: 'select',
       sorter: true,
-      valueEnum: buildDemandBusinessModeValueEnum(),
+      valueEnum: buildDemandBusinessModeValueEnum((mode) => {
+        if (mode === 'MTS') return t('app.kuaizhizao.demandManagement.businessModeMts');
+        if (mode === 'MTO') return t('app.kuaizhizao.demandManagement.businessModeMto');
+        return t('app.kuaizhizao.demandManagement.businessModeAto');
+      }),
       hideInSearch: false,
     },
     {
@@ -4193,23 +4187,13 @@ const DemandComputationPage: React.FC = () => {
                             key: 'demand',
                             label: t('app.kuaizhizao.demandComputation.colSourceNo'),
                             children: (
-                              <Space size={4}>
-                                <span>{currentComputation.demand_code ?? '—'}</span>
-                                {currentComputation.demand_code ? (
-                                  <Tooltip title={t('field.invitationCode.copy')}>
-                                    <Button
-                                      type="link"
-                                      size="small"
-                                      icon={<CopyOutlined style={{ fontSize: 12 }} />}
-                                      onClick={() =>
-                                        void navigator.clipboard
-                                          .writeText(currentComputation.demand_code!)
-                                          .then(() => messageApi.success(t('app.kuaizhizao.demandComputation.copied')), () => messageApi.error(t('app.kuaizhizao.demandComputation.copyFailed')))
-                                      }
-                                    />
-                                  </Tooltip>
-                                ) : null}
-                              </Space>
+                              <DemandComputationSourceCode
+                                demandCode={currentComputation.demand_code}
+                                demandType={currentComputation.demand_type}
+                                demandId={currentComputation.demand_id}
+                                demandIds={currentComputation.demand_ids}
+                                sourceId={currentComputation.source_id}
+                              />
                             ),
                           },
                           {

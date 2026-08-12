@@ -19,7 +19,8 @@ import {
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
-import { App, Button, Tag, Table, Select, Modal, Row, Col, Typography, Empty, Spin, Space, Tabs } from 'antd';
+import { App, Button, Table, Select, Modal, Row, Col, Typography, Empty, Spin, Space, Tabs } from 'antd';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { PlusOutlined } from '@ant-design/icons';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -423,7 +424,7 @@ const ToolLedgerPage: React.FC = () => {
             报废: { text: t('app.kuaizhizao.toolLedger.statusScrapped'), color: 'error' },
           };
           const config = statusMap[statusKey] || { text: statusKey || '-', color: 'default' };
-          return <Tag color={config.color}>{config.text}</Tag>;
+          return <MarkerTag color={config.color}>{config.text}</MarkerTag>;
         },
       },
       { title: t('app.kuaizhizao.toolLedger.colTotalUsageCount'), dataIndex: 'total_usage_count' },
@@ -592,7 +593,7 @@ const ToolLedgerPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<Tool>
           headerTitle={t('app.kuaizhizao.toolLedger.title')}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-ledger"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-ledger-equip-rank-v1"
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}

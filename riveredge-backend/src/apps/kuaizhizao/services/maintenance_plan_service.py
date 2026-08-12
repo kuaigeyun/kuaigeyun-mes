@@ -147,19 +147,24 @@ class MaintenancePlanService:
             if not equipment:
                 raise ValidationError(f"设备不存在: {primary['uuid']}")
             
-            # 如果没有提供计划编号，自动生成
-            if not data.plan_no:
+            # 如果没有提供计划编号，自动生成（必须写回 payload，勿只改 data）
+            plan_no = str(payload.get("plan_no") or "").strip()
+            if not plan_no:
                 try:
-                    data.plan_no = await CodeGenerationService.generate_code(
+                    plan_no = await CodeGenerationService.generate_code(
                         tenant_id=tenant_id,
                         rule_code="maintenance_plan_code",
-                        context=None
+                        context=None,
                     )
-                except ValidationError:
-                    # 如果编码规则不存在，使用默认编码格式
-                    timestamp = resolve_business_datetime().strftime("%Y%m%d%H%M%S")
-                    data.plan_no = f"MP{timestamp}"
-            
+                except Exception:
+                    # 编码规则缺失/未启用时降级，避免创建失败
+                    plan_no = f"MP{resolve_business_datetime().strftime('%Y%m%d%H%M%S')}"
+                plan_no = str(plan_no or "").strip()
+                if not plan_no:
+                    plan_no = f"MP{resolve_business_datetime().strftime('%Y%m%d%H%M%S')}"
+            payload["plan_no"] = plan_no
+            data.plan_no = plan_no
+
             plan = MaintenancePlan(
                 tenant_id=tenant_id,
                 **payload,

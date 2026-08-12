@@ -11,6 +11,8 @@ import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Modal, Form, Space, Typography, Tooltip, Card, theme, Descriptions } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { DeleteOutlined, EyeOutlined, PrinterOutlined, FileTextOutlined, EditOutlined, HighlightOutlined } from '@ant-design/icons';
 import { useCompanySealSettings } from '../CompanySealSettingsPanel';
 import { UniTable } from '../../../../components/uni-table';
@@ -494,7 +496,7 @@ const PrintTemplateListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<PrintTemplate>[] = [
+  const columns = useMemo<ProColumns<PrintTemplate>[]>(() => alignProColumns([
     {
       title: t('pages.system.printTemplates.columnName'),
       dataIndex: 'name',
@@ -502,11 +504,14 @@ const PrintTemplateListPage: React.FC = () => {
       ellipsis: true,
       render: (_, record) => resolvePresetPrintTemplateName(record, t),
     },
-    { title: t('pages.system.printTemplates.columnCode'), dataIndex: 'code', width: 150, ellipsis: true },
+    { title: t('pages.system.printTemplates.columnCode'), dataIndex: 'code', width: 150, minWidth: 150, uniTableKeepWidth: true, resizable: false, ellipsis: true },
     {
       title: t('pages.system.printTemplates.columnType'),
       dataIndex: 'type',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         pdf: { text: t('pages.system.printTemplates.typePdf') },
@@ -517,45 +522,53 @@ const PrintTemplateListPage: React.FC = () => {
       },
       render: (_, record) => {
         const typeInfo = getTypeInfo(t, record.type);
-        return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
+        return renderSystemTypeMarker(typeInfo.text, typeInfo.color);
       },
     },
     {
       title: t('pages.system.printTemplates.columnActive'),
       dataIndex: 'is_active',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('pages.system.printTemplates.enabled'), status: 'Success' },
         false: { text: t('pages.system.printTemplates.disabled'), status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('pages.system.printTemplates.enabled') : t('pages.system.printTemplates.disabled')}
-        </Tag>
-      ),
+      render: (_, record) =>
+        renderSystemActiveTag(t, record.is_active, 'pages.system.printTemplates.enabled', 'pages.system.printTemplates.disabled'),
     },
     {
       title: t('pages.system.printTemplates.columnDefault'),
       dataIndex: 'is_default',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
-      render: (_, record) => (
-        <Tag color={record.is_default ? 'processing' : 'default'}>
-          {record.is_default ? t('pages.system.printTemplates.defaultTag') : '-'}
-        </Tag>
-      ),
+      render: (_, record) =>
+        record.is_default
+          ? renderSystemTypeMarker(t('pages.system.printTemplates.defaultTag'), 'processing')
+          : '-',
     },
     {
       title: t('pages.system.printTemplates.columnUsage'),
       dataIndex: 'usage_count',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
     },
     {
       title: t('pages.system.printTemplates.columnLastUsed'),
       dataIndex: 'last_used_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
     },
@@ -563,13 +576,18 @@ const PrintTemplateListPage: React.FC = () => {
       title: t('pages.system.printTemplates.columnCreatedAt'),
       dataIndex: 'created_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
     },
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
       fixed: 'right',
+      hideInSearch: true,
       uniActionRenderOptions: { directMax: 4 },
       render: (_, record) =>
         [
@@ -604,7 +622,7 @@ const PrintTemplateListPage: React.FC = () => {
             </Popconfirm>,
           ],
     },
-  ];
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleView, handleEdit, handleOpenDesigner, handleDelete]);
 
   /**
    * 详情列定义
@@ -670,7 +688,7 @@ const PrintTemplateListPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<PrintTemplate>
-          columnPersistenceId="pages.system.print-templates.list"
+          columnPersistenceId="pages.system.print-templates.list-v1"
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {

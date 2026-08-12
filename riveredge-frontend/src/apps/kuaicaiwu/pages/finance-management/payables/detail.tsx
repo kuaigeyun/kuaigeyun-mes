@@ -58,6 +58,8 @@ const PayableDetail: React.FC = () => {
 
   const payablePerms = useResourcePermissions(PAYABLE_RESOURCE);
 
+  const purchaseInvoicePerms = useResourcePermissions('kuaicaiwu:purchase-invoice');
+
   const { id } = useParams<{ id: string }>();
 
   const navigate = useNavigate();
@@ -156,6 +158,20 @@ const PayableDetail: React.FC = () => {
 
 
 
+  const openInvoiceFromPayable = () => {
+
+    if (!data?.id) return;
+
+    navigate('/apps/kuaicaiwu/finance-management/purchase-invoices', {
+
+      state: { pullPayableId: data.id },
+
+    });
+
+  };
+
+
+
   const pageActions = data ? (
 
     <>
@@ -189,6 +205,12 @@ const PayableDetail: React.FC = () => {
         onSuccess={loadData}
 
       />
+
+      {purchaseInvoicePerms.canCreate ? (
+
+        <Button onClick={openInvoiceFromPayable}>{t(`${P}.createInvoice`)}</Button>
+
+      ) : null}
 
       {data.status !== '已结清' && payablePerms.canUpdate ? (
 

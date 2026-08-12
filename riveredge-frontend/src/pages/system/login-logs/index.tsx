@@ -12,6 +12,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { Tag, Space, Drawer, Typography, Descriptions, App, Button } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemStatusTag } from '../utils/systemListPresentation';
 import { EyeOutlined, BarChartOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea';
@@ -80,16 +82,16 @@ const LoginLogsPage: React.FC = () => {
   };
 
   /**
-   * 登录状态标签
+   * 登录状态标签（列表 lifecycle 列）
    */
-  const getLoginStatusTag = (status: string) => {
+  const renderLoginStatusTag = (status: string) => {
     if (status === 'success') {
-      return <Tag color="success">{t('pages.system.loginLogs.statusSuccess')}</Tag>;
-    } else if (status === 'failed') {
-      return <Tag color="error">{t('pages.system.loginLogs.statusFailed')}</Tag>;
-    } else {
-      return <Tag>{status}</Tag>;
+      return renderSystemStatusTag(t('pages.system.loginLogs.statusSuccess'), 'success');
     }
+    if (status === 'failed') {
+      return renderSystemStatusTag(t('pages.system.loginLogs.statusFailed'), 'error');
+    }
+    return renderSystemStatusTag(status);
   };
 
   /**
@@ -139,7 +141,7 @@ const LoginLogsPage: React.FC = () => {
     {
       title: t('pages.system.loginLogs.loginStatus'),
       dataIndex: 'login_status',
-      render: (_: unknown, record: LoginLog) => getLoginStatusTag(record.login_status),
+      render: (_: unknown, record: LoginLog) => renderLoginStatusTag(record.login_status),
     },
     {
       title: t('pages.system.loginLogs.failureReason'),
@@ -196,13 +198,16 @@ const LoginLogsPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<LoginLog>[] = [
+  const columns = useMemo<ProColumns<LoginLog>[]>(() => alignProColumns([
     {
       title: t('pages.system.loginLogs.username'),
       dataIndex: 'username',
       key: 'username',
       ellipsis: true,
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
       title: t('pages.system.loginLogs.loginIp'),
@@ -210,6 +215,9 @@ const LoginLogsPage: React.FC = () => {
       key: 'login_ip',
       ellipsis: true,
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
       title: t('pages.system.loginLogs.loginLocation'),
@@ -226,6 +234,9 @@ const LoginLogsPage: React.FC = () => {
       ellipsis: true,
       search: false,
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
       title: t('pages.system.loginLogs.loginBrowser'),
@@ -234,18 +245,6 @@ const LoginLogsPage: React.FC = () => {
       ellipsis: true,
       search: false,
       width: 150,
-    },
-    {
-      title: t('pages.system.loginLogs.loginStatus'),
-      dataIndex: 'login_status',
-      key: 'login_status',
-      valueType: 'select',
-      valueEnum: {
-        success: { text: t('pages.system.loginLogs.statusSuccess') },
-        failed: { text: t('pages.system.loginLogs.statusFailed') },
-      },
-      width: 100,
-      render: (_: any, record: LoginLog) => getLoginStatusTag(record.login_status),
     },
     {
       title: t('pages.system.loginLogs.failureReason'),
@@ -264,14 +263,34 @@ const LoginLogsPage: React.FC = () => {
       sorter: true,
       render: (_: any, record: LoginLog) => formatDateTimeBySiteSetting(record.created_at),
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
-  ];
+    {
+      title: t('pages.system.loginLogs.loginStatus'),
+      dataIndex: 'login_status',
+      key: 'lifecycle',
+      valueType: 'select',
+      valueEnum: {
+        success: { text: t('pages.system.loginLogs.statusSuccess') },
+        failed: { text: t('pages.system.loginLogs.statusFailed') },
+      },
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      fixed: 'right',
+      hideInSearch: true,
+      render: (_: any, record: LoginLog) => renderLoginStatusTag(record.login_status),
+    },
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t]);
 
   return (
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<LoginLog>
-          columnPersistenceId="pages.system.login-logs"
+          columnPersistenceId="pages.system.login-logs.list-v1"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

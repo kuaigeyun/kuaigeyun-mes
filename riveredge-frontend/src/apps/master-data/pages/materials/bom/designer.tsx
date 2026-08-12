@@ -1298,58 +1298,76 @@ const BOMDesignerPage: React.FC = () => {
   }, [handleNodeSelectCallback]);
 
   /**
-   * 保存节点配置
+   * 保存节点配置（仅写本地树；已审核 BOM 需再点「另存为新版本」落库）
    */
   const handleSaveNodeConfig = () => {
     if (!selectedNodeId || !mindMapDataRef.current) return;
 
-    nodeConfigForm.validateFields().then((values) => {
-      const material = materials.find(m => m.id === values.materialId);
-      const code = material ? ((material as any).mainCode ?? (material as any).main_code ?? material.code ?? '') : '';
-
-      const groupIds = collectBomGroupIds(mindMapDataRef.current);
-      const updated = updateNode(mindMapDataRef.current!, selectedNodeId, (node: MindMapNode) => {
-        let configurableGroupId = values.configurableGroupId ?? node.configurableGroupId;
-        if (values.isConfigurable && !isSafeBomGroupId(configurableGroupId)) {
-          configurableGroupId = nextBomGroupId(groupIds.configurable);
-          groupIds.configurable.push(configurableGroupId);
+    nodeConfigForm
+      .validateFields()
+      .then((values) => {
+        const existingNode = findNode(mindMapDataRef.current!, selectedNodeId);
+        const material =
+          materials.find((m) => m.id === values.materialId) ??
+          (selectedMaterialInForm?.id === values.materialId ? selectedMaterialInForm : null) ??
+          (existingNode?.material &&
+          (existingNode.material.id === values.materialId ||
+            existingNode.componentId === values.materialId)
+            ? existingNode.material
+            : null);
+        if (!material) {
+          messageApi.error(t('app.master-data.bom.materialNotSelected'));
+          return;
         }
-        let alternativeGroupId: number | null = null;
-        if (values.isAlternative) {
-          alternativeGroupId = isSafeBomGroupId(node.alternativeGroupId)
-            ? node.alternativeGroupId
-            : nextBomGroupId(groupIds.alternative);
-          if (!isSafeBomGroupId(node.alternativeGroupId)) {
-            groupIds.alternative.push(alternativeGroupId);
+        const code =
+          (material as any).mainCode ?? (material as any).main_code ?? material.code ?? '';
+
+        const groupIds = collectBomGroupIds(mindMapDataRef.current);
+        const updated = updateNode(mindMapDataRef.current!, selectedNodeId, (node: MindMapNode) => {
+          let configurableGroupId = values.configurableGroupId ?? node.configurableGroupId;
+          if (values.isConfigurable && !isSafeBomGroupId(configurableGroupId)) {
+            configurableGroupId = nextBomGroupId(groupIds.configurable);
+            groupIds.configurable.push(configurableGroupId);
+          }
+          let alternativeGroupId: number | null = null;
+          if (values.isAlternative) {
+            alternativeGroupId = isSafeBomGroupId(node.alternativeGroupId)
+              ? node.alternativeGroupId
+              : nextBomGroupId(groupIds.alternative);
+            if (!isSafeBomGroupId(node.alternativeGroupId)) {
+              groupIds.alternative.push(alternativeGroupId);
+            }
+          }
+          return {
+            ...node,
+            value: `${code} - ${material.name}`,
+            material,
+            quantity: values.quantity,
+            unit: values.unit,
+            wasteRate: values.wasteRate || 0,
+            isRequired: values.isRequired !== false,
+            issueMethod: values.issueMethod ?? 'pick',
+            componentId: values.materialId,
+            isConfigurable: values.isConfigurable ?? false,
+            configurableGroupId: values.isConfigurable ? configurableGroupId : null,
+            isDefaultConfigurable: false,
+            isAlternative: values.isAlternative ?? false,
+            alternativeGroupId,
+          };
+        });
+
+        if (updated) {
+          handleUpdateBOM(updated);
+          addDirtyNode(selectedNodeId);
+          messageApi.success(t('app.master-data.bom.configUpdated'));
+          if (selectedNodeId && values.materialId) {
+            loadSemiProductChildrenIfNeeded(selectedNodeId);
           }
         }
-        return {
-          ...node,
-          value: material ? `${code} - ${material.name}` : t('app.master-data.bom.materialNotSelected'),
-          material,
-          quantity: values.quantity,
-          unit: values.unit,
-          wasteRate: values.wasteRate || 0,
-          isRequired: values.isRequired !== false,
-          issueMethod: values.issueMethod ?? 'pick',
-          componentId: values.materialId,
-          isConfigurable: values.isConfigurable ?? false,
-          configurableGroupId: values.isConfigurable ? configurableGroupId : null,
-          isDefaultConfigurable: false,
-          isAlternative: values.isAlternative ?? false,
-          alternativeGroupId,
-        };
+      })
+      .catch(() => {
+        messageApi.warning(t('app.master-data.bom.checkFormRequired'));
       });
-
-      if (updated) {
-        handleUpdateBOM(updated);
-        addDirtyNode(selectedNodeId);
-        messageApi.success(t('app.master-data.bom.configUpdated'));
-        if (selectedNodeId && values.materialId) {
-          loadSemiProductChildrenIfNeeded(selectedNodeId);
-        }
-      }
-    });
   };
 
   /**
@@ -1370,6 +1388,7 @@ const BOMDesignerPage: React.FC = () => {
         items.push({
           parentCode,
           componentCode: compCode,
+          componentId: child.componentId,
           quantity: child.quantity || 1,
           unit: child.unit ?? undefined,
           wasteRate: child.wasteRate ?? undefined,
@@ -1402,6 +1421,7 @@ const BOMDesignerPage: React.FC = () => {
         items.push({
           parentCode,
           componentCode: compCode,
+          componentId: child.componentId,
           quantity: child.quantity || 1,
           unit: child.unit ?? undefined,
           wasteRate: child.wasteRate ?? undefined,
@@ -1599,17 +1619,16 @@ const BOMDesignerPage: React.FC = () => {
 
   /**
    * 另存为新版本（已审核BOM场景：在「最大版本」上升版后 batchImport，而非当前选中版本）。
-   * 仅导出根级子件，避免同层级未改动的半成品被误升版。
-   * 若与当前版本完全无变动则提示无需升版并中止。
+   * 按本会话脏节点定位受影响父件（含嵌套半成品）；仅对子件相对服务端确有差异的父件升版。
    */
   const handleSaveAsNewVersion = async () => {
     const latestTree = mindMapDataRef.current ?? mindMapData;
     if (!materialId || !rootMaterial || !latestTree) return;
     const materialIdNum = parseInt(materialId);
+    const rootMaterialId = rootMaterial.id ?? materialIdNum;
 
-    // 使用 ref 中的最新树导出，避免添加替代料/配置位后 state 未刷新导致节点丢失
-    const items = getRootLevelBOMItems(latestTree as MindMapNode, rootMaterial);
-    if (items.length === 0) {
+    const rootItems = getRootLevelBOMItems(latestTree as MindMapNode, rootMaterial);
+    if (rootItems.length === 0) {
       messageApi.warning(t('app.master-data.bom.addAtLeastOneChildMaterial'));
       return;
     }
@@ -1620,87 +1639,169 @@ const BOMDesignerPage: React.FC = () => {
       return;
     }
 
+    const normLine = (o: {
+      componentId?: number | null;
+      componentCode?: string;
+      quantity?: number;
+      unit?: string;
+      wasteRate?: number;
+      isRequired?: boolean;
+      isConfigurable?: boolean;
+      configurableGroupId?: string | number | null;
+      isDefaultConfigurable?: boolean;
+      isAlternative?: boolean;
+      alternativeGroupId?: string | number | null;
+    }) => ({
+      id: Number(o.componentId ?? 0),
+      code: String(o.componentCode ?? '').trim(),
+      qty: Number(o.quantity ?? 1),
+      unit: String(o.unit ?? '').trim(),
+      waste: Number(o.wasteRate ?? 0),
+      required: o.isRequired !== false,
+      config: o.isConfigurable === true,
+      groupId: o.configurableGroupId ?? null,
+      defaultCfg: o.isDefaultConfigurable === true,
+      alt: o.isAlternative === true,
+      altGroupId: o.alternativeGroupId ?? null,
+    });
+
+    const linesEqual = (
+      serverBoms: any[],
+      partItems: any[],
+    ) => {
+      const currentItems = serverBoms
+        .map((b: any) => {
+          const compId = Number(b.componentId ?? b.component_id ?? 0);
+          const fromList = materials.find((m) => m.id === compId);
+          const fromTree = findNodeByComponentId(latestTree as MindMapNode, compId);
+          const treeMat = fromTree?.material as any;
+          const compCode =
+            (fromList as any)?.mainCode ??
+            (fromList as any)?.main_code ??
+            treeMat?.mainCode ??
+            treeMat?.main_code ??
+            treeMat?.code ??
+            '';
+          return normLine({
+            componentId: compId,
+            componentCode: compCode,
+            quantity: b.quantity,
+            unit: b.unit,
+            wasteRate: b.wasteRate ?? b.waste_rate,
+            isRequired: b.isRequired ?? b.is_required,
+            isConfigurable: b.isConfigurable ?? b.is_configurable,
+            configurableGroupId: b.configurableGroupId ?? b.configurable_group_id ?? null,
+            isDefaultConfigurable: b.isDefaultConfigurable ?? b.is_default_configurable,
+            isAlternative: b.isAlternative ?? b.is_alternative,
+            alternativeGroupId: b.alternativeGroupId ?? b.alternative_group_id ?? null,
+          });
+        })
+        .sort((a, b) => (a.id || 0) - (b.id || 0) || a.code.localeCompare(b.code));
+      const newItems = partItems
+        .map((o: any) => normLine(o))
+        .sort((a, b) => (a.id || 0) - (b.id || 0) || a.code.localeCompare(b.code));
+      if (currentItems.length !== newItems.length) return false;
+      return currentItems.every((c, i) => {
+        const n = newItems[i];
+        const sameKey =
+          (c.id > 0 && n.id > 0 && c.id === n.id) ||
+          (!!c.code && !!n.code && c.code === n.code);
+        return (
+          sameKey &&
+          c.qty === n.qty &&
+          c.unit === n.unit &&
+          c.waste === n.waste &&
+          c.required === n.required &&
+          c.config === n.config &&
+          (c.groupId ?? '') === (n.groupId ?? '') &&
+          c.defaultCfg === n.defaultCfg &&
+          c.alt === n.alt &&
+          (c.altGroupId ?? '') === (n.altGroupId ?? '')
+        );
+      });
+    };
+
     try {
-      // 取当前选中版本的数据用于「有无变动」对比
-      const currentVersionBoms = await bomApi.getByMaterial(materialIdNum, resolvedVersion ?? undefined);
-      if (!currentVersionBoms?.length) {
-        messageApi.error(t('app.master-data.bom.cannotUpgrade'));
-        return;
+      setSaving(true);
+      const affected = getAffectedParentMaterialIds(
+        latestTree as MindMapNode,
+        rootMaterialId,
+        dirtyNodeIdsRef.current,
+      );
+      const versionRemark = buildVersionRemark(dirtyNodeIdsRef.current, latestTree as MindMapNode);
+
+      type ReviseJob = {
+        materialId: number;
+        isRoot: boolean;
+        partItems: any[];
+      };
+      const jobs: ReviseJob[] = [];
+
+      for (const { materialId: parentMaterialId } of affected) {
+        const isRoot = parentMaterialId === rootMaterialId;
+        const node = isRoot
+          ? (latestTree as MindMapNode)
+          : findNodeByComponentId(latestTree as MindMapNode, parentMaterialId);
+        if (!node) continue;
+        const partItems = isRoot
+          ? getRootLevelBOMItems(latestTree as MindMapNode, rootMaterial)
+          : getDirectChildrenBOMItems(node);
+        if (partItems.length === 0) continue;
+
+        // 拉全量再按「根=当前查看版本 / 半成品=默认或最新」过滤，避免多版本行混比
+        const allForCompare = await bomApi.getByMaterial(
+          parentMaterialId,
+          undefined,
+          false,
+          true,
+        );
+        if (!allForCompare?.length) {
+          if (isRoot) {
+            messageApi.error(t('app.master-data.bom.cannotUpgrade'));
+            return;
+          }
+          // 半成品尚无 BOM 行却树里有子件：视为有变更，升版时由 batchImport 写入
+          jobs.push({ materialId: parentMaterialId, isRoot, partItems });
+          continue;
+        }
+        const compareVersion = isRoot
+          ? (resolvedVersion ?? resolveVersionFromBoms(allForCompare))
+          : resolveVersionFromBoms(allForCompare);
+        const currentVersionBoms = allForCompare.filter(
+          (b) => String(b.version ?? '') === String(compareVersion),
+        );
+        if (!currentVersionBoms.length) {
+          jobs.push({ materialId: parentMaterialId, isRoot, partItems });
+          continue;
+        }
+        if (!linesEqual(currentVersionBoms, partItems)) {
+          jobs.push({ materialId: parentMaterialId, isRoot, partItems });
+        }
       }
 
-      const norm = (o: {
-        componentCode: string;
-        quantity?: number;
-        unit?: string;
-        wasteRate?: number;
-        isRequired?: boolean;
-        isConfigurable?: boolean;
-        configurableGroupId?: string | null;
-        isDefaultConfigurable?: boolean;
-      }) => ({
-        code: String(o.componentCode ?? '').trim(),
-        qty: Number(o.quantity ?? 1),
-        unit: String(o.unit ?? '').trim(),
-        waste: Number(o.wasteRate ?? 0),
-        required: o.isRequired !== false,
-        config: o.isConfigurable === true,
-        groupId: o.configurableGroupId ?? null,
-        defaultCfg: o.isDefaultConfigurable === true,
-      });
-      const currentItems = currentVersionBoms.map((b: any) => {
-        const compId = b.componentId ?? b.component_id;
-        const compCode = materials.find((m) => m.id === compId)?.mainCode ?? (materials.find((m) => m.id === compId) as any)?.main_code ?? '';
-        return norm({
-          componentCode: compCode,
-          quantity: b.quantity,
-          unit: b.unit,
-          wasteRate: b.wasteRate ?? b.waste_rate,
-          isRequired: b.isRequired ?? b.is_required,
-          isConfigurable: b.isConfigurable ?? b.is_configurable,
-          configurableGroupId: b.configurableGroupId ?? b.configurable_group_id ?? null,
-          isDefaultConfigurable: b.isDefaultConfigurable ?? b.is_default_configurable,
-        });
-      }).sort((a, b) => a.code.localeCompare(b.code));
-      const newItems = items.map((o: any) => norm(o)).sort((a, b) => a.code.localeCompare(b.code));
-      const noChange =
-        currentItems.length === newItems.length &&
-        currentItems.every((c, i) =>
-          c.code === newItems[i].code &&
-          c.qty === newItems[i].qty &&
-          c.unit === newItems[i].unit &&
-          c.waste === newItems[i].waste &&
-          c.required === newItems[i].required &&
-          c.config === newItems[i].config &&
-          (c.groupId ?? '') === (newItems[i].groupId ?? '') &&
-          c.defaultCfg === newItems[i].defaultCfg
-        );
-      if (noChange) {
+      if (jobs.length === 0) {
         messageApi.warning(t('app.master-data.bom.noChangeNoNeedRevise'));
         return;
       }
 
-      setSaving(true);
-      const rootMaterialId = rootMaterial.id ?? materialIdNum;
-      const affected = getAffectedParentMaterialIds(latestTree as MindMapNode, rootMaterialId, dirtyNodeIdsRef.current);
-      const versionRemark = buildVersionRemark(dirtyNodeIdsRef.current, latestTree as MindMapNode);
-
       let rootNewVersion = '';
-      for (const { materialId } of affected) {
-        const isRoot = materialId === rootMaterialId;
-        const node = isRoot ? (latestTree as MindMapNode) : findNodeByComponentId(latestTree as MindMapNode, materialId);
-        if (!node) continue;
-        const partItems = isRoot ? getRootLevelBOMItems(latestTree as MindMapNode, rootMaterial) : getDirectChildrenBOMItems(node);
-        const allBoms = await bomApi.getByMaterial(materialId, undefined, false, true);
+      for (const job of jobs) {
+        const allBoms = await bomApi.getByMaterial(job.materialId, undefined, false, true);
         if (!allBoms?.length) {
           messageApi.error(t('app.master-data.bom.cannotUpgrade'));
-          setSaving(false);
           return;
         }
         const sorted = [...allBoms].sort(compareVersionDesc);
         const maxBom = sorted[0];
         const newBom = await bomApi.revise(maxBom.uuid, undefined, versionRemark || undefined);
-        await bomApi.batchImport({ items: partItems, version: newBom.version, versionRemark: versionRemark || undefined, baseQuantity: bomBaseQuantity, bomName });
-        if (isRoot) rootNewVersion = newBom.version;
+        await bomApi.batchImport({
+          items: job.partItems,
+          version: newBom.version,
+          versionRemark: versionRemark || undefined,
+          baseQuantity: bomBaseQuantity,
+          bomName,
+        });
+        if (job.isRoot) rootNewVersion = newBom.version;
       }
 
       dirtyNodeIdsRef.current.clear();
@@ -1711,12 +1812,16 @@ const BOMDesignerPage: React.FC = () => {
             next.set('version', rootNewVersion);
             return next;
           },
-          { replace: true }
+          { replace: true },
         );
         setResolvedVersion(rootNewVersion);
       }
 
-      messageApi.success(t('app.master-data.bom.saveAsNewVersion', { version: (rootNewVersion || resolvedVersion) ?? '' }));
+      messageApi.success(
+        t('app.master-data.bom.saveAsNewVersion', {
+          version: (rootNewVersion || resolvedVersion) ?? '',
+        }),
+      );
       await loadBOMData();
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.bom.saveAsNewVersionFailed'));

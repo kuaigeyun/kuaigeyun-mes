@@ -9,9 +9,13 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Space, Typography, theme as AntdTheme } from 'antd';
+import { App, Popconfirm, Button, Space, theme as AntdTheme } from 'antd';
 import { DeleteOutlined, CalendarOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UniTableStackedPrimaryCell,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { PerformanceConfigDetailDrawer } from '../shared/performanceConfigDetailDrawer';
@@ -23,7 +27,11 @@ import { getPerformanceConfigActiveLifecycle } from '../../../utils/performanceL
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
-import { getPerformanceActiveValueEnum, renderActiveTag } from '../components/performanceMeta';
+import {
+  getPerformanceActiveValueEnum,
+  renderActiveTag,
+  renderPerformanceTypeMarker,
+} from '../components/performanceMeta';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   normalizePerformanceListResponse,
@@ -159,19 +167,50 @@ const HolidaysPage: React.FC = () => {
     return alignProColumns<Holiday>([
     {
       title: t('app.kuaizhizao.performance.holidays.columns.holidayName'),
+      key: 'performance_holiday_stacked',
       dataIndex: 'name',
-      width: 200,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
       sorter: true,
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.name ?? '') }} ellipsis>
-          {r.name ?? '-'}
-        </Typography.Text>
+        <UniTableStackedPrimaryCell
+          primary={String(r.name ?? '').trim() || '-'}
+          secondary={r.holidayDate ? String(r.holidayDate) : '-'}
+          secondaryCopyable={false}
+        />
       ),
     },
-    { title: t('app.kuaizhizao.performance.holidays.columns.holidayDate'), dataIndex: 'holidayDate', width: 132, uniTableKeepWidth: true, valueType: 'date', sorter: true },
-    { title: t('app.kuaizhizao.performance.holidays.columns.holidayType'), dataIndex: 'holidayType', width: 150, sorter: true },
-    { title: t('app.kuaizhizao.performance.common.columns.description'), dataIndex: 'description', ellipsis: true, hideInSearch: true },
+    {
+      title: t('app.kuaizhizao.performance.holidays.columns.holidayDate'),
+      dataIndex: 'holidayDate',
+      width: 132,
+      minWidth: 132,
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'date',
+      sorter: true,
+      hideInTable: true,
+    },
+    {
+      title: t('app.kuaizhizao.performance.holidays.columns.holidayType'),
+      dataIndex: 'holidayType',
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
+      sorter: true,
+      render: (_, r) => renderPerformanceTypeMarker(r.holidayType),
+    },
+    {
+      title: t('app.kuaizhizao.performance.common.columns.description'),
+      dataIndex: 'description',
+      width: 200,
+      minWidth: 200,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+    },
     ...customFieldColumns,
     {
       title: t('app.kuaizhizao.performance.common.active.enabled'),
@@ -182,10 +221,22 @@ const HolidaysPage: React.FC = () => {
     },
     ...buildDocumentAuditColumns<Holiday>(t),
     {
+      title: t('app.kuaizhizao.performance.common.columns.status'),
+      dataIndex: 'isActive',
+      width: 88,
+      minWidth: 88,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      render: (_, r) => renderActiveTag(t, r.isActive),
+    },
+    {
       title: t('app.kuaizhizao.performance.common.columns.actions'),
+      key: 'action',
       valueType: 'option',
       width: 150,
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => (
         <Space>
           <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
@@ -212,7 +263,7 @@ const HolidaysPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.performance.holidays.pageTitle')}
           actionRef={actionRef}
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.performance.holidays"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.holidays.v1"
           request={async (params, sort, _filter, searchFormValues) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;

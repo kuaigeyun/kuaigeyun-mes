@@ -6,7 +6,7 @@ import { rowActionKind } from '../../../../components/uni-action';
 import React, { useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Space, Tag } from 'antd';
+import { App, Button, Space } from 'antd';
 import { PlayCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../components/uni-table';
@@ -29,25 +29,22 @@ import {
 import { buildBomChangeCreateUrl, buildRouteChangeCreateUrl } from '../../services/master-data-links';
 import { useNewShortcut } from '../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
-import { getKuaiplmChangeCategoryText, getKuaiplmChangeStatusText, getKuaiplmChangeTypeText } from '../../components/kuaiplmMeta';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { getKuaiplmChangeStatusText } from '../../components/kuaiplmMeta';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   changeDeskSearchColumns,
   PLM_CHANGE_PINNED_STATUS_FIELD,
   plmCreatedUpdatedColumns,
+  plmListActionColumn,
   resolveChangeDeskListParams,
 } from '../../utils/plmListCore';
+import {
+  renderPlmChangeCategoryMarker,
+  renderPlmChangeStatusTag,
+  renderPlmChangeTypeMarker,
+} from '../../utils/plmListPresentation';
 
 type TabKey = 'all' | 'bom' | 'route';
-
-const STATUS_COLOR: Record<string, string> = {
-  draft: 'default',
-  pending: 'processing',
-  approved: 'success',
-  executed: 'default',
-  rejected: 'error',
-  cancelled: 'default',
-};
 
 const ChangeManagementPage: React.FC = () => {
   const { t } = useTranslation();
@@ -175,17 +172,19 @@ const ChangeManagementPage: React.FC = () => {
         title: t('app.kuaiplm.common.columns.category'),
         dataIndex: 'change_category',
         width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
-        render: (_, row) => (
-          <Tag color={row.change_category === 'bom' ? 'blue' : 'purple'}>
-            {getKuaiplmChangeCategoryText(t, row.change_category)}
-          </Tag>
-        ),
+        render: (_, row) => renderPlmChangeCategoryMarker(t, row.change_category),
       },
       {
         title: t('app.kuaiplm.common.columns.changeCode'),
         dataIndex: 'change_code',
         width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
       },
@@ -193,9 +192,11 @@ const ChangeManagementPage: React.FC = () => {
         title: t('app.kuaiplm.common.columns.changeType'),
         dataIndex: 'change_type',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
-        render: (_, row) =>
-          getKuaiplmChangeTypeText(t, row.change_type, row.change_category),
+        render: (_, row) => renderPlmChangeTypeMarker(t, row.change_type, row.change_category),
       },
       {
         title: t('app.kuaiplm.common.columns.target'),
@@ -205,9 +206,21 @@ const ChangeManagementPage: React.FC = () => {
         ellipsis: true,
       },
       {
+        title: t('app.kuaiplm.common.columns.changeReason'),
+        dataIndex: 'change_reason',
+        ellipsis: true,
+        hideInSearch: true,
+      },
+      ...plmCreatedUpdatedColumns<UnifiedChangeRow>(t),
+      {
         title: t('app.kuaiplm.common.columns.status'),
+        key: 'lifecycle',
         dataIndex: 'status',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        fixed: 'right',
         valueEnum: {
           draft: { text: getKuaiplmChangeStatusText(t, 'draft') },
           pending: { text: getKuaiplmChangeStatusText(t, 'pending') },
@@ -216,63 +229,44 @@ const ChangeManagementPage: React.FC = () => {
           rejected: { text: getKuaiplmChangeStatusText(t, 'rejected') },
           cancelled: { text: getKuaiplmChangeStatusText(t, 'cancelled') },
         },
-        render: (_, row) => (
-          <Tag color={STATUS_COLOR[(row.status ?? '').toLowerCase()] ?? 'default'}>
-            {getKuaiplmChangeStatusText(t, row.status)}
-          </Tag>
-        ),
+        render: (_, row) => renderPlmChangeStatusTag(t, row.status),
       },
-      {
-        title: t('app.kuaiplm.common.columns.changeReason'),
-        dataIndex: 'change_reason',
-        ellipsis: true,
-        hideInSearch: true,
-      },
-      ...plmCreatedUpdatedColumns<UnifiedChangeRow>(t),
-      {
-        title: t('app.kuaiplm.common.columns.actions'),
-        valueType: 'option',
-        fixed: 'right',
-        width: 200,
-        render: (_, row) => {
-          const status = (row.status ?? '').toLowerCase();
-          const rowAuditEnabled =
-            row.change_category === 'route' ? routeAuditEnabled : bomAuditEnabled;
-          return [
-            <UniWorkflowActions
-              {...rowActionKind('skip')}
-              key="audit"
-              record={row}
-              rowKey="id"
-                unifiedAudit
-                auditNodeKey={auditNodeKeyForRow(row)}
-                entityType={row.audit?.entity_type || auditNodeKeyForRow(row)}
-                resourcePrefix="kuaiplm:change"
-                pendingStatuses={['pending', 'pending_review', '待审批']}
-                approvedStatuses={['approved', '已审批']}
-                draftStatuses={['draft', '草稿']}
-                entityName={t('app.kuaiplm.change.entityName')}
-                onSuccess={() => actionRef.current?.reload()}
-                theme="link"
-                size="small"
-              />,
-            status === 'approved' || row.status === '已审批' ? (
-              <Button
-                {...rowActionKind('execute')}
-                key="execute"
-                type="link"
-                size="small"
-                icon={<PlayCircleOutlined />}
-                onClick={() => handleExecute(row)}
-              >
-                {t('app.kuaiplm.common.actions.execute')}
-              </Button>
-            ) : null,
-          ].filter(Boolean) as React.ReactNode[];
-        },
-      },
+      plmListActionColumn<UnifiedChangeRow>(t, (_, row) => {
+        const status = (row.status ?? '').toLowerCase();
+        return [
+          <UniWorkflowActions
+            {...rowActionKind('skip')}
+            key="audit"
+            record={row}
+            rowKey="id"
+            unifiedAudit
+            auditNodeKey={auditNodeKeyForRow(row)}
+            entityType={row.audit?.entity_type || auditNodeKeyForRow(row)}
+            resourcePrefix="kuaiplm:change"
+            pendingStatuses={['pending', 'pending_review', '待审批']}
+            approvedStatuses={['approved', '已审批']}
+            draftStatuses={['draft', '草稿']}
+            entityName={t('app.kuaiplm.change.entityName')}
+            onSuccess={() => actionRef.current?.reload()}
+            theme="link"
+            size="small"
+          />,
+          status === 'approved' || row.status === '已审批' ? (
+            <Button
+              {...rowActionKind('execute')}
+              key="execute"
+              type="link"
+              size="small"
+              icon={<PlayCircleOutlined />}
+              onClick={() => handleExecute(row)}
+            >
+              {t('app.kuaiplm.common.actions.execute')}
+            </Button>
+          ) : null,
+        ].filter(Boolean) as React.ReactNode[];
+      }, 200),
     ],
-    [handleExecute, routeAuditEnabled, bomAuditEnabled, t],
+    [handleExecute, t],
   );
 
   const toolbarMenuItems = useMemo(
@@ -293,8 +287,8 @@ const ChangeManagementPage: React.FC = () => {
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
-        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId={`apps.kuaiplm.pages.change-management.${activeTab}`}
+        columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
+        columnPersistenceId={`apps.kuaiplm.pages.change-management.${activeTab}.list-v1`}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={PLM_CHANGE_PINNED_STATUS_FIELD}

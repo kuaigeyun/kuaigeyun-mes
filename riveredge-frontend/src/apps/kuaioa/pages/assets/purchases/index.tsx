@@ -26,6 +26,7 @@ const AssetPurchasesPage: React.FC = () => (
     nameField="title"
     autoGenerateCode
     statusEnum={STATUS_ENUM}
+    statusPresentation="lifecycle"
     fields={[
       { name: 'purchase_code', labelKey: 'app.kuaioa.assetPurchase.code', width: 140 },
       { name: 'title', labelKey: 'app.kuaioa.assetPurchase.title', required: true, width: 200 },

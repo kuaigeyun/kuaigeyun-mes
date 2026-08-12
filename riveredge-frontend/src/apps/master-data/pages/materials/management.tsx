@@ -143,6 +143,13 @@ import {
   UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS,
 } from '../../../../components/uni-table/stackedPrimaryColumn'
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
+import { alignProColumns } from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment'
+import { MASTER_DATA_LIST_FIELD_RANK } from '../../utils/masterListCore'
+import {
+  renderMasterActiveTag,
+  renderMasterYesNoTag,
+} from '../../utils/masterListPresentation'
+import { MarkerTag } from '../../../../constants/statusBadges'
 
 const LazyUniImport = lazy(() => import('../../../../components/uni-import'))
 
@@ -204,7 +211,7 @@ function getMaterialSourceTypeLabel(
   return option ? option.label : st || '-'
 }
 
-/** 列表首列：名称 / 编号·规格；品牌、型号以徽章挂在下方（配置件 SKU 子行：属性摘要 / SKU 编号） */
+/** 物料管理特例：名/码/规格叠列；配置件 SKU 子行：属性摘要 / SKU 编号 */
 function MaterialListStackedCell({
   record,
   variantAttrLabelMap,
@@ -231,16 +238,12 @@ function MaterialListStackedCell({
       <Space size={4} wrap style={{ marginTop: 2 }}>
         {brand ? (
           <Tooltip title={`${t('app.master-data.materials.brand')}: ${brand}`}>
-            <Tag color="blue" style={{ margin: 0, lineHeight: '18px' }}>
-              {brand}
-            </Tag>
+            <MarkerTag color="processing">{brand}</MarkerTag>
           </Tooltip>
         ) : null}
         {model ? (
           <Tooltip title={`${t('app.master-data.materials.model')}: ${model}`}>
-            <Tag color="geekblue" style={{ margin: 0, lineHeight: '18px' }}>
-              {model}
-            </Tag>
+            <MarkerTag color="purple">{model}</MarkerTag>
           </Tooltip>
         ) : null}
       </Space>
@@ -3439,7 +3442,7 @@ const MaterialsManagementPage: React.FC = () => {
             record.shelfLifeManaged ?? (record as any).shelf_life_managed ?? false
           const days = record.shelfLifeDays ?? (record as any).shelf_life_days
           if (!managed) {
-            return <Tag>{t('app.master-data.bom.no')}</Tag>
+            return renderMasterYesNoTag(t, false, 'app.master-data.bom.yes', 'app.master-data.bom.no')
           }
           if (days != null) {
             return (
@@ -3449,7 +3452,7 @@ const MaterialsManagementPage: React.FC = () => {
               </span>
             )
           }
-          return <Tag color="blue">{t('app.master-data.bom.yes')}</Tag>
+          return renderMasterYesNoTag(t, true, 'app.master-data.bom.yes', 'app.master-data.bom.no')
         },
       },
       {
@@ -3457,11 +3460,7 @@ const MaterialsManagementPage: React.FC = () => {
         dataIndex: 'isGiftable',
         render: (_, record) => {
           const giftable = record.isGiftable ?? (record as any).is_giftable ?? false
-          return (
-            <Tag color={giftable ? 'blue' : 'default'} variant="solid">
-              {giftable ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
-            </Tag>
-          )
+          return renderMasterYesNoTag(t, giftable, 'app.master-data.bom.yes', 'app.master-data.bom.no')
         },
       },
       {
@@ -3478,20 +3477,14 @@ const MaterialsManagementPage: React.FC = () => {
       {
         title: t('app.master-data.materials.batchManaged'),
         dataIndex: 'batchManaged',
-        render: (_, record) => (
-          <Tag color={record.batchManaged ? 'blue' : 'default'}>
-            {record.batchManaged ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
-          </Tag>
-        ),
+        render: (_, record) =>
+          renderMasterYesNoTag(t, record.batchManaged, 'app.master-data.bom.yes', 'app.master-data.bom.no'),
       },
       {
         title: t('app.master-data.materials.variantManaged'),
         dataIndex: 'variantManaged',
-        render: (_, record) => (
-          <Tag color={record.variantManaged ? 'purple' : 'default'}>
-            {record.variantManaged ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
-          </Tag>
-        ),
+        render: (_, record) =>
+          renderMasterYesNoTag(t, record.variantManaged, 'app.master-data.bom.yes', 'app.master-data.bom.no'),
       },
       {
         title: t('app.master-data.materials.description'),
@@ -3500,11 +3493,13 @@ const MaterialsManagementPage: React.FC = () => {
       {
         title: t('app.master-data.materials.enabledStatusLabel'),
         dataIndex: 'isActive',
-        render: (_, record) => (
-          <Tag color={record.isActive ? 'success' : 'default'} variant="solid">
-            {record.isActive ? t('app.master-data.materials.enabled') : t('app.master-data.materials.disabled')}
-          </Tag>
-        ),
+        render: (_, record) =>
+          renderMasterActiveTag(
+            t,
+            record.isActive,
+            'app.master-data.materials.enabled',
+            'app.master-data.materials.disabled',
+          ),
       },
       {
         title: t('app.master-data.materials.createTime'),
@@ -3556,7 +3551,10 @@ const MaterialsManagementPage: React.FC = () => {
       {
         title: t('app.master-data.materials.productImage'),
         dataIndex: 'images',
-        width: 100,
+        width: 72,
+        minWidth: 72,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, record) => {
           if (isVariantSkuMaterial(record)) return null
@@ -3590,7 +3588,11 @@ const MaterialsManagementPage: React.FC = () => {
       {
         title: t('app.master-data.materials.materialGroup'),
         dataIndex: 'groupId',
-        width: 150,
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         valueType: 'select',
         valueEnum: materialGroups.reduce(
           (acc, group) => {
@@ -3606,6 +3608,9 @@ const MaterialsManagementPage: React.FC = () => {
         key: 'processRouteSource',
         dataIndex: ['processRouteName', 'process_route_name'],
         minWidth: 140,
+        uniTablePrimaryFlex: true,
+        uniTablePrimaryFlexMaxWidth: 220,
+        resizable: false,
         hideInSearch: true,
         render: (_, record) =>
           renderMasterCell(
@@ -3643,7 +3648,10 @@ const MaterialsManagementPage: React.FC = () => {
       {
         title: t('app.master-data.materials.baseUnit'),
         dataIndex: 'baseUnit',
-        width: 100,
+        width: 88,
+        minWidth: 88,
+        uniTableKeepWidth: true,
+        resizable: false,
         valueType: 'select',
         valueEnum: baseUnitOptions.reduce(
           (acc, option) => {
@@ -3667,26 +3675,36 @@ const MaterialsManagementPage: React.FC = () => {
         title: t('app.master-data.materials.batchManaged'),
         dataIndex: 'batchManaged',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, record) =>
           renderMasterCell(
             record,
-            <Tag color={record.batchManaged ? 'blue' : 'default'}>
-              {record.batchManaged ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
-            </Tag>,
+            renderMasterYesNoTag(
+              t,
+              record.batchManaged,
+              'app.master-data.bom.yes',
+              'app.master-data.bom.no',
+            ),
           ),
       },
       {
         title: t('app.master-data.materials.variantManaged'),
         dataIndex: 'variantManaged',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, record) => {
           if (isVariantSkuMaterial(record)) return null
-          return (
-            <Tag color={record.variantManaged ? 'purple' : 'default'}>
-              {record.variantManaged ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
-            </Tag>
+          return renderMasterYesNoTag(
+            t,
+            record.variantManaged,
+            'app.master-data.bom.yes',
+            'app.master-data.bom.no',
           )
         },
       },
@@ -3712,16 +3730,22 @@ const MaterialsManagementPage: React.FC = () => {
       {
         title: t('app.master-data.materials.enabledStatus'),
         dataIndex: 'isActive',
-        width: 100,
+        width: 88,
+        minWidth: 88,
+        uniTableKeepWidth: true,
+        resizable: false,
         valueType: 'select',
         hideInSearch: true,
         valueEnum: materialActiveValueEnum,
         render: (_, record) =>
           renderMasterCell(
             record,
-            <Tag color={record.isActive ? 'success' : 'default'} variant="solid">
-              {record.isActive ? t('app.master-data.materials.enabled') : t('app.master-data.materials.disabled')}
-            </Tag>,
+            renderMasterActiveTag(
+              t,
+              record.isActive,
+              'app.master-data.materials.enabled',
+              'app.master-data.materials.disabled',
+            ),
           ),
       },
       {
@@ -3761,9 +3785,10 @@ const MaterialsManagementPage: React.FC = () => {
       },
       {
         title: t('app.master-data.materials.action'),
+        key: 'action',
         valueType: 'option',
-        width: 150,
         fixed: 'right',
+        hideInSearch: true,
         render: (_, record) => (
           <Space>
             <Button key="view" {...rowActionKind('read')} onClick={() => handleViewMaterial(record)}>
@@ -3878,12 +3903,12 @@ const MaterialsManagementPage: React.FC = () => {
               }}
             >
               <UniTable<Material>
-                columnPersistenceId="apps.master-data.pages.materials.management"
+                columnPersistenceId="apps.master-data.pages.materials.management.list-v2"
                 tanstackQuery={{ queryKeyPrefix: ['apps.master-data.pages.materials.management', String(selectedGroupKeys[0] ?? 'all')] }}
                 size="small"
                 defaultPageSize={20}
                 actionRef={actionRef}
-                columns={columns}
+                columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
                 beforeSearchButtons={
                   <Tooltip title={leftPanelCollapsed ? t('app.master-data.materials.expandGroup') : t('app.master-data.materials.collapseGroup')}>
                     <Button

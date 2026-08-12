@@ -448,6 +448,10 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             "customer_name": receivable.customer_name,
             "receivable_id": receivable.id,
             "receivable_code": code,
+            # 同时收款上限：应收剩余可收金额（与开票可开票金额独立）
+            "remaining_settle_amount": float(
+                Decimal(str(getattr(receivable, "remaining_amount", 0) or 0))
+            ),
         }
 
     async def list_sales_order_pull_candidates(

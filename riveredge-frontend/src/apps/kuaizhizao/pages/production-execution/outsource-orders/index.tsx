@@ -43,7 +43,10 @@ import {
 } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import {
   UniPullQueryModal,
   filterByPullScope,
@@ -908,8 +911,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         title: `${t('app.kuaizhizao.outsourceOrder.colPlannedStart')} / ${t('app.kuaizhizao.outsourceOrder.colPlannedEnd')}`,
         key: 'planned_range_stacked',
         dataIndex: 'planned_start_date',
-        width: 132,
-        uniTableKeepWidth: true,
+        ...UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
         sorter: true,
         hideInSearch: true,
         render: (_, record) => (

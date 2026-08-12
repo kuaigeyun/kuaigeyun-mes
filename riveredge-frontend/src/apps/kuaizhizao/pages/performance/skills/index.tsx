@@ -7,9 +7,13 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Space, Typography, theme as AntdTheme } from 'antd';
+import { App, Popconfirm, Button, Space, theme as AntdTheme } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UniTableStackedPrimaryCell,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { PerformanceConfigDetailDrawer } from '../shared/performanceConfigDetailDrawer';
@@ -19,7 +23,11 @@ import type { Skill } from '../../../types/performance';
 import { getPerformanceConfigActiveLifecycle } from '../../../utils/performanceLifecycle';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
-import { getPerformanceActiveValueEnum, renderActiveTag } from '../components/performanceMeta';
+import {
+  getPerformanceActiveValueEnum,
+  renderActiveTag,
+  renderPerformanceTypeMarker,
+} from '../components/performanceMeta';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   normalizePerformanceListResponse,
@@ -136,20 +144,45 @@ const SkillsPage: React.FC = () => {
     const customFieldColumns = generateCustomFieldColumns();
     return alignProColumns<Skill>([
     {
-      title: t('app.kuaizhizao.performance.skills.columns.skillCode'),
-      dataIndex: 'code',
-      width: 150,
+      title: t('app.kuaizhizao.performance.skills.columns.skillName'),
+      key: 'performance_name_code_stacked',
+      dataIndex: 'name',
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
       sorter: true,
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
-          {r.code ?? '-'}
-        </Typography.Text>
+        <UniTableStackedPrimaryCell
+          primary={String(r.name ?? '').trim() || '-'}
+          secondary={String(r.code ?? '').trim() || '-'}
+        />
       ),
     },
-    { title: t('app.kuaizhizao.performance.skills.columns.skillName'), dataIndex: 'name', width: 200, ellipsis: true, sorter: true },
-    { title: t('app.kuaizhizao.performance.skills.columns.category'), dataIndex: 'category', width: 150, sorter: true },
-    { title: t('app.kuaizhizao.performance.common.columns.description'), dataIndex: 'description', ellipsis: true, hideInSearch: true },
+    {
+      title: t('app.kuaizhizao.performance.skills.columns.skillCode'),
+      dataIndex: 'code',
+      hideInTable: true,
+      sorter: true,
+    },
+    {
+      title: t('app.kuaizhizao.performance.skills.columns.category'),
+      dataIndex: 'category',
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
+      sorter: true,
+      render: (_, r) => renderPerformanceTypeMarker(r.category),
+    },
+    {
+      title: t('app.kuaizhizao.performance.common.columns.description'),
+      dataIndex: 'description',
+      width: 200,
+      minWidth: 200,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+    },
     ...customFieldColumns,
     {
       title: t('app.kuaizhizao.performance.common.active.enabled'),
@@ -160,10 +193,22 @@ const SkillsPage: React.FC = () => {
     },
     ...buildDocumentAuditColumns<Skill>(t),
     {
+      title: t('app.kuaizhizao.performance.common.columns.status'),
+      dataIndex: 'isActive',
+      width: 88,
+      minWidth: 88,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      render: (_, r) => renderActiveTag(t, r.isActive),
+    },
+    {
       title: t('app.kuaizhizao.performance.common.columns.actions'),
+      key: 'action',
       valueType: 'option',
       width: 150,
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => (
         <Space>
           <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
@@ -190,7 +235,7 @@ const SkillsPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.performance.skills.pageTitle')}
           actionRef={actionRef}
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.performance.skills"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.skills.v1"
           request={async (params, sort, _filter, searchFormValues) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;

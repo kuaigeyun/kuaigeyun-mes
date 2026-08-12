@@ -10,6 +10,7 @@ import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../documen
 import { UniLifecycleStepper } from '../../uni-lifecycle';
 import { QuantityWithUnitDisplay } from '../../quantity-with-unit';
 import { getPurchaseOrder, type PurchaseOrder } from '../../../apps/kuaizhizao/services/purchase';
+import { getStatusLabel } from '../../../apps/kuaizhizao/constants/documentStatus';
 import { getPurchaseOrderLifecycle } from '../../../apps/kuaizhizao/utils/purchaseOrderLifecycle';
 import { useAuditRequired } from '../../../hooks/useAuditRequired';
 import { formatDateTime } from '../../../utils/format';
@@ -140,7 +141,7 @@ export function PurchaseOrderLinkedDetailDrawer({
               label: t('app.kuaizhizao.purchaseOrder.col.deliveryDate'),
               children: order.delivery_date ? formatDateTime(order.delivery_date, 'YYYY-MM-DD') : '-',
             },
-            { key: 'status', label: t('common.status'), children: order.status || '-' },
+            { key: 'status', label: t('common.status'), children: getStatusLabel(order.status) },
             {
               key: 'total_amount',
               label: t('app.kuaizhizao.purchaseOrder.col.orderAmount'),
@@ -153,7 +154,7 @@ export function PurchaseOrderLinkedDetailDrawer({
             },
             {
               key: 'notes',
-              label: t('common.notes'),
+              label: t('common.remark'),
               children: order.notes || '-',
               span: 3,
             },

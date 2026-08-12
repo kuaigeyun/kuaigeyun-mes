@@ -1,5 +1,6 @@
 import type { SubStage } from '../../../../../../components/uni-lifecycle/types';
 import type { TFunction } from 'i18next';
+import type { WorkOrderOperationStep } from '../../../production-execution/work-orders/workOrderOperationSteps';
 
 export const EIGHT_D_STATUS_ORDER = [
   'd1_team',
@@ -60,6 +61,61 @@ export function buildEightDStepperSteps(t: TFunction, status?: string | null): S
     label: t(EIGHT_D_STATUS_I18N_KEY[key]),
     status: index < activeIndex ? 'done' : index === activeIndex ? 'active' : 'pending',
   }));
+}
+
+/**
+ * 列表阶段节点轴：始终展开完整 D1–D8 + 已关闭（禁止用残缺 lifecycle_stages 导致列内大块留白）。
+ * 后端 lifecycle 仅用于覆盖各节点 done/active/pending。
+ */
+export function buildEightDListStepNodes(
+  t: TFunction,
+  status?: string | null,
+  lifecycleStages?: Array<{ key: string; label: string; status: 'done' | 'active' | 'pending' }>,
+): WorkOrderOperationStep[] {
+  const statusByKey = new Map(
+    (lifecycleStages ?? []).map((stage) => [String(stage.key), stage.status] as const),
+  );
+  const stages = buildEightDStepperSteps(t, status).map((stage) => ({
+    ...stage,
+    status: statusByKey.get(String(stage.key)) ?? stage.status,
+  }));
+  return stages.map((stage, index) => {
+    const fullLabel = stage.label || getEightDStatusText(t, stage.key);
+    const parsed = parseEightDStageLabel(fullLabel);
+    const keyMatch = String(stage.key).match(/^d(\d)_/i);
+    const name =
+      parsed?.code ??
+      (keyMatch ? `D${keyMatch[1]}` : null) ??
+      (stage.key === 'closed' ? getEightDStatusText(t, 'closed') : fullLabel);
+    return {
+      name,
+      sequence: index + 1,
+      status: stage.status,
+    };
+  });
+}
+
+/** 与 WorkOrderOperationStepsStrip compact 单槽宽一致；9 节点完整展开列宽 */
+export const EIGHT_D_LIST_STEP_SLOT_PX = 56;
+export const EIGHT_D_LIST_STAGE_COLUMN_WIDTH = EIGHT_D_STATUS_ORDER.length * EIGHT_D_LIST_STEP_SLOT_PX;
+
+export function resolveEightDSourceDisplay(
+  t: TFunction,
+  row: { quality_exception_id?: number | null; defect_record_id?: number | null },
+): { label: string; color: string } | null {
+  if (row.quality_exception_id) {
+    return {
+      label: t('app.kuaizhizao.eightD.source.qualityException', { id: row.quality_exception_id }),
+      color: 'purple',
+    };
+  }
+  if (row.defect_record_id) {
+    return {
+      label: t('app.kuaizhizao.eightD.source.nonconformingLedger', { id: row.defect_record_id }),
+      color: 'orange',
+    };
+  }
+  return null;
 }
 
 export const EIGHT_D_SEVERITY_I18N_KEY: Record<string, string> = {

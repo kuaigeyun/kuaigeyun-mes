@@ -12,7 +12,6 @@ import {
   Typography,
   Space,
   Table,
-  Tag,
   DatePicker,
   Select,
   Descriptions,
@@ -50,6 +49,12 @@ import {
   resolvePartnerStatementListParams,
 } from '../../../utils/financeListCore';
 import type { PartnerStatementListParams } from '../../../services/finance/partnerStatement';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { MarkerTag } from '../../../../../constants/statusBadges';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const money = (v: number | string | undefined) =>
   `¥${Number(v ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -233,30 +238,34 @@ const PartnerStatementsPage: React.FC = () => {
       }),
       {
         title: t(`${PS}.col.code`),
+        key: 'finance_doc_partner_stacked',
         dataIndex: 'statement_code',
-        width: 160,
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         fixed: 'left',
         hideInSearch: true,
         sorter: true,
         render: (_, r) => (
-          <Typography.Text copyable={{ text: r.statement_code }} ellipsis>
-            <a onClick={() => navigate(`/apps/kuaicaiwu/finance-management/partner-statements/${r.id}`)}>
-              {r.statement_code}
-            </a>
-          </Typography.Text>
+          <UniTableStackedPrimaryCell
+            primary={String(r.partner_name ?? '')}
+            secondary={String(r.statement_code ?? '')}
+            onSecondaryClick={() =>
+              navigate(`/apps/kuaicaiwu/finance-management/partner-statements/${r.id}`)
+            }
+          />
         ),
       },
       {
         title: type === 'Customer' ? t(`${PS}.col.customerName`) : t(`${PS}.col.supplierName`),
         dataIndex: 'partner_name',
-        width: 200,
-        hideInSearch: true,
-        sorter: true,
+        hideInTable: true,
       },
       {
         title: t(`${PS}.col.period`),
         dataIndex: 'statement_period',
         width: 200,
+        minWidth: 200,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
         render: (_, r) => {
@@ -270,6 +279,9 @@ const PartnerStatementsPage: React.FC = () => {
         title: t(`${PS}.col.openingBalance`),
         dataIndex: 'opening_balance',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         align: 'right',
         hideInSearch: true,
         sorter: true,
@@ -279,6 +291,9 @@ const PartnerStatementsPage: React.FC = () => {
         title: t(`${PS}.col.closingBalance`),
         dataIndex: 'closing_balance',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         align: 'right',
         hideInSearch: true,
         sorter: true,
@@ -299,6 +314,9 @@ const PartnerStatementsPage: React.FC = () => {
         title: t('common.status'),
         dataIndex: 'status',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
         valueEnum: statusEnum,
@@ -310,15 +328,16 @@ const PartnerStatementsPage: React.FC = () => {
             Sent: 'success',
             Disputed: 'warning',
           };
-          return <Tag color={colorMap[r.status] || 'default'}>{m.text}</Tag>;
+          return <MarkerTag color={colorMap[r.status] || 'default'}>{m.text}</MarkerTag>;
         },
       },
       ...financeDocCreatedUpdatedColumns<PartnerStatement>(t),
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
       fixed: 'right',
-      width: 160,
+      hideInSearch: true,
       render: (_, record) => [
             <Button {...rowActionKind('read')}
               key="det"
@@ -409,7 +428,7 @@ const PartnerStatementsPage: React.FC = () => {
       selectedRowKeys={customerSelectedRowKeys}
       onRowSelectionChange={setCustomerSelectedRowKeys}
       rowKey="id"
-      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Customer"
+      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Customer.list-v1"
       showAdvancedSearch
       search={{ labelWidth: 100 }}
       showCreateButton
@@ -441,7 +460,7 @@ const PartnerStatementsPage: React.FC = () => {
         />,
       ]}
       request={tableRequest('Customer')}
-      columns={buildColumns('Customer')}
+      columns={alignProColumns(buildColumns('Customer'), SALES_DOC_LIST_FIELD_RANK)}
       skipFuzzyPinyinClientFilter
       pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
     />
@@ -455,7 +474,7 @@ const PartnerStatementsPage: React.FC = () => {
       selectedRowKeys={supplierSelectedRowKeys}
       onRowSelectionChange={setSupplierSelectedRowKeys}
       rowKey="id"
-      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Supplier"
+      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Supplier.list-v1"
       showAdvancedSearch
       search={{ labelWidth: 100 }}
       showCreateButton
@@ -487,7 +506,7 @@ const PartnerStatementsPage: React.FC = () => {
         />,
       ]}
       request={tableRequest('Supplier')}
-      columns={buildColumns('Supplier')}
+      columns={alignProColumns(buildColumns('Supplier'), SALES_DOC_LIST_FIELD_RANK)}
       skipFuzzyPinyinClientFilter
       pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
     />

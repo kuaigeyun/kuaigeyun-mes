@@ -1,6 +1,7 @@
 /**
- * 报工「生产人员」字段：标题旁分段切换 生产人员 / 工作小组，小组支持快速新建。
+ * 报工「生产人员」字段：标题行右侧重叠分段切换 生产人员 / 工作小组，小组支持快速新建。
  * 分段器须在 Form.Item label 之外，避免 label 关联焦点 / mousedown 拦截导致无法切换。
+ * 外层只输出一列 Col，内部控件不再带 colProps，避免 ProForm grid 双重嵌套错位。
  */
 import React, { useCallback } from 'react';
 import { Col, Form, theme } from 'antd';
@@ -84,12 +85,20 @@ export const ReportingProducerField: React.FC<ReportingProducerFieldProps> = ({
           style={{
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'space-between',
             gap: 8,
             flexWrap: 'wrap',
-            marginBottom: 8,
+            marginBottom: token.marginXXS,
+            minHeight: token.controlHeightSM,
           }}
         >
-          <span style={{ color: token.colorText, fontSize: token.fontSize }}>
+          <span
+            style={{
+              color: token.colorTextHeading,
+              fontSize: token.fontSize,
+              lineHeight: token.lineHeight,
+            }}
+          >
             {t('app.kuaizhizao.workReporting.formProxyWorker')}
           </span>
           <ThemedSegmented
@@ -114,8 +123,8 @@ export const ReportingProducerField: React.FC<ReportingProducerFieldProps> = ({
             name={workerFieldName}
             label={false}
             placeholder={t('app.kuaizhizao.workReporting.formProxyWorkerPlaceholder')}
-            colProps={{ span: 24 }}
             defaultBadgeUserIds={defaultBadgeUserIds}
+            formItemProps={{ style: { marginBottom: token.marginLG } }}
             onChange={(_uuid, u) => {
               onWorkerChange?.(
                 u && !Array.isArray(u)
@@ -127,6 +136,7 @@ export const ReportingProducerField: React.FC<ReportingProducerFieldProps> = ({
         ) : (
           <ProFormItem
             name={teamFieldName}
+            style={{ marginBottom: token.marginLG }}
             rules={[
               {
                 required: true,

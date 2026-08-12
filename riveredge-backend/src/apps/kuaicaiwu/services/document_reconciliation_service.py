@@ -255,10 +255,22 @@ class DocumentReconciliationService:
         limit: int = 20,
         sort_field: Optional[str] = None,
         sort_order: Optional[str] = None,
+        operator_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """预收/预付余额汇总（未核销余额 > 0 且 settlement_type=prepayment）。"""
         from apps.kuaicaiwu.models.receipt import Receipt
         from apps.kuaicaiwu.models.payment import Payment
+
+        # 打开余额页时补齐：已确认采购订单有预付金额但未生成预付付款单的历史缺口
+        pt = (partner_type or "").strip().lower()
+        if operator_id and pt in ("", "supplier"):
+            from apps.kuaicaiwu.services.finance_integration_hooks import (
+                backfill_missing_purchase_order_prepayments,
+            )
+
+            await backfill_missing_purchase_order_prepayments(
+                tenant_id, operator_id=int(operator_id)
+            )
 
         receipt_rows = await Receipt.filter(
             tenant_id=tenant_id,

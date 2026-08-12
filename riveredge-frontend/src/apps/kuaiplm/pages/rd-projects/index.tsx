@@ -5,7 +5,7 @@ import { rowActionKind } from '../../../../components/uni-action';
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
-import { App, Button, Tag, Typography } from 'antd';
+import { App, Button, Typography } from 'antd';
 import { EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
@@ -23,7 +23,6 @@ import {
   deleteRdProject,
   pushTrialWorkOrder,
   updateRdProject,
-  type ProjectType,
   type RdProject,
 } from '../../services/rd-project';
 import { listGateTemplates } from '../../services/gate-template';
@@ -35,17 +34,18 @@ import {
 import {
   plmCodeTitleSearchColumns,
   plmCreatedUpdatedColumns,
+  plmListActionColumn,
   resolveRdProjectListParams,
 } from '../../utils/plmListCore';
 import {
-  buildKuaiplmProjectStatusValueEnum,
-  getKuaiplmProjectStatusText,
   getKuaiplmProjectTypeText,
+  renderKuaiplmCurrentGateMarker,
+  renderKuaiplmProjectTypeMarker,
 } from '../../components/kuaiplmMeta';
 import { useNewShortcut } from '../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
 import { formatDateTime } from '../../../../utils/format';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const PAGE_CODE_RD = 'kuaiplm-rd-project';
 
@@ -64,7 +64,6 @@ const RdProjectsListPage: React.FC = () => {
 
   const activePageCode = PAGE_CODE_RD;
   const lifecycleValueEnum = useMemo(() => buildRdProjectLifecycleValueEnum(t), [t]);
-  const projectStatusValueEnum = useMemo(() => buildKuaiplmProjectStatusValueEnum(t), [t]);
 
   useEffect(() => {
     if (!createOpen) return;
@@ -195,6 +194,9 @@ const RdProjectsListPage: React.FC = () => {
         title: t('app.kuaiplm.common.columns.projectCode'),
         dataIndex: 'project_code',
         width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         fixed: 'left',
         sorter: true,
         hideInSearch: true,
@@ -208,19 +210,15 @@ const RdProjectsListPage: React.FC = () => {
         title: t('app.kuaiplm.common.columns.projectType'),
         dataIndex: 'project_type',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         valueEnum: {
           RD: { text: getKuaiplmProjectTypeText(t, 'RD') },
           DELIVERY: { text: getKuaiplmProjectTypeText(t, 'DELIVERY') },
         },
-        render: (_, row) => {
-          const type = (row.project_type ?? 'RD') as ProjectType;
-          return (
-            <Tag color={type === 'DELIVERY' ? 'blue' : 'purple'}>
-              {getKuaiplmProjectTypeText(t, type)}
-            </Tag>
-          );
-        },
+        render: (_, row) => renderKuaiplmProjectTypeMarker(t, row.project_type ?? 'RD'),
       },
       {
         title: t('app.kuaiplm.common.columns.projectName'),
@@ -235,27 +233,28 @@ const RdProjectsListPage: React.FC = () => {
         dataIndex: 'material_name',
         width: 160,
         hideInSearch: true,
+        ellipsis: true,
         render: (_, row) => row.material_name || row.material_code || '-',
       },
       {
         title: t('app.kuaiplm.common.columns.owner'),
         dataIndex: 'owner_name',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
       },
       {
         title: t('app.kuaiplm.common.columns.currentGate'),
         dataIndex: 'current_gate_name',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
-      },
-      {
-        title: t('app.kuaiplm.common.columns.status'),
-        dataIndex: 'status',
-        width: 100,
-        hideInSearch: true,
-        valueEnum: projectStatusValueEnum,
-        render: (_, row) => getKuaiplmProjectStatusText(t, row.status),
+        render: (_, row) =>
+          renderKuaiplmCurrentGateMarker(t, row.current_gate_key, row.current_gate_name),
       },
       {
         title: t('app.kuaiplm.common.columns.lifecycle'),
@@ -267,7 +266,9 @@ const RdProjectsListPage: React.FC = () => {
         title: t('app.kuaiplm.common.columns.plannedCompletion'),
         dataIndex: 'planned_end_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, row) => (row.planned_end_date ? formatDateTime(row.planned_end_date, 'YYYY-MM-DD') : '-'),
@@ -275,6 +276,7 @@ const RdProjectsListPage: React.FC = () => {
       ...plmCreatedUpdatedColumns<RdProject>(t),
       {
         title: t('app.kuaiplm.common.columns.lifecycle'),
+        key: 'lifecycle',
         dataIndex: 'lifecycle_stage',
         fixed: 'right',
         hideInSearch: true,
@@ -292,26 +294,20 @@ const RdProjectsListPage: React.FC = () => {
           );
         },
       },
-      {
-        title: t('app.kuaiplm.common.columns.actions'),
-        valueType: 'option',
-        fixed: 'right',
-        width: 120,
-        render: (_, record) => [
-          <Button
-            {...rowActionKind('read')}
-            key="detail"
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => navigate(`/apps/kuaiplm/rd-projects/detail/${record.id}`)}
-          >
-            {t('app.kuaiplm.common.actions.detail')}
-          </Button>,
-        ],
-      },
+      plmListActionColumn<RdProject>(t, (_, record) => [
+        <Button
+          {...rowActionKind('read')}
+          key="detail"
+          type="link"
+          size="small"
+          icon={<EyeOutlined />}
+          onClick={() => navigate(`/apps/kuaiplm/rd-projects/detail/${record.id}`)}
+        >
+          {t('app.kuaiplm.common.actions.detail')}
+        </Button>,
+      ], 120),
     ],
-    [t, navigate, lifecycleValueEnum, projectStatusValueEnum],
+    [t, navigate, lifecycleValueEnum],
   );
 
   return (
@@ -323,8 +319,8 @@ const RdProjectsListPage: React.FC = () => {
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
-        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.rd-projects"
+        columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
+        columnPersistenceId="apps.kuaiplm.pages.rd-projects.list-v1"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}

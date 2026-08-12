@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { Button, Descriptions, Empty, Modal, Table, Tag } from 'antd';
+import { Button, Descriptions, Empty, Modal, Table } from 'antd';
 import { App } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
@@ -12,13 +12,14 @@ import {
   detailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 
 export function renderIsActiveTag(t: TFunction, isActive?: boolean) {
   return (
-    <Tag color={isActive ? 'success' : 'default'}>
+    <MarkerTag color={isActive ? 'success' : 'default'}>
       {isActive ? t('common.enabled') : t('common.disabled')}
-    </Tag>
+    </MarkerTag>
   );
 }
 

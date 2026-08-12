@@ -4,7 +4,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Tag, Table, Descriptions, Typography, Timeline, Button, Empty } from 'antd';
+import { App, Table, Descriptions, Typography, Timeline, Button, Empty } from 'antd';
 import { EyeOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
@@ -17,9 +17,10 @@ import {
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { apiRequest } from '../../../../../services/api';
 import { getDocumentTimingLifecycle } from '../../../utils/documentTimingLifecycle';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { downloadFile } from '../../../../../utils/fileDownload';
+import { renderReportDocTypeMarker } from '../../../../kuaireport/utils/reportListPresentation';
 
 interface DocumentTiming {
   document_type?: string;
@@ -103,28 +104,44 @@ const DocumentTimingPage: React.FC = () => {
     }
   };
 
+  const DOC_TYPE_MARKER_COLOR: Record<string, string> = {
+    work_order: 'processing',
+    purchase_order: 'default',
+    sales_order: 'success',
+  };
+
   const columns: ProColumns<DocumentTiming>[] = [
-    {
-      title: t('app.kuaireport.analysis.col.documentType', { defaultValue: '单据类型' }),
-      dataIndex: 'document_type',
-      width: 120,
-      valueEnum: {
-        work_order: { text: docTypeLabel('work_order'), status: 'processing' },
-        purchase_order: { text: docTypeLabel('purchase_order'), status: 'default' },
-        sales_order: { text: docTypeLabel('sales_order'), status: 'success' },
-      },
-      render: (_, record) => docTypeLabel(record.document_type),
-    },
     {
       title: t('app.kuaireport.analysis.col.documentCode', { defaultValue: '单据编号' }),
       dataIndex: 'document_code',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       fixed: 'left',
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.document_code ?? '') }} ellipsis>
           {r.document_code ?? '-'}
         </Typography.Text>
       ),
+    },
+    {
+      title: t('app.kuaireport.analysis.col.documentType', { defaultValue: '单据类型' }),
+      dataIndex: 'document_type',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueEnum: {
+        work_order: { text: docTypeLabel('work_order'), status: 'processing' },
+        purchase_order: { text: docTypeLabel('purchase_order'), status: 'default' },
+        sales_order: { text: docTypeLabel('sales_order'), status: 'success' },
+      },
+      render: (_, record) =>
+        renderReportDocTypeMarker(
+          docTypeLabel(record.document_type),
+          DOC_TYPE_MARKER_COLOR[String(record.document_type ?? '')] ?? 'processing',
+        ),
     },
     {
       title: t('app.kuaireport.analysis.col.dateRange', { defaultValue: '时间范围' }),
@@ -137,6 +154,9 @@ const DocumentTimingPage: React.FC = () => {
       title: t('app.kuaireport.analysis.col.totalHours', { defaultValue: '总耗时（小时）' }),
       dataIndex: 'total_duration_hours',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       search: false,
       render: (_, record) => record.total_duration_hours?.toFixed(2) || '-',
@@ -153,6 +173,7 @@ const DocumentTimingPage: React.FC = () => {
     },
     {
       title: t('common.actions', { defaultValue: '操作' }),
+      key: 'action',
       width: 100,
       fixed: 'right',
       search: false,
@@ -184,8 +205,9 @@ const DocumentTimingPage: React.FC = () => {
       <UniTable
         headerTitle={t('app.kuaireport.analysis.timing.title', { defaultValue: '单据节点耗时' })}
         actionRef={actionRef}
-        columnPersistenceId="apps.kuaizhizao.pages.analysis-center.document-timing"rowKey={(r) => `${r.document_type}-${r.document_id}-${r.document_code}`}
-        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+        columnPersistenceId="apps.kuaireport.pages.analysis-center.document-timing.list-v1"
+        rowKey={(r) => `${r.document_type}-${r.document_id}-${r.document_code}`}
+        columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
         toolBarRender={() => {
           const actions: React.ReactNode[] = [];
           if (perms.canExport) {
@@ -259,17 +281,14 @@ const DocumentTimingPage: React.FC = () => {
               <DetailDrawerSection title={t('common.basicInfo', { defaultValue: '基本信息' })}>
                 <Descriptions column={2} size="small" bordered>
                   <Descriptions.Item label={t('app.kuaireport.analysis.col.documentType', { defaultValue: '单据类型' })}>
-                    <Tag
-                      color={
-                        currentTiming.document_type === 'work_order'
-                          ? 'processing'
-                          : currentTiming.document_type === 'purchase_order'
-                            ? 'default'
-                            : 'success'
-                      }
-                    >
-                      {docTypeLabel(currentTiming.document_type)}
-                    </Tag>
+                    {renderReportDocTypeMarker(
+                      docTypeLabel(currentTiming.document_type),
+                      currentTiming.document_type === 'work_order'
+                        ? 'processing'
+                        : currentTiming.document_type === 'purchase_order'
+                          ? 'default'
+                          : 'success',
+                    )}
                   </Descriptions.Item>
                   <Descriptions.Item label={t('app.kuaireport.analysis.col.documentCode', { defaultValue: '单据编号' })}>
                     <Typography.Text copyable={{ text: String(currentTiming.document_code ?? '') }}>

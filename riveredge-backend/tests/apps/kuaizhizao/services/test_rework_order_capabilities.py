@@ -8,7 +8,11 @@ from apps.kuaizhizao.services.document_action_policy.rework_order import (
     capability_kwargs_from_context,
     derive_rework_order_capabilities,
 )
+from apps.kuaizhizao.services.rework_order_workflow import resolve_awaiting_route_decision
 from apps.kuaizhizao.utils.rework_order_constants import (
+    OPERATION_STATUS_ACTIVE,
+    OPERATION_STATUS_COMPLETED,
+    OPERATION_STATUS_PENDING,
     ROUTING_MODE_DYNAMIC,
     ROUTING_MODE_PREDEFINED,
 )
@@ -52,6 +56,38 @@ def test_dynamic_advance_when_awaiting_decision():
     )
     assert caps.advance_next.allowed is True
     assert caps.execute.allowed is False
+
+
+def test_awaiting_route_decision_after_current_link_cleared():
+    """动态路线首道报满后清空 current_link，仍应判定为待决策（二次返工常见卡死点）。"""
+    completed = _record(status=OPERATION_STATUS_COMPLETED)
+    assert resolve_awaiting_route_decision(
+        status="in_progress",
+        routing_mode=ROUTING_MODE_DYNAMIC,
+        links=[completed],
+        current_link=None,
+    ) is True
+
+
+def test_not_awaiting_when_active_link_exists():
+    active = _record(status=OPERATION_STATUS_ACTIVE)
+    pending = _record(status=OPERATION_STATUS_PENDING)
+    assert resolve_awaiting_route_decision(
+        status="in_progress",
+        routing_mode=ROUTING_MODE_DYNAMIC,
+        links=[active, pending],
+        current_link=active,
+    ) is False
+
+
+def test_not_awaiting_for_predefined_route():
+    completed = _record(status=OPERATION_STATUS_COMPLETED)
+    assert resolve_awaiting_route_decision(
+        status="in_progress",
+        routing_mode=ROUTING_MODE_PREDEFINED,
+        links=[completed],
+        current_link=None,
+    ) is False
 
 
 def test_predefined_no_advance_next():

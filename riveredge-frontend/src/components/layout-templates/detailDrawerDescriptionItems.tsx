@@ -1,11 +1,14 @@
 /**
  * 将 ProDescriptions 列配置转为 Ant Design Descriptions items（详情抽屉「基本信息」区复用）
+ * 关联单号列与 UniTable 同一约定：自动挂嵌套抽屉链接。
  */
 
 import type { Key, ReactNode } from 'react';
 import type { DescriptionsProps } from 'antd';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../utils/format';
+import { resolveLinkedDocumentColumn } from '../../apps/kuaizhizao/utils/linkedDocumentAutoLink';
+import { LinkedDocumentAutoCell } from '../linked-document-code/LinkedDocumentAutoCell';
 
 export function detailDrawerDescriptionItems<T extends Record<string, any>>(
   columns: ProDescriptionsItemProps<T>[],
@@ -17,6 +20,27 @@ export function detailDrawerDescriptionItems<T extends Record<string, any>>(
       typeof di === 'string' ? di : Array.isArray(di) ? di.join('.') : undefined;
     const value =
       dataSource && lookupKey != null ? (dataSource as Record<string, unknown>)[lookupKey] : undefined;
+
+    const itemKey =
+      col.key ??
+      (typeof di === 'string' || typeof di === 'number' ? di : Array.isArray(di) ? di.join('.') : index);
+
+    const skipLinked = Boolean((col as { skipLinkedDocumentLink?: boolean }).skipLinkedDocumentLink);
+    const linkedBinding =
+      !skipLinked && typeof lookupKey === 'string' ? resolveLinkedDocumentColumn(lookupKey) : null;
+    if (linkedBinding && dataSource) {
+      return {
+        key: itemKey as Key,
+        label: col.title as ReactNode,
+        children: (
+          <LinkedDocumentAutoCell
+            binding={linkedBinding}
+            record={dataSource as Record<string, unknown>}
+          />
+        ),
+        span: col.span ?? 1,
+      };
+    }
 
     let content: ReactNode = value as ReactNode;
 
@@ -41,10 +65,6 @@ export function detailDrawerDescriptionItems<T extends Record<string, any>>(
         index,
       );
     }
-
-    const itemKey =
-      col.key ??
-      (typeof di === 'string' || typeof di === 'number' ? di : Array.isArray(di) ? di.join('.') : index);
 
     return {
       key: itemKey as Key,

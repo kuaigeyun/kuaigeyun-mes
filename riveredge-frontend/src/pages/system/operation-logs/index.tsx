@@ -12,6 +12,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Descriptions, Modal, Space, Tag, Typography } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemTypeMarker } from '../utils/systemListPresentation';
 import { EyeOutlined, BarChartOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea';
@@ -100,7 +102,7 @@ const OperationLogsPage: React.FC = () => {
       unknown: { color: 'default', text: t('pages.system.operationLogs.typeUnknown') },
     };
     const typeInfo = typeMap[type] || { color: 'default', text: type };
-    return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
+    return renderSystemTypeMarker(typeInfo.text, typeInfo.color);
   };
 
   /**
@@ -223,23 +225,112 @@ const OperationLogsPage: React.FC = () => {
   /**
    * 表格列定义（优化：突出对用户有用的信息）
    */
-  const columns: ProColumns<OperationLog>[] = [
-    { title: t('pages.system.operationLogs.createdAt'), dataIndex: 'created_at', key: 'created_at', valueType: 'dateTimeRange', sorter: true, render: (_: any, record: OperationLog) => formatDateTimeBySiteSetting(record.created_at), width: 180, fixed: 'left' },
-    { title: t('pages.system.operationLogs.operationType'), dataIndex: 'operation_type', key: 'operation_type', valueType: 'select', valueEnum: { create: { text: t('pages.system.operationLogs.typeCreate') }, update: { text: t('pages.system.operationLogs.typeUpdate') }, delete: { text: t('pages.system.operationLogs.typeDelete') }, view: { text: t('pages.system.operationLogs.typeView') }, error: { text: t('pages.system.operationLogs.typeError') }, unknown: { text: t('pages.system.operationLogs.typeUnknown') } }, render: (_: any, record: OperationLog) => getOperationTypeTag(record.operation_type), width: 100 },
-    { title: t('pages.system.operationLogs.operationModule'), dataIndex: 'operation_module', key: 'operation_module', ellipsis: true, width: 120, render: (_: React.ReactNode, record: OperationLog) => formatModuleName(record.operation_module) },
-    { title: t('pages.system.operationLogs.operationObject'), dataIndex: 'operation_object_type', key: 'operation_object_type', ellipsis: true, width: 120, render: (_: React.ReactNode, record: OperationLog) => record.operation_object_type || '-' },
-    { title: t('pages.system.operationLogs.operationContent'), dataIndex: 'operation_content', key: 'operation_content', ellipsis: true, search: false, width: 250, render: (_: React.ReactNode, record: OperationLog) => formatOperationContent(record.operation_content, record.operation_object_type) },
-    { title: t('pages.system.operationLogs.operator'), dataIndex: 'user_id', key: 'user_id', valueType: 'digit', width: 120, render: (_: any, record: OperationLog) => getUserDisplayName(record) },
-    { title: t('pages.system.operationLogs.ipAddress'), dataIndex: 'ip_address', key: 'ip_address', ellipsis: true, search: false, width: 120, hideInTable: true },
-    { title: t('pages.system.operationLogs.requestMethod'), dataIndex: 'request_method', key: 'request_method', valueType: 'select', valueEnum: { GET: { text: 'GET' }, POST: { text: 'POST' }, PUT: { text: 'PUT' }, PATCH: { text: 'PATCH' }, DELETE: { text: 'DELETE' } }, width: 100, hideInTable: true },
-    { title: t('pages.system.operationLogs.requestPath'), dataIndex: 'request_path', key: 'request_path', ellipsis: true, search: false, width: 200, hideInTable: true },
-  ];
+  const columns = useMemo<ProColumns<OperationLog>[]>(() => alignProColumns([
+    {
+      title: t('pages.system.operationLogs.createdAt'),
+      dataIndex: 'created_at',
+      key: 'created_at',
+      valueType: 'dateTimeRange',
+      sorter: true,
+      render: (_: any, record: OperationLog) => formatDateTimeBySiteSetting(record.created_at),
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      fixed: 'left',
+    },
+    {
+      title: t('pages.system.operationLogs.operationType'),
+      dataIndex: 'operation_type',
+      key: 'operation_type',
+      valueType: 'select',
+      valueEnum: {
+        create: { text: t('pages.system.operationLogs.typeCreate') },
+        update: { text: t('pages.system.operationLogs.typeUpdate') },
+        delete: { text: t('pages.system.operationLogs.typeDelete') },
+        view: { text: t('pages.system.operationLogs.typeView') },
+        error: { text: t('pages.system.operationLogs.typeError') },
+        unknown: { text: t('pages.system.operationLogs.typeUnknown') },
+      },
+      render: (_: any, record: OperationLog) => getOperationTypeTag(record.operation_type),
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+    },
+    {
+      title: t('pages.system.operationLogs.operationModule'),
+      dataIndex: 'operation_module',
+      key: 'operation_module',
+      ellipsis: true,
+      width: 120,
+      render: (_: React.ReactNode, record: OperationLog) => formatModuleName(record.operation_module),
+    },
+    {
+      title: t('pages.system.operationLogs.operationObject'),
+      dataIndex: 'operation_object_type',
+      key: 'operation_object_type',
+      ellipsis: true,
+      width: 120,
+      render: (_: React.ReactNode, record: OperationLog) => record.operation_object_type || '-',
+    },
+    {
+      title: t('pages.system.operationLogs.operationContent'),
+      dataIndex: 'operation_content',
+      key: 'operation_content',
+      ellipsis: true,
+      search: false,
+      width: 250,
+      render: (_: React.ReactNode, record: OperationLog) => formatOperationContent(record.operation_content, record.operation_object_type),
+    },
+    {
+      title: t('pages.system.operationLogs.operator'),
+      dataIndex: 'user_id',
+      key: 'user_id',
+      valueType: 'digit',
+      width: 120,
+      render: (_: any, record: OperationLog) => getUserDisplayName(record),
+    },
+    {
+      title: t('pages.system.operationLogs.ipAddress'),
+      dataIndex: 'ip_address',
+      key: 'ip_address',
+      ellipsis: true,
+      search: false,
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInTable: true,
+    },
+    {
+      title: t('pages.system.operationLogs.requestMethod'),
+      dataIndex: 'request_method',
+      key: 'request_method',
+      valueType: 'select',
+      valueEnum: { GET: { text: 'GET' }, POST: { text: 'POST' }, PUT: { text: 'PUT' }, PATCH: { text: 'PATCH' }, DELETE: { text: 'DELETE' } },
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInTable: true,
+    },
+    {
+      title: t('pages.system.operationLogs.requestPath'),
+      dataIndex: 'request_path',
+      key: 'request_path',
+      ellipsis: true,
+      search: false,
+      width: 200,
+      hideInTable: true,
+    },
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t]);
 
   return (
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<OperationLog>
-          columnPersistenceId="pages.system.operation-logs"
+          columnPersistenceId="pages.system.operation-logs.list-v1"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

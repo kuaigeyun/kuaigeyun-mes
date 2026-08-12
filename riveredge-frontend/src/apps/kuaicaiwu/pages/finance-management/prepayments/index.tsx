@@ -2,11 +2,17 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { ProFormMoney, ProFormSelect, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { App, Button, Tabs, Tag, Typography } from 'antd';
+import { App, Button, Tabs } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { FormModalTemplate, MultiTabListPageTemplate, MODAL_CONFIG, type StatCard } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { MarkerTag } from '../../../../../constants/statusBadges';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { apiRequest } from '../../../../../services/api';
 import { receiptService, type ReceiptListParams } from '../../../services/finance/receipt';
 import { paymentService, type PaymentListParams } from '../../../services/finance/payment';
@@ -46,9 +52,9 @@ const PREPAYMENT_RESOURCE = 'kuaicaiwu:prepayment';
 const prepaymentTag = (type: string | undefined, t: TFunction) => {
   const label = formatSettlementType(type, t);
   if (type === 'prepayment') {
-    return <Tag color="blue">{label}</Tag>;
+    return <MarkerTag color="processing">{label}</MarkerTag>;
   }
-  return <Tag>{label}</Tag>;
+  return <MarkerTag>{label}</MarkerTag>;
 };
 
 const PrepaymentsPage: React.FC = () => {
@@ -159,23 +165,28 @@ const PrepaymentsPage: React.FC = () => {
     }),
     {
       title: t(`${P}.col.receiptCode`),
+      key: 'finance_doc_partner_stacked',
       dataIndex: 'receipt_code',
-      width: 160,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      fixed: 'left',
       hideInSearch: true,
       sorter: true,
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.receipt_code ?? '') }} ellipsis>
-          {String(r.receipt_code ?? '-')}
-        </Typography.Text>
+        <UniTableStackedPrimaryCell
+          primary={String(r.customer_name ?? '')}
+          secondary={String(r.receipt_code ?? '')}
+        />
       ),
     },
-    { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', ellipsis: true, hideInSearch: true, sorter: true },
+    { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', hideInTable: true },
     {
       title: t(`${P}.col.receiptDate`),
       dataIndex: 'receipt_date',
       valueType: 'date',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
     },
@@ -193,6 +204,9 @@ const PrepaymentsPage: React.FC = () => {
       title: t(`${P}.col.settlementMethod`),
       dataIndex: 'settlement_type',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       render: (_, r) => prepaymentTag(String(r.settlement_type ?? 'normal'), t),
     },
@@ -200,6 +214,9 @@ const PrepaymentsPage: React.FC = () => {
       title: t(`${P}.col.status`),
       dataIndex: 'status',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
       valueType: 'select',
@@ -208,8 +225,10 @@ const PrepaymentsPage: React.FC = () => {
     ...financeDocCreatedUpdatedColumns<PrepaymentRow>(t),
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
-      width: 100,
+      fixed: 'right',
+      hideInSearch: true,
       render: (_, r) => [
         prepaymentPerms.canUpdate ? (
         <a
@@ -251,23 +270,28 @@ const PrepaymentsPage: React.FC = () => {
     }),
     {
       title: t(`${P}.col.paymentCode`),
+      key: 'finance_doc_partner_stacked',
       dataIndex: 'payment_code',
-      width: 160,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      fixed: 'left',
       hideInSearch: true,
       sorter: true,
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.payment_code ?? '') }} ellipsis>
-          {String(r.payment_code ?? '-')}
-        </Typography.Text>
+        <UniTableStackedPrimaryCell
+          primary={String(r.supplier_name ?? '')}
+          secondary={String(r.payment_code ?? '')}
+        />
       ),
     },
-    { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'supplier_name', ellipsis: true, hideInSearch: true, sorter: true },
+    { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'supplier_name', hideInTable: true },
     {
       title: t(`${P}.col.paymentDate`),
       dataIndex: 'payment_date',
       valueType: 'date',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
     },
@@ -285,6 +309,9 @@ const PrepaymentsPage: React.FC = () => {
       title: t(`${P}.col.settlementMethod`),
       dataIndex: 'settlement_type',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       render: (_, r) => prepaymentTag(String(r.settlement_type ?? 'normal'), t),
     },
@@ -292,6 +319,9 @@ const PrepaymentsPage: React.FC = () => {
       title: t(`${P}.col.status`),
       dataIndex: 'status',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
       valueType: 'select',
@@ -300,8 +330,10 @@ const PrepaymentsPage: React.FC = () => {
     ...financeDocCreatedUpdatedColumns<PrepaymentRow>(t),
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
-      width: 100,
+      fixed: 'right',
+      hideInSearch: true,
       render: (_, r) => [
         prepaymentPerms.canUpdate ? (
         <a
@@ -378,8 +410,8 @@ const PrepaymentsPage: React.FC = () => {
                     actionRef={customerBalanceRef}
                     enableRowSelection
                     rowKey={(r) => `c-${r.partner_id}`}
-                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.customer-balance"
-                    columns={balanceColumns}
+                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.customer-balance.list-v1"
+                    columns={alignProColumns(balanceColumns, SALES_DOC_LIST_FIELD_RANK)}
                     showAdvancedSearch
                     skipFuzzyPinyinClientFilter
                     request={async (params, sort, _filter, searchFormValues) => {
@@ -416,8 +448,8 @@ const PrepaymentsPage: React.FC = () => {
                     actionRef={receiptRef}
                     enableRowSelection
                     rowKey="id"
-                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.receipts"
-                    columns={receiptColumns}
+                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.receipts.list-v1"
+                    columns={alignProColumns(receiptColumns, SALES_DOC_LIST_FIELD_RANK)}
                     showAdvancedSearch
                     skipFuzzyPinyinClientFilter
                     pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
@@ -471,8 +503,8 @@ const PrepaymentsPage: React.FC = () => {
                     actionRef={supplierBalanceRef}
                     enableRowSelection
                     rowKey={(r) => `s-${r.partner_id}`}
-                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.supplier-balance"
-                    columns={balanceColumns}
+                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.supplier-balance.list-v1"
+                    columns={alignProColumns(balanceColumns, SALES_DOC_LIST_FIELD_RANK)}
                     showAdvancedSearch
                     skipFuzzyPinyinClientFilter
                     request={async (params, sort, _filter, searchFormValues) => {
@@ -509,8 +541,8 @@ const PrepaymentsPage: React.FC = () => {
                     actionRef={paymentRef}
                     enableRowSelection
                     rowKey="id"
-                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.payments"
-                    columns={paymentColumns}
+                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.payments.list-v1"
+                    columns={alignProColumns(paymentColumns, SALES_DOC_LIST_FIELD_RANK)}
                     showAdvancedSearch
                     skipFuzzyPinyinClientFilter
                     pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}

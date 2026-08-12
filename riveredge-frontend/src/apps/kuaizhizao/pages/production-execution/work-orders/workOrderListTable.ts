@@ -22,11 +22,8 @@ export const WORK_ORDER_LIST_UNITABLE_QUERY_KEY = [
   ...WORK_ORDER_LIST_TANSTACK_PREFIX,
 ] as const
 
-/** 列表缓存时效；齐套率靠后端库存回写 + 页内定时/聚焦刷新拉取 */
+/** 列表缓存时效；齐套率/下推进度由业务操作后的主动 reload 或工具栏同步刷新 */
 export const WORK_ORDER_LIST_STALE_MS = 15_000
-
-/** 工单列表页可见时静默刷新间隔（对齐套率/下推进度等随单据变化的字段） */
-export const WORK_ORDER_LIST_LIVE_REFRESH_MS = 30_000
 
 /** 从列表 rowKey 解析工单组 ID（组父行：work_order_group-123 或负数 id） */
 export function parseWorkOrderGroupIdFromListRowKey(key: React.Key): number | null {

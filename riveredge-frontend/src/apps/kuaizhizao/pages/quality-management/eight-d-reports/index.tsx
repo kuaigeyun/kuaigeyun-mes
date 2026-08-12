@@ -1,13 +1,13 @@
 import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useMemo, useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDateTimePicker, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Empty, Space, Tag } from 'antd';
+import { App, Button, Empty, Space } from 'antd';
 import { EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { stackedPrimarySecondaryColumn } from '../components/qualityTableColumns';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { qualityImprovementApi, Quality8DReport } from '../../../services/quality-improvement';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -19,9 +19,12 @@ import { EightDDetailDrawer } from './components/EightDDetailDrawer';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
+import { WorkOrderOperationStepsStrip } from '../../production-execution/work-orders/components/WorkOrderOperationStepsStrip';
 import {
-  getEightDStatusText,
+  buildEightDListStepNodes,
+  EIGHT_D_LIST_STAGE_COLUMN_WIDTH,
   resolveEightDSeverityDisplay,
+  resolveEightDSourceDisplay,
 } from './components/eightDMeta';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -138,50 +141,77 @@ const EightDReportsPage: React.FC = () => {
       hideInTable: true,
       search: { order: 31 } as ProColumns['search'],
     },
-    stackedPrimarySecondaryColumn<Quality8DReport>(
-      t('app.kuaizhizao.eightD.columns.titleAndCode'),
-      'eightDStacked',
-      ['title'],
-      ['report_code', 'reportCode'],
-      { dataIndex: 'title', fixed: 'left' },
-    ),
+    {
+      ...stackedPrimarySecondaryColumn<Quality8DReport>(
+        t('app.kuaizhizao.eightD.columns.titleAndCode'),
+        'eightDStacked',
+        ['title'],
+        ['report_code', 'reportCode'],
+        { dataIndex: 'title', fixed: 'left' },
+      ),
+      // 余宽只进主列，避免 table-layout:fixed 把「来源」等 keepWidth 列等比撑开
+      uniTablePrimaryFlexMaxWidth: 480,
+    },
     {
       title: t('app.kuaizhizao.eightD.columns.severity'),
       dataIndex: 'severity',
       width: 90,
+      uniTableKeepWidth: true,
       sorter: true,
       hideInSearch: true,
       render: (_, row) => {
         const { label, color } = resolveEightDSeverityDisplay(t, row.severity);
-        return <Tag color={color}>{label}</Tag>;
+        if (label === '-') return '-';
+        return <MarkerTag color={color}>{label}</MarkerTag>;
       },
     },
     {
+      title: t('app.kuaizhizao.eightD.columns.stage'),
+      key: 'eight_d_stages',
+      // 勿绑 dataIndex=status：与搜索列共用 ProTable key，会冲掉 width / 固定契约
+      dataIndex: 'lifecycle_stages',
+      width: EIGHT_D_LIST_STAGE_COLUMN_WIDTH,
+      minWidth: EIGHT_D_LIST_STAGE_COLUMN_WIDTH,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: false,
+      hideInSearch: true,
+      render: (_, row) => (
+        <WorkOrderOperationStepsStrip
+          steps={buildEightDListStepNodes(t, row.status, row.lifecycle_stages)}
+        />
+      ),
+    },
+    {
+      title: t('app.kuaizhizao.eightD.columns.source'),
+      key: 'eight_d_source',
+      dataIndex: 'quality_exception_id',
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      ellipsis: true,
+      render: (_, row) => resolveEightDSourceDisplay(t, row)?.label ?? '-',
+    },
+    {
       title: t('app.kuaizhizao.eightD.columns.owner'),
+      key: 'eight_d_owner',
       dataIndex: 'owner_name',
-      width: 120,
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
     },
     {
-      title: t('app.kuaizhizao.eightD.columns.source'),
-      key: 'source',
-      width: 160,
-      hideInSearch: true,
-      render: (_, row) => {
-        if (row.quality_exception_id) {
-          return t('app.kuaizhizao.eightD.source.qualityException', { id: row.quality_exception_id });
-        }
-        if (row.defect_record_id) {
-          return t('app.kuaizhizao.eightD.source.nonconformingLedger', { id: row.defect_record_id });
-        }
-        return '-';
-      },
-    },
-    {
       title: t('app.kuaizhizao.eightD.columns.verificationResult'),
       dataIndex: 'verification_result',
-      width: 180,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       ellipsis: true,
       render: (_, row) => {
@@ -199,17 +229,13 @@ const EightDReportsPage: React.FC = () => {
         if (display) {
           return <span title={display}>{display}</span>;
         }
-        return row.status === 'closed' ? (
-          <Tag color="warning">{t('app.kuaizhizao.eightD.notFilled')}</Tag>
-        ) : (
-          '-'
-        );
+        return '-';
       },
     },
     {
       title: t('app.kuaizhizao.eightD.columns.dueDate'),
       dataIndex: 'due_date',
-      width: 132,
+      width: 168,
       uniTableKeepWidth: true,
       sorter: true,
       hideInSearch: true,
@@ -217,35 +243,6 @@ const EightDReportsPage: React.FC = () => {
         row.due_date ? formatDateTime(row.due_date, 'YYYY-MM-DD HH:mm:ss') : '-',
     },
     ...buildDocumentAuditColumns<Quality8DReport>(t),
-    {
-      title: t('app.kuaizhizao.eightD.columns.stage'),
-      dataIndex: 'status',
-      width: 220,
-      fixed: 'right',
-      hideInSearch: true,
-      render: (_, row) => {
-        const lifecycleStages = row.lifecycle_stages || [];
-        const activeIndex = lifecycleStages.findIndex((stage) => stage.status === 'active');
-        const doneCount = lifecycleStages.filter((stage) => stage.status === 'done').length;
-        const percent =
-          activeIndex >= 0
-            ? Math.round((activeIndex / Math.max(1, lifecycleStages.length - 1)) * 100)
-            : lifecycleStages.length
-              ? Math.round((doneCount / lifecycleStages.length) * 100)
-              : 0;
-        const stageName = getEightDStatusText(t, row.status);
-        return (
-          <UniLifecycle
-            percent={percent}
-            stageName={stageName}
-            status={row.status === 'closed' ? 'success' : 'active'}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
-      },
-    },
     {
       title: t('common.actions'),
       valueType: 'option',
@@ -339,7 +336,7 @@ const EightDReportsPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           permissionResource={EIGHT_D_RESOURCE}
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.eight-d-reports"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.eight-d-reports.stage-source-v5"
           showAdvancedSearch
           pinnedTabsField={EIGHT_D_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter

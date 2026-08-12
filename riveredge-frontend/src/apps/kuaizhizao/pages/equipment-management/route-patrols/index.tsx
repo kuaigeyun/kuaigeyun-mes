@@ -12,7 +12,8 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
-import { App, Button, Modal, Row, Col, Tag, Table, Switch, Input, Typography } from 'antd';
+import { App, Button, Modal, Row, Col, Table, Switch, Input, Typography } from 'antd';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -326,9 +327,9 @@ const RoutePatrolsPage: React.FC = () => {
         dataIndex: 'has_abnormality',
         render: (_, r) =>
           r.has_abnormality ? (
-            <Tag color="error">{t(`${P}.abnormal`)}</Tag>
+            <MarkerTag color="error">{t(`${P}.abnormal`)}</MarkerTag>
           ) : (
-            <Tag color="success">{t(`${P}.normal`)}</Tag>
+            <MarkerTag color="success">{t(`${P}.normal`)}</MarkerTag>
           ),
       },
       { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
@@ -348,9 +349,9 @@ const RoutePatrolsPage: React.FC = () => {
         width: 80,
         render: (_, row) =>
           row.is_pass === false ? (
-            <Tag color="error">{t(`${P}.abnormal`)}</Tag>
+            <MarkerTag color="error">{t(`${P}.abnormal`)}</MarkerTag>
           ) : (
-            <Tag color="success">{t(`${P}.normal`)}</Tag>
+            <MarkerTag color="success">{t(`${P}.normal`)}</MarkerTag>
           ),
       },
       {
@@ -455,21 +456,17 @@ const RoutePatrolsPage: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: t(`${P}.col.status`),
-        dataIndex: 'status',
-        width: 90,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status),
-      },
-      {
         title: t(`${P}.col.abnormality`),
         dataIndex: 'has_abnormality',
         width: 80,
         sorter: true,
         hideInSearch: true,
         render: (_, r) =>
-          r.has_abnormality ? <Tag color="error">{t(`${P}.abnormal`)}</Tag> : <Tag color="success">{t(`${P}.normal`)}</Tag>,
+          r.has_abnormality ? (
+            <MarkerTag color="error">{t(`${P}.abnormal`)}</MarkerTag>
+          ) : (
+            <MarkerTag color="success">{t(`${P}.normal`)}</MarkerTag>
+          ),
       },
       {
         title: t(`${P}.col.linkedFault`),
@@ -497,6 +494,15 @@ const RoutePatrolsPage: React.FC = () => {
         hideInSearch: true,
       },
       ...buildDocumentAuditColumns<RoutePatrol>(t),
+      {
+        title: t(`${P}.col.status`),
+        key: 'lifecycle',
+        dataIndex: 'status',
+        sorter: true,
+        hideInSearch: true,
+        fixed: 'right',
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status),
+      },
       {
         title: t('common.actions'),
         key: 'action',
@@ -531,7 +537,7 @@ const RoutePatrolsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<RoutePatrol>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.route-patrols"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.route-patrols-equip-rank-v1"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

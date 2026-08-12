@@ -60,6 +60,10 @@ import {
 } from '../../../../kuaizhizao/pages/sales-management/shared/DocumentPushProgressBar';
 import { payablePaymentPushPercent, payableInvoicePushPercent } from '../../../../kuaizhizao/pages/sales-management/shared/pushProgress';
 import { renderPayableInvoiceStatusTag } from '../../../utils/financeInvoiceStatusUi';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
@@ -458,28 +462,35 @@ const PayableList: React.FC = () => {
         }),
         {
             title: t('app.kuaicaiwu.common.code'),
+            key: 'finance_doc_partner_stacked',
             dataIndex: 'payable_code',
-            width: 168,
+            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
             fixed: 'left',
             hideInSearch: true,
             sorter: true,
             render: (_, entity) => (
-                <Typography.Text copyable={{ text: String(entity.payable_code ?? '') }} ellipsis>
-                    <a onClick={() => navigate(`/apps/kuaicaiwu/finance-management/payables/${entity.id}`)}>{entity.payable_code}</a>
-                </Typography.Text>
+                <UniTableStackedPrimaryCell
+                    primary={String(entity.supplier_name ?? '')}
+                    secondary={String(entity.payable_code ?? '')}
+                    onSecondaryClick={() =>
+                        navigate(`/apps/kuaicaiwu/finance-management/payables/${entity.id}`)
+                    }
+                />
             ),
         },
         {
             title: t(`${P}.col.supplierName`),
             dataIndex: 'supplier_name',
-            width: 200,
-            hideInSearch: true,
-            sorter: true,
+            hideInTable: true,
         },
         {
             title: t(`${P}.col.invoiceStatus`),
+            key: 'invoice_status',
             dataIndex: 'invoice_status',
             width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
             hideInSearch: true,
             render: (_, record) => renderPayableInvoiceStatusTag(record.invoice_status, t),
         },
@@ -489,6 +500,9 @@ const PayableList: React.FC = () => {
             valueType: 'money',
             align: 'right',
             width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
             hideInSearch: true,
         },
         {
@@ -497,6 +511,9 @@ const PayableList: React.FC = () => {
             valueType: 'money',
             align: 'right',
             width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
             hideInSearch: true,
             render: (_, record) => (
                 <span
@@ -517,6 +534,9 @@ const PayableList: React.FC = () => {
             valueType: 'money',
             align: 'right',
             width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
             hideInSearch: true,
             sorter: true,
         },
@@ -526,6 +546,9 @@ const PayableList: React.FC = () => {
             valueType: 'money',
             align: 'right',
             width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
             hideInSearch: true,
             sorter: true,
         },
@@ -535,6 +558,9 @@ const PayableList: React.FC = () => {
             valueType: 'money',
             align: 'right',
             width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
             hideInSearch: true,
             sorter: true,
             render: (_, record) => (
@@ -550,6 +576,9 @@ const PayableList: React.FC = () => {
             dataIndex: 'business_date',
             valueType: 'date',
             width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
             hideInSearch: true,
             sorter: true,
         },
@@ -565,6 +594,9 @@ const PayableList: React.FC = () => {
             dataIndex: 'due_date',
             valueType: 'date',
             width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
             hideInSearch: true,
             sorter: true,
         },
@@ -624,6 +656,7 @@ const PayableList: React.FC = () => {
         ...financeDocCreatedUpdatedColumns<Payable>(t),
         {
             title: t('app.kuaicaiwu.common.lifecycle'),
+            key: 'lifecycle',
             dataIndex: 'lifecycle_stage',
             fixed: 'right',
             hideInSearch: true,
@@ -644,9 +677,10 @@ const PayableList: React.FC = () => {
         },
         {
             title: t('common.actions'),
+            key: 'action',
             valueType: 'option',
             fixed: 'right',
-            width: 280,
+            hideInSearch: true,
             uniActionRenderOptions: { directMax: 5 },
             render: (_, record) => [
                         <Button {...rowActionKind('read')}
@@ -714,7 +748,7 @@ const PayableList: React.FC = () => {
                 headerTitle={t(`${P}.pageTitle`)}
                 actionRef={actionRef}
                 columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payables"
+                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payables.list-v1"
                 request={async (params, sort, _filter, searchFormValues) => {
                     const { current, pageSize } = params;
                     const listParams = resolvePayableListParams(searchFormValues, sort);

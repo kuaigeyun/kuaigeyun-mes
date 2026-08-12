@@ -75,6 +75,34 @@ async def sync_link_quantities_from_reports(
     return link
 
 
+def resolve_awaiting_route_decision(
+    *,
+    status: str,
+    routing_mode: str,
+    links: List[Any],
+    current_link: Optional[Any],
+) -> bool:
+    """
+    动态路线：当前工序完成后会清空 current_operation_link_id，进入「选择下一工序 / 完修」决策窗。
+    不得仅用 current_link.status==completed 判断，否则清空指针后 awaiting 恒为 False，
+    前端仍显示「报工」并报「当前无激活工序」。
+    """
+    if _norm_status(status) != "in_progress":
+        return False
+    if _norm_status(routing_mode) != _norm_status(ROUTING_MODE_DYNAMIC):
+        return False
+    has_active = any(_norm_status(l.status) == OPERATION_STATUS_ACTIVE for l in links)
+    if has_active:
+        return False
+    has_completed = any(_norm_status(l.status) == OPERATION_STATUS_COMPLETED for l in links)
+    if not has_completed:
+        return False
+    if current_link is not None and _norm_status(current_link.status) == OPERATION_STATUS_COMPLETED:
+        return True
+    # 报工完成后清空 current_operation_link_id 的常态
+    return current_link is None
+
+
 async def compute_capability_context(
     tenant_id: int,
     rework_order: ReworkOrder,
@@ -91,14 +119,21 @@ async def compute_capability_context(
     ).exists()
 
     current_link = next((l for l in links if l.id == rework_order.current_operation_link_id), None)
+    if current_link is None:
+        # 指针丢失时回退到仍为 active 的工序行，避免误报无激活工序
+        current_link = next(
+            (l for l in links if _norm_status(l.status) == OPERATION_STATUS_ACTIVE),
+            None,
+        )
     current_op_completed = bool(
         current_link and _norm_status(current_link.status) == OPERATION_STATUS_COMPLETED
     )
     has_completed_operation = any(_norm_status(l.status) == OPERATION_STATUS_COMPLETED for l in links)
-    awaiting_route_decision = (
-        rework_order.status == "in_progress"
-        and current_op_completed
-        and rework_order.routing_mode == ROUTING_MODE_DYNAMIC
+    awaiting_route_decision = resolve_awaiting_route_decision(
+        status=str(rework_order.status or ""),
+        routing_mode=str(rework_order.routing_mode or ROUTING_MODE_DYNAMIC),
+        links=links,
+        current_link=current_link,
     )
 
     verification_passed = False

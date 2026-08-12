@@ -38,6 +38,20 @@ const OUTBOUND_ISSUE_TYPE_COLORS: Record<OutboundIssueType, string> = {
   material_borrow: 'geekblue',
 };
 
+type StocktakingType = 'full' | 'partial' | 'cycle';
+
+const STOCKTAKING_TYPE_COLORS: Record<StocktakingType, string> = {
+  full: 'blue',
+  partial: 'orange',
+  cycle: 'geekblue',
+};
+
+function stocktakingTypeLabel(t: TFunction, type: StocktakingType): string {
+  if (type === 'full') return t('app.kuaizhizao.stocktaking.typeFull');
+  if (type === 'partial') return t('app.kuaizhizao.stocktaking.typePartial');
+  return t('app.kuaizhizao.stocktaking.typeCycle');
+}
+
 export function resolveWarehouseReasonTypeTagColor(value: string): string {
   return WAREHOUSE_REASON_TYPE_COLORS[value] ?? 'default';
 }
@@ -87,5 +101,37 @@ export function outboundIssueTypeMarkerValueEnum(
       key,
       { text: getOutboundIssueTypeLabel(t, key), status: OUTBOUND_ISSUE_TYPE_COLORS[key] },
     ]),
+  );
+}
+
+export function renderStocktakingTypeMarkerTag(t: TFunction, type?: string): React.ReactNode {
+  if (!type) return '-';
+  const key = type as StocktakingType;
+  if (!(key in STOCKTAKING_TYPE_COLORS)) return type;
+  return (
+    <MarkerTag color={STOCKTAKING_TYPE_COLORS[key]}>
+      {stocktakingTypeLabel(t, key)}
+    </MarkerTag>
+  );
+}
+
+type InventoryTransferMode = 'transfer' | 'bin_relocation';
+
+const INVENTORY_TRANSFER_MODE_COLORS: Record<InventoryTransferMode, string> = {
+  transfer: 'blue',
+  bin_relocation: 'gold',
+};
+
+export function renderInventoryTransferModeMarkerTag(
+  t: TFunction,
+  mode?: string,
+): React.ReactNode {
+  const key: InventoryTransferMode = mode === 'bin_relocation' ? 'bin_relocation' : 'transfer';
+  return (
+    <MarkerTag color={INVENTORY_TRANSFER_MODE_COLORS[key]}>
+      {key === 'bin_relocation'
+        ? t('app.kuaizhizao.inventoryTransfer.transferModeBinRelocation')
+        : t('app.kuaizhizao.inventoryTransfer.transferModeCross')}
+    </MarkerTag>
   );
 }

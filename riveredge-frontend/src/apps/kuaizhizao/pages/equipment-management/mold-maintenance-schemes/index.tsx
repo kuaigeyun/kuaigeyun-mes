@@ -80,6 +80,17 @@ import {
 
 const P = 'app.kuaizhizao.moldOps.maintenanceScheme';
 
+
+
+function resolveMaintenanceTriggerTypeLabel(
+  t: (key: string) => string,
+  triggerType?: string | null,
+): string {
+  const raw = String(triggerType ?? '').trim();
+  if (raw === 'days') return t(`${P}.triggerType.days`);
+  if (raw === 'count' || raw === 'usage_count') return t(`${P}.triggerType.count`);
+  return raw || '-';
+}
 const RESOURCE = 'kuaizhizao:mold-maintenance-scheme';
 
 
@@ -164,7 +175,7 @@ const MoldMaintenanceSchemesPage: React.FC = () => {
 
     () => [
 
-      { label: t(`${P}.triggerType.count`), value: 'count' },
+      { label: t(`${P}.triggerType.count`), value: 'usage_count' },
 
       { label: t(`${P}.triggerType.days`), value: 'days' },
 
@@ -208,7 +219,7 @@ const MoldMaintenanceSchemesPage: React.FC = () => {
 
     formRef.current?.resetFields();
 
-    formRef.current?.setFieldsValue({ is_active: true, trigger_type: 'count', lines: [{ sort_order: 0 }] });
+    formRef.current?.setFieldsValue({ is_active: true, trigger_type: 'usage_count', lines: [{ sort_order: 0 }] });
 
   };
 
@@ -235,6 +246,9 @@ const MoldMaintenanceSchemesPage: React.FC = () => {
       formRef.current?.setFieldsValue({
 
         ...loaded,
+
+        trigger_type:
+          loaded.trigger_type === 'count' ? 'usage_count' : loaded.trigger_type,
 
         lines: (loaded.lines ?? []).map((l: SchemeLine, i: number) => ({
 
@@ -310,7 +324,9 @@ const MoldMaintenanceSchemesPage: React.FC = () => {
 
       description: values.description,
 
-      trigger_type: values.trigger_type,
+      trigger_type:
+
+        values.trigger_type === 'count' ? 'usage_count' : values.trigger_type,
 
       interval_value: values.interval_value,
 
@@ -372,17 +388,7 @@ const MoldMaintenanceSchemesPage: React.FC = () => {
 
         dataIndex: 'trigger_type',
 
-        render: (_, record) =>
-
-          record.trigger_type === 'days'
-
-            ? t(`${P}.triggerType.days`)
-
-            : record.trigger_type === 'count'
-
-              ? t(`${P}.triggerType.count`)
-
-              : record.trigger_type || '-',
+        render: (_, record) => resolveMaintenanceTriggerTypeLabel(t, record.trigger_type),
 
       },
 
@@ -490,7 +496,19 @@ const MoldMaintenanceSchemesPage: React.FC = () => {
 
       },
 
-      { title: t(`${P}.col.triggerType`), dataIndex: 'trigger_type', width: 100, hideInSearch: true },
+      {
+
+        title: t(`${P}.col.triggerType`),
+
+        dataIndex: 'trigger_type',
+
+        width: 100,
+
+        hideInSearch: true,
+
+        render: (_, r) => resolveMaintenanceTriggerTypeLabel(t, r.trigger_type),
+
+      },
 
       { title: t(`${P}.col.intervalValue`), dataIndex: 'interval_value', width: 90, hideInSearch: true },
 
@@ -596,7 +614,7 @@ const MoldMaintenanceSchemesPage: React.FC = () => {
 
           headerTitle={t(`${P}.title`)}
 
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-maintenance-schemes"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-maintenance-schemes-equip-rank-v1"
 
           actionRef={actionRef}
 

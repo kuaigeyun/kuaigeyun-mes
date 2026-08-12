@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError
@@ -21,23 +22,58 @@ def _norm(value: Any) -> str:
     return str(value or "").strip()
 
 
-def derive_replenishment_suggestion_capabilities(suggestion: Any) -> ReplenishmentSuggestionCapabilities:
+def _qty_positive(suggestion: Any) -> bool:
+    try:
+        return Decimal(str(getattr(suggestion, "suggested_quantity", 0) or 0)) > 0
+    except Exception:
+        return False
+
+
+def derive_replenishment_suggestion_capabilities(
+    suggestion: Any,
+    *,
+    require_purchase_requisition: bool = False,
+) -> ReplenishmentSuggestionCapabilities:
     status = _norm(getattr(suggestion, "status", None))
     pending = status == "pending"
-    deny_reason = "replenishment_suggestion.process.not_pending" if not pending else None
+    qty_ok = _qty_positive(suggestion)
+    deny_not_pending = "replenishment_suggestion.process.not_pending" if not pending else None
+    deny_push = None
+    if not pending:
+        deny_push = "replenishment_suggestion.push.not_pending"
+    elif not qty_ok:
+        deny_push = "replenishment_suggestion.push.no_quantity"
+
+    push_pr = _cap(pending and qty_ok, deny_push or deny_not_pending)
+    if require_purchase_requisition:
+        push_po = _cap(False, "replenishment_suggestion.push_purchase_order.require_requisition")
+    else:
+        push_po = _cap(pending and qty_ok, deny_push or deny_not_pending)
 
     return ReplenishmentSuggestionCapabilities(
-        process=_cap(pending, deny_reason),
-        ignore=_cap(pending, deny_reason),
+        process=_cap(pending, deny_not_pending),
+        ignore=_cap(pending, deny_not_pending),
+        push_purchase_requisition=push_pr,
+        push_purchase_order=push_po,
         print=_cap(True),
     )
 
 
-def assert_replenishment_suggestion_capability(suggestion: Any, action: str) -> None:
-    caps = derive_replenishment_suggestion_capabilities(suggestion)
+def assert_replenishment_suggestion_capability(
+    suggestion: Any,
+    action: str,
+    *,
+    require_purchase_requisition: bool = False,
+) -> None:
+    caps = derive_replenishment_suggestion_capabilities(
+        suggestion,
+        require_purchase_requisition=require_purchase_requisition,
+    )
     cap_map = {
         "process": caps.process,
         "ignore": caps.ignore,
+        "push_purchase_requisition": caps.push_purchase_requisition,
+        "push_purchase_order": caps.push_purchase_order,
         "print": caps.print,
     }
     cap = cap_map.get(action)

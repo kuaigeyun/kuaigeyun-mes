@@ -10,6 +10,8 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography, theme } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { flushDrawerOpen, DRAWER_CONFIG, ListPageTemplate } from '../../../../components/layout-templates';
@@ -449,11 +451,14 @@ const UserListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<User>[] = React.useMemo(() => [
+  const columns: ProColumns<User>[] = React.useMemo(() => alignProColumns([
     {
       title: t('field.user.username'),
       dataIndex: 'username',
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
       fixed: 'left',
       sorter: true,
     },
@@ -497,17 +502,16 @@ const UserListPage: React.FC = () => {
       render: (_, record) => (
         <Space size={4} wrap>
           {record.roles?.map(role => (
-            <Tag
+            <span
               key={role.uuid}
-              color="blue"
               style={{ cursor: 'pointer' }}
               onClick={(e) => {
                 e.stopPropagation();
                 handleOpenRoleEdit(role.uuid);
               }}
             >
-              {resolvePresetRoleName(role, t)}
-            </Tag>
+              {renderSystemTypeMarker(resolvePresetRoleName(role, t), 'processing')}
+            </span>
           ))}
         </Space>
       ),
@@ -529,37 +533,39 @@ const UserListPage: React.FC = () => {
       title: t('field.user.isTenantAdmin'),
       dataIndex: 'is_tenant_admin',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('field.customField.yes'), status: 'Warning' },
         false: { text: t('field.customField.no'), status: 'Default' },
       },
       hideInTable: true,
-      render: (_, record) => (
-        <Tag color={record.is_tenant_admin ? 'gold' : 'default'}>
-          {record.is_tenant_admin ? t('field.customField.yes') : t('field.customField.no')}
-        </Tag>
-      ),
+      render: (_, record) => renderSystemYesNoTag(t, record.is_tenant_admin),
     },
     {
       title: t('field.user.status'),
       dataIndex: 'is_active',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('field.systemParameter.enabled'), status: 'Success' },
         false: { text: t('field.systemParameter.disabled'), status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')}
-        </Tag>
-      ),
+      render: (_, record) =>
+        renderSystemActiveTag(t, record.is_active, 'field.systemParameter.enabled', 'field.systemParameter.disabled'),
     },
     {
       title: t('field.user.createdAt'),
       dataIndex: 'created_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
@@ -568,6 +574,9 @@ const UserListPage: React.FC = () => {
       title: t('field.user.updatedAt'),
       dataIndex: 'updated_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
@@ -576,13 +585,18 @@ const UserListPage: React.FC = () => {
       title: t('field.user.lastLogin'),
       dataIndex: 'last_login',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
     },
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => [
             <Button
               key="view"
@@ -622,7 +636,7 @@ const UserListPage: React.FC = () => {
             </Button>,
           ],
     },
-  ], [t, departmentOptions, positionOptions, handleView, handleEdit, handleResetPassword, handleDelete, handleOpenRoleEdit]);
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, departmentOptions, positionOptions, handleView, handleEdit, handleResetPassword, handleDelete, handleOpenRoleEdit]);
 
   /**
    * 详情列定义
@@ -690,7 +704,7 @@ const UserListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<User>
-        columnPersistenceId="pages.system.users.list"
+        columnPersistenceId="pages.system.users.list-v1"
         actionRef={actionRef}
         columns={columns}
         request={async (params, _, __, searchFormValues) => {

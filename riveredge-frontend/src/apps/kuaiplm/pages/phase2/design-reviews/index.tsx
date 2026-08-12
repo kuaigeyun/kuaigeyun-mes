@@ -3,8 +3,15 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * 设计评审（Phase2）
  */
 
-import React, { useRef, useState, useCallback, useMemo } from 'react';
-import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
+import {
+  ActionType,
+  ProColumns,
+  ProFormInstance,
+  ProFormSelect,
+  ProFormText,
+  ProFormTextArea,
+} from '@ant-design/pro-components';
 import { useSearchParams } from 'react-router-dom';
 import { App, Button, Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -21,7 +28,9 @@ import {
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { formatDateTime } from '../../../../../utils/format';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { testGenerateCode } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   plmCodeTitleSearchColumns,
   plmCreatedUpdatedColumns,
@@ -36,6 +45,8 @@ import {
   renderPhase2ReviewTypeMarker,
 } from '../../../components/phase2Meta';
 
+const PAGE_CODE = 'kuaiplm-design-review';
+
 const DesignReviewsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
@@ -44,14 +55,38 @@ const DesignReviewsPage: React.FC = () => {
     ? Number(searchParams.get('project_id'))
     : undefined;
   const actionRef = useRef<ActionType>(null);
+  const createFormRef = useRef<ProFormInstance>(null);
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [editingRecord, setEditingRecord] = useState<RdDesignReview | null>(null);
   const [detailRecord, setDetailRecord] = useState<RdDesignReview | null>(null);
 
   const handleCreate = useCallback(() => setCreateOpen(true), []);
   useNewShortcut(handleCreate);
+
+  useEffect(() => {
+    if (!createOpen) return;
+    (async () => {
+      if (!isAutoGenerateEnabled(PAGE_CODE)) {
+        setPreviewCode(null);
+        return;
+      }
+      try {
+        const ruleCode = getPageRuleCode(PAGE_CODE);
+        if (!ruleCode) {
+          setPreviewCode(null);
+          return;
+        }
+        const res = await testGenerateCode({ rule_code: ruleCode });
+        setPreviewCode(res.code);
+        createFormRef.current?.setFieldsValue({ review_code: res.code });
+      } catch {
+        setPreviewCode(null);
+      }
+    })();
+  }, [createOpen]);
 
   const toReviewIds = (keys: React.Key[]) =>
     keys.map((key) => Number(key)).filter((id) => Number.isFinite(id) && id > 0);
@@ -122,6 +157,9 @@ const DesignReviewsPage: React.FC = () => {
         title: t('app.kuaiplm.phase2.designReviews.columns.code'),
         dataIndex: 'review_code',
         width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
       },
@@ -136,6 +174,9 @@ const DesignReviewsPage: React.FC = () => {
         title: t('app.kuaiplm.phase2.designReviews.columns.type'),
         dataIndex: 'review_type',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, row) => renderPhase2ReviewTypeMarker(t, row.review_type),
@@ -144,27 +185,37 @@ const DesignReviewsPage: React.FC = () => {
         title: t('app.kuaiplm.phase2.designReviews.columns.reviewer'),
         dataIndex: 'reviewer_name',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
       },
       {
         title: t('app.kuaiplm.phase2.designReviews.columns.scheduledAt'),
         dataIndex: 'review_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, row) =>
           row.review_date
             ? formatDateTime(row.review_date, 'YYYY-MM-DD HH:mm')
             : '-',
       },
+      ...plmCreatedUpdatedColumns<RdDesignReview>(t),
       {
         title: t('app.kuaiplm.phase2.designReviews.columns.status'),
+        key: 'lifecycle',
         dataIndex: 'status',
         width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
+        fixed: 'right',
         valueEnum: designReviewStatusValueEnum,
         render: (_, row) => renderPhase2DesignReviewStatusTag(t, row.status),
       },
-      ...plmCreatedUpdatedColumns<RdDesignReview>(t),
       plmListActionColumn<RdDesignReview>(t, (_, row) => [
             <Button
               {...rowActionKind('read')}
@@ -224,8 +275,8 @@ const DesignReviewsPage: React.FC = () => {
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
-        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.phase2.design-reviews"
+        columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
+        columnPersistenceId="apps.kuaiplm.pages.phase2.design-reviews.list-v1"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={PLM_PHASE2_PINNED_STATUS_FIELD}
@@ -283,14 +334,33 @@ const DesignReviewsPage: React.FC = () => {
       <FormModalTemplate
         title={t('app.kuaiplm.phase2.designReviews.createTitle')}
         open={createOpen}
-        onClose={() => setCreateOpen(false)}
+        formRef={createFormRef}
+        onClose={() => {
+          setCreateOpen(false);
+          setPreviewCode(null);
+        }}
         onFinish={async (values) => {
-          await createDesignReview(values);
+          await createDesignReview({
+            ...values,
+            project_id: filterProjectId,
+          });
           messageApi.success(t('common.createSuccess'));
           setCreateOpen(false);
+          setPreviewCode(null);
           actionRef.current?.reload();
         }}
       >
+        <ProFormText
+          name="review_code"
+          label={t('app.kuaiplm.phase2.designReviews.columns.code')}
+          rules={[{ required: !isAutoGenerateEnabled(PAGE_CODE) }]}
+          disabled={isAutoGenerateEnabled(PAGE_CODE)}
+          extra={
+            previewCode
+              ? `${t('app.kuaiplm.phase2.designReviews.columns.code')}: ${previewCode}`
+              : undefined
+          }
+        />
         <ProFormText name="title" label={t('app.kuaiplm.phase2.designReviews.form.title')} rules={[{ required: true }]} />
         <ProFormSelect
           name="review_type"

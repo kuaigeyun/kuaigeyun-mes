@@ -5,11 +5,15 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Typography, theme as AntdTheme } from 'antd';
+import { App, Popconfirm, Button, Space, theme as AntdTheme } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { ProFormSelect, ProFormDigit, ProFormSwitch, ProFormDatePicker, ProFormField } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UniTableStackedPrimaryCell,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import {
@@ -165,21 +169,26 @@ const EmployeeConfigsPage: React.FC = () => {
     () => alignProColumns<EmployeePerformanceConfig>([
       {
         title: t('app.kuaizhizao.performance.common.columns.employee'),
+        key: 'performance_employee_stacked',
         dataIndex: 'employee_name',
-        width: 120,
-        ellipsis: true,
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         fixed: 'left',
         sorter: true,
         render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.employee_name ?? '') }} ellipsis>
-            {r.employee_name ?? '-'}
-          </Typography.Text>
+          <UniTableStackedPrimaryCell
+            primary={String(r.employee_name ?? '').trim() || '-'}
+            secondary={getCalcModeText(t, r.calc_mode)}
+            secondaryCopyable={false}
+          />
         ),
       },
       {
         title: t('app.kuaizhizao.performance.common.columns.calcMode'),
         dataIndex: 'calc_mode',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         valueType: 'select',
         valueEnum: Object.fromEntries(calcModeOptions.map((o) => [o.value, { text: o.label }])),
@@ -190,9 +199,33 @@ const EmployeeConfigsPage: React.FC = () => {
           return <MarkerTag color={color}>{label}</MarkerTag>;
         },
       },
-      { title: t('app.kuaizhizao.performance.employeeConfigs.columns.hourlyRate'), dataIndex: 'hourly_rate', width: 120, align: 'right' },
-      { title: t('app.kuaizhizao.performance.employeeConfigs.columns.defaultPieceRate'), dataIndex: 'default_piece_rate', width: 140, align: 'right' },
-      { title: t('app.kuaizhizao.performance.employeeConfigs.columns.baseSalary'), dataIndex: 'base_salary', width: 120, align: 'right' },
+      {
+        title: t('app.kuaizhizao.performance.employeeConfigs.columns.hourlyRate'),
+        dataIndex: 'hourly_rate',
+        width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+      },
+      {
+        title: t('app.kuaizhizao.performance.employeeConfigs.columns.defaultPieceRate'),
+        dataIndex: 'default_piece_rate',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+      },
+      {
+        title: t('app.kuaizhizao.performance.employeeConfigs.columns.baseSalary'),
+        dataIndex: 'base_salary',
+        width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+      },
       {
         title: t('app.kuaizhizao.performance.common.form.active'),
         dataIndex: 'is_active',
@@ -201,10 +234,22 @@ const EmployeeConfigsPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<EmployeePerformanceConfig>(t),
       {
+        title: t('app.kuaizhizao.performance.common.columns.status'),
+        dataIndex: 'is_active',
+        width: 88,
+        minWidth: 88,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, r) => renderActiveTag(t, r.is_active),
+      },
+      {
         title: t('app.kuaizhizao.performance.common.columns.actions'),
+        key: 'action',
         valueType: 'option',
         width: 160,
         fixed: 'right',
+        hideInSearch: true,
         render: (_, record) => (
           <Space>
             <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
@@ -233,7 +278,7 @@ const EmployeeConfigsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.performance.employee-configs"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.employee-configs.v1"
           showAdvancedSearch
           skipFuzzyPinyinClientFilter
           pinnedTabsField={PERFORMANCE_PINNED_IS_ACTIVE_FIELD}

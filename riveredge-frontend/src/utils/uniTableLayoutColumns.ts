@@ -86,6 +86,9 @@ export const UNI_TABLE_OPERATION_MIN_WIDTH = resolveUniTableOperationWidthForSlo
 /** 勾选列宽度（空表 scroll.x 求和） */
 export const UNI_TABLE_SELECTION_COL_WIDTH = 48;
 
+/** 展开列宽度（与 antd/rc-table expand 列一致；须计入 scroll.x，否则表头/表体错位叠字） */
+export const UNI_TABLE_EXPAND_COL_WIDTH = 48;
+
 /** 无 width/minWidth 时的回退列宽（空表 scroll.x 求和） */
 export const UNI_TABLE_EMPTY_FALLBACK_COL_WIDTH = 120;
 
@@ -250,9 +253,11 @@ export function getUniTableColumnScrollContribution(col: unknown): number {
 /** 空表 + 固定列：按列宽求和得到 scroll.x，保证表头与固定列对齐（antd 固定列依赖 scroll.x）。 */
 export function computeUniTableMinScrollX(
   columns: readonly unknown[],
-  options?: { includeSelection?: boolean },
+  options?: { includeSelection?: boolean; includeExpandable?: boolean },
 ): number {
-  let total = options?.includeSelection ? UNI_TABLE_SELECTION_COL_WIDTH : 0;
+  let total = 0;
+  if (options?.includeSelection) total += UNI_TABLE_SELECTION_COL_WIDTH;
+  if (options?.includeExpandable) total += UNI_TABLE_EXPAND_COL_WIDTH;
   for (const col of columns) {
     total += getUniTableColumnScrollContribution(col);
   }

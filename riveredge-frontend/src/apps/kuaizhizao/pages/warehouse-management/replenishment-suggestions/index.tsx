@@ -1,20 +1,18 @@
 /**
  * 补货建议管理页面
  *
- * 提供补货建议的查看、生成和处理功能
+ * 提供补货建议的查看、生成、处理与下推采购功能。
  *
  * @author RiverEdge Team
  * @date 2026-01-17
  */
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Descriptions } from 'antd';
-import dayjs from 'dayjs';
-import { ProForm, ProFormRadio, ProFormTextArea } from '@ant-design/pro-components';
-import { ReloadOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormRadio, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Descriptions, Select } from 'antd';
+import { CheckOutlined, ReloadOutlined, ExclamationCircleOutlined, StopOutlined, CalculatorOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   MaterialStackedCell,
@@ -22,8 +20,19 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { UniBatchMenuButton, runCapabilityBatchLoop } from '../../../../../components/uni-batch';
+import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import {
+  replenishmentBatchIgnoreAllowed,
+  replenishmentBatchProcessAllowed,
+  replenishmentBatchPushPurchaseOrderAllowed,
+  replenishmentBatchPushPurchaseRequisitionAllowed,
+} from '../../../../../hooks/useDocumentCapabilities';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { warehouseApi } from '../../../services/production';
+import { listDemandComputations } from '../../../services/demand-computation';
 import { formatDateTime } from '../../../../../utils/format';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
@@ -70,16 +79,28 @@ interface ReplenishmentSuggestion {
   capabilities?: {
     process?: { allowed?: boolean; reason?: string };
     ignore?: { allowed?: boolean; reason?: string };
+    push_purchase_requisition?: { allowed?: boolean; reason?: string };
+    push_purchase_order?: { allowed?: boolean; reason?: string };
   };
 }
 
+const SUGGESTION_TYPE_COLORS: Record<string, string> = {
+  low_stock: 'orange',
+  demand_based: 'blue',
+  seasonal: 'geekblue',
+};
+
 const ReplenishmentSuggestionsPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message: messageApi } = App.useApp();
+  const { message: messageApi, modal } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const tableRowsRef = useRef<ReplenishmentSuggestion[]>([]);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const replenishmentPerms = useResourcePermissions('kuaizhizao:warehouse-management-replenishment-suggestions');
+  const purchaseRequisitionPerms = useResourcePermissions('kuaizhizao:purchase-requisition');
+  const purchaseOrderPerms = useResourcePermissions('kuaizhizao:purchase-order');
 
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [suggestionDetail, setSuggestionDetail] = useState<ReplenishmentSuggestion | null>(null);
@@ -89,6 +110,56 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
   const [processStatus, setProcessStatus] = useState<string>('processed');
   const [processNotes, setProcessNotes] = useState<string>('');
 
+  const [demandModalVisible, setDemandModalVisible] = useState(false);
+  const [demandComputationId, setDemandComputationId] = useState<number | undefined>();
+  const [demandOptions, setDemandOptions] = useState<Array<{ label: string; value: number }>>([]);
+  const [demandLoading, setDemandLoading] = useState(false);
+  const [generatingDemand, setGeneratingDemand] = useState(false);
+
+  const pushToPrAction = resolveKuaizhizaoDocumentAction(
+    t,
+    'purchase_requisition.pull_from_replenishment_suggestion',
+  );
+  const pushToPoAction = resolveKuaizhizaoDocumentAction(
+    t,
+    'purchase_order.pull_from_replenishment_suggestion',
+  );
+
+  const selectedRecordsForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is ReplenishmentSuggestion => row != null),
+    [selectedRowKeys],
+  );
+
+  const handleBatchSuccess = useCallback(() => {
+    setSelectedRowKeys([]);
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+  }, [invalidateMenuBadgeCounts]);
+
+  const runBatchMark = useCallback(
+    async (keys: React.Key[], status: 'processed' | 'ignored') => {
+      const capabilityKey = status === 'processed' ? 'process' : 'ignore';
+      await runCapabilityBatchLoop({
+        keys,
+        records: selectedRecordsForBatch,
+        capabilityKey,
+        permAllowed: replenishmentPerms.canUpdate,
+        notAllowedMessage: t('app.kuaizhizao.replenishmentSuggestions.msgSelectSuggestions'),
+        onRun: (id) =>
+          warehouseApi.replenishmentSuggestion.process(String(id), {
+            status,
+          }),
+        message: messageApi,
+        t,
+        onSuccess: handleBatchSuccess,
+      });
+    },
+    [handleBatchSuccess, messageApi, replenishmentPerms.canUpdate, selectedRecordsForBatch, t],
+  );
+
   const suggestionTypeLabel = (type?: string) => {
     const typeMap: Record<string, string> = {
       low_stock: t('app.kuaizhizao.replenishmentSuggestions.typeLowStock'),
@@ -96,6 +167,15 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       seasonal: t('app.kuaizhizao.replenishmentSuggestions.typeSeasonal'),
     };
     return type ? typeMap[type] || type : '-';
+  };
+
+  const renderSuggestionTypeTag = (type?: string) => {
+    if (!type) return '-';
+    return (
+      <MarkerTag color={SUGGESTION_TYPE_COLORS[type] ?? 'default'}>
+        {suggestionTypeLabel(type)}
+      </MarkerTag>
+    );
   };
 
   const priorityConfig = (priority?: string) => {
@@ -116,6 +196,97 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
     const key = status || '';
     return statusMap[key] || { text: key || '-', color: 'default' };
   };
+
+  const canPushPr = replenishmentBatchPushPurchaseRequisitionAllowed(
+    selectedRecordsForBatch,
+    replenishmentPerms.canUpdate,
+    purchaseRequisitionPerms.canCreate,
+  );
+  const canPushPo = replenishmentBatchPushPurchaseOrderAllowed(
+    selectedRecordsForBatch,
+    replenishmentPerms.canUpdate,
+    purchaseOrderPerms.canCreate,
+  );
+
+  const runPush = useCallback(
+    async (target: 'purchase_requisition' | 'purchase_order') => {
+      const ids = selectedRecordsForBatch
+        .filter((r) =>
+          target === 'purchase_requisition'
+            ? r.capabilities?.push_purchase_requisition?.allowed
+            : r.capabilities?.push_purchase_order?.allowed,
+        )
+        .map((r) => Number(r.id))
+        .filter((id) => Number.isFinite(id) && id > 0);
+      if (ids.length === 0) {
+        messageApi.warning(t('app.kuaizhizao.replenishmentSuggestions.msgSelectSuggestions'));
+        return;
+      }
+      try {
+        const preview =
+          target === 'purchase_requisition'
+            ? await warehouseApi.replenishmentSuggestion.previewPushToPurchaseRequisition(ids)
+            : await warehouseApi.replenishmentSuggestion.previewPushToPurchaseOrder(ids);
+        if (preview?.has_blocking_issues) {
+          messageApi.error(
+            preview.blocking_reason || t('app.kuaizhizao.replenishmentSuggestions.msgPushBlocked'),
+          );
+          return;
+        }
+        modal.confirm({
+          title:
+            target === 'purchase_requisition'
+              ? t('app.kuaizhizao.replenishmentSuggestions.msgPushPrConfirm', { count: ids.length })
+              : t('app.kuaizhizao.replenishmentSuggestions.msgPushPoConfirm', { count: ids.length }),
+          content: preview?.tip,
+          onOk: async () => {
+            const result =
+              target === 'purchase_requisition'
+                ? await warehouseApi.replenishmentSuggestion.pushToPurchaseRequisition(ids)
+                : await warehouseApi.replenishmentSuggestion.pushToPurchaseOrder(ids);
+            messageApi.success(
+              result?.message || t('app.kuaizhizao.replenishmentSuggestions.msgPushSuccess'),
+            );
+            handleBatchSuccess();
+          },
+        });
+      } catch (error: any) {
+        messageApi.error(error?.message || t('app.kuaizhizao.replenishmentSuggestions.msgPushFailed'));
+      }
+    },
+    [handleBatchSuccess, messageApi, modal, selectedRecordsForBatch, t],
+  );
+
+  const toolbarPushMenuItems = useMemo(
+    () =>
+      buildUniPushMenuItems([
+        {
+          key: 'push-purchase-requisition',
+          label: pushToPrAction.label,
+          disabled: !canPushPr,
+          title: !canPushPr
+            ? t('app.kuaizhizao.replenishmentSuggestions.msgSelectSuggestions')
+            : undefined,
+          onClick: () => void runPush('purchase_requisition'),
+        },
+        {
+          key: 'push-purchase-order',
+          label: pushToPoAction.label,
+          disabled: !canPushPo,
+          title: !canPushPo
+            ? t('app.kuaizhizao.replenishmentSuggestions.msgPushPoDisabled')
+            : undefined,
+          onClick: () => void runPush('purchase_order'),
+        },
+      ]),
+    [canPushPo, canPushPr, pushToPoAction.label, pushToPrAction.label, runPush, t],
+  );
+
+  const pushToolbarDisabled = selectedRowKeys.length === 0 || (!canPushPr && !canPushPo);
+  const pushToolbarDisabledReason =
+    selectedRowKeys.length === 0
+      ? t('app.kuaizhizao.replenishmentSuggestions.msgSelectSuggestions')
+      : t('app.kuaizhizao.replenishmentSuggestions.msgPushUnavailable');
 
   const columns: ProColumns<ReplenishmentSuggestion>[] = useMemo(() => [
     {
@@ -172,7 +343,21 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       title: t('app.kuaizhizao.replenishmentSuggestions.colSuggestionType'),
       dataIndex: 'suggestion_type',
       width: 120,
-      render: (type) => suggestionTypeLabel(String(type ?? '')),
+      render: (type) => renderSuggestionTypeTag(String(type ?? '')),
+    },
+    {
+      title: t('app.kuaizhizao.replenishmentSuggestions.colSupplier'),
+      dataIndex: 'supplier_name',
+      width: 140,
+      ellipsis: true,
+      render: (_, r) => r.supplier_name || '-',
+    },
+    {
+      title: t('app.kuaizhizao.replenishmentSuggestions.colEstimatedDeliveryDays'),
+      dataIndex: 'estimated_delivery_days',
+      width: 110,
+      align: 'right',
+      render: (_, r) => (r.estimated_delivery_days != null ? r.estimated_delivery_days : '-'),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colStatus'),
@@ -232,7 +417,6 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
 
   const handleProcessSubmit = async () => {
     if (!processSuggestion) return;
-
     try {
       await warehouseApi.replenishmentSuggestion.process(processSuggestion.id!.toString(), {
         status: processStatus,
@@ -241,21 +425,34 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       messageApi.success(t('app.kuaizhizao.replenishmentSuggestions.msgProcessSuccess'));
       setProcessModalVisible(false);
       setProcessSuggestion(null);
-      invalidateMenuBadgeCounts();
-      actionRef.current?.reload();
+      handleBatchSuccess();
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaizhizao.replenishmentSuggestions.msgProcessFailed'));
     }
   };
 
+  const showGenerateSummary = (result: {
+    created?: number;
+    skipped_existing?: number;
+    skipped_zero_qty?: number;
+  }) => {
+    messageApi.success(
+      t('app.kuaizhizao.replenishmentSuggestions.msgGenerateSummary', {
+        created: result.created ?? 0,
+        skippedExisting: result.skipped_existing ?? 0,
+        skippedZero: result.skipped_zero_qty ?? 0,
+      }),
+    );
+  };
+
   const handleGenerateFromAlerts = async () => {
-    Modal.confirm({
+    modal.confirm({
       title: t('app.kuaizhizao.replenishmentSuggestions.msgGenerateTitle'),
       content: t('app.kuaizhizao.replenishmentSuggestions.msgGenerateContent'),
       onOk: async () => {
         try {
-          await warehouseApi.replenishmentSuggestion.generateFromAlerts();
-          messageApi.success(t('app.kuaizhizao.replenishmentSuggestions.msgGenerateSuccess'));
+          const result = await warehouseApi.replenishmentSuggestion.generateFromAlerts();
+          showGenerateSummary(result || {});
           invalidateMenuBadgeCounts();
           actionRef.current?.reload();
         } catch (error: any) {
@@ -263,6 +460,55 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
         }
       },
     });
+  };
+
+  const openDemandGenerateModal = async () => {
+    setDemandModalVisible(true);
+    setDemandComputationId(undefined);
+    setDemandLoading(true);
+    try {
+      const res = await listDemandComputations({
+        computation_status: '完成',
+        limit: 50,
+        skip: 0,
+      });
+      const raw = res as { data?: any[]; items?: any[] };
+      const items = raw?.data || raw?.items || [];
+      setDemandOptions(
+        items
+          .filter((item) => item.id != null)
+          .map((item) => ({
+            value: Number(item.id),
+            label: `${item.computation_code || item.id}${item.demand_code ? ` / ${item.demand_code}` : ''}`,
+          })),
+      );
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.kuaizhizao.replenishmentSuggestions.msgLoadDemandFailed'));
+      setDemandOptions([]);
+    } finally {
+      setDemandLoading(false);
+    }
+  };
+
+  const handleGenerateFromDemand = async () => {
+    if (!demandComputationId) {
+      messageApi.warning(t('app.kuaizhizao.replenishmentSuggestions.msgSelectDemandComputation'));
+      return;
+    }
+    setGeneratingDemand(true);
+    try {
+      const result = await warehouseApi.replenishmentSuggestion.generateFromDemandComputation({
+        demand_computation_id: demandComputationId,
+      });
+      showGenerateSummary(result || {});
+      setDemandModalVisible(false);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.kuaizhizao.replenishmentSuggestions.msgGenerateFailed'));
+    } finally {
+      setGeneratingDemand(false);
+    }
   };
 
   const detailColumns: ProDescriptionsItemProps<ReplenishmentSuggestion>[] = useMemo(() => [
@@ -312,7 +558,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.replenishmentSuggestions.colSuggestionType'),
       dataIndex: 'suggestion_type',
-      render: (_, record) => suggestionTypeLabel(record.suggestion_type),
+      render: (_, record) => renderSuggestionTypeTag(record.suggestion_type),
     },
     {
       title: t('app.kuaizhizao.replenishmentSuggestions.colEstimatedDeliveryDays'),
@@ -326,6 +572,11 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.replenishmentSuggestions.colSupplier'),
       dataIndex: 'supplier_name',
+    },
+    {
+      title: t('app.kuaizhizao.replenishmentSuggestions.colRelatedDemand'),
+      dataIndex: 'related_demand_code',
+      render: (_, record) => record.related_demand_code || '-',
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colStatus'),
@@ -376,6 +627,15 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
           showAdvancedSearch={true}
           pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter
+          enableRowSelection={replenishmentPerms.canUpdate}
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
+          rowSelectionGetCheckboxProps={(record) => ({
+            disabled: !record.capabilities?.process?.allowed,
+          })}
+          onTableDataChange={(rows) => {
+            tableRowsRef.current = rows;
+          }}
           request={async (params, sort, _filter, searchFormValues) => {
             try {
               const lifecycleStage = resolveListLifecycleStageFromSearch(searchFormValues, params);
@@ -388,7 +648,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
               });
               const { data, total } = normalizeWarehouseListResponse(response);
               return { data, success: true, total };
-            } catch (error) {
+            } catch {
               messageApi.error(t('app.kuaizhizao.replenishmentSuggestions.msgListFailed'));
               return {
                 data: [],
@@ -398,15 +658,75 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
             }
           }}
           toolBarRender={() => [
-            <Button
-              key="generate"
-              type="primary"
-              icon={<ReloadOutlined />}
-              onClick={handleGenerateFromAlerts}
-            >
-              {t('app.kuaizhizao.replenishmentSuggestions.actionGenerateFromAlerts')}
-            </Button>,
+            ...(replenishmentPerms.canCreate
+              ? [
+                  <Button
+                    key="generate-alerts"
+                    type="primary"
+                    icon={<ReloadOutlined />}
+                    onClick={() => void handleGenerateFromAlerts()}
+                  >
+                    {t('app.kuaizhizao.replenishmentSuggestions.actionGenerateFromAlerts')}
+                  </Button>,
+                  <Button
+                    key="generate-demand"
+                    icon={<CalculatorOutlined />}
+                    onClick={() => void openDemandGenerateModal()}
+                  >
+                    {t('app.kuaizhizao.replenishmentSuggestions.actionGenerateFromDemand')}
+                  </Button>,
+                ]
+              : []),
+            ...(replenishmentPerms.canUpdate
+              ? [
+                  <UniPushToolbarButton
+                    key="replenishment-push"
+                    menuItems={toolbarPushMenuItems}
+                    disabled={pushToolbarDisabled}
+                    disabledReason={pushToolbarDisabledReason}
+                  />,
+                ]
+              : []),
           ]}
+          toolBarActionsAfterDelete={
+            replenishmentPerms.canUpdate
+              ? [
+                  <UniBatchMenuButton
+                    key="replenishment-batch-ops"
+                    selectedRowKeys={selectedRowKeys}
+                    buttonText={t('app.kuaizhizao.warehouseCommon.batchOps')}
+                    menuItems={[
+                      {
+                        key: 'mark-processed',
+                        label: t('app.kuaizhizao.warehouseCommon.batchMarkProcessed'),
+                        icon: <CheckOutlined />,
+                        disabled: !replenishmentBatchProcessAllowed(
+                          selectedRecordsForBatch,
+                          replenishmentPerms.canUpdate,
+                        ),
+                        requireConfirm: true,
+                        confirmTitle: (count) =>
+                          t('app.kuaizhizao.replenishmentSuggestions.msgBatchProcessConfirm', { count }),
+                        onClick: (keys) => runBatchMark(keys, 'processed'),
+                      },
+                      {
+                        key: 'mark-ignored',
+                        label: t('app.kuaizhizao.warehouseCommon.batchMarkIgnored'),
+                        icon: <StopOutlined />,
+                        disabled: !replenishmentBatchIgnoreAllowed(
+                          selectedRecordsForBatch,
+                          replenishmentPerms.canUpdate,
+                        ),
+                        requireConfirm: true,
+                        confirmTitle: (count) =>
+                          t('app.kuaizhizao.replenishmentSuggestions.msgBatchIgnoreConfirm', { count }),
+                        onClick: (keys) => runBatchMark(keys, 'ignored'),
+                      },
+                    ]}
+                  />,
+                ]
+              : []
+          }
         />
       </ListPageTemplate>
 
@@ -474,6 +794,30 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
             }}
           />
         </ProForm>
+      </Modal>
+
+      <Modal
+        title={t('app.kuaizhizao.replenishmentSuggestions.modalGenerateFromDemand')}
+        open={demandModalVisible}
+        onOk={() => void handleGenerateFromDemand()}
+        confirmLoading={generatingDemand}
+        onCancel={() => setDemandModalVisible(false)}
+        okText={t('app.kuaizhizao.warehouseCommon.confirm')}
+        cancelText={t('app.kuaizhizao.warehouseCommon.cancel')}
+      >
+        <div style={{ marginBottom: 8 }}>
+          {t('app.kuaizhizao.replenishmentSuggestions.formDemandComputation')}
+        </div>
+        <Select
+          style={{ width: '100%' }}
+          loading={demandLoading}
+          placeholder={t('app.kuaizhizao.replenishmentSuggestions.formDemandComputationPlaceholder')}
+          options={demandOptions}
+          value={demandComputationId}
+          onChange={(v) => setDemandComputationId(v)}
+          showSearch
+          optionFilterProp="label"
+        />
       </Modal>
     </>
   );

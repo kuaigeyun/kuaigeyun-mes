@@ -1253,6 +1253,28 @@ export function replenishmentBatchIgnoreAllowed(
   return batchSomeCapabilityAllowed(records, canUpdate, (r) => r.capabilities?.ignore);
 }
 
+export function replenishmentBatchPushPurchaseRequisitionAllowed(
+  records: { capabilities?: { push_purchase_requisition?: ActionCapability } }[],
+  canUpdate: boolean,
+  canCreatePurchaseRequisition: boolean,
+): boolean {
+  return (
+    canCreatePurchaseRequisition &&
+    batchSomeCapabilityAllowed(records, canUpdate, (r) => r.capabilities?.push_purchase_requisition)
+  );
+}
+
+export function replenishmentBatchPushPurchaseOrderAllowed(
+  records: { capabilities?: { push_purchase_order?: ActionCapability } }[],
+  canUpdate: boolean,
+  canCreatePurchaseOrder: boolean,
+): boolean {
+  return (
+    canCreatePurchaseOrder &&
+    batchSomeCapabilityAllowed(records, canUpdate, (r) => r.capabilities?.push_purchase_order)
+  );
+}
+
 export const QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'quality_inspection.conduct.not_pending': '只有待检验状态的检验单才能执行检验',
   'quality_inspection.conduct.approved_locked': '已审核的检验单不可执行检验，请先撤销审核',

@@ -1,20 +1,38 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Button, Drawer, Form, Input, InputNumber, Modal, Select, message } from 'antd';
+import { App, Button, Drawer, Form, Input, InputNumber, Modal, Select } from 'antd';
 import { DatePicker } from 'antd';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UniTableStackedPrimaryCell,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { SourceDocumentCode } from '../../../../../components/linked-document-code/SourceDocumentCode';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { formDateFormItemProps } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
+import { formatApiErrorDetail } from '../../../../../services/api';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
+import type { Customer } from '../../../../master-data/types/supply-chain';
+import { MarkerTag } from '../../../../../constants/statusBadges';
+import { renderAfterSalesTypeMarker } from '../shared/afterSalesListPresentation';
+import { AfterSalesSourceDocumentSelect } from '../shared/AfterSalesSourceDocumentSelect';
 import {
   customerReturnVisitApi,
   type CustomerReturnVisit,
   type CustomerReturnVisitPayload,
 } from '../../../services/after-sales-service';
+
+function customerDisplayName(c: Customer | null | undefined): string {
+  if (!c) return '';
+  const row = c as Record<string, unknown>;
+  return String(row.name ?? row.customer_name ?? '').trim();
+}
 
 const RESOURCE = 'kuaizhizao:customer-return-visit';
 
@@ -22,13 +40,16 @@ const VISIT_METHODS = ['电话', '现场', '在线'];
 
 const ReturnVisitsPage: React.FC = () => {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
   const actionRef = useRef<ActionType>();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<CustomerReturnVisit | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<CustomerReturnVisit | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm<CustomerReturnVisitPayload & { visited_at_picker?: dayjs.Dayjs }>();
+  const customerId = Form.useWatch('customer_id', form);
 
   const openCreate = () => {
     setEditing(null);
@@ -47,46 +68,108 @@ const ReturnVisitsPage: React.FC = () => {
     setModalOpen(true);
   };
 
-  const columns: ProColumns<CustomerReturnVisit>[] = [
-    { title: t('app.kuaizhizao.afterSalesService.returnVisit.field.visitCode'), dataIndex: 'visit_code' },
-    { title: t('app.kuaizhizao.afterSalesService.returnVisit.field.customerName'), dataIndex: 'customer_name' },
-    { title: t('app.kuaizhizao.afterSalesService.returnVisit.field.sourceCode'), dataIndex: 'source_code' },
-    { title: t('app.kuaizhizao.afterSalesService.returnVisit.field.visitMethod'), dataIndex: 'visit_method' },
-    {
-      title: t('app.kuaizhizao.afterSalesService.returnVisit.field.satisfactionScore'),
-      dataIndex: 'satisfaction_score',
-      align: 'center',
-    },
-    {
-      title: t('app.kuaizhizao.afterSalesService.returnVisit.field.visitedAt'),
-      dataIndex: 'visited_at',
-      render: (_, row) => (row.visited_at ? formatDateTime(row.visited_at) : '-'),
-    },
-    {
-      title: t('common.action'),
-      valueType: 'option',
-      width: 160,
-      render: (_, row) => [
-        <Button
-          {...rowActionKind('read')}
-          key="read"
-          onClick={async () => {
-            setDetail(await customerReturnVisitApi.get(row.id));
-            setDetailOpen(true);
-          }}
-        />,
-        perms.canUpdate ? (
-          <Button {...rowActionKind('update')} key="edit" onClick={() => void openEdit(row)} />
-        ) : null,
-      ],
-    },
-  ];
+  const columns: ProColumns<CustomerReturnVisit>[] = useMemo(
+    () =>
+      alignProColumns<CustomerReturnVisit>(
+        [
+          {
+            title: t('app.kuaizhizao.afterSalesService.returnVisit.field.visitCode'),
+            dataIndex: 'visit_code',
+            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            fixed: 'left',
+            render: (_, row) => (
+              <UniTableStackedPrimaryCell
+                primary={String(row.visit_code ?? '').trim() || '-'}
+                secondary={String(row.customer_name ?? '').trim() || '-'}
+                secondaryCopyable={false}
+              />
+            ),
+          },
+          {
+            title: t('app.kuaizhizao.afterSalesService.returnVisit.field.customerName'),
+            dataIndex: 'customer_name',
+            hideInTable: true,
+          },
+          {
+            title: t('app.kuaizhizao.afterSalesService.returnVisit.field.sourceCode'),
+            dataIndex: 'source_code',
+            width: 148,
+            minWidth: 148,
+            uniTableKeepWidth: true,
+            resizable: false,
+            render: (_, row) => (
+              <SourceDocumentCode
+                sourceType={row.source_type}
+                sourceId={row.source_id}
+                sourceCode={row.source_code}
+              />
+            ),
+          },
+          {
+            title: t('app.kuaizhizao.afterSalesService.returnVisit.field.visitMethod'),
+            dataIndex: 'visit_method',
+            width: 88,
+            minWidth: 88,
+            uniTableKeepWidth: true,
+            resizable: false,
+            render: (_, row) => renderAfterSalesTypeMarker(row.visit_method),
+          },
+          {
+            title: t('app.kuaizhizao.afterSalesService.returnVisit.field.satisfactionScore'),
+            dataIndex: 'satisfaction_score',
+            width: 88,
+            minWidth: 88,
+            uniTableKeepWidth: true,
+            resizable: false,
+            align: 'center',
+            render: (_, row) =>
+              row.satisfaction_score != null ? (
+                <MarkerTag color="success">{row.satisfaction_score}</MarkerTag>
+              ) : (
+                '-'
+              ),
+          },
+          {
+            title: t('app.kuaizhizao.afterSalesService.returnVisit.field.visitedAt'),
+            dataIndex: 'visited_at',
+            width: 148,
+            minWidth: 148,
+            uniTableKeepWidth: true,
+            resizable: false,
+            render: (_, row) => (row.visited_at ? formatDateTime(row.visited_at) : '-'),
+          },
+          {
+            title: t('common.action'),
+            key: 'action',
+            valueType: 'option',
+            fixed: 'right',
+            hideInSearch: true,
+            render: (_, row) => [
+              <Button
+                {...rowActionKind('read')}
+                key="read"
+                onClick={async () => {
+                  setDetail(await customerReturnVisitApi.get(row.id));
+                  setDetailOpen(true);
+                }}
+              />,
+              perms.canUpdate ? (
+                <Button {...rowActionKind('update')} key="edit" onClick={() => void openEdit(row)} />
+              ) : null,
+            ],
+          },
+        ],
+        SALES_DOC_LIST_FIELD_RANK,
+      ),
+    [perms.canUpdate, t],
+  );
 
   return (
     <ListPageTemplate>
       <UniTable<CustomerReturnVisit>
         actionRef={actionRef}
         columns={columns}
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.return-visits.v1"
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.return-visits')}
         request={async (params) => {
@@ -117,58 +200,65 @@ const ReturnVisitsPage: React.FC = () => {
             : t('app.kuaizhizao.afterSalesService.returnVisit.createTitle')
         }
         onCancel={() => setModalOpen(false)}
+        confirmLoading={submitting}
         onOk={async () => {
-          const values = await form.validateFields();
-          const { visited_at_picker, ...rest } = values;
-          const payload: CustomerReturnVisitPayload = {
-            ...rest,
-            visited_at: visited_at_picker?.format('YYYY-MM-DD HH:mm:ss') ?? '',
-          };
-          if (editing) {
-            await customerReturnVisitApi.update(editing.id, payload);
-            message.success(t('common.saveSuccess'));
-          } else {
-            await customerReturnVisitApi.create(payload);
-            message.success(t('common.createSuccess'));
+          try {
+            const values = await form.validateFields();
+            const { visited_at_picker, ...rest } = values;
+            const payload: CustomerReturnVisitPayload = {
+              ...rest,
+              visited_at: visited_at_picker?.format('YYYY-MM-DD HH:mm:ss') ?? '',
+            };
+            setSubmitting(true);
+            if (editing) {
+              await customerReturnVisitApi.update(editing.id, payload);
+              message.success(t('common.saveSuccess'));
+            } else {
+              await customerReturnVisitApi.create(payload);
+              message.success(t('common.createSuccess'));
+            }
+            setModalOpen(false);
+            actionRef.current?.reload();
+          } catch (error: unknown) {
+            if (error && typeof error === 'object' && 'errorFields' in error) {
+              return;
+            }
+            message.error(formatApiErrorDetail(error) || t('common.saveFailed'));
+          } finally {
+            setSubmitting(false);
           }
-          setModalOpen(false);
-          actionRef.current?.reload();
         }}
         destroyOnClose
         width={720}
       >
         <Form form={form} layout="vertical">
-          <Form.Item name="customer_id" hidden rules={[{ required: true }]}>
-            <InputNumber />
+          <Form.Item name="customer_name" hidden>
+            <Input />
           </Form.Item>
           <Form.Item
-            name="customer_name"
+            name="customer_id"
             label={t('app.kuaizhizao.afterSalesService.returnVisit.field.customerName')}
-            rules={[{ required: true }]}
+            rules={[{ required: true, message: t('app.kuaizhizao.afterSalesTicket.selectCustomerFirst') }]}
           >
-            <Input />
+            <CustomerSelectDropdown
+              hostResource={RESOURCE}
+              placeholder={t('app.kuaizhizao.afterSalesTicket.selectCustomerFirst')}
+              style={{ width: '100%' }}
+              onCustomerPick={(c) => {
+                form.setFieldsValue({
+                  customer_id: c?.id,
+                  customer_name: customerDisplayName(c),
+                  source_id: undefined,
+                  source_code: undefined,
+                });
+              }}
+            />
           </Form.Item>
-          <Form.Item
-            name="source_type"
-            label={t('app.kuaizhizao.afterSalesService.returnVisit.field.sourceType')}
-            rules={[{ required: true }]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="source_id"
-            label={t('app.kuaizhizao.afterSalesService.returnVisit.field.sourceId')}
-            rules={[{ required: true }]}
-          >
-            <InputNumber style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item
-            name="source_code"
-            label={t('app.kuaizhizao.afterSalesService.returnVisit.field.sourceCode')}
-            rules={[{ required: true }]}
-          >
-            <Input />
-          </Form.Item>
+          <AfterSalesSourceDocumentSelect
+            customerId={customerId}
+            allowedTypes={['after_sales_ticket', 'repair_order']}
+            typeLabelKeyPrefix="app.kuaizhizao.afterSalesService.returnVisit.field"
+          />
           <Form.Item name="visit_method" label={t('app.kuaizhizao.afterSalesService.returnVisit.field.visitMethod')}>
             <Select options={VISIT_METHODS.map((value) => ({ value, label: value }))} />
           </Form.Item>
@@ -181,7 +271,7 @@ const ReturnVisitsPage: React.FC = () => {
           <Form.Item
             name="visited_at_picker"
             label={t('app.kuaizhizao.afterSalesService.returnVisit.field.visitedAt')}
-            rules={[{ required: true }]}
+            rules={[{ required: true, message: t('common.required') }]}
             {...formDateFormItemProps}
           >
             <DatePicker showTime style={{ width: '100%' }} />

@@ -8,7 +8,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Table, Tag, Tooltip, Typography, theme } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Table, Tooltip, Typography, theme } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -31,6 +31,10 @@ import {
   pickOptionalString,
   resolveMasterCrudListParams,
 } from '../../../utils/masterListCore';
+import {
+  renderMasterActiveTag,
+  renderMasterTypeMarker,
+} from '../../../utils/masterListPresentation';
 import { WarehouseFormModal } from '../../../components/WarehouseFormModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { Warehouse, WarehouseCreate } from '../../../types/warehouse';
@@ -611,7 +615,10 @@ const WarehousesPage: React.FC = () => {
     {
       title: t('app.master-data.warehouses.name'),
       dataIndex: 'name',
-      width: 200,
+      width: 168,
+      minWidth: 168,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
     },
@@ -619,17 +626,26 @@ const WarehousesPage: React.FC = () => {
       title: t('field.warehouse.warehouseType'),
       dataIndex: 'warehouseType',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       order: 15,
       valueType: 'select',
       valueEnum: warehouseTypeEnum,
       fieldProps: { allowClear: true },
       sorter: true,
-      render: (_, record) => warehouseTypeEnum[record.warehouseType || 'normal']?.text || record.warehouseType || '-',
+      render: (_, record) =>
+        renderMasterTypeMarker(
+          warehouseTypeEnum[record.warehouseType || 'normal']?.text || record.warehouseType || '-',
+        ),
     },
     {
       title: t('field.warehouse.workshopName'),
       dataIndex: 'workshopName',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       render: (_, record) => record.workshopName || '-',
@@ -638,6 +654,9 @@ const WarehousesPage: React.FC = () => {
       title: t('field.warehouse.workCenterName'),
       dataIndex: 'workCenterName',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       render: (_, record) => record.workCenterName || '-',
@@ -662,19 +681,19 @@ const WarehousesPage: React.FC = () => {
     {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
-      width: 100,
+      width: 88,
+      minWidth: 88,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       valueEnum: warehouseActiveValueEnum,
-      render: (_: any, record: Warehouse) => (
-        <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
-          {record?.isActive ? t('common.enabled') : t('common.disabled')}
-        </Tag>
-      ),
+      render: (_: any, record: Warehouse) => renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled'),
       sorter: true,
     },
     ...masterCrudCreatedUpdatedColumns<Warehouse>(t),
     {
       title: t('app.master-data.warehouses.action'),
+      key: 'action',
       valueType: 'option',
       width: 150,
       fixed: 'right',
@@ -727,7 +746,10 @@ const WarehousesPage: React.FC = () => {
     {
       title: t('field.warehouse.warehouseType'),
       dataIndex: 'warehouseType',
-      render: (_, record) => warehouseTypeEnum[record.warehouseType || 'normal']?.text || record.warehouseType || '-',
+      render: (_, record) =>
+        renderMasterTypeMarker(
+          warehouseTypeEnum[record.warehouseType || 'normal']?.text || record.warehouseType || '-',
+        ),
     },
     {
       title: t('field.warehouse.workshopName'),
@@ -746,11 +768,7 @@ const WarehousesPage: React.FC = () => {
     {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
-      render: (_, record) => (
-        <Tag color={record?.isActive ? 'success' : 'default'} variant="solid">
-          {record?.isActive ? t('common.enabled') : t('common.disabled')}
-        </Tag>
-      ),
+      render: (_, record) => renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled'),
     },
     {
       title: t('app.master-data.warehouses.createTime'),
@@ -768,7 +786,7 @@ const WarehousesPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Warehouse>
-        columnPersistenceId="apps.master-data.pages.warehouse.warehouses.status-v2"
+        columnPersistenceId="apps.master-data.pages.warehouse.warehouses.list-v1"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {

@@ -9,7 +9,7 @@ import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormDigit, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space } from 'antd';
+import { App, Popconfirm, Button, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
@@ -31,6 +31,11 @@ import { BATCH_RULE_AVAILABLE_FIELDS, DEFAULT_BATCH_RULE_COMPONENTS } from '../.
 import type { BatchRule, BatchRuleCreate, BatchRuleUpdate } from '../../../services/batchSerialRules';
 import type { CodeRuleComponent } from '../../../../../types/codeRuleComponent';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import {
+  renderMasterActiveTag,
+  renderMasterYesNoTag,
+  renderMasterTypeMarker,
+} from '../../../utils/masterListPresentation';
 
 const BatchRulesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -164,6 +169,9 @@ const BatchRulesPage: React.FC = () => {
       title: t('app.master-data.seqRules.ruleName'),
       dataIndex: 'name',
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       fixed: 'left',
       sorter: true,
@@ -173,7 +181,10 @@ const BatchRulesPage: React.FC = () => {
     {
       title: t('app.master-data.seqRules.description'),
       dataIndex: 'description',
-      width: 200,
+      width: 168,
+      minWidth: 168,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
@@ -182,6 +193,9 @@ const BatchRulesPage: React.FC = () => {
       title: t('app.master-data.seqRules.seqReset'),
       dataIndex: 'seqResetRule',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       render: (_, r) => seqResetOptions.find((o) => o.value === r.seqResetRule)?.label || r.seqResetRule || '-',
@@ -198,17 +212,19 @@ const BatchRulesPage: React.FC = () => {
     {
       title: t('app.master-data.seqRules.status'),
       dataIndex: 'isActive',
-      width: 80,
+      width: 88,
+      minWidth: 88,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       valueEnum: ruleActiveValueEnum,
-      render: (_, r) => (
-        <Tag color={r.isActive ? 'success' : 'default'} variant="solid">{r.isActive ? t('app.master-data.seqRules.enabled') : t('app.master-data.seqRules.disabled')}</Tag>
-      ),
+      render: (_, r) => renderMasterActiveTag(t, r.isActive, 'app.master-data.seqRules.enabled', 'app.master-data.seqRules.disabled'),
     },
     ...masterCrudCreatedUpdatedColumns<BatchRule>(t),
     {
       title: t('common.actions'),
+      key: 'action',
       width: 150,
       fixed: 'right',
       render: (_, record) => (
@@ -239,7 +255,7 @@ const BatchRulesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<BatchRule>
-        columnPersistenceId="apps.master-data.pages.materials.batch-rules.status-v2"
+        columnPersistenceId="apps.master-data.pages.materials.batch-rules.list-v1"
         headerTitle={t('app.master-data.batchRules.headerTitle')}
         actionRef={actionRef}
         rowKey="uuid"

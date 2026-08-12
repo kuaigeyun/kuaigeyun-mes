@@ -11,7 +11,7 @@ import {
   ProDescriptionsItemProps,
   ProForm,
 } from '@ant-design/pro-components';
-import { App, Button, Descriptions, InputNumber, Modal, Space, Table, Tag, Typography } from 'antd';
+import { App, Button, Descriptions, InputNumber, Modal, Space, Table, Typography } from 'antd';
 import {
   PlusOutlined,
   DeleteOutlined,
@@ -73,6 +73,11 @@ import {
 } from '../../../constants/documentActionRegistry';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import {
+  AFTER_SALES_TICKET_STATUS_COLOR,
+  renderAfterSalesStatusTag,
+  renderAfterSalesTypeMarker,
+} from '../shared/afterSalesListPresentation';
 
 /** 取单弹窗状态码 → documentStatus.*（与单据跟踪一致） */
 const PULL_STATUS_I18N: Record<string, string> = {
@@ -109,11 +114,6 @@ const PULL_STATUS_I18N: Record<string, string> = {
 const AFTER_SALES_TICKET_RESOURCE = 'kuaizhizao:after-sales-ticket';
 const SALES_RETURN_RESOURCE = 'kuaizhizao:sales-return';
 
-const STATUS_COLOR: Record<string, string> = {
-  待处理: 'processing',
-  处理中: 'warning',
-  已关闭: 'success',
-};
 
 type PullSalesOrderCandidate = {
   id: number;
@@ -782,11 +782,8 @@ const AfterSalesTicketsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.afterSalesTicket.colStatus'),
         dataIndex: 'status',
-        render: (_, row) => (
-          <Tag color={STATUS_COLOR[row.status] || 'default'} bordered={false}>
-            {row.status}
-          </Tag>
-        ),
+        render: (_, row) =>
+          renderAfterSalesStatusTag(row.status, AFTER_SALES_TICKET_STATUS_COLOR),
       },
       {
         title: t('app.kuaizhizao.afterSalesTicket.colSalesOrder'),
@@ -910,7 +907,9 @@ const AfterSalesTicketsPage: React.FC = () => {
       {
         ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         title: t('app.kuaizhizao.afterSalesTicket.colTicketCode'),
+        key: 'after_sales_ticket_stacked',
         dataIndex: 'ticket_code',
+        fixed: 'left',
         sorter: true,
         hideInSearch: true,
         render: (_, row) => (
@@ -924,9 +923,12 @@ const AfterSalesTicketsPage: React.FC = () => {
         title: t('app.kuaizhizao.afterSalesTicket.colRequestType'),
         dataIndex: 'request_type',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
-        render: (_, row) => row.request_type || '—',
+        render: (_, row) => renderAfterSalesTypeMarker(row.request_type),
       },
       {
         title: t('app.kuaizhizao.afterSalesTicket.colRequestType'),
@@ -937,29 +939,12 @@ const AfterSalesTicketsPage: React.FC = () => {
         valueEnum: requestTypeValueEnum,
       },
       {
-        title: t('app.kuaizhizao.afterSalesTicket.colStatus'),
-        dataIndex: 'status',
-        width: 100,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, row) => (
-          <Tag color={STATUS_COLOR[row.status] || 'default'} bordered={false}>
-            {row.status}
-          </Tag>
-        ),
-      },
-      {
-        title: t('app.kuaizhizao.afterSalesTicket.colStatus'),
-        dataIndex: 'status',
-        hideInTable: true,
-        order: 21,
-        valueType: 'select',
-        valueEnum: statusValueEnum,
-      },
-      {
         title: t('app.kuaizhizao.afterSalesTicket.colContent'),
         dataIndex: 'content',
-        width: 320,
+        width: 220,
+        minWidth: 220,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         hideInSearch: true,
         render: (_, row) => (
@@ -979,6 +964,9 @@ const AfterSalesTicketsPage: React.FC = () => {
         title: t('app.kuaizhizao.afterSalesTicket.colRegisteredAt'),
         dataIndex: 'registered_at',
         width: 148,
+        minWidth: 148,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         defaultSortOrder: 'descend',
@@ -995,7 +983,26 @@ const AfterSalesTicketsPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<AfterSalesTicket>(t),
       {
+        title: t('app.kuaizhizao.afterSalesTicket.colStatus'),
+        key: 'lifecycle',
+        dataIndex: 'status',
+        fixed: 'right',
+        sorter: true,
+        hideInSearch: true,
+        render: (_, row) =>
+          renderAfterSalesStatusTag(row.status, AFTER_SALES_TICKET_STATUS_COLOR),
+      },
+      {
+        title: t('app.kuaizhizao.afterSalesTicket.colStatus'),
+        dataIndex: 'status',
+        hideInTable: true,
+        order: 21,
+        valueType: 'select',
+        valueEnum: statusValueEnum,
+      },
+      {
         title: t('common.actions'),
+        key: 'action',
         valueType: 'option',
         fixed: 'right',
         hideInSearch: true,
@@ -1036,7 +1043,7 @@ const AfterSalesTicketsPage: React.FC = () => {
     <>
       <ListPageTemplate style={{ padding: 0 }}>
         <UniTable<AfterSalesTicket>
-          columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.tickets"
+          columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.tickets.v1"
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           headerTitle={t('app.kuaizhizao.menu.after-sales-service.tickets')}

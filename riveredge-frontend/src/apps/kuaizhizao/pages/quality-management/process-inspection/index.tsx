@@ -58,7 +58,7 @@ import {
   buildQualityInspectionListMaterialHiddenColumns,
   buildQualityInspectionListQuantityResultColumns,
   buildQualityInspectionListSearchColumns,
-  stackedPrimarySecondaryColumn,
+  buildQualityInspectionPartnerStackedColumn,
 } from '../components/qualityTableColumns';
 import {
   buildQualityInspectionDetailCodeColumn,
@@ -127,7 +127,6 @@ import {
 import {
   getQualityFinishedDisposalFallback,
   mergeQualityDisposalOptions,
-  renderQualityResultTag,
   renderQualityDocStatusTag,
   renderQualityQualityStatusTag,
   getQualityDefectTypeOptions,
@@ -959,9 +958,8 @@ const ProcessInspectionPage: React.FC = () => {
       inspectionQualityStatusValueEnum,
     ),
     buildQualityInspectionListCodeColumn<ProcessInspection>(t),
-    stackedPrimarySecondaryColumn<ProcessInspection>(
+    buildQualityInspectionPartnerStackedColumn<ProcessInspection>(
       t('app.kuaizhizao.quality.common.columns.operationWorkOrder'),
-      'operationWorkOrder',
       ['operation_name', 'operationName'],
       ['work_order_code', 'workOrderCode'],
       { dataIndex: 'operation_name' },
@@ -980,7 +978,7 @@ const ProcessInspectionPage: React.FC = () => {
     buildQualityInspectionListMaterialColumn<ProcessInspection>(t),
     ...buildQualityInspectionListMaterialHiddenColumns<ProcessInspection>(t),
     buildInspectorTimeStackedColumn<ProcessInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
-    ...buildQualityInspectionListQuantityResultColumns<ProcessInspection>(t, renderQualityResultTag),
+    ...buildQualityInspectionListQuantityResultColumns<ProcessInspection>(t),
     ...buildDocumentAuditColumns<ProcessInspection>(t),
     ...inspectionCustomFieldColumns,
     ...(processAuditColumn ? [processAuditColumn] : []),
@@ -1046,7 +1044,7 @@ const ProcessInspectionPage: React.FC = () => {
     >
       <UniTable<ProcessInspection>
         headerTitle={t('app.kuaizhizao.quality.process.pageTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.quality-management.process-inspection.material-qty-v2"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.process-inspection.rank-v3"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

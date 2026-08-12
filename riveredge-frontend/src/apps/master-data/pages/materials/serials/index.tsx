@@ -21,6 +21,11 @@ import {
 import { materialSerialApi, materialApi } from '../../../services/material';
 import type { MaterialSerial, MaterialSerialCreate, MaterialSerialUpdate } from '../../../types/material';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import {
+  renderMasterActiveTag,
+  renderMasterYesNoTag,
+  renderMasterTypeMarker,
+} from '../../../utils/masterListPresentation';
 
 const SERIAL_STATUS_PINNED_FIELD = 'status';
 
@@ -155,7 +160,10 @@ const SerialsPage: React.FC = () => {
     {
       title: t('app.master-data.serials.serialNo'),
       dataIndex: 'serialNo',
-      width: 220,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       copyable: true,
@@ -165,6 +173,9 @@ const SerialsPage: React.FC = () => {
       title: t('app.master-data.serials.materialCode'),
       dataIndex: 'materialCode',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       sorter: true,
@@ -173,7 +184,10 @@ const SerialsPage: React.FC = () => {
     {
       title: t('app.master-data.serials.materialName'),
       dataIndex: 'materialName',
-      width: 180,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       sorter: true,
@@ -182,6 +196,9 @@ const SerialsPage: React.FC = () => {
       title: t('app.master-data.serials.materialModel'),
       dataIndex: 'materialModel',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       sorter: true,
@@ -199,14 +216,33 @@ const SerialsPage: React.FC = () => {
       title: t('app.master-data.serials.status'),
       dataIndex: 'status',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       valueEnum: serialStatusValueEnum,
+      render: (_, r) => {
+        const color =
+          r.status === 'in_stock'
+            ? 'success'
+            : r.status === 'expired'
+              ? 'error'
+              : r.status === 'scrapped'
+                ? 'warning'
+                : 'default';
+        const text =
+          serialStatusValueEnum[r.status as keyof typeof serialStatusValueEnum]?.text || r.status || '-';
+        return renderMasterTypeMarker(text, color);
+      },
     },
     {
       title: t('app.master-data.serials.productionDate'),
       dataIndex: 'productionDate',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'date',
       sorter: true,
       hideInSearch: true,
@@ -224,6 +260,7 @@ const SerialsPage: React.FC = () => {
     ...masterCrudCreatedUpdatedColumns<MaterialSerial>(t),
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
       width: 150,
       fixed: 'right',
@@ -256,7 +293,7 @@ const SerialsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<MaterialSerial>
-        columnPersistenceId="apps.master-data.pages.materials.serials.v2"
+        columnPersistenceId="apps.master-data.pages.materials.serials.list-v1"
         headerTitle={t('app.master-data.menu.materials.serials')}
         actionRef={actionRef}
         rowKey="uuid"

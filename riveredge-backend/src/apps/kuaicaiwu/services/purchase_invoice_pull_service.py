@@ -475,6 +475,10 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
             "payable_code": code,
             "purchase_order_id": po_id,
             "purchase_order_code": po_code,
+            # 同时付款上限：应付剩余可付金额（与开票可开票金额独立）
+            "remaining_settle_amount": float(
+                Decimal(str(getattr(payable, "remaining_amount", 0) or 0))
+            ),
         }
 
     async def list_purchase_order_pull_candidates(

@@ -74,6 +74,8 @@ export interface ReportingRecord {
   qualified_quantity?: number;
   unqualified_quantity?: number;
   work_hours?: number;
+  work_start_time?: string;
+  work_end_time?: string;
   status?: string;
   reported_at?: string;
   created_at?: string;

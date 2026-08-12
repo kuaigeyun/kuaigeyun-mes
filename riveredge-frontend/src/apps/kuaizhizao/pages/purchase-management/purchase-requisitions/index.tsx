@@ -40,6 +40,7 @@ import {
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { SourceDocumentCode } from '../../../../../components/linked-document-code/SourceDocumentCode';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE } from '../../../../../components/layout-templates';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
@@ -1430,10 +1431,16 @@ const PurchaseRequisitionsPage: React.FC = () => {
           return t('app.kuaizhizao.purchaseRequisition.col.sourceTypeActiveRequest');
         }
         return (
-          <UniTableStackedPrimaryCell
-            primary={formatPurchaseRequisitionSourceType(record.source_type, t)}
-            secondary={sourceCode}
-          />
+          <Space direction="vertical" size={0} style={{ lineHeight: 1.35 }}>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {formatPurchaseRequisitionSourceType(record.source_type, t)}
+            </Typography.Text>
+            <SourceDocumentCode
+              sourceType={record.source_type}
+              sourceId={record.source_id}
+              sourceCode={sourceCode}
+            />
+          </Space>
         );
       },
     },
@@ -2651,7 +2658,17 @@ const PurchaseRequisitionsPage: React.FC = () => {
                         label: t('common.status'),
                         children: <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>,
                       },
-                      { key: 'src', label: t('app.kuaizhizao.purchaseRequisition.col.sourceCode'), children: currentReq.source_code ?? '-' },
+                      {
+                        key: 'src',
+                        label: t('app.kuaizhizao.purchaseRequisition.col.sourceCode'),
+                        children: (
+                          <SourceDocumentCode
+                            sourceType={currentReq.source_type}
+                            sourceId={currentReq.source_id}
+                            sourceCode={currentReq.source_code}
+                          />
+                        ),
+                      },
                       {
                         key: 'stype',
                         label: t('app.kuaizhizao.purchaseRequisition.col.sourceType'),

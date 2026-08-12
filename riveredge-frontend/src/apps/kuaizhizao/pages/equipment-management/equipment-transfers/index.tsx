@@ -9,7 +9,8 @@ import {
   ProFormTextArea,
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
-import { App, Button, Modal, Row, Col, Tag, Input } from 'antd';
+import { App, Button, Modal, Row, Col, Input } from 'antd';
+import { StatusTag } from '../../../../../constants/statusBadges';
 import { SendOutlined, CheckOutlined, CloseOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
@@ -187,7 +188,7 @@ const EquipmentTransfersPage: React.FC = () => {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
         render: (_, r) => (
-          <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>
+          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
         ),
       },
       { title: t(`${P}.form.reason`), dataIndex: 'reason', span: 2 },
@@ -271,20 +272,23 @@ const EquipmentTransfersPage: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: t(`${P}.col.status`),
-        dataIndex: 'status',
-        width: 90,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, r) => <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>,
-      },
-      {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
         hideInTable: true,
         hideInSearch: true,
       },
       ...buildDocumentAuditColumns<TransferApplication>(t),
+      {
+        title: t(`${P}.col.status`),
+        key: 'lifecycle',
+        dataIndex: 'status',
+        sorter: true,
+        hideInSearch: true,
+        fixed: 'right',
+        render: (_, r) => (
+          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
+        ),
+      },
       {
         title: t('common.actions'),
         key: 'action',
@@ -357,7 +361,7 @@ const EquipmentTransfersPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<TransferApplication>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-transfers"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-transfers-equip-rank-v1"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

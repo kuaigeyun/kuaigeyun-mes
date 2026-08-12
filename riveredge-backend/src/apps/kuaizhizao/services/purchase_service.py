@@ -130,6 +130,29 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 f"{Decimal(str(fluctuation_limit_percent)):.2f}%（基准价={benchmark_price}，当前={current_price}）"
             )
 
+    async def _ensure_prepayment_payment_after_confirm(
+        self,
+        *,
+        tenant_id: int,
+        order: PurchaseOrder,
+        operator_id: int,
+    ) -> None:
+        """订单进入已确认后：按预付金额幂等生成预付付款单（供预收预付余额消费）。"""
+        from apps.kuaicaiwu.services.finance_integration_hooks import (
+            ensure_prepayment_payment_for_purchase_order,
+        )
+
+        await ensure_prepayment_payment_for_purchase_order(
+            tenant_id=tenant_id,
+            order_id=int(order.id),
+            order_code=str(order.order_code or ""),
+            supplier_id=int(order.supplier_id),
+            supplier_name=str(order.supplier_name or ""),
+            prepayment_amount=order.prepayment_amount,
+            prepayment_bank_account_id=order.prepayment_bank_account_id,
+            operator_id=operator_id,
+        )
+
     async def create_purchase_order(
         self,
         tenant_id: int,
@@ -999,12 +1022,18 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         audit_required = await config_service.check_audit_required(tenant_id, "purchase_order")
 
         if not audit_required:
-            # 无需审核，直接确认
+            # 无需审核，直接确认（须同步生成预付付款单，否则预收预付余额无明细）
             await order.update_from_dict({
                 'status': DocumentStatus.CONFIRMED.value,
                 'review_status': ReviewStatus.APPROVED.value,
                 'updated_by': submitted_by
             }).save()
+            await order.refresh_from_db()
+            await self._ensure_prepayment_payment_after_confirm(
+                tenant_id=tenant_id,
+                order=order,
+                operator_id=submitted_by,
+            )
             return await self.get_purchase_order_by_id(tenant_id, order_id)
 
         # 启动审批流程（统一使用 ApprovalInstanceService）
@@ -1172,18 +1201,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         if update_dict.get("status") == DocumentStatus.CONFIRMED.value:
             await order.refresh_from_db()
-            from apps.kuaicaiwu.services.finance_integration_hooks import (
-                ensure_prepayment_payment_for_purchase_order,
-            )
-
-            await ensure_prepayment_payment_for_purchase_order(
+            await self._ensure_prepayment_payment_after_confirm(
                 tenant_id=tenant_id,
-                order_id=order_id,
-                order_code=order.order_code,
-                supplier_id=order.supplier_id,
-                supplier_name=order.supplier_name,
-                prepayment_amount=order.prepayment_amount,
-                prepayment_bank_account_id=order.prepayment_bank_account_id,
+                order=order,
                 operator_id=approved_by,
             )
 
@@ -1279,18 +1299,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         }).save()
 
         await order.refresh_from_db()
-        from apps.kuaicaiwu.services.finance_integration_hooks import (
-            ensure_prepayment_payment_for_purchase_order,
-        )
-
-        await ensure_prepayment_payment_for_purchase_order(
+        await self._ensure_prepayment_payment_after_confirm(
             tenant_id=tenant_id,
-            order_id=order_id,
-            order_code=order.order_code,
-            supplier_id=order.supplier_id,
-            supplier_name=order.supplier_name,
-            prepayment_amount=order.prepayment_amount,
-            prepayment_bank_account_id=order.prepayment_bank_account_id,
+            order=order,
             operator_id=confirmed_by,
         )
 

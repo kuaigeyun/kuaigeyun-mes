@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next';
 import React from 'react';
-import { Tag } from 'antd';
+import { MarkerTag } from '../../../constants/statusBadges';
 import { normalizeMaterialSourceType } from '../../master-data/utils/materialSourceType';
 
 const P = 'app.kuaicaiwu.costCommon';
@@ -35,7 +35,7 @@ export function formatSourceType(value: string | null | undefined, t: TFunction)
 export function getSourceTypeTag(sourceType: string, t: TFunction): React.ReactElement {
   const normalized = normalizeMaterialSourceType(sourceType);
   const color = SOURCE_TYPE_COLOR[normalized] || 'default';
-  return React.createElement(Tag, { color }, formatSourceType(sourceType, t));
+  return React.createElement(MarkerTag, { color }, formatSourceType(sourceType, t));
 }
 
 export function getSourceTypeSelectOptions(t: TFunction) {
@@ -72,12 +72,12 @@ export function formatVarianceType(value: string | null | undefined, t: TFunctio
 
 export function getVarianceTypeTag(varianceType: string, t: TFunction): React.ReactElement {
   if (varianceType === '超支') {
-    return React.createElement(Tag, { color: 'red' }, formatVarianceType(varianceType, t));
+    return React.createElement(MarkerTag, { color: 'error' }, formatVarianceType(varianceType, t));
   }
   if (varianceType === '节约') {
-    return React.createElement(Tag, { color: 'green' }, formatVarianceType(varianceType, t));
+    return React.createElement(MarkerTag, { color: 'success' }, formatVarianceType(varianceType, t));
   }
-  return React.createElement(Tag, { color: 'default' }, formatVarianceType('无差异', t));
+  return React.createElement(MarkerTag, { color: 'default' }, formatVarianceType('无差异', t));
 }
 
 const PRIORITY_COLOR: Record<string, string> = {
@@ -100,7 +100,7 @@ export function formatPriority(value: string | null | undefined, t: TFunction): 
 
 export function getPriorityTag(priority: string, t: TFunction): React.ReactElement {
   const color = PRIORITY_COLOR[priority] || 'default';
-  return React.createElement(Tag, { color }, formatPriority(priority, t));
+  return React.createElement(MarkerTag, { color }, formatPriority(priority, t));
 }
 
 const RULE_TYPE_COLOR: Record<string, string> = {
@@ -123,7 +123,7 @@ export function formatRuleType(value: string | null | undefined, t: TFunction): 
 
 export function getRuleTypeTag(value: string, t: TFunction): React.ReactElement {
   const color = RULE_TYPE_COLOR[value] || 'default';
-  return React.createElement(Tag, { color }, formatRuleType(value, t));
+  return React.createElement(MarkerTag, { color }, formatRuleType(value, t));
 }
 
 export function getRuleTypeSelectOptions(t: TFunction) {

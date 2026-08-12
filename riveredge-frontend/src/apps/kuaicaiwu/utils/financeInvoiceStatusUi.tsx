@@ -1,6 +1,6 @@
 import React from 'react';
-import { Tag } from 'antd';
 import type { TFunction } from 'i18next';
+import { MarkerTag } from '../../../constants/statusBadges';
 
 const RECEIVABLE_INVOICE_STATUS_COLORS: Record<string, string> = {
   未开票: 'default',
@@ -41,7 +41,9 @@ export function renderReceivableInvoiceStatusTag(
   t: TFunction,
 ): React.ReactElement {
   const label = formatReceivableInvoiceStatusLabel(status, t);
-  return <Tag color={RECEIVABLE_INVOICE_STATUS_COLORS[status ?? ''] ?? 'default'}>{label}</Tag>;
+  return (
+    <MarkerTag color={RECEIVABLE_INVOICE_STATUS_COLORS[status ?? ''] ?? 'default'}>{label}</MarkerTag>
+  );
 }
 
 export function renderPayableInvoiceStatusTag(
@@ -49,5 +51,7 @@ export function renderPayableInvoiceStatusTag(
   t: TFunction,
 ): React.ReactElement {
   const label = formatPayableInvoiceStatusLabel(status, t);
-  return <Tag color={PAYABLE_INVOICE_STATUS_COLORS[status ?? ''] ?? 'default'}>{label}</Tag>;
+  return (
+    <MarkerTag color={PAYABLE_INVOICE_STATUS_COLORS[status ?? ''] ?? 'default'}>{label}</MarkerTag>
+  );
 }

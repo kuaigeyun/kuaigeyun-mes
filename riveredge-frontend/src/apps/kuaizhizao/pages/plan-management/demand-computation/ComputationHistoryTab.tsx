@@ -138,11 +138,16 @@ const ComputationHistoryTab: React.FC = () => {
       {
         title: t('app.kuaizhizao.demandComputation.colBusinessMode'),
         dataIndex: 'business_mode',
-        width: 110,
+        width: 140,
+        uniTableKeepWidth: true,
         valueType: 'select',
         sorter: true,
         hideInSearch: false,
-        valueEnum: buildDemandBusinessModeValueEnum(),
+        valueEnum: buildDemandBusinessModeValueEnum((mode) => {
+          if (mode === 'MTS') return t('app.kuaizhizao.demandManagement.businessModeMts');
+          if (mode === 'MTO') return t('app.kuaizhizao.demandManagement.businessModeMto');
+          return t('app.kuaizhizao.demandManagement.businessModeAto');
+        }),
       },
       {
         title: t('app.kuaizhizao.demandComputation.colComputationStatus'),

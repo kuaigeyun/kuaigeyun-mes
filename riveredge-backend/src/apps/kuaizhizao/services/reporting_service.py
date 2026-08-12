@@ -13,7 +13,12 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
 
-from core.utils.timezone_utils import is_future_datetime, resolve_business_datetime, today_site_str
+from core.utils.timezone_utils import (
+    coerce_business_datetime_to_utc,
+    is_future_datetime,
+    resolve_business_datetime,
+    today_site_str,
+)
 
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
@@ -894,6 +899,12 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 qualified_quantity=reporting_data.qualified_quantity,
                 unqualified_quantity=reporting_data.unqualified_quantity,
                 work_hours=reporting_data.work_hours,
+                work_start_time=coerce_business_datetime_to_utc(
+                    getattr(reporting_data, "work_start_time", None)
+                ),
+                work_end_time=coerce_business_datetime_to_utc(
+                    getattr(reporting_data, "work_end_time", None)
+                ),
                 status=reporting_data.status,
                 reported_at=reporting_data.reported_at,
                 remarks=reporting_data.remarks,
@@ -2467,6 +2478,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if "reported_at" in update_data and update_data.get("reported_at") is not None:
                 if is_future_datetime(update_data["reported_at"]):
                     raise ValidationError("报工时间不能晚于当前时间")
+            for time_key in ("work_start_time", "work_end_time", "reported_at"):
+                if time_key in update_data and update_data.get(time_key) is not None:
+                    update_data[time_key] = coerce_business_datetime_to_utc(update_data[time_key])
 
             update_data['remarks'] = updated_remarks
             # ReportingRecord 当前模型未定义 updated_by / updated_by_name，

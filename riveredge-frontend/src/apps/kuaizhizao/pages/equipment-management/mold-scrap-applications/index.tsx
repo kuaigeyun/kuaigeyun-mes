@@ -8,10 +8,11 @@ import {
   ProFormSelect,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Modal, Row, Col, Tag, Input } from 'antd';
+import { App, Button, Modal, Row, Col, Input } from 'antd';
 import { EditOutlined, DeleteOutlined, SendOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
+import { StatusTag } from '../../../../../constants/statusBadges';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -186,7 +187,9 @@ const MoldScrapApplicationsPage: React.FC = () => {
       {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
-        render: (_, r) => <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>,
+        render: (_, r) => (
+          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
+        ),
       },
       { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
     ],
@@ -239,20 +242,24 @@ const MoldScrapApplicationsPage: React.FC = () => {
       },
       { title: t(`${P}.col.applicant`), dataIndex: 'applicant_name', width: 100, sorter: true, hideInSearch: true },
       {
-        title: t(`${P}.col.status`),
-        dataIndex: 'status',
-        width: 90,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, r) => <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>,
-      },
-      {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
         hideInTable: true,
         hideInSearch: true,
       },
       ...buildDocumentAuditColumns<Record<string, unknown>>(t),
+      {
+        title: t(`${P}.col.status`),
+        key: 'lifecycle',
+        dataIndex: 'status',
+        width: 90,
+        sorter: true,
+        hideInSearch: true,
+        fixed: 'right',
+        render: (_, r) => (
+          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
+        ),
+      },
       {
         title: t('common.actions'),
         key: 'action',
@@ -361,7 +368,7 @@ const MoldScrapApplicationsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<MoldScrapApplication>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-scrap-applications"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-scrap-applications-equip-rank-v1"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

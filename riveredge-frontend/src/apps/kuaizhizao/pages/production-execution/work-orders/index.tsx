@@ -109,7 +109,6 @@ import {
   resolveMergeableWorkOrderIdsFromRowKeys,
   resolveWorkOrderGroupIdFromListRow,
   resolveWorkOrderIdsFromListRowKeys,
-  WORK_ORDER_LIST_LIVE_REFRESH_MS,
   WORK_ORDER_LIST_STALE_MS,
   WORK_ORDER_LIST_UNITABLE_QUERY_KEY,
 } from './workOrderListTable'
@@ -287,6 +286,8 @@ import {
 import ReportableQuantityPanel from '../../../components/ReportableQuantityPanel'
 import ReportingInboundWarehouseField from '../../../components/ReportingInboundWarehouseField'
 import { ReportingProducerField } from '../../../components/ReportingProducerField'
+import { ReportingWorkTimeFields } from '../../../components/ReportingWorkTimeFields'
+import { resolveReportingWorkTimeForSubmit } from '../../../utils/reportingWorkTime'
 import {
   isInboundWarehouseRequiredForLastOperation,
   resolveIsLastOperation,
@@ -1548,7 +1549,7 @@ const WorkOrdersPage: React.FC = () => {
     })
   }
 
-  /** 定时/聚焦刷新时重算齐套率与下推进度；首屏与翻页保持轻量读库 */
+  /** 业务主动刷新时重算齐套率与下推进度；首屏与翻页保持轻量读库 */
   const workOrderListHeavyMetricsRef = useRef(false)
   /** 齐套「库位与补料」Modal 打开中：禁止 softReload，避免表格重挂载把弹窗卸掉 */
   const readinessModalOpenRef = useRef(false)
@@ -1604,24 +1605,6 @@ const WorkOrdersPage: React.FC = () => {
     )
     prefetchDefaultWorkOrderList(queryClient, workOrderListDefaultPageSize)
   }, [queryClient, workOrderListDefaultPageSize])
-
-  // 页内可见时定时/聚焦刷新，物料齐套后圆环与下推进度同步更新
-  useEffect(() => {
-    const refreshIfVisible = () => {
-      if (document.visibilityState === 'visible') {
-        softReloadWorkOrderList()
-      }
-    }
-    const onWindowFocus = () => softReloadWorkOrderList()
-    window.addEventListener('focus', onWindowFocus)
-    document.addEventListener('visibilitychange', refreshIfVisible)
-    const timer = window.setInterval(refreshIfVisible, WORK_ORDER_LIST_LIVE_REFRESH_MS)
-    return () => {
-      window.removeEventListener('focus', onWindowFocus)
-      document.removeEventListener('visibilitychange', refreshIfVisible)
-      window.clearInterval(timer)
-    }
-  }, [softReloadWorkOrderList])
 
   const workOrderRowByKeyRef = useRef<Map<string, WorkOrder>>(new Map())
   const [workOrderListRowIndexVersion, setWorkOrderListRowIndexVersion] = useState(0)
@@ -3497,6 +3480,7 @@ const WorkOrdersPage: React.FC = () => {
         }
       }
       const producerMode = canProxyReporting && values.producer_mode === 'team' ? 'team' : 'worker'
+      const workTime = resolveReportingWorkTimeForSubmit(values)
       const reportingData: any = {
         work_order_id: quickReportingWorkOrder.id,
         work_order_code: quickReportingWorkOrder.code,
@@ -3505,9 +3489,11 @@ const WorkOrdersPage: React.FC = () => {
         operation_code: quickReportingOperation.operation_code,
         operation_name: quickReportingOperation.operation_name,
         status: 'pending',
-        reported_at: new Date().toISOString(),
+        reported_at: workTime.reported_at,
         remarks: values.remarks,
-        work_hours: values.work_hours ?? 0,
+        work_hours: workTime.work_hours,
+        work_start_time: workTime.work_start_time,
+        work_end_time: workTime.work_end_time,
       }
       if (producerMode === 'team') {
         const team = quickReportingTeamRef.current
@@ -7151,6 +7137,8 @@ const WorkOrdersPage: React.FC = () => {
       valueType: 'select',
       valueEnum: workOrderLifecycleValueEnum,
       render: (_, record) => {
+        // 工单组无独立执行状态，避免展示误导的草稿
+        if (isWorkOrderGroupListRow(record)) return null
         const kind = record.row_kind || 'work_order'
         if (kind === 'rework' || kind === 'outsource') {
           return <Tag variant="solid">{translateWorkOrderLifecycleStatus(t, record.status)}</Tag>
@@ -8465,7 +8453,7 @@ const WorkOrdersPage: React.FC = () => {
 
       {PrintModal}
 
-      {/* 工序卡环形进度：快速报工（与报工管理新建逻辑一致） */}
+      {/* 工序卡报工：与报工管理共用开始/结束/工时三向联动与提交口径 */}
       <FormModalTemplate
         key={
           quickReportingModalVisible && quickReportingWorkOrder?.id != null
@@ -8474,8 +8462,8 @@ const WorkOrdersPage: React.FC = () => {
         }
         title={
           quickReportingOperation
-            ? `报工 — ${quickReportingOperation.operation_name || ''}`
-            : '报工'
+            ? `${t('app.kuaizhizao.workReporting.createModalTitle')} — ${quickReportingOperation.operation_name || ''}`
+            : t('app.kuaizhizao.workReporting.createModalTitle')
         }
         open={quickReportingModalVisible}
         onClose={() => {
@@ -8501,70 +8489,16 @@ const WorkOrdersPage: React.FC = () => {
             </Col>
           )}
         {quickReportingOperation?.reporting_type === 'status' ? (
-          <>
-            <ProFormRadio.Group
-              name="completed_status"
-              label="完成状态"
-              rules={[{ required: true, message: '请选择完成状态' }]}
-              options={[
-                { label: t('app.kuaizhizao.workOrder.formCompleted'), value: 'completed' },
-                { label: t('app.kuaizhizao.workOrder.formIncomplete'), value: 'incomplete' },
-              ]}
-              colProps={{ span: 24 }}
-            />
-            {canProxyReporting && (
-              <>
-                <ReportingProducerField
-                  defaultBadgeUserIds={(quickReportingOperation?.default_operators || [])
-                    .map((d: { id?: number }) => d.id)
-                    .filter((n: number | undefined): n is number => typeof n === 'number')}
-                  onWorkerChange={(u) => {
-                    quickReportingProxyWorkerRef.current = u
-                  }}
-                  onTeamChange={(team) => {
-                    quickReportingTeamRef.current = team
-                  }}
-                  colProps={{ span: 12 }}
-                />
-                <ProFormDigit
-                  name="work_hours"
-                  label="工时(小时)"
-                  placeholder="选填"
-                  min={0}
-                  fieldProps={{ step: 0.1 }}
-                  colProps={{ span: 12 }}
-                />
-                <Col span={24}>
-                  {currentUser ? (
-                    <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-                      记录人员（本次登录）：{currentUser.full_name || currentUser.username || '—'}
-                    </Typography.Text>
-                  ) : null}
-                </Col>
-              </>
-            )}
-            {!canProxyReporting && (
-              <ProFormDigit
-                name="work_hours"
-                label="工时(小时)"
-                placeholder="选填"
-                min={0}
-                fieldProps={{ step: 0.1 }}
-                colProps={{ span: 24 }}
-              />
-            )}
-            <ReportingInboundWarehouseField
-              isLastOperation={quickReportingIsLastOperation}
-              warehouseRequired={quickReportingWarehouseRequired}
-            />
-            <ProFormTextArea
-              name="remarks"
-              label="备注"
-              placeholder="请输入备注信息"
-              fieldProps={{ rows: 3 }}
-              colProps={{ span: 24 }}
-            />
-          </>
+          <ProFormRadio.Group
+            name="completed_status"
+            label="完成状态"
+            rules={[{ required: true, message: '请选择完成状态' }]}
+            options={[
+              { label: t('app.kuaizhizao.workOrder.formCompleted'), value: 'completed' },
+              { label: t('app.kuaizhizao.workOrder.formIncomplete'), value: 'incomplete' },
+            ]}
+            colProps={{ span: 24 }}
+          />
         ) : (
           <>
             {quickReportingWorkOrder && quickReportingOperation && (
@@ -8652,7 +8586,7 @@ const WorkOrdersPage: React.FC = () => {
               }}
             </ProFormDependency>
             <ProFormDependency name={['qualified_quantity', 'unqualified_quantity']}>
-              {({ qualified_quantity: qqIn, unqualified_quantity: uqIn }) => {
+              {({ unqualified_quantity: uqIn }) => {
                 const uq = Number(uqIn) || 0
                 if (uq <= 0 || !quickReportingOperation || !operationHasSimpleInspection(quickReportingOperation)) {
                   return null
@@ -8684,60 +8618,45 @@ const WorkOrdersPage: React.FC = () => {
                 )
               }}
             </ProFormDependency>
-            {canProxyReporting && (
-              <>
-                <ReportingProducerField
-                  defaultBadgeUserIds={(quickReportingOperation?.default_operators || [])
-                    .map((d: { id?: number }) => d.id)
-                    .filter((n: number | undefined): n is number => typeof n === 'number')}
-                  onWorkerChange={(u) => {
-                    quickReportingProxyWorkerRef.current = u
-                  }}
-                  onTeamChange={(team) => {
-                    quickReportingTeamRef.current = team
-                  }}
-                  colProps={{ span: 12 }}
-                />
-                <ProFormDigit
-                  name="work_hours"
-                  label="工时(小时)"
-                  placeholder="选填"
-                  min={0}
-                  fieldProps={{ step: 0.1 }}
-                  colProps={{ span: 12 }}
-                />
-                <Col span={24}>
-                  {currentUser ? (
-                    <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-                      记录人员（本次登录）：{currentUser.full_name || currentUser.username || '—'}
-                    </Typography.Text>
-                  ) : null}
-                </Col>
-              </>
-            )}
-            {!canProxyReporting && (
-              <ProFormDigit
-                name="work_hours"
-                label="工时(小时)"
-                placeholder="选填"
-                min={0}
-                fieldProps={{ step: 0.1 }}
-                colProps={{ span: 24 }}
-              />
-            )}
-            <ReportingInboundWarehouseField
-              isLastOperation={quickReportingIsLastOperation}
-              warehouseRequired={quickReportingWarehouseRequired}
-            />
-            <ProFormTextArea
-              name="remarks"
-              label="备注"
-              placeholder="请输入备注信息"
-              fieldProps={{ rows: 3 }}
-              colProps={{ span: 24 }}
-            />
           </>
         )}
+        {canProxyReporting && (
+          <>
+            <ReportingProducerField
+              defaultBadgeUserIds={(quickReportingOperation?.default_operators || [])
+                .map((d: { id?: number }) => d.id)
+                .filter((n: number | undefined): n is number => typeof n === 'number')}
+              onWorkerChange={(u) => {
+                quickReportingProxyWorkerRef.current = u
+              }}
+              onTeamChange={(team) => {
+                quickReportingTeamRef.current = team
+              }}
+              colProps={{ span: 12 }}
+            />
+            <Col span={24}>
+              {currentUser ? (
+                <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+                  {t('app.kuaizhizao.workReporting.formRecordedByLogin', {
+                    name: currentUser.full_name || currentUser.username || '—',
+                  })}
+                </Typography.Text>
+              ) : null}
+            </Col>
+          </>
+        )}
+        <ReportingWorkTimeFields />
+        <ReportingInboundWarehouseField
+          isLastOperation={quickReportingIsLastOperation}
+          warehouseRequired={quickReportingWarehouseRequired}
+        />
+        <ProFormTextArea
+          name="remarks"
+          label={t('app.kuaizhizao.workReporting.colRemarks')}
+          placeholder={t('app.kuaizhizao.workReporting.formRemarksPlaceholder')}
+          fieldProps={{ rows: 3 }}
+          colProps={{ span: 24 }}
+        />
         </>
       </FormModalTemplate>
 

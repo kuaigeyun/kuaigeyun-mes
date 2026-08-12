@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import {
   Button,
@@ -9,7 +9,6 @@ import {
   Select,
   Space,
   Table,
-  Tag,
   Timeline,
   message,
 } from 'antd';
@@ -17,8 +16,19 @@ import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UniTableStackedPrimaryCell,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { SourceDocumentCode } from '../../../../../components/linked-document-code/SourceDocumentCode';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import {
+  freightOrderStatusLabel,
+  renderFreightOrderStatusTag,
+  renderLogisticsBusinessDirectionTag,
+} from '../shared/logisticsListPresentation';
 import {
   arriveFreightOrder,
   createFreightOrder,
@@ -35,16 +45,6 @@ import {
   type FreightOrder,
   type FreightPullCandidate,
 } from '../../../services/logistics';
-
-const statusColor: Record<string, string> = {
-  draft: 'default',
-  scheduled: 'processing',
-  shipped: 'blue',
-  in_transit: 'cyan',
-  arrived: 'orange',
-  signed: 'success',
-  cancelled: 'error',
-};
 
 const FreightOrdersPage: React.FC = () => {
   const { t } = useTranslation();
@@ -114,40 +114,76 @@ const FreightOrdersPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
-  const columns: ProColumns<FreightOrder>[] = [
-    { title: t('app.kuaizhizao.logistics.field.orderCode'), dataIndex: 'order_code' },
-    {
-      title: t('app.kuaizhizao.logistics.field.businessDirection'),
-      dataIndex: 'business_direction',
-      render: (_, row) =>
-        row.business_direction === 'sales_outbound'
-          ? t('app.kuaizhizao.logistics.option.direction.salesOutbound')
-          : t('app.kuaizhizao.logistics.option.direction.purchaseInbound'),
-    },
-    { title: t('app.kuaizhizao.logistics.field.carrierName'), dataIndex: 'carrier_name' },
-    { title: t('app.kuaizhizao.logistics.field.trackingNumber'), dataIndex: 'tracking_number' },
-    {
-      title: t('app.kuaizhizao.logistics.field.status'),
-      dataIndex: 'status',
-      render: (_, row) => <Tag color={statusColor[row.status] || 'default'}>{row.status}</Tag>,
-    },
-    {
-      title: t('common.action'),
-      valueType: 'option',
-      width: 120,
-      render: (_, row) => (
-        <Button {...rowActionKind('read')} type="link" size="small" onClick={() => openDetail(row)}>
-          {t('common.detail')}
-        </Button>
-      ),
-    },
-  ];
+  const columns: ProColumns<FreightOrder>[] = useMemo(
+    () =>
+      alignProColumns<FreightOrder>([
+        {
+          title: t('app.kuaizhizao.logistics.field.orderCode'),
+          dataIndex: 'order_code',
+          ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+          fixed: 'left',
+          render: (_, row) => (
+            <UniTableStackedPrimaryCell
+              primary={String(row.order_code ?? '').trim() || '-'}
+              secondary={String(row.tracking_number ?? '').trim() || '-'}
+              secondaryCopyable={Boolean(String(row.tracking_number ?? '').trim())}
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.trackingNumber'),
+          dataIndex: 'tracking_number',
+          hideInTable: true,
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.businessDirection'),
+          dataIndex: 'business_direction',
+          width: 110,
+          minWidth: 110,
+          uniTableKeepWidth: true,
+          resizable: false,
+          render: (_, row) => renderLogisticsBusinessDirectionTag(t, row.business_direction),
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.carrierName'),
+          dataIndex: 'carrier_name',
+          width: 140,
+          minWidth: 140,
+          uniTableKeepWidth: true,
+          resizable: false,
+          ellipsis: true,
+          render: (_, row) => row.carrier_name || '-',
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.status'),
+          key: 'lifecycle',
+          dataIndex: 'status',
+          fixed: 'right',
+          hideInSearch: true,
+          render: (_, row) => renderFreightOrderStatusTag(t, row.status),
+        },
+        {
+          title: t('common.action'),
+          key: 'action',
+          valueType: 'option',
+          fixed: 'right',
+          hideInSearch: true,
+          render: (_, row) => (
+            <Button {...rowActionKind('read')} type="link" size="small" onClick={() => openDetail(row)}>
+              {t('common.detail')}
+            </Button>
+          ),
+        },
+      ]),
+    [t],
+  );
 
   return (
     <ListPageTemplate>
       <UniTable<FreightOrder>
         actionRef={actionRef}
         columns={columns}
+        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-orders.v1"
         rowKey="id"
         request={async (params) => {
           const res = await listFreightOrders({
@@ -224,7 +260,17 @@ const FreightOrdersPage: React.FC = () => {
             onChange: (_, rows) => setSelectedSources(rows),
           }}
           columns={[
-            { title: t('app.kuaizhizao.logistics.field.sourceCode'), dataIndex: 'source_code' },
+            {
+              title: t('app.kuaizhizao.logistics.field.sourceCode'),
+              dataIndex: 'source_code',
+              render: (_, row) => (
+                <SourceDocumentCode
+                  sourceType={row.source_type}
+                  sourceId={row.source_id}
+                  sourceCode={row.source_code}
+                />
+              ),
+            },
             { title: t('app.kuaizhizao.logistics.field.partnerName'), dataIndex: 'partner_name' },
             { title: t('app.kuaizhizao.logistics.field.businessDirection'), dataIndex: 'business_direction' },
           ]}
@@ -294,7 +340,9 @@ const FreightOrdersPage: React.FC = () => {
       >
         {detail ? (
           <>
-            <p>{t('app.kuaizhizao.logistics.field.status')}: {detail.status}</p>
+            <p>
+              {t('app.kuaizhizao.logistics.field.status')}: {freightOrderStatusLabel(t, detail.status)}
+            </p>
             <p>{t('app.kuaizhizao.logistics.field.trackingNumber')}: {detail.tracking_number || '-'}</p>
             <Timeline
               items={(detail.tracking_events || []).map((event) => ({

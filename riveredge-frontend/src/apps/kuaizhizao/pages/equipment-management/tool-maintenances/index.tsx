@@ -10,7 +10,7 @@ import {
 } from '@ant-design/pro-components';
 import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
-import { App, Button, Modal, Row, Col, Tag, Table, Input, Switch } from 'antd';
+import { App, Button, Modal, Row, Col, Table, Input, Switch } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   EditOutlined,
@@ -22,6 +22,7 @@ import {
   CheckCircleOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { StatusTag } from '../../../../../constants/statusBadges';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -308,7 +309,7 @@ const ToolMaintenancesPage: React.FC = () => {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
         render: (_, r) => (
-          <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>
+          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
         ),
       },
       { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
@@ -376,20 +377,24 @@ const ToolMaintenancesPage: React.FC = () => {
       },
       { title: t(`${P}.col.executor`), dataIndex: 'applicant_name', width: 100, sorter: true, hideInSearch: true },
       {
-        title: t(`${P}.col.status`),
-        dataIndex: 'status',
-        width: 90,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, r) => <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>,
-      },
-      {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
         hideInTable: true,
         hideInSearch: true,
       },
       ...buildDocumentAuditColumns<ToolMaintenance>(t),
+      {
+        title: t(`${P}.col.status`),
+        key: 'lifecycle',
+        dataIndex: 'status',
+        width: 90,
+        sorter: true,
+        hideInSearch: true,
+        fixed: 'right',
+        render: (_, r) => (
+          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
+        ),
+      },
       {
         title: t('common.actions'),
         key: 'action',
@@ -513,7 +518,7 @@ const ToolMaintenancesPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<ToolMaintenance>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenances"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenances-equip-rank-v1"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

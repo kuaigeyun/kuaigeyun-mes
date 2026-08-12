@@ -29,6 +29,7 @@ const RECEIVABLE_RESOURCE = 'kuaicaiwu:receivable';
 const ReceivableDetail: React.FC = () => {
   const { t } = useTranslation();
   const receivablePerms = useResourcePermissions(RECEIVABLE_RESOURCE);
+  const salesInvoicePerms = useResourcePermissions('kuaicaiwu:sales-invoice');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -78,6 +79,13 @@ const ReceivableDetail: React.FC = () => {
     });
   };
 
+  const openInvoiceFromReceivable = () => {
+    if (!data?.id) return;
+    navigate('/apps/kuaicaiwu/finance-management/sales-invoices', {
+      state: { pullReceivableId: data.id },
+    });
+  };
+
   const pageActions = data ? (
     <>
       <Button onClick={() => navigate(-1)}>{t('app.kuaicaiwu.common.back')}</Button>
@@ -95,6 +103,9 @@ const ReceivableDetail: React.FC = () => {
         theme="default"
         onSuccess={loadData}
       />
+      {salesInvoicePerms.canCreate ? (
+        <Button onClick={openInvoiceFromReceivable}>{t(`${P}.createInvoice`)}</Button>
+      ) : null}
       {data.status !== '已结清' && receivablePerms.canUpdate ? (
         <Button type="primary" onClick={openReceiptFromReceivable}>
           {t(`${P}.recordReceipt`)}

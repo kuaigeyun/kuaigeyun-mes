@@ -335,7 +335,42 @@ export const warehouseApi = {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/replenishment-suggestions', { method: 'GET', params }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/replenishment-suggestions/${id}`, { method: 'GET' }),
     generateFromAlerts: async (data?: { alert_ids?: number[] }) =>
-      apiRequest('/apps/kuaizhizao/replenishment-suggestions/generate-from-alerts', { method: 'POST', data: data || {} }),
+      apiRequest<{
+        items: any[];
+        created: number;
+        skipped_existing: number;
+        skipped_zero_qty: number;
+      }>('/apps/kuaizhizao/replenishment-suggestions/generate-from-alerts', { method: 'POST', data: data || {} }),
+    generateFromDemandComputation: async (data: { demand_computation_id: number }) =>
+      apiRequest<{
+        items: any[];
+        created: number;
+        skipped_existing: number;
+        skipped_zero_qty: number;
+      }>('/apps/kuaizhizao/replenishment-suggestions/generate-from-demand-computation', {
+        method: 'POST',
+        data,
+      }),
+    previewPushToPurchaseRequisition: async (suggestion_ids: number[]) =>
+      apiRequest('/apps/kuaizhizao/replenishment-suggestions/push-to-purchase-requisition/preview', {
+        method: 'POST',
+        data: { suggestion_ids },
+      }),
+    pushToPurchaseRequisition: async (suggestion_ids: number[]) =>
+      apiRequest('/apps/kuaizhizao/replenishment-suggestions/push-to-purchase-requisition', {
+        method: 'POST',
+        data: { suggestion_ids },
+      }),
+    previewPushToPurchaseOrder: async (suggestion_ids: number[]) =>
+      apiRequest('/apps/kuaizhizao/replenishment-suggestions/push-to-purchase-order/preview', {
+        method: 'POST',
+        data: { suggestion_ids },
+      }),
+    pushToPurchaseOrder: async (suggestion_ids: number[]) =>
+      apiRequest('/apps/kuaizhizao/replenishment-suggestions/push-to-purchase-order', {
+        method: 'POST',
+        data: { suggestion_ids },
+      }),
     process: async (id: string, data: { status: string; processing_notes?: string }) =>
       apiRequest(`/apps/kuaizhizao/replenishment-suggestions/${id}/process`, { method: 'POST', data }),
     statistics: async () => apiRequest('/apps/kuaizhizao/replenishment-suggestions/statistics', { method: 'GET' }),

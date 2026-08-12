@@ -14,6 +14,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useInvalidateSalesOrderList } from '../../../../../hooks/useInvalidateSalesOrderList';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Tooltip, Switch, Alert } from 'antd';
@@ -270,7 +277,12 @@ type QuotationItemRow = QuotationItem & {
   contract_downstream_missing?: boolean;
 };
 
-const QUOTATION_LIST_PERSISTENCE_ID = 'apps.kuaizhizao.pages.sales-management.quotations.v2';
+const QUOTATION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_quotations';
+const QUOTATION_LIST_PERSISTENCE_ID = 'apps.kuaizhizao.pages.sales-management.quotations.v3';
+
+function pickQuotationCustomFieldProps(record: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(record).filter(([key]) => key.startsWith('custom_')));
+}
 
 /** 同一系列的分组键：优先后端 series_code；否则从编号剥 `-Vn` 后缀 */
 function quotationSeriesGroupKey(r: Quotation): string {
@@ -452,8 +464,14 @@ const QuotationSalesmanField: React.FC<{ userList: User[]; loading: boolean }> =
           loading={loading}
           style={{ width: '100%' }}
           options={options}
-          onChange={(_val, opt: any) => {
-            form.setFieldsValue({ salesman_name: opt?.label });
+          onChange={(val, opt: any) => {
+            const option = Array.isArray(opt) ? opt[0] : opt;
+            const label = typeof option?.label === 'string' ? option.label : undefined;
+            form.setFieldsValue({
+              salesman_id:
+                val != null && val !== '' && Number.isFinite(Number(val)) ? Number(val) : undefined,
+              salesman_name: label,
+            });
           }}
         />
       </ProForm.Item>
@@ -628,6 +646,27 @@ const QuotationsPage: React.FC = () => {
   const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
   const isFormPage = isCreatePage || isEditPage;
   const formPageInitializedRef = useRef(false);
+  const {
+    customFields: quotationFormCustomFields,
+    customFieldValues: quotationFormCustomFieldValues,
+    loadFieldValues: loadQuotationFormFieldValues,
+    extractFormValues: extractQuotationFormValues,
+    saveCustomFieldValues: saveQuotationCustomFieldValues,
+    resetFieldValues: resetQuotationFormFieldValues,
+  } = useCustomFields({
+    tableName: QUOTATION_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: isFormPage,
+  });
+  const {
+    customFields: quotationListCustomFields,
+    generateCustomFieldColumns: generateQuotationCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichQuotationRecordsWithCustomFields,
+    customFieldValues: quotationDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadQuotationFieldValuesForDetail,
+    resetDetailFieldValues: resetQuotationDetailFieldValues,
+  } = useCustomFieldsForList<Quotation>({ tableName: QUOTATION_CUSTOM_FIELD_TABLE });
+  const quotationCustomFieldColumns = generateQuotationCustomFieldColumns();
   const { message: messageApi } = App.useApp();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal({
     onAfterPrint: async (target) => {
@@ -1213,6 +1252,7 @@ const QuotationsPage: React.FC = () => {
         />
       ),
     },
+    ...quotationCustomFieldColumns,
     {
       title: t('common.actions'),
       minWidth: 120,
@@ -1428,6 +1468,9 @@ const QuotationsPage: React.FC = () => {
       if (res) {
         setQuotationDetail(res);
         setDetailDrawerVisible(true);
+        if (res.id != null) {
+          await loadQuotationFieldValuesForDetail(res.id);
+        }
       }
     } catch (e: any) {
       messageApi.error(t('app.kuaizhizao.quotation.detailFailed'));
@@ -1438,12 +1481,17 @@ const QuotationsPage: React.FC = () => {
     async (id: number) => {
       try {
         const res = await getQuotation(id);
-        if (res) setQuotationDetail(res);
+        if (res) {
+          setQuotationDetail(res);
+          if (res.id != null) {
+            await loadQuotationFieldValuesForDetail(res.id);
+          }
+        }
       } catch (e: any) {
         messageApi.error(e?.message || t('app.kuaizhizao.quotation.detailFailed'));
       }
     },
-    [messageApi, t],
+    [loadQuotationFieldValuesForDetail, messageApi, t],
   );
 
   /** 从销售订单全链路浮层「打开报价单」跳转携带 state，到达本页后自动打开详情 */
@@ -1458,12 +1506,15 @@ const QuotationsPage: React.FC = () => {
         if (res) {
           setQuotationDetail(res);
           setDetailDrawerVisible(true);
+          if (res.id != null) {
+            await loadQuotationFieldValuesForDetail(res.id);
+          }
         }
       } catch {
         messageApi.error(t('app.kuaizhizao.quotation.detailFailed'));
       }
     })();
-  }, [location.state, location.pathname, location.search, navigate, messageApi]);
+  }, [loadQuotationFieldValuesForDetail, location.state, location.pathname, location.search, navigate, messageApi, t]);
 
   const openFollowUpFromQuotation = (record: Quotation) => {
     const cid = record.customer_id;
@@ -2152,7 +2203,7 @@ const QuotationsPage: React.FC = () => {
           invalidateMenuBadgeCounts();
           actionRef.current?.reload();
           // 创建新版后直接进入编辑页（与「新建」一致），不再跳详情抽屉。
-          setDetailDrawerVisible(false);
+          closeQuotationDetailDrawer();
           if (created.id) {
             navigate(quotationEditPath(created.id));
           }
@@ -2471,6 +2522,7 @@ const QuotationsPage: React.FC = () => {
   async function initQuotationCreateForm(options?: { customerId?: number }) {
     const prefillCustomerId = options?.customerId;
     lastHeaderDeliveryRef.current = null;
+    resetQuotationFormFieldValues();
     formRef.current?.resetFields();
     setEditingId(null);
     setPendingCreateCustomerId(prefillCustomerId ?? null);
@@ -2586,6 +2638,9 @@ const QuotationsPage: React.FC = () => {
         formRef.current?.setFieldsValue(editValues);
         lastHeaderDeliveryRef.current = coerceFormDate(editValues.delivery_date);
         lastPriceTypeRef.current = normalizeSalesPriceType(editValues.price_type);
+        void loadQuotationFormFieldValues(quotationId).then((fieldFormValues) => {
+          formRef.current?.setFieldsValue(fieldFormValues);
+        });
       }, 100);
     } catch {
       messageApi.error(t('app.kuaizhizao.quotation.detailFailed'));
@@ -2602,6 +2657,11 @@ const QuotationsPage: React.FC = () => {
   }
 
   const submitCreate = async (values: any, options?: { asDraft?: boolean }) => {
+    const { customData, standardValues } = extractQuotationFormValues(values);
+    Object.keys(values).forEach((key) => {
+      if (key.startsWith('custom_')) delete values[key];
+    });
+    Object.assign(values, standardValues);
     const validItems = normalizeFormListItems<any>(values.items).filter((it: any) =>
       isValidSalesLineForSubmit(it, 'quote_quantity'),
     );
@@ -2631,7 +2691,7 @@ const QuotationsPage: React.FC = () => {
     }
     const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id);
     const customerName = cust?.name ?? cust?.customer_name ?? values.customer_name ?? '';
-    await createQuotation(
+    const created = await createQuotation(
       {
         quotation_code: quotationCode || undefined,
         quotation_date: toApiDateString(values.quotation_date),
@@ -2655,6 +2715,9 @@ const QuotationsPage: React.FC = () => {
       },
       { autoSubmit: !options?.asDraft },
     );
+    if (created?.id != null) {
+      await saveQuotationCustomFieldValues(created.id, customData);
+    }
     messageApi.success(options?.asDraft ? t('app.kuaizhizao.quotation.savedDraft') : t('common.createSuccess'));
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
@@ -2684,6 +2747,10 @@ const QuotationsPage: React.FC = () => {
 
   const handleFormSubmit = async () => {
     const values = formRef.current?.getFieldsValue(true);
+    if (!values) {
+      messageApi.warning(t('components.layoutTemplates.formModal.formNotReady'));
+      return;
+    }
     try {
       if (isCreatePage) {
         await submitCreate(values);
@@ -2703,7 +2770,20 @@ const QuotationsPage: React.FC = () => {
   };
 
   const submitEdit = async (values: any) => {
-    if (!editingId) return;
+    // 编辑页标签 keep-alive：保存成功后若清空 editingId，回到未关的编辑标签再保存会静默失败。
+    // 与销售订单一致，以路由 id 为真源。
+    const quotationId =
+      editingId ??
+      (editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0 ? editRouteId : null);
+    if (quotationId == null) {
+      messageApi.error(t('app.kuaizhizao.quotation.updateFailed'));
+      throw new Error(t('app.kuaizhizao.quotation.updateFailed'));
+    }
+    const { customData, standardValues } = extractQuotationFormValues(values);
+    Object.keys(values).forEach((key) => {
+      if (key.startsWith('custom_')) delete values[key];
+    });
+    Object.assign(values, standardValues);
     const validItems = normalizeFormListItems<any>(values.items).filter((it: any) =>
       isValidSalesLineForSubmit(it, 'quote_quantity'),
     );
@@ -2720,7 +2800,7 @@ const QuotationsPage: React.FC = () => {
     }
     const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id);
     const customerName = cust?.name ?? cust?.customer_name ?? values.customer_name ?? '';
-    await updateQuotation(editingId, {
+    await updateQuotation(quotationId, {
       quotation_date: toApiDateString(values.quotation_date),
       valid_until: toApiDateString(values.valid_until),
       delivery_date: toApiDateString(values.delivery_date),
@@ -2740,8 +2820,8 @@ const QuotationsPage: React.FC = () => {
       discount_amount: Number(values.discount_amount ?? 0) || 0,
       items: submitItems,
     });
+    await saveQuotationCustomFieldValues(quotationId, customData);
     messageApi.success(t('common.updateSuccess'));
-    setEditingId(null);
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
     invalidateMenuBadgeCounts();
@@ -2858,7 +2938,8 @@ const QuotationsPage: React.FC = () => {
   const closeQuotationDetailDrawer = useCallback(() => {
     setDetailDrawerVisible(false);
     setQuotationDetail(null);
-  }, []);
+    resetQuotationDetailFieldValues();
+  }, [resetQuotationDetailFieldValues]);
 
   const refreshQuotationLinePriceByVariant = useCallback(
     async (index: number, attrs?: Record<string, unknown>) => {
@@ -3020,7 +3101,7 @@ const QuotationsPage: React.FC = () => {
                 name="quotation_code"
                 label={t('app.kuaizhizao.quotation.import.code')}
                 placeholder={isAutoGenerateEnabled('kuaizhizao-quotation') ? t('app.kuaizhizao.quotation.form.codeAutoGenerate') : t('app.kuaizhizao.quotation.form.codeRequired')}
-                fieldProps={{ disabled: !!editingId }}
+                fieldProps={{ disabled: isEditPage || !!editingId }}
                 rules={[{ required: true, whitespace: true, message: t('app.kuaizhizao.quotation.form.codeRequired') }]}
               />
             </Col>
@@ -3148,6 +3229,11 @@ const QuotationsPage: React.FC = () => {
             </Col>
           </Row>
         </div>
+        <CustomFieldsFormSection
+          customFields={quotationFormCustomFields}
+          customFieldValues={quotationFormCustomFieldValues}
+          gridColumns={4}
+        />
       </div>
       <ProFormText name="customer_name" hidden />
       <ProFormText name="price_type" hidden initialValue={DEFAULT_SALES_PRICE_TYPE} />
@@ -3952,7 +4038,7 @@ const QuotationsPage: React.FC = () => {
                 include_items: dataViewModeRef.current === 'detail',
               });
               setListTotal(response.total ?? 0);
-              const flat = response.data || [];
+              const flat = await enrichQuotationRecordsWithCustomFields(response.data || []);
               lastQuotationsFlatCacheRef.current = flat;
               setTableQuotationsFlat(flat);
               if (dataViewModeRef.current === 'order') {
@@ -3970,6 +4056,7 @@ const QuotationsPage: React.FC = () => {
                   item?.id ? `qt-${h.id}-item-${item.id}` : `qt-${h.id}-idx-${index}`,
                 mapItemRow: (h, item) => ({
                   ...item,
+                  ...pickQuotationCustomFieldProps(h as unknown as Record<string, unknown>),
                   quotation_id: h.id ?? 0,
                   quotation_code: h.quotation_code,
                   customer_name: h.customer_name,
@@ -3985,6 +4072,7 @@ const QuotationsPage: React.FC = () => {
                   contract_downstream_missing: h.contract_downstream_missing,
                 }),
                 mapEmptyHeaderRow: (h) => ({
+                  ...pickQuotationCustomFieldProps(h as unknown as Record<string, unknown>),
                   quotation_id: h.id ?? 0,
                   quotation_code: h.quotation_code,
                   customer_name: h.customer_name,
@@ -4098,11 +4186,21 @@ const QuotationsPage: React.FC = () => {
         }
         basic={
           quotationDetail ? (
-            <Descriptions
-              column={3}
-              size="small"
-              items={buildDescriptionItemsFromColumns(quotationDetail, alignedDetailBasicColumns, { column: 3 })}
-            />
+            <>
+              <Descriptions
+                column={3}
+                size="small"
+                items={buildDescriptionItemsFromColumns(quotationDetail, alignedDetailBasicColumns, { column: 3 })}
+              />
+              {hasCustomFieldsDetailContent(quotationListCustomFields, quotationDetailCustomFieldValues) ? (
+                <div style={{ marginTop: 16 }}>
+                  <CustomFieldsDetailSection
+                    customFields={quotationListCustomFields}
+                    customFieldValues={quotationDetailCustomFieldValues}
+                  />
+                </div>
+              ) : null}
+            </>
           ) : undefined
         }
         collaborationTitleSuffix={

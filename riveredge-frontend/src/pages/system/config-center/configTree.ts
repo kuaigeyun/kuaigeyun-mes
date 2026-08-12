@@ -140,6 +140,31 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = createCategories({
     { key: 'work_order.merge', nameKey: 'pages.system.configCenter.param.work_order_merge', descriptionKey: 'pages.system.configCenter.param.work_order_merge_desc', source: 'business_config', sourcePath: 'parameters.work_order.merge', type: 'boolean' },
     { key: 'reporting.quick_reporting', nameKey: 'pages.system.configCenter.param.reporting_quick_reporting', descriptionKey: 'pages.system.configCenter.param.reporting_quick_reporting_desc', source: 'business_config', sourcePath: 'parameters.reporting.quick_reporting', type: 'boolean' },
     { key: 'reporting.parameter_reporting', nameKey: 'pages.system.configCenter.param.reporting_parameter_reporting', descriptionKey: 'pages.system.configCenter.param.reporting_parameter_reporting_desc', source: 'business_config', sourcePath: 'parameters.reporting.parameter_reporting', type: 'boolean' },
+    {
+      key: 'reporting.default_reporting_quantity_mode',
+      nameKey: 'pages.system.configCenter.param.reporting_default_reporting_quantity_mode',
+      descriptionKey: 'pages.system.configCenter.param.reporting_default_reporting_quantity_mode_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.reporting.default_reporting_quantity_mode',
+      type: 'select',
+      selectOptions: [
+        { value: 'zero', labelKey: 'pages.system.configCenter.param.reporting_default_reporting_quantity_mode_opt_zero' },
+        { value: 'reportable', labelKey: 'pages.system.configCenter.param.reporting_default_reporting_quantity_mode_opt_reportable' },
+      ],
+    },
+    {
+      key: 'reporting.default_production_worker_mode',
+      nameKey: 'pages.system.configCenter.param.reporting_default_production_worker_mode',
+      descriptionKey: 'pages.system.configCenter.param.reporting_default_production_worker_mode_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.reporting.default_production_worker_mode',
+      type: 'select',
+      selectOptions: [
+        { value: 'current_user', labelKey: 'pages.system.configCenter.param.reporting_default_production_worker_mode_opt_current_user' },
+        { value: 'operation_assigned', labelKey: 'pages.system.configCenter.param.reporting_default_production_worker_mode_opt_operation_assigned' },
+        { value: 'auto', labelKey: 'pages.system.configCenter.param.reporting_default_production_worker_mode_opt_auto' },
+      ],
+    },
     { key: 'reporting.data_correction', nameKey: 'pages.system.configCenter.param.reporting_data_correction', descriptionKey: 'pages.system.configCenter.param.reporting_data_correction_desc', source: 'business_config', sourcePath: 'parameters.reporting.data_correction', type: 'boolean' },
   ],
   warehouse: [

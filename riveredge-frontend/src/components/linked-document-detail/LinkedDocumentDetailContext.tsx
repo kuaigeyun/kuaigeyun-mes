@@ -6,12 +6,20 @@
 
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { theme } from 'antd';
-import { canOpenLinkedDocumentDetail } from '../../apps/kuaizhizao/utils/linkedDocumentDetail';
+import {
+  canOpenLinkedDocumentDetail,
+  normalizeLinkedDocumentType,
+} from '../../apps/kuaizhizao/utils/linkedDocumentDetail';
 import { SalesOrderLinkedDetailDrawer } from './drawers/SalesOrderLinkedDetailDrawer';
 import { PurchaseOrderLinkedDetailDrawer } from './drawers/PurchaseOrderLinkedDetailDrawer';
 import { QuotationLinkedDetailDrawer } from './drawers/QuotationLinkedDetailDrawer';
 import { SalesDeliveryLinkedDetailDrawer } from './drawers/SalesDeliveryLinkedDetailDrawer';
 import { PurchaseReceiptLinkedDetailDrawer } from './drawers/PurchaseReceiptLinkedDetailDrawer';
+import { SalesForecastLinkedDetailDrawer } from './drawers/SalesForecastLinkedDetailDrawer';
+import { DemandLinkedDetailDrawer } from './drawers/DemandLinkedDetailDrawer';
+import { PurchaseRequisitionLinkedDetailDrawer } from './drawers/PurchaseRequisitionLinkedDetailDrawer';
+import { DemandComputationLinkedDetailDrawer } from './drawers/DemandComputationLinkedDetailDrawer';
+import { WorkOrderLinkedDetailDrawer } from './drawers/WorkOrderLinkedDetailDrawer';
 
 /** 高于列表详情抽屉与报价单内嵌关联抽屉（常见 base+50） */
 const LINKED_DRAWER_Z_OFFSET = 60;
@@ -100,6 +108,51 @@ function LinkedDocumentDetailHost({
           zIndex={zIndex}
         />
       );
+    case 'sales_forecast':
+      return (
+        <SalesForecastLinkedDetailDrawer
+          open
+          documentId={documentId}
+          onClose={onClose}
+          zIndex={zIndex}
+        />
+      );
+    case 'demand':
+      return (
+        <DemandLinkedDetailDrawer
+          open
+          documentId={documentId}
+          onClose={onClose}
+          zIndex={zIndex}
+        />
+      );
+    case 'purchase_requisition':
+      return (
+        <PurchaseRequisitionLinkedDetailDrawer
+          open
+          documentId={documentId}
+          onClose={onClose}
+          zIndex={zIndex}
+        />
+      );
+    case 'demand_computation':
+      return (
+        <DemandComputationLinkedDetailDrawer
+          open
+          documentId={documentId}
+          onClose={onClose}
+          zIndex={zIndex}
+        />
+      );
+    case 'work_order':
+      return (
+        <WorkOrderLinkedDetailDrawer
+          open
+          documentId={documentId}
+          onClose={onClose}
+          zIndex={zIndex}
+        />
+      );
     default:
       return null;
   }
@@ -109,7 +162,7 @@ export function LinkedDocumentDetailProvider({ children }: { children: React.Rea
   const [target, setTarget] = useState<Target | null>(null);
 
   const openLinkedDocumentDetail = useCallback<OpenFn>((documentType, documentId) => {
-    const type = String(documentType ?? '').trim();
+    const type = normalizeLinkedDocumentType(documentType);
     const id = Number(documentId);
     if (!canOpenLinkedDocumentDetail(type) || !Number.isFinite(id) || id <= 0) return false;
     setTarget({ documentType: type, documentId: id });

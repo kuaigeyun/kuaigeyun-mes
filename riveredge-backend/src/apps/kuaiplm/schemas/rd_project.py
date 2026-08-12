@@ -219,6 +219,7 @@ class RdProjectResponse(BaseModel):
     material_code: Optional[str] = None
     material_name: Optional[str] = None
     current_gate_key: Optional[str] = None
+    current_gate_name: Optional[str] = None
     owner_id: Optional[int] = None
     owner_name: Optional[str] = None
     priority: str

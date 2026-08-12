@@ -1354,10 +1354,15 @@ def enrich_inventory_alert_list_capabilities(
 def enrich_replenishment_suggestion_list_capabilities(
     suggestions: List[Any],
     responses: List[T],
+    *,
+    require_purchase_requisition: bool = False,
 ) -> List[T]:
     out: List[T] = []
     for suggestion, resp in zip(suggestions, responses):
-        caps = derive_replenishment_suggestion_capabilities(suggestion)
+        caps = derive_replenishment_suggestion_capabilities(
+            suggestion,
+            require_purchase_requisition=require_purchase_requisition,
+        )
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))
         else:

@@ -79,8 +79,18 @@ export function applyCustomerFormFields(
   const full = options.customerList
     ? resolveFullCustomerFromList(customer, options.customerList)
     : customer;
+  const next = resolveCustomerFormFieldValues(full, options.users);
+  // 公海/无归属客户：保留单据上已选业务员，避免「私有→共有」回填把业务员清空
+  if (next.salesman_id == null) {
+    const currentId = formRef.current?.getFieldValue('salesman_id');
+    const currentName = formRef.current?.getFieldValue('salesman_name');
+    if (currentId != null && currentId !== '' && Number.isFinite(Number(currentId))) {
+      next.salesman_id = Number(currentId);
+      next.salesman_name = currentName;
+    }
+  }
   formRef.current?.setFieldsValue({
     ...(options.includeCustomerId ? { customer_id: full.id ?? full.customer_id } : {}),
-    ...resolveCustomerFormFieldValues(full, options.users),
+    ...next,
   });
 }

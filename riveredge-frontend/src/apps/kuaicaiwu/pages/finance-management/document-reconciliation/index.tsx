@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Card, DatePicker, Form, Select, Space, Steps, Tag, Alert } from 'antd';
+import { App, Button, Card, DatePicker, Form, Select, Space, Steps, Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { LinkOutlined, SearchOutlined } from '@ant-design/icons';
@@ -21,6 +21,7 @@ import {
   documentReconciliationGapSearchColumns,
   resolveDocumentReconciliationGapListParams,
 } from '../../../utils/financeListCore';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 
 type GapRow = DocumentReconciliationGapItem;
 type GapSummary = {
@@ -251,19 +252,35 @@ const DocumentReconciliationPage: React.FC = () => {
       title: t(`${D}.col.docType`),
       dataIndex: 'doc_type',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
       valueType: 'select',
       valueEnum: docTypeEnum,
       render: (_, r) => formatDocType(r.doc_type, t),
     },
-    { title: t(`${D}.col.docCode`), dataIndex: 'doc_code', width: 160, ellipsis: true, hideInSearch: true, sorter: true },
+    {
+      title: t(`${D}.col.docCode`),
+      dataIndex: 'doc_code',
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+      sorter: true,
+    },
     {
       title: t(`${S}.preview.col.docAmount`),
       dataIndex: 'quantity',
       valueType: 'money',
       align: 'right',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
     },
@@ -273,6 +290,9 @@ const DocumentReconciliationPage: React.FC = () => {
       valueType: 'money',
       align: 'right',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
     },
@@ -282,6 +302,9 @@ const DocumentReconciliationPage: React.FC = () => {
       valueType: 'money',
       align: 'right',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
     },
@@ -289,6 +312,9 @@ const DocumentReconciliationPage: React.FC = () => {
       title: t(`${D}.col.gapReason`),
       dataIndex: 'gap_reason',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       render: (_, r) => (r.gap_reason ? documentReconciliationGapReasonMessage(r.gap_reason, t) : '—'),
     },
@@ -296,17 +322,31 @@ const DocumentReconciliationPage: React.FC = () => {
       title: t(`${D}.col.link`),
       dataIndex: 'finance_related_count',
       width: 100,
-      render: (v) => (Number(v) > 0 ? <Tag color="success">{v}</Tag> : <Tag color="warning">{t(`${D}.unlinked`)}</Tag>),
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      render: (v) =>
+        Number(v) > 0 ? (
+          <MarkerTag color="success">{v}</MarkerTag>
+        ) : (
+          <MarkerTag color="warning">{t(`${D}.unlinked`)}</MarkerTag>
+        ),
     },
     {
       title: t(`${D}.col.settlementMethod`),
       dataIndex: 'settlement_type',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       render: (_, r) => (r.settlement_type ? formatSettlementType(String(r.settlement_type), t) : '—'),
     },
     {
       title: t('common.actions'),
-      width: 100,
+      key: 'action',
+      valueType: 'option',
+      fixed: 'right',
+      hideInSearch: true,
       render: (_, r) => (
         <Button type="link" size="small" icon={<LinkOutlined />} onClick={() => openChainFromGap(r)}>
           {t(`${D}.col.linkChain`)}
@@ -448,7 +488,7 @@ const DocumentReconciliationPage: React.FC = () => {
         request={gapRequest}
         tanstackQuery={{ enabled: false }}
         rowKey={(r) => `${r.doc_type}-${r.doc_id}`}
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.document-reconciliation.gaps"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.document-reconciliation.gaps.list-v1"
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         loading={loading}
         showAdvancedSearch
@@ -571,7 +611,7 @@ const DocumentReconciliationPage: React.FC = () => {
             </Space>
           ),
           status: step.status === 'linked' ? 'finish' : 'wait',
-          icon: step.status === 'linked' ? undefined : <Tag color="warning">{t(`${D}.chain.missing`)}</Tag>,
+          icon: step.status === 'linked' ? undefined : <MarkerTag color="warning">{t(`${D}.chain.missing`)}</MarkerTag>,
         }))}
       />
     </>

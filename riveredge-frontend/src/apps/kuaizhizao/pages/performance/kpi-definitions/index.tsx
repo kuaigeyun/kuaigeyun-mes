@@ -5,10 +5,14 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Space, Typography, theme as AntdTheme } from 'antd';
+import { App, Popconfirm, Button, Space, theme as AntdTheme } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import { ProFormText, ProFormDigit, ProFormSelect, ProFormSwitch, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UniTableStackedPrimaryCell,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { rowActionKind } from '../../../../../components/uni-action';
 import {
   ListPageTemplate,
@@ -23,6 +27,7 @@ import {
   getKpiCalcTypeText,
   getPerformanceYesNoValueEnum,
   renderActiveTag,
+  renderPerformanceTypeMarker,
 } from '../components/performanceMeta';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
@@ -127,27 +132,46 @@ const KpiDefinitionsPage: React.FC = () => {
   const columns: ProColumns<KPIDefinition>[] = useMemo(
     () => alignProColumns<KPIDefinition>([
       {
-        title: t('app.kuaizhizao.performance.common.columns.code'),
-        dataIndex: 'code',
-        width: 120,
+        title: t('app.kuaizhizao.performance.common.columns.name'),
+        key: 'performance_name_code_stacked',
+        dataIndex: 'name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         fixed: 'left',
         sorter: true,
         render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
-            {r.code ?? '-'}
-          </Typography.Text>
+          <UniTableStackedPrimaryCell
+            primary={String(r.name ?? '').trim() || '-'}
+            secondary={String(r.code ?? '').trim() || '-'}
+          />
         ),
       },
-      { title: t('app.kuaizhizao.performance.common.columns.name'), dataIndex: 'name', width: 150, ellipsis: true, sorter: true },
-      { title: t('app.kuaizhizao.performance.common.columns.weight'), dataIndex: 'weight', width: 80, align: 'right', sorter: true },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.code'),
+        dataIndex: 'code',
+        hideInTable: true,
+        sorter: true,
+      },
       {
         title: t('app.kuaizhizao.performance.common.columns.calcType'),
         dataIndex: 'calc_type',
-        width: 100,
+        width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         valueType: 'select',
         valueEnum: Object.fromEntries(calcTypeOptions.map((o) => [o.value, { text: o.label }])),
-        render: (_, r) => getKpiCalcTypeText(t, r.calc_type),
+        render: (_, r) => renderPerformanceTypeMarker(getKpiCalcTypeText(t, r.calc_type)),
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.weight'),
+        dataIndex: 'weight',
+        width: 80,
+        minWidth: 80,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+        sorter: true,
       },
       {
         title: t('app.kuaizhizao.performance.common.form.active'),
@@ -157,10 +181,22 @@ const KpiDefinitionsPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<KPIDefinition>(t),
       {
+        title: t('app.kuaizhizao.performance.common.columns.status'),
+        dataIndex: 'is_active',
+        width: 88,
+        minWidth: 88,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, r) => renderActiveTag(t, r.is_active),
+      },
+      {
         title: t('app.kuaizhizao.performance.common.columns.actions'),
+        key: 'action',
         valueType: 'option',
         width: 160,
         fixed: 'right',
+        hideInSearch: true,
         render: (_, record) => (
           <Space>
             <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
@@ -189,7 +225,7 @@ const KpiDefinitionsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.performance.kpi-definitions"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.kpi-definitions.v1"
           showAdvancedSearch
           skipFuzzyPinyinClientFilter
           pinnedTabsField={PERFORMANCE_PINNED_IS_ACTIVE_FIELD}

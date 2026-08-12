@@ -2,7 +2,8 @@ import React, { useRef, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormSelect } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Modal, Tag, Typography } from 'antd';
+import { App, Button, Descriptions, Modal, Typography } from 'antd';
+import { StatusTag } from '../../../../../constants/statusBadges';
 import { CheckOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -154,7 +155,9 @@ const EquipmentRepairsPage: React.FC = () => {
       {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
-        render: (_, r) => <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>,
+        render: (_, r) => (
+          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
+        ),
       },
       { title: t(`${P}.col.repairResult`), dataIndex: 'repair_result' },
       { title: t(`${P}.col.repairDescription`), dataIndex: 'repair_description', span: 2 },
@@ -251,14 +254,6 @@ const EquipmentRepairsPage: React.FC = () => {
       { title: t(`${P}.col.repairType`), dataIndex: 'repair_type', width: 120, sorter: true, hideInSearch: true },
       { title: t(`${P}.col.repairerName`), dataIndex: 'repairer_name', width: 120, sorter: true, hideInSearch: true },
       {
-        title: t(`${P}.col.status`),
-        dataIndex: 'status',
-        width: 100,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, r) => <Tag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</Tag>,
-      },
-      {
         title: t(`${P}.col.repairResult`),
         dataIndex: 'repair_result',
         width: 100,
@@ -266,6 +261,17 @@ const EquipmentRepairsPage: React.FC = () => {
         hideInSearch: true,
       },
       ...buildDocumentAuditColumns<EquipmentRepair>(t),
+      {
+        title: t(`${P}.col.status`),
+        key: 'lifecycle',
+        dataIndex: 'status',
+        sorter: true,
+        hideInSearch: true,
+        fixed: 'right',
+        render: (_, r) => (
+          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
+        ),
+      },
       {
         title: t('common.actions'),
         valueType: 'option',
@@ -304,7 +310,7 @@ const EquipmentRepairsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<EquipmentRepair>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-repairs"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-repairs-equip-rank-v1"
           actionRef={actionRef}
           rowKey="uuid"
           enableRowSelection={perms.canDelete}

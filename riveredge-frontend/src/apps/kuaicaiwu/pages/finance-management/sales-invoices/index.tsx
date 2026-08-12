@@ -6,20 +6,32 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Space, Dropdown, Tag, Alert, Spin, Table, Empty, Form } from 'antd';
+import { App, Button, Modal, Typography, Space, Dropdown, Alert, Spin, Table, Empty, Form } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ModalForm,
   ProForm,
   ProFormDatePicker,
   ProFormDigit,
+  ProFormMoney,
   ProFormRadio,
   ProFormSelect,
+  ProFormSwitch,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { CheckCircleOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, DownOutlined } from '@ant-design/icons';
 import { apiRequest, formatApiErrorDetail } from '../../../../../services/api';
+import {
+  LedgerAccountFormFields,
+  resolveLedgerAccountNote,
+} from '../../../components/LedgerAccountFormFields';
+import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
+import {
+  assertBankAccountForPaymentMethod,
+  BANK_TRANSFER_PAYMENT_METHOD,
+  getPaymentMethodOptions,
+} from '../../../utils/financeSharedOptions';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
@@ -73,6 +85,12 @@ import {
 } from '../../../utils/financeListCore';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { MarkerTag } from '../../../../../constants/statusBadges';
+import { renderFinanceTypeMarker } from '../../../utils/financeListPresentation';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
 type PullPreviewKind = 'sales_order' | 'sales_delivery' | 'receivable';
@@ -140,11 +158,17 @@ const SalesInvoicesPage: React.FC = () => {
   const pullFromSalesDeliveryCloseRef = useRef<(() => void) | null>(null);
   const pullFromReceivableCloseRef = useRef<(() => void) | null>(null);
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const { message: messageApi } = App.useApp();
   const pullFromSalesOrderAction = getKuaicaiwuDocumentAction('sales_invoice.pull_from_sales_order');
   const pullFromSalesDeliveryAction = getKuaicaiwuDocumentAction('sales_invoice.pull_from_sales_delivery');
   const pullFromReceivableAction = getKuaicaiwuDocumentAction('sales_invoice.pull_from_receivable');
   const salesInvoicePerms = useResourcePermissions(SALES_INVOICE_RESOURCE);
+  const receiptPerms = useResourcePermissions('kuaicaiwu:receipt');
+  const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
+  const concurrentReceiptEnabled = Form.useWatch('concurrent_receipt_enabled', pullForm);
+  const canConcurrentReceipt =
+    pullPreviewKind === 'receivable' && receiptPerms.canCreate && Number(pullPreviewData?.remaining_settle_amount ?? 0) > 0;
 
   useEffect(() => {
     const load = async () => {
@@ -160,6 +184,10 @@ const SalesInvoicesPage: React.FC = () => {
       }
     };
     load();
+    bankAccountService
+      .list({ limit: 200, is_active: true })
+      .then((res) => setBankAccounts(res.data))
+      .catch(() => setBankAccounts([]));
   }, []);
 
   const handleCreate = async (values: any) => {
@@ -359,6 +387,25 @@ const SalesInvoicesPage: React.FC = () => {
       messageApi.warning(t(`${P}.pullExceedMax`, { max: maxPush.toFixed(2) }));
       return false;
     }
+    const wantReceipt = Boolean(values.concurrent_receipt_enabled) && pullPreviewKind === 'receivable';
+    if (wantReceipt) {
+      const settleAmt = Number(values.settle_amount) || 0;
+      const maxSettle = Number(pullPreviewData.remaining_settle_amount ?? 0);
+      if (settleAmt <= 0) {
+        messageApi.warning(t(`${P}.concurrentReceiptAmountRequired`));
+        return false;
+      }
+      if (settleAmt > maxSettle) {
+        messageApi.warning(t(`${P}.concurrentReceiptExceedMax`, { max: maxSettle.toFixed(2) }));
+        return false;
+      }
+      try {
+        assertBankAccountForPaymentMethod(values.payment_method, values.bank_account_id, t);
+      } catch (e: unknown) {
+        messageApi.warning(e instanceof Error ? e.message : t(`${P}.concurrentReceiptAccountRequired`));
+        return false;
+      }
+    }
     const sourceLabel =
       pullPreviewKind === 'sales_order'
         ? pullFromSalesOrderAction.sourceLabel
@@ -385,9 +432,30 @@ const SalesInvoicesPage: React.FC = () => {
           invoice_amount: invoiceAmount,
           notes: String(values.notes ?? '').trim() || t(`${P}.pullNotes`, { source: sourceLabel, code: pullPreviewData.source_code }),
           attachments: normalizeDocumentAttachments(values.attachments),
+          ...(wantReceipt
+            ? {
+                concurrent_settlement: {
+                  enabled: true,
+                  total_amount: Number(values.settle_amount),
+                  payment_method: values.payment_method,
+                  bank_account_id: values.bank_account_id,
+                  bank_account: resolveLedgerAccountNote(
+                    bankAccounts,
+                    values.bank_account_id,
+                    values.bank_account,
+                  ),
+                  voucher_date: formatDateTime(values.settle_date || dayjs(), 'YYYY-MM-DD'),
+                  notes: String(values.settle_notes ?? '').trim() || undefined,
+                },
+              }
+            : {}),
         },
       });
-      messageApi.success(t(`${P}.pullCreateSuccess`, { target: pullFromSalesOrderAction.targetLabel }));
+      messageApi.success(
+        wantReceipt
+          ? t(`${P}.pullCreateWithReceiptSuccess`, { target: pullFromReceivableAction.targetLabel })
+          : t(`${P}.pullCreateSuccess`, { target: pullFromSalesOrderAction.targetLabel }),
+      );
       resetPullPreview();
       actionRef.current?.reload();
       return true;
@@ -502,25 +570,35 @@ const SalesInvoicesPage: React.FC = () => {
       }),
       financeInvoiceNumberSearchColumn(t('app.kuaicaiwu.invoice.col.invoiceNumber')),
       {
-        title: t('app.kuaicaiwu.invoice.col.invoiceNumber'),
-        dataIndex: 'invoice_number',
-        width: 160,
+        title: t(`${P}.col.internalCode`, '系统编号'),
+        key: 'finance_doc_partner_stacked',
+        dataIndex: 'invoice_code',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         fixed: 'left',
         hideInSearch: true,
         sorter: true,
-        render: (_, r) => {
-          const shown = r.invoice_number?.trim() || displaySalesInvoiceListCode(r);
-          return (
-            <Typography.Text copyable={{ text: shown }} ellipsis={{ tooltip: shown }}>
-              <a onClick={() => navigate(`/apps/kuaicaiwu/finance-management/sales-invoices/${r.id}`)}>{shown}</a>
-            </Typography.Text>
-          );
-        },
+        render: (_, r) => (
+          <UniTableStackedPrimaryCell
+            primary={String(r.customer_name ?? '')}
+            secondary={String(r.invoice_code ?? displaySalesInvoiceListCode(r))}
+            onSecondaryClick={() =>
+              navigate(`/apps/kuaicaiwu/finance-management/sales-invoices/${r.id}`)
+            }
+          />
+        ),
       },
       {
         title: t('app.kuaicaiwu.common.customer'),
         dataIndex: 'customer_name',
-        width: 200,
+        hideInTable: true,
+      },
+      {
+        title: t('app.kuaicaiwu.invoice.col.invoiceNumber'),
+        dataIndex: 'invoice_number',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
       },
@@ -528,15 +606,21 @@ const SalesInvoicesPage: React.FC = () => {
         title: t(`${P}.col.invoiceType`),
         dataIndex: 'invoice_type',
         width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
-        render: (_, r) => formatChineseInvoiceType(r.invoice_type, t),
+        render: (_, r) => renderFinanceTypeMarker(formatChineseInvoiceType(r.invoice_type, t)),
       },
       {
         title: t('app.kuaicaiwu.common.invoiceDate'),
         dataIndex: 'invoice_date',
         valueType: 'date',
         width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
       },
@@ -552,6 +636,9 @@ const SalesInvoicesPage: React.FC = () => {
         title: t(`${P}.col.taxRate`),
         dataIndex: 'tax_rate',
         width: 80,
+        minWidth: 80,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
         render: (_, r) => `${r.tax_rate}%`,
@@ -562,6 +649,9 @@ const SalesInvoicesPage: React.FC = () => {
         valueType: 'money',
         align: 'right',
         width: 130,
+        minWidth: 130,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
       },
@@ -571,6 +661,9 @@ const SalesInvoicesPage: React.FC = () => {
         valueType: 'money',
         align: 'right',
         width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
       },
@@ -580,6 +673,9 @@ const SalesInvoicesPage: React.FC = () => {
         valueType: 'money',
         align: 'right',
         width: 130,
+        minWidth: 130,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
         render: (_, record) => (
@@ -592,6 +688,9 @@ const SalesInvoicesPage: React.FC = () => {
         title: t(`${P}.col.linkedReceivable`),
         dataIndex: 'receivable_code',
         width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, r) =>
           r.receivable_id != null && r.receivable_id !== undefined ? (
@@ -618,6 +717,7 @@ const SalesInvoicesPage: React.FC = () => {
       ...financeDocCreatedUpdatedColumns<SalesInvoice>(t),
       {
         title: t('app.kuaicaiwu.common.lifecycle'),
+        key: 'lifecycle',
         dataIndex: 'lifecycle_stage',
         fixed: 'right',
         hideInSearch: true,
@@ -638,9 +738,10 @@ const SalesInvoicesPage: React.FC = () => {
       },
       {
         title: t('common.actions'),
+        key: 'action',
         valueType: 'option',
         fixed: 'right',
-        width: 200,
+        hideInSearch: true,
         render: (_, record) => [
           !['已审核', '已作废', '已红冲'].includes(String(record.status || '').trim()) && salesInvoicePerms.canUpdate ? (
             <Button {...rowActionKind('edit')} key="edit" onClick={() => openEditModal(record)}>
@@ -683,7 +784,7 @@ const SalesInvoicesPage: React.FC = () => {
         align: 'center' as const,
         render: (v: string) => {
           const { text, color } = getStatusDisplay(v);
-          return text === '-' ? '-' : <Tag color={color}>{text}</Tag>;
+          return text === '-' ? '-' : <MarkerTag color={color}>{text}</MarkerTag>;
         },
       },
       {
@@ -728,6 +829,7 @@ const SalesInvoicesPage: React.FC = () => {
         : pullPreviewKind === 'sales_delivery'
           ? pullFromSalesDeliveryAction.sourceLabel
           : pullFromReceivableAction.sourceLabel;
+    const maxSettle = Number(pullPreviewData.remaining_settle_amount ?? 0);
     return {
       source_code: pullPreviewData.source_code,
       customer_name: pullPreviewData.customer_name,
@@ -737,6 +839,10 @@ const SalesInvoicesPage: React.FC = () => {
       amount_input_mode: 'tax_exclusive' as InvoiceAmountInputMode,
       invoice_amount: defaultExcl,
       notes: t(`${P}.pullNotes`, { source: sourceLabel, code: pullPreviewData.source_code }),
+      concurrent_receipt_enabled: false,
+      settle_amount: maxSettle > 0 ? maxSettle : undefined,
+      settle_date: dayjs(),
+      payment_method: BANK_TRANSFER_PAYMENT_METHOD,
     };
   }, [
     pullPreviewData,
@@ -810,7 +916,7 @@ const SalesInvoicesPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.sales-invoices"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.sales-invoices.list-v1"
         showAdvancedSearch
         search={{ labelWidth: 120 }}
         showCreateButton={false}
@@ -1152,6 +1258,49 @@ const SalesInvoicesPage: React.FC = () => {
                   extra={pullAmountCounterpartHint || undefined}
                   fieldProps={{ precision: 2, style: { width: '100%' } }}
                 />
+                {canConcurrentReceipt ? (
+                  <>
+                    <ProFormSwitch
+                      name="concurrent_receipt_enabled"
+                      label={t(`${P}.concurrentReceipt`)}
+                      extra={t(`${P}.concurrentReceiptHint`, {
+                        max: Number(pullPreviewData.remaining_settle_amount || 0).toFixed(2),
+                      })}
+                    />
+                    {concurrentReceiptEnabled ? (
+                      <>
+                        <ProFormMoney
+                          name="settle_amount"
+                          label={t(`${P}.concurrentReceiptAmount`)}
+                          min={0.01}
+                          rules={[{ required: true, message: t(`${P}.concurrentReceiptAmountRequired`) }]}
+                        />
+                        <ProFormDatePicker
+                          name="settle_date"
+                          label={t('app.kuaicaiwu.receipt.col.receiptDate')}
+                          rules={[{ required: true }]}
+                          fieldProps={{ style: { width: '100%' } }}
+                        />
+                        <ProFormSelect
+                          name="payment_method"
+                          label={t('app.kuaicaiwu.receipt.col.paymentMethod')}
+                          options={paymentMethodOptions}
+                          rules={[{ required: true, message: t('app.kuaicaiwu.receipt.selectPaymentMethod') }]}
+                        />
+                        <LedgerAccountFormFields
+                          accounts={bankAccounts}
+                          accountLabel={t('app.kuaicaiwu.receipt.bankAccount')}
+                          noteLabel={t('app.kuaicaiwu.receipt.bankAccountNote')}
+                        />
+                        <ProFormTextArea
+                          name="settle_notes"
+                          label={t(`${P}.concurrentReceiptNotes`)}
+                          fieldProps={{ rows: 2 }}
+                        />
+                      </>
+                    ) : null}
+                  </>
+                ) : null}
                 <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} />
                 <DocumentAttachmentsField category="sales_invoice_attachments" />
               </ProForm>

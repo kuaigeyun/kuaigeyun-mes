@@ -39,6 +39,18 @@ import {
 } from '../shared/equipmentMasterDataDetail';
 
 const P = 'app.kuaizhizao.toolOps.maintenanceScheme';
+
+
+function resolveMaintenanceTriggerTypeLabel(
+  t: (key: string) => string,
+  triggerType?: string | null,
+): string {
+  const raw = String(triggerType ?? '').trim();
+  if (raw === 'days') return t(`${P}.triggerType.days`);
+  if (raw === 'count' || raw === 'usage_count') return t(`${P}.triggerType.count`);
+  return raw || '-';
+}
+
 const RESOURCE = 'kuaizhizao:tool-maintenance-scheme';
 
 interface SchemeLine {
@@ -81,7 +93,7 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
 
   const triggerTypeOptions = useMemo(
     () => [
-      { label: t(`${P}.triggerType.count`), value: 'count' },
+      { label: t(`${P}.triggerType.count`), value: 'usage_count' },
       { label: t(`${P}.triggerType.days`), value: 'days' },
     ],
     [t],
@@ -103,7 +115,7 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
     setModalVisible(true);
     void loadItemOptions();
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ is_active: true, trigger_type: 'count', lines: [{ sort_order: 0 }] });
+    formRef.current?.setFieldsValue({ is_active: true, trigger_type: 'usage_count', lines: [{ sort_order: 0 }] });
   };
   useNewShortcut(handleCreate);
 
@@ -117,6 +129,8 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
       void loadItemOptions();
       formRef.current?.setFieldsValue({
         ...loaded,
+        trigger_type:
+          loaded.trigger_type === 'count' ? 'usage_count' : loaded.trigger_type,
         lines: (loaded.lines ?? []).map((l: SchemeLine, i: number) => ({
           item_id: l.item_id,
           sort_order: l.sort_order ?? i,
@@ -154,7 +168,8 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
       code: values.code,
       name: values.name,
       description: values.description,
-      trigger_type: values.trigger_type,
+      trigger_type:
+        values.trigger_type === 'count' ? 'usage_count' : values.trigger_type,
       interval_value: values.interval_value,
       is_active: values.is_active,
       lines: (values.lines as SchemeLine[] | undefined)?.map((l, i) => ({
@@ -185,12 +200,7 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
       {
         title: t(`${P}.col.triggerType`),
         dataIndex: 'trigger_type',
-        render: (_, record) =>
-          record.trigger_type === 'days'
-            ? t(`${P}.triggerType.days`)
-            : record.trigger_type === 'count'
-              ? t(`${P}.triggerType.count`)
-              : record.trigger_type || '-',
+        render: (_, record) => resolveMaintenanceTriggerTypeLabel(t, record.trigger_type),
       },
       { title: t(`${P}.col.intervalValue`), dataIndex: 'interval_value' },
       { title: t(`${P}.col.description`), dataIndex: 'description', span: 2 },
@@ -244,7 +254,13 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
         sorter: true,
         hideInSearch: true,
       },
-      { title: t(`${P}.col.triggerType`), dataIndex: 'trigger_type', width: 100, hideInSearch: true },
+      {
+        title: t(`${P}.col.triggerType`),
+        dataIndex: 'trigger_type',
+        width: 100,
+        hideInSearch: true,
+        render: (_, r) => resolveMaintenanceTriggerTypeLabel(t, r.trigger_type),
+      },
       { title: t(`${P}.col.intervalValue`), dataIndex: 'interval_value', width: 90, hideInSearch: true },
       { title: t(`${P}.col.lineCount`), dataIndex: 'line_count', width: 80, hideInSearch: true },
       { title: t(`${P}.col.description`), dataIndex: 'description', ellipsis: true, hideInSearch: true },
@@ -297,7 +313,7 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<MaintenanceScheme>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-schemes"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-schemes-equip-rank-v1"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

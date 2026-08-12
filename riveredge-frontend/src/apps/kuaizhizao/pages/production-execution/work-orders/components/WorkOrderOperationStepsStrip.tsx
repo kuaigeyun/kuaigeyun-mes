@@ -70,7 +70,7 @@ export function WorkOrderOperationStepsStrip({
       >
         {isDone ? (
           <CheckOutlined style={{ color: '#fff', fontSize: compact ? 12 : 14 }} />
-        ) : isActive ? (
+        ) : isActive && typeof step.progress === 'number' ? (
           <span
             style={{
               color: activeColor,
@@ -138,7 +138,13 @@ export function WorkOrderOperationStepsStrip({
                 justifyContent: 'center',
               }}
             >
-              <Tooltip title={`${step.name}${step.status === 'active' ? ` - ${step.progress}%` : ''}`}>
+              <Tooltip
+                title={
+                  step.status === 'active' && typeof step.progress === 'number'
+                    ? `${step.name} - ${step.progress}%`
+                    : step.name
+                }
+              >
                 {node}
               </Tooltip>
             </div>

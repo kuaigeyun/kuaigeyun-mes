@@ -25,6 +25,7 @@ const FormRequestsPage: React.FC = () => (
     nameField="title"
     autoGenerateCode
     statusEnum={STATUS_ENUM}
+    statusPresentation="lifecycle"
     fields={[
       { name: 'request_code', labelKey: 'app.kuaioa.formRequest.code', width: 150 },
       { name: 'title', labelKey: 'app.kuaioa.formRequest.title', required: true, width: 200 },

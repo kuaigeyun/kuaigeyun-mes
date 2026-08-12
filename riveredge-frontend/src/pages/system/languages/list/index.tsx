@@ -12,6 +12,8 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormSwitch, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Table, Input, Descriptions, theme } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemActiveTag, renderSystemYesNoTag } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, TranslationOutlined, SettingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import {
@@ -420,11 +422,14 @@ const LanguageListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<Language>[] = [
+  const columns = useMemo<ProColumns<Language>[]>(() => alignProColumns([
     {
       title: t('field.language.code'),
       dataIndex: 'code',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       fixed: 'left',
       render: (_, record) => (
         <span style={{ fontFamily: CODE_FONT_FAMILY, fontWeight: 'bold' }}>{record.code}</span>
@@ -445,6 +450,9 @@ const LanguageListPage: React.FC = () => {
       title: t('field.language.translationCount'),
       dataIndex: 'translations',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       render: (_, record) => Object.keys(record.translations || {}).length,
     },
@@ -452,21 +460,23 @@ const LanguageListPage: React.FC = () => {
       title: t('field.language.isDefault'),
       dataIndex: 'is_default',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('field.role.yes'), status: 'Success' },
         false: { text: t('field.role.no'), status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_default ? 'success' : 'default'}>
-          {record.is_default ? t('field.role.yes') : t('field.role.no')}
-        </Tag>
-      ),
+      render: (_, record) => renderSystemYesNoTag(t, record.is_default),
     },
     {
       title: t('field.department.sortOrder'),
       dataIndex: 'sort_order',
       width: 80,
+      minWidth: 80,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
     },
@@ -474,29 +484,34 @@ const LanguageListPage: React.FC = () => {
       title: t('field.role.status'),
       dataIndex: 'is_active',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('field.role.enabled'), status: 'Success' },
         false: { text: t('field.role.disabled'), status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('field.role.enabled') : t('field.role.disabled')}
-        </Tag>
-      ),
+      render: (_, record) =>
+        renderSystemActiveTag(t, record.is_active, 'field.role.enabled', 'field.role.disabled'),
     },
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
     },
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => [
             <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
               {t('field.language.view')}
@@ -525,7 +540,7 @@ const LanguageListPage: React.FC = () => {
             </Popconfirm>,
           ],
     },
-  ];
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleView, handleManageTranslations, handleEdit, handleDelete]);
 
   /**
    * 翻译表格列定义
@@ -603,7 +618,7 @@ const LanguageListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Language>
-          columnPersistenceId="pages.system.languages.list"
+          columnPersistenceId="pages.system.languages.list-v1"
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {

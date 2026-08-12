@@ -118,7 +118,7 @@ type ShipmentNoticeItemRow = ShipmentNoticeItem & {
 };
 
 const SHIPMENT_NOTICE_LIST_PERSISTENCE_ID =
-  'apps.kuaizhizao.pages.sales-management.shipment-notices.v2';
+  'apps.kuaizhizao.pages.sales-management.shipment-notices.list-v3';
 
 type PullSalesOrderCandidate = {
   id: number;
@@ -404,8 +404,11 @@ const ShipmentNoticesPage: React.FC = () => {
       title: t('app.kuaizhizao.shipmentNotice.salesOrderCode'),
       key: 'shipment_sales_order_code',
       dataIndex: 'sales_order_code',
-      width: 140,
-      ellipsis: true,
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: false,
       sorter: true,
       fieldProps: { placeholder: t('app.kuaizhizao.shipmentNotice.salesOrderCode') },
       render: (_, record) => (

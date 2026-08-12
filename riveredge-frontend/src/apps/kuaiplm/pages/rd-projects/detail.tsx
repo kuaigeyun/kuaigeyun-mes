@@ -77,9 +77,10 @@ import {
   getKuaiplmEngineeringLinkText,
   getKuaiplmGateStatusText,
   getKuaiplmProjectStatusText,
-  getKuaiplmProjectTypeText,
   getKuaiplmTaskStatusOptions,
   getKuaiplmTaskStatusText,
+  renderKuaiplmCurrentGateMarker,
+  renderKuaiplmProjectTypeMarker,
 } from '../../components/kuaiplmMeta';
 import './detail.less';
 
@@ -674,9 +675,7 @@ const RdProjectDetailPage: React.FC = () => {
           <Typography.Title level={4} style={{ margin: 0 }}>
             {project.project_code} - {project.project_name}
           </Typography.Title>
-          <Tag color={projectType === 'DELIVERY' ? 'blue' : 'purple'}>
-            {getKuaiplmProjectTypeText(t, projectType)}
-          </Tag>
+          {renderKuaiplmProjectTypeMarker(t, projectType)}
           {project.status ? (
             <Tag color={project.status === 'DRAFT' ? 'default' : 'processing'}>
               {getKuaiplmProjectStatusText(t, project.status)}
@@ -734,7 +733,11 @@ const RdProjectDetailPage: React.FC = () => {
                   {project.owner_name || '—'}
                 </Descriptions.Item>
                 <Descriptions.Item label={t('app.kuaiplm.common.columns.currentGate')}>
-                  {project.current_gate_name || activeGate?.gate_name || '—'}
+                  {renderKuaiplmCurrentGateMarker(
+                    t,
+                    project.current_gate_key || activeGate?.gate_key,
+                    project.current_gate_name || activeGate?.gate_name,
+                  )}
                 </Descriptions.Item>
                 <Descriptions.Item label={t('app.kuaiplm.rdProjects.detail.label.plannedPeriod')}>
                   {project.planned_start_date

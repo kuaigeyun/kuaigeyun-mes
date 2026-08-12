@@ -13,6 +13,8 @@ export type SalesInvoicePullPreview = DocumentPushPreview & {
   receivable_id?: number;
   receivable_code?: string;
   price_type?: 'tax_inclusive' | 'tax_exclusive' | string;
+  /** 同时收款上限（应收剩余可收） */
+  remaining_settle_amount?: number;
 };
 
 export type SalesInvoicePullCandidate = {

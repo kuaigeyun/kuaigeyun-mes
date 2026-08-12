@@ -1,4 +1,6 @@
+import React from 'react';
 import type { TFunction } from 'i18next';
+import { MarkerTag } from '../../../constants/statusBadges';
 
 export const KUAIPLM_PROJECT_STATUS_I18N: Record<string, string> = {
   DRAFT: 'app.kuaiplm.common.projectStatus.draft',
@@ -120,6 +122,82 @@ export function getKuaiplmProjectTypeText(t: TFunction, type?: string | null): s
   if (!type) return '-';
   const key = KUAIPLM_PROJECT_TYPE_I18N[String(type).toUpperCase()];
   return key ? t(key) : type;
+}
+
+const PROJECT_TYPE_MARKER_COLOR: Record<string, string> = {
+  RD: 'purple',
+  DELIVERY: 'blue',
+};
+
+/** 项目类型（非状态）：filled MarkerTag */
+export function renderKuaiplmProjectTypeMarker(t: TFunction, type?: string | null): React.ReactNode {
+  const normalized = String(type ?? 'RD').toUpperCase();
+  const text = getKuaiplmProjectTypeText(t, normalized);
+  if (text === '-') return '-';
+  return React.createElement(
+    MarkerTag,
+    { color: PROJECT_TYPE_MARKER_COLOR[normalized] ?? 'default' },
+    text,
+  );
+}
+
+/** 默认 NPI 阶段门 key → i18n（与后端 DEFAULT_NPI_GATES 对齐） */
+export const KUAIPLM_GATE_KEY_I18N: Record<string, string> = {
+  concept: 'app.kuaiplm.common.gate.concept',
+  design: 'app.kuaiplm.common.gate.design',
+  prototype: 'app.kuaiplm.common.gate.prototype',
+  pilot: 'app.kuaiplm.common.gate.pilot',
+  release: 'app.kuaiplm.common.gate.release',
+  ramp: 'app.kuaiplm.common.gate.ramp',
+  first_delivery: 'app.kuaiplm.common.gate.firstDelivery',
+  stable_production: 'app.kuaiplm.common.gate.stableProduction',
+  service_handover: 'app.kuaiplm.common.gate.serviceHandover',
+};
+
+const GATE_KEY_MARKER_COLOR: Record<string, string> = {
+  concept: 'purple',
+  design: 'geekblue',
+  prototype: 'blue',
+  pilot: 'cyan',
+  release: 'green',
+  ramp: 'lime',
+  first_delivery: 'orange',
+  stable_production: 'gold',
+  service_handover: 'magenta',
+};
+
+export function getKuaiplmGateText(
+  t: TFunction,
+  gateKey?: string | null,
+  gateName?: string | null,
+): string {
+  const name = String(gateName ?? '').trim();
+  const key = String(gateKey ?? '').trim().toLowerCase();
+  if (name && (!key || name.toLowerCase() !== key)) {
+    return name;
+  }
+  if (key) {
+    const i18nKey = KUAIPLM_GATE_KEY_I18N[key];
+    if (i18nKey) return t(i18nKey);
+    return name || gateKey || '-';
+  }
+  return name || '-';
+}
+
+/** 当前阶段门（非状态）：中文阶段名 + filled MarkerTag */
+export function renderKuaiplmCurrentGateMarker(
+  t: TFunction,
+  gateKey?: string | null,
+  gateName?: string | null,
+): React.ReactNode {
+  const text = getKuaiplmGateText(t, gateKey, gateName);
+  if (text === '-') return '-';
+  const key = String(gateKey ?? '').trim().toLowerCase();
+  return React.createElement(
+    MarkerTag,
+    { color: GATE_KEY_MARKER_COLOR[key] ?? 'processing' },
+    text,
+  );
 }
 
 export function getKuaiplmTaskStatusText(t: TFunction, status?: string | null): string {

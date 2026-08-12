@@ -5,7 +5,8 @@
  */
 import React, { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { App, Button, Empty, Spin, Tag } from 'antd'
+import { App, Button, Empty, Spin } from 'antd'
+import { MarkerTag } from '../../../../../constants/statusBadges'
 import { TwoColumnLayout } from '../../../../../components/layout-templates'
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry'
 import { batchingOrderApi } from '../../../services/batching-order'
@@ -166,13 +167,9 @@ const LineSidePrepSplitView: React.FC<Props> = ({
               >
                 <div className="product-process-material-list__row">
                   <span className="product-process-material-list__code">{title}</span>
-                  <Tag
-                    variant="filled"
-                    color="processing"
-                    className="product-process-material-list__tag"
-                  >
+                  <MarkerTag color="processing" className="product-process-material-list__tag">
                     {tagText}
-                  </Tag>
+                  </MarkerTag>
                 </div>
                 <div className="product-process-material-list__name" title={subtitle}>
                   {subtitle}

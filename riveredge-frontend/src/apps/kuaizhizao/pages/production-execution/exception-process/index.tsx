@@ -17,6 +17,7 @@ import {
   ProFormDependency,
   ProFormInstance,
   ProFormSelect,
+  ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Tag, Button, Space, Modal, Steps, Timeline, Card, Divider } from 'antd';
@@ -24,6 +25,9 @@ import { ProDescriptions } from '@ant-design/pro-components';
 import { EyeOutlined, UserOutlined, ArrowRightOutlined, CheckCircleOutlined, CloseCircleOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { UniTable } from '../../../../../components/uni-table';
+import { UNI_TABLE_OPERATION_STEPS_COLUMN_DEFAULTS } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
+import { resolveUserDisplay } from '../../../../../services/user';
 import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { exceptionApi } from '../../../services/production';
@@ -43,17 +47,75 @@ import {
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { WorkOrderOperationStepsStrip } from '../work-orders/components/WorkOrderOperationStepsStrip';
+import type { WorkOrderOperationStep } from '../work-orders/workOrderOperationSteps';
 
-const EXCEPTION_PROCESS_RESOURCE = 'kuaizhizao:production-execution-reporting';
+const EXCEPTION_PROCESS_RESOURCE = 'kuaizhizao:production-execution-exception-process';
 
 const P = 'app.kuaizhizao.productionException';
 const PROC = `${P}.process`;
+
+/** 异常处理流程标准步骤（与详情 Steps 一致；取消单独成节点） */
+const EXCEPTION_PROCESS_STEP_KEYS = [
+  'detected',
+  'assigned',
+  'investigating',
+  'handling',
+  'verifying',
+  'closed',
+] as const;
+
+function exceptionProcessStepLabel(t: (key: string) => string, key: string): string {
+  if (key === 'cancelled') return t(`${P}.status.cancelled`);
+  const map: Record<string, string> = {
+    detected: `${P}.step.detected`,
+    assigned: `${P}.step.assigned`,
+    investigating: `${P}.step.investigating`,
+    handling: `${P}.step.handling`,
+    verifying: `${P}.step.verifying`,
+    closed: `${P}.step.closed`,
+  };
+  return t(map[key] || `${P}.exceptionType.unknown`);
+}
+
+function buildExceptionProcessStepNodes(
+  t: (key: string) => string,
+  currentStep?: string,
+  processStatus?: string,
+): WorkOrderOperationStep[] {
+  const cancelled = processStatus === 'cancelled' || currentStep === 'cancelled';
+  const resolved = processStatus === 'resolved' || currentStep === 'closed';
+  const keys: string[] = cancelled
+    ? [...EXCEPTION_PROCESS_STEP_KEYS.filter((k) => k !== 'closed'), 'cancelled']
+    : [...EXCEPTION_PROCESS_STEP_KEYS];
+  const activeKey = cancelled ? 'cancelled' : resolved ? 'closed' : currentStep || 'detected';
+  let activeIdx = keys.findIndex((k) => k === activeKey);
+  if (activeIdx < 0) activeIdx = 0;
+
+  return keys.map((key, index) => {
+    let status: WorkOrderOperationStep['status'] = 'pending';
+    if (resolved) {
+      status = 'done';
+    } else if (index < activeIdx) {
+      status = 'done';
+    } else if (index === activeIdx) {
+      status = 'active';
+    }
+    return {
+      name: exceptionProcessStepLabel(t, key),
+      sequence: index + 1,
+      status,
+    };
+  });
+}
 
 interface ExceptionProcessRecord {
   id?: number;
   uuid?: string;
   exception_type?: string;
   exception_id?: number;
+  work_order_code?: string;
+  work_order_id?: number;
   process_status?: string;
   current_step?: string;
   assigned_to?: number;
@@ -85,6 +147,7 @@ const ExceptionProcessPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const startFormRef = useRef<ProFormInstance>();
+  const assignFormRef = useRef<ProFormInstance>();
   const tableRowsRef = useRef<ExceptionProcessRecord[]>([]);
   const exceptionProcessPerms = useResourcePermissions(EXCEPTION_PROCESS_RESOURCE);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -120,7 +183,7 @@ const ExceptionProcessPage: React.FC = () => {
         cancelled: { color: 'error', text: t(`${P}.status.cancelled`) },
       };
       const item = statusMap[status || 'pending'] || statusMap.pending;
-      return <Tag color={item.color}>{item.text}</Tag>;
+      return <StatusTag color={item.color}>{item.text}</StatusTag>;
     },
     [t],
   );
@@ -133,7 +196,7 @@ const ExceptionProcessPage: React.FC = () => {
         quality: { color: 'purple', text: t(`${P}.exceptionType.quality`) },
       };
       const item = typeMap[type || ''] || { color: 'default', text: type || t(`${P}.exceptionType.unknown`) };
-      return <Tag color={item.color}>{item.text}</Tag>;
+      return <MarkerTag color={item.color}>{item.text}</MarkerTag>;
     },
     [t],
   );
@@ -243,12 +306,18 @@ const ExceptionProcessPage: React.FC = () => {
     [t],
   );
 
+  const resolveAssigneeUserId = (raw: unknown): number | undefined => {
+    if (raw == null || raw === '') return undefined;
+    const id = Number(raw);
+    return Number.isFinite(id) ? id : undefined;
+  };
+
   const handleStart = async (values: any) => {
     try {
       await exceptionApi.process.start({
         exception_type: values.exception_type,
         exception_id: values.exception_id,
-        assigned_to: values.assigned_to,
+        assigned_to: resolveAssigneeUserId(values.assigned_to),
         remarks: values.remarks,
       });
       messageApi.success(t(`${PROC}.message.startSuccess`));
@@ -271,8 +340,13 @@ const ExceptionProcessPage: React.FC = () => {
       if (!currentRecord?.id) {
         throw new Error(t(`${P}.message.processRecordNotFound`));
       }
+      const assignedTo = resolveAssigneeUserId(values.assigned_to);
+      if (assignedTo == null) {
+        messageApi.error(t(`${PROC}.validation.assigneeRequired`));
+        return;
+      }
       await exceptionApi.process.assign(String(currentRecord.id), {
-        assigned_to: values.assigned_to,
+        assigned_to: assignedTo,
         comment: values.comment,
       });
       messageApi.success(t(`${PROC}.message.assignSuccess`));
@@ -361,35 +435,45 @@ const ExceptionProcessPage: React.FC = () => {
 
   const columns: ProColumns<ExceptionProcessRecord>[] = useMemo(() => [
     {
+      title: t(`${P}.col.workOrderCode`),
+      key: 'exception_doc_work_order_code',
+      dataIndex: 'work_order_code',
+      width: 180,
+      uniTableKeepWidth: true,
+      fixed: 'left',
+      ellipsis: false,
+      sorter: true,
+      hideInSearch: false,
+    },
+    {
       title: t(`${P}.col.exceptionType`),
+      key: 'exception_process_type',
       dataIndex: 'exception_type',
       width: 120,
+      hideInSearch: false,
+      valueType: 'select',
+      valueEnum: exceptionTypeValueEnum,
       render: (_, record) => getExceptionTypeTag(record.exception_type),
     },
     {
-      title: t(`${P}.col.exceptionId`),
-      dataIndex: 'exception_id',
-      width: 100,
-    },
-    {
       title: t(`${P}.col.currentStep`),
+      key: 'exception_process_steps',
       dataIndex: 'current_step',
-      width: 120,
-      render: (_, record) => getStepTag(record.current_step),
+      ...UNI_TABLE_OPERATION_STEPS_COLUMN_DEFAULTS,
+      className: 'uni-table-operation-steps-cell',
+      onHeaderCell: () => ({ className: 'uni-table-operation-steps-cell' }),
+      onCell: () => ({ className: 'uni-table-operation-steps-cell' }),
+      hideInSearch: true,
+      render: (_, record) => (
+        <WorkOrderOperationStepsStrip
+          steps={buildExceptionProcessStepNodes(t, record.current_step, record.process_status)}
+        />
+      ),
     },
     {
       title: t(`${P}.col.assignedTo`),
       dataIndex: 'assigned_to_name',
       width: 120,
-    },
-    {
-      title: t(`${P}.col.processStatus`),
-      dataIndex: 'process_status',
-      width: 120,
-      hideInSearch: false,
-      valueType: 'select',
-      valueEnum: processStatusValueEnum,
-      render: (_, record) => getStatusTag(record.process_status),
     },
     {
       title: t(`${P}.col.startTime`),
@@ -412,36 +496,58 @@ const ExceptionProcessPage: React.FC = () => {
         record.completed_at ? formatDateTime(record.completed_at, 'YYYY-MM-DD HH:mm') : '-',
     },
     {
-      title: t('common.actions'),
-      valueType: 'option',
+      title: t(`${P}.col.processStatus`),
+      key: 'lifecycle',
+      dataIndex: 'process_status',
       fixed: 'right',
-      render: (_, record) => [
-        <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
-          {t('common.detail')}
-        </Button>,
-        record.process_status === 'pending' ? (
-          <Button {...rowActionKind('audit')} key="approve" onClick={() => openAssignModal(record)}>
-            {t(`${P}.action.assign`)}
-          </Button>
-        ) : null,
-        record.process_status === 'processing' ? (
-          <Button {...rowActionKind('audit')} key="transition" onClick={() => openStepTransitionModal(record)}>
-            {t(`${P}.action.transition`)}
-          </Button>
-        ) : null,
-        record.process_status === 'processing' ? (
-          <Button key="resolve" {...rowActionKind('audit')} onClick={() => openResolveModal(record)}>
-            {t(`${P}.lifecycleNext.resolve`)}
-          </Button>
-        ) : null,
-        ['pending', 'processing'].includes(record.process_status || '') ? (
-          <Button key="reject" {...rowActionKind('reject')} onClick={() => handleCancel(record)}>
-            {t(`${P}.action.cancel`)}
-          </Button>
-        ) : null,
-      ],
+      hideInSearch: false,
+      valueType: 'select',
+      valueEnum: processStatusValueEnum,
+      render: (_, record) => getStatusTag(record.process_status),
     },
-  ], [t, getExceptionTypeTag, getStepTag, getStatusTag, processStatusValueEnum]);
+    {
+      title: t('common.actions'),
+      key: 'option',
+      fixed: 'right',
+      render: (_, record) => {
+        const status = record.process_status || '';
+        const canAssign = status === 'pending' || status === 'processing';
+        // 历史数据：创建时已带处理人但仍停在 pending 时，仍允许步骤流转/解决
+        const canExecute =
+          status === 'processing' || (status === 'pending' && record.assigned_to != null);
+        const canCancel = status === 'pending' || status === 'processing';
+        return [
+          <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
+            {t('common.detail')}
+          </Button>,
+          canAssign ? (
+            <Button key="assign" {...rowActionKind('assign')} onClick={() => openAssignModal(record)}>
+              {t(`${P}.action.assign`)}
+            </Button>
+          ) : null,
+          canExecute ? (
+            <Button
+              key="transition"
+              {...rowActionKind('execute')}
+              onClick={() => openStepTransitionModal(record)}
+            >
+              {t(`${P}.action.transition`)}
+            </Button>
+          ) : null,
+          canExecute ? (
+            <Button key="resolve" {...rowActionKind('execute')} onClick={() => openResolveModal(record)}>
+              {t(`${P}.lifecycleNext.resolve`)}
+            </Button>
+          ) : null,
+          canCancel ? (
+            <Button key="cancel" {...rowActionKind('revoke')} onClick={() => handleCancel(record)}>
+              {t(`${P}.action.cancel`)}
+            </Button>
+          ) : null,
+        ];
+      },
+    },
+  ], [t, getExceptionTypeTag, getStatusTag, processStatusValueEnum, exceptionTypeValueEnum]);
 
   const getStepsConfig = useCallback(
     (currentStep?: string) => {
@@ -466,7 +572,7 @@ const ExceptionProcessPage: React.FC = () => {
   const detailDescriptionColumns = useMemo(
     () => [
       { title: t(`${P}.col.exceptionType`), dataIndex: 'exception_type' },
-      { title: t(`${P}.col.exceptionId`), dataIndex: 'exception_id' },
+      { title: t(`${P}.col.workOrderCode`), dataIndex: 'work_order_code' },
       { title: t(`${P}.col.processStatus`), dataIndex: 'process_status' },
       { title: t(`${P}.col.currentStep`), dataIndex: 'current_step' },
       { title: t(`${P}.col.assignedTo`), dataIndex: 'assigned_to_name' },
@@ -482,7 +588,7 @@ const ExceptionProcessPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<ExceptionProcessRecord>
-          columnPersistenceId="apps.kuaizhizao.pages.production-execution.exception-process"
+          columnPersistenceId="apps.kuaizhizao.pages.production-execution.exception-process.v3"
           actionRef={actionRef}
           columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -503,8 +609,13 @@ const ExceptionProcessPage: React.FC = () => {
             if (s.exception_type) {
               apiParams.exception_type = s.exception_type;
             }
-            if (s.assigned_to) {
-              apiParams.assigned_to = s.assigned_to;
+            const assigneeUuid = String(s.assigned_to_uuid ?? '').trim();
+            if (assigneeUuid) {
+              const resolved = await resolveUserDisplay({ user_uuids: [assigneeUuid] });
+              const assigneeId = resolved[0]?.id;
+              if (assigneeId != null) {
+                apiParams.assigned_to = assigneeId;
+              }
             }
             if (fuzzyKeyword) {
               apiParams.keyword = fuzzyKeyword;
@@ -554,21 +665,8 @@ const ExceptionProcessPage: React.FC = () => {
           enableRowSelection={true}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
-          showDeleteButton={true}
-          onDelete={async (keys) => {
-            try {
-              for (const id of keys) {
-                await exceptionApi.process.cancel(String(id));
-              }
-              messageApi.success(t(`${PROC}.message.batchCancelSuccess`, { count: keys.length }));
-              invalidateMenuBadgeCounts();
-              actionRef.current?.reload();
-            } catch (error: any) {
-              messageApi.error(error?.message || t(`${PROC}.message.cancelFailed`));
-            }
-          }}
-          deleteConfirmTitle={(count) => t(`${PROC}.confirm.batchCancel`, { count })}
-          toolBarActionsAfterDelete={[
+          showDeleteButton={false}
+          toolBarActions={[
             <UniCapabilityBatchButton
               key="exception-process-batch-cancel"
               selectedRowKeys={selectedRowKeys}
@@ -600,9 +698,9 @@ const ExceptionProcessPage: React.FC = () => {
               valueEnum: processStatusValueEnum,
             },
             {
-              name: 'assigned_to',
+              name: 'assigned_to_uuid',
               label: t(`${P}.col.assignedTo`),
-              renderFormItem: () => <UniUserSelect name="assigned_to" />
+              renderFormItem: () => <UniUserSelect name="assigned_to_uuid" />,
             },
           ]}
           pagination={{
@@ -623,22 +721,39 @@ const ExceptionProcessPage: React.FC = () => {
         extra={
           currentRecord && ['pending', 'processing'].includes(currentRecord.process_status || '') ? (
             <Space>
-              {currentRecord.process_status === 'pending' && (
-                <Button icon={<UserOutlined />} onClick={() => openAssignModal(currentRecord)}>
-                  {t(`${P}.action.assign`)}
-                </Button>
-              )}
-              {currentRecord.process_status === 'processing' && (
+              <Button
+                {...rowActionKind('assign')}
+                icon={<UserOutlined />}
+                onClick={() => openAssignModal(currentRecord)}
+              >
+                {t(`${P}.action.assign`)}
+              </Button>
+              {(currentRecord.process_status === 'processing' ||
+                (currentRecord.process_status === 'pending' && currentRecord.assigned_to != null)) && (
                 <>
-                  <Button icon={<ArrowRightOutlined />} onClick={() => openStepTransitionModal(currentRecord)}>
+                  <Button
+                    {...rowActionKind('execute')}
+                    icon={<ArrowRightOutlined />}
+                    onClick={() => openStepTransitionModal(currentRecord)}
+                  >
                     {t(`${P}.action.stepTransition`)}
                   </Button>
-                  <Button type="primary" icon={<CheckCircleOutlined />} onClick={() => openResolveModal(currentRecord)}>
+                  <Button
+                    {...rowActionKind('execute')}
+                    type="primary"
+                    icon={<CheckCircleOutlined />}
+                    onClick={() => openResolveModal(currentRecord)}
+                  >
                     {t(`${P}.lifecycleNext.resolve`)}
                   </Button>
                 </>
               )}
-              <Button danger icon={<CloseCircleOutlined />} onClick={() => handleCancel(currentRecord)}>
+              <Button
+                {...rowActionKind('revoke')}
+                danger
+                icon={<CloseCircleOutlined />}
+                onClick={() => handleCancel(currentRecord)}
+              >
                 {t(`${P}.action.cancel`)}
               </Button>
             </Space>
@@ -652,7 +767,7 @@ const ExceptionProcessPage: React.FC = () => {
               bordered
               dataSource={{
                 exception_type: getExceptionTypeTag(currentRecord.exception_type),
-                exception_id: currentRecord.exception_id,
+                work_order_code: currentRecord.work_order_code || '-',
                 process_status: getStatusTag(currentRecord.process_status),
                 current_step: getStepTag(currentRecord.current_step),
                 assigned_to_name: currentRecord.assigned_to_name || '-',
@@ -743,7 +858,17 @@ const ExceptionProcessPage: React.FC = () => {
             );
           }}
         </ProFormDependency>
-        <UniUserSelect name="assigned_to" label={t(`${P}.col.assignedTo`)} />
+        <UniUserSelect
+          name="assigned_to_uuid"
+          label={t(`${P}.col.assignedTo`)}
+          onChange={(_, user) => {
+            const picked = Array.isArray(user) ? user[0] : user;
+            startFormRef.current?.setFieldsValue({
+              assigned_to: picked?.id ?? undefined,
+            });
+          }}
+        />
+        <ProFormText name="assigned_to" hidden />
         <ProFormTextArea
           name="remarks"
           label={t(`${P}.field.remarks`)}
@@ -759,13 +884,21 @@ const ExceptionProcessPage: React.FC = () => {
         }}
         onFinish={handleAssign}
         width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={assignFormRef}
       >
         <UniUserSelect
-          name="assigned_to"
+          name="assigned_to_uuid"
           label={t(`${P}.col.assignedTo`)}
           required
           rules={[{ required: true, message: t(`${PROC}.validation.assigneeRequired`) }]}
+          onChange={(_, user) => {
+            const picked = Array.isArray(user) ? user[0] : user;
+            assignFormRef.current?.setFieldsValue({
+              assigned_to: picked?.id ?? undefined,
+            });
+          }}
         />
+        <ProFormText name="assigned_to" hidden />
         <ProFormTextArea
           name="comment"
           label={t(`${P}.field.remarks`)}

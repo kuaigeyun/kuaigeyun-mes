@@ -57,9 +57,10 @@ import {
   buildQualityInspectionListCodeColumn,
   buildQualityInspectionListMaterialColumn,
   buildQualityInspectionListMaterialHiddenColumns,
+  buildQualityInspectionListPushProgressColumn,
   buildQualityInspectionListQuantityResultColumns,
   buildQualityInspectionListSearchColumns,
-  stackedPrimarySecondaryColumn,
+  buildQualityInspectionPartnerStackedColumn,
 } from '../components/qualityTableColumns';
 import {
   buildQualityInspectionDetailCodeColumn,
@@ -94,7 +95,6 @@ import { downloadFile } from '../../../services/common';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar';
 import { finishedGoodsReworkPushPercent } from '../../sales-management/shared/pushProgress';
 import {
   buildQualityInspectionDocStatusValueEnum,
@@ -134,7 +134,6 @@ import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActi
 import {
   getQualityFinishedDisposalFallback,
   mergeQualityDisposalOptions,
-  renderQualityResultTag,
   renderQualityDocStatusTag,
   renderQualityQualityStatusTag,
   getQualityDefectTypeOptions,
@@ -1093,9 +1092,8 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       inspectionQualityStatusValueEnum,
     ),
     buildQualityInspectionListCodeColumn<FinishedGoodsInspection>(t),
-    stackedPrimarySecondaryColumn<FinishedGoodsInspection>(
+    buildQualityInspectionPartnerStackedColumn<FinishedGoodsInspection>(
       t('app.kuaizhizao.quality.common.columns.workOrderSalesOrder'),
-      'workOrderSalesOrder',
       ['work_order_code', 'workOrderCode'],
       ['sales_order_code', 'salesOrderCode'],
       { dataIndex: 'work_order_code' },
@@ -1113,26 +1111,12 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     buildQualityInspectionListMaterialColumn<FinishedGoodsInspection>(t),
     ...buildQualityInspectionListMaterialHiddenColumns<FinishedGoodsInspection>(t),
     buildInspectorTimeStackedColumn<FinishedGoodsInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
-    ...buildQualityInspectionListQuantityResultColumns<FinishedGoodsInspection>(t, renderQualityResultTag, [
-      {
-        title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+    ...buildQualityInspectionListQuantityResultColumns<FinishedGoodsInspection>(t, [
+      buildQualityInspectionListPushProgressColumn<FinishedGoodsInspection>(t, {
         dataIndex: 'pushed_rework_quantity',
-        ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
-        render: (_, record) => {
-          const percent = finishedGoodsReworkPushPercent(
-            record.pushed_rework_quantity,
-            record.unqualified_quantity,
-          );
-          return (
-            <DocumentPushProgressBar
-              percent={percent}
-              tooltip={t('app.kuaizhizao.salesManagement.pushProgress.percentOnly', {
-                percent: Math.round(percent),
-              })}
-            />
-          );
-        },
-      },
+        getPercent: (record) =>
+          finishedGoodsReworkPushPercent(record.pushed_rework_quantity, record.unqualified_quantity),
+      }),
     ]),
     ...buildDocumentAuditColumns<FinishedGoodsInspection>(t),
     ...inspectionCustomFieldColumns,
@@ -1202,7 +1186,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     >
       <UniTable<FinishedGoodsInspection>
         headerTitle={t('app.kuaizhizao.quality.finished.pageTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.quality-management.finished-goods-inspection.material-qty-v2"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.finished-goods-inspection.rank-v3"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

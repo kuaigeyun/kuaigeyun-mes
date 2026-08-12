@@ -9,8 +9,8 @@ export type DemandBusinessMode = 'MTS' | 'MTO' | 'ATO';
 
 export function getDemandBusinessModeLabel(mode: string | undefined | null): string {
   const m = (mode ?? '').trim();
-  if (m === 'MTS') return '按库存生产';
-  if (m === 'MTO') return '按订单生产';
+  if (m === 'MTS') return '按库存生产 (MTS)';
+  if (m === 'MTO') return '按订单生产 (MTO)';
   if (m === 'ATO') return '按订单组装 (ATO)';
   return m || '-';
 }

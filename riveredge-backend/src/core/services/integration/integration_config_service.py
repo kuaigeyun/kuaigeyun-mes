@@ -89,14 +89,16 @@ def _mask_config_password(config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def build_integration_response(integration: IntegrationConfig) -> Dict[str, Any]:
-    """构建 API 响应（config 脱敏，is_system_default/is_editable）"""
+    """构建 API 响应（config 脱敏，is_system_default/is_editable；历史伞型 type 归一）"""
+    from core.config.integration_type_spec import normalize_integration_type
+
     is_system_default = integration.code == SYSTEM_DEFAULT_CODE
     return {
         "uuid": str(integration.uuid),
         "tenant_id": integration.tenant_id,
         "name": integration.name,
         "code": integration.code,
-        "type": integration.type,
+        "type": normalize_integration_type(integration.type),
         "description": integration.description,
         "config": _mask_config_password(integration.config or {}),
         "is_active": integration.is_active,
@@ -108,6 +110,42 @@ def build_integration_response(integration: IntegrationConfig) -> Dict[str, Any]
         "is_system_default": is_system_default,
         "is_editable": not is_system_default,
     }
+
+
+async def migrate_legacy_integration_types(
+    integrations: List[IntegrationConfig],
+) -> None:
+    """将列表中的历史伞型 type 落库归一（幂等）。"""
+    from core.config.integration_type_spec import (
+        LEGACY_INTEGRATION_TYPE_ALIASES,
+        normalize_integration_type,
+    )
+
+    for integration in integrations:
+        raw = integration.type or ""
+        if raw not in LEGACY_INTEGRATION_TYPE_ALIASES:
+            continue
+        normalized = normalize_integration_type(raw)
+        if normalized == raw:
+            continue
+        integration.type = normalized
+        await integration.save(update_fields=["type", "updated_at"])
+
+
+async def migrate_legacy_integration_types_for_tenant(tenant_id: int) -> None:
+    """组织内历史伞型 type 一次性落库归一（列表/详情前调用）。"""
+    from core.config.integration_type_spec import LEGACY_INTEGRATION_TYPE_ALIASES
+
+    legacy_keys = list(LEGACY_INTEGRATION_TYPE_ALIASES.keys())
+    if not legacy_keys:
+        return
+    rows = await IntegrationConfig.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        type__in=legacy_keys,
+    ).all()
+    if rows:
+        await migrate_legacy_integration_types(rows)
 
 
 class IntegrationConfigService:
@@ -171,6 +209,8 @@ class IntegrationConfigService:
         
         if not integration:
             raise NotFoundError("集成配置不存在")
+
+        await migrate_legacy_integration_types([integration])
         
         return integration
     
@@ -222,6 +262,8 @@ class IntegrationConfigService:
         Returns:
             (集成配置列表, 总数)
         """
+        await migrate_legacy_integration_types_for_tenant(tenant_id)
+
         query = IntegrationConfig.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,

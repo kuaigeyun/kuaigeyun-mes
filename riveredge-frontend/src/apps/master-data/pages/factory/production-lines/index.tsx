@@ -8,7 +8,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { Alert, App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
+import { Alert, App, Button, Descriptions, List, Modal, Popconfirm, Space, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -30,6 +30,9 @@ import {
   pickOptionalId,
   resolveMasterCrudListParams,
 } from '../../../utils/masterListCore';
+import {
+  renderMasterActiveTag,
+} from '../../../utils/masterListPresentation';
 import { ProductionLineFormModal } from '../../../components/ProductionLineFormModal';
 import type { ProductionLine, ProductionLineCreate, Workshop } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -587,7 +590,10 @@ const ProductionLinesPage: React.FC = () => {
     {
       title: t('app.master-data.productionLines.code'),
       dataIndex: 'code',
-      width: 150,
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       fixed: 'left',
       ellipsis: true,
       copyable: true,
@@ -597,7 +603,10 @@ const ProductionLinesPage: React.FC = () => {
     {
       title: t('app.master-data.productionLines.name'),
       dataIndex: 'name',
-      width: 200,
+      width: 168,
+      minWidth: 168,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
     },
@@ -633,22 +642,22 @@ const ProductionLinesPage: React.FC = () => {
     {
       title: t('app.master-data.productionLines.statusLabel'),
       dataIndex: 'isActive',
-      width: 100,
+      width: 88,
+      minWidth: 88,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
       valueEnum: productionLineActiveValueEnum,
       render: (_, record) => {
         const isActive = record?.isActive;
-        return (
-          <Tag color={isActive ? 'success' : 'default'} variant="solid">
-            {isActive ? t('common.enabled') : t('common.disabled')}
-          </Tag>
-        );
+        return renderMasterActiveTag(t, isActive, 'common.enabled', 'common.disabled');
       },
     },
     ...masterCrudCreatedUpdatedColumns<ProductionLine>(t),
     {
       title: t('common.actions'),
+      key: 'action',
       valueType: 'option',
       width: 150,
       fixed: 'right',
@@ -712,11 +721,7 @@ const ProductionLinesPage: React.FC = () => {
       dataIndex: 'isActive',
       render: (_, record) => {
         const isActive = record?.isActive;
-        return (
-          <Tag color={isActive ? 'success' : 'default'} variant="solid">
-            {isActive ? t('common.enabled') : t('common.disabled')}
-          </Tag>
-        );
+        return renderMasterActiveTag(t, isActive, 'common.enabled', 'common.disabled');
       },
     },
     {
@@ -742,7 +747,7 @@ const ProductionLinesPage: React.FC = () => {
           message={t('app.master-data.productionLines.dimensionHint')}
         />
         <UniTable<ProductionLine>
-        columnPersistenceId="apps.master-data.pages.factory.production-lines.status-v2"
+        columnPersistenceId="apps.master-data.pages.factory.production-lines.list-v1"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues) => {

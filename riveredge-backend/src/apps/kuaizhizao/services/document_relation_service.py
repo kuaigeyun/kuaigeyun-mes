@@ -996,7 +996,7 @@ class DocumentRelationService:
         tenant_id: int,
         notice_id: int,
     ) -> List[Dict[str, Any]]:
-        """发货通知单下游：已出库时关联销售出库单"""
+        """发货通知单下游：关联销售出库单（通知仓库即生成，未必已确认出库）"""
         sn = await ShipmentNotice.get_or_none(
             tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
         )

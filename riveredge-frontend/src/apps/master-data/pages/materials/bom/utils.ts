@@ -381,6 +381,190 @@ export const handleDeleteNode = (
   }
 };
 
+/** 列表导出行（与 BOM 导入表头对齐的扁平行） */
+export type BomListExportRow = Record<string, string | number | boolean>;
+
+type BomExportMaterialLike = {
+  id?: number;
+  mainCode?: string;
+  code?: string;
+  name?: string;
+  specification?: string;
+  baseUnit?: string;
+  processRouteName?: string;
+  process_route_name?: string;
+  processRouteCode?: string;
+  process_route_code?: string;
+};
+
+type BomExportGroupResolved = {
+  materialId: number;
+  bomCode: string;
+  version: string;
+  bomName: string;
+  approvalStatus?: string;
+  items: Array<Record<string, unknown>>;
+};
+
+/**
+ * 从列表行（物料分组行 / 版本分组行）解析可导出的 BOM 组；子件叶行返回 null。
+ */
+export function resolveBomExportGroup(row: unknown): BomExportGroupResolved | null {
+  if (!row || typeof row !== 'object') return null;
+  const r = row as Record<string, unknown>;
+  if (Array.isArray(r.versions)) {
+    const sel = (r.selectedVersion && typeof r.selectedVersion === 'object'
+      ? r.selectedVersion
+      : r) as Record<string, unknown>;
+    const firstItem =
+      sel.firstItem && typeof sel.firstItem === 'object'
+        ? (sel.firstItem as Record<string, unknown>)
+        : undefined;
+    const materialId = Number(sel.materialId ?? r.materialId);
+    if (!Number.isFinite(materialId) || materialId <= 0) return null;
+    return {
+      materialId,
+      bomCode: String(sel.bomCode ?? firstItem?.bomCode ?? ''),
+      version: String(sel.version ?? firstItem?.version ?? '1.0'),
+      bomName: String(sel.bomName ?? firstItem?.bomName ?? ''),
+      approvalStatus: (sel.approvalStatus ?? firstItem?.approvalStatus) as string | undefined,
+      items: Array.isArray(sel.items) ? (sel.items as Array<Record<string, unknown>>) : [],
+    };
+  }
+  if (Array.isArray(r.items) && r.groupKey != null) {
+    const firstItem =
+      r.firstItem && typeof r.firstItem === 'object'
+        ? (r.firstItem as Record<string, unknown>)
+        : undefined;
+    const materialId = Number(r.materialId);
+    if (!Number.isFinite(materialId) || materialId <= 0) return null;
+    return {
+      materialId,
+      bomCode: String(r.bomCode ?? firstItem?.bomCode ?? ''),
+      version: String(r.version ?? firstItem?.version ?? '1.0'),
+      bomName: String(r.bomName ?? firstItem?.bomName ?? ''),
+      approvalStatus: (r.approvalStatus ?? firstItem?.approvalStatus) as string | undefined,
+      items: r.items as Array<Record<string, unknown>>,
+    };
+  }
+  return null;
+}
+
+function materialCodeOf(mat?: BomExportMaterialLike | null): string {
+  if (!mat) return '';
+  return String(mat.mainCode || mat.code || '').trim();
+}
+
+function approvalStatusLabel(
+  status: string | undefined,
+  labels: Record<string, string>,
+): string {
+  const key = String(status ?? '').trim().toLowerCase();
+  if (!key) return '';
+  return labels[key] || String(status ?? '');
+}
+
+/**
+ * 将 BOM 分组展平为可导入格式的明细行（父件 + 子件一行）。
+ */
+export function flattenBomGroupsForExport(
+  rows: unknown[],
+  materials: BomExportMaterialLike[],
+  options: {
+    unitValueToLabel?: Record<string, string>;
+    approvalStatusLabels?: Record<string, string>;
+    yesLabel?: string;
+    noLabel?: string;
+  } = {},
+): BomListExportRow[] {
+  const matById = new Map<number, BomExportMaterialLike>();
+  materials.forEach((m) => {
+    if (m?.id != null) matById.set(Number(m.id), m);
+  });
+  const unitMap = options.unitValueToLabel ?? {};
+  const yes = options.yesLabel ?? '是';
+  const no = options.noLabel ?? '否';
+  const statusLabels = options.approvalStatusLabels ?? {};
+  const out: BomListExportRow[] = [];
+
+  for (const row of rows) {
+    const group = resolveBomExportGroup(row);
+    if (!group) continue;
+    const parent = matById.get(group.materialId);
+    const parentCode = materialCodeOf(parent);
+    const parentName = String(parent?.name ?? '').trim();
+    const parentSpec = String(parent?.specification ?? '').trim();
+    const parentBaseUnit = String(parent?.baseUnit ?? '').trim();
+    const parentRouteName = String(
+      parent?.processRouteName ?? parent?.process_route_name ?? '',
+    ).trim();
+    const parentRouteCode = String(
+      parent?.processRouteCode ?? parent?.process_route_code ?? '',
+    ).trim();
+    const approval = approvalStatusLabel(group.approvalStatus, statusLabels);
+    const items = group.items.length
+      ? group.items
+      : [
+          {
+            componentId: undefined,
+            quantity: '',
+            unit: '',
+            wasteRate: 0,
+            isRequired: true,
+            isActive: true,
+            remark: '',
+          },
+        ];
+
+    for (const item of items) {
+      const componentId = Number(item.componentId ?? item.component_id);
+      const component =
+        Number.isFinite(componentId) && componentId > 0 ? matById.get(componentId) : undefined;
+      const componentCode =
+        String(item.componentCode ?? item.component_code ?? '').trim() || materialCodeOf(component);
+      const unitRaw = String(item.unit ?? '').trim();
+      const unit = unitRaw ? unitMap[unitRaw] || unitRaw : '';
+      const wasteRaw = item.wasteRate ?? item.waste_rate;
+      const wasteRate =
+        wasteRaw == null || wasteRaw === ''
+          ? 0
+          : Number(wasteRaw);
+      const isRequired = item.isRequired ?? item.is_required;
+      const isActive = item.isActive ?? item.is_active;
+      const flat: BomListExportRow = {
+        bomCode: group.bomCode || '',
+        bomName: group.bomName || '',
+        version: group.version || '1.0',
+        approvalStatus: approval,
+        baseQuantity: Number(item.baseQuantity ?? item.base_quantity ?? 1) || 1,
+        parentCode,
+        componentCode,
+        quantity: item.quantity == null || item.quantity === '' ? '' : Number(item.quantity),
+        unit,
+        wasteRate: Number.isFinite(wasteRate) ? wasteRate : 0,
+        isRequired: isRequired === false ? no : yes,
+        isActive: isActive === false ? no : yes,
+        remark: String(item.remark ?? item.description ?? '').trim(),
+        materialName: parentName,
+        specification: parentSpec,
+        baseUnit: parentBaseUnit ? unitMap[parentBaseUnit] || parentBaseUnit : '',
+        processRouteCode: parentRouteCode,
+        processRouteName: parentRouteName,
+      };
+      Object.entries(item).forEach(([key, value]) => {
+        if (!key.startsWith('custom_')) return;
+        if (value == null || typeof value === 'object') {
+          flat[key] = value == null ? '' : JSON.stringify(value);
+        } else {
+          flat[key] = value as string | number | boolean;
+        }
+      });
+      out.push(flat);
+    }
+  }
+  return out;
+}
+
 /**
  * 处理选择节点
  */

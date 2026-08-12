@@ -607,8 +607,11 @@ class VisualSchedulingService(BaseService):
             ):
                 conflicts.append(
                     _conflict_item(
-                        "outside_working_hours",
-                        f"工序开工时间不在工作时段内（{work_hours.start.strftime('%H:%M')}-{work_hours.end.strftime('%H:%M')}，或加班窗口；且须为工作日/加班日）",
+                        conflict_type="outside_working_hours",
+                        message=(
+                            f"工序开工时间不在工作时段内（{work_hours.start.strftime('%H:%M')}-"
+                            f"{work_hours.end.strftime('%H:%M')}，或加班窗口；且须为工作日/加班日）"
+                        ),
                         work_order_id=int(op.work_order_id) if op.work_order_id else None,
                         work_order_code=wo.code if wo else None,
                         operation_id=op_id,
@@ -626,8 +629,8 @@ class VisualSchedulingService(BaseService):
                 if rate < 100.0:
                     conflicts.append(
                         _conflict_item(
-                            "material_not_ready",
-                            f"物料未齐套（{rate:.0f}%），硬约束禁止排产",
+                            conflict_type="material_not_ready",
+                            message=f"物料未齐套（{rate:.0f}%），硬约束禁止排产",
                             work_order_id=int(op.work_order_id) if op.work_order_id else None,
                             work_order_code=wo.code if wo else None,
                             operation_id=op_id,
@@ -837,8 +840,8 @@ class VisualSchedulingService(BaseService):
                     target = b if b["op_id"] in touched else a
                     conflicts.append(
                         _conflict_item(
-                            "insufficient_changeover",
-                            f"同工位跨产品换型不足（需净工时 {changeover_hours:g}h）",
+                            conflict_type="insufficient_changeover",
+                            message=f"同工位跨产品换型不足（需净工时 {changeover_hours:g}h）",
                             work_order_id=target["wo_id"] or None,
                             work_order_code=target["wo_code"],
                             operation_id=target["op_id"],

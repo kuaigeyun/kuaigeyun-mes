@@ -34,10 +34,13 @@ import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { StatusTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH } from '../../../../../utils/uniTableLayoutColumns';
 import {
   buildProductionExceptionAlertLevelValueEnum,
   buildStandardProductionExceptionStatusValueEnum,
   resolveProductionExceptionListStatusParams,
+  resolveStandardProductionExceptionStatusTagColor,
 } from '../../../utils/productionExceptionList';
 
 const P = 'app.kuaizhizao.productionException';
@@ -219,15 +222,18 @@ const MaterialShortageExceptionsPage: React.FC = () => {
     },
     {
       title: t(`${P}.col.workOrderCode`),
+      key: 'exception_doc_work_order_code',
       dataIndex: 'work_order_code',
-      width: 140,
+      width: 180,
+      uniTableKeepWidth: true,
       fixed: 'left',
+      ellipsis: false,
       sorter: true,
       hideInSearch: false,
     },
     {
       title: t(`${P}.col.material`),
-      key: 'material_name',
+      key: 'exception_material_stacked',
       dataIndex: 'material_name',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       render: (_, record) => (
@@ -277,14 +283,6 @@ const MaterialShortageExceptionsPage: React.FC = () => {
       valueEnum: alertLevelValueEnum,
     },
     {
-      title: t(`${P}.col.status`),
-      dataIndex: 'status',
-      width: 100,
-      hideInSearch: false,
-      valueType: 'select',
-      valueEnum: exceptionStatusValueEnum,
-    },
-    {
       title: t(`${P}.col.suggestedAction`),
       dataIndex: 'suggested_action',
       width: 100,
@@ -296,8 +294,25 @@ const MaterialShortageExceptionsPage: React.FC = () => {
     },
     ...buildDocumentAuditColumns<MaterialShortageException>(t),
     {
+      title: t(`${P}.col.status`),
+      // 搜索仍绑 status；key 声明列身份，UniTable 右固定于操作列之前
+      key: 'lifecycle',
+      dataIndex: 'status',
+      width: UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH,
+      uniTableKeepWidth: true,
+      fixed: 'right',
+      hideInSearch: false,
+      valueType: 'select',
+      valueEnum: exceptionStatusValueEnum,
+      render: (_, record) => (
+        <StatusTag color={resolveStandardProductionExceptionStatusTagColor(record.status)}>
+          {statusLabel(record.status)}
+        </StatusTag>
+      ),
+    },
+    {
       title: t('common.actions'),
-      valueType: 'option',
+      key: 'option',
       fixed: 'right',
       render: (_, record) => [
         <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
@@ -311,12 +326,12 @@ const MaterialShortageExceptionsPage: React.FC = () => {
         }),
       ],
     },
-  ], SALES_DOC_LIST_FIELD_RANK), [alertLevelValueEnum, exceptionStatusValueEnum, t]);
+  ], SALES_DOC_LIST_FIELD_RANK), [alertLevelValueEnum, exceptionStatusValueEnum, statusLabel, t]);
 
   return (
     <ListPageTemplate>
       <UniTable
-        columnPersistenceId="apps.kuaizhizao.pages.production-execution.material-shortage-exceptions"
+        columnPersistenceId="apps.kuaizhizao.pages.production-execution.material-shortage-exceptions.v3"
         headerTitle={t(`${P}.materialShortage.pageTitle`)}
         actionRef={actionRef}
         rowKey="id"

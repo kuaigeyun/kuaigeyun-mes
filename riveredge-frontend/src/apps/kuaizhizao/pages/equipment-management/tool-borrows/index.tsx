@@ -12,7 +12,7 @@ import {
 } from '@ant-design/pro-components';
 import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
-import { App, Button, Modal, Row, Col, Tag } from 'antd';
+import { App, Button, Modal, Row, Col } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -280,20 +280,22 @@ const ToolBorrowsPage: React.FC = () => {
       },
       { title: t(`${P}.col.plannedQty`), dataIndex: 'planned_qty', width: 90, sorter: true, hideInSearch: true },
       {
-        title: t(`${P}.col.status`),
-        dataIndex: 'status',
-        width: 90,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status),
-      },
-      {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
         hideInTable: true,
         hideInSearch: true,
       },
       ...buildDocumentAuditColumns<ToolBorrow>(t),
+      {
+        title: t(`${P}.col.status`),
+        key: 'lifecycle',
+        dataIndex: 'status',
+        width: 90,
+        sorter: true,
+        hideInSearch: true,
+        fixed: 'right',
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status),
+      },
       {
         title: t('common.actions'),
         key: 'action',
@@ -358,7 +360,7 @@ const ToolBorrowsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<ToolBorrow>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-borrows"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-borrows-equip-rank-v1"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

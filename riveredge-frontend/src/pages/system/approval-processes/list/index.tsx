@@ -9,6 +9,8 @@ import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Descriptions } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemActiveTag } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined, HighlightOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
@@ -283,7 +285,7 @@ const ApprovalProcessListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<ApprovalProcess>[] = [
+  const columns = useMemo<ProColumns<ApprovalProcess>[]>(() => alignProColumns([
     {
       title: t('pages.system.approvalProcesses.name'),
       dataIndex: 'name',
@@ -295,6 +297,9 @@ const ApprovalProcessListPage: React.FC = () => {
       title: t('pages.system.approvalProcesses.code'),
       dataIndex: 'code',
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
     },
     {
@@ -309,28 +314,33 @@ const ApprovalProcessListPage: React.FC = () => {
       title: t('pages.system.approvalProcesses.enableStatus'),
       dataIndex: 'is_active',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('pages.system.approvalProcesses.enabled'), status: 'Success' },
         false: { text: t('pages.system.approvalProcesses.disabled'), status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('pages.system.approvalProcesses.enabled') : t('pages.system.approvalProcesses.disabled')}
-        </Tag>
-      ),
+      render: (_, record) =>
+        renderSystemActiveTag(t, record.is_active, 'pages.system.approvalProcesses.enabled', 'pages.system.approvalProcesses.disabled'),
     },
     {
       title: t('pages.system.approvalProcesses.createdAt'),
       dataIndex: 'created_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
     },
     {
       title: t('pages.system.approvalProcesses.actions'),
+      key: 'action',
       valueType: 'option',
       fixed: 'right',
+      hideInSearch: true,
       uniActionRenderOptions: { directMax: 4 },
       render: (_, record) => [
             <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)}>
@@ -364,13 +374,13 @@ const ApprovalProcessListPage: React.FC = () => {
             </Popconfirm>,
           ],
     },
-  ];
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleView, handleEdit, handleDesign, handleDelete]);
 
   return (
     <>
       <ListPageTemplate>
         <UniTable<ApprovalProcess>
-        columnPersistenceId="pages.system.approval-processes.list"
+        columnPersistenceId="pages.system.approval-processes.list-v1"
         headerTitle={t('pages.system.approvalProcesses.headerTitle')}
         actionRef={actionRef}
         columns={columns}

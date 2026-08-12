@@ -5,11 +5,13 @@
  * 支持应用的 CRUD 操作、安装/卸载、启用/禁用功能。
  */
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Card, Descriptions, Dropdown, Modal, Popconfirm, Space, Switch, Tag, Typography, Alert, Divider, Menu, Breadcrumb, Tooltip, message, Row, Col, Tree, Select, Table } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag } from '../../utils/systemListPresentation';
 import { ThemedSegmented } from '../../../../components/themed-segmented';
 import { useCurrentUser } from '../../../../hooks/useCurrentUser';
 const { Title, Paragraph, Text } = Typography;
@@ -958,7 +960,7 @@ const ApplicationListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<Application>[] = [
+  const columns = useMemo<ProColumns<Application>[]>(() => alignProColumns([
     {
       title: t('pages.system.applications.name'),
       dataIndex: 'name',
@@ -972,6 +974,9 @@ const ApplicationListPage: React.FC = () => {
       title: t('pages.system.applications.code'),
       dataIndex: 'code',
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
     },
     {
@@ -988,64 +993,73 @@ const ApplicationListPage: React.FC = () => {
       title: t('pages.system.applications.sortOrder'),
       dataIndex: 'sort_order',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: (a, b) => (a.sort_order || 0) - (b.sort_order || 0),
     },
     {
       title: t('pages.system.applications.isSystem'),
       dataIndex: 'is_system',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('field.customField.yes'), status: 'Default' },
         false: { text: t('field.customField.no'), status: 'Processing' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_system ? 'default' : 'blue'}>
-          {record.is_system ? t('field.customField.yes') : t('field.customField.no')}
-        </Tag>
-      ),
+      render: (_, record) => renderSystemYesNoTag(t, record.is_system),
     },
     {
       title: t('pages.system.applications.installStatus'),
       dataIndex: 'is_installed',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('pages.system.applications.installed'), status: 'Success' },
         false: { text: t('pages.system.applications.notInstalled'), status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_installed ? 'success' : 'default'}>
-          {record.is_installed ? t('pages.system.applications.installed') : t('pages.system.applications.notInstalled')}
-        </Tag>
-      ),
+      render: (_, record) =>
+        renderSystemTypeMarker(
+          record.is_installed ? t('pages.system.applications.installed') : t('pages.system.applications.notInstalled'),
+          record.is_installed ? 'success' : 'default',
+        ),
     },
     {
       title: t('pages.system.applications.activeStatus'),
       dataIndex: 'is_active',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         true: { text: t('pages.system.applications.enabled'), status: 'Success' },
         false: { text: t('pages.system.applications.disabled'), status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('pages.system.applications.enabled') : t('pages.system.applications.disabled')}
-        </Tag>
-      ),
+      render: (_, record) =>
+        renderSystemActiveTag(t, record.is_active, 'pages.system.applications.enabled', 'pages.system.applications.disabled'),
     },
     {
       title: t('pages.system.applications.version'),
       dataIndex: 'version',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
     },
     {
       title: t('pages.system.applications.actions'),
+      key: 'action',
       valueType: 'option',
-      width: 300,
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => {
         const canSync = record.is_installed && record.is_active;
         const actions: React.ReactNode[] = [
@@ -1211,7 +1225,7 @@ const ApplicationListPage: React.FC = () => {
         return actions;
       },
     },
-  ];
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, canManageAppLifecycle, handleView, handleInstall, handleUninstall, showProUpgradeRequired, openDedicatedBindingModal]);
 
   /**
    * 渲染应用卡片
@@ -1784,7 +1798,7 @@ const ApplicationListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Application>
-          columnPersistenceId="pages.system.applications.list"
+          columnPersistenceId="pages.system.applications.list-v1"
           tanstackQuery={{ queryKeyPrefix: ['pages.system.applications.list', appCategoryFilter] }}
           key={`application-list-${appCategoryFilter}`}
           headerTitle={t('pages.system.applications.headerTitle')}

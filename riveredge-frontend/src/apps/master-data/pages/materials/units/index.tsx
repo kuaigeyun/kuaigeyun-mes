@@ -13,7 +13,7 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
+import { App, Button, List, Modal, Popconfirm, Space, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 import { UniTable } from '../../../../../components/uni-table';
@@ -33,6 +33,13 @@ import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionary
 import { materialUnitApi } from '../../../services/material-unit';
 import type { MaterialUnit, MaterialUnitConversion } from '../../../types/material-unit';
 import { masterCrudCreatedUpdatedSnakeColumns } from '../../../utils/materialListCore';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { MASTER_DATA_LIST_FIELD_RANK } from '../../../utils/masterListCore';
+import {
+  renderMasterActiveTag,
+  renderMasterYesNoTag,
+  renderMasterTypeMarker,
+} from '../../../utils/masterListPresentation';
 import { invalidateMaterialUnitDisplayMapCache } from '../../../../../utils/materialUnitDisplay';
 import {
   buildFactoryImportTemplate,
@@ -607,6 +614,9 @@ const UnitsPage: React.FC = () => {
         title: t('app.master-data.units.code'),
         dataIndex: 'code',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         // @ts-expect-error UniTable defaultShow：列设置可再打开
         defaultShow: false,
@@ -614,7 +624,10 @@ const UnitsPage: React.FC = () => {
       {
         title: t('app.master-data.units.name'),
         dataIndex: 'name',
-        width: 140,
+        width: 150,
+        minWidth: 150,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         fixed: 'left',
       },
@@ -622,6 +635,9 @@ const UnitsPage: React.FC = () => {
         title: t('app.master-data.units.sortOrder'),
         dataIndex: 'sort_order',
         width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
       },
@@ -629,24 +645,26 @@ const UnitsPage: React.FC = () => {
         title: t('app.master-data.units.isSystem'),
         dataIndex: 'is_system',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, r) =>
-          r.is_system ? <Tag color="blue">{t('app.master-data.units.isSystem')}</Tag> : '-',
+          r.is_system ? renderMasterTypeMarker(t('app.master-data.units.isSystem')) : '-',
       },
       {
         title: t('app.master-data.units.status'),
         dataIndex: 'is_active',
-        width: 90,
+        width: 88,
+        minWidth: 88,
+        uniTableKeepWidth: true,
+        resizable: false,
         valueType: 'select',
         valueEnum: {
           true: { text: t('app.master-data.plants.enabled'), status: 'Success' },
           false: { text: t('app.master-data.plants.disabled'), status: 'Default' },
         },
-        render: (_, r) => (
-          <Tag color={r.is_active ? 'success' : 'default'} variant="solid">
-            {r.is_active ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
-          </Tag>
-        ),
+        render: (_, r) => renderMasterActiveTag(t, r.is_active, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
       },
       {
         title: t('app.master-data.units.description'),
@@ -657,6 +675,7 @@ const UnitsPage: React.FC = () => {
       ...masterCrudCreatedUpdatedSnakeColumns<MaterialUnit>(t),
       {
         title: t('common.actions'),
+        key: 'action',
         valueType: 'option',
         fixed: 'right',
         width: 160,
@@ -733,24 +752,26 @@ const UnitsPage: React.FC = () => {
         title: t('app.master-data.units.isSystem'),
         dataIndex: 'is_system',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, r) =>
-          r.is_system ? <Tag color="blue">{t('app.master-data.units.isSystem')}</Tag> : '-',
+          r.is_system ? renderMasterTypeMarker(t('app.master-data.units.isSystem')) : '-',
       },
       {
         title: t('app.master-data.units.status'),
         dataIndex: 'is_active',
-        width: 90,
+        width: 88,
+        minWidth: 88,
+        uniTableKeepWidth: true,
+        resizable: false,
         valueType: 'select',
         valueEnum: {
           true: { text: t('app.master-data.plants.enabled'), status: 'Success' },
           false: { text: t('app.master-data.plants.disabled'), status: 'Default' },
         },
-        render: (_, r) => (
-          <Tag color={r.is_active ? 'success' : 'default'} variant="solid">
-            {r.is_active ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
-          </Tag>
-        ),
+        render: (_, r) => renderMasterActiveTag(t, r.is_active, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
       },
       {
         title: t('app.master-data.units.description'),
@@ -761,6 +782,7 @@ const UnitsPage: React.FC = () => {
       ...masterCrudCreatedUpdatedSnakeColumns<MaterialUnitConversion>(t),
       {
         title: t('common.actions'),
+        key: 'action',
         valueType: 'option',
         fixed: 'right',
         width: 160,
@@ -830,11 +852,11 @@ const UnitsPage: React.FC = () => {
             label: t('app.master-data.units.tabUnits'),
             children: (
               <UniTable<MaterialUnit>
-                columnPersistenceId="apps.master-data.pages.materials.units.catalog.v2"
+                columnPersistenceId="apps.master-data.pages.materials.units.catalog.list-v1"
                 permissionResource="master-data:material-unit"
                 actionRef={unitActionRef}
                 rowKey="uuid"
-                columns={unitColumns}
+                columns={alignProColumns(unitColumns, MASTER_DATA_LIST_FIELD_RANK)}
                 headerTitle={t('app.master-data.units.tabUnits')}
                 showCreateButton={perms.canCreate}
                 createButtonText={withSingleNewShortcutHint(t('app.master-data.units.createTitle'))}
@@ -891,11 +913,11 @@ const UnitsPage: React.FC = () => {
             label: t('app.master-data.units.tabConversions'),
             children: (
               <UniTable<MaterialUnitConversion>
-                columnPersistenceId="apps.master-data.pages.materials.units.conversions.v2"
+                columnPersistenceId="apps.master-data.pages.materials.units.conversions.list-v1"
                 permissionResource="master-data:material-unit"
                 actionRef={convActionRef}
                 rowKey="uuid"
-                columns={convColumns}
+                columns={alignProColumns(convColumns, MASTER_DATA_LIST_FIELD_RANK)}
                 headerTitle={t('app.master-data.units.tabConversions')}
                 showCreateButton={perms.canCreate}
                 createButtonText={withSingleNewShortcutHint(

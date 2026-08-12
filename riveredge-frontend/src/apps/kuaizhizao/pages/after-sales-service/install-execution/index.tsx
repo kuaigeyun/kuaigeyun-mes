@@ -4,7 +4,7 @@
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Modal, Space, Tag } from 'antd';
+import { App, Button, Descriptions, Modal, Space } from 'antd';
 import { EditOutlined, CheckOutlined, DeleteOutlined, StopOutlined } from '@ant-design/icons';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { rowActionLabelKeep } from '../../../../../components/uni-action/actionCatalog';
@@ -43,16 +43,15 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { formatDateTime } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import {
+  AFTER_SALES_INSTALL_STATUS_COLOR,
+  renderAfterSalesStatusTag,
+  renderAfterSalesTypeMarker,
+} from '../shared/afterSalesListPresentation';
 
 const RESOURCE = 'kuaizhizao:after-sales-install';
-
-const STATUS_COLOR: Record<string, string> = {
-  待派工: 'default',
-  进行中: 'processing',
-  待验收: 'warning',
-  已关闭: 'success',
-};
 
 function installExecutionBatchCloseAllowed(
   records: InstallExecution[],
@@ -267,130 +266,164 @@ const InstallExecutionPage: React.FC = () => {
   };
 
   const columns: ProColumns<InstallExecution>[] = useMemo(
-    () => [
-      {
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-        title: '安装执行单',
-        dataIndex: 'job_code',
-        fixed: 'left',
-        render: (_, row) => (
-          <UniTableStackedPrimaryCell
-            primary={String(row.customer_name ?? '')}
-            secondary={String(row.job_code ?? '')}
-          />
-        ),
-      },
-      {
-        title: '供给来源',
-        dataIndex: 'supply_source',
-        valueType: 'select',
-        valueEnum: Object.fromEntries(
-          INSTALL_SUPPLY_SOURCES.map((s) => [s, { text: s }]),
-        ),
-        hideInSearch: true,
-      },
-      {
-        title: t('components.uniLifecycle.listColumnTitle'),
-        dataIndex: 'current_stage_key',
-        hideInSearch: true,
-        render: (_, row) => {
-          const stage = row.stages?.find((s) => s.stage_key === row.current_stage_key);
-          return formatInstallStageLabel(row.current_stage_key, stage?.stage_name);
-        },
-      },
-      {
-        title: '状态',
-        dataIndex: 'status',
-        valueType: 'select',
-        valueEnum: Object.fromEntries(
-          INSTALL_JOB_STATUSES.map((s) => [s, { text: s }]),
-        ),
-        render: (_, row) => <Tag color={STATUS_COLOR[row.status] ?? 'default'}>{row.status}</Tag>,
-      },
-      {
-        title: '销售订单',
-        dataIndex: 'sales_order_code',
-        hideInSearch: true,
-        render: (_, row) => (
-          <LinkedDocumentCode
-            documentType="sales_order"
-            documentId={row.sales_order_id}
-            code={row.sales_order_code}
-          />
-        ),
-      },
-      {
-        title: '现场地址',
-        dataIndex: 'site_address',
-        ellipsis: true,
-        hideInSearch: true,
-      },
-      ...buildDocumentAuditColumns<InstallExecution>(t),
-      {
-        title: t('common.actions'),
-        valueType: 'option',
-        fixed: 'right',
-        hideInSearch: true,
-        uniActionRenderOptions: { directMax: 6 },
-        render: (_, row) => {
-          const caps = row.capabilities;
-          const parts: React.ReactNode[] = [
-            <Button
-              {...rowActionKind('read')}
-              key="detail"
-              onClick={(e) => {
-                e.stopPropagation();
-                openDetail(row);
-              }}
-            />,
-            ...renderBusinessActions(row, 'row'),
-          ];
-          if (caps?.update?.allowed !== false && perms.canUpdate) {
-            parts.push(
-              <Button
-                {...rowActionKind('update')}
-                key="edit"
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  const full = await installExecutionApi.get(row.id);
-                  setEditing(full);
-                  setFormOpen(true);
-                }}
-              />,
-            );
-          }
-          if (
-            caps?.close?.allowed !== false &&
-            perms.canUpdate &&
-            row.status !== '已关闭'
-          ) {
-            parts.push(
-              <Button
-                {...rowActionKind('close')}
-                key="close"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleClose(row);
-                }}
-              />,
-            );
-          }
-          if (caps?.delete?.allowed !== false && perms.canDelete) {
-            parts.push(
-              <Button
-                {...rowActionKind('delete')}
-                key="delete"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(row);
-                }}
-              />,
-            );
-          }
-          return parts;
-        },
-      },
-    ],
+    () =>
+      alignProColumns<InstallExecution>(
+        [
+          {
+            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            title: '安装执行单',
+            key: 'after_sales_install_stacked',
+            dataIndex: 'job_code',
+            fixed: 'left',
+            render: (_, row) => (
+              <UniTableStackedPrimaryCell
+                primary={String(row.customer_name ?? '') || '-'}
+                secondary={String(row.job_code ?? '') || '-'}
+              />
+            ),
+          },
+          {
+            title: '供给来源',
+            dataIndex: 'supply_source',
+            width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
+            valueType: 'select',
+            valueEnum: Object.fromEntries(
+              INSTALL_SUPPLY_SOURCES.map((s) => [s, { text: s }]),
+            ),
+            hideInSearch: true,
+            render: (_, row) => renderAfterSalesTypeMarker(row.supply_source),
+          },
+          {
+            title: t('components.uniLifecycle.listColumnTitle'),
+            dataIndex: 'current_stage_key',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            render: (_, row) => {
+              const stage = row.stages?.find((s) => s.stage_key === row.current_stage_key);
+              return renderAfterSalesTypeMarker(
+                formatInstallStageLabel(row.current_stage_key, stage?.stage_name),
+              );
+            },
+          },
+          {
+            title: '销售订单',
+            dataIndex: 'sales_order_code',
+            width: 148,
+            minWidth: 148,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            render: (_, row) => (
+              <LinkedDocumentCode
+                documentType="sales_order"
+                documentId={row.sales_order_id}
+                code={row.sales_order_code}
+              />
+            ),
+          },
+          {
+            title: '现场地址',
+            dataIndex: 'site_address',
+            width: 168,
+            minWidth: 168,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+          },
+          {
+            title: '状态',
+            dataIndex: 'status',
+            hideInTable: true,
+            valueType: 'select',
+            valueEnum: Object.fromEntries(
+              INSTALL_JOB_STATUSES.map((s) => [s, { text: s }]),
+            ),
+          },
+          ...buildDocumentAuditColumns<InstallExecution>(t),
+          {
+            title: '状态',
+            key: 'lifecycle',
+            dataIndex: 'status',
+            fixed: 'right',
+            hideInSearch: true,
+            render: (_, row) =>
+              renderAfterSalesStatusTag(row.status, AFTER_SALES_INSTALL_STATUS_COLOR),
+          },
+          {
+            title: t('common.actions'),
+            key: 'action',
+            valueType: 'option',
+            fixed: 'right',
+            hideInSearch: true,
+            uniActionRenderOptions: { directMax: 6 },
+            render: (_, row) => {
+              const caps = row.capabilities;
+              const parts: React.ReactNode[] = [
+                <Button
+                  {...rowActionKind('read')}
+                  key="detail"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openDetail(row);
+                  }}
+                />,
+                ...renderBusinessActions(row, 'row'),
+              ];
+              if (caps?.update?.allowed !== false && perms.canUpdate) {
+                parts.push(
+                  <Button
+                    {...rowActionKind('update')}
+                    key="edit"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const full = await installExecutionApi.get(row.id);
+                      setEditing(full);
+                      setFormOpen(true);
+                    }}
+                  />,
+                );
+              }
+              if (
+                caps?.close?.allowed !== false &&
+                perms.canUpdate &&
+                row.status !== '已关闭'
+              ) {
+                parts.push(
+                  <Button
+                    {...rowActionKind('close')}
+                    key="close"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleClose(row);
+                    }}
+                  />,
+                );
+              }
+              if (caps?.delete?.allowed !== false && perms.canDelete) {
+                parts.push(
+                  <Button
+                    {...rowActionKind('delete')}
+                    key="delete"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(row);
+                    }}
+                  />,
+                );
+              }
+              return parts;
+            },
+          },
+        ],
+        SALES_DOC_LIST_FIELD_RANK,
+      ),
     [t, perms, messageApi, modal],
   );
 
@@ -401,7 +434,7 @@ const InstallExecutionPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           permissionResource={RESOURCE}
-          columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.install-execution"
+          columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.install-execution.v1"
           headerTitle={t('app.kuaizhizao.menu.after-sales-service.install-execution')}
           columns={columns}
           enableRowSelection={perms.canDelete || canBatchClose}
@@ -516,7 +549,7 @@ const InstallExecutionPage: React.FC = () => {
             <Descriptions column={2} bordered size="small">
               <Descriptions.Item label="客户">{detailRow.customer_name}</Descriptions.Item>
               <Descriptions.Item label="状态">
-                <Tag color={STATUS_COLOR[detailRow.status] ?? 'default'}>{detailRow.status}</Tag>
+                {renderAfterSalesStatusTag(detailRow.status, AFTER_SALES_INSTALL_STATUS_COLOR)}
               </Descriptions.Item>
               <Descriptions.Item label="供给来源">{detailRow.supply_source}</Descriptions.Item>
               <Descriptions.Item label="负责人">{detailRow.owner_name ?? '-'}</Descriptions.Item>

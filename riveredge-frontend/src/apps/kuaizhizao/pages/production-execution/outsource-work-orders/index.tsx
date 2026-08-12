@@ -46,11 +46,13 @@ import {
   Input,
   theme as AntdTheme,
 } from 'antd';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { EditOutlined, EyeOutlined, SendOutlined, StopOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   MaterialStackedCell,
   UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import CodeField from '../../../../../components/code-field';
@@ -494,7 +496,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         urgent: { color: 'red', key: 'app.kuaizhizao.outsourceWorkOrder.priorityUrgent' },
       };
       const p = priorityMap[priority || 'normal'] || { color: 'default', key: 'app.kuaizhizao.outsourceWorkOrder.priorityNormal' };
-      return <Tag color={p.color}>{t(p.key)}</Tag>;
+      return <MarkerTag color={p.color}>{t(p.key)}</MarkerTag>;
     },
     [t],
   );
@@ -1484,7 +1486,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       },
       {
         title: t('app.kuaizhizao.outsourceWorkOrder.colProduct'),
-        key: 'product_stacked',
+        key: 'owo_product_stacked',
         dataIndex: 'product_name',
         ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         sorter: true,
@@ -1628,8 +1630,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         title: t('app.kuaizhizao.outsourceWorkOrder.colPlannedRange'),
         key: 'planned_range_stacked',
         dataIndex: 'planned_start_date',
-        width: 132,
-        uniTableKeepWidth: true,
+        ...UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
         sorter: true,
         hideInSearch: true,
         render: (_, record) => {

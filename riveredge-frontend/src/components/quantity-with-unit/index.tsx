@@ -21,6 +21,11 @@ export interface QuantityWithUnitProps {
   /** 已加载物料时可传入，避免重复请求 */
   material?: Material | null;
   scenario?: MaterialScenario;
+  /**
+   * 默认单位（如检验单 material_unit）。
+   * value.unit 为空时展示并写入，避免单位下拉只显示「单位」占位。
+   */
+  preferredUnit?: string;
   value?: QuantityWithUnitValue;
   onChange?: (next: QuantityWithUnitValue) => void;
   disabled?: boolean;
@@ -49,6 +54,7 @@ export const QuantityWithUnit: React.FC<QuantityWithUnitProps> = ({
   materialId,
   material: materialProp,
   scenario = 'sale',
+  preferredUnit,
   value,
   onChange,
   disabled = false,
@@ -81,19 +87,39 @@ export const QuantityWithUnit: React.FC<QuantityWithUnitProps> = ({
     };
   }, [materialId, materialProp]);
 
+  const resolveDefaultUnit = useCallback(() => {
+    const preferred = String(preferredUnit ?? '').trim();
+    if (preferred) return preferred;
+    return resolveMaterialScenarioUnit(material, scenario);
+  }, [preferredUnit, material, scenario]);
+
+  const effectiveUnit = String(value?.unit ?? '').trim() || resolveDefaultUnit();
+
+  // value 尚未带单位时，用默认单位回填，避免下拉长期停在「单位」占位
+  useEffect(() => {
+    if (!onChange) return;
+    if (String(value?.unit ?? '').trim()) return;
+    const unit = resolveDefaultUnit();
+    if (!unit) return;
+    onChange({
+      quantity: value?.quantity,
+      unit,
+    });
+  }, [onChange, value?.unit, value?.quantity, resolveDefaultUnit]);
+
   const handleQuantityChange = useCallback(
     (qty: number | null) => {
       onChange?.({
         quantity: qty ?? undefined,
-        unit: value?.unit ?? resolveMaterialScenarioUnit(material, scenario),
+        unit: String(value?.unit ?? '').trim() || resolveDefaultUnit(),
       });
     },
-    [onChange, value?.unit, material, scenario],
+    [onChange, value?.unit, resolveDefaultUnit],
   );
 
   const handleUnitChange = useCallback(
     (newUnit: string) => {
-      const oldUnit = value?.unit;
+      const oldUnit = String(value?.unit ?? '').trim() || resolveDefaultUnit();
       const oldQty = Number(value?.quantity);
       let nextQty = value?.quantity;
       if (Number.isFinite(oldQty) && oldQty > 0 && oldUnit && newUnit && oldUnit !== newUnit) {
@@ -104,7 +130,7 @@ export const QuantityWithUnit: React.FC<QuantityWithUnitProps> = ({
         unit: newUnit,
       });
     },
-    [onChange, value?.quantity, value?.unit, material],
+    [onChange, value?.quantity, value?.unit, material, resolveDefaultUnit],
   );
 
   const quantityControl = (
@@ -123,7 +149,7 @@ export const QuantityWithUnit: React.FC<QuantityWithUnitProps> = ({
   const unitControl = (
     <MaterialUnitSelect
       materialId={materialId ?? material?.id}
-      value={value?.unit}
+      value={effectiveUnit || undefined}
       onChange={handleUnitChange}
       disabled={disabled}
       size={size}

@@ -7,7 +7,8 @@
 import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { Button, Tag, Typography } from 'antd';
+import { Button, Typography } from 'antd';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { rowActionKind } from '../../../../../components/uni-action';
@@ -73,9 +74,9 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
           const v = r.usages_until_due ?? 0;
           if (v < 0) {
             return (
-              <Tag color="error">
+              <MarkerTag color="error">
                 {t(`${P}.overdueUsages`, { count: Math.abs(v) })}
-              </Tag>
+              </MarkerTag>
             );
           }
           return v;
@@ -86,7 +87,7 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
         dataIndex: 'reminder_type',
         render: (_, r) => {
           const color = r.reminder_type === 'overdue' ? 'error' : r.reminder_type === 'due_soon' ? 'warning' : 'default';
-          return <Tag color={color}>{reminderStatusLabel(r.reminder_type)}</Tag>;
+          return <MarkerTag color={color}>{reminderStatusLabel(r.reminder_type)}</MarkerTag>;
         },
       },
     ],
@@ -160,7 +161,7 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
         render: (_, r) => {
           const v = r.usages_until_due ?? 0;
           if (v < 0) {
-            return <Tag color="red">{t(`${P}.overdueUsages`, { count: Math.abs(v) })}</Tag>;
+            return <MarkerTag color="error">{t(`${P}.overdueUsages`, { count: Math.abs(v) })}</MarkerTag>;
           }
           return <span>{v}</span>;
         },
@@ -188,7 +189,7 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<MoldMaintenanceReminder>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-maintenance-reminders"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-maintenance-reminders-equip-rank-v1"
           actionRef={actionRef}
           enableRowSelection
           selectedRowKeys={selectedRowKeys}

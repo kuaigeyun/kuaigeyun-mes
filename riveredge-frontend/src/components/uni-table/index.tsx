@@ -60,6 +60,8 @@ import {
   ProjectOutlined,
 } from '@ant-design/icons'
 import { isPinyinKeyword, matchPinyinInitialsAsync } from '../../utils/pinyin'
+import { resolveLinkedDocumentColumn } from '../../apps/kuaizhizao/utils/linkedDocumentAutoLink'
+import { LinkedDocumentAutoCell } from '../linked-document-code/LinkedDocumentAutoCell'
 import UniSearch from '../uni-search'
 import UniView from '../uni-view'
 import { UniBatchDeleteButton } from '../uni-batch'
@@ -150,6 +152,7 @@ import {
   resolveUniTablePrimaryFlexWidthFromContent,
   UNI_TABLE_OPERATION_MIN_WIDTH,
   UNI_TABLE_SELECTION_COL_WIDTH,
+  UNI_TABLE_EXPAND_COL_WIDTH,
 } from '../../utils/uniTableLayoutColumns'
 import {
   resolveLayoutPlan,
@@ -1405,6 +1408,31 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   // 为 date/dateTime 列注入站点格式的展示，使站点设置中的日期格式在单据表格中生效
   const processedColumns = React.useMemo(() => {
     const mapped = effectiveColumns.map((col: any) => {
+      /**
+       * 关联单号全局自动挂链：dataIndex 命中约定（如 original_work_order_code / source_code）
+       * 即渲染嵌套抽屉链接；页面设 skipLinkedDocumentLink 可退出。
+       */
+      if (
+        !col.skipLinkedDocumentLink &&
+        typeof col.dataIndex === 'string' &&
+        !col.hideInTable
+      ) {
+        const linkedBinding = resolveLinkedDocumentColumn(col.dataIndex)
+        if (linkedBinding) {
+          return {
+            ...col,
+            render: (_: unknown, record: T) => (
+              <LinkedDocumentAutoCell
+                binding={linkedBinding}
+                record={record as Record<string, unknown>}
+                // 列 ellipsis:false 时完整展示单号（LinkedDocumentCode 默认会省略）
+                ellipsis={col.ellipsis !== false}
+              />
+            ),
+          }
+        }
+      }
+
       // 自动处理日期和时间列的展示
       if ((col.valueType === 'date' || col.valueType === 'dateTime') && !col.render && !col.valueFormatter) {
         const dataIndex = col.dataIndex
@@ -2722,6 +2750,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const emptyTableHasFixedColumns =
     isEmptyTable && hasUniTableFixedColumns(effectiveTableColumns)
   const tableHasRowSelection = enableRowSelection || !!normalizedUserRowSelection
+  const tableHasExpandable = Boolean(
+    (restProps as { expandable?: { expandedRowRender?: unknown; rowExpandable?: unknown } })
+      .expandable?.expandedRowRender,
+  )
 
   const layoutPlan = React.useMemo(
     () =>
@@ -2729,12 +2761,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         columns: effectiveTableColumns,
         containerWidth: containerLayoutWidth,
         includeSelection: tableHasRowSelection,
+        includeExpandable: tableHasExpandable,
         scrollYEnabled: proTableBodyScrollYEnabled,
       }),
     [
       effectiveTableColumns,
       containerLayoutWidth,
       tableHasRowSelection,
+      tableHasExpandable,
       proTableBodyScrollYEnabled,
     ],
   )
@@ -3265,8 +3299,18 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   onSizeChange: _omitOnSizeChange,
                   sticky: userSticky,
                   className: userTableClassName,
+                  expandable: userExpandable,
                   ...otherProps
                 } = restProps
+                const mergedExpandable =
+                  userExpandable && typeof userExpandable === 'object'
+                    ? {
+                        ...userExpandable,
+                        columnWidth:
+                          (userExpandable as { columnWidth?: number }).columnWidth ??
+                          UNI_TABLE_EXPAND_COL_WIDTH,
+                      }
+                    : userExpandable
                 const mergedProTableClassName = [
                   'uni-table-pro-table',
                   layoutPlan.mode === 'scrollY' ? 'uni-table-scroll-y' : '',
@@ -3322,6 +3366,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   ...(mergedOnRow ? { onRow: mergedOnRow } : {}),
                   ...(useVirtual ? { virtual: true } : userVirtual !== undefined ? { virtual: userVirtual } : {}),
                   ...(userComponents ? { components: userComponents } : {}),
+                  ...(mergedExpandable != null ? { expandable: mergedExpandable } : {}),
                   ...(mergedScroll != null ? { scroll: mergedScroll } : {}),
                 }
               })()}

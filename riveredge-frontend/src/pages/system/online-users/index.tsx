@@ -9,6 +9,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, type ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Avatar, Badge, Button, Card, Descriptions, Popconfirm, Space, Tag, Tooltip, Typography, theme } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { EyeOutlined, BarChartOutlined, LogoutOutlined, UserOutlined, ClockCircleOutlined, GlobalOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { DRAWER_CONFIG, ListPageTemplate } from '../../../components/layout-templates';
@@ -294,13 +295,16 @@ const OnlineUsersPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<OnlineUser>[] = [
+  const columns = useMemo<ProColumns<OnlineUser>[]>(() => alignProColumns([
     {
       title: t('pages.system.onlineUsers.username'),
       dataIndex: 'username',
       key: 'username',
       ellipsis: true,
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
       title: t('pages.system.onlineUsers.fullName'),
@@ -324,6 +328,9 @@ const OnlineUsersPage: React.FC = () => {
       key: 'login_ip',
       ellipsis: true,
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
       title: t('pages.system.onlineUsers.loginTime'),
@@ -335,6 +342,9 @@ const OnlineUsersPage: React.FC = () => {
       render: (_: any, record: OnlineUser) =>
         record.login_time ? formatDateTime(record.login_time, 'YYYY-MM-DD HH:mm:ss') : '-',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
       title: t('pages.system.onlineUsers.lastActivityTime'),
@@ -346,8 +356,11 @@ const OnlineUsersPage: React.FC = () => {
       render: (_: any, record: OnlineUser) =>
         record.last_activity_time ? formatDateTime(record.last_activity_time, 'YYYY-MM-DD HH:mm:ss') : '-',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
-  ];
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t]);
 
   /**
    * 详情列定义
@@ -399,7 +412,7 @@ const OnlineUsersPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<OnlineUser>
-          columnPersistenceId="pages.system.online-users"
+          columnPersistenceId="pages.system.online-users.list-v1"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

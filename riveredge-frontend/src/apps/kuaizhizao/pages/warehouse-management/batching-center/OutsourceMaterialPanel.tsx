@@ -14,12 +14,20 @@ import {
   ProFormItem,
   ProFormDigit,
 } from '@ant-design/pro-components';
-import { App, Button, Tag } from 'antd';
+import { App, Button } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import {
+  MaterialStackedCell,
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import {
   outsourceMaterialIssueApi,
   outsourceMaterialReceiptApi,
@@ -154,121 +162,163 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode, o
   };
 
   const columns: ProColumns<OutsourceMaterialRow>[] = useMemo(
-    () => [
-    {
-      title: t('app.kuaizhizao.warehouseCommon.colCode'),
-      dataIndex: 'code',
-      width: 160,
-      fixed: 'left',
-    },
-    {
-      title: t('app.kuaizhizao.warehouseCommon.colOutsourceWorkOrder'),
-      dataIndex: ['outsourceWorkOrderCode', 'outsource_work_order_code'],
-      width: 150,
-      render: (_, r) => r.outsourceWorkOrderCode || r.outsource_work_order_code || '-',
-    },
-    ...(isIssue || isMaterialReturn
-      ? [
+    () =>
+      alignProColumns<OutsourceMaterialRow>(
+        [
           {
-            title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
-            dataIndex: 'materialName',
-            width: 140,
-            render: (_: unknown, r: OutsourceMaterialRow) =>
-              `${r.materialCode || r.material_code || ''} ${r.materialName || r.material_name || ''}`.trim() || '-',
-          } as ProColumns<OutsourceMaterialRow>,
-        ]
-      : []),
-    ...(isProductReturn
-      ? [
+            title: t('app.kuaizhizao.warehouseCommon.colDocCode'),
+            key: 'doc_code',
+            dataIndex: 'code',
+            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            fixed: 'left',
+            hideInSearch: true,
+            render: (_, r) => {
+              const owo = String(r.outsourceWorkOrderCode || r.outsource_work_order_code || '').trim();
+              return (
+                <UniTableStackedPrimaryCell
+                  primary={String(r.code ?? '').trim() || '-'}
+                  secondary={owo || '-'}
+                  secondaryCopyable={Boolean(owo)}
+                />
+              );
+            },
+          },
           {
-            title: t('app.kuaizhizao.warehouseCommon.colReturnReason'),
-            dataIndex: ['returnReason', 'return_reason'],
-            width: 160,
-            ellipsis: true,
-            render: (_, r) => r.returnReason || r.return_reason || '-',
-          } as ProColumns<OutsourceMaterialRow>,
-        ]
-      : []),
-    {
-      title: t('app.kuaizhizao.warehouseCommon.colQuantity'),
-      dataIndex: 'quantity',
-      width: 90,
-      align: 'right',
-      render: (_, r) => (r.quantity != null ? `${formatQuantity(r.quantity)} ${r.unit || ''}`.trim() : '—'),
-    },
-    ...(!isProductReturn
-      ? [
+            title: t('app.kuaizhizao.warehouseCommon.colCode'),
+            dataIndex: 'code',
+            hideInTable: true,
+          },
           {
-            title: t('app.kuaizhizao.warehouseCommon.colWarehouse'),
-            dataIndex: ['warehouseName', 'warehouse_name'],
-            width: 120,
-            render: (_: unknown, r: OutsourceMaterialRow) => r.warehouseName || r.warehouse_name || '-',
-          } as ProColumns<OutsourceMaterialRow>,
-        ]
-      : []),
-    {
-      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
-      dataIndex: 'status',
-      width: 90,
-      render: (_, r) => {
-        const statusKey =
-          r.status === 'draft'
-            ? t('app.kuaizhizao.warehouseCommon.statusDraft')
-            : r.status === 'completed'
-              ? t('app.kuaizhizao.warehouseCommon.statusCompleted')
-              : r.status || '-';
-        const color = resolveOutsourceStatusTagColor(r.status);
-        return <Tag color={color}>{statusKey}</Tag>;
-      },
-    },
-    ...buildDocumentAuditColumns<OutsourceMaterialRow>(t),
-    {
-      title: t('app.kuaizhizao.warehouseCommon.colActions'),
-      valueType: 'option',
-      fixed: 'right',
-      render: (_, record) => {
-        const actions: React.ReactNode[] = [];
-        if (canRead && record.id) {
-          actions.push(
-            <Button
-              key="detail"
-              {...rowActionKind('read')}
-              size="small"
-              onClick={() => onOpenDetail?.({ kind: OUTSOURCE_DETAIL_KIND[mode], id: record.id! })}
-            >
-              {t('app.kuaizhizao.warehouseCommon.detail')}
-            </Button>,
-          );
-        }
-        if (isReceipt && record.status === 'draft' && record.id) {
-          actions.push(
-            <Button
-              key="complete"
-              {...rowActionKind('complete')}
-              size="small"
-              onClick={() => handleComplete(record)}
-            >
-              {t('app.kuaizhizao.warehouseCommon.complete')}
-            </Button>,
-          );
-        }
-        if (isIssue && record.status === 'draft' && record.id) {
-          actions.push(
-            <Button
-              key="complete"
-              {...rowActionKind('complete')}
-              size="small"
-              onClick={() => handleComplete(record)}
-            >
-              {t('app.kuaizhizao.warehouseCommon.complete')}
-            </Button>,
-          );
-        }
-        if (!actions.length) return '-';
-        return actions;
-      },
-    },
-  ],
+            title: t('app.kuaizhizao.warehouseCommon.colOutsourceWorkOrder'),
+            key: 'outsource_work_order_code',
+            dataIndex: ['outsourceWorkOrderCode', 'outsource_work_order_code'],
+            hideInTable: true,
+          },
+          ...(isIssue || isMaterialReturn
+            ? [
+                {
+                  title: t('app.kuaizhizao.warehouseCommon.colProductOrMaterial'),
+                  key: 'material',
+                  dataIndex: 'materialName',
+                  ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+                  hideInSearch: true,
+                  render: (_: unknown, r: OutsourceMaterialRow) => {
+                    const name = String(r.materialName || r.material_name || '').trim();
+                    const code = String(r.materialCode || r.material_code || '').trim();
+                    if (!name && !code) return '-';
+                    return <MaterialStackedCell material_name={name || '-'} material_code={code || undefined} />;
+                  },
+                } as ProColumns<OutsourceMaterialRow>,
+              ]
+            : []),
+          ...(isProductReturn
+            ? [
+                {
+                  title: t('app.kuaizhizao.warehouseCommon.colReturnReason'),
+                  key: 'return_reason',
+                  dataIndex: ['returnReason', 'return_reason'],
+                  width: 140,
+                  minWidth: 140,
+                  uniTableKeepWidth: true,
+                  resizable: false,
+                  ellipsis: true,
+                  hideInSearch: true,
+                  render: (_: unknown, r: OutsourceMaterialRow) => {
+                    const reason = String(r.returnReason || r.return_reason || '').trim();
+                    return reason ? <MarkerTag color="processing">{reason}</MarkerTag> : '-';
+                  },
+                } as ProColumns<OutsourceMaterialRow>,
+              ]
+            : []),
+          {
+            title: t('app.kuaizhizao.warehouseCommon.colQuantity'),
+            dataIndex: 'quantity',
+            width: 96,
+            minWidth: 96,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            align: 'right',
+            render: (_, r) =>
+              r.quantity != null ? `${formatQuantity(r.quantity)} ${r.unit || ''}`.trim() : '—',
+          },
+          ...(!isProductReturn
+            ? [
+                {
+                  title: t('app.kuaizhizao.warehouseCommon.colWarehouse'),
+                  key: 'warehouse_name',
+                  dataIndex: ['warehouseName', 'warehouse_name'],
+                  width: 120,
+                  minWidth: 120,
+                  uniTableKeepWidth: true,
+                  resizable: false,
+                  ellipsis: true,
+                  hideInSearch: true,
+                  render: (_: unknown, r: OutsourceMaterialRow) =>
+                    r.warehouseName || r.warehouse_name || '-',
+                } as ProColumns<OutsourceMaterialRow>,
+              ]
+            : []),
+          {
+            title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+            key: 'lifecycle',
+            dataIndex: 'status',
+            fixed: 'right',
+            hideInSearch: true,
+            render: (_, r) => {
+              const statusKey =
+                r.status === 'draft'
+                  ? t('app.kuaizhizao.warehouseCommon.statusDraft')
+                  : r.status === 'completed'
+                    ? t('app.kuaizhizao.warehouseCommon.statusCompleted')
+                    : r.status || '-';
+              return (
+                <StatusTag color={resolveOutsourceStatusTagColor(r.status)}>{statusKey}</StatusTag>
+              );
+            },
+          },
+          ...buildDocumentAuditColumns<OutsourceMaterialRow>(t),
+          {
+            title: t('app.kuaizhizao.warehouseCommon.colActions'),
+            key: 'action',
+            valueType: 'option',
+            fixed: 'right',
+            hideInSearch: true,
+            render: (_, record) => {
+              const actions: React.ReactNode[] = [];
+              if (canRead && record.id) {
+                actions.push(
+                  <Button
+                    key="detail"
+                    {...rowActionKind('read')}
+                    size="small"
+                    onClick={() =>
+                      onOpenDetail?.({ kind: OUTSOURCE_DETAIL_KIND[mode], id: record.id! })
+                    }
+                  >
+                    {t('app.kuaizhizao.warehouseCommon.detail')}
+                  </Button>,
+                );
+              }
+              if ((isReceipt || isIssue) && record.status === 'draft' && record.id) {
+                actions.push(
+                  <Button
+                    key="complete"
+                    {...rowActionKind('complete')}
+                    size="small"
+                    onClick={() => handleComplete(record)}
+                  >
+                    {t('app.kuaizhizao.warehouseCommon.complete')}
+                  </Button>,
+                );
+              }
+              if (!actions.length) return '-';
+              return actions;
+            },
+          },
+        ],
+        WAREHOUSE_DOC_LIST_FIELD_RANK,
+      ),
     [canRead, isIssue, isMaterialReturn, isProductReturn, isReceipt, mode, onOpenDetail, t],
   );
 
@@ -467,10 +517,11 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode, o
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
-        columnPersistenceId={`apps.kuaizhizao.pages.warehouse-management.material-center.${mode}`}
+        columnPersistenceId={`apps.kuaizhizao.pages.warehouse-management.material-center.${mode}.v1`}
         headerTitle={panelTitle}
+        showAdvancedSearch
         toolBarRender={() => [
-          <Button {...rowActionKind('create')} key="create" type="primary" onClick={openCreate}>
+          <Button {...rowActionKind('create')} key="create" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
             {createLabel}
           </Button>,
         ]}
