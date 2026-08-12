@@ -183,6 +183,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         items: Optional[List[SalesContractItem]] = None,
         milestones: Optional[List[SalesContractMilestone]] = None,
         capability_ctx: Optional[dict[str, Any]] = None,
+        released_sales_order_codes: Optional[List[str]] = None,
     ) -> SalesContractResponse:
         rem_qty, rem_amt = self._remaining(contract)
         payload = {
@@ -204,6 +205,7 @@ class SalesContractService(AppBaseService[SalesContract]):
             "discount_amount": getattr(contract, "discount_amount", None) or Decimal("0"),
             "released_quantity": contract.released_quantity,
             "released_amount": contract.released_amount,
+            "released_sales_order_codes": list(released_sales_order_codes or []),
             "remaining_quantity": rem_qty,
             "remaining_amount": rem_amt,
             "price_type": contract.price_type,
@@ -591,6 +593,24 @@ class SalesContractService(AppBaseService[SalesContract]):
                     cid = int(it.contract_id)
                     contract_line_items_by_id.setdefault(cid, []).append(it)
         await self._reconcile_stale_contract_releases(tenant_id, row_list)
+        released_codes_by_contract: dict[int, list[str]] = {}
+        list_contract_ids = [int(r.id) for r in row_list if r.id is not None]
+        if list_contract_ids:
+            so_rows = await SalesOrder.filter(
+                tenant_id=tenant_id,
+                contract_id__in=list_contract_ids,
+                deleted_at__isnull=True,
+            ).exclude(
+                status__in=["已取消", "CANCELLED", "cancelled"]
+            ).values_list("contract_id", "order_code")
+            for cid, order_code in so_rows:
+                contract_id = int(cid or 0)
+                code = str(order_code or "").strip()
+                if contract_id <= 0 or not code:
+                    continue
+                bucket = released_codes_by_contract.setdefault(contract_id, [])
+                if code not in bucket:
+                    bucket.append(code)
         capability_ctx_by_contract_id: dict[int, dict[str, Any]] = {}
         if rows:
             contract_ids = [int(r.id) for r in row_list if r.id is not None]
@@ -632,6 +652,7 @@ class SalesContractService(AppBaseService[SalesContract]):
                     if include_items
                     else None,
                     capability_ctx=capability_ctx_by_contract_id.get(int(r.id or 0)),
+                    released_sales_order_codes=released_codes_by_contract.get(int(r.id or 0)),
                 )
                 for r in row_list
             ],

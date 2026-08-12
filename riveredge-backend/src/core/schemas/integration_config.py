@@ -38,11 +38,14 @@ class IntegrationConfigBase(BaseModel):
             'api',
             # 应用连接器：协作
             'feishu', 'dingtalk', 'wecom',
-            # 应用连接器：ERP
-            'sap', 'kingdee', 'yonyou', 'dsc', 'inspur', 'digiwin_e10',
-            'grasp_erp', 'super_erp', 'chanjet_tplus', 'kingdee_kis',
-            'oracle_netsuite', 'erpnext', 'odoo', 'sunlike_erp',
-            # 应用连接器：PLM/PDM
+            # 应用连接器：ERP（具体产品）
+            'kingdee_galaxy', 'kingdee_xingchen', 'kingdee_kis_cloud', 'kingdee_kis',
+            'yonyou_yonbip', 'yonyou_u8', 'yonyou_u9', 'yonyou_nc',
+            'sap_s4hana', 'sap_b1', 'oracle_netsuite', 'odoo',
+            'inspur_gs', 'inspur_ps',
+            'digiwin_t100', 'digiwin_yifei', 'digiwin_yizhu', 'digiwin_yituo', 'digiwin_e10',
+            'chanjet_tplus', 'grasp_huihuang', 'super_erp', 'erpnext', 'sunlike_erp',
+            # 应用连接器：PLM
             'teamcenter', 'windchill', 'caxa', 'sanpin_plm', 'sunlike_plm', 'sipm', 'inteplm',
             # 应用连接器：CRM
             'salesforce', 'xiaoshouyi', 'fenxiang', 'qidian', 'supra_crm',
@@ -52,6 +55,11 @@ class IntegrationConfigBase(BaseModel):
             'rootcloud', 'casicloud', 'alicloud_iot', 'huaweicloud_iot', 'thingsboard', 'jetlinks',
             # 应用连接器：WMS
             'flux_wms', 'kejian_wms', 'digiwin_wms', 'openwms',
+            # 应用连接器：存储
+            'alicloud_oss', 'tencent_cos', 'huaweicloud_obs', 'aws_s3', 'minio', 'qiniu_kodo',
+            'nas_webdav', 'nas_smb',
+            # 应用连接器：AI（OpenAI 兼容；同一 type 可多条）
+            'deepseek', 'openai', 'qwen', 'zhipu', 'moonshot', 'siliconflow',
         ]
         if v not in allowed_types:
             raise ValueError(f"集成类型必须是以下之一: {', '.join(allowed_types)}")

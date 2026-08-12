@@ -72,6 +72,10 @@ export const UniLifecycle: React.FC<UniLifecycleProps> = ({
   );
 };
 
-export { LifecycleStageBadge, resolveLifecycleBadgeColor } from './LifecycleStageBadge';
+export {
+  LifecycleStageBadge,
+  resolveLifecycleBadgeColor,
+  resolveLifecycleStageBadgeTagProps,
+} from './LifecycleStageBadge';
 export { UniLifecycleStepper } from './UniLifecycleStepper';
 export type { LifecycleResult, SubStage, SubStageStatus } from './types';

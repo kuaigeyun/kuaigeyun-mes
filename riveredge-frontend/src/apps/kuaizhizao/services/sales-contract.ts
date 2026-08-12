@@ -104,6 +104,8 @@ export interface SalesContract {
 
   released_quantity?: number;
 
+  released_sales_order_codes?: string[];
+
   released_amount?: number;
 
   remaining_quantity?: number;

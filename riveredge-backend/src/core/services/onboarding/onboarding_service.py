@@ -1007,14 +1007,20 @@ class OnboardingService:
 
             APPLICATION_TYPES = (
                 "feishu", "dingtalk", "wecom",
-                "sap", "kingdee", "yonyou", "dsc", "inspur", "digiwin_e10",
-                "grasp_erp", "super_erp", "chanjet_tplus", "kingdee_kis",
-                "oracle_netsuite", "erpnext", "odoo", "sunlike_erp",
+                "kingdee_galaxy", "kingdee_xingchen", "kingdee_kis_cloud", "kingdee_kis",
+                "yonyou_yonbip", "yonyou_u8", "yonyou_u9", "yonyou_nc",
+                "sap_s4hana", "sap_b1", "oracle_netsuite", "odoo",
+                "inspur_gs", "inspur_ps",
+                "digiwin_t100", "digiwin_yifei", "digiwin_yizhu", "digiwin_yituo", "digiwin_e10",
+                "chanjet_tplus", "grasp_huihuang", "super_erp", "erpnext", "sunlike_erp",
                 "teamcenter", "windchill", "caxa", "sanpin_plm", "sunlike_plm", "sipm", "inteplm",
                 "salesforce", "xiaoshouyi", "fenxiang", "qidian", "supra_crm",
                 "weaver", "seeyon", "landray", "cloudhub", "tongda_oa",
                 "rootcloud", "casicloud", "alicloud_iot", "huaweicloud_iot", "thingsboard", "jetlinks",
                 "flux_wms", "kejian_wms", "digiwin_wms", "openwms",
+                "alicloud_oss", "tencent_cos", "huaweicloud_obs", "aws_s3", "minio", "qiniu_kodo",
+                "nas_webdav", "nas_smb",
+                "deepseek", "openai", "qwen", "zhipu", "moonshot", "siliconflow",
             )
             from core.config.data_source_type_spec import DATA_SOURCE_TYPES
 

@@ -6,7 +6,7 @@
  * - 带「开始/结束」徽章的日期列用 `UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS`（196px）；
  * - 带徽章的日期时间列用 `UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS`（240px）；
  * - 工序步骤轴列用 `UNI_TABLE_OPERATION_STEPS_COLUMN_DEFAULTS`（360px，单元格内横滚）；
- * - 更新人/时间列用 `UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS`（168px）；
+ * - 更新人/时间列用 `UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS`（120px）；
  */
 
 import React from 'react';
@@ -67,7 +67,7 @@ export const UNI_TABLE_OPERATION_STEPS_COLUMN_DEFAULTS = {
 } as const;
 
 /** 更新人 + 更新时间堆叠列宽 */
-export const UNI_TABLE_STACKED_AUDIT_COLUMN_WIDTH = 168;
+export const UNI_TABLE_STACKED_AUDIT_COLUMN_WIDTH = 120;
 
 export const UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS = {
   width: UNI_TABLE_STACKED_AUDIT_COLUMN_WIDTH,
@@ -123,6 +123,8 @@ export interface UniTableStackedPrimaryCellProps {
   secondary: string;
   /** 次行是否显示复制按钮，默认 true */
   secondaryCopyable?: boolean;
+  /** 次行可点（如关联单据单号）；传入后次行以链接样式渲染 */
+  onSecondaryClick?: () => void;
   /** @deprecated 请用 secondaryExtra；复制按钮前的插槽（历史兼容） */
   secondaryLeadingExtra?: React.ReactNode;
   /** 次行末尾附加内容（如逾期：须用 UniTableStackedLineBadge tone="danger"，与开始/结束同尺寸） */
@@ -143,6 +145,7 @@ export function UniTableStackedPrimaryCell({
   primary,
   secondary,
   secondaryCopyable = true,
+  onSecondaryClick,
   secondaryLeadingExtra,
   secondaryExtra,
   primaryExtra,
@@ -208,12 +211,24 @@ export function UniTableStackedPrimaryCell({
         }}
       >
         {secondaryBadge ? <UniTableStackedLineBadge>{secondaryBadge}</UniTableStackedLineBadge> : null}
-        <Typography.Text
-          {...(uniformText ? {} : { type: 'secondary' as const })}
-          style={secondaryLineStyle}
-        >
-          {secondaryText}
-        </Typography.Text>
+        {onSecondaryClick && secondaryText !== '-' ? (
+          <Typography.Link
+            onClick={(e) => {
+              e.stopPropagation();
+              onSecondaryClick();
+            }}
+            style={secondaryLineStyle}
+          >
+            {secondaryText}
+          </Typography.Link>
+        ) : (
+          <Typography.Text
+            {...(uniformText ? {} : { type: 'secondary' as const })}
+            style={secondaryLineStyle}
+          >
+            {secondaryText}
+          </Typography.Text>
+        )}
         {secondaryLeadingExtra}
         {secondaryCopyable && secondaryText !== '-' ? (
           <Typography.Text

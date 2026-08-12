@@ -136,6 +136,10 @@ class SalesContractResponse(BaseSchema):
     discount_amount: Decimal = Decimal("0")
     released_quantity: Decimal
     released_amount: Decimal
+    released_sales_order_codes: List[str] = Field(
+        default_factory=list,
+        description="已从合同释放的销售订单编码（列表 hover 用）",
+    )
     remaining_quantity: Optional[Decimal] = None
     remaining_amount: Optional[Decimal] = None
     price_type: str

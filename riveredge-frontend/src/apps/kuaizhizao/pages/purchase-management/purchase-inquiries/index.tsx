@@ -33,7 +33,11 @@ import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleSt
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import {
+  alignProColumns,
+  GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
+  SALES_DOC_LIST_FIELD_RANK,
+} from '../../sales-management/shared/documentFieldAlignment';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS, DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
@@ -99,11 +103,6 @@ type PullPurchaseRequisitionCandidate = {
 };
 
 const PURCHASE_INQUIRY_RESOURCE = 'kuaizhizao:purchase-inquiry';
-/** 仅覆盖 buyer_name：询价单需靠后展示采购员；其余字段用 GLOBAL_DOC_LIST_FIELD_RANK */
-const PURCHASE_INQUIRY_LIST_FIELD_RANK = {
-  ...SALES_DOC_LIST_FIELD_RANK,
-  buyer_name: 59.4,
-};
 
 type PurchaseInquiryItemRow = PurchaseInquiryItem & {
   _rowKey: string;
@@ -920,12 +919,14 @@ const PurchaseInquiriesPage: React.FC = () => {
         return parts;
       },
     },
-  ], PURCHASE_INQUIRY_LIST_FIELD_RANK),
+  ], SALES_DOC_LIST_FIELD_RANK),
     [auditEnabled, detail, detailOpen, message, modal, openCompare, purchaseInquiryAuditColumn, purchaseInquiryLifecycleValueEnum, purchaseInquiryPerms.canDelete, purchaseInquiryPerms.canUpdate, resolveInquiryPushPercent, t],
   );
 
   const detailTableColumns: ProColumns<PurchaseInquiryItemRow>[] = useMemo(
-    () => [
+    () =>
+      alignProColumns<PurchaseInquiryItemRow>(
+        [
       {
         title: t('app.kuaizhizao.purchaseInquiry.colNameInquiryCode'),
         key: 'inquiry_code',
@@ -1022,7 +1023,9 @@ const PurchaseInquiriesPage: React.FC = () => {
           />
         ),
       },
-    ],
+        ],
+        GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
+      ),
     [purchaseInquiryLifecycleValueEnum, resolveInquiryPushPercent, t],
   );
 

@@ -122,20 +122,47 @@ export async function deleteApplicationConnection(uuid: string): Promise<void> {
   });
 }
 
+/**
+ * apiRequest 对 { success: true, data } 会解包成 data，导致调用方读不到 success。
+ * 测试接口成功时 data 含 verification_level，在此还原为完整 TestConnectionResponse。
+ */
+function normalizeTestConnectionResponse(raw: any): TestConnectionResponse {
+  if (raw && typeof raw === 'object') {
+    if (raw.success === true || raw.success === false) {
+      return raw as TestConnectionResponse;
+    }
+    if (raw.verification_level === 'live' || raw.verification_level === 'config_only') {
+      return {
+        success: true,
+        message: typeof raw.message === 'string' ? raw.message : '',
+        data: raw,
+      };
+    }
+  }
+  return {
+    success: false,
+    message: typeof raw?.message === 'string' ? raw.message : '',
+    error: typeof raw?.error === 'string' ? raw.error : undefined,
+    data: raw && typeof raw === 'object' ? raw : undefined,
+  };
+}
+
 export async function testApplicationConnection(uuid: string): Promise<TestConnectionResponse> {
-  return apiRequest<TestConnectionResponse>(`/core/application-connections/${uuid}/test`, {
+  const raw = await apiRequest<any>(`/core/application-connections/${uuid}/test`, {
     method: 'POST',
   });
+  return normalizeTestConnectionResponse(raw);
 }
 
 export async function testApplicationConnectionConfig(
   type: string,
   config: Record<string, any>
 ): Promise<TestConnectionResponse> {
-  return apiRequest<TestConnectionResponse>('/core/application-connections/test-config', {
+  const raw = await apiRequest<any>('/core/application-connections/test-config', {
     method: 'POST',
     data: { type, config },
   });
+  return normalizeTestConnectionResponse(raw);
 }
 
 export interface SyncContactsResponse {

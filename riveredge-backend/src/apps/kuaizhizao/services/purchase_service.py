@@ -481,6 +481,12 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             order_data.pop('items', None)
             order_data['items_count'] = items_count
             order_data['downstream_push_progress'] = downstream_push_progress
+            order_data['downstream_receipt_notice_codes'] = list(
+                downstream_totals.get("notice_codes") or []
+            )
+            order_data['downstream_purchase_receipt_codes'] = list(
+                downstream_totals.get("receipt_codes") or []
+            )
             order_data['received_total'] = received_total
             order_data['outstanding_total'] = outstanding_total
             order_data['receipt_progress'] = receipt_progress
@@ -497,6 +503,12 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     resp.items.append(item_resp)
             resp.items_count = items_count
             resp.downstream_push_progress = downstream_push_progress
+            resp.downstream_receipt_notice_codes = list(
+                downstream_totals.get("notice_codes") or []
+            )
+            resp.downstream_purchase_receipt_codes = list(
+                downstream_totals.get("receipt_codes") or []
+            )
             resp.received_total = received_total
             resp.outstanding_total = outstanding_total
             resp.receipt_progress = receipt_progress
@@ -585,7 +597,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
         from apps.kuaizhizao.services.warehouse_service import _PURCHASE_RECEIPT_VOID_STATUSES
 
-        notice_rows = (
+        notice_agg_rows = (
             await ReceiptNotice.filter(
                 tenant_id=tenant_id,
                 purchase_order_id__in=order_ids,
@@ -598,31 +610,56 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             )
             .values("purchase_order_id", "notice_total", "notice_count")
         )
+        notice_code_rows = await ReceiptNotice.filter(
+            tenant_id=tenant_id,
+            purchase_order_id__in=order_ids,
+            deleted_at__isnull=True,
+        ).values_list("purchase_order_id", "notice_code")
         result: Dict[int, Dict[str, Any]] = {
             int(order_id): {
                 "notice_total": Decimal("0"),
                 "notice_count": 0,
+                "notice_codes": [],
                 "receipt_total": Decimal("0"),
                 "receipt_count": 0,
+                "receipt_codes": [],
             }
             for order_id in order_ids
         }
-        for row in notice_rows:
+        for row in notice_agg_rows:
             oid = int(row["purchase_order_id"])
             bucket = result.setdefault(oid, {
                 "notice_total": Decimal("0"),
                 "notice_count": 0,
+                "notice_codes": [],
                 "receipt_total": Decimal("0"),
                 "receipt_count": 0,
+                "receipt_codes": [],
             })
             bucket["notice_total"] = Decimal(str(row.get("notice_total") or 0))
             bucket["notice_count"] = int(row.get("notice_count") or 0)
+        for oid_raw, notice_code in notice_code_rows:
+            oid = int(oid_raw or 0)
+            code = str(notice_code or "").strip()
+            if oid <= 0 or not code:
+                continue
+            bucket = result.setdefault(oid, {
+                "notice_total": Decimal("0"),
+                "notice_count": 0,
+                "notice_codes": [],
+                "receipt_total": Decimal("0"),
+                "receipt_count": 0,
+                "receipt_codes": [],
+            })
+            codes = bucket.setdefault("notice_codes", [])
+            if code not in codes:
+                codes.append(code)
 
         receipt_rows = await PurchaseReceipt.filter(
             tenant_id=tenant_id,
             purchase_order_id__in=order_ids,
             deleted_at__isnull=True,
-        ).values("id", "purchase_order_id", "status")
+        ).values("id", "purchase_order_id", "status", "receipt_code")
         receipt_order_map: Dict[int, int] = {}
         for row in receipt_rows:
             rid = int(row.get("id") or 0)
@@ -638,10 +675,17 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             bucket = result.setdefault(oid, {
                 "notice_total": Decimal("0"),
                 "notice_count": 0,
+                "notice_codes": [],
                 "receipt_total": Decimal("0"),
                 "receipt_count": 0,
+                "receipt_codes": [],
             })
             bucket["receipt_count"] = int(bucket.get("receipt_count", 0) or 0) + 1
+            code = str(row.get("receipt_code") or "").strip()
+            if code:
+                codes = bucket.setdefault("receipt_codes", [])
+                if code not in codes:
+                    codes.append(code)
 
         if receipt_order_map:
             receipt_item_rows = await PurchaseReceiptItem.filter(
@@ -659,8 +703,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 bucket = result.setdefault(oid, {
                     "notice_total": Decimal("0"),
                     "notice_count": 0,
+                    "notice_codes": [],
                     "receipt_total": Decimal("0"),
                     "receipt_count": 0,
+                    "receipt_codes": [],
                 })
                 bucket["receipt_total"] = Decimal(str(bucket.get("receipt_total") or 0)) + qty
         return result

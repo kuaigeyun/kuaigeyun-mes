@@ -117,6 +117,7 @@ import {
 } from '../../../utils/purchaseReturnLifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
@@ -1379,49 +1380,59 @@ const PurchaseReturnsPage: React.FC = () => {
       },
       { title: t('app.kuaizhizao.purchaseReturn.supplier'), dataIndex: 'supplier_name', hideInTable: true, hideInSearch: true },
       {
-        title: t('app.kuaizhizao.purchaseReturn.colPurchaseReceiptCode'),
-        dataIndex: 'purchase_receipt_code',
-        width: 132,
-        uniTableKeepWidth: true,
-        sorter: true,
-        hideInSearch: false,
-        ellipsis: true,
-        render: (_, r) => {
-          const code = String(r.purchase_receipt_code ?? '').trim();
-          if (!code) return '-';
-          return (
-            <Typography.Text copyable={{ text: code }} ellipsis>
-              {code}
-            </Typography.Text>
-          );
-        },
-      },
-      {
-        title: t('app.kuaizhizao.purchaseReturn.colPurchaseOrderCode'),
-        dataIndex: 'purchase_order_code',
-        width: 132,
-        uniTableKeepWidth: true,
-        sorter: true,
-        hideInSearch: false,
-        ellipsis: true,
-        render: (_, r) => {
-          const code = String(r.purchase_order_code ?? '').trim();
-          if (!code) return '-';
-          return (
-            <Typography.Text copyable={{ text: code }} ellipsis>
-              {code}
-            </Typography.Text>
-          );
-        },
-      },
-      {
         title: t('app.kuaizhizao.purchaseReturn.colWarehouse'),
+        key: 'purchase_return_warehouse',
         dataIndex: 'warehouse_name',
         width: 140,
         ellipsis: true,
         uniTableKeepWidth: true,
         sorter: true,
         hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseReturn.colRelatedDocs'),
+        key: 'purchase_return_related_docs',
+        dataIndex: 'purchase_order_code',
+        width: 140,
+        uniTableKeepWidth: true,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => {
+          // 与销售退货一致：来源一般为采购订单或采购入库单二选一
+          const receipt = String(r.purchase_receipt_code ?? '').trim();
+          const order = String(r.purchase_order_code ?? '').trim();
+          if (receipt && r.purchase_receipt_id) {
+            return (
+              <LinkedDocumentCode
+                documentType="purchase_receipt"
+                documentId={r.purchase_receipt_id}
+                code={receipt}
+              />
+            );
+          }
+          if (order && r.purchase_order_id) {
+            return (
+              <LinkedDocumentCode
+                documentType="purchase_order"
+                documentId={r.purchase_order_id}
+                code={order}
+              />
+            );
+          }
+          return receipt || order || '-';
+        },
+      },
+      {
+        title: t('app.kuaizhizao.purchaseReturn.colPurchaseOrderCode'),
+        dataIndex: 'purchase_order_code',
+        hideInTable: true,
+        fieldProps: { placeholder: t('app.kuaizhizao.purchaseReturn.colPurchaseOrderCode') },
+      },
+      {
+        title: t('app.kuaizhizao.purchaseReturn.colPurchaseReceiptCode'),
+        dataIndex: 'purchase_receipt_code',
+        hideInTable: true,
+        fieldProps: { placeholder: t('app.kuaizhizao.purchaseReturn.colPurchaseReceiptCode') },
       },
       {
         title: t('app.kuaizhizao.purchaseReturn.totalQuantity'),

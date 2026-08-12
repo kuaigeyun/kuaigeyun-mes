@@ -10,6 +10,7 @@ Date: 2025-12-30
 from __future__ import annotations
 
 from datetime import datetime, date
+from decimal import Decimal
 from typing import Optional, List
 from pydantic import Field
 from core.schemas.base import BaseSchema
@@ -69,6 +70,8 @@ class SalesForecastResponse(SalesForecastBase):
         None,
         description="业务态动作 capabilities（不含 RBAC，与 service 门禁一致）",
     )
+    total_quantity: Optional[Decimal] = Field(None, description="预测总数量（明细合计，列表可不带 items）")
+    items_count: Optional[int] = Field(None, description="产品种类数（明细中不重复物料数，列表可不带 items）")
     items: Optional[List[SalesForecastItemResponse]] = Field(None, description="预测明细列表")
 
     class Config:

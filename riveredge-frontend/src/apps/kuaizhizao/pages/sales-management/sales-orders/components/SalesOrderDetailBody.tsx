@@ -1,9 +1,8 @@
 /**
  * 销售订单详情主体（基本信息 / 生命周期·协作 / 明细 / 操作记录）
  *
- * 支持两种外壳：
- * - SalesOrderDetailBody：自带 DetailDrawerSection（报价单嵌套抽屉等 plainBody）
- * - Provider + *Pane：配合 DetailDrawerTemplate 插槽（销售订单列表详情）
+ * 原版外壳：SalesOrderDetailDrawer（Provider + DetailDrawerTemplate 插槽）。
+ * SalesOrderDetailBody（plainBody 分区卡片）仅保留兼容，关联入口禁止使用。
  */
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
@@ -33,6 +32,9 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../.
 import type { SalesOrder, SalesOrderItem } from '../../../../services/sales-order';
 import { listSalesOrderChangesByOrder, type SalesOrderChange } from '../../../../services/sales-order-change';
 import { useKuaizhizaoPrintModal } from '../../../../hooks/useKuaizhizaoPrintModal';
+import { UniWorkflowActions } from '../../../../../../components/uni-workflow-actions';
+import { rowActionKind } from '../../../../../../components/uni-action';
+import { isManualAuditEnabled } from '../../../../../../utils/auditMode';
 
 export interface SalesOrderDetailBodyProps {
   order: SalesOrder;
@@ -188,6 +190,38 @@ export const SalesOrderDetailProvider: React.FC<
       {children}
       {PrintModal}
     </SalesOrderDetailContext.Provider>
+  );
+};
+
+/** 关联/只读场景：打印 + 工作流（须在 Provider 内） */
+export const SalesOrderDetailReadonlyExtra: React.FC<{ onWorkflowSuccess?: () => void }> = ({
+  onWorkflowSuccess,
+}) => {
+  const { t } = useTranslation();
+  const { order, handlePrintSalesOrder } = useSalesOrderDetailContext();
+  return (
+    <Space size="small">
+      <UniWorkflowActions
+        {...rowActionKind('skip')}
+        record={order}
+        entityName={t('app.kuaizhizao.salesOrder.entityName')}
+        entityType="sales_order"
+        unifiedAudit
+        resourcePrefix="kuaizhizao:sales-order"
+        theme="default"
+        onSuccess={() => onWorkflowSuccess?.()}
+        confirmMessages={{
+          submit: isManualAuditEnabled(order.audit)
+            ? t('app.kuaizhizao.salesOrder.submitConfirmAudit')
+            : t('app.kuaizhizao.salesOrder.submitConfirmAuto'),
+        }}
+      />
+      {order.id != null ? (
+        <Button icon={<PrinterOutlined />} onClick={() => void handlePrintSalesOrder()}>
+          {t('components.uniAction.print')}
+        </Button>
+      ) : null}
+    </Space>
   );
 };
 

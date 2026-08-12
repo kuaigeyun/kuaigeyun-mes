@@ -91,6 +91,12 @@
   white-space: nowrap;
 }
 
+/* 表头标题用主题正文色（antd CSS 变量为 kebab-case；禁止 camelCase 回落成固定黑色） */
+.uni-table-container .ant-table-thead > tr > th,
+.uni-table-container .uni-table-pro-table .ant-table-thead .ant-table-column-title {
+  color: var(--ant-color-text);
+}
+
 /*
  * 结构不变式：table-layout:fixed 下单元格必须自己包住 nowrap 内容。
  * 否则内容会溢出到滚动区，把 .ant-table-body/.ant-table-content 的 scrollWidth

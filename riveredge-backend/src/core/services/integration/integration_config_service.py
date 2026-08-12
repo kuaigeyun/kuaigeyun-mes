@@ -6,7 +6,11 @@
 """
 
 import asyncio
+import hashlib
+import hmac
+import time
 from typing import Optional, List, Dict, Any, Tuple  # noqa: F401
+from urllib.parse import urlparse
 from uuid import UUID
 from tortoise.exceptions import IntegrityError
 import httpx  # 仅用于 BasicAuth 等类型
@@ -22,6 +26,16 @@ from core.config.data_source_type_spec import (
 
 # 系统默认数据源代码（密码从 ENV 读取，不可编辑）
 SYSTEM_DEFAULT_CODE = "system_default"
+
+# 对象存储连接器（配置用 endpoint/bucket/region，非 base_url）
+OBJECT_STORAGE_TYPES = (
+    "alicloud_oss",
+    "tencent_cos",
+    "huaweicloud_obs",
+    "aws_s3",
+    "minio",
+    "qiniu_kodo",
+)
 
 def _config_only_user_message(integration_type: str) -> str:
     """对仅配置校验的类型返回明确文案，避免与真实建连成功混淆。"""
@@ -45,14 +59,32 @@ def _get_system_default_pg_config() -> Dict[str, Any]:
     }
 
 
+_SENSITIVE_CONFIG_KEYS = (
+    "password",
+    "app_secret",
+    "client_secret",
+    "secret",
+    "corp_secret",
+    "api_key",
+    "api_secret",
+    "access_key_secret",
+    "secret_access_key",
+    "secret_key",
+)
+
+
 def _mask_config_password(config: Dict[str, Any]) -> Dict[str, Any]:
     """脱敏：将 config 中的敏感字段替换为占位符，避免 API 暴露"""
     if not config:
         return {}
     out = dict(config)
-    for key in ("password", "app_secret", "client_secret", "secret"):
+    api_key = out.get("api_key")
+    api_key_configured = bool(isinstance(api_key, str) and api_key.strip() and api_key.strip() != "****")
+    for key in _SENSITIVE_CONFIG_KEYS:
         if key in out and out[key]:
             out[key] = "****"
+    if "api_key" in config or api_key_configured:
+        out["api_key_configured"] = api_key_configured
     return out
 
 
@@ -267,9 +299,11 @@ class IntegrationConfigService:
             old_cfg = dict(integration.config or {})
             new_cfg = dict(update_data["config"])
             merged = {**old_cfg, **new_cfg}
-            for sk in ("password", "app_secret", "client_secret", "secret"):
-                if merged.get(sk) == "****" and old_cfg.get(sk) not in (None, "", "****"):
+            for sk in _SENSITIVE_CONFIG_KEYS:
+                new_val = merged.get(sk)
+                if new_val in (None, "", "****") and old_cfg.get(sk) not in (None, "", "****"):
                     merged[sk] = old_cfg[sk]
+            merged.pop("api_key_configured", None)
             update_data["config"] = merged
         
         for key, value in update_data.items():
@@ -395,16 +429,26 @@ class IntegrationConfigService:
             elif integration.type == "wecom":
                 result = await IntegrationConfigService._test_wecom_connection(integration)
             elif integration.type in (
-                "sap", "kingdee", "yonyou", "dsc", "inspur", "digiwin_e10",
-                "grasp_erp", "super_erp", "chanjet_tplus", "kingdee_kis",
-                "oracle_netsuite", "erpnext", "odoo", "sunlike_erp",
+                "kingdee_galaxy", "kingdee_xingchen", "kingdee_kis_cloud", "kingdee_kis",
+                "yonyou_yonbip", "yonyou_u8", "yonyou_u9", "yonyou_nc",
+                "sap_s4hana", "sap_b1", "oracle_netsuite", "odoo",
+                "inspur_gs", "inspur_ps",
+                "digiwin_t100", "digiwin_yifei", "digiwin_yizhu", "digiwin_yituo", "digiwin_e10",
+                "chanjet_tplus", "grasp_huihuang", "super_erp", "erpnext", "sunlike_erp",
                 "teamcenter", "windchill", "caxa", "sanpin_plm", "sunlike_plm", "sipm", "inteplm",
                 "salesforce", "xiaoshouyi", "fenxiang", "qidian", "supra_crm",
                 "weaver", "seeyon", "landray", "cloudhub", "tongda_oa",
                 "rootcloud", "casicloud", "alicloud_iot", "huaweicloud_iot", "thingsboard", "jetlinks",
                 "flux_wms", "kejian_wms", "digiwin_wms", "openwms",
+                "nas_webdav", "nas_smb",
             ):
                 result = await IntegrationConfigService._test_rest_api_connection(integration)
+            elif integration.type in OBJECT_STORAGE_TYPES:
+                result = await IntegrationConfigService._test_object_storage_connection(integration)
+            elif integration.type in (
+                "deepseek", "openai", "qwen", "zhipu", "moonshot", "siliconflow",
+            ):
+                result = await IntegrationConfigService._test_llm_connection(integration)
             else:
                 raise ValueError(f"不支持的集成类型: {integration.type}")
 
@@ -607,16 +651,26 @@ class IntegrationConfigService:
             elif temp.type == "wecom":
                 result = await IntegrationConfigService._test_wecom_connection(temp)
             elif temp.type in (
-                "sap", "kingdee", "yonyou", "dsc", "inspur", "digiwin_e10",
-                "grasp_erp", "super_erp", "chanjet_tplus", "kingdee_kis",
-                "oracle_netsuite", "erpnext", "odoo", "sunlike_erp",
+                "kingdee_galaxy", "kingdee_xingchen", "kingdee_kis_cloud", "kingdee_kis",
+                "yonyou_yonbip", "yonyou_u8", "yonyou_u9", "yonyou_nc",
+                "sap_s4hana", "sap_b1", "oracle_netsuite", "odoo",
+                "inspur_gs", "inspur_ps",
+                "digiwin_t100", "digiwin_yifei", "digiwin_yizhu", "digiwin_yituo", "digiwin_e10",
+                "chanjet_tplus", "grasp_huihuang", "super_erp", "erpnext", "sunlike_erp",
                 "teamcenter", "windchill", "caxa", "sanpin_plm", "sunlike_plm", "sipm", "inteplm",
                 "salesforce", "xiaoshouyi", "fenxiang", "qidian", "supra_crm",
                 "weaver", "seeyon", "landray", "cloudhub", "tongda_oa",
                 "rootcloud", "casicloud", "alicloud_iot", "huaweicloud_iot", "thingsboard", "jetlinks",
                 "flux_wms", "kejian_wms", "digiwin_wms", "openwms",
+                "nas_webdav", "nas_smb",
             ):
                 result = await IntegrationConfigService._test_rest_api_connection(temp)
+            elif temp.type in OBJECT_STORAGE_TYPES:
+                result = await IntegrationConfigService._test_object_storage_connection(temp)
+            elif temp.type in (
+                "deepseek", "openai", "qwen", "zhipu", "moonshot", "siliconflow",
+            ):
+                result = await IntegrationConfigService._test_llm_connection(temp)
             else:
                 raise ValueError(f"不支持的集成类型: {temp.type}")
             if isinstance(result, dict) and result.get("success") is False:
@@ -1466,6 +1520,30 @@ class IntegrationConfigService:
     # ── 应用连接器测试（协作、ERP、PLM、CRM）────────────────────────────────────
 
     @staticmethod
+    async def _test_llm_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """测试 OpenAI 兼容 LLM：GET {base_url}/models。"""
+        config = integration.get_config()
+        base_url = str(config.get("base_url") or "").strip().rstrip("/")
+        api_key = config.get("api_key")
+        model = str(config.get("model") or "").strip()
+        if not base_url:
+            raise ValueError("请填写 Base URL")
+        if not isinstance(api_key, str) or not api_key.strip() or api_key.strip() == "****":
+            raise ValueError("请填写 API Key")
+        if not model:
+            raise ValueError("请填写模型名")
+        url = f"{base_url}/models"
+        resp = await get_http_client().get(
+            url,
+            headers={"Authorization": f"Bearer {api_key.strip()}"},
+            timeout=15.0,
+        )
+        if resp.status_code >= 400:
+            detail = (resp.text or "")[:200]
+            raise ValueError(f"HTTP {resp.status_code}: {detail or '鉴权或地址失败'}")
+        return {"message": f"{integration.type} 连接成功", "model": model, "probe": "models"}
+
+    @staticmethod
     async def _test_feishu_connection(integration: IntegrationConfig) -> Dict[str, Any]:
         """测试飞书连接（调用 app_access_token 接口）"""
         config = integration.get_config()
@@ -1550,3 +1628,150 @@ class IntegrationConfigService:
             except Exception:
                 continue
         raise ValueError("无法连接到配置的 API 地址，请检查 base_url 和认证信息")
+
+    @staticmethod
+    def _build_object_storage_probe_url(storage_type: str, config: Dict[str, Any]) -> str:
+        """根据 endpoint / region / bucket 构造探测 URL。"""
+        endpoint = str(config.get("endpoint") or "").strip().rstrip("/")
+        bucket = str(config.get("bucket") or "").strip()
+        region = str(config.get("region") or "").strip()
+
+        if storage_type == "tencent_cos":
+            if not region:
+                raise ValueError("请填写 Region（如 ap-guangzhou）")
+            if not bucket:
+                raise ValueError("请填写 Bucket")
+            if endpoint:
+                if endpoint.startswith("http://") or endpoint.startswith("https://"):
+                    # 若已是桶域名则直接用；否则拼成桶域名
+                    host = urlparse(endpoint).netloc or endpoint.replace("https://", "").replace("http://", "")
+                    if bucket and host.startswith(f"{bucket}."):
+                        return f"https://{host}"
+                    if "myqcloud.com" in host and not host.startswith(f"{bucket}."):
+                        # cos.ap-xxx.myqcloud.com → bucket.cos.ap-xxx.myqcloud.com
+                        return f"https://{bucket}.{host}"
+                    return endpoint if endpoint.startswith("http") else f"https://{endpoint}"
+                return f"https://{endpoint}"
+            return f"https://{bucket}.cos.{region}.myqcloud.com"
+
+        if endpoint:
+            if not endpoint.startswith("http://") and not endpoint.startswith("https://"):
+                endpoint = f"https://{endpoint}"
+            return endpoint
+        if storage_type == "alicloud_oss" and bucket and region:
+            return f"https://{bucket}.oss-{region}.aliyuncs.com"
+        if storage_type == "huaweicloud_obs" and bucket and region:
+            return f"https://{bucket}.obs.{region}.myhuaweicloud.com"
+        if storage_type == "aws_s3" and bucket and region:
+            return f"https://{bucket}.s3.{region}.amazonaws.com"
+        raise ValueError("请填写 Endpoint（或 Bucket + Region）")
+
+    @staticmethod
+    def _tencent_cos_authorization(
+        secret_id: str,
+        secret_key: str,
+        method: str,
+        host: str,
+        path: str = "/",
+    ) -> str:
+        """腾讯云 COS 请求签名（q-sign-algorithm=sha1）。"""
+        now = int(time.time())
+        key_time = f"{now};{now + 600}"
+        sign_key = hmac.new(
+            secret_key.encode("utf-8"),
+            key_time.encode("utf-8"),
+            hashlib.sha1,
+        ).hexdigest()
+        http_string = f"{method.lower()}\n{path}\n\nhost={host.lower()}\n"
+        sha1_http = hashlib.sha1(http_string.encode("utf-8")).hexdigest()
+        string_to_sign = f"sha1\n{key_time}\n{sha1_http}\n"
+        signature = hmac.new(
+            sign_key.encode("utf-8"),
+            string_to_sign.encode("utf-8"),
+            hashlib.sha1,
+        ).hexdigest()
+        return (
+            f"q-sign-algorithm=sha1&q-ak={secret_id}"
+            f"&q-sign-time={key_time}&q-key-time={key_time}"
+            f"&q-header-list=host&q-url-param-list=&q-signature={signature}"
+        )
+
+    @staticmethod
+    async def _test_object_storage_connection(integration: Any) -> Dict[str, Any]:
+        """对象存储连接测试：校验必填项，并对腾讯云 COS 做签名 HEAD 桶探测。"""
+        storage_type = getattr(integration, "type", "") or ""
+        config = integration.get_config() if hasattr(integration, "get_config") else (integration.config or {})
+        bucket = str(config.get("bucket") or "").strip()
+        if not bucket:
+            raise ValueError("请填写 Bucket")
+
+        if storage_type == "tencent_cos":
+            secret_id = str(config.get("secret_id") or "").strip()
+            secret_key = str(config.get("secret_key") or "").strip()
+            if not secret_id or not secret_key or secret_key == "****":
+                raise ValueError("请填写 SecretId 与 SecretKey")
+            probe_url = IntegrationConfigService._build_object_storage_probe_url(storage_type, config)
+            host = urlparse(probe_url).netloc
+            if not host:
+                raise ValueError("无法解析 Endpoint / Bucket 域名")
+            auth = IntegrationConfigService._tencent_cos_authorization(
+                secret_id, secret_key, "HEAD", host, "/"
+            )
+            resp = await get_http_client().request(
+                "HEAD",
+                probe_url if probe_url.endswith("/") else f"{probe_url}/",
+                headers={"Host": host, "Authorization": auth},
+                timeout=15.0,
+            )
+            # 200/204：桶存在且有权限；403：鉴权或权限问题；404：桶不存在/地域错误
+            if resp.status_code in (200, 204):
+                return {
+                    "message": "腾讯云 COS 连接成功",
+                    "status_code": resp.status_code,
+                    "endpoint": probe_url,
+                    "bucket": bucket,
+                }
+            if resp.status_code == 404:
+                raise ValueError("桶不存在或 Region 不正确，请核对 Bucket 与 Region")
+            if resp.status_code in (401, 403):
+                raise ValueError("鉴权失败，请核对 SecretId / SecretKey 及桶权限")
+            detail = (resp.text or "")[:200]
+            raise ValueError(f"COS 探测失败 HTTP {resp.status_code}: {detail or '未知错误'}")
+
+        # 其它对象存储：校验密钥 + 探测 endpoint 可达（不伪造成功）
+        if storage_type == "alicloud_oss":
+            if not str(config.get("access_key_id") or "").strip():
+                raise ValueError("请填写 Access Key ID")
+            secret = str(config.get("access_key_secret") or "").strip()
+            if not secret or secret == "****":
+                raise ValueError("请填写 Access Key Secret")
+        elif storage_type in ("aws_s3", "huaweicloud_obs"):
+            if not str(config.get("access_key_id") or "").strip():
+                raise ValueError("请填写 Access Key ID")
+            secret = str(config.get("secret_access_key") or "").strip()
+            if not secret or secret == "****":
+                raise ValueError("请填写 Secret Key")
+        elif storage_type in ("minio", "qiniu_kodo"):
+            if not str(config.get("access_key") or "").strip():
+                raise ValueError("请填写 Access Key")
+            secret = str(config.get("secret_key") or "").strip()
+            if not secret or secret == "****":
+                raise ValueError("请填写 Secret Key")
+
+        probe_url = IntegrationConfigService._build_object_storage_probe_url(storage_type, config)
+        try:
+            resp = await get_http_client().request("HEAD", probe_url, timeout=15.0)
+        except Exception as e:
+            raise ValueError(f"无法访问存储 Endpoint：{e}") from e
+        if resp.status_code >= 500:
+            raise ValueError(f"存储服务异常 HTTP {resp.status_code}")
+        # 未签名时 403 常见，表示域名可达；200 亦成功
+        if resp.status_code in (200, 204, 301, 302, 403):
+            return {
+                "message": f"{storage_type} Endpoint 可达（已校验必填项）",
+                "status_code": resp.status_code,
+                "endpoint": probe_url,
+                "bucket": bucket,
+                "verification_level": "endpoint_reachable",
+            }
+        raise ValueError(f"存储探测失败 HTTP {resp.status_code}，请检查 Endpoint / Bucket / Region")

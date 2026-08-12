@@ -25,8 +25,13 @@ import {
   mapMaterialGroupTree,
   type MaterialGroupTreeNode,
 } from './utils';
-import { getMaterialSourceTypeLabel } from '../../apps/master-data/utils/materialSourceType';
+import {
+  getMaterialSourceTypeLabel,
+  getMaterialSourceTypeTagColor,
+} from '../../apps/master-data/utils/materialSourceType';
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../utils/modalEventIsolation';
+import { MarkerTag } from '../../constants/statusBadges';
+import './index.less';
 
 export type { UniMaterialBatchPickerProps } from './types';
 
@@ -295,13 +300,21 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
       },
       {
         title: t('app.kuaizhizao.salesOrder.materialPickerHasBom'),
-        width: 88,
+        width: 104,
         align: 'center',
         render: (_, r) => {
           const id = r.id;
           if (indicatorsLoading || !(id in bomMap)) {
             return (
-              <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 12 }}>...</span>
+              <span
+                style={{
+                  color: 'var(--ant-color-text-tertiary)',
+                  fontSize: 12,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                —
+              </span>
             );
           }
           const hasBom = bomMap[id];
@@ -326,13 +339,21 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
       },
       {
         title: t('app.kuaizhizao.salesOrder.materialPickerAvailableInventory'),
-        width: 96,
+        width: 110,
         align: 'right',
         render: (_, r) => {
           const id = r.id;
           if (indicatorsLoading || !(id in inventoryMap)) {
             return (
-              <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 12 }}>...</span>
+              <span
+                style={{
+                  color: 'var(--ant-color-text-tertiary)',
+                  fontSize: 12,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                —
+              </span>
             );
           }
           const qty = inventoryMap[id];
@@ -342,11 +363,16 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
       {
         title: t('app.kuaizhizao.salesOrder.materialPickerSourceType'),
         width: 100,
-        ellipsis: true,
         render: (_, r) => {
           const rec = r as Record<string, unknown>;
           const val = (getMaterialField(rec, 'sourceType') ?? rec.source_type) as string;
-          return getMaterialSourceTypeLabel(val, t);
+          const label = getMaterialSourceTypeLabel(val, t);
+          if (!val || label === '-') return '-';
+          return (
+            <MarkerTag color={getMaterialSourceTypeTagColor(val)} style={{ marginInlineEnd: 0 }}>
+              {label}
+            </MarkerTag>
+          );
         },
       },
     ],
@@ -375,9 +401,9 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
       style={{
         padding: 12,
         marginBottom: 12,
-        background: token.colorFillAlter,
+        background: token.colorPrimaryBg,
         borderRadius: token.borderRadius,
-        border: `1px solid ${token.colorBorderSecondary}`,
+        border: `1px solid ${token.colorPrimaryBorder}`,
       }}
     >
       <Flex gap={8} align="center" style={{ width: '100%' }}>
@@ -454,6 +480,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
     >
       {filterBar}
       <Table<Material>
+        className="uni-material-batch-picker-table"
         size="small"
         rowKey="id"
         loading={loading}
@@ -469,9 +496,21 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
           pageSize: PAGE_SIZE,
           total: totalHint,
           showSizeChanger: false,
+          showLessItems: true,
           onChange: (p) => setPage(p),
+          // mini 分页格宽 24px，antd 默认三个 • 会折行；改用单字符省略号
+          itemRender: (_page, type, originalElement) => {
+            if (type === 'jump-prev' || type === 'jump-next') {
+              return (
+                <a className="ant-pagination-item-link" style={{ whiteSpace: 'nowrap' }}>
+                  …
+                </a>
+              );
+            }
+            return originalElement;
+          },
           showTotal: (tot) => (
-            <Flex gap={16} align="center">
+            <Flex gap={16} align="center" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
               <span style={{ color: token.colorTextSecondary, fontSize: 13 }}>
                 {t('app.kuaizhizao.salesOrder.materialPickerSelectedCount', { count: selectedCount })}
               </span>
@@ -481,7 +520,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
             </Flex>
           ),
         }}
-        scroll={{ x: 900, y: 360 }}
+        scroll={{ x: 960, y: 360 }}
       />
     </Modal>
   );

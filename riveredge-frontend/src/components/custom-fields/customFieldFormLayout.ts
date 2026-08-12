@@ -18,6 +18,8 @@ export type CustomFieldGridColumns = 1 | 2 | 3 | 4;
 export const CUSTOM_FIELD_FORM_CLASS_NAMES = {
   /** 单个字段 Col */
   fieldCol: 'custom-fields-form-field-col',
+  /** 独立一行时的外层 Row（与 document-form-untitled-groups 间隙对齐） */
+  sectionRow: 'custom-fields-form-section-row',
   /** JSON 字段容器 */
   jsonItem: 'custom-fields-form-json-item',
   /** 标题旁「自定义字段」标签 */

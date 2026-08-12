@@ -5,6 +5,9 @@
  */
 
 import { apiRequest } from './api';
+import { queryClient } from '../queryClient';
+import { buildSiteSettingQueryKey, SITE_SETTING_QUERY_ROOT } from '../config/sessionQueries';
+import { getTenantId } from '../utils/auth';
 
 /**
  * 站点设置信息接口
@@ -106,10 +109,15 @@ export async function getSiteSetting(): Promise<SiteSetting> {
  * @returns 更新后的站点设置信息
  */
 export async function updateSiteSetting(data: UpdateSiteSettingData): Promise<SiteSetting> {
-  return apiRequest<SiteSetting>('/core/site-settings', {
+  const result = await apiRequest<SiteSetting>('/core/site-settings', {
     method: 'PUT',
     data,
   });
+  // 避免随后 getSiteSetting / react-query 读到保存前的缓存
+  siteSettingInFlight = null;
+  queryClient.setQueryData(buildSiteSettingQueryKey(getTenantId()), result);
+  void queryClient.invalidateQueries({ queryKey: [SITE_SETTING_QUERY_ROOT] });
+  return result;
 }
 
 export async function getSubtenantCapability(): Promise<SubtenantCapability> {

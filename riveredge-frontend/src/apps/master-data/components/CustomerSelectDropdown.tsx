@@ -320,6 +320,7 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
       <CustomerFormModal
         open={formOpen}
         zIndex={modalZIndex}
+        hostResource={hostResource}
         onClose={() => {
           setFormOpen(false);
           setEditUuid(null);

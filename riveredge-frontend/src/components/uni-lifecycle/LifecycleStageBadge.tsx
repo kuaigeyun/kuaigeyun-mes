@@ -5,14 +5,20 @@
 
 import React from 'react';
 import { Tag, Tooltip } from 'antd';
+import type { TagProps } from 'antd';
 import { CheckCircle, CircleMinus, PlayCircle } from 'lucide-react';
 import {
   RE_STATUS_BADGE_DRAFT,
   resolveStatusTagDisplayProps,
 } from '../../constants/statusBadges';
+import { getDocumentLifecycleStageTagProps } from '../../utils/documentLifecycleStatusTag';
 import type { LifecycleResult, SubStage } from './types';
 import './UniLifecycleStepper.less';
 
+/**
+ * 按整体进度启发式取色（仅未知阶段名回落）。
+ * 已知阶段名须走 `getDocumentLifecycleStageTagProps`，否则「已通过」等中段会被 percent=0 刷成草稿灰。
+ */
 export function resolveLifecycleBadgeColor(lifecycle: Pick<LifecycleResult, 'status' | 'percent'>): string {
   const status = lifecycle.status;
   if (status === 'success') return 'success';
@@ -22,6 +28,25 @@ export function resolveLifecycleBadgeColor(lifecycle: Pick<LifecycleResult, 'sta
   if (percent >= 100) return 'success';
   if (percent <= 0) return RE_STATUS_BADGE_DRAFT;
   return 'processing';
+}
+
+/** 列表执行状态徽章配色：阶段名语义优先，未知名再回落 status/percent */
+export function resolveLifecycleStageBadgeTagProps(
+  stageName: string,
+  lifecycle?: Pick<LifecycleResult, 'status' | 'percent'>,
+): Pick<TagProps, 'color' | 'style' | 'className' | 'variant'> {
+  const stageProps = getDocumentLifecycleStageTagProps(stageName);
+  // 登记阶段带 color 或草稿 className；未登记仅有中性 style
+  if (stageProps.color || stageProps.className) {
+    return stageProps;
+  }
+  return resolveStatusTagDisplayProps({
+    text: stageName,
+    color: resolveLifecycleBadgeColor({
+      status: lifecycle?.status,
+      percent: lifecycle?.percent ?? 0,
+    }),
+  });
 }
 
 function SubStageIcon({ status }: { status: SubStage['status'] }) {
@@ -94,9 +119,8 @@ export function LifecycleStageBadge({
     return <span>—</span>;
   }
 
-  const color = resolveLifecycleBadgeColor({ status, percent });
   const badge = (
-    <Tag {...resolveStatusTagDisplayProps({ text: stageName, color })}>{stageName}</Tag>
+    <Tag {...resolveLifecycleStageBadgeTagProps(stageName, { status, percent })}>{stageName}</Tag>
   );
 
   const tipEligible =

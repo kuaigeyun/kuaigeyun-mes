@@ -219,6 +219,7 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
                   disabled={selectDisabled}
                   allowClear={field.allowClear ?? true}
                   mode={field.mode}
+                  showSearch
                   quickCreate={dropdownEnhance.quickCreate}
                   quickCreates={dropdownEnhance.quickCreates}
                   advancedSearch={dropdownEnhance.advancedSearch}

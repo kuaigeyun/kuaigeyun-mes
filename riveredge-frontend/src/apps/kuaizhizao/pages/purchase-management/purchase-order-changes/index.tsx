@@ -10,6 +10,7 @@ import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormTextArea } fro
 import { App, Alert, Button, Descriptions, Empty, Form, Input, Modal, Space, Spin, Table, Tag, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import {
@@ -416,6 +417,13 @@ const PurchaseOrderChangesPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.purchaseOrderChange.colSourceOrderCode'),
         dataIndex: 'source_order_code',
+        render: (_, record) => (
+          <LinkedDocumentCode
+            documentType="purchase_order"
+            documentId={record.source_order_id}
+            code={record.source_order_code}
+          />
+        ),
       },
       {
         title: t('app.kuaizhizao.purchaseOrderChange.colVersion'),
@@ -520,6 +528,13 @@ const PurchaseOrderChangesPage: React.FC = () => {
         uniTableKeepWidth: true,
         sorter: true,
         hideInSearch: false,
+        render: (_, record) => (
+          <LinkedDocumentCode
+            documentType="purchase_order"
+            documentId={record.source_order_id}
+            code={record.source_order_code}
+          />
+        ),
       },
       {
         title: t('app.kuaizhizao.purchaseOrderChange.colChangeReason'),

@@ -44,7 +44,7 @@ class File(BaseModel):
     
     name = fields.CharField(max_length=255, description="文件名称（存储时使用的文件名，通常是UUID）")
     original_name = fields.CharField(max_length=255, description="原始文件名（用户上传时的文件名）")
-    file_path = fields.CharField(max_length=500, description="文件存储路径")
+    file_path = fields.CharField(max_length=500, description="文件存储路径（本地相对路径或对象 Key）")
     file_size = fields.BigIntField(description="文件大小（字节）")
     file_type = fields.CharField(max_length=100, null=True, description="文件类型（MIME类型）")
     file_extension = fields.CharField(max_length=20, null=True, description="文件扩展名")
@@ -53,6 +53,17 @@ class File(BaseModel):
     category = fields.CharField(max_length=50, null=True, description="文件分类（可选）")
     tags = fields.JSONField(null=True, description="文件标签（JSON数组，可选）")
     description = fields.TextField(null=True, description="文件描述（可选）")
+
+    storage_backend = fields.CharField(
+        max_length=32,
+        default="local",
+        description="存储后端：local / tencent_cos 等",
+    )
+    storage_connection_uuid = fields.CharField(
+        max_length=36,
+        null=True,
+        description="对象存储应用连接 UUID（local 时可空）",
+    )
     
     is_active = fields.BooleanField(default=True, description="是否启用")
     upload_status = fields.CharField(max_length=20, default="completed", description="上传状态（uploading、completed、failed）")

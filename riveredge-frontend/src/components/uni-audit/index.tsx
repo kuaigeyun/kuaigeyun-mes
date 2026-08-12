@@ -53,7 +53,7 @@ function inferAuditNodeKey(apiPrefix?: string): string {
   const prefix = (apiPrefix ?? '').toLowerCase();
   if (prefix.includes('/sales/contracts')) return 'sales_contract';
   if (prefix.includes('/sales/orders')) return 'sales_order';
-  if (prefix.includes('/sales/forecasts')) return 'sales_forecast';
+  if (prefix.includes('/sales/forecasts') || prefix.includes('/sales-forecasts')) return 'sales_forecast';
   if (prefix.includes('/purchase/orders')) return 'purchase_order';
   if (prefix.includes('/purchase/requisitions')) return 'purchase_request';
   if (prefix.includes('/purchase/inquiries')) return 'purchase_inquiry';
@@ -75,7 +75,12 @@ function inferResourcePrefix(apiPrefix?: string): string {
   if (!prefix) return '';
   if (prefix.includes('/apps/kuaizhizao/sales/contracts')) return 'kuaizhizao:sales-contract';
   if (prefix.includes('/apps/kuaizhizao/sales/orders')) return 'kuaizhizao:sales-order';
-  if (prefix.includes('/apps/kuaizhizao/sales/forecasts')) return 'kuaizhizao:sales-forecast';
+  if (
+    prefix.includes('/apps/kuaizhizao/sales/forecasts')
+    || prefix.includes('/apps/kuaizhizao/sales-forecasts')
+  ) {
+    return 'kuaizhizao:sales-forecast';
+  }
   if (prefix.includes('/apps/kuaizhizao/sales/order-changes')) return 'kuaizhizao:sales-order-change';
   if (prefix.includes('/apps/kuaizhizao/purchase/orders')) return 'kuaizhizao:purchase-order';
   if (prefix.includes('/apps/kuaizhizao/purchase/requisitions')) return 'kuaizhizao:purchase-request';
@@ -523,11 +528,26 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
 
   if (inlineButtons.length === 0) return null;
 
+  /**
+   * 行内（link）单按钮直接直出，避免再包 Space 与 UniTable
+   * `.uni-table-operation-actions` 实测抢布局。多按钮时才用 Space 保间距。
+   * 工具栏（default）始终 Space。
+   */
+  const actionNodes = isToolbarTheme ? (
+    <Space size={8} align="center">
+      {inlineButtons}
+    </Space>
+  ) : inlineButtons.length === 1 ? (
+    inlineButtons[0]
+  ) : (
+    <Space size={4} align="center">
+      {inlineButtons}
+    </Space>
+  );
+
   return (
     <>
-      <Space {...rowActionKind('skip')} size={isToolbarTheme ? 8 : 4} align="center">
-        {inlineButtons}
-      </Space>
+      {actionNodes}
 
       {auditHubOpen && (
         <UniAuditModal
@@ -563,6 +583,8 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     </>
   );
 };
+
+UniAuditActions.displayName = 'UniWorkflowActions';
 
 export type { WorkflowStatus, UniAuditAction, UniAuditActionsMap, UniAuditEndpointMap } from './types';
 export default UniAuditActions;

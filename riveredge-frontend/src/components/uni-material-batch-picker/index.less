@@ -1,0 +1,53 @@
+/* 分页 jump-prev/next 用三个 • 作省略号，被挤窄时会按字折行并撑高整行 */
+.uni-material-batch-picker-table {
+  /* 无数据时列宽仍可能被压缩，表头禁止折行 */
+  .ant-table-thead > tr > th {
+    white-space: nowrap;
+  }
+
+  .ant-table-pagination.ant-pagination {
+    flex-wrap: nowrap;
+  }
+
+  .ant-pagination-total-text {
+    flex-shrink: 0;
+  }
+
+  .ant-pagination-jump-prev,
+  .ant-pagination-jump-next {
+    flex: none;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    overflow: hidden;
+    line-height: 32px;
+
+    .ant-pagination-item-container {
+      width: 100%;
+      height: 100%;
+    }
+
+    .ant-pagination-item-ellipsis {
+      display: block;
+      overflow: hidden;
+      white-space: nowrap;
+      line-height: 32px;
+    }
+  }
+
+  &.ant-table-wrapper .ant-table-pagination.ant-pagination-mini {
+    .ant-pagination-jump-prev,
+    .ant-pagination-jump-next {
+      width: 24px;
+      min-width: 24px;
+      height: 24px;
+      line-height: 24px;
+
+      .ant-pagination-item-ellipsis {
+        line-height: 24px;
+      }
+    }
+  }
+}

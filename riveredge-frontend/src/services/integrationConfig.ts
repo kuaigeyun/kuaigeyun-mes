@@ -230,12 +230,23 @@ const TYPE_CATEGORIES: Record<string, string[]> = {
   数据库: ['postgresql', 'mysql', 'mongodb', 'oracle', 'sqlserver', 'redis', 'clickhouse', 'influxdb', 'doris', 'starrocks', 'elasticsearch'],
   API: ['api'],
   协作: ['feishu', 'dingtalk', 'wecom'],
-  ERP: ['sap', 'kingdee', 'yonyou', 'dsc', 'inspur', 'digiwin_e10', 'grasp_erp', 'super_erp', 'chanjet_tplus', 'kingdee_kis', 'oracle_netsuite', 'erpnext', 'odoo', 'sunlike_erp'],
-  'PLM/PDM': ['teamcenter', 'windchill', 'caxa', 'sanpin_plm', 'sunlike_plm', 'sipm', 'inteplm'],
+  ERP: [
+    'kingdee_galaxy', 'kingdee_xingchen', 'kingdee_kis_cloud', 'kingdee_kis',
+    'yonyou_yonbip', 'yonyou_u8', 'yonyou_u9', 'yonyou_nc',
+    'sap_s4hana', 'sap_b1', 'oracle_netsuite', 'odoo',
+    'inspur_gs', 'inspur_ps',
+    'digiwin_t100', 'digiwin_yifei', 'digiwin_yizhu', 'digiwin_yituo', 'digiwin_e10',
+    'chanjet_tplus', 'grasp_huihuang', 'super_erp', 'erpnext', 'sunlike_erp',
+  ],
+  PLM: ['teamcenter', 'windchill', 'caxa', 'sanpin_plm', 'sunlike_plm', 'sipm', 'inteplm'],
   CRM: ['salesforce', 'xiaoshouyi', 'fenxiang', 'qidian', 'supra_crm'],
   OA: ['weaver', 'seeyon', 'landray', 'cloudhub', 'tongda_oa', 'feishu', 'dingtalk', 'wecom'],
   IoT: ['rootcloud', 'casicloud', 'alicloud_iot', 'huaweicloud_iot', 'thingsboard', 'jetlinks'],
   WMS: ['flux_wms', 'kejian_wms', 'digiwin_wms', 'openwms'],
+  存储: [
+    'alicloud_oss', 'tencent_cos', 'huaweicloud_obs', 'aws_s3', 'minio', 'qiniu_kodo',
+    'nas_webdav', 'nas_smb',
+  ],
 };
 
 export interface DataConnectionsForDatasetResult {

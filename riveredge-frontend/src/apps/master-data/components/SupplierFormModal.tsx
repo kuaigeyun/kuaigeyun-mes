@@ -85,7 +85,7 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
 
   const loadOptions = useCallback(async () => {
     const [users, industry, src, category, contactTitle] = await Promise.all([
-      getUserOptions(),
+      getUserOptions('master-data:supply-chain:supplier'),
       getDictionaryOptions('INDUSTRY_SECTOR'),
       getDictionaryOptions('PARTNER_SOURCE_CHANNEL'),
       getDictionaryOptions('CUSTOMER_CATEGORY'),

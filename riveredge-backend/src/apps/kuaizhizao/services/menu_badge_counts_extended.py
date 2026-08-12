@@ -13,7 +13,6 @@ from typing import Any, Dict, List
 
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
 from apps.kuaizhizao.constants.purchase_inquiry import PurchaseInquiryStatus
-from apps.kuaizhizao.services.customer_pool_list_core import customer_pool_effective_public_q
 from apps.kuaizhizao.services.menu_badge_counts_service import (
     _DOC_TERMINAL_STATUSES,
     _RV_PENDING,
@@ -58,14 +57,6 @@ _FREIGHT_TERMINAL = ["signed", "cancelled", "已签收", "已取消"]
 
 def _tri(overdue: int = 0, pending: int = 0, in_progress: int = 0) -> Dict[str, int]:
     return {"overdue": overdue, "pending": pending, "in_progress": in_progress}
-
-
-async def _section_customer_pool(tenant_id: int) -> BadgeFragment:
-    from apps.master_data.models.customer import Customer
-
-    public_q = customer_pool_effective_public_q()
-    cnt = await Customer.filter(tenant_id=tenant_id, deleted_at__isnull=True).filter(public_q).count()
-    return {"customer_pool": _tri(pending=cnt)}
 
 
 async def _section_contracts_and_changes(tenant_id: int, now_date) -> BadgeFragment:
@@ -504,7 +495,6 @@ async def _section_warehouse_extra(tenant_id: int, now_date) -> BadgeFragment:
 
 async def fetch_extended_menu_badge_counts(tenant_id: int, now: datetime, now_date) -> BadgeFragment:
     sections = await asyncio.gather(
-        _safe_section("customer_pool", lambda: _section_customer_pool(tenant_id)),
         _safe_section("contracts_changes", lambda: _section_contracts_and_changes(tenant_id, now_date)),
         _safe_section("purchase_inquiry", lambda: _section_purchase_inquiry(tenant_id, now_date)),
         _safe_section("demand_reporting", lambda: _section_demand_and_reporting(tenant_id, now_date)),

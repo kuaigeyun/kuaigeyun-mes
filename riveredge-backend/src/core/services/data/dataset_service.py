@@ -35,7 +35,12 @@ from core.utils.timezone_utils import resolve_business_datetime
 # 应用连接器类型（与 application_connections API 一致）
 APPLICATION_CONNECTOR_TYPES = (
     "feishu", "dingtalk", "wecom",
-    "sap", "kingdee", "yonyou", "dsc",
+    "kingdee_galaxy", "kingdee_xingchen", "kingdee_kis_cloud", "kingdee_kis",
+    "yonyou_yonbip", "yonyou_u8", "yonyou_u9", "yonyou_nc",
+    "sap_s4hana", "sap_b1", "oracle_netsuite", "odoo",
+    "inspur_gs", "inspur_ps",
+    "digiwin_t100", "digiwin_yifei", "digiwin_yizhu", "digiwin_yituo", "digiwin_e10",
+    "chanjet_tplus", "grasp_huihuang", "super_erp", "erpnext", "sunlike_erp",
     "teamcenter", "windchill", "dassault_3dx",
     "salesforce", "xiaoshouyi", "fenxiang",
 )

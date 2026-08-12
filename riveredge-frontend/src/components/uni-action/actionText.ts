@@ -49,7 +49,10 @@ export const ROW_ACTION_TONE_ATTR = 'data-action-tone' as const
 /** 与 manifest action 正交的统一视觉配置（禁止用文案推断） */
 export const ROW_ACTION_VISUAL_PROFILE_ATTR = 'data-action-visual-profile' as const
 
-export type RowActionVisualProfile = 'add-follow-up-from-document' | 'reset-password'
+export type RowActionVisualProfile =
+  | 'add-follow-up-from-document'
+  | 'reset-password'
+  | 'test-connection'
 
 export function rowActionKind(
   kind: RowActionPermissionKind,
@@ -83,10 +86,29 @@ export function rowActionResetPassword(
   }
 }
 
+/** 行内「测试连接」：ApiOutlined；RBAC 默认 execute */
+export function rowActionTestConnection(
+  permission: 'skip' | 'execute' | 'read' = 'execute',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'test-connection',
+  }
+}
+
 export function readActionVisualProfile(node: React.ReactNode): RowActionVisualProfile | null {
   if (!React.isValidElement(node)) return null
   const raw = (node.props as Record<string, unknown>)?.[ROW_ACTION_VISUAL_PROFILE_ATTR]
-  if (raw === 'add-follow-up-from-document' || raw === 'reset-password') return raw
+  if (
+    raw === 'add-follow-up-from-document' ||
+    raw === 'reset-password' ||
+    raw === 'test-connection'
+  ) {
+    return raw
+  }
   const children = (node.props as Record<string, unknown>)?.children
   if (children != null) {
     for (const child of React.Children.toArray(children)) {

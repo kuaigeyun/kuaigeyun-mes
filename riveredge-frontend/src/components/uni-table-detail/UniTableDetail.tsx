@@ -60,13 +60,16 @@ export interface UniTableDetailHeaderProps {
   required?: boolean;
   /** 标题左侧扩展（紧邻标题） */
   leftExtra?: React.ReactNode;
-  /** 右侧标准动作按钮（统一 size/type） */
+  /** 右侧标准动作按钮（统一 size / 语义色） */
   actions?: Array<{
     key: string;
     label: React.ReactNode;
     onClick: () => void;
     icon?: React.ReactNode;
     type?: 'default' | 'primary' | 'dashed' | 'link' | 'text';
+    /** antd Button color（outlined 语义色） */
+    color?: 'default' | 'primary' | 'danger' | 'blue' | 'purple' | 'cyan' | 'green' | 'magenta' | 'pink' | 'red' | 'orange' | 'yellow' | 'volcano' | 'geekblue' | 'lime' | 'gold';
+    className?: string;
     danger?: boolean;
     disabled?: boolean;
   }>;
@@ -144,12 +147,26 @@ export const UniTableDetailHeader: React.FC<UniTableDetailHeaderProps> = ({
         {leftExtra}
       </Space>
       <div className="uni-table-detail-header-actions">
+        {onImport && (
+          <Button
+            className="uni-detail-action-import"
+            color="primary"
+            variant="outlined"
+            icon={<ImportOutlined />}
+            onClick={onImport}
+          >
+            {importText ?? t('common.importDetail')}
+          </Button>
+        )}
         {(actions || []).map((action) => (
           <Button
             key={action.key}
-            type={action.type ?? 'default'}
-            icon={action.icon}
+            className={action.className}
+            color={action.danger ? undefined : (action.color ?? 'primary')}
+            variant={action.danger ? undefined : 'outlined'}
+            type={action.danger ? (action.type ?? 'default') : undefined}
             danger={action.danger}
+            icon={action.icon}
             disabled={action.disabled}
             onClick={action.onClick}
           >
@@ -157,11 +174,6 @@ export const UniTableDetailHeader: React.FC<UniTableDetailHeaderProps> = ({
           </Button>
         ))}
         {headerExtra}
-        {onImport && (
-          <Button type="default" icon={<ImportOutlined />} onClick={onImport}>
-            {importText ?? t('common.importDetail')}
-          </Button>
-        )}
       </div>
     </div>
   );
@@ -228,7 +240,8 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
               key: 'add',
               label: addText || t('common.addDetail'),
               icon: <PlusOutlined />,
-              type: 'default',
+              color: 'primary',
+              className: 'uni-detail-action-add',
               onClick: handleAdd,
             });
           }
@@ -237,7 +250,8 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
               key: 'batch-select',
               label: batchSelectText || t('app.kuaizhizao.common.materialBatchSelect'),
               icon: <AppstoreAddOutlined />,
-              type: 'default',
+              color: 'primary',
+              className: 'uni-detail-action-batch',
               onClick: onBatchSelect,
             });
           }

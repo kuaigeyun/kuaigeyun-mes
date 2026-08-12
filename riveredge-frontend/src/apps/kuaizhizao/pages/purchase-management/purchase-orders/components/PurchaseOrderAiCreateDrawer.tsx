@@ -6,6 +6,7 @@ import React, { useCallback, useState } from 'react';
 import { Alert, App, Button, Upload } from 'antd';
 import { PaperClipOutlined } from '@ant-design/icons';
 import type { ProFormInstance } from '@ant-design/pro-components';
+import { useTranslation } from 'react-i18next';
 import { UniAiButton } from '../../../../../../components/uni-ai-button';
 import { UniDetail } from '../../../../../../components/uni-detail';
 import { DRAWER_CONFIG } from '../../../../../../components/layout-templates';
@@ -16,18 +17,21 @@ import {
   type PurchaseOrderOcrResult,
 } from '../../../../services/purchase-order-ocr';
 
+const I18N = 'app.kuaizhizao.purchaseOrder.aiCreate';
+
 export interface PurchaseOrderAiCreateTriggerProps {
   formRef: React.RefObject<ProFormInstance | undefined>;
   onApplied?: () => void;
 }
 
 export function PurchaseOrderAiCreateTrigger({ formRef, onApplied }: PurchaseOrderAiCreateTriggerProps) {
+  const { t } = useTranslation();
   const available = useKuaiaiEntryAvailable();
   const [open, setOpen] = useState(false);
   if (!available) return null;
   return (
     <>
-      <UniAiButton onClick={() => setOpen(true)}>AI 录单</UniAiButton>
+      <UniAiButton onClick={() => setOpen(true)}>{t(`${I18N}.trigger`)}</UniAiButton>
       <PurchaseOrderAiCreateDrawer
         open={open}
         onClose={() => setOpen(false)}
@@ -70,6 +74,7 @@ function applyPurchaseOrderOcr(formRef: React.RefObject<ProFormInstance | undefi
 }
 
 export function PurchaseOrderAiCreateDrawer({ open, onClose, formRef, onApplied }: DrawerProps) {
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -113,7 +118,7 @@ export function PurchaseOrderAiCreateDrawer({ open, onClose, formRef, onApplied 
   return (
     <UniDetail
       {...DRAWER_CONFIG}
-      title="采购订单 AI 录单"
+      title={t(`${I18N}.title`)}
       open={open}
       onClose={onClose}
       footer={

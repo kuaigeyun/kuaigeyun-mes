@@ -263,7 +263,7 @@ const CustomersPage: React.FC = () => {
     let cancelled = false;
     (async () => {
       try {
-        const options = await getUserOptions();
+        const options = await getUserOptions('master-data:supply-chain:customer');
         if (!cancelled) {
           setSalesmanOptions(options);
         }

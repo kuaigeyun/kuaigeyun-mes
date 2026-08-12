@@ -374,8 +374,8 @@ export default function DashboardPage() {
     ],
   );
 
-  // 计算时间范围
-  const getDateRange = useMemo(() => {
+  // 计算时间范围（全部：不传起止日，后端统计全量）
+  const getDateRange = useMemo((): { dateStart?: string; dateEnd?: string } => {
     const now = dayjs();
     switch (timeRange) {
       case 'today':
@@ -383,12 +383,13 @@ export default function DashboardPage() {
           dateStart: now.format('YYYY-MM-DD'),
           dateEnd: now.format('YYYY-MM-DD'),
         };
-      case 'yesterday':
+      case 'yesterday': {
         const yesterday = now.subtract(1, 'day');
         return {
           dateStart: yesterday.format('YYYY-MM-DD'),
           dateEnd: yesterday.format('YYYY-MM-DD'),
         };
+      }
       case 'thisWeek':
         return {
           dateStart: now.startOf('week').format('YYYY-MM-DD'),
@@ -409,6 +410,8 @@ export default function DashboardPage() {
           dateStart: now.subtract(29, 'day').format('YYYY-MM-DD'),
           dateEnd: now.format('YYYY-MM-DD'),
         };
+      case 'all':
+        return {};
       default:
         return {
           dateStart: now.format('YYYY-MM-DD'),
@@ -419,7 +422,7 @@ export default function DashboardPage() {
 
   // 获取统计数据（使用真实API）
   const { data: statistics } = useQuery({
-    queryKey: ['dashboard-statistics', getDateRange.dateStart, getDateRange.dateEnd],
+    queryKey: ['dashboard-statistics', getDateRange.dateStart ?? 'all', getDateRange.dateEnd ?? 'all'],
     queryFn: () => getStatistics(getDateRange.dateStart, getDateRange.dateEnd),
     refetchInterval: 60000,
   });

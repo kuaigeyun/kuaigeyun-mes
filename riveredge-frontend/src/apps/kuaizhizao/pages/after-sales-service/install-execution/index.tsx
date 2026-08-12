@@ -11,6 +11,7 @@ import { rowActionLabelKeep } from '../../../../../components/uni-action/actionC
 import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
+import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
@@ -310,6 +311,13 @@ const InstallExecutionPage: React.FC = () => {
         title: '销售订单',
         dataIndex: 'sales_order_code',
         hideInSearch: true,
+        render: (_, row) => (
+          <LinkedDocumentCode
+            documentType="sales_order"
+            documentId={row.sales_order_id}
+            code={row.sales_order_code}
+          />
+        ),
       },
       {
         title: '现场地址',
@@ -512,8 +520,20 @@ const InstallExecutionPage: React.FC = () => {
               </Descriptions.Item>
               <Descriptions.Item label="供给来源">{detailRow.supply_source}</Descriptions.Item>
               <Descriptions.Item label="负责人">{detailRow.owner_name ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="销售订单">{detailRow.sales_order_code ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="销售出库">{detailRow.sales_delivery_code ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label="销售订单">
+                <LinkedDocumentCode
+                  documentType="sales_order"
+                  documentId={detailRow.sales_order_id}
+                  code={detailRow.sales_order_code}
+                />
+              </Descriptions.Item>
+              <Descriptions.Item label="销售出库">
+                <LinkedDocumentCode
+                  documentType="sales_delivery"
+                  documentId={detailRow.sales_delivery_id}
+                  code={detailRow.sales_delivery_code}
+                />
+              </Descriptions.Item>
               <Descriptions.Item label="现场地址" span={2}>
                 {detailRow.site_address ?? '-'}
               </Descriptions.Item>

@@ -1,8 +1,14 @@
-import { clampPushProgressPercent, ratioToPushProgressPercent } from './DocumentPushProgressBar';
+import {
+  clampPushProgressPercent,
+  ratioToPushProgressPercent,
+  type PushProgressDocument,
+} from './DocumentPushProgressBar';
 
 type QuotationPushRow = {
   sales_order_id?: number | null;
   contract_id?: number | null;
+  sales_order_code?: string | null;
+  contract_code?: string | null;
   conversion_downstream_missing?: boolean | null;
   contract_downstream_missing?: boolean | null;
 };
@@ -29,6 +35,112 @@ export function isQuotationDownstreamPushed(row: QuotationPushRow): boolean {
 
 export function quotationDownstreamPushPercent(row: QuotationPushRow): number {
   return isQuotationDownstreamPushed(row) ? 100 : 0;
+}
+
+function appendPushDoc(
+  docs: PushProgressDocument[],
+  label: string,
+  code?: string | null,
+): void {
+  const trimmed = String(code ?? '').trim();
+  if (!trimmed) return;
+  if (docs.some((d) => d.label === label && d.code === trimmed)) return;
+  docs.push({ label, code: trimmed });
+}
+
+function appendPushDocs(
+  docs: PushProgressDocument[],
+  label: string,
+  codes?: Array<string | null | undefined> | null,
+): void {
+  if (!Array.isArray(codes)) return;
+  for (const code of codes) appendPushDoc(docs, label, code);
+}
+
+/** 报价单 → 已下推销售订单 / 销售合同 */
+export function collectQuotationPushDocuments(
+  row: QuotationPushRow,
+  labels: { salesOrder: string; salesContract: string },
+): PushProgressDocument[] {
+  const docs: PushProgressDocument[] = [];
+  if (Boolean(row.sales_order_id) && row.conversion_downstream_missing !== true) {
+    appendPushDoc(docs, labels.salesOrder, row.sales_order_code);
+  }
+  if (Boolean(row.contract_id) && row.contract_downstream_missing !== true) {
+    appendPushDoc(docs, labels.salesContract, row.contract_code);
+  }
+  return docs;
+}
+
+/** 发货通知 → 销售出库 */
+export function collectShipmentOutboundPushDocuments(
+  row: ShipmentNoticeOutboundRow & { sales_delivery_code?: string | null },
+  label: string,
+): PushProgressDocument[] {
+  const docs: PushProgressDocument[] = [];
+  appendPushDoc(docs, label, row.sales_delivery_code);
+  return docs;
+}
+
+/** 收货通知 → 采购入库 */
+export function collectReceiptInboundPushDocuments(
+  row: ReceiptNoticeInboundRow & { purchase_receipt_code?: string | null },
+  label: string,
+): PushProgressDocument[] {
+  const docs: PushProgressDocument[] = [];
+  appendPushDoc(docs, label, row.purchase_receipt_code);
+  return docs;
+}
+
+/** 需求 / 预测 → 需求计算 */
+export function collectComputationPushDocuments(
+  code: string | null | undefined,
+  label: string,
+): PushProgressDocument[] {
+  const docs: PushProgressDocument[] = [];
+  appendPushDoc(docs, label, code);
+  return docs;
+}
+
+/** 销售订单 → 工单（及可选需求计算） */
+export function collectSalesOrderPushDocuments(
+  row: {
+    pushed_work_order_codes?: Array<string | null | undefined> | null;
+    computation_code?: string | null;
+    pushed_to_computation?: boolean | null;
+  },
+  labels: { workOrder: string; demandComputation: string },
+): PushProgressDocument[] {
+  const docs: PushProgressDocument[] = [];
+  appendPushDocs(docs, labels.workOrder, row.pushed_work_order_codes);
+  if (row.pushed_to_computation) {
+    appendPushDoc(docs, labels.demandComputation, row.computation_code);
+  }
+  return docs;
+}
+
+/** 销售合同 → 已释放销售订单 */
+export function collectSalesContractPushDocuments(
+  codes: Array<string | null | undefined> | null | undefined,
+  label: string,
+): PushProgressDocument[] {
+  const docs: PushProgressDocument[] = [];
+  appendPushDocs(docs, label, codes);
+  return docs;
+}
+
+/** 采购订单 → 收货通知 / 采购入库 */
+export function collectPurchaseOrderPushDocuments(
+  row: {
+    downstream_receipt_notice_codes?: Array<string | null | undefined> | null;
+    downstream_purchase_receipt_codes?: Array<string | null | undefined> | null;
+  },
+  labels: { receiptNotice: string; purchaseReceipt: string },
+): PushProgressDocument[] {
+  const docs: PushProgressDocument[] = [];
+  appendPushDocs(docs, labels.receiptNotice, row.downstream_receipt_notice_codes);
+  appendPushDocs(docs, labels.purchaseReceipt, row.downstream_purchase_receipt_codes);
+  return docs;
 }
 
 export function salesForecastComputationPushPercent(planningPushed?: boolean | null): number {

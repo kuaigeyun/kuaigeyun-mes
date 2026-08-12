@@ -5,7 +5,10 @@ import { extractProTableSort } from '../../../utils/tableQueryKey';
 import { parseSalesReportDateRange } from '../../kuaizhizao/services/reports';
 import { formatDateTime } from '../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../utils/formDate';
-import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stackedPrimaryColumn';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS,
+} from '../../../components/uni-table/stackedPrimaryColumn';
 
 export const COST_CALCULATION_PINNED_STATUS_FIELD = 'calculation_status';
 export const COST_CRUD_PINNED_ACTIVE_FIELD = 'isActive';
@@ -80,10 +83,8 @@ export function costDocCreatedUpdatedColumns<T extends object>(t: TFunction): Pr
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
-      width: 148,
-      uniTableKeepWidth: true,
+      ...UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS,
       sorter: true,
-      hideInSearch: true,
       render: (_, r) => {
         const preferred = resolveCostPreferredAudit(r as Record<string, unknown>);
         return React.createElement(UniTableStackedPrimaryCell, {

@@ -15,6 +15,8 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
+import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
+import { useOptionalLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
@@ -48,12 +50,6 @@ import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFi
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 
 const DICT_CODE = 'SALES_FOLLOW_UP_TYPE';
-/** 仅覆盖跟进时间段位；其余字段用 GLOBAL_DOC_LIST_FIELD_RANK */
-const CUSTOMER_FOLLOW_UP_LIST_FIELD_RANK = {
-  ...SALES_DOC_LIST_FIELD_RANK,
-  occurred_at: 71,
-  next_follow_up_at: 72,
-} as const;
 
 function followUpPresetFromRecord(record: CustomerFollowUp): CustomerFollowUpPreset {
   const preset: CustomerFollowUpPreset = {
@@ -73,6 +69,7 @@ function followUpPresetFromRecord(record: CustomerFollowUp): CustomerFollowUpPre
 const CustomerFollowUpsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message } = App.useApp();
+  const linkedDetail = useOptionalLinkedDocumentDetail();
   const actionRef = useRef<ActionType>(null);
   const detailIdRef = useRef<number | null>(null);
   const pendingOnlySkipReloadRef = useRef(true);
@@ -197,17 +194,31 @@ const CustomerFollowUpsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.customerFollowUp.colQuotation'),
         dataIndex: 'quotation_code',
-        render: (_, row) => row.quotation_code || '—',
+        render: (_, row) => (
+          <LinkedDocumentCode
+            documentType="quotation"
+            documentId={row.quotation_id}
+            code={row.quotation_code}
+            emptyText="—"
+          />
+        ),
       },
       {
         title: t('app.kuaizhizao.customerFollowUp.colSalesOrder'),
         dataIndex: 'sales_order_code',
-        render: (_, row) => row.sales_order_code || '—',
+        render: (_, row) => (
+          <LinkedDocumentCode
+            documentType="sales_order"
+            documentId={row.sales_order_id}
+            code={row.sales_order_code}
+            emptyText="—"
+          />
+        ),
       },
       { title: t('app.kuaizhizao.customerFollowUp.colCreator'), dataIndex: 'created_by_name', ellipsis: true },
       { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime', span: 2 },
     ],
-    [t, activityLabelMap],
+    [t, activityLabelMap, renderActivityTypeTag],
   );
 
   useEffect(() => {
@@ -399,12 +410,31 @@ const CustomerFollowUpsPage: React.FC = () => {
       fixed: 'left',
       sorter: true,
       hideInSearch: true,
-      render: (_, row) => (
-        <UniTableStackedPrimaryCell
-          primary={row.customer_name || '-'}
-          secondary={row.sales_order_code || row.quotation_code || '-'}
-        />
-      ),
+      render: (_, row) => {
+        const soCode = String(row.sales_order_code ?? '').trim();
+        const qCode = String(row.quotation_code ?? '').trim();
+        const soId = row.sales_order_id != null ? Number(row.sales_order_id) : NaN;
+        const qId = row.quotation_id != null ? Number(row.quotation_id) : NaN;
+        const preferSo = Boolean(soCode) && Number.isFinite(soId) && soId > 0;
+        const preferQ = !preferSo && Boolean(qCode) && Number.isFinite(qId) && qId > 0;
+        return (
+          <UniTableStackedPrimaryCell
+            primary={row.customer_name || '-'}
+            secondary={soCode || qCode || '-'}
+            onSecondaryClick={
+              preferSo
+                ? () => {
+                    linkedDetail?.openLinkedDocumentDetail('sales_order', soId);
+                  }
+                : preferQ
+                  ? () => {
+                      linkedDetail?.openLinkedDocumentDetail('quotation', qId);
+                    }
+                  : undefined
+            }
+          />
+        );
+      },
     },
     {
       title: t('app.kuaizhizao.customerFollowUp.colActivityType'),
@@ -549,7 +579,7 @@ const CustomerFollowUpsPage: React.FC = () => {
         return parts;
       },
     },
-  ], CUSTOMER_FOLLOW_UP_LIST_FIELD_RANK);
+  ], SALES_DOC_LIST_FIELD_RANK);
 
   return (
     <>

@@ -75,6 +75,7 @@ export interface SalesOrder {
   invoice_progress?: number | null;
   /** 已下推工单数量（列表接口返回） */
   pushed_work_order_quantity?: number;
+  pushed_work_order_codes?: string[];
   /** 剩余可下推数量（列表接口返回） */
   remaining_push_quantity?: number;
   /** 工单下推占比 0-100（列表接口返回） */

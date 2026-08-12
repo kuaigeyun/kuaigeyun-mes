@@ -43,6 +43,7 @@ import {
   ScissorOutlined,
   SnippetsOutlined,
   CompressOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import type { DataNode, TreeProps } from 'antd/es/tree';
 import type { MenuProps } from 'antd';
@@ -60,6 +61,7 @@ import {
   FileListParams,
 } from '../../../../services/file';
 import FilePreviewModal from '../../../../components/file-preview';
+import FileStorageSettingsModal from './FileStorageSettingsModal';
 import { useNavigationMenuTreeQuery } from '../../../../hooks/useNavigationMenuTreeQuery';
 import { collectNavigationMenuPaths } from '../../../../utils/navigationMenuPaths';
 import { 
@@ -271,6 +273,7 @@ const FileListPage: React.FC = () => {
   const [editingFolderCategory, setEditingFolderCategory] = useState<string | null>(null);
   const [savingFolderEdit, setSavingFolderEdit] = useState(false);
   const [imageTierBackfillLoading, setImageTierBackfillLoading] = useState(false);
+  const [storageSettingsVisible, setStorageSettingsVisible] = useState(false);
   
   // 右键菜单状态
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
@@ -1443,6 +1446,12 @@ const FileListPage: React.FC = () => {
                 >
                   {t('pages.system.files.imageTierBackfillButton')}
                 </Button>
+                <Button
+                  icon={<SettingOutlined />}
+                  onClick={() => setStorageSettingsVisible(true)}
+                >
+                  {t('pages.system.files.storageSettingsButton')}
+                </Button>
                 <div style={{ width: 1, height: 16, backgroundColor: token.colorSplit, margin: '0 8px' }} />
                 <Space>
                   <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>{t('pages.system.files.sortLabel')}</span>
@@ -1576,6 +1585,11 @@ const FileListPage: React.FC = () => {
         title={t('pages.system.files.previewModalTitle')}
         width="calc(100vw - 32px)"
         height="calc(100vh - 32px)"
+      />
+
+      <FileStorageSettingsModal
+        open={storageSettingsVisible}
+        onClose={() => setStorageSettingsVisible(false)}
       />
 
       {/* 重命名 Modal */}

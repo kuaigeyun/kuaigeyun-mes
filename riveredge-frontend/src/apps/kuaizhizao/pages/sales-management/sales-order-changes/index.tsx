@@ -11,6 +11,7 @@ import { App, Button, Descriptions, Form, Input, Space, Tag } from 'antd';
 import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, PrinterOutlined, RollbackOutlined, SendOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import {
@@ -462,6 +463,13 @@ const SalesOrderChangesPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesOrderChange.colSourceOrderCode'),
         dataIndex: 'source_order_code',
+        render: (_, record) => (
+          <LinkedDocumentCode
+            documentType="sales_order"
+            documentId={record.source_order_id}
+            code={record.source_order_code}
+          />
+        ),
       },
       {
         title: t('app.kuaizhizao.customerFollowUp.colCustomer'),
@@ -569,6 +577,13 @@ const SalesOrderChangesPage: React.FC = () => {
       uniTableKeepWidth: true,
       sorter: true,
       fieldProps: { placeholder: t('app.kuaizhizao.salesOrderChange.colSourceOrder') },
+      render: (_, record) => (
+        <LinkedDocumentCode
+          documentType="sales_order"
+          documentId={record.source_order_id}
+          code={record.source_order_code}
+        />
+      ),
     },
     {
       title: t('app.kuaizhizao.salesOrderChange.colChangeReason'),

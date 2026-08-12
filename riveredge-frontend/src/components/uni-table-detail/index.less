@@ -39,6 +39,25 @@
       gap: 8px;
       flex-wrap: wrap;
       align-items: center;
+
+      /*
+       * 明细表右上角标准操作：统一主题色描边（导入 / 添加 / 多选）。
+       * headerExtra 历史 Button 靠图标 :has 命中。
+       */
+      .ant-btn:has(.anticon-import),
+      .ant-btn:has(.anticon-plus),
+      .ant-btn:has(.anticon-appstore-add),
+      .ant-btn.uni-detail-action-import,
+      .ant-btn.uni-detail-action-add,
+      .ant-btn.uni-detail-action-batch {
+        color: var(--ant-color-primary, #1677ff);
+        border-color: var(--ant-color-primary, #1677ff);
+
+        &:not(:disabled):hover {
+          color: var(--ant-color-primary-hover, #4096ff);
+          border-color: var(--ant-color-primary-hover, #4096ff);
+        }
+      }
     }
   }
 

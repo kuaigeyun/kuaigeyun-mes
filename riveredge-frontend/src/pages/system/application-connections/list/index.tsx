@@ -5,7 +5,7 @@
  */
 
 import React, { useRef, useState, useMemo } from 'react';
-import { rowActionKind } from '../../../../components/uni-action';
+import { rowActionKind, rowActionTestConnection } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -19,7 +19,6 @@ import {
 import {
   App,
   Popconfirm,
-  Tag,
   Space,
   Badge,
   Typography,
@@ -27,10 +26,10 @@ import {
   Button,
   Descriptions,
 } from 'antd';
+import { MarkerTag, StatusTag } from '../../../../constants/statusBadges';
 import {
   DeleteOutlined,
-  EyeOutlined,
-  ThunderboltOutlined,
+  ApiOutlined,
   EditOutlined,
   AppstoreOutlined,
   MessageOutlined,
@@ -52,9 +51,8 @@ import {
 } from '../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import AppConnectorMarket from '../AppConnectorMarket';
-import KuAiConnectorConfigModal from '../KuAiConnectorConfigModal';
 import type { AppConnectorDefinition } from '../connectors';
-import { isSiteIntegrationConnector } from '../connectors';
+import { isLlmConnectionType } from '../connectors';
 import {
   getApplicationConnectionList,
   getApplicationConnectionListAll,
@@ -78,19 +76,29 @@ const TYPE_COLORS: Record<string, { color: string; icon: React.ReactNode }> = {
   feishu: { color: 'blue', icon: <MessageOutlined /> },
   dingtalk: { color: 'cyan', icon: <MessageOutlined /> },
   wecom: { color: 'green', icon: <MessageOutlined /> },
-  sap: { color: 'gold', icon: <DatabaseOutlined /> },
-  kingdee: { color: 'orange', icon: <CloudOutlined /> },
-  yonyou: { color: 'purple', icon: <CloudOutlined /> },
-  dsc: { color: 'magenta', icon: <DatabaseOutlined /> },
-  inspur: { color: 'cyan', icon: <CloudOutlined /> },
-  digiwin_e10: { color: 'blue', icon: <DatabaseOutlined /> },
-  grasp_erp: { color: 'orange', icon: <DatabaseOutlined /> },
-  super_erp: { color: 'magenta', icon: <DatabaseOutlined /> },
-  chanjet_tplus: { color: 'blue', icon: <CloudOutlined /> },
+  kingdee_galaxy: { color: 'orange', icon: <CloudOutlined /> },
+  kingdee_xingchen: { color: 'orange', icon: <CloudOutlined /> },
+  kingdee_kis_cloud: { color: 'orange', icon: <CloudOutlined /> },
   kingdee_kis: { color: 'cyan', icon: <CloudOutlined /> },
+  yonyou_yonbip: { color: 'purple', icon: <CloudOutlined /> },
+  yonyou_u8: { color: 'purple', icon: <CloudOutlined /> },
+  yonyou_u9: { color: 'purple', icon: <CloudOutlined /> },
+  yonyou_nc: { color: 'purple', icon: <CloudOutlined /> },
+  sap_s4hana: { color: 'gold', icon: <DatabaseOutlined /> },
+  sap_b1: { color: 'gold', icon: <DatabaseOutlined /> },
   oracle_netsuite: { color: 'blue', icon: <CloudOutlined /> },
-  erpnext: { color: 'blue', icon: <CloudOutlined /> },
   odoo: { color: 'purple', icon: <CloudOutlined /> },
+  inspur_gs: { color: 'cyan', icon: <CloudOutlined /> },
+  inspur_ps: { color: 'cyan', icon: <CloudOutlined /> },
+  digiwin_t100: { color: 'magenta', icon: <DatabaseOutlined /> },
+  digiwin_yifei: { color: 'magenta', icon: <DatabaseOutlined /> },
+  digiwin_yizhu: { color: 'magenta', icon: <DatabaseOutlined /> },
+  digiwin_yituo: { color: 'magenta', icon: <DatabaseOutlined /> },
+  digiwin_e10: { color: 'blue', icon: <DatabaseOutlined /> },
+  chanjet_tplus: { color: 'blue', icon: <CloudOutlined /> },
+  grasp_huihuang: { color: 'orange', icon: <DatabaseOutlined /> },
+  super_erp: { color: 'magenta', icon: <DatabaseOutlined /> },
+  erpnext: { color: 'blue', icon: <CloudOutlined /> },
   sunlike_erp: { color: 'cyan', icon: <DatabaseOutlined /> },
   teamcenter: { color: 'blue', icon: <AppstoreOutlined /> },
   windchill: { color: 'geekblue', icon: <AppstoreOutlined /> },
@@ -119,6 +127,20 @@ const TYPE_COLORS: Record<string, { color: string; icon: React.ReactNode }> = {
   kejian_wms: { color: 'orange', icon: <CloudOutlined /> },
   digiwin_wms: { color: 'cyan', icon: <DatabaseOutlined /> },
   openwms: { color: 'green', icon: <DatabaseOutlined /> },
+  alicloud_oss: { color: 'orange', icon: <CloudOutlined /> },
+  tencent_cos: { color: 'blue', icon: <CloudOutlined /> },
+  huaweicloud_obs: { color: 'red', icon: <CloudOutlined /> },
+  aws_s3: { color: 'gold', icon: <CloudOutlined /> },
+  minio: { color: 'geekblue', icon: <DatabaseOutlined /> },
+  qiniu_kodo: { color: 'cyan', icon: <CloudOutlined /> },
+  nas_webdav: { color: 'purple', icon: <DatabaseOutlined /> },
+  nas_smb: { color: 'magenta', icon: <DatabaseOutlined /> },
+  deepseek: { color: 'blue', icon: <RocketOutlined /> },
+  openai: { color: 'green', icon: <RocketOutlined /> },
+  qwen: { color: 'orange', icon: <RocketOutlined /> },
+  zhipu: { color: 'purple', icon: <RocketOutlined /> },
+  moonshot: { color: 'cyan', icon: <RocketOutlined /> },
+  siliconflow: { color: 'geekblue', icon: <RocketOutlined /> },
 };
 
 
@@ -131,6 +153,11 @@ const SENSITIVE_KEYS = [
   'encoding_aes_key',
   'security_token',
   'aes_key',
+  'access_key_secret',
+  'secret_access_key',
+  'secret_key',
+  'api_key',
+  'api_secret',
 ];
 
 const ApplicationConnectionsListPage: React.FC = () => {
@@ -170,8 +197,6 @@ const ApplicationConnectionsListPage: React.FC = () => {
   const [allConnections, setAllConnections] = useState<ApplicationConnection[]>([]);
   const [connectorMarketVisible, setConnectorMarketVisible] = useState(false);
   const [connectorMarketInitialCategory, setConnectorMarketInitialCategory] = useState('all');
-  const [kuAiConfigVisible, setKuAiConfigVisible] = useState(false);
-  const [kuAiConnectorName, setKuAiConnectorName] = useState('');
   const connectionPerms = useResourcePermissions('system:application-connection');
   const canSyncContacts = !connectionPerms.enabled || !!connectionPerms.canAction?.('execute');
   const formRef = useRef<ProFormInstance>(null);
@@ -220,15 +245,24 @@ const ApplicationConnectionsListPage: React.FC = () => {
   };
 
   const handleConnectorSelect = (connector: AppConnectorDefinition) => {
-    if (isSiteIntegrationConnector(connector.type)) {
-      setKuAiConnectorName(connector.name);
-      setKuAiConfigVisible(true);
-      return;
-    }
+    const defaults = { ...(connector.defaultConfig || {}) };
+    delete defaults.enabled;
+    const modelHint = String(defaults.model || 'default')
+      .replace(/[^a-zA-Z0-9._-]+/g, '_')
+      .slice(0, 24);
+    const suggestedCode = isLlmConnectionType(connector.type)
+      ? `${connector.type}_${modelHint}`.slice(0, 50)
+      : undefined;
     setFormInitialValues({
       type: connector.type,
       is_active: true,
-      ...connector.defaultConfig,
+      ...(isLlmConnectionType(connector.type)
+        ? {
+            name: `${connector.name} ${defaults.model || ''}`.trim(),
+            code: suggestedCode,
+          }
+        : {}),
+      ...defaults,
     });
     setModalVisible(true);
   };
@@ -238,7 +272,11 @@ const ApplicationConnectionsListPage: React.FC = () => {
       setIsEdit(true);
       setCurrentUuid(record.uuid);
       const detail = await getApplicationConnectionByUuid(record.uuid);
-      const config = detail.config || {};
+      const config = { ...(detail.config || {}) };
+      delete config.api_key_configured;
+      if (config.api_key === '****') {
+        config.api_key = '';
+      }
       setFormInitialValues({
         name: detail.name,
         code: detail.code,
@@ -420,8 +458,20 @@ const ApplicationConnectionsListPage: React.FC = () => {
   const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
-      const { name, code, description, type, is_active, ...restConfig } = values;
+      const {
+        name,
+        code,
+        description,
+        type,
+        is_active,
+        api_key_configured: _apiKeyConfigured,
+        enabled: _enabled,
+        ...restConfig
+      } = values;
       const config = { ...restConfig };
+      if (config.api_key === '****') {
+        delete config.api_key;
+      }
       if (isEdit && currentUuid) {
         await updateApplicationConnection(currentUuid, {
           name,
@@ -505,7 +555,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
             <ProFormText name="encoding_aes_key" label="EncodingAESKey" colProps={{ span: 12 }} />
           </>
         );
-      case 'sap':
+      case 'sap_s4hana':
         return (
           <>
             {common}
@@ -515,7 +565,19 @@ const ApplicationConnectionsListPage: React.FC = () => {
             <ProFormText name="language" label="Language" initialValue="ZH" colProps={{ span: 12 }} />
           </>
         );
-      case 'kingdee':
+      case 'sap_b1':
+        return (
+          <>
+            {common}
+            <ProFormText name="company_db" label="Company DB" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText name="username" label="Username" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText.Password name="password" label="Password" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText name="language" label="Language" initialValue="ZH" colProps={{ span: 12 }} />
+          </>
+        );
+      case 'kingdee_galaxy':
+      case 'kingdee_xingchen':
+      case 'kingdee_kis_cloud':
         return (
           <>
             {common}
@@ -525,7 +587,10 @@ const ApplicationConnectionsListPage: React.FC = () => {
             <ProFormText name="lcid" label="LCID" initialValue="2052" colProps={{ span: 12 }} />
           </>
         );
-      case 'yonyou':
+      case 'yonyou_yonbip':
+      case 'yonyou_u8':
+      case 'yonyou_u9':
+      case 'yonyou_nc':
         return (
           <>
             {common}
@@ -535,7 +600,10 @@ const ApplicationConnectionsListPage: React.FC = () => {
             <ProFormText name="user_id" label="User ID" colProps={{ span: 12 }} />
           </>
         );
-      case 'dsc':
+      case 'digiwin_t100':
+      case 'digiwin_yifei':
+      case 'digiwin_yizhu':
+      case 'digiwin_yituo':
       case 'digiwin_e10':
         return (
           <>
@@ -563,16 +631,24 @@ const ApplicationConnectionsListPage: React.FC = () => {
             <ProFormText name="csrf_token" label="CSRF Token" colProps={{ span: 12 }} />
           </>
         );
-      case 'inspur':
-      case 'grasp_erp':
+      case 'inspur_gs':
+      case 'inspur_ps':
+      case 'grasp_huihuang':
       case 'chanjet_tplus':
-      case 'erpnext':
       case 'sunlike_erp':
         return (
           <>
             {common}
             <ProFormText name="app_key" label="App Key" rules={[{ required: true }]} colProps={{ span: 12 }} />
             <ProFormText.Password name="app_secret" label="App Secret" rules={[{ required: true }]} colProps={{ span: 12 }} />
+          </>
+        );
+      case 'erpnext':
+        return (
+          <>
+            {common}
+            <ProFormText name="api_key" label="API Key" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText.Password name="api_secret" label="API Secret" rules={[{ required: true }]} colProps={{ span: 12 }} />
           </>
         );
       case 'caxa':
@@ -712,6 +788,110 @@ const ApplicationConnectionsListPage: React.FC = () => {
             <ProFormText.Password name="app_secret" label="App Secret" colProps={{ span: 12 }} />
           </>
         );
+      case 'alicloud_oss':
+      case 'huaweicloud_obs':
+      case 'aws_s3':
+        return (
+          <>
+            <ProFormText name="endpoint" label="Endpoint" colProps={{ span: 24 }} />
+            <ProFormText name="access_key_id" label="Access Key ID" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText.Password
+              name={type === 'alicloud_oss' ? 'access_key_secret' : 'secret_access_key'}
+              label="Secret Key"
+              rules={[{ required: true }]}
+              colProps={{ span: 12 }}
+            />
+            <ProFormText name="bucket" label="Bucket" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText name="region" label="Region" colProps={{ span: 12 }} />
+          </>
+        );
+      case 'tencent_cos':
+        return (
+          <>
+            <ProFormText
+              name="endpoint"
+              label="Endpoint"
+              colProps={{ span: 24 }}
+              placeholder="可留空，将按 Bucket+Region 自动拼 https://{bucket}.cos.{region}.myqcloud.com"
+            />
+            <ProFormText name="secret_id" label="SecretId" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText.Password name="secret_key" label="SecretKey" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText name="bucket" label="Bucket" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText
+              name="region"
+              label="Region"
+              rules={[{ required: true }]}
+              colProps={{ span: 12 }}
+              placeholder="ap-guangzhou"
+            />
+          </>
+        );
+      case 'minio':
+      case 'qiniu_kodo':
+        return (
+          <>
+            <ProFormText name="endpoint" label="Endpoint" rules={[{ required: true }]} colProps={{ span: 24 }} />
+            <ProFormText name="access_key" label="Access Key" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText.Password name="secret_key" label="Secret Key" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText name="bucket" label="Bucket" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText name="region" label="Region" colProps={{ span: 12 }} />
+          </>
+        );
+      case 'nas_webdav':
+        return (
+          <>
+            <ProFormText name="base_url" label="WebDAV URL" rules={[{ required: true }]} colProps={{ span: 24 }} />
+            <ProFormText name="username" label={t('pages.system.applicationConnections.formUsernameLabel')} rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText.Password name="password" label={t('pages.system.applicationConnections.formPasswordLabel')} rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText name="root_path" label="Root Path" initialValue="/" colProps={{ span: 12 }} />
+          </>
+        );
+      case 'nas_smb':
+        return (
+          <>
+            <ProFormText name="host" label="Host" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText name="share" label="Share" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText name="username" label={t('pages.system.applicationConnections.formUsernameLabel')} rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText.Password name="password" label={t('pages.system.applicationConnections.formPasswordLabel')} rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText name="domain" label="Domain" colProps={{ span: 12 }} />
+            <ProFormText name="port" label="Port" initialValue={445} colProps={{ span: 12 }} />
+          </>
+        );
+      case 'deepseek':
+      case 'openai':
+      case 'qwen':
+      case 'zhipu':
+      case 'moonshot':
+      case 'siliconflow':
+        return (
+          <>
+            <ProFormText
+              name="base_url"
+              label="API Base URL"
+              rules={[{ required: true }]}
+              colProps={{ span: 24 }}
+            />
+            <ProFormText
+              name="model"
+              label={t('pages.system.applicationConnections.columnModel')}
+              rules={[{ required: true }]}
+              colProps={{ span: 12 }}
+              placeholder="deepseek-v4-flash"
+            />
+            <ProFormText.Password
+              name="api_key"
+              label="API Key"
+              rules={isEdit ? [] : [{ required: true }]}
+              colProps={{ span: 12 }}
+              placeholder={
+                isEdit
+                  ? t('pages.system.siteSettings.integrationsDeepseekApiKeyPlaceholderConfigured')
+                  : t('pages.system.applicationConnections.llmProviderKeyRequired')
+              }
+              fieldProps={{ autoComplete: 'new-password' }}
+            />
+          </>
+        );
       default:
         return <Alert title={t('pages.system.applicationConnections.noVisualForm', { type })} type="info" />;
     }
@@ -720,14 +900,20 @@ const ApplicationConnectionsListPage: React.FC = () => {
   const canTestInForm = (type: string) => {
     return [
       'feishu', 'dingtalk', 'wecom',
-      'sap', 'kingdee', 'yonyou', 'dsc', 'inspur', 'digiwin_e10',
-      'grasp_erp', 'super_erp', 'chanjet_tplus', 'kingdee_kis',
-      'oracle_netsuite', 'erpnext', 'odoo', 'sunlike_erp',
+      'kingdee_galaxy', 'kingdee_xingchen', 'kingdee_kis_cloud', 'kingdee_kis',
+      'yonyou_yonbip', 'yonyou_u8', 'yonyou_u9', 'yonyou_nc',
+      'sap_s4hana', 'sap_b1', 'oracle_netsuite', 'odoo',
+      'inspur_gs', 'inspur_ps',
+      'digiwin_t100', 'digiwin_yifei', 'digiwin_yizhu', 'digiwin_yituo', 'digiwin_e10',
+      'chanjet_tplus', 'grasp_huihuang', 'super_erp', 'erpnext', 'sunlike_erp',
       'teamcenter', 'windchill', 'caxa', 'sanpin_plm', 'sunlike_plm', 'sipm', 'inteplm',
       'salesforce', 'xiaoshouyi', 'fenxiang', 'qidian', 'supra_crm',
       'weaver', 'seeyon', 'landray', 'cloudhub', 'tongda_oa',
       'rootcloud', 'casicloud', 'alicloud_iot', 'huaweicloud_iot', 'thingsboard', 'jetlinks',
       'flux_wms', 'kejian_wms', 'digiwin_wms', 'openwms',
+      'alicloud_oss', 'tencent_cos', 'huaweicloud_obs', 'aws_s3', 'minio', 'qiniu_kodo',
+      'nas_webdav', 'nas_smb',
+      'deepseek', 'openai', 'qwen', 'zhipu', 'moonshot', 'siliconflow',
     ].includes(type);
   };
 
@@ -740,7 +926,18 @@ const ApplicationConnectionsListPage: React.FC = () => {
       width: 120,
       render: (_, record) => {
         const info = getTypeInfo(record.type);
-        return <Tag color={info.color}>{info.text}</Tag>;
+        return <MarkerTag color={info.color}>{info.text}</MarkerTag>;
+      },
+    },
+    {
+      title: t('pages.system.applicationConnections.columnModel'),
+      dataIndex: ['config', 'model'],
+      width: 160,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, record) => {
+        if (!isLlmConnectionType(record.type)) return t('common.dash');
+        return record.config?.model || t('common.dash');
       },
     },
     { title: t('pages.system.applicationConnections.columnDescription'), dataIndex: 'description', ellipsis: true, hideInSearch: true },
@@ -758,9 +955,9 @@ const ApplicationConnectionsListPage: React.FC = () => {
       dataIndex: 'is_active',
       width: 80,
       render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
+        <StatusTag color={record.is_active ? 'success' : 'default'}>
           {record.is_active ? t('pages.system.applicationConnections.actionEnable') : t('pages.system.applicationConnections.actionDisable')}
-        </Tag>
+        </StatusTag>
       ),
     },
     {
@@ -791,11 +988,9 @@ const ApplicationConnectionsListPage: React.FC = () => {
             <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
               {t('pages.system.applicationConnections.edit')}
             </Button>,
-            <Button {...rowActionKind('read')}
+            <Button
+              {...rowActionTestConnection('execute')}
               key="test"
-              type="link"
-              size="small"
-              icon={<ThunderboltOutlined />}
               onClick={() => handleTestConnection(record)}
             >
               {t('pages.system.applicationConnections.testConnection')}
@@ -843,8 +1038,14 @@ const ApplicationConnectionsListPage: React.FC = () => {
       dataIndex: 'type',
       render: (v: string) => {
         const info = getTypeInfo(v);
-        return <Tag color={info.color}>{info.text}</Tag>;
+        return <MarkerTag color={info.color}>{info.text}</MarkerTag>;
       },
+    },
+    {
+      title: t('pages.system.applicationConnections.columnModel'),
+      dataIndex: 'config',
+      render: (_: any, record: ApplicationConnection) =>
+        isLlmConnectionType(record.type) ? record.config?.model || t('common.dash') : t('common.dash'),
     },
     { title: t('pages.system.applicationConnections.columnDescription'), dataIndex: 'description' },
     {
@@ -876,13 +1077,17 @@ const ApplicationConnectionsListPage: React.FC = () => {
       title: t('pages.system.applicationConnections.columnActive'),
       dataIndex: 'is_active',
       render: (v: boolean) => (
-        <Tag color={v ? 'success' : 'default'}>
+        <StatusTag color={v ? 'success' : 'default'}>
           {v ? t('pages.system.applicationConnections.actionEnable') : t('pages.system.applicationConnections.actionDisable')}
-        </Tag>
+        </StatusTag>
       ),
     },
     { title: t('pages.system.applicationConnections.columnLastConnected'), dataIndex: 'last_connected_at', valueType: 'dateTime' },
-    { title: t('pages.system.applicationConnections.columnLastError'), dataIndex: 'last_error', render: (v: string) => v ? <Tag color="error">{v}</Tag> : t('common.dash') },
+    {
+      title: t('pages.system.applicationConnections.columnLastError'),
+      dataIndex: 'last_error',
+      render: (v: string) => (v ? <StatusTag color="error">{v}</StatusTag> : t('common.dash')),
+    },
     { title: t('pages.system.applicationConnections.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
     { title: t('pages.system.applicationConnections.columnUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
@@ -1043,7 +1248,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
               return (
                 <Button
                   type="default"
-                  icon={<ThunderboltOutlined />}
+                  icon={<ApiOutlined />}
                   loading={testingConnection}
                   onClick={handleTestConnectionInForm}
                 >
@@ -1096,12 +1301,6 @@ const ApplicationConnectionsListPage: React.FC = () => {
         initialCategory={connectorMarketInitialCategory}
       />
 
-      <KuAiConnectorConfigModal
-        open={kuAiConfigVisible}
-        connectorName={kuAiConnectorName}
-        onClose={() => setKuAiConfigVisible(false)}
-      />
-
       <UniDetail
         title={t('pages.system.applicationConnections.detailTitle')}
         open={drawerVisible}
@@ -1119,7 +1318,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
               <Button type="primary" icon={<EditOutlined />} onClick={() => { setDrawerVisible(false); handleEdit(detailData); }}>
                 {t('pages.system.applicationConnections.edit')}
               </Button>
-              <Button icon={<ThunderboltOutlined />} onClick={() => handleTestConnection(detailData)}>
+              <Button icon={<ApiOutlined />} onClick={() => handleTestConnection(detailData)}>
                 {t('pages.system.applicationConnections.testConnection')}
               </Button>
               {detailData.type === 'wecom' && canSyncContacts ? (

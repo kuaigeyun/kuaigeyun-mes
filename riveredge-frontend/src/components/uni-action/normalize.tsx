@@ -28,6 +28,7 @@ import {
   BranchesOutlined,
   CommentOutlined,
   ReloadOutlined,
+  ApiOutlined,
 } from '@ant-design/icons'
 import type { NormalizeActionContext } from './types'
 import {
@@ -115,6 +116,9 @@ function defaultIconForRowActionWithKind(
   }
   if (readActionVisualProfile(node) === 'reset-password') {
     return <ReloadOutlined />
+  }
+  if (readActionVisualProfile(node) === 'test-connection') {
+    return <ApiOutlined />
   }
   const explicit = readExplicitActionKind(node) ?? inheritedExplicit ?? null
   if (explicit === 'read' || explicit === 'display') return <EyeOutlined />

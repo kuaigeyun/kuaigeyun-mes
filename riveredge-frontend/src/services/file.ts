@@ -23,8 +23,38 @@ export interface File {
   description?: string;
   is_active: boolean;
   upload_status: string;
+  storage_backend?: string;
+  storage_connection_uuid?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface FileStorageSettings {
+  backend: 'local' | 'connection' | string;
+  connection_uuid?: string | null;
+  key_prefix?: string;
+  delete_local_after_migrate?: boolean;
+}
+
+export interface FileStorageMigrateRequest {
+  connection_uuid?: string | null;
+  dry_run?: boolean;
+  cursor?: number;
+  limit?: number;
+}
+
+export interface FileStorageMigrateResult {
+  total: number;
+  cursor: number;
+  next_cursor: number;
+  limit: number;
+  done: boolean;
+  migrated: number;
+  skipped: number;
+  failed: number;
+  failures: Array<{ uuid: string; reason: string }>;
+  dry_run: boolean;
+  connection_uuid: string;
 }
 
 export interface FileListParams {
@@ -518,5 +548,32 @@ export async function backfillImageTiers(params?: {
   const qs = query.toString();
   const url = qs ? `/core/files/image-tiers/backfill?${qs}` : '/core/files/image-tiers/backfill';
   return apiRequest<ImageTierBackfillResult>(url, { method: 'POST' });
+}
+
+/** 获取文件存储位置设置（本环境） */
+export async function getFileStorageSettings(): Promise<FileStorageSettings> {
+  return apiRequest<FileStorageSettings>('/core/files/storage-settings');
+}
+
+/** 保存文件存储位置设置 */
+export async function saveFileStorageSettings(
+  data: FileStorageSettings,
+): Promise<FileStorageSettings> {
+  return apiRequest<FileStorageSettings>('/core/files/storage-settings', {
+    method: 'PUT',
+    data,
+  });
+}
+
+/**
+ * 本环境本地文件迁移到 COS（单批）。前端循环调用直至 done。
+ */
+export async function migrateFileStorageToCos(
+  data?: FileStorageMigrateRequest,
+): Promise<FileStorageMigrateResult> {
+  return apiRequest<FileStorageMigrateResult>('/core/files/storage-migrate', {
+    method: 'POST',
+    data: data || {},
+  });
 }
 

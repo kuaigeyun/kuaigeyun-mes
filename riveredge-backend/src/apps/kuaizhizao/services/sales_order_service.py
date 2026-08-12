@@ -284,6 +284,15 @@ class SalesOrderService:
         sales_order_ids: List[int],
     ) -> Dict[int, Decimal]:
         """按销售订单统计已下推工单数量（排除已取消工单）。"""
+        summary = await self._pushed_work_orders_by_sales_order(tenant_id, sales_order_ids)
+        return {oid: data["qty"] for oid, data in summary.items()}
+
+    async def _pushed_work_orders_by_sales_order(
+        self,
+        tenant_id: int,
+        sales_order_ids: List[int],
+    ) -> Dict[int, Dict[str, Any]]:
+        """按销售订单汇总已下推工单数量与编码（排除已取消工单）。"""
         ids = [int(v) for v in sales_order_ids if v is not None]
         if not ids:
             return {}
@@ -293,11 +302,15 @@ class SalesOrderService:
             deleted_at__isnull=True,
         ).exclude(
             status__in=["cancelled", "CANCELLED", "已取消"]
-        ).values_list("sales_order_id", "quantity")
-        pushed: Dict[int, Decimal] = {}
-        for so_id, qty in rows:
+        ).values_list("sales_order_id", "quantity", "code")
+        pushed: Dict[int, Dict[str, Any]] = {}
+        for so_id, qty, code in rows:
             oid = int(so_id)
-            pushed[oid] = pushed.get(oid, Decimal("0")) + Decimal(str(qty or 0))
+            bucket = pushed.setdefault(oid, {"qty": Decimal("0"), "codes": []})
+            bucket["qty"] = bucket["qty"] + Decimal(str(qty or 0))
+            code_str = str(code or "").strip()
+            if code_str and code_str not in bucket["codes"]:
+                bucket["codes"].append(code_str)
         return pushed
 
     _EXCLUDED_SALES_INVOICE_STATUSES = ("已作废", "已红冲")
@@ -687,6 +700,7 @@ class SalesOrderService:
         pushed_work_order_quantity: Optional[Decimal] = None,
         remaining_push_quantity: Optional[Decimal] = None,
         work_order_push_progress: Optional[float] = None,
+        pushed_work_order_codes: Optional[List[str]] = None,
         audit_enabled: bool = False,
     ) -> SalesOrderResponse:
         """将 SalesOrder 转为 SalesOrderResponse"""
@@ -773,6 +787,7 @@ class SalesOrderService:
             base["remaining_push_quantity"] = remaining_push_quantity
         if work_order_push_progress is not None:
             base["work_order_push_progress"] = round(float(work_order_push_progress), 1)
+        base["pushed_work_order_codes"] = list(pushed_work_order_codes or [])
         hint = shippable_hint or {}
         base["has_shippable_products"] = bool(hint.get("has_shippable_products"))
         base["shippable_quantity"] = float(hint.get("shippable_quantity") or 0.0)
@@ -1956,7 +1971,7 @@ class SalesOrderService:
         )
 
         shipped_by_order = await self._shipped_qty_by_sales_order(tenant_id, order_ids)
-        pushed_work_order_qty_by_order = await self._pushed_work_order_qty_by_sales_order(
+        pushed_work_orders_by_order = await self._pushed_work_orders_by_sales_order(
             tenant_id=tenant_id,
             sales_order_ids=order_ids,
         )
@@ -1986,7 +2001,12 @@ class SalesOrderService:
             invoice_amount_progress_val = finance.get("invoice_amount_progress", 0.0)
             collection_progress_val = finance.get("collection_progress", 0.0)
             total_qty = Decimal(str(order.total_quantity or 0))
-            pushed_qty = pushed_work_order_qty_by_order.get(order.id, Decimal("0"))
+            pushed_bucket = pushed_work_orders_by_order.get(order.id) or {
+                "qty": Decimal("0"),
+                "codes": [],
+            }
+            pushed_qty = Decimal(str(pushed_bucket.get("qty") or 0))
+            pushed_codes = list(pushed_bucket.get("codes") or [])
             remaining_qty = total_qty - pushed_qty
             if remaining_qty < 0:
                 remaining_qty = Decimal("0")
@@ -2010,6 +2030,7 @@ class SalesOrderService:
                         pushed_work_order_quantity=pushed_qty,
                         remaining_push_quantity=remaining_qty,
                         work_order_push_progress=push_ratio,
+                        pushed_work_order_codes=pushed_codes,
                         material_code_fallback=material_code_fallback_all.get(order.id) if include_items else None,
                         material_fallback=material_fallback_all.get(order.id) if include_items else None,
                         shippable_hint=shippable_map.get(order.id),

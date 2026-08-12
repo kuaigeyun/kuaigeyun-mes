@@ -17,6 +17,7 @@ import {
   getUniTableVerticalScrollbarWidth,
   isUniTableDetailProgressColumn,
   isUniTableLifecycleColumn,
+  isUniTableProgressColumn,
   resolveUniTableColumnLayoutWidth,
   UNI_TABLE_EMPTY_FALLBACK_COL_WIDTH,
 } from '../../utils/uniTableLayoutColumns'
@@ -84,6 +85,7 @@ function isUniTableLayoutColumn(col: Record<string, unknown>): boolean {
     col.hideInTable === true ||
     isUniTableOperationColumn(col) ||
     isUniTableLifecycleColumn(col) ||
+    isUniTableProgressColumn(col) ||
     isUniTableDetailProgressColumn(col)
   )
 }

@@ -142,12 +142,12 @@ import {
 
   DocumentFormPageLayout,
   DocumentFormPageHeaderActions,
+  DetailDrawerSection,
 
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
 
-  PAGE_SPACING,
-
 } from '../../../../../components/layout-templates';
+import { DOCUMENT_SUBLINE_TABLE_PROPS } from '../../../../../components/document-subline-table';
 
 import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
 import {
@@ -235,11 +235,15 @@ import {
   alignDescriptionColumns,
   alignProColumns,
   getSalesCommonFormLabels,
+  GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
   SALES_DOC_DETAIL_BASIC_FIELD_RANK,
   SALES_DOC_LIST_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS, DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS, ratioToPushProgressPercent } from '../shared/DocumentPushProgressBar';
-import { salesContractOrderPushPercent } from '../shared/pushProgress';
+import {
+  collectSalesContractPushDocuments,
+  salesContractOrderPushPercent,
+} from '../shared/pushProgress';
 import { buildDescriptionItemsFromColumns } from '../shared/descriptionItems';
 import { applyCustomerFormFields } from '../shared/applyCustomerFormFields';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -1699,309 +1703,210 @@ const SalesContractsPage: React.FC = () => {
   const contractCodeAutoEnabled = effectiveAutoGen ?? isAutoGenerateEnabled('kuaizhizao-sales-contract');
 
   const renderCreateForm = () => (
-
     <>
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionBasic')}>
+        <div className="document-form-untitled-groups">
+          <div className="document-form-untitled-group">
+            <Row gutter={16}>
+              <Col span={8}>
+                <ProFormText
+                  name="contract_code"
+                  label={t('app.kuaizhizao.salesContract.contractCode')}
+                  placeholder={
+                    contractCodeAutoEnabled
+                      ? t('app.kuaizhizao.salesContract.contractCodeAutoPlaceholder')
+                      : t('app.kuaizhizao.salesContract.contractCodeRequired')
+                  }
+                  rules={[{ required: true, whitespace: true, message: t('app.kuaizhizao.salesContract.contractCodeRequired') }]}
+                  fieldProps={{ disabled: isEditPage }}
+                />
+              </Col>
+              <Col span={8}>
+                <ProForm.Item
+                  name="customer_id"
+                  label={t('app.kuaizhizao.salesContract.customer')}
+                  rules={[{ required: true, message: t('app.kuaizhizao.salesContract.selectCustomerRequired') }]}
+                >
+                  <CustomerSelectDropdown
+                    placeholder={t('app.kuaizhizao.salesContract.selectCustomer')}
+                    style={{ width: '100%' }}
+                    customers={customerList}
+                    onCustomersChange={setCustomerList}
+                    autoLoad={false}
+                    onCustomerPick={(cust) => {
+                      applyCustomerFormFields(formRef, cust as Record<string, unknown> | null, {
+                        customerList,
+                      });
+                    }}
+                  />
+                </ProForm.Item>
+              </Col>
+              <Col span={8}>
+                <ProFormText
+                  name="salesman_name"
+                  label={salesCommonLabels.salesman}
+                  placeholder={t('app.kuaizhizao.salesContract.salesmanPlaceholder')}
+                  fieldProps={{ style: { width: '100%' } }}
+                />
+              </Col>
+            </Row>
+          </div>
+          <div className="document-form-untitled-group">
+            <Row gutter={16}>
+              <Col span={8}>
+                <ProFormDatePicker
+                  name="contract_date"
+                  label={t('app.kuaizhizao.salesContract.contractDate')}
+                  rules={[{ required: true, message: t('app.kuaizhizao.salesContract.contractDateRequired') }]}
+                  fieldProps={{ style: { width: '100%' } }}
+                />
+              </Col>
+              <Col span={8}>
+                <ProFormDatePicker
+                  name="valid_from"
+                  label={t('app.kuaizhizao.salesContract.validFrom')}
+                  fieldProps={{ style: { width: '100%' } }}
+                />
+              </Col>
+              <Col span={8}>
+                <ProFormDatePicker
+                  name="valid_to"
+                  label={t('app.kuaizhizao.salesContract.validTo')}
+                  fieldProps={buildFutureDateShortcutFieldProps({
+                    getForm: () => formRef.current,
+                    fieldName: 'valid_to',
+                    baseFieldName: 'contract_date',
+                    t,
+                  })}
+                />
+              </Col>
+            </Row>
+          </div>
+          <div className="document-form-untitled-group">
+            <Row gutter={16}>
+              <Col span={5}>
+                <DictionarySelect
+                  dictionaryCode="SHIPPING_METHOD"
+                  name="shipping_method"
+                  label={t('app.kuaizhizao.salesOrder.shippingMethod')}
+                  placeholder={t('app.kuaizhizao.salesContract.selectShippingMethod')}
+                  formRef={formRef}
+                  valueEqualsLabel={false}
+                />
+              </Col>
+              <Col span={5}>
+                <ProFormText name="customer_contact" label={salesCommonLabels.contact} />
+              </Col>
+              <Col span={5}>
+                <ProFormText name="customer_phone" label={salesCommonLabels.phone} />
+              </Col>
+              <Col span={5}>
+                <DictionarySelect
+                  dictionaryCode="PAYMENT_TERMS"
+                  name="payment_terms"
+                  label={t('app.kuaizhizao.salesOrder.paymentTerms')}
+                  placeholder={t('app.kuaizhizao.salesContract.selectPaymentTerms')}
+                  formRef={formRef}
+                  valueEqualsLabel={false}
+                />
+              </Col>
+              <Col span={4}>
+                <DictionarySelect
+                  dictionaryCode="CURRENCY"
+                  name="currency_code"
+                  label={t('app.kuaizhizao.salesContract.currency')}
+                  placeholder={t('app.kuaizhizao.salesContract.selectCurrency')}
+                  formRef={formRef}
+                  initialValue="CNY"
+                  valueEqualsLabel={false}
+                />
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={24}>
+                <ProFormText
+                  name="shipping_address"
+                  label={t('app.kuaizhizao.salesOrder.shippingAddress')}
+                  placeholder={t('app.kuaizhizao.salesContract.shippingAddressPlaceholder')}
+                />
+              </Col>
+            </Row>
+          </div>
+          <div className="document-form-untitled-group">
+            <Row gutter={16}>
+              <Col span={12}>
+                <ProFormSelect
+                  name="contract_type"
+                  label={t('app.kuaizhizao.salesContract.contractType')}
+                  rules={[{ required: true, message: t('app.kuaizhizao.salesContract.contractTypeRequired') }]}
+                  options={[
+                    { label: t('app.kuaizhizao.salesContract.contractTypeSingle'), value: 'single' },
+                    { label: t('app.kuaizhizao.salesContract.contractTypeFramework'), value: 'framework' },
+                  ]}
+                />
+              </Col>
+              <Col span={12}>
+                <ProFormSelect
+                  name="term_group_id"
+                  label={t('app.kuaizhizao.salesContract.terms.selectGroup')}
+                  placeholder={t('app.kuaizhizao.salesContract.terms.selectGroupPlaceholder')}
+                  options={termGroupOptions}
+                  fieldProps={{
+                    allowClear: true,
+                    onChange: (val: number) => {
+                      applyTermGroupPreview(val);
+                    },
+                  }}
+                />
+              </Col>
+            </Row>
+          </div>
+        </div>
+        <ProFormText name="customer_name" hidden />
+        <ProFormText name="price_type" hidden initialValue={DEFAULT_SALES_PRICE_TYPE} />
+      </DetailDrawerSection>
 
-      <Row gutter={16}>
-
-        <Col span={12}>
-
-          <ProFormText
-            name="contract_code"
-            label={t('app.kuaizhizao.salesContract.contractCode')}
-            placeholder={
-              contractCodeAutoEnabled
-                ? t('app.kuaizhizao.salesContract.contractCodeAutoPlaceholder')
-                : t('app.kuaizhizao.salesContract.contractCodeRequired')
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionLines')}>
+        <SalesContractItemsFormTable
+          formRef={formRef}
+          materialList={materialList}
+          onOpenMaterialPicker={() => setMaterialPickerOpen(true)}
+          onOpenImport={() => {
+            if (!contractPerms.canImport) {
+              messageApi.warning(t('app.kuaizhizao.salesContract.noImportPermission'));
+              return;
             }
-            rules={[{ required: true, whitespace: true, message: t('app.kuaizhizao.salesContract.contractCodeRequired') }]}
-            fieldProps={{ disabled: isEditPage }}
-          />
-
-        </Col>
-
-        <Col span={12}>
-
-          <ProForm.Item name="customer_id" label={t('app.kuaizhizao.salesContract.customer')} rules={[{ required: true, message: t('app.kuaizhizao.salesContract.selectCustomerRequired') }]}>
-
-            <CustomerSelectDropdown
-
-              placeholder={t('app.kuaizhizao.salesContract.selectCustomer')}
-
-              style={{ width: '100%' }}
-
-              customers={customerList}
-
-              onCustomersChange={setCustomerList}
-
-              autoLoad={false}
-
-              onCustomerPick={(cust) => {
-                applyCustomerFormFields(formRef, cust as Record<string, unknown> | null, {
-                  customerList,
-                });
-              }}
-
-            />
-
-          </ProForm.Item>
-
-        </Col>
-
-      </Row>
-
-      <ProFormText name="customer_name" hidden />
-      <ProFormText name="price_type" hidden initialValue={DEFAULT_SALES_PRICE_TYPE} />
-
-      <Row gutter={16}>
-
-        <Col span={5}>
-
-          <ProFormText name="salesman_name" label={salesCommonLabels.salesman} placeholder={t('app.kuaizhizao.salesContract.salesmanPlaceholder')} fieldProps={{ style: { width: '100%' } }} />
-
-        </Col>
-
-        <Col span={5}>
-
-          <ProFormDatePicker
-
-            name="contract_date"
-
-            label={t('app.kuaizhizao.salesContract.contractDate')}
-
-            rules={[{ required: true, message: t('app.kuaizhizao.salesContract.contractDateRequired') }]}
-
-            fieldProps={{ style: { width: '100%' } }}
-
-          />
-
-        </Col>
-
-        <Col span={5}>
-
-          <ProFormDatePicker name="valid_from" label={t('app.kuaizhizao.salesContract.validFrom')} fieldProps={{ style: { width: '100%' } }} />
-
-        </Col>
-
-        <Col span={5}>
-
-          <ProFormDatePicker name="valid_to" label={t('app.kuaizhizao.salesContract.validTo')} fieldProps={buildFutureDateShortcutFieldProps({ getForm: () => formRef.current, fieldName: 'valid_to', baseFieldName: 'contract_date', t })} />
-
-        </Col>
-
-        <Col span={4}>
-
-          <DictionarySelect
-
-            dictionaryCode="SHIPPING_METHOD"
-
-            name="shipping_method"
-
-            label={t('app.kuaizhizao.salesOrder.shippingMethod')}
-
-            placeholder={t('app.kuaizhizao.salesContract.selectShippingMethod')}
-
-            formRef={formRef}
-
-            valueEqualsLabel={false}
-
-          />
-
-        </Col>
-
-      </Row>
-
-      <Row gutter={16}>
-
-        <Col span={4}>
-
-          <ProFormText name="customer_contact" label={salesCommonLabels.contact} />
-
-        </Col>
-
-        <Col span={4}>
-
-          <ProFormText name="customer_phone" label={salesCommonLabels.phone} />
-
-        </Col>
-
-        <Col span={8}>
-
-          <ProFormText name="shipping_address" label={t('app.kuaizhizao.salesOrder.shippingAddress')} placeholder={t('app.kuaizhizao.salesContract.shippingAddressPlaceholder')} />
-
-        </Col>
-
-        <Col span={4}>
-
-          <DictionarySelect
-
-            dictionaryCode="PAYMENT_TERMS"
-
-            name="payment_terms"
-
-            label={t('app.kuaizhizao.salesOrder.paymentTerms')}
-
-            placeholder={t('app.kuaizhizao.salesContract.selectPaymentTerms')}
-
-            formRef={formRef}
-
-            valueEqualsLabel={false}
-
-          />
-
-        </Col>
-
-        <Col span={4}>
-
-          <DictionarySelect
-
-            dictionaryCode="CURRENCY"
-
-            name="currency_code"
-
-            label={t('app.kuaizhizao.salesContract.currency')}
-
-            placeholder={t('app.kuaizhizao.salesContract.selectCurrency')}
-
-            formRef={formRef}
-
-            initialValue="CNY"
-
-            valueEqualsLabel={false}
-
-          />
-
-        </Col>
-
-      </Row>
-
-      <SalesContractItemsFormTable
-
-        formRef={formRef}
-
-        materialList={materialList}
-
-        onOpenMaterialPicker={() => setMaterialPickerOpen(true)}
-
-        onOpenImport={() => {
-          if (!contractPerms.canImport) {
-            messageApi.warning(t('app.kuaizhizao.salesContract.noImportPermission'));
-            return;
-          }
-          setImportModalVisible(true);
-        }}
-        showImportButton={contractPerms.canImport}
-
-        onPriceTypeChange={handleContractPriceTypeChange}
-
-        onRefreshLinePriceByVariant={refreshContractLinePriceByVariant}
-
-        editingIncl={contractEditingIncl}
-
-        setEditingIncl={setContractEditingIncl}
-
-        editingInclValueRef={contractEditingInclValueRef}
-
-      />
-
-      <div style={{ marginTop: 16 }}>
-
-        <Row gutter={16}>
-
-          <Col span={12}>
-
-            <ProFormSelect
-
-              name="contract_type"
-
-              label={t('app.kuaizhizao.salesContract.contractType')}
-
-              rules={[{ required: true, message: t('app.kuaizhizao.salesContract.contractTypeRequired') }]}
-
-              options={[
-
-                { label: t('app.kuaizhizao.salesContract.contractTypeSingle'), value: 'single' },
-
-                { label: t('app.kuaizhizao.salesContract.contractTypeFramework'), value: 'framework' },
-
-              ]}
-
-            />
-
-          </Col>
-
-          <Col span={12}>
-
-            <ProFormSelect
-
-              name="term_group_id"
-
-              label={t('app.kuaizhizao.salesContract.terms.selectGroup')}
-
-              placeholder={t('app.kuaizhizao.salesContract.terms.selectGroupPlaceholder')}
-
-              options={termGroupOptions}
-
-              fieldProps={{
-
-                allowClear: true,
-
-                onChange: (val: number) => {
-
-                  applyTermGroupPreview(val);
-
-                },
-
-              }}
-
-            />
-
-          </Col>
-
-        </Row>
+            setImportModalVisible(true);
+          }}
+          showImportButton={contractPerms.canImport}
+          onPriceTypeChange={handleContractPriceTypeChange}
+          onRefreshLinePriceByVariant={refreshContractLinePriceByVariant}
+          editingIncl={contractEditingIncl}
+          setEditingIncl={setContractEditingIncl}
+          editingInclValueRef={contractEditingInclValueRef}
+        />
 
         <ProForm.Item label={t('app.kuaizhizao.salesContract.paymentPlanOptional')} colon={false} style={{ marginTop: 16 }}>
-
           <AntForm.List name="milestones">
-
             {(fields, { add, remove }) => {
-
               const msCols = [
-
                 {
-
                   title: t('app.kuaizhizao.salesContract.milestoneName'),
-
                   width: 160,
-
                   render: (_: unknown, __: unknown, index: number) => (
-
                     <ProFormText
-
                       name={[index, 'milestone_name']}
-
                       placeholder={t('app.kuaizhizao.salesContract.milestoneNamePlaceholder')}
-
                       formItemProps={{ style: { margin: 0 } }}
-
                     />
-
                   ),
-
                 },
-
                 {
-
                   title: t('app.kuaizhizao.salesContract.plannedDate'),
-
                   width: 140,
-
                   render: (_: unknown, __: unknown, index: number) => (
-
                     <ProFormDatePicker
-
                       name={[index, 'planned_date']}
-
                       fieldProps={buildFutureDateShortcutFieldProps({
                         getForm: () => formRef.current,
                         fieldName: 'planned_date',
@@ -2010,133 +1915,81 @@ const SalesContractsPage: React.FC = () => {
                         onApply: (date) =>
                           formRef.current?.setFieldValue?.(['milestones', index, 'planned_date'], date),
                       })}
-
                       formItemProps={{ style: { margin: 0 } }}
-
                     />
-
                   ),
-
                 },
-
                 {
-
                   title: t('app.kuaizhizao.salesContract.plannedAmount'),
-
                   width: 120,
-
                   render: (_: unknown, __: unknown, index: number) => (
-
                     <ProFormDigit
-
                       name={[index, 'planned_amount']}
-
                       min={0}
-
                       fieldProps={{ style: { width: '100%' } }}
-
                       formItemProps={{ style: { margin: 0 } }}
-
                     />
-
                   ),
-
                 },
-
                 {
-
                   title: t('app.kuaizhizao.salesContract.ratioPercent'),
-
                   width: 100,
-
                   render: (_: unknown, __: unknown, index: number) => (
-
                     <ProFormDigit
-
                       name={[index, 'planned_ratio']}
-
                       min={0}
-
                       max={100}
-
                       fieldProps={{ style: { width: '100%' } }}
-
                       formItemProps={{ style: { margin: 0 } }}
-
                     />
-
                   ),
-
                 },
-
                 {
-
                   title: t('app.kuaizhizao.salesContract.billingTrigger'),
-
                   width: 120,
-
                   render: (_: unknown, __: unknown, index: number) => (
-
                     <ProFormSelect
-
                       name={[index, 'billing_trigger']}
-
                       options={[
-
                         { label: t('app.kuaizhizao.salesContract.billingTriggerMilestone'), value: 'milestone' },
-
                         { label: t('app.kuaizhizao.salesContract.billingTriggerDelivery'), value: 'delivery' },
-
                       ]}
-
                       formItemProps={{ style: { margin: 0 } }}
-
                     />
-
                   ),
-
                 },
-
                 {
-
                   title: t('common.actions'),
-
                   width: 60,
-
                   render: (_: unknown, __: unknown, index: number) => (
-
                     <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} />
-
                   ),
-
                 },
-
               ];
-
               return (
-
                 <>
-
                   {fields.length > 0 ? (
-
-                    <Table size="small" bordered pagination={false} rowKey="key" dataSource={fields} columns={msCols as any} scroll={{ x: 'max-content' }} />
-
+                    <Table
+                      {...DOCUMENT_SUBLINE_TABLE_PROPS}
+                      rowKey="key"
+                      dataSource={fields}
+                      columns={msCols as any}
+                      scroll={{ x: 'max-content' }}
+                    />
                   ) : null}
-
-                  <Button type="dashed" block icon={<PlusOutlined />} style={{ marginTop: 8 }} onClick={() => add({ ...defaultMilestone })}>
-
+                  <Button
+                    type="dashed"
+                    block
+                    icon={<PlusOutlined />}
+                    style={{ marginTop: 8 }}
+                    onClick={() => add({ ...defaultMilestone })}
+                  >
                     {t('app.kuaizhizao.salesContract.addPaymentNode')}
-
                   </Button>
-
                 </>
-
               );
-
             }}
-
           </AntForm.List>
-
         </ProForm.Item>
 
         {termFieldBindingKeys.length > 0 && (
@@ -2182,47 +2035,35 @@ const SalesContractsPage: React.FC = () => {
         )}
 
         {termsPreview.length > 0 && (
-
           <Card
-
             size="small"
-
             title={t('app.kuaizhizao.salesContract.terms.previewTitle')}
-
             style={{ marginBottom: 16 }}
-
           >
-
             {termsPreview.map((term, idx) => (
-
               <div key={`${term.term_item_id ?? idx}-${term.term_name}`} style={{ marginBottom: 12 }}>
-
                 <Typography.Text strong>
-
                   {idx + 1}. {term.term_name}
-
                 </Typography.Text>
-
                 <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
                   <ContractTermPreviewContent content={term.content ?? ''} />
                 </Typography.Paragraph>
-
               </div>
-
             ))}
-
           </Card>
-
         )}
 
-        <DocumentAttachmentsField category="sales_contract_attachments" />
-
         <ProFormTextArea name="notes" label={t('app.kuaizhizao.salesOrder.notes')} fieldProps={{ rows: 2 }} />
+      </DetailDrawerSection>
 
-      </div>
-
+      <DetailDrawerSection
+        titleAccent
+        title={t('app.uniDetail.sectionAttachments')}
+        marginBottom={0}
+      >
+        <DocumentAttachmentsField category="sales_contract_attachments" label={false} />
+      </DetailDrawerSection>
     </>
-
   );
 
 
@@ -2969,6 +2810,13 @@ const SalesContractsPage: React.FC = () => {
                 pushed: releasedQty,
                 total: totalQty,
               })}
+              documents={collectSalesContractPushDocuments(
+                r.released_sales_order_codes,
+                t('components.documentTrackingPanel.docType.sales_order'),
+              )}
+              formatMoreDocs={(count) =>
+                t('app.kuaizhizao.salesManagement.pushProgress.moreDocs', { count })
+              }
             />
           );
         },
@@ -3073,7 +2921,9 @@ const SalesContractsPage: React.FC = () => {
   );
 
   const detailTableColumns: ProColumns<SalesContractItemRow>[] = useMemo(
-    () => [
+    () =>
+      alignProColumns<SalesContractItemRow>(
+        [
       {
         title: `${t('app.kuaizhizao.salesContract.customer')} / ${t('app.kuaizhizao.salesContract.contractCode')}`,
         key: 'contract_code',
@@ -3193,7 +3043,9 @@ const SalesContractsPage: React.FC = () => {
           />
         ),
       },
-    ],
+        ],
+        GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
+      ),
     [contractLifecycleValueEnum, t],
   );
 
@@ -3467,8 +3319,7 @@ const SalesContractsPage: React.FC = () => {
             </>
           }
         >
-          <Card styles={{ body: { padding: PAGE_SPACING.PADDING } }}>
-            <div className="form-modal-content-inner">
+          <div className="form-modal-content-inner">
               <ProForm
                 formRef={formRef}
                 layout="vertical"
@@ -3478,15 +3329,14 @@ const SalesContractsPage: React.FC = () => {
                 onFinish={(values) => handleFormSubmit(values, { asDraft: false })}
                 onFinishFailed={({ errorFields }) => {
                   const first = errorFields?.[0];
-                  const text = first?.errors?.filter(Boolean)[0];
-                  messageApi.error(text || t('components.layoutTemplates.formModal.checkFormHint'));
+                  const msg = first?.errors?.filter(Boolean)[0];
+                  messageApi.error(msg || t('components.layoutTemplates.formModal.checkFormHint'));
                 }}
                 initialValues={isCreatePage ? { items: [{ ...defaultContractItem }], discount_amount: 0, price_type: DEFAULT_SALES_PRICE_TYPE } : undefined}
               >
                 {renderCreateForm()}
               </ProForm>
             </div>
-          </Card>
         </DocumentFormPageLayout>
         <UniMaterialBatchPicker
           open={materialPickerOpen}

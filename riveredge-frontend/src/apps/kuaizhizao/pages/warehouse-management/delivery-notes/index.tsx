@@ -23,6 +23,7 @@ import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNu
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, PrinterOutlined, MoreOutlined, ShoppingOutlined, DownOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -229,9 +230,11 @@ const DeliveryNotesPage: React.FC = () => {
       sorter: true,
       hideInSearch: true,
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.sales_delivery_code ?? '') }} ellipsis>
-          {r.sales_delivery_code ?? '-'}
-        </Typography.Text>
+        <LinkedDocumentCode
+          documentType="sales_delivery"
+          documentId={r.sales_delivery_id}
+          code={r.sales_delivery_code}
+        />
       ),
     },
     {
@@ -762,8 +765,28 @@ const DeliveryNotesPage: React.FC = () => {
 
   const detailColumns: ProDescriptionsItemProps<DeliveryNoticeDetail>[] = useMemo(() => [
     { title: t('app.kuaizhizao.deliveryNote.col.noticeCode'), dataIndex: 'notice_code' },
-    { title: t('app.kuaizhizao.deliveryNote.col.salesDeliveryCode'), dataIndex: 'sales_delivery_code' },
-    { title: t('app.kuaizhizao.deliveryNote.col.salesOrderCode'), dataIndex: 'sales_order_code' },
+    {
+      title: t('app.kuaizhizao.deliveryNote.col.salesDeliveryCode'),
+      dataIndex: 'sales_delivery_code',
+      render: (_, r) => (
+        <LinkedDocumentCode
+          documentType="sales_delivery"
+          documentId={r.sales_delivery_id}
+          code={r.sales_delivery_code}
+        />
+      ),
+    },
+    {
+      title: t('app.kuaizhizao.deliveryNote.col.salesOrderCode'),
+      dataIndex: 'sales_order_code',
+      render: (_, r) => (
+        <LinkedDocumentCode
+          documentType="sales_order"
+          documentId={r.sales_order_id}
+          code={r.sales_order_code}
+        />
+      ),
+    },
     { title: t('app.kuaizhizao.deliveryNote.field.customer'), dataIndex: 'customer_name' },
     { title: t('app.kuaizhizao.deliveryNote.field.contact'), dataIndex: 'customer_contact' },
     { title: t('app.kuaizhizao.deliveryNote.field.phone'), dataIndex: 'customer_phone' },

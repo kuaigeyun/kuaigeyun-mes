@@ -5,12 +5,12 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import {
   App,
   Button,
+  Dropdown,
   Empty,
   Form,
   Input,
   InputNumber,
   Modal,
-  Popconfirm,
   Select,
   Space,
   Spin,
@@ -19,6 +19,7 @@ import {
   Timeline,
   Typography,
 } from 'antd';
+import type { MenuProps } from 'antd';
 import {
   PlusOutlined,
   UserAddOutlined,
@@ -28,6 +29,9 @@ import {
   EditOutlined,
   TeamOutlined,
   HistoryOutlined,
+  MoreOutlined,
+  DeleteOutlined,
+  FormOutlined,
 } from '@ant-design/icons';
 import { useCustomerPoolPermissions } from '../../../hooks/useCustomerPoolPermissions';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -37,6 +41,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniDetail } from '../../../../../components/uni-detail';
 import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS,
   UniTableStackedPrimaryCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
@@ -73,11 +78,14 @@ import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictio
 import type { CustomerCreate } from '../../../../master-data/types/supply-chain';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { normalizeUserDisplayName } from '../../../../../utils/userDisplay';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
 import {
   formatCustomerPoolDateTimeCell,
   resolveCustomerPoolListParams,
 } from '../../../utils/customerPoolListCore';
+
+const CUSTOMER_POOL_HOST_RESOURCE = 'kuaizhizao:customer-pool';
 
 const CustomerPoolPage: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -213,7 +221,7 @@ const CustomerPoolPage: React.FC = () => {
     setAssignOpen(true);
     assignForm.resetFields();
     try {
-      const options = await getUserOptions();
+      const options = await getUserOptions(CUSTOMER_POOL_HOST_RESOURCE);
       setAssignUsers(options || []);
     } catch {
       setAssignUsers([]);
@@ -274,7 +282,10 @@ const CustomerPoolPage: React.FC = () => {
       setCollabLoading(true);
       collabForm.resetFields();
       try {
-        const [options, collaborators] = await Promise.all([getUserOptions(), customerPoolApi.getCollaborators(row.id)]);
+        const [options, collaborators] = await Promise.all([
+          getUserOptions(CUSTOMER_POOL_HOST_RESOURCE),
+          customerPoolApi.getCollaborators(row.id),
+        ]);
         setCollabUserOptions(
           (options || []).map((option) => ({
             label: String(option.label ?? option.value),
@@ -434,7 +445,7 @@ const CustomerPoolPage: React.FC = () => {
     let cancelled = false;
     (async () => {
       try {
-        const options = await getUserOptions();
+        const options = await getUserOptions(CUSTOMER_POOL_HOST_RESOURCE);
         if (!cancelled) setSalesmanOptions(options || []);
       } catch {
         if (!cancelled) setSalesmanOptions([]);
@@ -523,6 +534,7 @@ const CustomerPoolPage: React.FC = () => {
       },
       {
         title: `${t('field.customer.contactPerson')} / ${t('field.customer.phone')}`,
+        key: 'pool_contact_phone_stacked',
         dataIndex: 'contact_person',
         ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         minWidth: 190,
@@ -537,11 +549,12 @@ const CustomerPoolPage: React.FC = () => {
       },
       {
         title: t('field.customer.salesman'),
+        key: 'pool_salesman_name',
         dataIndex: 'salesman_name',
         width: 120,
         sorter: true,
         hideInSearch: true,
-        render: (_, row) => row.salesman_name || '—',
+        render: (_, row) => normalizeUserDisplayName(row.salesman_name) || '—',
       },
       {
         title: t('app.kuaizhizao.customerPool.collaborators'),
@@ -588,9 +601,13 @@ const CustomerPoolPage: React.FC = () => {
         hideInSearch: true,
         render: (_, row) => (
           row.pool_status === 'pool' ? (
-            <Tag color="blue">{t('app.kuaizhizao.customerPool.scopePublic')}</Tag>
+            <Tag color="blue" bordered={false} variant="filled">
+              {t('app.kuaizhizao.customerPool.scopePublic')}
+            </Tag>
           ) : (
-            <Tag color="green">{t('app.kuaizhizao.customerPool.scopePrivate')}</Tag>
+            <Tag color="green" bordered={false} variant="filled">
+              {t('app.kuaizhizao.customerPool.scopePrivate')}
+            </Tag>
           )
         ),
       },
@@ -657,10 +674,8 @@ const CustomerPoolPage: React.FC = () => {
       {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
-        width: 148,
-        uniTableKeepWidth: true,
+        ...UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS,
         sorter: true,
-        hideInSearch: true,
         render: (_, row) => {
           const hasUpdatedAt = Boolean(row.updated_at);
           const operator = hasUpdatedAt ? String(row.updated_by_name ?? '-') : String(row.created_by_name ?? '-');
@@ -701,24 +716,26 @@ const CustomerPoolPage: React.FC = () => {
         title: t('common.actions'),
         dataIndex: 'option',
         fixed: 'right',
-        minWidth: 320,
+        minWidth: 280,
         hideInSearch: true,
         render: (_, row) => {
-          const actions: React.ReactNode[] = [];
+          const inline: React.ReactNode[] = [];
           if (row.uuid) {
-            actions.push(
-              <Button {...rowActionKind('read')}
+            inline.push(
+              <Button
+                {...rowActionKind('read')}
                 key="detail"
                 type="link"
                 size="small"
                 onClick={() => openDetailCustomer(row.uuid)}
               >
                 {t('common.detail')}
-              </Button>
+              </Button>,
             );
             if (canUpdateCustomer) {
-              actions.push(
-                <Button {...rowActionKind('update')}
+              inline.push(
+                <Button
+                  {...rowActionKind('update')}
                   key="edit"
                   type="link"
                   size="small"
@@ -726,131 +743,196 @@ const CustomerPoolPage: React.FC = () => {
                   onClick={() => openEditCustomer(row.uuid)}
                 >
                   {t('common.edit')}
-                </Button>
-              );
-            }
-            if (canDeleteCustomer) {
-              actions.push(
-                <Popconfirm
-                  {...rowActionKind('delete')}
-                  key="delete"
-                  title={t('app.kuaizhizao.customerPool.confirmDeleteCustomer')}
-                  description={t('app.kuaizhizao.customerPool.confirmDeleteCustomerDesc', {
-                    name: row.name || row.code || t('app.kuaizhizao.customerPool.customerFallback'),
-                  })}
-                  onConfirm={() => handleDeleteCustomer(row)}
-                >
-                  <Button type="link" size="small" danger>
-                    {t('common.delete')}
-                  </Button>
-                </Popconfirm>,
+                </Button>,
               );
             }
           }
-          if (row.pool_status === 'pool') {
-          } else {
-            actions.push(
+
+          const isOwned = row.pool_status !== 'pool';
+          if (isOwned) {
+            inline.push(
               <Button
                 {...rowActionKind('create')}
                 key="quote"
                 type="link"
                 size="small"
-                data-action-priority={15}
                 onClick={() => toQuotation(row.id)}
               >
                 {t('app.kuaizhizao.customerPool.goToQuotation')}
               </Button>,
             );
-            actions.push(
-              <Button {...rowActionKind('create')} key="follow-up" onClick={() => openFollowUp(row.id)}>
-                {t('app.kuaizhizao.customerPool.newFollowUp')}
-              </Button>
+          }
+
+          const makeItem = (
+            key: string,
+            label: string,
+            onClick: () => void,
+            options?: { icon?: React.ReactNode; danger?: boolean },
+          ): NonNullable<MenuProps['items']>[number] => ({
+            key,
+            icon: options?.icon,
+            label,
+            danger: options?.danger,
+            onClick: ({ domEvent }) => {
+              domEvent?.stopPropagation?.();
+              onClick();
+            },
+          });
+
+          const followUpItems: NonNullable<MenuProps['items']> = [];
+          const ownershipItems: NonNullable<MenuProps['items']> = [];
+          const recordItems: NonNullable<MenuProps['items']> = [];
+          const dangerItems: NonNullable<MenuProps['items']> = [];
+
+          if (isOwned) {
+            followUpItems.push(
+              makeItem(
+                'follow-up',
+                t('app.kuaizhizao.customerPool.newFollowUp'),
+                () => openFollowUp(row.id),
+                { icon: <FormOutlined /> },
+              ),
             );
             if (canManageCollaborators(row)) {
-              actions.push(
-                <Button
-                  {...rowActionKind('update')}
-                  key="collaborators"
-                  type="link"
-                  size="small"
-                  icon={<TeamOutlined />}
-                  onClick={() => {
+              followUpItems.push(
+                makeItem(
+                  'collaborators',
+                  t('app.kuaizhizao.customerPool.manageCollaborators'),
+                  () => {
                     void openCollaboratorsModal(row);
-                  }}
-                >
-                  {t('app.kuaizhizao.customerPool.manageCollaborators')}
-                </Button>,
+                  },
+                  { icon: <TeamOutlined /> },
+                ),
               );
             }
-            actions.push(
-              <Button
-                {...rowActionKind('read')}
-                key="pool-logs"
-                type="link"
-                size="small"
-                icon={<HistoryOutlined />}
-                data-action-priority={500}
-                onClick={() => {
-                  void openPoolLogsModal(row);
-                }}
-              >
-                {t('app.kuaizhizao.customerPool.poolLogs')}
-              </Button>,
-            );
             if (canRelease) {
-              actions.push(
-                <Button {...rowActionKind('release')}
-                  key="release"
-                  type="link"
-                  size="small"
-                  icon={<RollbackOutlined />}
-                  onClick={() => {
-                    confirmReleaseCustomer(row);
-                  }}
-                >
-                  {t('components.uniAction.release')}
-                </Button>
+              ownershipItems.push(
+                makeItem(
+                  'release',
+                  t('components.uniAction.release'),
+                  () => confirmReleaseCustomer(row),
+                  { icon: <RollbackOutlined /> },
+                ),
               );
             }
             if (canRecycle) {
-              actions.push(
-                <Button {...rowActionKind('recycle')}
-                  key="recycle"
-                  type="link"
-                  size="small"
-                  icon={<SyncOutlined />}
-                  onClick={async () => {
-                    try {
-                      await customerPoolApi.recycle(row.id);
-                      message.success(t('app.kuaizhizao.customerPool.recycledSuccess'));
-                      actionRef.current?.reload();
-                    } catch (error: any) {
-                      message.error(error?.message || t('app.kuaizhizao.customerPool.recycleFailed'));
-                    }
-                  }}
-                >
-                  {t('app.kuaizhizao.customerPool.forceRecycle')}
-                </Button>
+              ownershipItems.push(
+                makeItem(
+                  'recycle',
+                  t('app.kuaizhizao.customerPool.forceRecycle'),
+                  () => {
+                    void (async () => {
+                      try {
+                        await customerPoolApi.recycle(row.id);
+                        message.success(t('app.kuaizhizao.customerPool.recycledSuccess'));
+                        actionRef.current?.reload();
+                      } catch (error: any) {
+                        message.error(error?.message || t('app.kuaizhizao.customerPool.recycleFailed'));
+                      }
+                    })();
+                  },
+                  { icon: <SyncOutlined />, danger: true },
+                ),
               );
             }
+            recordItems.push(
+              makeItem(
+                'pool-logs',
+                t('app.kuaizhizao.customerPool.poolLogs'),
+                () => {
+                  void openPoolLogsModal(row);
+                },
+                { icon: <HistoryOutlined /> },
+              ),
+            );
           }
-          return actions;
+
+          if (row.uuid && canDeleteCustomer) {
+            dangerItems.push(
+              makeItem(
+                'delete',
+                t('common.delete'),
+                () => {
+                  modal.confirm({
+                    title: t('app.kuaizhizao.customerPool.confirmDeleteCustomer'),
+                    content: t('app.kuaizhizao.customerPool.confirmDeleteCustomerDesc', {
+                      name: row.name || row.code || t('app.kuaizhizao.customerPool.customerFallback'),
+                    }),
+                    okText: t('common.confirm'),
+                    cancelText: t('common.cancel'),
+                    okButtonProps: { danger: true },
+                    onOk: () => handleDeleteCustomer(row),
+                  });
+                },
+                { icon: <DeleteOutlined />, danger: true },
+              ),
+            );
+          }
+
+          const moreItems: MenuProps['items'] = [];
+          if (followUpItems.length) {
+            moreItems.push({
+              type: 'group',
+              label: t('app.kuaizhizao.customerPool.groupFollowUp'),
+              children: followUpItems,
+            });
+          }
+          if (ownershipItems.length) {
+            moreItems.push({
+              type: 'group',
+              label: t('app.kuaizhizao.customerPool.groupOwnership'),
+              children: ownershipItems,
+            });
+          }
+          if (recordItems.length) {
+            moreItems.push({
+              type: 'group',
+              label: t('app.kuaizhizao.customerPool.groupRecords'),
+              children: recordItems,
+            });
+          }
+          if (dangerItems.length) {
+            moreItems.push({
+              type: 'group',
+              label: t('app.kuaizhizao.customerPool.groupDanger'),
+              children: dangerItems,
+            });
+          }
+
+          if (moreItems.length > 0) {
+            inline.push(
+              <Dropdown
+                {...rowActionKind('skip')}
+                key="more"
+                trigger={['click']}
+                menu={{ items: moreItems }}
+              >
+                <Button
+                  {...rowActionKind('skip')}
+                  type="text"
+                  size="small"
+                  className="ant-btn-row-action"
+                  icon={<MoreOutlined />}
+                >
+                  {t('common.more')}
+                </Button>
+              </Dropdown>,
+            );
+          }
+
+          return inline;
         },
       },
     ], SALES_DOC_LIST_FIELD_RANK),
     [
-      buildPoolLogDescription,
-      canAssign,
-      canClaim,
       canDeleteCustomer,
       canManageCollaborators,
       canRecycle,
       canRelease,
       canUpdateCustomer,
       confirmReleaseCustomer,
-      formatPoolLogAction,
       handleDeleteCustomer,
-      navigate,
+      modal,
       openCollaboratorsModal,
       openPoolLogsModal,
       poolStatusValueEnum,
@@ -1371,6 +1453,7 @@ const CustomerPoolPage: React.FC = () => {
       <CustomerFormModal
         open={editOpen}
         editUuid={editUuid}
+        hostResource={CUSTOMER_POOL_HOST_RESOURCE}
         collaboratorSupport={customerPoolCollaboratorSupport}
         onClose={() => {
           setEditOpen(false);

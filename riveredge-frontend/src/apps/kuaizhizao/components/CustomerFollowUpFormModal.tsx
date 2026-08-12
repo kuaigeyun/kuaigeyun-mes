@@ -682,6 +682,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
       <CustomerFormModal
         open={customerModalVisible}
         editUuid={null}
+        hostResource="kuaizhizao:customer-follow-up"
         onClose={() => setCustomerModalVisible(false)}
         zIndex={zIndex != null ? zIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET : undefined}
         onSuccess={(newCust) => {

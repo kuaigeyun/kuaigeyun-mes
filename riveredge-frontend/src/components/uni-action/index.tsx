@@ -30,6 +30,7 @@ export {
   rowActionKind,
   rowActionResetPassword,
   rowActionAddFollowUpFromDocument,
+  rowActionTestConnection,
   rowActionToneDestructive,
   ROW_ACTION_KIND_ATTR,
   ROW_ACTION_TONE_ATTR,

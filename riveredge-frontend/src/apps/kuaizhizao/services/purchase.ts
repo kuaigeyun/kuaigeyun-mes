@@ -105,6 +105,8 @@ export interface PurchaseOrder {
   notes?: string;
   items_count?: number;
   downstream_push_progress?: number;
+  downstream_receipt_notice_codes?: string[];
+  downstream_purchase_receipt_codes?: string[];
   received_total?: number;
   outstanding_total?: number;
   receipt_progress?: number;

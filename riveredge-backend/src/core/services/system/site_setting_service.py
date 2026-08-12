@@ -190,9 +190,22 @@ class SiteSettingService:
         Returns:
             SiteSetting: 站点设置对象
         """
+        from core.utils.integration_settings import (
+            migrate_legacy_ai_integrations,
+            migrate_llm_providers_to_connections,
+        )
+
         rows = await SiteSettingService._active_settings_for_tenant(tenant_id)
         if rows:
-            return await SiteSettingService._canonical_settings(rows)
+            site_settings = await SiteSettingService._canonical_settings(rows)
+            settings_dict = dict(site_settings.settings or {})
+            changed = migrate_legacy_ai_integrations(settings_dict)
+            if await migrate_llm_providers_to_connections(tenant_id, settings_dict):
+                changed = True
+            if changed:
+                site_settings.settings = settings_dict
+                await site_settings.save(update_fields=["settings", "updated_at"])
+            return site_settings
 
         try:
             return await SiteSetting.create(
@@ -202,7 +215,15 @@ class SiteSettingService:
         except IntegrityError:
             rows = await SiteSettingService._active_settings_for_tenant(tenant_id)
             if rows:
-                return await SiteSettingService._canonical_settings(rows)
+                site_settings = await SiteSettingService._canonical_settings(rows)
+                settings_dict = dict(site_settings.settings or {})
+                changed = migrate_legacy_ai_integrations(settings_dict)
+                if await migrate_llm_providers_to_connections(tenant_id, settings_dict):
+                    changed = True
+                if changed:
+                    site_settings.settings = settings_dict
+                    await site_settings.save(update_fields=["settings", "updated_at"])
+                return site_settings
             raise
     
     @staticmethod
@@ -271,7 +292,7 @@ class SiteSettingService:
         """
         site_settings = await SiteSettingService.get_settings(tenant_id)
         site_settings.update_settings(data.settings)
-        await site_settings.save(update_fields=["settings"])
+        await site_settings.save(update_fields=["settings", "updated_at"])
         return site_settings
 
     @staticmethod

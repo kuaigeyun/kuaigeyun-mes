@@ -43,6 +43,7 @@ const ROW_ACTION_LABEL_FALLBACK: Partial<Record<RowActionPermissionKind, string>
 const VISUAL_PROFILE_LABEL_FALLBACK: Record<RowActionVisualProfile, string> = {
   'add-follow-up-from-document': '添加跟进',
   'reset-password': '重置',
+  'test-connection': '测试连接',
 }
 
 const ROW_ACTION_I18N_KEY: Partial<Record<RowActionPermissionKind, string>> = {
@@ -75,6 +76,7 @@ const ROW_ACTION_I18N_KEY: Partial<Record<RowActionPermissionKind, string>> = {
 const VISUAL_PROFILE_I18N_KEY: Record<RowActionVisualProfile, string> = {
   'add-follow-up-from-document': 'components.uniAction.addFollowUpFromDocument',
   'reset-password': 'components.uniAction.resetPassword',
+  'test-connection': 'components.uniAction.testConnection',
 }
 
 /** 行内操作排序（细于 detail/edit/delete 三分法；与 overflow 直出/折叠一致） */
@@ -108,6 +110,7 @@ const ROW_ACTION_SORT_RANK: Partial<Record<RowActionPermissionKind, number>> = {
 
 const VISUAL_PROFILE_SORT_RANK: Record<RowActionVisualProfile, number> = {
   'add-follow-up-from-document': 85,
+  'test-connection': 15,
   'reset-password': 990,
 }
 

@@ -12,6 +12,7 @@ import type { TFunction } from 'i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useNavigate } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import {
   salesReturnBatchConfirmAllowed,
@@ -636,29 +637,59 @@ const SalesReturnsPage: React.FC = () => {
       },
     },
     {
-      title: t('app.kuaizhizao.salesReturn.colSalesDeliveryCode'),
-      dataIndex: 'sales_delivery_code',
-      width: 140,
-      ellipsis: true,
-      sorter: true,
-      fieldProps: { placeholder: t('app.kuaizhizao.salesReturn.colSalesDeliveryCode') },
-    },
-    {
-      title: t('app.kuaizhizao.salesReturn.colSalesOrderCode'),
-      dataIndex: 'sales_order_code',
-      width: 140,
-      ellipsis: true,
-      sorter: true,
-      fieldProps: { placeholder: t('app.kuaizhizao.salesReturn.colSalesOrderCode') },
-    },
-    {
       title: t('app.kuaizhizao.salesReturn.colWarehouse'),
+      key: 'sales_return_warehouse',
       dataIndex: 'warehouse_name',
       width: 140,
       ellipsis: true,
       uniTableKeepWidth: true,
       sorter: true,
       hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.salesReturn.colRelatedDocs'),
+      key: 'sales_return_related_docs',
+      dataIndex: 'sales_order_code',
+      width: 140,
+      uniTableKeepWidth: true,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, record) => {
+        // 退货来源一般为销售订单或销售出库单二选一，不会同时作为主来源
+        const delivery = String(record.sales_delivery_code ?? '').trim();
+        const order = String(record.sales_order_code ?? '').trim();
+        if (delivery && record.sales_delivery_id) {
+          return (
+            <LinkedDocumentCode
+              documentType="sales_delivery"
+              documentId={record.sales_delivery_id}
+              code={delivery}
+            />
+          );
+        }
+        if (order && record.sales_order_id) {
+          return (
+            <LinkedDocumentCode
+              documentType="sales_order"
+              documentId={record.sales_order_id}
+              code={order}
+            />
+          );
+        }
+        return delivery || order || '-';
+      },
+    },
+    {
+      title: t('app.kuaizhizao.salesReturn.colSalesOrderCode'),
+      dataIndex: 'sales_order_code',
+      hideInTable: true,
+      fieldProps: { placeholder: t('app.kuaizhizao.salesReturn.colSalesOrderCode') },
+    },
+    {
+      title: t('app.kuaizhizao.salesReturn.colSalesDeliveryCode'),
+      dataIndex: 'sales_delivery_code',
+      hideInTable: true,
+      fieldProps: { placeholder: t('app.kuaizhizao.salesReturn.colSalesDeliveryCode') },
     },
     {
       title: t('app.kuaizhizao.salesReturn.totalQuantity'),

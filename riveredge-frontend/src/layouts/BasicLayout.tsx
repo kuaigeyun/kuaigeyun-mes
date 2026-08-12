@@ -226,7 +226,6 @@ const APP_GROUP_TITLE_TEXT_STYLE: React.CSSProperties = {
  */
 const MENU_BADGE_PATH_KEY: Record<string, string> = {
   // 销售
-  '/apps/kuaizhizao/sales-management/customer-pool': 'customer_pool',
   '/apps/kuaizhizao/sales-management/quotations': 'quotation',
   '/apps/kuaizhizao/sales-management/customer-follow-ups': 'customer_follow_up',
   '/apps/kuaizhizao/sales-management/sales-contracts': 'sales_contract',

@@ -4,7 +4,10 @@ import React from 'react';
 import { extractProTableSort } from '../../../utils/tableQueryKey';
 import { parseSalesReportDateRange } from '../../kuaizhizao/services/reports';
 import { formDateRangeFormItemProps } from '../../../utils/formDate';
-import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stackedPrimaryColumn';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS,
+} from '../../../components/uni-table/stackedPrimaryColumn';
 import {
   buildMasterCrudActiveValueEnum,
   formatMasterDateTimeCell,
@@ -311,10 +314,8 @@ export function masterCrudCreatedUpdatedSnakeColumns<
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
-      width: 148,
-      uniTableKeepWidth: true,
+      ...UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS,
       sorter: true,
-      hideInSearch: true,
       render: (_, r) => {
         const preferred = resolveMaterialPreferredAudit(r as Record<string, unknown>);
         return React.createElement(UniTableStackedPrimaryCell, {

@@ -1407,8 +1407,9 @@ code {
   ) !important;
 }
 
-/* 全局：Modal 标题装饰（竖条药丸形，颜色随主题，略胖） */
-.ant-modal .ant-modal-header .ant-modal-title {
+/* 全局：标题左侧主题色竖条（Modal / 表单板块等共用，药丸形） */
+.ant-modal .ant-modal-header .ant-modal-title,
+.detail-drawer-section-title-accent .ant-card-head-title {
   position: relative;
   padding-left: 14px;
 
@@ -1424,6 +1425,19 @@ code {
     max-height: 22px;
     background: var(--ant-colorPrimary);
     border-radius: 999px;
+  }
+}
+
+/* 表单字段无标题分组：仅按类型分行排布，无分组名、无分割线 */
+.document-form-untitled-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.document-form-untitled-group > .ant-row:last-child {
+  .ant-form-item {
+    margin-bottom: 0;
   }
 }
 

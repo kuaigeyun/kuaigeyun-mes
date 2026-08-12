@@ -20,7 +20,8 @@ export type DashboardTimeRange =
   | 'thisWeek'
   | 'thisMonth'
   | 'last7days'
-  | 'last30days';
+  | 'last30days'
+  | 'all';
 
 const TIME_RANGE_OPTIONS: DashboardTimeRange[] = [
   'today',
@@ -29,6 +30,7 @@ const TIME_RANGE_OPTIONS: DashboardTimeRange[] = [
   'thisMonth',
   'last7days',
   'last30days',
+  'all',
 ];
 
 const TIME_RANGE_I18N: Record<DashboardTimeRange, string> = {
@@ -38,6 +40,7 @@ const TIME_RANGE_I18N: Record<DashboardTimeRange, string> = {
   thisMonth: 'pages.dashboard.timeThisMonth',
   last7days: 'pages.dashboard.timeLast7Days',
   last30days: 'pages.dashboard.timeLast30Days',
+  all: 'pages.dashboard.timeAll',
 };
 
 export interface DashboardKpiPanelProps {

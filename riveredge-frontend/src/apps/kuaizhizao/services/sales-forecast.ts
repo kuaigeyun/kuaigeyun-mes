@@ -35,6 +35,10 @@ export interface SalesForecast {
   updated_by?: number;
   updated_by_name?: string;
   forecast_items?: SalesForecastItem[];
+  /** 明细数量合计（列表订单视图可不带 items） */
+  total_quantity?: number;
+  /** 产品种类数（不重复物料，列表订单视图可不带 items） */
+  items_count?: number;
   /** 创建/更新提交的明细；详情/列表带行时也可能是读模型明细 */
   items?: SalesForecastItemCreatePayload[] | SalesForecastItem[];
   /** 本次操作是否已同步至关联需求（更新/审核接口返回） */
@@ -45,6 +49,15 @@ export interface SalesForecast {
   planning_computation_code?: string;
   lifecycle?: Record<string, unknown>;
   capabilities?: SalesForecastCapabilities;
+  /** 统一审核富化（phase / allowed_actions / entity_type） */
+  audit?: {
+    phase?: string;
+    enabled?: boolean;
+    mode?: string;
+    entity_type?: string;
+    allowed_actions?: string[];
+    [key: string]: unknown;
+  };
 }
 
 export interface ActionCapability {

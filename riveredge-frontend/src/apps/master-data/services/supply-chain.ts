@@ -5,8 +5,8 @@
  */
 
 import { api } from '../../../services/api';
-import { useGlobalStore } from '../../../stores';
 import { searchUserIdOptions } from '../../../utils/userDisplay';
+import { getSessionCurrentUser } from '../../../utils/sessionCurrentUser';
 import {
   getDictionaryItemsCached,
   getDictionaryItemsSync,
@@ -113,17 +113,18 @@ export const supplierApi = {
 };
 
 /**
- * 获取用户选项列表（供 Schema Form 使用）
+ * 获取用户选项列表（供 Schema Form / 业务选人使用）。
+ * @param hostResource 宿主 {app}:{module}，无 system:user:read 时靠其隐式鉴权 display-search
  */
-export const getUserOptions = async () => {
-  try {
-    const currentUser = useGlobalStore.getState().currentUser;
-    const opts = await searchUserIdOptions({ pageSize: 200, isActive: true, currentUser });
-    return opts.map((o) => ({ label: o.label, value: o.value }));
-  } catch (error) {
-    console.error('获取用户列表失败:', error);
-    return [];
-  }
+export const getUserOptions = async (hostResource?: string) => {
+  const currentUser = getSessionCurrentUser();
+  const opts = await searchUserIdOptions({
+    pageSize: 200,
+    isActive: true,
+    currentUser,
+    hostResource,
+  });
+  return opts.map((o) => ({ label: o.label, value: o.value }));
 };
 
 /**

@@ -2301,10 +2301,12 @@
             "master-data:process:operation"
         ],
         "customer-follow-up": [
-            "master-data:supply-chain:customer"
+            "master-data:supply-chain:customer",
+            "system:user"
         ],
         "customer-pool": [
-            "master-data:supply-chain:customer"
+            "master-data:supply-chain:customer",
+            "system:user"
         ],
         "warehouse-management-customer-material-registration": [
             "master-data:supply-chain:customer",

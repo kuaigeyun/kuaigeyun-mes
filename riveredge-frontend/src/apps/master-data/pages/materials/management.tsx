@@ -140,6 +140,7 @@ import {
   MaterialStackedCell,
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS,
 } from '../../../../components/uni-table/stackedPrimaryColumn'
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 
@@ -3726,8 +3727,7 @@ const MaterialsManagementPage: React.FC = () => {
       {
         title: t('common.updatedAt'),
         dataIndex: 'updatedAt',
-        width: 148,
-        uniTableKeepWidth: true,
+        ...UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS,
         sorter: true,
         hideInSearch: true,
         render: (_, record) => {

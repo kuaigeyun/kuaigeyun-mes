@@ -12,6 +12,7 @@
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import PageSkeleton from '../../components/page-skeleton';
+import { LinkedDocumentDetailProvider } from '../../components/linked-document-detail';
 
 /** 页面懒加载包装：Suspense + Spin fallback */
 const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
@@ -285,7 +286,8 @@ const PieceRateSalarySummaryPage = lazy(() => import('./pages/performance/report
 
 const KuaizhizaoApp: React.FC = () => {
   return (
-    <Routes>
+    <LinkedDocumentDetailProvider>
+      <Routes>
       <Route path="analysis-center/*" element={<RedirectAnalysisCenterToKuaireport />} />
       {/* 计划管理路由 */}
       <Route path="plan-management/demand-management" element={withPageSuspense(DemandManagementPage)} />
@@ -586,7 +588,8 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="performance/reports/piece-rate-salary-summary" element={withPageSuspense(PieceRateSalarySummaryPage)} />
       {/* 默认路由 - 应用首页 */}
       <Route path="" element={withPageSuspense(MESDashboard)} />
-    </Routes>
+      </Routes>
+    </LinkedDocumentDetailProvider>
   );
 };
 

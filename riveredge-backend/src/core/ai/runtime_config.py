@@ -1,4 +1,4 @@
-"""AI 运行时配置：站点 DeepSeek 集成为唯一模型真源。"""
+"""AI 运行时配置：应用连接器选用行 + KU-AI 能力为唯一真源。"""
 
 from __future__ import annotations
 
@@ -6,13 +6,12 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
-from core.services.system.site_setting_service import SiteSettingService
 from core.utils.integration_settings import (
     DEEPSEEK_DEFAULT_BASE_URL,
     DEEPSEEK_DEFAULT_MODEL,
-    build_deepseek_public_status,
-    get_deepseek_integration,
+    build_deepseek_public_status_for_tenant,
     normalize_rag_backend,
+    resolve_active_llm_integration,
 )
 from core.utils.deepseek_vision_client import get_deepseek_runtime_config
 from infra.exceptions.exceptions import ValidationError
@@ -36,38 +35,32 @@ class AiRuntimeConfig(BaseModel):
     rag_top_k: int = 5
     stream_enabled: bool = True
     custom_system_prompt: Optional[str] = None
+    provider: str = "deepseek"
+    connection_uuid: Optional[str] = None
 
     @classmethod
     async def load(cls, tenant_id: int) -> "AiRuntimeConfig":
-        site_settings = await SiteSettingService.get_settings(tenant_id)
-        settings = site_settings.settings or {}
-        deepseek = get_deepseek_integration(settings)
+        active = await resolve_active_llm_integration(tenant_id)
 
-        if not deepseek.get("enabled"):
-            raise ValidationError("DeepSeek 集成未启用，请在系统配置 → 应用连接器中开启 KU-AI")
-        api_key = deepseek.get("api_key")
+        if not active.get("enabled"):
+            raise ValidationError(
+                "AI 连接器未启用，请在应用连接器中启用并填写 API Key，并在 KU-AI → 模型设置中选用"
+            )
+        api_key = active.get("api_key")
         if not isinstance(api_key, str) or not api_key.strip():
-            raise ValidationError("未配置 DeepSeek API Key，请在系统配置 → 应用连接器中填写")
+            raise ValidationError("未配置 AI API Key，请在系统配置 → 应用连接器中填写")
 
         vision = await get_deepseek_runtime_config(tenant_id)
-        custom_prompt = deepseek.get("custom_system_prompt")
+        custom_prompt = active.get("custom_system_prompt")
         if isinstance(custom_prompt, str):
             custom_prompt = custom_prompt.strip() or None
         else:
             custom_prompt = None
 
-        tools_enabled = deepseek.get("tools_enabled")
-        if tools_enabled is None:
-            tools_enabled = True
-        rag_enabled = deepseek.get("rag_enabled")
-        if rag_enabled is None:
-            rag_enabled = True
-        stream_enabled = deepseek.get("stream_enabled")
-        if stream_enabled is None:
-            stream_enabled = True
-
         return cls(
             tenant_id=tenant_id,
+            provider=str(active.get("provider") or "deepseek"),
+            connection_uuid=active.get("connection_uuid"),
             chat_api_key=vision["chat_api_key"],
             chat_base_url=vision["chat_base_url"],
             chat_model=vision["chat_model"],
@@ -75,12 +68,12 @@ class AiRuntimeConfig(BaseModel):
             ocr_model=vision.get("ocr_model"),
             ocr_api_key=vision.get("ocr_api_key"),
             ocr_configured=bool(vision.get("ocr_configured")),
-            tools_enabled=bool(tools_enabled),
-            rag_enabled=bool(rag_enabled),
-            rag_use_embedding=deepseek.get("rag_use_embedding", True) is not False,
-            rag_backend=normalize_rag_backend(deepseek.get("rag_backend")),
-            rag_top_k=int(deepseek.get("rag_top_k") or 5),
-            stream_enabled=bool(stream_enabled),
+            tools_enabled=bool(active.get("tools_enabled", True)),
+            rag_enabled=bool(active.get("rag_enabled", True)),
+            rag_use_embedding=active.get("rag_use_embedding", True) is not False,
+            rag_backend=normalize_rag_backend(active.get("rag_backend")),
+            rag_top_k=int(active.get("rag_top_k") or 5),
+            stream_enabled=bool(active.get("stream_enabled", True)),
             custom_system_prompt=custom_prompt,
         )
 
@@ -93,5 +86,4 @@ class AiRuntimeConfig(BaseModel):
 
     @staticmethod
     async def public_status(tenant_id: int) -> Dict[str, Any]:
-        site_settings = await SiteSettingService.get_settings(tenant_id)
-        return build_deepseek_public_status(site_settings.settings or {})
+        return await build_deepseek_public_status_for_tenant(tenant_id)

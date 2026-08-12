@@ -23,6 +23,12 @@ export interface DetailDrawerSectionProps {
   style?: React.CSSProperties;
   /** 卡片底部间距（默认 16） */
   marginBottom?: number;
+  /**
+   * 标题左侧主题色竖条，与 Modal 标题装饰同一视觉（见 global.less）。
+   * 单据新建/编辑页板块建议开启；详情抽屉默认关闭以免与原样式冲突。
+   */
+  titleAccent?: boolean;
+  className?: string;
 }
 
 /**
@@ -35,6 +41,8 @@ export const DetailDrawerSection: React.FC<DetailDrawerSectionProps> = ({
   visible = true,
   style,
   marginBottom = 16,
+  titleAccent = false,
+  className,
 }) => {
   const { token } = theme.useToken();
   if (!visible) return null;
@@ -44,6 +52,9 @@ export const DetailDrawerSection: React.FC<DetailDrawerSectionProps> = ({
       extra={titleExtra}
       size="small"
       variant="outlined"
+      className={[titleAccent ? 'detail-drawer-section-title-accent' : '', className]
+        .filter(Boolean)
+        .join(' ') || undefined}
       style={{ marginBottom, ...style }}
       styles={{
         root: { borderColor: token.colorBorder },

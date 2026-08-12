@@ -11,6 +11,7 @@ import {
 } from '../services/user';
 import type { CurrentUser } from '../types/api';
 import { hasPermission } from './permission';
+import { getSessionCurrentUser } from './sessionCurrentUser';
 
 export const PERM_USER_READ = 'system:user:read';
 
@@ -84,6 +85,8 @@ export async function searchUserIdOptions(args: {
   selectedIds?: number[];
   labelById?: Map<number, string>;
   currentUser?: CurrentUser;
+  /** 宿主 {app}:{module}，供 display-search 隐式鉴权（业务页选人必传） */
+  hostResource?: string;
 }): Promise<{ label: string; value: number }[]> {
   const {
     keyword,
@@ -93,8 +96,10 @@ export async function searchUserIdOptions(args: {
     isActive = true,
     selectedIds = [],
     labelById = new Map<number, string>(),
-    currentUser,
+    hostResource,
   } = args;
+  const currentUser = args.currentUser ?? getSessionCurrentUser();
+  const host = (hostResource || '').trim() || undefined;
 
   if (!canPickUsersForDisplay(currentUser)) {
     return mergeSelectedIdOptions([], selectedIds, labelById);
@@ -106,7 +111,8 @@ export async function searchUserIdOptions(args: {
       : undefined;
 
   let opts: { label: string; value: number }[] = [];
-  if (canReadUserDirectory(currentUser)) {
+  // 业务选人优先走展示 API（带 host_resource）；目录读仅用于人员管理页。
+  if (canReadUserDirectory(currentUser) && !host) {
     const res = await getUserList({
       page: 1,
       page_size: pageSize,
@@ -124,6 +130,7 @@ export async function searchUserIdOptions(args: {
       ...(isActive !== undefined ? { is_active: isActive } : {}),
       ...(departmentUuid ? { department_uuid: departmentUuid } : {}),
       ...(positionUuid ? { position_uuid: positionUuid } : {}),
+      ...(host ? { host_resource: host } : {}),
     });
     opts = (res.items || []).map(displayItemToIdOption);
   }
@@ -131,7 +138,10 @@ export async function searchUserIdOptions(args: {
   const missing = selectedIds.filter((id) => Number.isFinite(id) && !opts.some((o) => o.value === id));
   if (missing.length && canPickUsersForDisplay(currentUser)) {
     try {
-      const resolved = await resolveUserDisplay({ user_ids: missing });
+      const resolved = await resolveUserDisplay({
+        user_ids: missing,
+        ...(host ? { host_resource: host } : {}),
+      });
       for (const u of resolved) {
         labelById.set(u.id, u.label || formatUserDisplayLabel(u));
         if (!opts.some((o) => o.value === u.id)) {
@@ -152,12 +162,14 @@ export async function searchUserNameOptions(args: {
   pageSize?: number;
   selectedName?: string;
   currentUser?: CurrentUser;
+  hostResource?: string;
 }): Promise<{ label: string; value: string }[]> {
-  const { keyword, pageSize = 50, selectedName, currentUser } = args;
+  const { keyword, pageSize = 50, selectedName, currentUser, hostResource } = args;
   const idOpts = await searchUserIdOptions({
     keyword,
     pageSize,
     currentUser,
+    hostResource,
   });
   const opts = idOpts.map((o) => ({ label: o.label, value: o.label }));
   const sel = (selectedName || '').trim();

@@ -99,6 +99,14 @@ class PurchaseOrderListResponse(PurchaseOrderResponse):
     """采购订单列表响应Schema"""
     items_count: Optional[int] = Field(None, description="订单明细条数（列表用）")
     downstream_push_progress: Optional[float] = Field(None, description="下推进度 0-100（列表用）")
+    downstream_receipt_notice_codes: List[str] = Field(
+        default_factory=list,
+        description="下游收货通知单编码（列表 hover 用）",
+    )
+    downstream_purchase_receipt_codes: List[str] = Field(
+        default_factory=list,
+        description="下游采购入库单编码（列表 hover 用）",
+    )
     received_total: Optional[Decimal] = Field(None, description="累计收货数量（列表用）")
     outstanding_total: Optional[Decimal] = Field(None, description="待收货数量（列表用）")
     receipt_progress: Optional[float] = Field(None, description="收货进度 0-100（列表用）")

@@ -141,8 +141,10 @@ import {
   getUniTableLifecycleCellClassName,
   isUniTableDetailProgressColumn,
   isUniTableLifecycleColumn,
+  isUniTableProgressColumn,
   resolveUniTableDetailProgressColumnWidth,
   resolveUniTableLifecycleColumnWidth,
+  resolveUniTableProgressColumnWidth,
   resolveUniTableOperationColumnWidth,
   resolveUniTableOperationWidthFromContent,
   resolveUniTablePrimaryFlexWidthFromContent,
@@ -1427,6 +1429,18 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         return {
           ...col,
           render: (val: any) => <DictionaryLabel dictionaryCode="unit" value={val} />,
+        }
+      }
+      /** 列表头表进度列：全局 80px，禁止页面/持久化漂移 */
+      if (isUniTableProgressColumn(col)) {
+        const { width: _w, minWidth: _mw, ...progressRest } = col
+        return {
+          ...progressRest,
+          width: resolveUniTableProgressColumnWidth(),
+          minWidth: resolveUniTableProgressColumnWidth(),
+          resizable: false,
+          align: 'center' as const,
+          uniTableKeepWidth: true,
         }
       }
       /** 明细表格下推进度列：与执行状态同宽、右固定，禁止页面/持久化漂移 */
@@ -2892,9 +2906,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         if (!colKey) return
         const strip = cell.querySelector<HTMLElement>(`.${ROW_ACTIONS_STRIP_CLASS}`)
         if (!strip) return
-        const width = resolveUniTableOperationWidthFromContent(
-          strip.getBoundingClientRect().width,
-        )
+        // scrollWidth：单元格 overflow:hidden 时仍能拿到动作条固有宽（避免被列宽反压后量到收缩值）
+        const contentPx = Math.max(strip.scrollWidth, strip.getBoundingClientRect().width)
+        const width = resolveUniTableOperationWidthFromContent(contentPx)
         if (!(width > 0)) return
         operationWidths[colKey] = Math.max(operationWidths[colKey] ?? 0, width)
       })

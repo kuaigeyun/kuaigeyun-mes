@@ -18,6 +18,8 @@ import { customerApi, getUserOptions, getDictionaryOptions } from '../services/s
 import { getDataDictionaryByCode, createDictionaryItem } from '../../../services/dataDictionary';
 import { testGenerateCode, generateCode, fetchEffectivePageCodeRule } from '../../../services/codeRule';
 import { useGlobalStore } from '../../../stores/globalStore';
+import { ReferenceDisplayAccessError } from '../../../services/displayContract';
+import { getSessionCurrentUser } from '../../../utils/sessionCurrentUser';
 import type { Customer, CustomerCreate, CustomerUpdate } from '../types/supply-chain';
 import { SchemaFormRenderer } from '../../../components/schema-form';
 import {
@@ -47,6 +49,8 @@ import { CustomFieldsFormSection } from '../../../components/custom-fields';
 
 const PAGE_CODE = 'master-data-supply-chain-customer';
 const CUSTOM_FIELD_TABLE = 'master_data_customers';
+/** 主数据客户页默认宿主；客户池等业务页应显式传入自身 resource */
+export const CUSTOMER_FORM_DEFAULT_HOST_RESOURCE = 'master-data:supply-chain:customer';
 
 export interface CustomerFormModalProps {
   open: boolean;
@@ -57,6 +61,8 @@ export interface CustomerFormModalProps {
   onSuccess: (customer: Customer) => void;
   /** 与详情抽屉、追溯浮层或已抬升的表单 Modal 同屏时使用 */
   zIndex?: number;
+  /** 选人 display 宿主 {app}:{module} */
+  hostResource?: string;
   /**
    * 客户池协作人：传入后在「归属业务员」后展示多选，并在保存后同步协作人。
    * 主数据客户页可不传。
@@ -76,6 +82,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
   editUuid,
   onSuccess,
   zIndex,
+  hostResource = CUSTOMER_FORM_DEFAULT_HOST_RESOURCE,
   collaboratorSupport,
 }) => {
   const { t } = useTranslation();
@@ -109,10 +116,11 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
   const isEdit = Boolean(editUuid);
   const collaboratorSupportRef = useRef(collaboratorSupport);
   collaboratorSupportRef.current = collaboratorSupport;
+  const resolvedHostResource = (hostResource || CUSTOMER_FORM_DEFAULT_HOST_RESOURCE).trim();
 
   const syncSalesmanWithVisibility = useCallback((isPublic: boolean | undefined) => {
     setIsPublicMode(isPublic !== false);
-    const currentUser = useGlobalStore.getState().currentUser;
+    const currentUser = getSessionCurrentUser() ?? useGlobalStore.getState().currentUser;
     if (isPublic === true) {
       formRef.current?.setFieldsValue({ salesmanId: undefined, collaboratorIds: [] });
       return;
@@ -126,8 +134,19 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
   }, []);
 
   const loadOptions = useCallback(async () => {
-    const [users, industry, level, lead, category, contactTitle] = await Promise.all([
-      getUserOptions(),
+    let users: Array<{ value: any; label: string }> = [];
+    try {
+      users = await getUserOptions(resolvedHostResource);
+    } catch (err) {
+      const msg =
+        err instanceof ReferenceDisplayAccessError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : t('app.master-data.customers.loadUsersFailed', { defaultValue: '加载业务员列表失败' });
+      messageApi.error(msg);
+    }
+    const [industry, level, lead, category, contactTitle] = await Promise.all([
       getDictionaryOptions('INDUSTRY_SECTOR'),
       getDictionaryOptions('CUSTOMER_LEVEL'),
       getDictionaryOptions('PARTNER_SOURCE_CHANNEL'),
@@ -143,7 +162,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
       category,
       contactTitle,
     });
-  }, []);
+  }, [messageApi, resolvedHostResource, t]);
 
   useEffect(() => {
     if (!open) return;

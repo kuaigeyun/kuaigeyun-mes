@@ -704,7 +704,7 @@ const SuppliersPage: React.FC = () => {
       hideInTable: true,
       order: 15,
       valueType: 'select',
-      request: getUserOptions,
+      request: () => getUserOptions('master-data:supply-chain:supplier'),
       fieldProps: {
         showSearch: true,
         optionFilterProp: 'label',

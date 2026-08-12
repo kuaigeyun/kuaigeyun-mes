@@ -10,8 +10,8 @@ import { rowActionKind } from '../../../../../components/uni-action';
 
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
-import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Descriptions, Tooltip, Card, Alert, Empty, Spin, Switch, Tag } from 'antd'
-import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, AppstoreAddOutlined, ImportOutlined, ArrowLeftOutlined, PrinterOutlined, ArrowDownOutlined } from '@ant-design/icons'
+import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Descriptions, Tooltip, Alert, Empty, Spin, Switch, Tag } from 'antd'
+import { PlusOutlined, DeleteOutlined, EditOutlined, AppstoreAddOutlined, ImportOutlined, ArrowLeftOutlined, PrinterOutlined, ArrowDownOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -34,7 +34,6 @@ import {
   DocumentFormPageLayout,
   DocumentFormPageHeaderActions,
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
-  PAGE_SPACING,
   type StatCard,
 } from '../../../../../components/layout-templates'
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle'
@@ -60,10 +59,17 @@ import {
   DOCUMENT_DETAIL_CONTROL_SIZE,
   DOCUMENT_DETAIL_TABLE_PROPS,
 } from '../../../components/document-detail-table/documentDetailTable'
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment'
+import {
+  alignProColumns,
+  GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
+  SALES_DOC_LIST_FIELD_RANK,
+} from '../shared/documentFieldAlignment'
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../shared/DocumentPushProgressBar'
-import { salesForecastComputationPushPercent } from '../shared/pushProgress'
-import { resolveDocumentPreferredAudit } from '../../shared/documentAuditColumns'
+import {
+  collectComputationPushDocuments,
+  salesForecastComputationPushPercent,
+} from '../shared/pushProgress'
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns'
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
@@ -364,7 +370,29 @@ export default function SalesForecastsPage() {
     review_status?: string;
     planning_pushed_to_computation?: boolean;
     capabilities?: SalesForecast['capabilities'];
+    audit?: SalesForecast['audit'];
+    created_at?: string;
+    updated_at?: string;
+    created_by_name?: string;
+    updated_by_name?: string;
   };
+
+  const salesForecastWorkflowProps = useMemo(
+    () => ({
+      entityName: t('app.kuaizhizao.salesForecast.title'),
+      entityType: 'sales_forecast' as const,
+      auditNodeKey: 'sales_forecast',
+      resourcePrefix: 'kuaizhizao:sales-forecast',
+      unifiedAudit: true,
+      statusField: 'status' as const,
+      reviewStatusField: 'review_status' as const,
+      draftStatuses: ['草稿', 'DRAFT'],
+      pendingStatuses: ['待审核', 'PENDING_REVIEW'],
+      approvedStatuses: ['已审核', 'AUDITED', 'APPROVED', '审核通过', '通过', '已通过'],
+      rejectedStatuses: ['已驳回', 'REJECTED', '审核驳回'],
+    }),
+    [t],
+  );
 
   /**
    * 处理新建销售预测
@@ -1042,6 +1070,10 @@ export default function SalesForecastsPage() {
   };
 
   const calcForecastTotalQuantity = (record: SalesForecast) => {
+    const fromApi = Number(record.total_quantity);
+    if (Number.isFinite(fromApi) && record.total_quantity != null) {
+      return fromApi;
+    }
     const items = record.items || (record as { forecast_items?: SalesForecastItem[] }).forecast_items || [];
     return items.reduce((sum, item) => sum + Number(item.forecast_quantity ?? 0), 0);
   };
@@ -1103,18 +1135,6 @@ export default function SalesForecastsPage() {
       ),
     },
     {
-      title: t('app.kuaizhizao.salesForecast.forecastType'),
-      dataIndex: 'forecast_type',
-      width: 100,
-      hideInSearch: true,
-      sorter: true,
-      render: (_text, record) => (
-        <Tag color="blue" bordered={false}>
-          {record.forecast_type || '-'}
-        </Tag>
-      ),
-    },
-    {
       title: t('app.kuaizhizao.salesForecast.startDate'),
       dataIndex: 'start_date',
       key: 'start_end_date_stacked',
@@ -1151,6 +1171,23 @@ export default function SalesForecastsPage() {
         record.end_date ? formatDateTime(record.end_date, 'YYYY-MM-DD') : '-',
     },
     {
+      title: t('app.kuaizhizao.salesForecast.colProductKinds'),
+      dataIndex: 'items_count',
+      width: 96,
+      align: 'right' as const,
+      hideInSearch: true,
+      render: (_text, record) => {
+        if (record.items_count != null && Number.isFinite(Number(record.items_count))) {
+          return String(record.items_count);
+        }
+        const items = record.items || record.forecast_items || [];
+        const kindCount = new Set(
+          items.map((it) => it.material_id).filter((id): id is number => id != null),
+        ).size;
+        return String(kindCount);
+      },
+    },
+    {
       title: t('app.kuaizhizao.salesForecast.totalQuantity'),
       dataIndex: 'total_quantity',
       width: 100,
@@ -1173,6 +1210,13 @@ export default function SalesForecastsPage() {
                 ? t('app.kuaizhizao.salesManagement.pushProgress.pushed')
                 : t('app.kuaizhizao.salesManagement.pushProgress.notPushed'),
             })}
+            documents={collectComputationPushDocuments(
+              record.planning_computation_code,
+              t('components.documentTrackingPanel.docType.demand_computation'),
+            )}
+            formatMoreDocs={(count) =>
+              t('app.kuaizhizao.salesManagement.pushProgress.moreDocs', { count })
+            }
           />
         );
       },
@@ -1189,25 +1233,7 @@ export default function SalesForecastsPage() {
         }),
       },
     },
-    {
-      title: t('common.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 148,
-      uniTableKeepWidth: true,
-      sorter: true,
-      hideInSearch: true,
-      render: (_text, record) => {
-        const preferred = resolveDocumentPreferredAudit(record as Record<string, unknown>);
-        return (
-          <UniTableStackedPrimaryCell
-            primary={preferred.operator}
-            secondary={preferred.time}
-            secondaryCopyable={false}
-            primaryBold={false}
-          />
-        );
-      },
-    },
+    ...buildDocumentAuditColumns<SalesForecast>(t),
     ...(salesForecastAuditColumn ? [salesForecastAuditColumn] : []),
     {
       title: t('app.kuaizhizao.salesForecast.lifecycleColumn'),
@@ -1233,12 +1259,14 @@ export default function SalesForecastsPage() {
     {
       title: t('common.actions'),
       valueType: 'option',
+      minWidth: 120,
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => {
-        const canEdit = record.capabilities?.update?.allowed === true && forecastPerms.canUpdate
-        const canDelete = record.capabilities?.delete?.allowed === true && forecastPerms.canDelete
+        const canEdit = record.capabilities?.update?.allowed === true && forecastPerms.canUpdate;
+        const canDelete = record.capabilities?.delete?.allowed === true && forecastPerms.canDelete;
         const parts: React.ReactNode[] = [
-          <Button {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+          <Button {...rowActionKind('read')} key="d" onClick={() => handleDetail(record)}>
             {t('common.detail')}
           </Button>,
         ];
@@ -1246,29 +1274,30 @@ export default function SalesForecastsPage() {
           parts.push(
             <Button
               {...rowActionKind('update')}
-              key="edit"
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
+              key="e"
               onClick={() => record.id != null && handleEdit(record.id)}
             >
               {t('common.edit')}
             </Button>,
           );
         }
+        if (canDelete) {
+          parts.push(
+            <Button
+              {...rowActionKind('delete')}
+              key="del"
+              onClick={() => record.id != null && handleDelete([record.id])}
+            >
+              {t('common.delete')}
+            </Button>,
+          );
+        }
         parts.push(
-          <UniWorkflowActions {...rowActionKind('skip')}
+          <UniWorkflowActions
+            {...rowActionKind('skip')}
             key="workflow-actions"
             record={record}
-            entityName={t('app.kuaizhizao.salesForecast.title')}
-            statusField="status"
-            reviewStatusField="review_status"
-            draftStatuses={['草稿', 'DRAFT']}
-            pendingStatuses={['待审核', 'PENDING_REVIEW']}
-            approvedStatuses={['已审核', 'AUDITED', 'APPROVED', '审核通过', '通过', '已通过']}
-            rejectedStatuses={['已驳回', 'REJECTED', '审核驳回']}
-            theme="link"
-            size="small"
+            {...salesForecastWorkflowProps}
             onSuccess={() => {
               if (record.id != null) {
                 refreshForecastAfterPush(record.id);
@@ -1280,30 +1309,17 @@ export default function SalesForecastsPage() {
                 actionRef.current?.reload();
               }
             }}
-          />
+          />,
         );
-        if (canDelete) {
-          parts.push(
-            <Button
-              {...rowActionKind('delete')}
-              key="del"
-              type="link"
-              danger
-              size="small"
-              icon={<DeleteOutlined />}
-              onClick={() => record.id != null && handleDelete([record.id])}
-            >
-              {t('common.delete')}
-            </Button>,
-          );
-        }
         return parts;
       },
     },
   ];
 
   const detailTableColumns: ProColumns<SalesForecastItemRow>[] = useMemo(
-    () => [
+    () =>
+      alignProColumns<SalesForecastItemRow>(
+        [
       {
         title: t('app.kuaizhizao.salesForecast.colForecastPrimary'),
         key: 'forecast_code',
@@ -1323,28 +1339,6 @@ export default function SalesForecastsPage() {
         title: t('app.kuaizhizao.salesForecast.forecastName'),
         dataIndex: 'forecast_name',
         hideInTable: true,
-      },
-      {
-        title: t('app.kuaizhizao.salesForecast.forecastPeriod'),
-        dataIndex: 'forecast_period',
-        width: 120,
-        hideInSearch: true,
-        render: (_, record) => (
-          <Tag color={getForecastPeriodTagColor(record.forecast_period)} bordered={false}>
-            {formatForecastPeriod(record.forecast_period)}
-          </Tag>
-        ),
-      },
-      {
-        title: t('app.kuaizhizao.salesForecast.forecastType'),
-        dataIndex: 'forecast_type',
-        width: 100,
-        hideInSearch: true,
-        render: (_, record) => (
-          <Tag color="blue" bordered={false}>
-            {record.forecast_type || '-'}
-          </Tag>
-        ),
       },
       {
         title: t('app.kuaizhizao.salesForecast.material'),
@@ -1367,6 +1361,17 @@ export default function SalesForecastsPage() {
         hideInSearch: true,
       },
       {
+        title: t('app.kuaizhizao.salesForecast.forecastPeriod'),
+        dataIndex: 'forecast_period',
+        width: 120,
+        hideInSearch: true,
+        render: (_, record) => (
+          <Tag color={getForecastPeriodTagColor(record.forecast_period)} bordered={false}>
+            {formatForecastPeriod(record.forecast_period)}
+          </Tag>
+        ),
+      },
+      {
         title: t('app.kuaizhizao.salesForecast.forecastQuantity'),
         dataIndex: 'forecast_quantity',
         width: 100,
@@ -1383,15 +1388,10 @@ export default function SalesForecastsPage() {
         render: (_, record) =>
           record.forecast_date ? formatDateTime(record.forecast_date, 'YYYY-MM-DD') : '-',
       },
-      {
-        title: t('app.kuaizhizao.salesForecast.confidenceLevel'),
-        dataIndex: 'confidence_level',
-        width: 90,
-        align: 'right' as const,
-        hideInSearch: true,
-        render: (_, record) =>
-          record.confidence_level != null ? `${record.confidence_level}%` : '-',
-      },
+      ...buildDocumentAuditColumns<SalesForecastItemRow>(t),
+      ...(salesForecastAuditColumn
+        ? [salesForecastAuditColumn as ProColumns<SalesForecastItemRow>]
+        : []),
       {
         title: t('app.kuaizhizao.salesForecast.lifecycleColumn'),
         dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
@@ -1422,8 +1422,91 @@ export default function SalesForecastsPage() {
           />
         ),
       },
+      {
+        title: t('common.actions'),
+        valueType: 'option',
+        minWidth: 120,
+        fixed: 'right',
+        hideInSearch: true,
+        render: (_, record) => {
+          const header: SalesForecast = {
+            id: record.forecast_id,
+            forecast_code: record.forecast_code,
+            forecast_name: record.forecast_name,
+            status: record.status,
+            review_status: record.review_status,
+            capabilities: record.capabilities,
+            audit: record.audit,
+            planning_pushed_to_computation: record.planning_pushed_to_computation,
+          };
+          const canEdit = record.capabilities?.update?.allowed === true && forecastPerms.canUpdate;
+          const canDelete = record.capabilities?.delete?.allowed === true && forecastPerms.canDelete;
+          const parts: React.ReactNode[] = [
+            <Button
+              {...rowActionKind('read')}
+              key="d"
+              onClick={() => {
+                if (record.forecast_id) void handleDetail(header);
+              }}
+            >
+              {t('common.detail')}
+            </Button>,
+          ];
+          if (canEdit) {
+            parts.push(
+              <Button
+                {...rowActionKind('update')}
+                key="e"
+                onClick={() => handleEdit(record.forecast_id)}
+              >
+                {t('common.edit')}
+              </Button>,
+            );
+          }
+          if (canDelete) {
+            parts.push(
+              <Button
+                {...rowActionKind('delete')}
+                key="del"
+                onClick={() => handleDelete([record.forecast_id])}
+              >
+                {t('common.delete')}
+              </Button>,
+            );
+          }
+          parts.push(
+            <UniWorkflowActions
+              {...rowActionKind('skip')}
+              key="workflow-actions"
+              record={header}
+              {...salesForecastWorkflowProps}
+              onSuccess={() => {
+                if (record.forecast_id) {
+                  refreshForecastAfterPush(record.forecast_id);
+                } else {
+                  invalidateForecastCache();
+                  invalidateStatistics();
+                  invalidateMenuBadge();
+                  setTrackingRefreshKey((k) => k + 1);
+                  actionRef.current?.reload();
+                }
+              }}
+            />,
+          );
+          return parts;
+        },
+      },
+        ],
+        GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
+      ),
+    [
+      auditEnabled,
+      forecastPerms.canDelete,
+      forecastPerms.canUpdate,
+      salesForecastAuditColumn,
+      salesForecastWorkflowProps,
+      t,
     ],
-    [auditEnabled, t],
   );
 
   const alignedColumns = useMemo(
@@ -1530,6 +1613,9 @@ export default function SalesForecastsPage() {
 
   const renderForecastForm = () => (
     <>
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionBasic')}>
+        <div className="document-form-untitled-groups">
+          <div className="document-form-untitled-group">
         <Row gutter={16}>
           <Col span={12}>
             <ProFormText
@@ -1554,6 +1640,8 @@ export default function SalesForecastsPage() {
             />
           </Col>
         </Row>
+          </div>
+          <div className="document-form-untitled-group">
         <Row gutter={16}>
           <Col span={8}>
             <ProFormSelect
@@ -1591,7 +1679,11 @@ export default function SalesForecastsPage() {
             />
           </Col>
         </Row>
+          </div>
+        </div>
+      </DetailDrawerSection>
 
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionLines')}>
         <UniTableDetail
           name="items"
           title={t('app.kuaizhizao.salesForecast.forecastItems')}
@@ -1760,8 +1852,12 @@ export default function SalesForecastsPage() {
           tableProps={DOCUMENT_DETAIL_TABLE_PROPS}
         />
         <SalesForecastFormSummary />
-        <DocumentAttachmentsField category="sales_forecast_attachments" />
         <ProFormTextArea name="notes" label={t('app.kuaizhizao.salesForecast.notes')} placeholder={t('app.kuaizhizao.salesForecast.notesPlaceholder')} />
+      </DetailDrawerSection>
+
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionAttachments')} marginBottom={0}>
+        <DocumentAttachmentsField category="sales_forecast_attachments" label={false} />
+      </DetailDrawerSection>
     </>
   );
 
@@ -1906,8 +2002,7 @@ export default function SalesForecastsPage() {
             </>
           }
         >
-          <Card styles={{ body: { padding: PAGE_SPACING.PADDING } }}>
-            <div className="form-modal-content-inner">
+          <div className="form-modal-content-inner">
               <ProForm
                 formRef={formRef}
                 layout="vertical"
@@ -1924,7 +2019,6 @@ export default function SalesForecastsPage() {
                 {renderForecastForm()}
               </ProForm>
             </div>
-          </Card>
         </DocumentFormPageLayout>
         {forecastFormSecondaryModals}
       </>
@@ -2028,6 +2122,11 @@ export default function SalesForecastsPage() {
                   review_status: h.review_status,
                   planning_pushed_to_computation: h.planning_pushed_to_computation,
                   capabilities: h.capabilities,
+                  audit: h.audit,
+                  created_at: h.created_at,
+                  updated_at: h.updated_at,
+                  created_by_name: h.created_by_name,
+                  updated_by_name: h.updated_by_name,
                 }),
                 mapEmptyHeaderRow: (h) => ({
                   forecast_id: h.id ?? 0,
@@ -2041,6 +2140,11 @@ export default function SalesForecastsPage() {
                   review_status: h.review_status,
                   planning_pushed_to_computation: h.planning_pushed_to_computation,
                   capabilities: h.capabilities,
+                  audit: h.audit,
+                  created_at: h.created_at,
+                  updated_at: h.updated_at,
+                  created_by_name: h.created_by_name,
+                  updated_by_name: h.updated_by_name,
                   material_code: '-',
                   material_name: '-',
                   forecast_quantity: 0,
@@ -2217,15 +2321,10 @@ export default function SalesForecastsPage() {
                   </Button>
                 </span>
               </Tooltip>
-              <UniWorkflowActions {...rowActionKind('skip')}
+              <UniWorkflowActions
+                {...rowActionKind('skip')}
                 record={currentForecast}
-                entityName={t('app.kuaizhizao.salesForecast.title')}
-                statusField="status"
-                reviewStatusField="review_status"
-                draftStatuses={['草稿', 'DRAFT']}
-                pendingStatuses={['待审核', 'PENDING_REVIEW']}
-                approvedStatuses={['已审核', 'AUDITED', 'APPROVED', '审核通过', '通过', '已通过']}
-                rejectedStatuses={['已驳回', 'REJECTED', '审核驳回']}
+                {...salesForecastWorkflowProps}
                 onSuccess={() => {
                   if (currentForecast.id != null) {
                     refreshForecastAfterPush(currentForecast.id);
@@ -2278,7 +2377,6 @@ export default function SalesForecastsPage() {
                 items={[
                   { key: 'forecast_code', label: t('app.kuaizhizao.salesForecast.forecastCode'), children: currentForecast.forecast_code || '-' },
                   { key: 'forecast_name', label: t('app.kuaizhizao.salesForecast.forecastName'), children: currentForecast.forecast_name || '-' },
-                  { key: 'forecast_type', label: t('app.kuaizhizao.salesForecast.forecastType'), children: currentForecast.forecast_type || '-' },
                   { key: 'forecast_period', label: t('app.kuaizhizao.salesForecast.forecastPeriod'), children: formatForecastPeriod(currentForecast.forecast_period) },
                   { key: 'start_date', label: t('app.kuaizhizao.salesForecast.startDate'), children: currentForecast.start_date || '-' },
                   { key: 'end_date', label: t('app.kuaizhizao.salesForecast.endDate'), children: currentForecast.end_date || '-' },

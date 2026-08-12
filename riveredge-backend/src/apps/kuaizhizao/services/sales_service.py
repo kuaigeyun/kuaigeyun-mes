@@ -9,6 +9,7 @@ Date: 2025-12-30
 
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timedelta
+from decimal import Decimal
 import zoneinfo
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
@@ -211,6 +212,40 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         ).annotate(cnt=Count("id")).group_by("forecast_id").values("forecast_id", "cnt")
         return {int(r["forecast_id"]): int(r["cnt"] or 0) > 0 for r in rows}
 
+    async def _forecast_total_quantity_map(
+        self, tenant_id: int, forecast_ids: List[int]
+    ) -> Dict[int, Decimal]:
+        """按预测头汇总明细数量（列表订单视图不带 items 时用）。"""
+        if not forecast_ids:
+            return {}
+        from tortoise.functions import Sum
+
+        rows = await SalesForecastItem.filter(
+            tenant_id=tenant_id,
+            forecast_id__in=forecast_ids,
+        ).annotate(total_qty=Sum("forecast_quantity")).group_by("forecast_id").values(
+            "forecast_id", "total_qty"
+        )
+        out: Dict[int, Decimal] = {}
+        for r in rows:
+            out[int(r["forecast_id"])] = Decimal(str(r["total_qty"] or 0))
+        return out
+
+    async def _forecast_items_count_map(
+        self, tenant_id: int, forecast_ids: List[int]
+    ) -> Dict[int, int]:
+        """按预测头统计产品种类（不重复 material_id）。"""
+        if not forecast_ids:
+            return {}
+        rows = await SalesForecastItem.filter(
+            tenant_id=tenant_id,
+            forecast_id__in=forecast_ids,
+        ).values_list("forecast_id", "material_id")
+        by_fid: Dict[int, set[int]] = {}
+        for fid, mid in rows:
+            by_fid.setdefault(int(fid), set()).add(int(mid))
+        return {fid: len(mids) for fid, mids in by_fid.items()}
+
     async def _audit_update_fields(self, updated_by: int) -> Dict[str, Any]:
         """状态流转等 .update() 必须同时写 updated_by / updated_by_name。"""
         user_info = await self.get_user_info(updated_by)
@@ -310,6 +345,10 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         item_rows = await SalesForecastItem.filter(tenant_id=tenant_id, forecast_id=forecast_id).order_by("forecast_date").all()
         await self._hydrate_forecast_item_snapshots(tenant_id, item_rows)
         resp.items = [self._forecast_item_to_response(it) for it in item_rows]
+        resp.total_quantity = sum(
+            (Decimal(str(it.forecast_quantity or 0)) for it in item_rows),
+            Decimal("0"),
+        )
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_forecast_lifecycle, get_document_milestones
         milestones = await get_document_milestones(forecast.tenant_id, "sales_forecast", forecast.id)
         demand = await self._get_linked_demand_for_forecast(tenant_id, forecast_id)
@@ -398,6 +437,8 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_forecast_lifecycle
         downstream_ids = await self._forecast_downstream_ids(tenant_id, forecast_ids)
         has_items_by_id = await self._forecast_has_items_map(tenant_id, forecast_ids)
+        qty_by_id = await self._forecast_total_quantity_map(tenant_id, forecast_ids)
+        items_count_by_id = await self._forecast_items_count_map(tenant_id, forecast_ids)
         pushed_by_id: Dict[int, bool] = {}
         for fid, f in zip(forecast_ids, forecasts):
             d = demand_by_fid.get(fid)
@@ -412,6 +453,8 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 forecast,
                 pushed_to_computation=pushed_by_id.get(fid, False),
             )
+            resp.total_quantity = qty_by_id.get(fid, Decimal("0"))
+            resp.items_count = items_count_by_id.get(fid, 0)
             if include_items:
                 f_items = items_by_forecast.get(fid, [])
                 resp.items = [self._forecast_item_to_response(it) for it in f_items]

@@ -4,8 +4,8 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Tag } from 'antd';
 
+import { MarkerTag } from '../../constants/statusBadges';
 import { CUSTOM_FIELD_FORM_CLASS_NAMES } from './customFieldFormLayout';
 
 export interface CustomFieldFormLabelProps {
@@ -18,9 +18,9 @@ export const CustomFieldFormLabel: React.FC<CustomFieldFormLabelProps> = ({ text
   return (
     <span>
       {text}
-      <Tag color="blue" className={CUSTOM_FIELD_FORM_CLASS_NAMES.labelTag}>
+      <MarkerTag color="blue" className={CUSTOM_FIELD_FORM_CLASS_NAMES.labelTag}>
         {t('app.master-data.customFields')}
-      </Tag>
+      </MarkerTag>
     </span>
   );
 };

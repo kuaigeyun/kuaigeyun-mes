@@ -4,6 +4,13 @@
  * 禁止在页面/modal 内为自定义字段写额外 layout CSS。
  */
 
+/* 作为无标题分组的子级时，与分组 gap 对齐，并去掉行底额外外边距 */
+.document-form-untitled-groups > .custom-fields-form-section-row {
+  .ant-form-item {
+    margin-bottom: 0;
+  }
+}
+
 .custom-fields-form-field-col {
   min-width: 0;
 

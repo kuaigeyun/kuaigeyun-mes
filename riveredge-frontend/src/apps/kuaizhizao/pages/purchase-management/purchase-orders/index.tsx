@@ -14,7 +14,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
 import type { DescriptionsProps } from 'antd';
-import { App, Button, Tag, Space, Modal, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, List, Typography, theme, Dropdown, Descriptions, Spin, Card, Select, Switch, Alert } from 'antd';
+import { App, Button, Tag, Space, Modal, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, List, Typography, theme, Dropdown, Descriptions, Spin, Select, Switch, Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
@@ -53,8 +53,8 @@ import {
   DRAWER_CONFIG,
   DocumentFormPageLayout,
   DocumentFormPageHeaderActions,
+  DetailDrawerSection,
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
-  PAGE_SPACING,
   type StatCard,
 } from '../../../../../components/layout-templates';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
@@ -170,13 +170,18 @@ import { useKuaiaiEntryAvailable } from '../../../../kuaiai/hooks/useKuaiaiEntry
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import {
+  alignProColumns,
+  GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
+  SALES_DOC_LIST_FIELD_RANK,
+} from '../../sales-management/shared/documentFieldAlignment';
 import {
   DocumentPushProgressBar,
   DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
   DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS,
   ratioToPushProgressPercent,
 } from '../../sales-management/shared/DocumentPushProgressBar';
+import { collectPurchaseOrderPushDocuments } from '../../sales-management/shared/pushProgress';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
@@ -237,6 +242,8 @@ type PurchaseOrderItemRow = PurchaseOrderItem & {
   review_status?: string;
   receipt_progress?: number;
   downstream_push_progress?: number;
+  downstream_receipt_notice_codes?: string[];
+  downstream_purchase_receipt_codes?: string[];
 };
 
 /** 指标卡迷你图默认序列：模块级稳定引用，避免每次 render 新数组触发图表无限 update（G2 interval 报错） */
@@ -932,9 +939,24 @@ const PurchaseOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
       dataIndex: 'downstream_push_progress',
       ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
-      render: (_: any, record: PurchaseOrder) => (
-        <DocumentPushProgressBar percent={Number(record.downstream_push_progress ?? 0)} />
-      ),
+      render: (_: any, record: PurchaseOrder) => {
+        const percent = Number(record.downstream_push_progress ?? 0);
+        return (
+          <DocumentPushProgressBar
+            percent={percent}
+            tooltip={t('app.kuaizhizao.salesManagement.pushProgress.percentOnly', {
+              percent: Math.round(percent),
+            })}
+            documents={collectPurchaseOrderPushDocuments(record, {
+              receiptNotice: t('components.documentTrackingPanel.docType.receipt_notice'),
+              purchaseReceipt: t('components.documentTrackingPanel.docType.purchase_receipt'),
+            })}
+            formatMoreDocs={(count) =>
+              t('app.kuaizhizao.salesManagement.pushProgress.moreDocs', { count })
+            }
+          />
+        );
+      },
     },
     {
       title: t('app.kuaizhizao.purchaseOrder.col.receiptProgress'),
@@ -1055,12 +1077,11 @@ const PurchaseOrdersPage: React.FC = () => {
     },
   ], SALES_DOC_LIST_FIELD_RANK), [t, purchaseOrderAuditEnabled, lifecycleValueEnum, purchaseOrderAuditColumn, purchaseOrderCustomFieldColumns, purchaseOrderPerms, purchaseOrderSupplierSearchOptions, detailDrawerVisible, orderDetail?.id]);
 
-  /**
-   * 明细表格列序按声明顺序（标识 → 物料 → 数量金额 → 到货 → 交期 → 状态）。
-   * 禁止套用主单列表的 SALES_DOC_LIST_FIELD_RANK，否则会把明细字段打散。
-   */
+  /** 明细表格列序：GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK（禁止套用 LIST rank） */
   const detailTableColumns: ProColumns<PurchaseOrderItemRow>[] = useMemo(
-    () => [
+    () =>
+      alignProColumns<PurchaseOrderItemRow>(
+        [
       {
         title: t('app.kuaizhizao.purchaseOrder.col.supplierAndOrder'),
         key: 'order_code',
@@ -1220,7 +1241,9 @@ const PurchaseOrdersPage: React.FC = () => {
           );
         },
       },
-    ],
+        ],
+        GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
+      ),
     [t, purchaseOrderAuditEnabled, lifecycleValueEnum, purchaseOrderSupplierSearchOptions],
   );
 
@@ -2769,158 +2792,173 @@ const PurchaseOrdersPage: React.FC = () => {
 
   const purchaseOrderFormItemContent = (
     <>
-        <Row gutter={16}>
-          <Col span={12}>
-            <CodeField
-              pageCode="kuaizhizao-purchase-order"
-              name="order_code"
-              label={t('app.kuaizhizao.purchaseOrder.form.orderCode')}
-              required={true}
-              autoGenerateOnCreate={!isEdit}
-              showGenerateButton={false}
-              disabled={isEdit}
-              context={{}}
-            />
-          </Col>
-          <Col span={6}>
-            <ProFormDatePicker
-              name="order_date"
-              label={t('app.kuaizhizao.purchaseOrder.form.orderDate')}
-              placeholder={t('app.kuaizhizao.purchaseOrder.form.orderDateRequired')}
-              rules={[{ required: true, message: t('app.kuaizhizao.purchaseOrder.form.orderDateRequired') }]}
-              fieldProps={{ style: { width: '100%' } }}
-            />
-          </Col>
-          <Col span={6}>
-            <ProFormDatePicker
-              name="delivery_date"
-              label={t('app.kuaizhizao.purchaseOrder.form.requiredDate')}
-              placeholder={t('app.kuaizhizao.purchaseOrder.form.requiredDateRequired')}
-              rules={[{ required: true, message: t('app.kuaizhizao.purchaseOrder.form.requiredDateRequired') }]}
-              fieldProps={buildFutureDateShortcutFieldProps({
-                getForm: () => formRef.current,
-                fieldName: 'delivery_date',
-                baseFieldName: 'order_date',
-                t,
-              })}
-            />
-          </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={6}>
-            <ProForm.Item
-              name="prepayment_amount"
-              label={t('app.kuaizhizao.purchaseOrder.form.prepaymentAmount')}
-            >
-              <InputNumber min={0} precision={2} style={{ width: '100%' }} placeholder={t('app.kuaizhizao.purchaseOrder.form.prepaymentAmountPlaceholder')} />
-            </ProForm.Item>
-          </Col>
-          <Col span={12}>
-            <ProFormSelect
-              name="prepayment_bank_account_id"
-              label={t('app.kuaizhizao.purchaseOrder.form.prepaymentBankAccount')}
-              options={bankAccountOptions}
-              showSearch
-              allowClear
-              placeholder={t('app.kuaizhizao.purchaseOrder.form.prepaymentBankAccountPlaceholder')}
-            />
-          </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProForm.Item
-              name="supplier_id"
-              label={t('app.kuaizhizao.purchaseOrder.form.supplier')}
-              rules={[{ required: true, message: t('app.kuaizhizao.purchaseOrder.form.supplierRequired') }]}
-            >
-              <SupplierSelectDropdown
-                placeholder={t('app.kuaizhizao.purchaseOrder.form.supplierRequired')}
-                style={{ width: '100%' }}
-                suppliers={supplierList}
-                loading={suppliersLoading}
-                onSuppliersChange={setSupplierList}
-                autoLoad={false}
-                onSupplierPick={(s) => {
-                  if (s) {
-                    formRef.current?.setFieldsValue({
-                      supplier_name: s.name ?? (s as any).supplier_name,
-                      supplier_contact: (s as any).contact_person ?? s.contactPerson ?? (s as any).supplier_contact,
-                      supplier_phone: s.phone ?? (s as any).supplier_phone,
-                      buyer_id: (s as any).buyerId || (s as any).buyer_id,
-                      buyer_name: (s as any).buyerName || (s as any).buyer_name,
-                    });
-                  } else {
-                    formRef.current?.setFieldsValue({
-                      supplier_name: undefined,
-                      supplier_contact: undefined,
-                      supplier_phone: undefined,
-                      buyer_id: undefined,
-                      buyer_name: undefined,
-                    });
-                  }
-                }}
-              />
-            </ProForm.Item>
-          </Col>
-          <Col span={6}>
-            <ProFormText
-              name="supplier_contact"
-              label={t('app.kuaizhizao.purchaseOrder.form.contact')}
-              placeholder={t('app.kuaizhizao.purchaseOrder.form.contactPlaceholder')}
-            />
-          </Col>
-          <Col span={6}>
-            <ProFormText
-              name="supplier_phone"
-              label={t('app.kuaizhizao.purchaseOrder.form.phone')}
-              placeholder={t('app.kuaizhizao.purchaseOrder.form.phonePlaceholder')}
-            />
-          </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProForm.Item name="order_type" label={t('app.kuaizhizao.purchaseOrder.form.orderType')} initialValue="标准采购">
-              <UniDropdown
-                placeholder={t('app.kuaizhizao.purchaseOrder.form.orderTypePlaceholder')}
-                options={orderTypeOptions}
-                loading={orderTypeLoading}
-              />
-            </ProForm.Item>
-          </Col>
-          <Col span={6}>
-            <ProForm.Item name="buyer_id" label={t('app.kuaizhizao.purchaseOrder.form.buyer')}>
-              <UniDropdown
-                placeholder={t('app.kuaizhizao.purchaseOrder.form.buyerPlaceholder')}
-                showSearch
-                allowClear
-                loading={usersLoading}
-                options={users.map(u => ({ label: u.full_name || u.username, value: u.id }))}
-                onChange={(_val, opt: any) => {
-                  formRef.current?.setFieldsValue({ buyer_name: opt?.label });
-                }}
-              />
-            </ProForm.Item>
-            <AntForm.Item name="buyer_name" hidden><Input /></AntForm.Item>
-          </Col>
-          <Col span={6}>
-            <ProForm.Item name="currency" label={t('app.kuaizhizao.purchaseOrder.form.currency')} initialValue="CNY">
-              <UniDropdown
-                placeholder={t('app.kuaizhizao.purchaseOrder.form.currencyPlaceholder')}
-                options={currencyOptions}
-                loading={currencyLoading}
-              />
-            </ProForm.Item>
-          </Col>
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionBasic')}>
+        <div className="document-form-untitled-groups">
+          <div className="document-form-untitled-group">
+            <Row gutter={16}>
+              <Col span={8}>
+                <CodeField
+                  pageCode="kuaizhizao-purchase-order"
+                  name="order_code"
+                  label={t('app.kuaizhizao.purchaseOrder.form.orderCode')}
+                  required={true}
+                  autoGenerateOnCreate={!isEdit}
+                  showGenerateButton={false}
+                  disabled={isEdit}
+                  context={{}}
+                />
+              </Col>
+              <Col span={8}>
+                <ProForm.Item
+                  name="supplier_id"
+                  label={t('app.kuaizhizao.purchaseOrder.form.supplier')}
+                  rules={[{ required: true, message: t('app.kuaizhizao.purchaseOrder.form.supplierRequired') }]}
+                >
+                  <SupplierSelectDropdown
+                    placeholder={t('app.kuaizhizao.purchaseOrder.form.supplierRequired')}
+                    style={{ width: '100%' }}
+                    suppliers={supplierList}
+                    loading={suppliersLoading}
+                    onSuppliersChange={setSupplierList}
+                    autoLoad={false}
+                    onSupplierPick={(s) => {
+                      if (s) {
+                        formRef.current?.setFieldsValue({
+                          supplier_name: s.name ?? (s as any).supplier_name,
+                          supplier_contact: (s as any).contact_person ?? s.contactPerson ?? (s as any).supplier_contact,
+                          supplier_phone: s.phone ?? (s as any).supplier_phone,
+                          buyer_id: (s as any).buyerId || (s as any).buyer_id,
+                          buyer_name: (s as any).buyerName || (s as any).buyer_name,
+                        });
+                      } else {
+                        formRef.current?.setFieldsValue({
+                          supplier_name: undefined,
+                          supplier_contact: undefined,
+                          supplier_phone: undefined,
+                          buyer_id: undefined,
+                          buyer_name: undefined,
+                        });
+                      }
+                    }}
+                  />
+                </ProForm.Item>
+              </Col>
+              <Col span={8}>
+                <ProForm.Item name="buyer_id" label={t('app.kuaizhizao.purchaseOrder.form.buyer')}>
+                  <UniDropdown
+                    placeholder={t('app.kuaizhizao.purchaseOrder.form.buyerPlaceholder')}
+                    showSearch
+                    allowClear
+                    loading={usersLoading}
+                    options={users.map((u) => ({ label: u.full_name || u.username, value: u.id }))}
+                    onChange={(_val, opt: any) => {
+                      formRef.current?.setFieldsValue({ buyer_name: opt?.label });
+                    }}
+                  />
+                </ProForm.Item>
+                <AntForm.Item name="buyer_name" hidden>
+                  <Input />
+                </AntForm.Item>
+              </Col>
+            </Row>
+          </div>
+          <div className="document-form-untitled-group">
+            <Row gutter={16}>
+              <Col span={6}>
+                <ProFormDatePicker
+                  name="order_date"
+                  label={t('app.kuaizhizao.purchaseOrder.form.orderDate')}
+                  placeholder={t('app.kuaizhizao.purchaseOrder.form.orderDateRequired')}
+                  rules={[{ required: true, message: t('app.kuaizhizao.purchaseOrder.form.orderDateRequired') }]}
+                  fieldProps={{ style: { width: '100%' } }}
+                />
+              </Col>
+              <Col span={6}>
+                <ProFormDatePicker
+                  name="delivery_date"
+                  label={t('app.kuaizhizao.purchaseOrder.form.requiredDate')}
+                  placeholder={t('app.kuaizhizao.purchaseOrder.form.requiredDateRequired')}
+                  rules={[{ required: true, message: t('app.kuaizhizao.purchaseOrder.form.requiredDateRequired') }]}
+                  fieldProps={buildFutureDateShortcutFieldProps({
+                    getForm: () => formRef.current,
+                    fieldName: 'delivery_date',
+                    baseFieldName: 'order_date',
+                    t,
+                  })}
+                />
+              </Col>
+              <Col span={6}>
+                <ProForm.Item
+                  name="prepayment_amount"
+                  label={t('app.kuaizhizao.purchaseOrder.form.prepaymentAmount')}
+                >
+                  <InputNumber
+                    min={0}
+                    precision={2}
+                    style={{ width: '100%' }}
+                    placeholder={t('app.kuaizhizao.purchaseOrder.form.prepaymentAmountPlaceholder')}
+                  />
+                </ProForm.Item>
+              </Col>
+              <Col span={6}>
+                <ProFormSelect
+                  name="prepayment_bank_account_id"
+                  label={t('app.kuaizhizao.purchaseOrder.form.prepaymentBankAccount')}
+                  options={bankAccountOptions}
+                  showSearch
+                  allowClear
+                  placeholder={t('app.kuaizhizao.purchaseOrder.form.prepaymentBankAccountPlaceholder')}
+                />
+              </Col>
+            </Row>
+          </div>
+          <div className="document-form-untitled-group">
+            <Row gutter={16}>
+              <Col span={6}>
+                <ProForm.Item name="order_type" label={t('app.kuaizhizao.purchaseOrder.form.orderType')} initialValue="标准采购">
+                  <UniDropdown
+                    placeholder={t('app.kuaizhizao.purchaseOrder.form.orderTypePlaceholder')}
+                    options={orderTypeOptions}
+                    loading={orderTypeLoading}
+                  />
+                </ProForm.Item>
+              </Col>
+              <Col span={6}>
+                <ProFormText
+                  name="supplier_contact"
+                  label={t('app.kuaizhizao.purchaseOrder.form.contact')}
+                  placeholder={t('app.kuaizhizao.purchaseOrder.form.contactPlaceholder')}
+                />
+              </Col>
+              <Col span={6}>
+                <ProFormText
+                  name="supplier_phone"
+                  label={t('app.kuaizhizao.purchaseOrder.form.phone')}
+                  placeholder={t('app.kuaizhizao.purchaseOrder.form.phonePlaceholder')}
+                />
+              </Col>
+              <Col span={6}>
+                <ProForm.Item name="currency" label={t('app.kuaizhizao.purchaseOrder.form.currency')} initialValue="CNY">
+                  <UniDropdown
+                    placeholder={t('app.kuaizhizao.purchaseOrder.form.currencyPlaceholder')}
+                    options={currencyOptions}
+                    loading={currencyLoading}
+                  />
+                </ProForm.Item>
+              </Col>
+            </Row>
+          </div>
           <CustomFieldsFormSection
             customFields={purchaseOrderFormCustomFields}
             customFieldValues={purchaseOrderFormCustomFieldValues}
             gridColumns={4}
-            embedInParentRow
           />
-        </Row>
-
+        </div>
+        <ProFormText name="supplier_name" hidden />
         <ProFormText name="price_type" hidden initialValue="tax_exclusive" />
+      </DetailDrawerSection>
 
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionLines')}>
         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
           {({ getFieldValue: getFormValue }: any) => {
             const rawPriceType = getFormValue('price_type');
@@ -3241,17 +3279,20 @@ const PurchaseOrdersPage: React.FC = () => {
           )}
         </AntForm.Item>
 
-        <ProFormText name="supplier_name" hidden />
-        <DocumentAttachmentsField
-          category="purchase_order_attachments"
-          label={t('app.kuaizhizao.purchaseOrder.form.attachments')}
-        />
         <ProFormTextArea
           name="notes"
           label={t('app.kuaizhizao.purchaseOrder.form.notes')}
           placeholder={t('app.kuaizhizao.purchaseOrder.form.notesPlaceholder')}
           fieldProps={{ rows: 3 }}
         />
+      </DetailDrawerSection>
+
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionAttachments')} marginBottom={0}>
+        <DocumentAttachmentsField
+          category="purchase_order_attachments"
+          label={false}
+        />
+      </DetailDrawerSection>
     </>
   );
 
@@ -3297,22 +3338,23 @@ const PurchaseOrdersPage: React.FC = () => {
                   : t('app.kuaizhizao.menu.purchase-management.purchase-orders.edit')}
               </Typography.Title>
             </Space>
-            <DocumentFormPageHeaderActions
-              onCancel={leavePurchaseOrderFormPage}
-              onSaveDraft={() => void handleSaveDraft()}
-              onPrimarySubmit={() => void triggerPurchaseOrderPrimarySubmit()}
-              isCreatePage={isCreatePage}
-              canSubmitAfterSave={canSubmitAfterSave}
-              showSaveDraft={canSubmitAfterSave}
-            />
-            {isCreatePage && kuaiaiAvailable ? (
-              <PurchaseOrderAiCreateTrigger formRef={formRef} />
-            ) : null}
+            <Space wrap align="center">
+              <DocumentFormPageHeaderActions
+                onCancel={leavePurchaseOrderFormPage}
+                onSaveDraft={() => void handleSaveDraft()}
+                onPrimarySubmit={() => void triggerPurchaseOrderPrimarySubmit()}
+                isCreatePage={isCreatePage}
+                canSubmitAfterSave={canSubmitAfterSave}
+                showSaveDraft={canSubmitAfterSave}
+              />
+              {isCreatePage && kuaiaiAvailable ? (
+                <PurchaseOrderAiCreateTrigger formRef={formRef} />
+              ) : null}
+            </Space>
             </>
           }
         >
-          <Card styles={{ body: { padding: PAGE_SPACING.PADDING } }}>
-            <div className="form-modal-content-inner">
+          <div className="form-modal-content-inner">
               <ProForm
                 formRef={formRef}
                 layout="vertical"
@@ -3329,7 +3371,6 @@ const PurchaseOrdersPage: React.FC = () => {
                 {purchaseOrderFormItemContent}
               </ProForm>
             </div>
-          </Card>
         </DocumentFormPageLayout>
         {purchaseOrderFormAuxModals}
       </>

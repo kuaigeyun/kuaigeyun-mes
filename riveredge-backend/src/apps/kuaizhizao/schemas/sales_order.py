@@ -213,6 +213,10 @@ class SalesOrderResponse(SalesOrderBase):
     pushed_work_order_quantity: Decimal = Field(Decimal("0"), description="已下推工单数量")
     remaining_push_quantity: Decimal = Field(Decimal("0"), description="剩余可下推数量")
     work_order_push_progress: float = Field(0.0, description="工单下推占比 0-100")
+    pushed_work_order_codes: List[str] = Field(
+        default_factory=list,
+        description="已下推工单编码（列表 hover 用，排除已取消）",
+    )
     has_shippable_products: bool = Field(False, description="是否存在可发货产品（库存满足且仍有欠交）")
     shippable_quantity: float = Field(0.0, description="当前可发货数量合计（扣除已通知占用）")
     demand_synced: Optional[bool] = Field(None, description="本次操作是否已同步至关联需求")

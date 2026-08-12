@@ -7,7 +7,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Row, Col, Checkbox, Descriptions, Empty, Spin, Typography, DatePicker, Modal, Card, theme, Tooltip, Alert, Switch } from 'antd';
+import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Row, Col, Checkbox, Descriptions, Empty, Spin, Typography, DatePicker, Modal, theme, Tooltip, Alert, Switch } from 'antd';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   EyeOutlined,
@@ -40,7 +40,7 @@ import {
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE, PAGE_SPACING } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE } from '../../../../../components/layout-templates';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
@@ -1680,6 +1680,9 @@ const PurchaseRequisitionsPage: React.FC = () => {
 
   const renderPurchaseRequisitionForm = () => (
     <>
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionBasic')}>
+        <div className="document-form-untitled-groups">
+          <div className="document-form-untitled-group">
         <Row gutter={16}>
           <Col span={12}>
             <ProFormText
@@ -1700,6 +1703,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
             <ProFormText name="requisition_name" label={t('app.kuaizhizao.purchaseRequisition.form.name')} placeholder={t('app.kuaizhizao.purchaseRequisition.form.namePlaceholder')} />
           </Col>
         </Row>
+          </div>
+          <div className="document-form-untitled-group">
         <Row gutter={16}>
           <Col span={12}>
             <ProFormDatePicker
@@ -1721,6 +1726,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
             />
           </Col>
         </Row>
+          </div>
+          <div className="document-form-untitled-group">
         <Row gutter={16}>
           <Col span={12}>
             {editingId != null ? (
@@ -1738,7 +1745,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
           </Col>
           <Col span={12} />
         </Row>
-        {/* 申请明细：与销售订单 Modal 同款 — AntForm.List + Table + 内联样式 + 操作列 fixed right */}
+          </div>
+        </div>
+      </DetailDrawerSection>
+
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionLines')}>
         <UniTableDetail
           name="items"
           title={t('app.kuaizhizao.purchaseRequisition.form.itemsTitle')}
@@ -1985,8 +1996,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
             style: { width: '100%', margin: 0 },
           }}
         />
-        <DocumentAttachmentsField category="purchase_requisition_attachments" />
         <ProFormTextArea name="notes" label={t('app.kuaizhizao.common.fieldNotes')} placeholder={t('app.kuaizhizao.purchaseRequisition.form.notesPlaceholder')} />
+      </DetailDrawerSection>
+
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionAttachments')} marginBottom={0}>
+        <DocumentAttachmentsField category="purchase_requisition_attachments" label={false} />
+      </DetailDrawerSection>
     </>
   );
 
@@ -2023,8 +2038,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
             </>
           }
         >
-          <Card styles={{ body: { padding: PAGE_SPACING.PADDING } }}>
-            <div className="form-modal-content-inner">
+          <div className="form-modal-content-inner">
               <ProForm
                 formRef={createFormRef}
                 layout="vertical"
@@ -2048,7 +2062,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 {renderPurchaseRequisitionForm()}
               </ProForm>
             </div>
-          </Card>
         </DocumentFormPageLayout>
         <UniMaterialBatchPicker
           open={materialPickerOpen}

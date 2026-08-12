@@ -13,12 +13,11 @@ from typing import Any, Dict, Optional
 
 from loguru import logger
 
-from core.services.system.site_setting_service import SiteSettingService
 from core.utils.integration_settings import (
     DEEPSEEK_DEFAULT_BASE_URL,
     DEEPSEEK_DEFAULT_MODEL,
-    get_deepseek_integration,
     is_deepseek_ocr_endpoint_configured,
+    resolve_active_llm_integration,
 )
 from infra.exceptions.exceptions import ValidationError
 from infra.infrastructure.http import get_http_client
@@ -107,23 +106,22 @@ def is_deepseek_ocr_model(model: Optional[str]) -> bool:
 
 
 async def get_deepseek_runtime_config(tenant_id: int) -> Dict[str, Any]:
-    site_settings = await SiteSettingService.get_settings(tenant_id)
-    deepseek = get_deepseek_integration(site_settings.settings or {})
-    if not deepseek.get("enabled"):
-        raise ValidationError("DeepSeek 集成未启用，请在系统配置 → 应用连接器中开启 KU-AI")
-    api_key = deepseek.get("api_key")
+    active = await resolve_active_llm_integration(tenant_id)
+    if not active.get("enabled"):
+        raise ValidationError("AI 连接器未启用，请在应用连接器中启用并填写 API Key，并在 KU-AI → 模型设置中选用")
+    api_key = active.get("api_key")
     if not isinstance(api_key, str) or not api_key.strip():
-        raise ValidationError("未配置 DeepSeek API Key，无法使用 OCR")
+        raise ValidationError("未配置 AI API Key，无法使用对话或 OCR")
 
-    chat_base_url = (deepseek.get("base_url") or DEEPSEEK_DEFAULT_BASE_URL).strip().rstrip("/")
-    chat_model = str(deepseek.get("model") or DEEPSEEK_DEFAULT_MODEL).strip()
+    chat_base_url = (active.get("base_url") or DEEPSEEK_DEFAULT_BASE_URL).strip().rstrip("/")
+    chat_model = str(active.get("model") or DEEPSEEK_DEFAULT_MODEL).strip()
 
-    ocr_base_raw = deepseek.get("ocr_base_url") or deepseek.get("vision_base_url")
-    ocr_model_raw = deepseek.get("ocr_model") or deepseek.get("vision_model")
+    ocr_base_raw = active.get("ocr_base_url") or active.get("vision_base_url")
+    ocr_model_raw = active.get("ocr_model") or active.get("vision_model")
     ocr_base_url = str(ocr_base_raw).strip().rstrip("/") if ocr_base_raw else ""
     ocr_model = str(ocr_model_raw).strip() if ocr_model_raw else ""
 
-    ocr_api_key_raw = deepseek.get("ocr_api_key")
+    ocr_api_key_raw = active.get("ocr_api_key")
     ocr_api_key = (
         ocr_api_key_raw.strip()
         if isinstance(ocr_api_key_raw, str) and ocr_api_key_raw.strip()
@@ -137,7 +135,7 @@ async def get_deepseek_runtime_config(tenant_id: int) -> Dict[str, Any]:
         "ocr_base_url": ocr_base_url or None,
         "ocr_model": ocr_model or None,
         "ocr_api_key": ocr_api_key,
-        "ocr_configured": is_deepseek_ocr_endpoint_configured(deepseek),
+        "ocr_configured": is_deepseek_ocr_endpoint_configured(active),
     }
 
 

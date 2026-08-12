@@ -1,5 +1,6 @@
 /**
- * 仓储管理 Uni-detail：关联简览底部「关闭 / 前往列表」（与 EquipmentTraceBriefFooter 业务类型对齐并补充仓储单据）
+ * 仓储管理 Uni-detail：关联简览底部「关闭 / 打开详情」（与 EquipmentTraceBriefFooter 业务类型对齐并补充仓储单据）
+ * 已登记关联类型：当前页嵌套详情抽屉，不跳转列表。
  */
 
 import React from 'react';
@@ -7,10 +8,33 @@ import { Button, Space } from 'antd';
 import type { NavigateFunction } from 'react-router-dom';
 import type { TFunction } from 'i18next';
 import { ROUTES } from '../../constants/routes';
+import { canOpenLinkedDocumentDetail } from '../../utils/linkedDocumentDetail';
+import { useOptionalLinkedDocumentDetail } from '../../../../components/linked-document-detail';
 
 export interface WarehouseTraceBriefDoc {
   document_type: string;
   document_id: number;
+}
+
+function LinkedDetailOpenButton(props: {
+  documentType: string;
+  documentId: number;
+  label: string;
+}) {
+  const linked = useOptionalLinkedDocumentDetail();
+  const { documentType, documentId, label } = props;
+  if (!canOpenLinkedDocumentDetail(documentType) || !linked) return null;
+  return (
+    <Button
+      type="primary"
+      size="small"
+      onClick={() => {
+        linked.openLinkedDocumentDetail(documentType, documentId);
+      }}
+    >
+      {label}
+    </Button>
+  );
 }
 
 /** 用于 DetailDrawerTemplate.traceDocument.renderBriefActions（内嵌全链路已含「关闭简览」） */
@@ -28,9 +52,11 @@ export function WarehouseTraceBriefPrimaryActions(props: {
   return (
     <>
       {brief.document_type === 'purchase_order' ? (
-        <Button type="primary" size="small" onClick={() => go(ROUTES.PURCHASE_ORDERS)}>
-          {t('components.documentTrackingPanel.traceBriefOpenPurchaseOrder')}
-        </Button>
+        <LinkedDetailOpenButton
+          documentType="purchase_order"
+          documentId={brief.document_id}
+          label={t('components.documentTrackingPanel.traceBriefOpenPurchaseOrder')}
+        />
       ) : null}
       {brief.document_type === 'purchase_return' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.PURCHASE_RETURNS)}>
@@ -38,9 +64,11 @@ export function WarehouseTraceBriefPrimaryActions(props: {
         </Button>
       ) : null}
       {brief.document_type === 'sales_order' ? (
-        <Button type="primary" size="small" onClick={() => go(ROUTES.SALES_ORDERS)}>
-          {t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
-        </Button>
+        <LinkedDetailOpenButton
+          documentType="sales_order"
+          documentId={brief.document_id}
+          label={t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
+        />
       ) : null}
       {brief.document_type === 'sales_forecast' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.SALES_FORECASTS)}>
@@ -68,16 +96,11 @@ export function WarehouseTraceBriefPrimaryActions(props: {
         </Button>
       ) : null}
       {brief.document_type === 'quotation' ? (
-        <Button
-          type="primary"
-          size="small"
-          onClick={() => {
-            closeDrawer();
-            navigate(ROUTES.QUOTATIONS, { state: { openQuotationDetailId: brief.document_id } });
-          }}
-        >
-          {t('components.documentTrackingPanel.traceBriefOpenQuotation')}
-        </Button>
+        <LinkedDetailOpenButton
+          documentType="quotation"
+          documentId={brief.document_id}
+          label={t('components.documentTrackingPanel.traceBriefOpenQuotation')}
+        />
       ) : null}
       {brief.document_type === 'purchase_requisition' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.PURCHASE_REQUISITIONS)}>
@@ -124,15 +147,28 @@ export function WarehouseTraceBriefPrimaryActions(props: {
           {t('components.documentTrackingPanel.traceBriefOpenOtherInbound')}
         </Button>
       ) : null}
-      {brief.document_type === 'purchase_receipt' ||
-      brief.document_type === 'finished_goods_receipt' ||
+      {brief.document_type === 'purchase_receipt' ? (
+        <LinkedDetailOpenButton
+          documentType="purchase_receipt"
+          documentId={brief.document_id}
+          label={t('components.documentTrackingPanel.traceBriefOpenInbound')}
+        />
+      ) : null}
+      {brief.document_type === 'finished_goods_receipt' ||
       brief.document_type === 'semi_finished_goods_receipt' ||
       brief.document_type === 'production_return' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.WM_INBOUND)}>
           {t('components.documentTrackingPanel.traceBriefOpenInbound')}
         </Button>
       ) : null}
-      {brief.document_type === 'production_picking' || brief.document_type === 'sales_delivery' ? (
+      {brief.document_type === 'sales_delivery' ? (
+        <LinkedDetailOpenButton
+          documentType="sales_delivery"
+          documentId={brief.document_id}
+          label={t('components.documentTrackingPanel.traceBriefOpenOutbound')}
+        />
+      ) : null}
+      {brief.document_type === 'production_picking' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.WM_OUTBOUND)}>
           {t('components.documentTrackingPanel.traceBriefOpenOutbound')}
         </Button>

@@ -364,5 +364,9 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
     return <>{fieldCols}</>;
   }
 
-  return <Row gutter={FORM_LAYOUT.GRID_GUTTER}>{fieldCols}</Row>;
+  return (
+    <Row gutter={FORM_LAYOUT.GRID_GUTTER} className={CUSTOM_FIELD_FORM_CLASS_NAMES.sectionRow}>
+      {fieldCols}
+    </Row>
+  );
 };

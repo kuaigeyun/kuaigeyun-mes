@@ -16,6 +16,8 @@ import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
+import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
+import { useOptionalLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, Row, Col, Typography, Dropdown, Spin, Empty, Descriptions, Switch, Alert } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, DownOutlined, PrinterOutlined } from '@ant-design/icons';
@@ -67,7 +69,10 @@ import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS, DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS } from '../shared/DocumentPushProgressBar';
-import { shipmentNoticeOutboundPushPercent } from '../shared/pushProgress';
+import {
+  collectShipmentOutboundPushDocuments,
+  shipmentNoticeOutboundPushPercent,
+} from '../shared/pushProgress';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
@@ -160,6 +165,7 @@ const ShipmentNoticesPage: React.FC = () => {
     [t, i18n.language, materialUnitImportOptions],
   );
   const navigate = useNavigate();
+  const linkedDetail = useOptionalLinkedDocumentDetail();
   const salesOrderEntityName = t('app.kuaizhizao.salesOrder.entityName');
   const shipmentNoticeEntityName = t('app.kuaizhizao.shipmentNotice.entityName');
   const statusMap = useMemo(
@@ -385,21 +391,60 @@ const ShipmentNoticesPage: React.FC = () => {
       },
     },
     {
-      title: t('app.kuaizhizao.shipmentNotice.salesOrderCode'),
-      dataIndex: 'sales_order_code',
-      width: 140,
-      ellipsis: true,
-      sorter: true,
-      fieldProps: { placeholder: t('app.kuaizhizao.shipmentNotice.salesOrderCode') },
-    },
-    {
       title: t('app.kuaizhizao.shipmentNotice.outboundWarehouse'),
+      key: 'outbound_warehouse',
       dataIndex: 'warehouse_name',
       width: 140,
       ellipsis: true,
       uniTableKeepWidth: true,
       sorter: true,
       hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.shipmentNotice.salesOrderCode'),
+      key: 'shipment_sales_order_code',
+      dataIndex: 'sales_order_code',
+      width: 140,
+      ellipsis: true,
+      sorter: true,
+      fieldProps: { placeholder: t('app.kuaizhizao.shipmentNotice.salesOrderCode') },
+      render: (_, record) => (
+        <LinkedDocumentCode
+          documentType="sales_order"
+          documentId={record.sales_order_id}
+          code={record.sales_order_code}
+        />
+      ),
+    },
+    {
+      title: t('app.kuaizhizao.shipmentNotice.deliveryConversion'),
+      key: 'shipment_outbound_conversion',
+      dataIndex: 'sales_delivery_code',
+      width: 180,
+      hideInSearch: true,
+      render: (_, record) => {
+        if (record.sales_delivery_id) {
+          return (
+            <UniTableStackedPrimaryCell
+              primary={t('app.kuaizhizao.shipmentNotice.pulledToOutbound')}
+              secondary={String(record.sales_delivery_code || `#${record.sales_delivery_id}`)}
+              onSecondaryClick={() => {
+                linkedDetail?.openLinkedDocumentDetail(
+                  'sales_delivery',
+                  Number(record.sales_delivery_id),
+                );
+              }}
+            />
+          );
+        }
+        return (
+          <UniTableStackedPrimaryCell
+            primary={t('app.kuaizhizao.shipmentNotice.notPulledOutbound')}
+            secondary="-"
+            secondaryCopyable={false}
+          />
+        );
+      },
     },
     {
       title: t('app.kuaizhizao.shipmentNotice.plannedShipDate'),
@@ -446,6 +491,13 @@ const ShipmentNoticesPage: React.FC = () => {
                 ? t('app.kuaizhizao.salesManagement.pushProgress.pushed')
                 : t('app.kuaizhizao.salesManagement.pushProgress.notPushed'),
             })}
+            documents={collectShipmentOutboundPushDocuments(
+              record,
+              t('components.documentTrackingPanel.docType.sales_delivery'),
+            )}
+            formatMoreDocs={(count) =>
+              t('app.kuaizhizao.salesManagement.pushProgress.moreDocs', { count })
+            }
           />
         );
       },
@@ -497,6 +549,7 @@ const ShipmentNoticesPage: React.FC = () => {
   ], SALES_DOC_LIST_FIELD_RANK),
     [
       t,
+      linkedDetail,
       customersLoading,
       shipmentNoticeAuditColumn,
       shipmentNoticeCustomerSearchOptions,
@@ -593,10 +646,7 @@ const ShipmentNoticesPage: React.FC = () => {
         key: 'line_outbound_progress',
         ...DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS,
         render: (_: unknown, record) => {
-          const percent = shipmentNoticeOutboundPushPercent({
-            sales_delivery_id: record.sales_delivery_id,
-            status: record.status,
-          });
+          const percent = shipmentNoticeOutboundPushPercent(record);
           return (
             <DocumentPushProgressBar
               percent={percent}
@@ -606,6 +656,13 @@ const ShipmentNoticesPage: React.FC = () => {
                   ? t('app.kuaizhizao.salesManagement.pushProgress.pushed')
                   : t('app.kuaizhizao.salesManagement.pushProgress.notPushed'),
               })}
+              documents={collectShipmentOutboundPushDocuments(
+                record,
+                t('components.documentTrackingPanel.docType.sales_delivery'),
+              )}
+              formatMoreDocs={(count) =>
+                t('app.kuaizhizao.salesManagement.pushProgress.moreDocs', { count })
+              }
             />
           );
         },
@@ -1810,6 +1867,7 @@ const ShipmentNoticesPage: React.FC = () => {
                   notified_at: h.notified_at,
                   status: h.status,
                   sales_delivery_id: h.sales_delivery_id,
+                  sales_delivery_code: h.sales_delivery_code,
                   lifecycle: h.lifecycle,
                 }),
                 mapEmptyHeaderRow: (h) => ({
@@ -1822,6 +1880,7 @@ const ShipmentNoticesPage: React.FC = () => {
                   notice_quantity: 0,
                   status: h.status,
                   sales_delivery_id: h.sales_delivery_id,
+                  sales_delivery_code: h.sales_delivery_code,
                   lifecycle: h.lifecycle,
                   planned_ship_date: h.planned_ship_date,
                   notified_at: h.notified_at,

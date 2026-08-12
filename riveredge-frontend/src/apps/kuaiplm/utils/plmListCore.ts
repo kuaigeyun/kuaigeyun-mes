@@ -6,7 +6,10 @@ import { parseSalesReportDateRange } from '../../kuaizhizao/services/reports';
 import { formatDateTime } from '../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../utils/formDate';
 import { resolveRdProjectListLifecycleParams } from './rdProjectLifecycle';
-import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stackedPrimaryColumn';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS,
+} from '../../../components/uni-table/stackedPrimaryColumn';
 
 export const PLM_PHASE2_PINNED_STATUS_FIELD = 'status';
 export const PLM_CHANGE_PINNED_STATUS_FIELD = 'status';
@@ -109,10 +112,8 @@ export function plmCreatedUpdatedColumns<T extends object>(t: TFunction): ProCol
     {
       title: t('app.kuaiplm.common.columns.updatedAt'),
       dataIndex: 'updated_at',
-      width: 148,
-      uniTableKeepWidth: true,
+      ...UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS,
       sorter: true,
-      hideInSearch: true,
       render: (_, row) => {
         const preferred = resolvePlmPreferredAudit(row as Record<string, unknown>);
         return React.createElement(UniTableStackedPrimaryCell, {

@@ -34,115 +34,182 @@ interface TermsModalProps {
 }
 
 /**
- * 用户条款内容
+ * 用户条款内容（与 Apache 2.0 开源许可及多组织 SaaS 场景对齐）
  */
 const UserTermsContent = () => (
   <div style={{ maxHeight: '60vh', overflowY: 'auto', padding: '0 8px' }}>
     <Title level={4}>用户服务协议</Title>
     <Paragraph>
-      欢迎使用 RiverEdge SaaS 多组织管理框架（以下简称&quot;本服务&quot;）。在使用本服务之前，请您仔细阅读本用户服务协议（以下简称&quot;本协议&quot;）。当您点击&quot;同意&quot;或开始使用本服务时，即表示您已充分理解并同意接受本协议的全部内容。
+      欢迎使用 RiverEdge（以下简称&quot;本项目&quot;或&quot;本软件&quot;）。本用户服务协议（以下简称&quot;本协议&quot;）约定您与 RiverEdge 相关权利人之间，就使用本软件及（如适用）我们运营的在线服务的权利义务。
+    </Paragraph>
+    <Paragraph>
+      当您点击&quot;同意&quot;、注册、登录或开始使用时，即表示您已阅读、理解并同意接受本协议。若您代表组织使用，您保证已获得该组织授权，并使该组织受本协议约束。
+    </Paragraph>
+    <Paragraph>
+      本项目开源软件以 Apache License, Version 2.0（以下简称&quot;Apache 2.0&quot;）发布。若本协议与 Apache 2.0 就开源软件的授权范围冲突，就该开源软件部分以 Apache 2.0 为准；就我们运营的在线服务（SaaS）、品牌与您的业务数据，以本协议及相关专项约定为准。
     </Paragraph>
 
     <Divider />
 
-    <Title level={5}>一、服务说明</Title>
+    <Title level={5}>一、定义与适用范围</Title>
     <Paragraph>
-      1.1 本服务是由 RiverEdge 提供的多组织 SaaS 管理平台，为企业提供安全、高效、可扩展的 SaaS 解决方案。
+      1.1 &quot;开源软件&quot;：指以 Apache 2.0 发布的 RiverEdge 源代码、文档及随附材料，完整许可见项目仓库 LICENSE，或 https://www.apache.org/licenses/LICENSE-2.0 。
     </Paragraph>
     <Paragraph>
-      1.2 本服务包括但不限于：用户管理、组织管理、权限管理、数据管理等核心功能。
+      1.2 &quot;在线服务&quot;：指由我们或经授权方部署并运营、供您通过网络访问的 RiverEdge 多组织管理服务（如适用），功能可包括用户与组织管理、权限、业务单据、文件与集成等，以实际开通范围为准。
     </Paragraph>
     <Paragraph>
-      1.3 我们保留随时修改、中断或终止本服务的权利，无需事先通知用户。
-    </Paragraph>
-
-    <Divider />
-
-    <Title level={5}>二、用户账户</Title>
-    <Paragraph>
-      2.1 您需要注册账户才能使用本服务的部分功能。注册时，您需要提供真实、准确、完整的注册信息。
+      1.3 &quot;您&quot;：指注册、登录或使用开源软件/在线服务的个人，或该个人所代表的组织。
     </Paragraph>
     <Paragraph>
-      2.2 您有责任维护账户信息的安全性和准确性。如发现账户被盗用或存在安全漏洞，请立即通知我们。
-    </Paragraph>
-    <Paragraph>
-      2.3 您不得将账户转让、出售或以其他方式提供给第三方使用。
+      1.4 若您仅自行部署开源软件、且不使用我们运营的在线服务，则本协议中关于在线服务运营、账户开通与服务终止等条款不适用；开源使用仍须遵守 Apache 2.0。
     </Paragraph>
 
     <Divider />
 
-    <Title level={5}>三、使用规范</Title>
+    <Title level={5}>二、服务说明</Title>
     <Paragraph>
-      3.1 您在使用本服务时，应当遵守相关法律法规，不得利用本服务从事违法违规活动。
+      2.1 在线服务面向多组织场景，具体功能、配额与可用性以您实际开通的环境及届时公示说明为准。我们可能持续迭代功能，重大变更将尽量提前告知。
     </Paragraph>
     <Paragraph>
-      3.2 您不得利用本服务进行以下行为：
+      2.2 为保障安全与稳定，我们可能进行维护、升级或临时中断。计划内维护将尽量提前公示；紧急安全处置可能无法事先通知。
+    </Paragraph>
+    <Paragraph>
+      2.3 我们不对第三方系统、网络、浏览器或您本地环境导致的不可用作出承诺。依赖第三方连接器（如对象存储、即时通讯等）时，还需遵守对应第三方条款。
+    </Paragraph>
+
+    <Divider />
+
+    <Title level={5}>三、账户与组织</Title>
+    <Paragraph>
+      3.1 使用在线服务通常需要账户。您应提供真实、准确、完整且可及时更新的注册与联系信息。
+    </Paragraph>
+    <Paragraph>
+      3.2 您应妥善保管账号与凭证，对以您账户实施的操作负责。发现盗用或异常，请立即采取措施并通知我们。
+    </Paragraph>
+    <Paragraph>
+      3.3 不得出售、出租账户，或将账户提供给无权使用的第三方。组织管理员应合理配置权限与数据范围，并对其组织内用户行为承担管理责任。
+    </Paragraph>
+    <Paragraph>
+      3.4 您保证有权上传、处理相关业务数据，且该等处理不违反适用法律或第三方权利。
+    </Paragraph>
+
+    <Divider />
+
+    <Title level={5}>四、使用规范</Title>
+    <Paragraph>
+      4.1 您应遵守适用法律法规及本协议，不得将开源软件或在线服务用于违法违规目的。
+    </Paragraph>
+    <Paragraph>
+      4.2 使用在线服务时，禁止下列行为：
     </Paragraph>
     <Paragraph style={{ paddingLeft: 24 }}>
-      （1）发布、传播、存储含有法律、行政法规禁止的内容；<br />
-      （2）侵犯他人知识产权、商业秘密等合法权益；<br />
-      （3）干扰、破坏本服务的正常运行；<br />
-      （4）未经授权访问、使用或修改本服务的数据；<br />
-      （5）其他违反法律法规或本协议的行为。
+      （1）发布、传播或存储法律、行政法规禁止的内容；<br />
+      （2）侵犯他人知识产权、商业秘密、隐私权等合法权益；<br />
+      （3）攻击、侵入、干扰服务或未经授权扫描、探测系统；<br />
+      （4）未经授权访问、爬取、篡改或删除他人或他组织数据；<br />
+      （5）规避、破坏安全或权限控制机制，或滥用接口造成不合理负载；<br />
+      （6）其他违反法律法规、公序良俗或本协议的行为。
+    </Paragraph>
+    <Paragraph>
+      4.3 对开源软件的使用、修改与再分发，须同时遵守 Apache 2.0（包括保留许可与版权声明、NOTICE 要求等，如适用）。本条不限制 Apache 2.0 已明确授予的权利。
     </Paragraph>
 
     <Divider />
 
-    <Title level={5}>四、知识产权</Title>
+    <Title level={5}>五、知识产权与开源许可</Title>
     <Paragraph>
-      4.1 本服务的所有知识产权，包括但不限于商标、专利、著作权等，均归 RiverEdge 所有。
+      5.1 开源软件的著作权等权利由贡献者及权利人依 Apache 2.0 及适用法律享有。您可在遵守 Apache 2.0 的前提下使用、复制、修改、再分发开源软件（含源码与目标码形式）。
     </Paragraph>
     <Paragraph>
-      4.2 未经我们书面许可，您不得复制、修改、传播、展示或以其他方式使用本服务的任何内容。
-    </Paragraph>
-
-    <Divider />
-
-    <Title level={5}>五、免责声明</Title>
-    <Paragraph>
-      5.1 本服务按&quot;现状&quot;提供，我们不对服务的准确性、完整性、及时性、可靠性作任何明示或暗示的保证。
+      5.2 Apache 2.0 不授予商标权。&quot;RiverEdge&quot;名称、标识、徽标及其他品牌元素的权利仍归权利人所有。未经书面许可，不得暗示我们背书、赞助或与您的产品/服务存在关联。
     </Paragraph>
     <Paragraph>
-      5.2 因不可抗力、网络故障、系统维护等原因导致的服务中断或数据丢失，我们不承担责任。
+      5.3 使用在线服务时，您获得的是在服务期内访问与使用该服务的权利；这不改变开源软件的 Apache 2.0 授权，也不将您的业务数据转让给我们。
     </Paragraph>
     <Paragraph>
-      5.3 您使用本服务所产生的风险由您自行承担。
+      5.4 您上传或产生的业务数据，权利归属按您与组织之间的约定及适用法律确定。除为提供、维护、保障安全与改进服务所必需，或依法/依有权机关要求外，我们不主张该等数据的知识产权归我们所有。
+    </Paragraph>
+    <Paragraph>
+      5.5 第三方开源组件遵循其各自许可；使用时请一并遵守相应许可条款。
     </Paragraph>
 
     <Divider />
 
-    <Title level={5}>六、服务变更与终止</Title>
+    <Title level={5}>六、数据与隐私</Title>
     <Paragraph>
-      6.1 我们有权根据业务发展需要，随时修改、中断或终止本服务。
+      6.1 我们如何收集与处理个人信息，详见《隐私政策》。使用在线服务即表示您亦知悉该政策。
     </Paragraph>
     <Paragraph>
-      6.2 如您违反本协议，我们有权立即终止向您提供服务，并保留追究法律责任的权利。
-    </Paragraph>
-
-    <Divider />
-
-    <Title level={5}>七、协议修改</Title>
-    <Paragraph>
-      7.1 我们有权随时修改本协议。修改后的协议将在本服务页面公布，自公布之日起生效。
+      6.2 您应自行做好重要业务数据的备份与导出（在功能支持范围内）。自行部署开源软件时，数据安全与备份由您自行负责。
     </Paragraph>
     <Paragraph>
-      7.2 如您不同意修改后的协议，请停止使用本服务。
+      6.3 在线服务中，我们可能在合理必要范围内访问运维日志、诊断信息，用于故障排查、安全防护与服务质量改进，并以最小必要为原则。
     </Paragraph>
 
     <Divider />
 
-    <Title level={5}>八、联系我们</Title>
+    <Title level={5}>七、免责声明与责任限制</Title>
     <Paragraph>
-      如您对本协议有任何疑问，请通过以下方式联系我们：
+      7.1 按 Apache 2.0，开源软件按&quot;现状&quot;（AS IS）提供，不附带适销性、特定用途适用性及不侵权等明示或暗示担保。
+    </Paragraph>
+    <Paragraph>
+      7.2 在线服务亦按&quot;现状&quot;与&quot;可用&quot;基础提供。在法律允许的最大范围内，我们不对间接损失、利润损失、数据丢失或业务中断承担责任，法律法规另有强制性规定的除外。
+    </Paragraph>
+    <Paragraph>
+      7.3 因不可抗力、基础网络或电力故障、第三方服务中断、您的配置或操作失误、或超出合理控制的事件导致的中断或损失，我们将在能力范围内协助排查，但不因此承担赔偿责任。
+    </Paragraph>
+    <Paragraph>
+      7.4 若适用法律不允许排除或限制某些责任，则我们仅在该法律要求的最小范围内承担责任。
+    </Paragraph>
+
+    <Divider />
+
+    <Title level={5}>八、服务变更、暂停与终止</Title>
+    <Paragraph>
+      8.1 我们可根据产品演进调整在线服务功能。若变更实质影响您的主要使用方式，将尽量提前公示。
+    </Paragraph>
+    <Paragraph>
+      8.2 您可随时停止使用在线服务并申请注销账户（按产品流程办理）。注销后，相关数据将按《隐私政策》与法律要求删除或匿名化处理，法律法规要求保留的除外。
+    </Paragraph>
+    <Paragraph>
+      8.3 若您严重或持续违反本协议，我们可暂停或终止向您提供在线服务，并依法保留相应权利。终止不影响 Apache 2.0 已授予您的开源软件权利（以该许可为准）。
+    </Paragraph>
+
+    <Divider />
+
+    <Title level={5}>九、协议修改</Title>
+    <Paragraph>
+      9.1 我们可能修订本协议。修订后将在本服务相关页面公布，并更新文末日期；重大变更将尽量以合理方式提示。
+    </Paragraph>
+    <Paragraph>
+      9.2 若您在修订生效后继续使用在线服务，即视为接受修订。若您不同意，应停止使用在线服务。开源软件的授权变更仅在符合 Apache 2.0 及适用法律的前提下进行。
+    </Paragraph>
+
+    <Divider />
+
+    <Title level={5}>十、适用法律与争议解决</Title>
+    <Paragraph>
+      10.1 本协议的订立、效力、解释与争议解决，适用中华人民共和国大陆地区法律（冲突法规范除外）。
+    </Paragraph>
+    <Paragraph>
+      10.2 因本协议产生的争议，双方应先行友好协商；协商不成的，提交被告所在地有管辖权的人民法院诉讼解决。
+    </Paragraph>
+
+    <Divider />
+
+    <Title level={5}>十一、联系我们</Title>
+    <Paragraph>
+      如对本协议有疑问或建议，请联系：
     </Paragraph>
     <Paragraph style={{ paddingLeft: 24 }}>
-      邮箱：support@riveredge.cn
+      邮箱：ludingjie@live.cn
     </Paragraph>
 
     <Divider />
 
     <Paragraph style={{ textAlign: 'right', color: '#8c8c8c', fontSize: '12px' }}>
-      最后更新日期：2025年11月
+      最后更新日期：2026年8月
     </Paragraph>
   </div>
 );
@@ -273,7 +340,7 @@ const PrivacyTermsContent = () => (
       如您对本隐私政策有任何疑问、意见或建议，请通过以下方式联系我们：
     </Paragraph>
     <Paragraph style={{ paddingLeft: 24 }}>
-      邮箱：privacy@riveredge.cn
+      邮箱：ludingjie@live.cn
     </Paragraph>
 
     <Divider />

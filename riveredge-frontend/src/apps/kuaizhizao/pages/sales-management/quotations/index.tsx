@@ -16,7 +16,7 @@ import { useInvalidateSalesOrderList } from '../../../../../hooks/useInvalidateS
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Tooltip, Card, Switch, Alert } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Tooltip, Switch, Alert } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, BranchesOutlined, ReloadOutlined, FileTextOutlined, FormOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable, invalidateUniTableListCache, readPersistedUniTableViewType } from '../../../../../components/uni-table';
@@ -24,6 +24,7 @@ import { UniWorkflowActions } from '../../../../../components/uni-workflow-actio
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
@@ -61,7 +62,7 @@ import {
 } from '../../../../master-data/utils/resolve-partner-material-price';
 import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
 import { parseVariantAttributesValue } from '../../../../master-data/components/VariantAttributeFields';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET, PAGE_SPACING, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG, MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE } from '../../../../../components/layout-templates';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
@@ -93,12 +94,8 @@ import {
   Quotation,
   type QuotationItem,
 } from '../../../services/quotation';
-import { getSalesOrder, type SalesOrder } from '../../../services/sales-order';
 import { salesContractApi } from '../../../services/sales-contract';
-import {
-  SalesOrderDetailBody,
-  renderSalesOrderTraceBriefActions,
-} from '../sales-orders/components/SalesOrderDetailBody';
+import { useOptionalLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import { getQuotationLifecycle, buildQuotationLifecycleValueEnum, resolveQuotationListLifecycleParams } from '../../../utils/quotationLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import {
@@ -167,9 +164,13 @@ import {
   getSalesCommonFormLabels,
   SALES_DOC_DETAIL_BASIC_FIELD_RANK,
   SALES_DOC_LIST_FIELD_RANK,
+  GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS, DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS } from '../shared/DocumentPushProgressBar';
-import { quotationDownstreamPushPercent } from '../shared/pushProgress';
+import {
+  collectQuotationPushDocuments,
+  quotationDownstreamPushPercent,
+} from '../shared/pushProgress';
 import { buildDescriptionItemsFromColumns } from '../shared/descriptionItems';
 import { applyCustomerFormFields } from '../shared/applyCustomerFormFields';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -249,8 +250,6 @@ function toApiDateString(v: unknown): string | undefined {
 const QUOTATION_DETAIL_ITEMS_SCROLL_X = 1060;
 
 /** 报价单详情内打开下游销售订单时：二层抽屉宽度（zIndex 见组件内 token.zIndexPopupBase + 50） */
-const LINKED_DOCUMENT_DRAWER_WIDTH = '45%';
-
 /** 列表树形行（antd Table children） */
 type QuotationTableRow = Quotation & { children?: QuotationTableRow[] };
 
@@ -263,9 +262,12 @@ type QuotationItemRow = QuotationItem & {
   status?: string;
   review_status?: string;
   sales_order_id?: number;
+  sales_order_code?: string;
   contract_id?: number;
+  contract_code?: string;
   lifecycle?: Record<string, unknown>;
   conversion_downstream_missing?: boolean;
+  contract_downstream_missing?: boolean;
 };
 
 const QUOTATION_LIST_PERSISTENCE_ID = 'apps.kuaizhizao.pages.sales-management.quotations.v2';
@@ -614,7 +616,7 @@ const QuotationsPage: React.FC = () => {
   );
   const { token } = AntdTheme.useToken();
   const quotationDetailDrawerZIndex = token.zIndexPopupBase;
-  const linkedSalesOrderDrawerZIndex = token.zIndexPopupBase + 50;
+  const linkedDetail = useOptionalLinkedDocumentDetail();
   const quotationElevatedModalZIndex = token.zIndexPopupBase + MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET;
   const quotationNestedElevatedPopupZIndex = quotationElevatedModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET;
   const navigate = useNavigate();
@@ -759,7 +761,6 @@ const QuotationsPage: React.FC = () => {
   );
   /** 默认 false：配置未加载时不应误判为「已开审核」，否则会出现未开审核仍显示「撤回提交」等 */
   const quotationAuditRequired = useAuditRequired('quotation', false);
-  const salesOrderAuditRequired = useAuditRequired('sales_order', false);
   const quotationLifecycleDetail = useMemo(
     () => (quotationDetail ? getQuotationLifecycle(quotationDetail, quotationAuditRequired, t) : null),
     [quotationDetail, quotationAuditRequired, t],
@@ -867,11 +868,6 @@ const QuotationsPage: React.FC = () => {
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
   const [followUpPreset, setFollowUpPreset] = useState<CustomerFollowUpPreset | null>(null);
-  /** 报价单详情内点击下游销售订单：二层只读抽屉 */
-  const [linkedSalesOrderDrawerOpen, setLinkedSalesOrderDrawerOpen] = useState(false);
-  const [linkedSalesOrder, setLinkedSalesOrder] = useState<SalesOrder | null>(null);
-  const [linkedSalesOrderLoading, setLinkedSalesOrderLoading] = useState(false);
-
   type QuotationPushTarget = 'sales_order' | 'sales_contract';
   const [pushPreviewOpen, setPushPreviewOpen] = useState(false);
   const [pushPreviewLoading, setPushPreviewLoading] = useState(false);
@@ -1121,44 +1117,17 @@ const QuotationsPage: React.FC = () => {
       },
     },
     {
-      title: t('app.kuaizhizao.quotation.colSalesman'),
-      dataIndex: 'salesman_name',
-      width: 120,
-      ellipsis: true,
-      sorter: true,
-      hideInSearch: true,
-      render: (_, r) => normalizeUserDisplayName(r.salesman_name) || '-',
-    },
-    {
       title: t('app.kuaizhizao.quotation.colVersion'),
       dataIndex: 'version_no',
       width: 88,
       sorter: true,
       hideInSearch: true,
-      order: 13,
+      order: 11,
       render: (_, r) => (
         <Tag color="blue" bordered={false} variant="filled">
           {t('app.kuaizhizao.quotation.versionDisplay', { n: r.version_no ?? 1 })}
         </Tag>
       ),
-    },
-    {
-      title: t('app.kuaizhizao.quotation.colQuotationDate'),
-      dataIndex: 'quotation_date',
-      width: 132,
-      uniTableKeepWidth: true,
-      valueType: 'date',
-      sorter: true,
-      hideInSearch: true,
-    },
-    {
-      title: t('app.kuaizhizao.quotation.colDateRange'),
-      dataIndex: 'date_range',
-      valueType: 'dateRange',
-      hideInTable: true,
-      fieldProps: { placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')] },
-      formItemProps: formDateRangeFormItemProps,
-      order: 30,
     },
     {
       title: t('app.kuaizhizao.salesOrder.totalQuantity'),
@@ -1179,6 +1148,30 @@ const QuotationsPage: React.FC = () => {
       render: (_, r) => <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="total_amount" value={r.total_amount} />,
     },
     {
+      title: t('app.kuaizhizao.quotation.colSalesPersonnel'),
+      key: 'salesman_quotation_date_stacked',
+      dataIndex: 'salesman_name',
+      ...UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, r) => (
+        <UniTableStackedPrimaryCell
+          primary={normalizeUserDisplayName(r.salesman_name) || '-'}
+          secondary={r.quotation_date ? formatDateTime(r.quotation_date, 'YYYY-MM-DD') : '-'}
+          secondaryCopyable={false}
+        />
+      ),
+    },
+    {
+      title: t('app.kuaizhizao.quotation.colDateRange'),
+      dataIndex: 'date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      fieldProps: { placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')] },
+      formItemProps: formDateRangeFormItemProps,
+      order: 30,
+    },
+    {
       title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
       dataIndex: 'downstream_push_progress',
       ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
@@ -1193,6 +1186,13 @@ const QuotationsPage: React.FC = () => {
                 ? t('app.kuaizhizao.salesManagement.pushProgress.pushed')
                 : t('app.kuaizhizao.salesManagement.pushProgress.notPushed'),
             })}
+            documents={collectQuotationPushDocuments(r, {
+              salesOrder: t('components.documentTrackingPanel.docType.sales_order'),
+              salesContract: t('components.documentTrackingPanel.docType.sales_contract'),
+            })}
+            formatMoreDocs={(count) =>
+              t('app.kuaizhizao.salesManagement.pushProgress.moreDocs', { count })
+            }
           />
         );
       },
@@ -1288,128 +1288,135 @@ const QuotationsPage: React.FC = () => {
   const alignedListColumns = alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK);
 
   const detailTableColumns: ProColumns<QuotationItemRow>[] = useMemo(
-    () => [
-      {
-        title: t('app.kuaizhizao.quotation.colCustomerQuotation'),
-        key: 'quotation_code',
-        dataIndex: 'quotation_code',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-        fixed: 'left',
-        hideInSearch: false,
-        fieldProps: { placeholder: t('app.kuaizhizao.quotation.colQuotationCode') },
-        render: (_, record) => (
-          <UniTableStackedPrimaryCell
-            primary={String(record.customer_name ?? '')}
-            secondary={String(record.quotation_code ?? '')}
-          />
-        ),
-      },
-      {
-        title: t('app.kuaizhizao.quotation.colQuotationCode'),
-        dataIndex: 'quotation_code',
-        hideInTable: true,
-      },
-      {
-        title: t('app.kuaizhizao.quotation.import.materialName'),
-        key: 'material_display',
-        dataIndex: 'material_name',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-        render: (_, record) => (
-          <MaterialStackedCell
-            material_name={record.material_name}
-            material_code={record.material_code}
-            material_spec={record.material_spec}
-          />
-        ),
-      },
-      {
-        title: t('app.kuaizhizao.quotation.import.materialCode'),
-        dataIndex: 'material_code',
-        hideInTable: true,
-      },
-      {
-        title: t('app.kuaizhizao.quotation.import.quantity'),
-        dataIndex: 'quote_quantity',
-        width: 120,
-        align: 'right',
-        render: (val: unknown, record) => (
-          <QuantityWithUnitDisplay quantity={val} unit={record.material_unit} />
-        ),
-      },
-      {
-        title: t('app.kuaizhizao.quotation.import.unitPrice'),
-        dataIndex: 'unit_price',
-        width: 100,
-        align: 'right',
-        render: (_, record) => (
-          <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="unit_price" value={record.unit_price} />
-        ),
-      },
-      {
-        title: t('app.kuaizhizao.quotation.colTotalAmount'),
-        dataIndex: 'total_amount',
-        width: 110,
-        align: 'right',
-        render: (_, record) => (
-          <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="total_amount" value={record.total_amount} />
-        ),
-      },
-      {
-        title: t('app.kuaizhizao.quotation.colQuotationDate'),
-        dataIndex: 'quotation_date',
-        width: 132,
-        uniTableKeepWidth: true,
-        hideInSearch: true,
-        render: (_: unknown, row) =>
-          row.quotation_date ? formatDateTime(row.quotation_date, 'YYYY-MM-DD') : '-',
-      },
-      {
-        title: t('app.kuaizhizao.quotation.import.deliveryDate'),
-        dataIndex: 'delivery_date',
-        width: 132,
-        uniTableKeepWidth: true,
-        hideInSearch: true,
-        render: (_: unknown, row) =>
-          row.delivery_date ? formatDateTime(row.delivery_date, 'YYYY-MM-DD') : '-',
-      },
-      {
-        title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
-        key: 'line_push_progress',
-        dataIndex: 'line_push_progress',
-        ...DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS,
-        render: (_: unknown, record) => {
-          const percent = quotationDownstreamPushPercent({
-            status: record.status,
-            sales_order_id: record.sales_order_id,
-            contract_id: record.contract_id,
-          });
-          return (
-            <DocumentPushProgressBar
-              percent={percent}
-              tooltip={t('app.kuaizhizao.salesManagement.pushProgress.downstreamTooltip', {
-                percent,
-                status: percent >= 100
-                  ? t('app.kuaizhizao.salesManagement.pushProgress.pushed')
-                  : t('app.kuaizhizao.salesManagement.pushProgress.notPushed'),
-              })}
-            />
-          );
-        },
-      },
-      {
-        title: t('app.kuaizhizao.quotation.colLifecycle'),
-        dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
-        fixed: 'right',
-        hideInSearch: false,
-        valueEnum: quotationLifecycleValueEnum,
-        render: (_, record) => (
-          <ListUniLifecycleCell
-            lifecycle={getQuotationLifecycle(record, quotationAuditRequired, t)}
-            withSubStages
-          />
-        ),
-      },
-    ],
+    () =>
+      alignProColumns<QuotationItemRow>(
+        [
+          {
+            title: t('app.kuaizhizao.quotation.colCustomerQuotation'),
+            key: 'quotation_code',
+            dataIndex: 'quotation_code',
+            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            fixed: 'left',
+            hideInSearch: false,
+            fieldProps: { placeholder: t('app.kuaizhizao.quotation.colQuotationCode') },
+            render: (_, record) => (
+              <UniTableStackedPrimaryCell
+                primary={String(record.customer_name ?? '')}
+                secondary={String(record.quotation_code ?? '')}
+              />
+            ),
+          },
+          {
+            title: t('app.kuaizhizao.quotation.colQuotationCode'),
+            dataIndex: 'quotation_code',
+            hideInTable: true,
+          },
+          {
+            title: t('app.kuaizhizao.quotation.import.materialName'),
+            key: 'material_display',
+            dataIndex: 'material_name',
+            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            render: (_, record) => (
+              <MaterialStackedCell
+                material_name={record.material_name}
+                material_code={record.material_code}
+                material_spec={record.material_spec}
+              />
+            ),
+          },
+          {
+            title: t('app.kuaizhizao.quotation.import.materialCode'),
+            dataIndex: 'material_code',
+            hideInTable: true,
+          },
+          {
+            title: t('app.kuaizhizao.quotation.import.quantity'),
+            dataIndex: 'quote_quantity',
+            width: 120,
+            align: 'right',
+            render: (val: unknown, record) => (
+              <QuantityWithUnitDisplay quantity={val} unit={record.material_unit} />
+            ),
+          },
+          {
+            title: t('app.kuaizhizao.quotation.import.unitPrice'),
+            dataIndex: 'unit_price',
+            width: 100,
+            align: 'right',
+            render: (_, record) => (
+              <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="unit_price" value={record.unit_price} />
+            ),
+          },
+          {
+            title: t('app.kuaizhizao.quotation.colTotalAmount'),
+            dataIndex: 'total_amount',
+            width: 110,
+            align: 'right',
+            render: (_, record) => (
+              <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="total_amount" value={record.total_amount} />
+            ),
+          },
+          {
+            title: t('app.kuaizhizao.quotation.colQuotationDate'),
+            dataIndex: 'quotation_date',
+            width: 132,
+            uniTableKeepWidth: true,
+            hideInSearch: true,
+            render: (_: unknown, row) =>
+              row.quotation_date ? formatDateTime(row.quotation_date, 'YYYY-MM-DD') : '-',
+          },
+          {
+            title: t('app.kuaizhizao.quotation.import.deliveryDate'),
+            dataIndex: 'delivery_date',
+            width: 132,
+            uniTableKeepWidth: true,
+            hideInSearch: true,
+            render: (_: unknown, row) =>
+              row.delivery_date ? formatDateTime(row.delivery_date, 'YYYY-MM-DD') : '-',
+          },
+          {
+            title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+            key: 'line_push_progress',
+            dataIndex: 'line_push_progress',
+            ...DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS,
+            render: (_: unknown, record) => {
+              const percent = quotationDownstreamPushPercent(record);
+              return (
+                <DocumentPushProgressBar
+                  percent={percent}
+                  tooltip={t('app.kuaizhizao.salesManagement.pushProgress.downstreamTooltip', {
+                    percent,
+                    status: percent >= 100
+                      ? t('app.kuaizhizao.salesManagement.pushProgress.pushed')
+                      : t('app.kuaizhizao.salesManagement.pushProgress.notPushed'),
+                  })}
+                  documents={collectQuotationPushDocuments(record, {
+                    salesOrder: t('components.documentTrackingPanel.docType.sales_order'),
+                    salesContract: t('components.documentTrackingPanel.docType.sales_contract'),
+                  })}
+                  formatMoreDocs={(count) =>
+                    t('app.kuaizhizao.salesManagement.pushProgress.moreDocs', { count })
+                  }
+                />
+              );
+            },
+          },
+          {
+            title: t('app.kuaizhizao.quotation.colLifecycle'),
+            dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+            fixed: 'right',
+            hideInSearch: false,
+            valueEnum: quotationLifecycleValueEnum,
+            render: (_, record) => (
+              <ListUniLifecycleCell
+                lifecycle={getQuotationLifecycle(record, quotationAuditRequired, t)}
+                withSubStages
+              />
+            ),
+          },
+        ],
+        GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
+      ),
     [quotationAuditRequired, quotationLifecycleValueEnum, t],
   );
 
@@ -1983,19 +1990,8 @@ const QuotationsPage: React.FC = () => {
                   type="link"
                   size="small"
                   style={{ padding: 0, height: 'auto' }}
-                  onClick={async () => {
-                    setLinkedSalesOrderDrawerOpen(true);
-                    setLinkedSalesOrder(null);
-                    setLinkedSalesOrderLoading(true);
-                    try {
-                      const data = await getSalesOrder(salesOrderId, true, true);
-                      setLinkedSalesOrder(data);
-                    } catch (e: any) {
-                      messageApi.error(e?.message || e?.detail || t('app.kuaizhizao.quotation.loadSalesOrderFailed'));
-                      setLinkedSalesOrderDrawerOpen(false);
-                    } finally {
-                      setLinkedSalesOrderLoading(false);
-                    }
+                  onClick={() => {
+                    linkedDetail?.openLinkedDocumentDetail('sales_order', salesOrderId);
                   }}
                 >
                   {orderCode}
@@ -2859,35 +2855,10 @@ const QuotationsPage: React.FC = () => {
     SALES_DOC_DETAIL_BASIC_FIELD_RANK,
   );
 
-  const openLinkedSalesOrderDrawer = useCallback(
-    async (id: number) => {
-      setLinkedSalesOrderDrawerOpen(true);
-      setLinkedSalesOrder(null);
-      setLinkedSalesOrderLoading(true);
-      try {
-        const data = await getSalesOrder(id, true, true);
-        setLinkedSalesOrder(data);
-      } catch (e: any) {
-        messageApi.error(e?.message || e?.detail || t('app.kuaizhizao.quotation.loadSalesOrderFailed'));
-        setLinkedSalesOrderDrawerOpen(false);
-      } finally {
-        setLinkedSalesOrderLoading(false);
-      }
-    },
-    [messageApi]
-  );
-
-  const closeLinkedSalesOrderDrawer = useCallback(() => {
-    setLinkedSalesOrderDrawerOpen(false);
-    setLinkedSalesOrder(null);
-    setLinkedSalesOrderLoading(false);
-  }, []);
-
   const closeQuotationDetailDrawer = useCallback(() => {
-    closeLinkedSalesOrderDrawer();
     setDetailDrawerVisible(false);
     setQuotationDetail(null);
-  }, [closeLinkedSalesOrderDrawer]);
+  }, []);
 
   const refreshQuotationLinePriceByVariant = useCallback(
     async (index: number, attrs?: Record<string, unknown>) => {
@@ -3039,132 +3010,150 @@ const QuotationsPage: React.FC = () => {
 
   const formItemContent = (
     <>
-      <Row gutter={16}>
-        <Col span={12}>
-          <ProFormText
-            name="quotation_code"
-            label={t('app.kuaizhizao.quotation.import.code')}
-            placeholder={isAutoGenerateEnabled('kuaizhizao-quotation') ? t('app.kuaizhizao.quotation.form.codeAutoGenerate') : t('app.kuaizhizao.quotation.form.codeRequired')}
-            fieldProps={{ disabled: !!editingId }}
-            rules={[{ required: true, whitespace: true, message: t('app.kuaizhizao.quotation.form.codeRequired') }]}
-          />
-        </Col>
-        <Col span={12}>
-          <ProForm.Item name="customer_id" label={t('field.customer.name')} rules={[{ required: true, message: t('app.kuaizhizao.quotation.form.selectCustomer') }]}>
-            <CustomerSelectDropdown
-              hostResource="kuaizhizao:quotation"
-              placeholder={t('app.kuaizhizao.quotation.form.selectCustomer')}
-              style={{ width: '100%' }}
-              customers={customerList}
-              loading={customersLoading}
-              onCustomersChange={setCustomerList}
-              autoLoad={false}
-              modalZIndex={quotationNestedElevatedPopupZIndex}
-              onCustomerPick={(c) => {
-                applyCustomerToQuotationForm(c as Record<string, any> | null);
-              }}
-            />
-          </ProForm.Item>
-        </Col>
-      </Row>
-      {/* 归属业务员 + 日期 + 发货方式：五列等分（24 栅格 5+5+5+5+4） */}
-      <Row gutter={16}>
-        <Col span={5}>
-          <QuotationSalesmanField userList={userList} loading={usersLoading} />
-        </Col>
-        <Col span={5}>
-          <ProFormDatePicker
-            name="quotation_date"
-            label={t('app.kuaizhizao.quotation.colQuotationDate')}
-            rules={[{ required: true }]}
-            formItemProps={formDateFormItemProps}
-            fieldProps={{ style: { width: '100%' } }}
-          />
-        </Col>
-        <Col span={5}>
-          <ProFormDatePicker
-            name="valid_until"
-            label={t('app.kuaizhizao.quotation.form.validUntil')}
-            formItemProps={formDateFormItemProps}
-            fieldProps={buildFutureDateShortcutFieldProps({
-              getForm: () => formRef.current,
-              fieldName: 'valid_until',
-              baseFieldName: 'quotation_date',
-              t,
-            })}
-          />
-        </Col>
-        <Col span={5}>
-          <ProFormDatePicker
-            name="delivery_date"
-            label={t('app.kuaizhizao.quotation.form.expectedDeliveryDate')}
-            formItemProps={formDateFormItemProps}
-            fieldProps={buildFutureDateShortcutFieldProps({
-              getForm: () => formRef.current,
-              fieldName: 'delivery_date',
-              baseFieldName: 'quotation_date',
-              t,
-              onApply: (date) => {
-                formRef.current?.setFieldValue?.('delivery_date', date);
-                applyHeaderDeliveryToItemLines(date);
-              },
-              fieldProps: {
-                onChange: (value: unknown) => {
-                  applyHeaderDeliveryToItemLines(value);
-                },
-              },
-            })}
-          />
-        </Col>
-        <Col span={4}>
-          <DictionarySelect
-            dictionaryCode="SHIPPING_METHOD"
-            name="shipping_method"
-            label={t('app.kuaizhizao.salesOrder.shippingMethod')}
-            placeholder={t('app.kuaizhizao.quotation.form.selectShippingMethod')}
-            formRef={formRef}
-            simpleQuickCreate
-            quickCreatePopoverZIndex={quotationNestedElevatedPopupZIndex}
-          />
-        </Col>
-      </Row>
-      {/* 联系人 1/6 - 电话 1/6 - 地址 1/3 - 付款条件 1/6 - 币种 1/6 */}
-      <Row gutter={16}>
-        <Col span={4}>
-          <ProFormText name="customer_contact" label={salesCommonFormLabels.contact} />
-        </Col>
-        <Col span={4}>
-          <ProFormText name="customer_phone" label={salesCommonFormLabels.phone} />
-        </Col>
-        <Col span={8}>
-          <ProFormText name="shipping_address" label={t('app.kuaizhizao.salesOrder.shippingAddress')} placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')} />
-        </Col>
-        <Col span={4}>
-          <DictionarySelect
-            dictionaryCode="PAYMENT_TERMS"
-            name="payment_terms"
-            label={t('app.kuaizhizao.salesOrder.paymentTerms')}
-            placeholder={t('app.kuaizhizao.quotation.form.selectPaymentTerms')}
-            formRef={formRef}
-            simpleQuickCreate
-            quickCreatePopoverZIndex={quotationNestedElevatedPopupZIndex}
-          />
-        </Col>
-        <Col span={4}>
-          <DictionarySelect
-            dictionaryCode="CURRENCY"
-            name="currency_code"
-            label={t('app.kuaizhizao.quotation.form.currency')}
-            placeholder={t('app.kuaizhizao.quotation.form.selectCurrency')}
-            formRef={formRef}
-            valueEqualsLabel={false}
-            quickCreatePopoverZIndex={quotationNestedElevatedPopupZIndex}
-          />
-        </Col>
-      </Row>
+      <DetailDrawerSection titleAccent title={t('app.kuaizhizao.quotation.form.section.basicInfo')}>
+      <div className="document-form-untitled-groups">
+        {/* 单据与归属：编号 / 客户 / 业务员 */}
+        <div className="document-form-untitled-group">
+          <Row gutter={16}>
+            <Col span={8}>
+              <ProFormText
+                name="quotation_code"
+                label={t('app.kuaizhizao.quotation.import.code')}
+                placeholder={isAutoGenerateEnabled('kuaizhizao-quotation') ? t('app.kuaizhizao.quotation.form.codeAutoGenerate') : t('app.kuaizhizao.quotation.form.codeRequired')}
+                fieldProps={{ disabled: !!editingId }}
+                rules={[{ required: true, whitespace: true, message: t('app.kuaizhizao.quotation.form.codeRequired') }]}
+              />
+            </Col>
+            <Col span={8}>
+              <ProForm.Item name="customer_id" label={t('field.customer.name')} rules={[{ required: true, message: t('app.kuaizhizao.quotation.form.selectCustomer') }]}>
+                <CustomerSelectDropdown
+                  hostResource="kuaizhizao:quotation"
+                  placeholder={t('app.kuaizhizao.quotation.form.selectCustomer')}
+                  style={{ width: '100%' }}
+                  customers={customerList}
+                  loading={customersLoading}
+                  onCustomersChange={setCustomerList}
+                  autoLoad={false}
+                  modalZIndex={quotationNestedElevatedPopupZIndex}
+                  onCustomerPick={(c) => {
+                    applyCustomerToQuotationForm(c as Record<string, any> | null);
+                  }}
+                />
+              </ProForm.Item>
+            </Col>
+            <Col span={8}>
+              <QuotationSalesmanField userList={userList} loading={usersLoading} />
+            </Col>
+          </Row>
+        </div>
+        {/* 日期 */}
+        <div className="document-form-untitled-group">
+          <Row gutter={16}>
+            <Col span={8}>
+              <ProFormDatePicker
+                name="quotation_date"
+                label={t('app.kuaizhizao.quotation.colQuotationDate')}
+                rules={[{ required: true }]}
+                formItemProps={formDateFormItemProps}
+                fieldProps={{ style: { width: '100%' } }}
+              />
+            </Col>
+            <Col span={8}>
+              <ProFormDatePicker
+                name="valid_until"
+                label={t('app.kuaizhizao.quotation.form.validUntil')}
+                formItemProps={formDateFormItemProps}
+                fieldProps={buildFutureDateShortcutFieldProps({
+                  getForm: () => formRef.current,
+                  fieldName: 'valid_until',
+                  baseFieldName: 'quotation_date',
+                  t,
+                })}
+              />
+            </Col>
+            <Col span={8}>
+              <ProFormDatePicker
+                name="delivery_date"
+                label={t('app.kuaizhizao.quotation.form.expectedDeliveryDate')}
+                formItemProps={formDateFormItemProps}
+                fieldProps={buildFutureDateShortcutFieldProps({
+                  getForm: () => formRef.current,
+                  fieldName: 'delivery_date',
+                  baseFieldName: 'quotation_date',
+                  t,
+                  onApply: (date) => {
+                    formRef.current?.setFieldValue?.('delivery_date', date);
+                    applyHeaderDeliveryToItemLines(date);
+                  },
+                  fieldProps: {
+                    onChange: (value: unknown) => {
+                      applyHeaderDeliveryToItemLines(value);
+                    },
+                  },
+                })}
+              />
+            </Col>
+          </Row>
+        </div>
+        {/* 履约与商务：发货 / 联系 / 付款 / 币种 */}
+        <div className="document-form-untitled-group">
+          <Row gutter={16}>
+            <Col span={5}>
+              <DictionarySelect
+                dictionaryCode="SHIPPING_METHOD"
+                name="shipping_method"
+                label={t('app.kuaizhizao.salesOrder.shippingMethod')}
+                placeholder={t('app.kuaizhizao.quotation.form.selectShippingMethod')}
+                formRef={formRef}
+                simpleQuickCreate
+                quickCreatePopoverZIndex={quotationNestedElevatedPopupZIndex}
+              />
+            </Col>
+            <Col span={5}>
+              <ProFormText name="customer_contact" label={salesCommonFormLabels.contact} />
+            </Col>
+            <Col span={5}>
+              <ProFormText name="customer_phone" label={salesCommonFormLabels.phone} />
+            </Col>
+            <Col span={5}>
+              <DictionarySelect
+                dictionaryCode="PAYMENT_TERMS"
+                name="payment_terms"
+                label={t('app.kuaizhizao.salesOrder.paymentTerms')}
+                placeholder={t('app.kuaizhizao.quotation.form.selectPaymentTerms')}
+                formRef={formRef}
+                simpleQuickCreate
+                quickCreatePopoverZIndex={quotationNestedElevatedPopupZIndex}
+              />
+            </Col>
+            <Col span={4}>
+              <DictionarySelect
+                dictionaryCode="CURRENCY"
+                name="currency_code"
+                label={t('app.kuaizhizao.quotation.form.currency')}
+                placeholder={t('app.kuaizhizao.quotation.form.selectCurrency')}
+                formRef={formRef}
+                valueEqualsLabel={false}
+                quickCreatePopoverZIndex={quotationNestedElevatedPopupZIndex}
+              />
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={24}>
+              <ProFormText
+                name="shipping_address"
+                label={t('app.kuaizhizao.salesOrder.shippingAddress')}
+                placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')}
+              />
+            </Col>
+          </Row>
+        </div>
+      </div>
       <ProFormText name="customer_name" hidden />
       <ProFormText name="price_type" hidden initialValue={DEFAULT_SALES_PRICE_TYPE} />
+      </DetailDrawerSection>
 
+      <DetailDrawerSection titleAccent title={t('app.kuaizhizao.quotation.form.section.detailInfo')}>
       <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
         {({ getFieldValue }: any) => {
           const priceType = salesFormPriceType(getFieldValue('price_type'));
@@ -3638,8 +3627,16 @@ const QuotationsPage: React.FC = () => {
         }}
       </Form.Item>
       <QuotationFormSummary />
-      <DocumentAttachmentsField category="quotation_attachments" />
       <ProFormTextArea name="notes" label={t('app.kuaizhizao.salesOrder.notes')} fieldProps={{ rows: 2 }} />
+      </DetailDrawerSection>
+
+      <DetailDrawerSection
+        titleAccent
+        title={t('app.kuaizhizao.quotation.form.section.attachments')}
+        marginBottom={0}
+      >
+        <DocumentAttachmentsField category="quotation_attachments" label={false} />
+      </DetailDrawerSection>
       <UniMaterialBatchPicker
         hostResource="kuaizhizao:quotation"
         open={materialPickerOpen}
@@ -3696,8 +3693,7 @@ const QuotationsPage: React.FC = () => {
             </>
           }
         >
-          <Card className="quotation-create-form-card" styles={{ body: { padding: PAGE_SPACING.PADDING } }}>
-            <div className="form-modal-content-inner">
+          <div className="form-modal-content-inner">
               <ProForm
                 formRef={formRef}
                 layout="vertical"
@@ -3724,7 +3720,6 @@ const QuotationsPage: React.FC = () => {
                 {formItemContent}
               </ProForm>
             </div>
-          </Card>
         </DocumentFormPageLayout>
         {quotationFormModals}
       </>
@@ -3982,9 +3977,12 @@ const QuotationsPage: React.FC = () => {
                   status: h.status,
                   review_status: h.review_status,
                   sales_order_id: h.sales_order_id,
+                  sales_order_code: h.sales_order_code,
                   contract_id: h.contract_id,
+                  contract_code: h.contract_code,
                   lifecycle: h.lifecycle,
                   conversion_downstream_missing: h.conversion_downstream_missing,
+                  contract_downstream_missing: h.contract_downstream_missing,
                 }),
                 mapEmptyHeaderRow: (h) => ({
                   quotation_id: h.id ?? 0,
@@ -4001,9 +3999,12 @@ const QuotationsPage: React.FC = () => {
                   review_status: h.review_status,
                   quotation_date: h.quotation_date,
                   sales_order_id: h.sales_order_id,
+                  sales_order_code: h.sales_order_code,
                   contract_id: h.contract_id,
+                  contract_code: h.contract_code,
                   lifecycle: h.lifecycle,
                   conversion_downstream_missing: h.conversion_downstream_missing,
+                  contract_downstream_missing: h.contract_downstream_missing,
                 }),
               }) as QuotationItemRow[];
               return {
@@ -4292,7 +4293,9 @@ const QuotationsPage: React.FC = () => {
                           <Button
                             type="primary"
                             size="small"
-                            onClick={() => openLinkedSalesOrderDrawer(doc.document_id)}
+                            onClick={() =>
+                              linkedDetail?.openLinkedDocumentDetail('sales_order', doc.document_id)
+                            }
                           >
                             {t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
                           </Button>
@@ -4387,53 +4390,6 @@ const QuotationsPage: React.FC = () => {
           </div>
         ) : null}
       </Modal>
-
-      <DetailDrawerTemplate
-        title={linkedSalesOrder?.order_code ? t('app.kuaizhizao.quotation.linkedSalesOrderDetailTitleWithCode', { code: linkedSalesOrder.order_code }) : t('app.kuaizhizao.quotation.linkedSalesOrderDetailTitle')}
-        open={linkedSalesOrderDrawerOpen}
-        onClose={closeLinkedSalesOrderDrawer}
-        width={LINKED_DOCUMENT_DRAWER_WIDTH}
-        zIndex={linkedSalesOrderDrawerZIndex}
-        extra={
-          <Button
-            type="link"
-            size="small"
-            onClick={() => {
-              closeLinkedSalesOrderDrawer();
-              navigate('/apps/kuaizhizao/sales-management/sales-orders');
-            }}
-          >
-            {t('app.kuaizhizao.quotation.gotoSalesOrders')}
-          </Button>
-        }
-        plainBody={
-          linkedSalesOrder ? (
-            <SalesOrderDetailBody
-              order={linkedSalesOrder}
-              auditRequired={salesOrderAuditRequired}
-            />
-          ) : linkedSalesOrderLoading ? (
-            <div style={{ textAlign: 'center', padding: 48 }}>
-              <Spin />
-            </div>
-          ) : null
-        }
-        traceDocument={
-          linkedSalesOrder?.id != null
-            ? {
-                documentType: 'sales_order',
-                documentId: linkedSalesOrder.id,
-                selfDocumentId: linkedSalesOrder.id,
-                renderBriefActions: (doc) =>
-                  renderSalesOrderTraceBriefActions(doc, {
-                    t,
-                    navigate,
-                    closeDrawer: closeLinkedSalesOrderDrawer,
-                  }),
-              }
-            : undefined
-        }
-      />
 
       {quotationFormModals}
 

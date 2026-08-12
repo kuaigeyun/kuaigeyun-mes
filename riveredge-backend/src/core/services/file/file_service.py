@@ -155,6 +155,8 @@ class FileService:
         category: Optional[str] = None,
         tags: Optional[List[str]] = None,
         description: Optional[str] = None,
+        storage_backend: str = "local",
+        storage_connection_uuid: Optional[str] = None,
     ) -> File:
         """
         创建文件记录
@@ -168,6 +170,8 @@ class FileService:
             category: 文件分类
             tags: 文件标签
             description: 文件描述
+            storage_backend: 存储后端
+            storage_connection_uuid: 对象存储连接 UUID
             
         Returns:
             File: 创建的文件对象
@@ -191,6 +195,8 @@ class FileService:
             category=category,
             tags=tags or [],
             description=description,
+            storage_backend=storage_backend or "local",
+            storage_connection_uuid=storage_connection_uuid,
             upload_status="completed",
         )
         await file.save()
@@ -410,7 +416,12 @@ class FileService:
         ImageTierService.delete_tier_cache(uuid)
         
         # 物理删除文件（安全增强：防止已删除记录的文件通过 URL 被执行或访问）
-        await FileService.destroy_physical_file(file.file_path)
+        await FileService.destroy_physical_file(
+            file.file_path,
+            tenant_id=tenant_id,
+            storage_backend=getattr(file, "storage_backend", None) or "local",
+            storage_connection_uuid=getattr(file, "storage_connection_uuid", None),
+        )
     
     @staticmethod
     async def batch_delete_files(
@@ -427,12 +438,12 @@ class FileService:
         Returns:
             int: 删除的文件数量
         """
-        # 先获取文件路径，用于物理删除
+        # 先获取文件路径与存储元数据，用于物理删除
         files_to_delete = await File.filter(
             tenant_id=tenant_id,
             uuid__in=uuids,
             deleted_at__isnull=True
-        ).values_list("uuid", "file_path")
+        ).values_list("uuid", "file_path", "storage_backend", "storage_connection_uuid")
 
         if not files_to_delete:
             return 0
@@ -445,9 +456,14 @@ class FileService:
         ).update(deleted_at=resolve_business_datetime())
         
         # 执行物理删除
-        for file_uuid, path in files_to_delete:
+        for file_uuid, path, storage_backend, storage_connection_uuid in files_to_delete:
             ImageTierService.delete_tier_cache(str(file_uuid))
-            await FileService.destroy_physical_file(path)
+            await FileService.destroy_physical_file(
+                path,
+                tenant_id=tenant_id,
+                storage_backend=storage_backend or "local",
+                storage_connection_uuid=storage_connection_uuid,
+            )
 
         return count
     
@@ -509,30 +525,27 @@ class FileService:
         file_uuid = str(uuid.uuid4())
         storage_filename = f"{file_uuid}.{file_extension}" if file_extension else file_uuid
         
-        # 生成存储路径
+        # 生成存储路径（相对 key）；按租户存储设置写入本地或 COS
+        from core.services.file.storage import apply_key_prefix, resolve_storage_for_upload
+
         storage_path = FileService._get_file_storage_path(tenant_id, storage_filename)
-        full_path = os.path.join(FileService.UPLOAD_DIR, storage_path)
-        
-        # 确保目录存在
-        os.makedirs(os.path.dirname(full_path), exist_ok=True)
-        
-        # 保存文件
-        async with aiofiles.open(full_path, "wb") as f:
-            await f.write(file_content)
-        
-        # 获取文件类型
+        storage, meta = await resolve_storage_for_upload(tenant_id)
+        object_key = apply_key_prefix(meta.get("key_prefix") or "", storage_path)
         file_type = FileService._get_mime_type(file_extension)
+        await storage.put(object_key, file_content, content_type=file_type)
         
         # 创建文件记录
         file = await FileService.create_file(
             tenant_id=tenant_id,
             original_name=original_name,
-            file_path=storage_path,  # 存储相对路径
+            file_path=object_key,
             file_size=file_size,
             file_type=file_type,
             category=category,
             tags=tags,
             description=description,
+            storage_backend=str(meta.get("storage_backend") or "local"),
+            storage_connection_uuid=meta.get("storage_connection_uuid"),
         )
 
         if ImageTierService.is_tier_eligible_image(file_type, file_extension):
@@ -593,39 +606,152 @@ class FileService:
             NotFoundError: 当文件不存在时抛出
         """
         file = await FileService.get_file_by_uuid(tenant_id, uuid)
-        
-        full_path, corrected_rel = FileService.resolve_physical_file_path(
-            tenant_id, file.file_path
-        )
-        if not full_path:
-            raise NotFoundError("文件")
+        from core.services.file.storage import resolve_storage_for_file
 
-        if corrected_rel and corrected_rel != file.file_path:
-            await File.filter(id=file.id).update(file_path=corrected_rel)
-        
-        async with aiofiles.open(full_path, "rb") as f:
-            content = await f.read()
-        
-        return content
+        backend_name = str(getattr(file, "storage_backend", None) or "local").strip().lower()
+        if backend_name in ("", "local"):
+            full_path, corrected_rel = FileService.resolve_physical_file_path(
+                tenant_id, file.file_path
+            )
+            if not full_path:
+                raise NotFoundError("文件")
+
+            if corrected_rel and corrected_rel != file.file_path:
+                await File.filter(id=file.id).update(file_path=corrected_rel)
+
+            async with aiofiles.open(full_path, "rb") as f:
+                return await f.read()
+
+        storage = await resolve_storage_for_file(tenant_id, file)
+        return await storage.get(file.file_path)
 
     @staticmethod
-    async def destroy_physical_file(file_path: str) -> bool:
+    async def destroy_physical_file(
+        file_path: str,
+        *,
+        tenant_id: Optional[int] = None,
+        storage_backend: str = "local",
+        storage_connection_uuid: Optional[str] = None,
+    ) -> bool:
         """
-        从磁盘物理删除文件
-        
-        Args:
-            file_path: 相对存储路径
-            
-        Returns:
-            bool: 是否删除成功
+        删除物理文件（本地磁盘或对象存储）。
         """
+        backend_name = str(storage_backend or "local").strip().lower()
+        if backend_name in ("", "local"):
+            try:
+                full_path = os.path.join(FileService.UPLOAD_DIR, file_path)
+                if os.path.exists(full_path):
+                    os.remove(full_path)
+                    return True
+            except Exception as e:
+                print(f"Failed to delete physical file {file_path}: {e}")
+            return False
+
+        if tenant_id is None:
+            return False
         try:
-            full_path = os.path.join(FileService.UPLOAD_DIR, file_path)
-            if os.path.exists(full_path):
-                os.remove(full_path)
-                return True
+            from core.services.file.storage.local import LocalFileStorage
+            from core.services.file.storage.resolver import load_cos_storage
+
+            if backend_name == "tencent_cos":
+                if not storage_connection_uuid:
+                    return False
+                storage = await load_cos_storage(tenant_id, storage_connection_uuid)
+            else:
+                storage = LocalFileStorage()
+            return await storage.delete(file_path)
         except Exception as e:
-            # 记录日志但不阻塞业务
-            print(f"Failed to delete physical file {file_path}: {e}")
-        return False
+            print(f"Failed to delete remote file {file_path}: {e}")
+            return False
+
+    @staticmethod
+    async def migrate_local_files_to_cos(
+        tenant_id: int,
+        *,
+        connection_uuid: Optional[str] = None,
+        dry_run: bool = False,
+        cursor: int = 0,
+        limit: int = 50,
+    ) -> Dict[str, Any]:
+        """
+        将本租户本地文件分页迁移到腾讯 COS（仅处理当前环境库与磁盘）。
+        """
+        from core.services.file.storage import (
+            apply_key_prefix,
+            get_file_storage_settings,
+        )
+        from core.services.file.storage.local import LocalFileStorage
+        from core.services.file.storage.resolver import load_cos_storage
+
+        cfg = await get_file_storage_settings(tenant_id)
+        target_uuid = (connection_uuid or cfg.get("connection_uuid") or "").strip()
+        if not target_uuid:
+            raise ValidationError("请先在文件存储设置中选择腾讯 COS 连接")
+
+        cos = await load_cos_storage(tenant_id, target_uuid)
+        local = LocalFileStorage()
+        key_prefix = cfg.get("key_prefix") or ""
+        delete_local = cfg.get("delete_local_after_migrate") is not False
+
+        local_q = File.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).filter(Q(storage_backend="local") | Q(storage_backend__isnull=True) | Q(storage_backend=""))
+
+        total = await local_q.count()
+        safe_limit = max(1, min(int(limit or 50), 100))
+        safe_cursor = max(0, int(cursor or 0))
+        # id 游标：迁移成功后记录离开 local 集合，不可用 offset（会跳过剩余行）
+        rows = await local_q.filter(id__gt=safe_cursor).order_by("id").limit(safe_limit).all()
+
+        migrated = 0
+        skipped = 0
+        failed = 0
+        failures: List[Dict[str, str]] = []
+
+        for row in rows:
+            try:
+                abs_path, corrected = FileService.resolve_physical_file_path(tenant_id, row.file_path)
+                source_key = corrected or row.file_path
+                if not abs_path:
+                    failed += 1
+                    failures.append({"uuid": str(row.uuid), "reason": "本地文件不存在"})
+                    continue
+
+                async with aiofiles.open(abs_path, "rb") as f:
+                    content = await f.read()
+
+                dest_key = apply_key_prefix(key_prefix, source_key)
+                if dry_run:
+                    migrated += 1
+                    continue
+
+                await cos.put(dest_key, content, content_type=row.file_type)
+                await File.filter(id=row.id).update(
+                    storage_backend="tencent_cos",
+                    storage_connection_uuid=target_uuid,
+                    file_path=dest_key,
+                )
+                if delete_local:
+                    await local.delete(source_key)
+                migrated += 1
+            except Exception as e:
+                failed += 1
+                failures.append({"uuid": str(row.uuid), "reason": str(e)[:200]})
+
+        next_cursor = int(rows[-1].id) if rows else safe_cursor
+        done = len(rows) == 0 or len(rows) < safe_limit
+        return {
+            "total": total,
+            "cursor": safe_cursor,
+            "next_cursor": next_cursor,
+            "limit": safe_limit,
+            "done": done,
+            "migrated": migrated,
+            "skipped": skipped,
+            "failed": failed,
+            "failures": failures,
+            "dry_run": dry_run,
+            "connection_uuid": target_uuid,
+        }
 

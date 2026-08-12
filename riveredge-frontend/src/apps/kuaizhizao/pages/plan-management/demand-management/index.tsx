@@ -77,7 +77,10 @@ import { createListAuditPhaseColumn } from '../../sales-management/shared/listAu
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar';
-import { demandComputationPushPercent } from '../../sales-management/shared/pushProgress';
+import {
+  collectComputationPushDocuments,
+  demandComputationPushPercent,
+} from '../../sales-management/shared/pushProgress';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
@@ -795,6 +798,13 @@ const DemandManagementPage: React.FC = () => {
                 ? t('app.kuaizhizao.salesManagement.pushProgress.pushed')
                 : t('app.kuaizhizao.salesManagement.pushProgress.notPushed'),
             })}
+            documents={collectComputationPushDocuments(
+              record.computation_code,
+              t('components.documentTrackingPanel.docType.demand_computation'),
+            )}
+            formatMoreDocs={(count) =>
+              t('app.kuaizhizao.salesManagement.pushProgress.moreDocs', { count })
+            }
           />
         );
       },

@@ -12,7 +12,7 @@ import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspens
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { LIST_PAGE_REFRESH_KEYS, useListPageRefreshStore } from '../../../../../stores/listPageRefreshStore';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Tooltip, Dropdown, Select, Segmented, Tag, Alert, Card, Typography, theme as AntdTheme } from 'antd';
+import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Tooltip, Dropdown, Select, Segmented, Tag, Alert, Typography, theme as AntdTheme } from 'antd';
 import { EyeOutlined, EditOutlined, ArrowDownOutlined, ArrowLeftOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, StopOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
@@ -59,18 +59,11 @@ import { MaterialBomIndicator } from '../../../components/MaterialBomIndicator';
 import { SalesOrderIndicatorsProvider } from '../../../components/SalesOrderIndicatorsProvider';
 import { SalesOrderAiCreateTrigger } from './components/SalesOrderAiCreateDrawer';
 import { useKuaiaiEntryAvailable } from '../../../../kuaiai/hooks/useKuaiaiEntryAvailable';
-import {
-  SalesOrderDetailProvider,
-  SalesOrderDetailBasicPane,
-  SalesOrderDetailCollaborationPane,
-  SalesOrderDetailLinesPane,
-  SalesOrderDetailTimelinePane,
-  SalesOrderDetailCollaborationTitleSuffix,
-  renderSalesOrderTraceBriefActions,
-} from './components/SalesOrderDetailBody';
+import { SalesOrderDetailDrawer } from './components/SalesOrderDetailDrawer';
 import {
   alignProColumns,
   getSalesCommonFormLabels,
+  GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
   SALES_DOC_LIST_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
 import {
@@ -79,6 +72,7 @@ import {
   DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS,
   ratioToPushProgressPercent,
 } from '../shared/DocumentPushProgressBar';
+import { collectSalesOrderPushDocuments } from '../shared/pushProgress';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
@@ -100,13 +94,11 @@ import {
 } from '../../../../../components/custom-fields';
 import {
   ListPageTemplate,
-  DetailDrawerTemplate,
-  DRAWER_CONFIG,
   MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET,
   MODAL_NESTED_ABOVE_PARENT_OFFSET,
-  PAGE_SPACING,
   DocumentFormPageLayout,
   DocumentFormPageHeaderActions,
+  DetailDrawerSection,
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
   type StatCard,
 } from '../../../../../components/layout-templates';
@@ -3063,9 +3055,11 @@ const SalesOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesOrder.salesman'),
       dataIndex: 'salesman_name',
-      width: 120,
+      width: 96,
+      uniTableKeepWidth: true,
       sorter: true,
       hideInSearch: true,
+      ellipsis: true,
       render: (_: unknown, record: SalesOrder) => normalizeUserDisplayName(record.salesman_name) || '-',
     },
     {
@@ -3111,6 +3105,13 @@ const SalesOrdersPage: React.FC = () => {
               total: totalQty,
               remaining: remainingQty,
             })}
+            documents={collectSalesOrderPushDocuments(record, {
+              workOrder: t('components.documentTrackingPanel.docType.work_order'),
+              demandComputation: t('components.documentTrackingPanel.docType.demand_computation'),
+            })}
+            formatMoreDocs={(count) =>
+              t('app.kuaizhizao.salesManagement.pushProgress.moreDocs', { count })
+            }
           />
         );
       },
@@ -3144,8 +3145,9 @@ const SalesOrdersPage: React.FC = () => {
     ...salesOrderCustomFieldColumns,
     {
       title: t('app.kuaizhizao.salesOrder.actions'),
+      key: 'option',
       fixed: 'right' as const,
-      valueType: 'option',
+      hideInSearch: true,
       render: (_: any, record: SalesOrder) => {
         const canEdit = record.capabilities?.update?.allowed === true && salesOrderPerms.canUpdate;
         const canDelete = record.capabilities?.delete?.allowed === true && salesOrderPerms.canDelete;
@@ -3190,10 +3192,9 @@ const SalesOrdersPage: React.FC = () => {
     },
   ];
 
-  /**
-   * 明细表格列序按声明顺序；禁止套用主单列表 SALES_DOC_LIST_FIELD_RANK。
-   */
-  const detailColumns: ProColumns<SalesOrderItemRow>[] = [
+  /** 明细表格列序：GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK（禁止套用 LIST rank） */
+  const detailColumns: ProColumns<SalesOrderItemRow>[] = alignProColumns(
+    [
     {
       title: t('app.kuaizhizao.salesOrder.colOrderPrimary'),
       key: 'order_code',
@@ -3384,7 +3385,9 @@ const SalesOrdersPage: React.FC = () => {
         return <ListUniLifecycleCell lifecycle={lifecycle} withSubStages />;
       },
     },
-  ];
+  ],
+    GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
+  );
   const alignedOrderColumns = useMemo(
     () => alignProColumns(orderColumns, SALES_DOC_LIST_FIELD_RANK),
     [orderColumns],
@@ -3557,8 +3560,11 @@ const SalesOrdersPage: React.FC = () => {
 
   const salesOrderFormItemContent = (
     <>
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionBasic')}>
+        <div className="document-form-untitled-groups">
+          <div className="document-form-untitled-group">
       <Row gutter={16}>
-        <Col span={12}>
+        <Col span={8}>
           <ProFormText
             name="order_code"
             label={t('app.kuaizhizao.salesOrder.orderCode')}
@@ -3567,7 +3573,7 @@ const SalesOrdersPage: React.FC = () => {
             fieldProps={{ disabled: isEditPage }}
           />
         </Col>
-        <Col span={12}>
+        <Col span={8}>
           <ProForm.Item
             name="customer_id"
             label={t('app.kuaizhizao.salesOrder.customerName')}
@@ -3619,11 +3625,13 @@ const SalesOrdersPage: React.FC = () => {
             />
           </ProForm.Item>
         </Col>
-      </Row>
-      <Row gutter={16}>
-        <Col span={6}>
+        <Col span={8}>
           <SalesOrderSalesmanField userList={users} loading={usersLoading} />
         </Col>
+      </Row>
+          </div>
+          <div className="document-form-untitled-group">
+      <Row gutter={16}>
         <Col span={6}>
           <ProFormDatePicker
             name="order_date"
@@ -3655,51 +3663,6 @@ const SalesOrdersPage: React.FC = () => {
           />
         </Col>
         <Col span={6}>
-          <DictionarySelect
-            dictionaryCode="SHIPPING_METHOD"
-            name="shipping_method"
-            label={t('app.kuaizhizao.salesOrder.shippingMethod')}
-            placeholder={t('app.kuaizhizao.salesOrder.selectShippingMethod')}
-            formRef={formRef}
-            valueEqualsLabel={false}
-          />
-        </Col>
-      </Row>
-      <Row gutter={16}>
-        <Col span={6}>
-          <ProFormText
-            name="customer_contact"
-            label={salesCommonFormLabels.contact}
-            placeholder={t('app.kuaizhizao.salesOrder.contactPlaceholder')}
-          />
-        </Col>
-        <Col span={6}>
-          <ProFormText
-            name="customer_phone"
-            label={salesCommonFormLabels.phone}
-            placeholder={t('app.kuaizhizao.salesOrder.phonePlaceholder')}
-          />
-        </Col>
-        <Col span={12}>
-          <ProFormText
-            name="shipping_address"
-            label={t('app.kuaizhizao.salesOrder.shippingAddress')}
-            placeholder={t('app.kuaizhizao.salesOrder.shippingAddressPlaceholder')}
-          />
-        </Col>
-      </Row>
-      <Row gutter={16}>
-        <Col span={6}>
-          <DictionarySelect
-            dictionaryCode="PAYMENT_TERMS"
-            name="payment_terms"
-            label={t('app.kuaizhizao.salesOrder.paymentTerms')}
-            placeholder={t('app.kuaizhizao.salesOrder.selectPaymentTerms')}
-            formRef={formRef}
-            valueEqualsLabel={false}
-          />
-        </Col>
-        <Col span={6}>
           <ProForm.Item
             name="prepayment_amount"
             label={t('app.kuaizhizao.salesOrder.prepaymentAmount')}
@@ -3717,7 +3680,45 @@ const SalesOrdersPage: React.FC = () => {
             placeholder={t('app.kuaizhizao.salesOrder.prepaymentBankAccountPlaceholder')}
           />
         </Col>
-        <Col span={6}>
+      </Row>
+          </div>
+          <div className="document-form-untitled-group">
+      <Row gutter={16}>
+        <Col span={5}>
+          <DictionarySelect
+            dictionaryCode="SHIPPING_METHOD"
+            name="shipping_method"
+            label={t('app.kuaizhizao.salesOrder.shippingMethod')}
+            placeholder={t('app.kuaizhizao.salesOrder.selectShippingMethod')}
+            formRef={formRef}
+            valueEqualsLabel={false}
+          />
+        </Col>
+        <Col span={5}>
+          <ProFormText
+            name="customer_contact"
+            label={salesCommonFormLabels.contact}
+            placeholder={t('app.kuaizhizao.salesOrder.contactPlaceholder')}
+          />
+        </Col>
+        <Col span={5}>
+          <ProFormText
+            name="customer_phone"
+            label={salesCommonFormLabels.phone}
+            placeholder={t('app.kuaizhizao.salesOrder.phonePlaceholder')}
+          />
+        </Col>
+        <Col span={5}>
+          <DictionarySelect
+            dictionaryCode="PAYMENT_TERMS"
+            name="payment_terms"
+            label={t('app.kuaizhizao.salesOrder.paymentTerms')}
+            placeholder={t('app.kuaizhizao.salesOrder.selectPaymentTerms')}
+            formRef={formRef}
+            valueEqualsLabel={false}
+          />
+        </Col>
+        <Col span={4}>
           <DictionarySelect
             dictionaryCode="CURRENCY"
             name="currency_code"
@@ -3729,14 +3730,27 @@ const SalesOrdersPage: React.FC = () => {
           />
         </Col>
       </Row>
+      <Row gutter={16}>
+        <Col span={24}>
+          <ProFormText
+            name="shipping_address"
+            label={t('app.kuaizhizao.salesOrder.shippingAddress')}
+            placeholder={t('app.kuaizhizao.salesOrder.shippingAddressPlaceholder')}
+          />
+        </Col>
+      </Row>
+          </div>
+          <CustomFieldsFormSection
+            customFields={salesOrderFormCustomFields}
+            customFieldValues={salesOrderFormCustomFieldValues}
+            gridColumns={4}
+          />
+        </div>
       <ProFormText name="customer_name" hidden />
       <ProFormText name="price_type" hidden initialValue={DEFAULT_SALES_PRICE_TYPE} />
-      <CustomFieldsFormSection
-        customFields={salesOrderFormCustomFields}
-        customFieldValues={salesOrderFormCustomFieldValues}
-        gridColumns={4}
-      />
+      </DetailDrawerSection>
 
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionLines')}>
           <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
             {({ getFieldValue: getFormValue }: any) => {
               const priceType = salesFormPriceType(getFormValue('price_type'));
@@ -4237,16 +4251,19 @@ const SalesOrdersPage: React.FC = () => {
           )}
         </AntForm.Item>
 
-          <DocumentAttachmentsField
-            category="sales_order_attachments"
-            label={t('app.kuaizhizao.salesOrder.attachments')}
-          />
-
           <ProFormTextArea
             name="notes"
             label={t('app.kuaizhizao.salesOrder.notes')}
             placeholder={t('app.kuaizhizao.salesOrder.notesPlaceholder')}
           />
+      </DetailDrawerSection>
+
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionAttachments')} marginBottom={0}>
+          <DocumentAttachmentsField
+            category="sales_order_attachments"
+            label={false}
+          />
+      </DetailDrawerSection>
     </>
   );
 
@@ -4319,8 +4336,7 @@ const SalesOrdersPage: React.FC = () => {
             </>
           }
         >
-          <Card styles={{ body: { padding: PAGE_SPACING.PADDING } }}>
-            <div className="form-modal-content-inner">
+          <div className="form-modal-content-inner">
               <ProForm
                 formRef={formRef}
                 layout="vertical"
@@ -4354,7 +4370,6 @@ const SalesOrdersPage: React.FC = () => {
                 {salesOrderFormItemContent}
               </ProForm>
             </div>
-          </Card>
         </DocumentFormPageLayout>
         {salesOrderFormAuxModals}
       </>
@@ -4787,124 +4802,79 @@ const SalesOrdersPage: React.FC = () => {
         </SalesOrderIndicatorsProvider>
       </ListPageTemplate>
 
-      {/* 详情抽屉：DetailDrawerTemplate + 与报价单一致的分区 */}
-      {currentSalesOrder ? (
-        <SalesOrderDetailProvider
-          order={currentSalesOrder}
-          auditRequired={auditEnabled}
-          trackingRefreshKey={trackingRefreshKey}
-          shippingMethodOptions={shippingMethodOptions}
-          paymentTermsOptions={paymentTermsOptions}
-          feeTypeOptions={feeTypeOptions}
-          customFields={salesOrderListCustomFields}
-          customFieldValues={salesOrderDetailCustomFieldValues}
-        >
-          <DetailDrawerTemplate
-            title={
-              <Space size={4}>
-                <span>{t('app.kuaizhizao.salesOrder.detail')}</span>
-                {currentSalesOrder.order_code && (
-                  <>
-                    <span style={{ color: 'var(--ant-color-text-secondary)', fontWeight: 'normal' }}>
-                      {currentSalesOrder.order_code}
-                    </span>
-                    <Tooltip title={t('field.invitationCode.copy')}>
-                      <Button
-                        type="link"
-                        size="small"
-                        icon={<CopyOutlined style={{ fontSize: 12 }} />}
-                        onClick={() => {
-                          navigator.clipboard.writeText(currentSalesOrder.order_code ?? '').then(
-                            () => messageApi.success(t('common.copySuccess')),
-                            () => messageApi.error(t('common.copyFailed')),
-                          );
-                        }}
-                      />
-                    </Tooltip>
-                  </>
-                )}
-              </Space>
-            }
-            open={drawerVisible}
-            onClose={() => {
-              setDrawerVisible(false);
-              resetSalesOrderDetailFieldValues();
-            }}
-            width={DRAWER_CONFIG.HALF_WIDTH}
-            zIndex={salesOrderDetailDrawerZIndex}
-            collaborationTitleSuffix={<SalesOrderDetailCollaborationTitleSuffix />}
-            collaborationAuditRecord={currentSalesOrder}
-            extra={
-              <Space size="small">
-                <Button icon={<BellOutlined />} onClick={handleOpenReminder}>
-                  {t('app.kuaizhizao.salesOrder.reminder')}
+      <SalesOrderDetailDrawer
+        open={drawerVisible && Boolean(currentSalesOrder)}
+        order={currentSalesOrder}
+        auditRequired={auditEnabled}
+        trackingRefreshKey={trackingRefreshKey}
+        shippingMethodOptions={shippingMethodOptions}
+        paymentTermsOptions={paymentTermsOptions}
+        feeTypeOptions={feeTypeOptions}
+        customFields={salesOrderListCustomFields}
+        customFieldValues={salesOrderDetailCustomFieldValues}
+        zIndex={salesOrderDetailDrawerZIndex}
+        onClose={() => {
+          setDrawerVisible(false);
+          resetSalesOrderDetailFieldValues();
+        }}
+        onWorkflowSuccess={() => {
+          invalidateMenuBadge();
+          invalidateStatistics();
+          refreshDrawerOrder(currentSalesOrder?.id);
+        }}
+        extra={
+          currentSalesOrder ? (
+            <Space size="small">
+              <Button icon={<BellOutlined />} onClick={handleOpenReminder}>
+                {t('app.kuaizhizao.salesOrder.reminder')}
+              </Button>
+              {!detailCapabilityGates.update.disabled && (
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={() => {
+                    setDrawerVisible(false);
+                    handleEdit([currentSalesOrder.id!]);
+                  }}
+                >
+                  {t('app.kuaizhizao.salesOrder.editAction')}
                 </Button>
-                {!detailCapabilityGates.update.disabled && (
-                  <Button
-                    icon={<EditOutlined />}
-                    onClick={() => {
-                      setDrawerVisible(false);
-                      handleEdit([currentSalesOrder.id!]);
-                    }}
-                  >
-                    {t('app.kuaizhizao.salesOrder.editAction')}
-                  </Button>
-                )}
-                {!detailCapabilityGates.delete.disabled && (
-                  <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteSingle(currentSalesOrder.id!)}>
-                    {t('app.kuaizhizao.salesOrder.delete')}
-                  </Button>
-                )}
-                <UniWorkflowActions {...rowActionKind('skip')}
-                  record={currentSalesOrder}
-                  entityName={t('app.kuaizhizao.salesOrder.entityName')}
-                  entityType="sales_order"
-                  unifiedAudit
-                  resourcePrefix="kuaizhizao:sales-order"
-                  theme="default"
-                  onSuccess={() => {
-                    invalidateMenuBadge();
-                    invalidateStatistics();
-                    refreshDrawerOrder(currentSalesOrder?.id);
-                  }}
-                  confirmMessages={{
-                    submit: isManualAuditEnabled(currentSalesOrder.audit)
-                      ? t('app.kuaizhizao.salesOrder.submitConfirmAudit')
-                      : t('app.kuaizhizao.salesOrder.submitConfirmAuto'),
-                  }}
-                />
-                {currentSalesOrder.id != null && !detailCapabilityGates.print.disabled && (
-                  <Button
-                    icon={<PrinterOutlined />}
-                    onClick={() => openPrint({ documentType: 'sales_order', documentId: currentSalesOrder.id! })}
-                  >
-                    {t('components.uniAction.print')}
-                  </Button>
-                )}
-              </Space>
-            }
-            basic={<SalesOrderDetailBasicPane />}
-            collaboration={<SalesOrderDetailCollaborationPane />}
-            lines={<SalesOrderDetailLinesPane />}
-            timeline={<SalesOrderDetailTimelinePane />}
-            traceDocument={
-              currentSalesOrder.id != null
-                ? {
-                    documentType: 'sales_order',
-                    documentId: currentSalesOrder.id,
-                    selfDocumentId: currentSalesOrder.id,
-                    renderBriefActions: (doc) =>
-                      renderSalesOrderTraceBriefActions(doc, {
-                        t,
-                        navigate,
-                        closeDrawer: () => setDrawerVisible(false),
-                      }),
-                  }
-                : undefined
-            }
-          />
-        </SalesOrderDetailProvider>
-      ) : null}
+              )}
+              {!detailCapabilityGates.delete.disabled && (
+                <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteSingle(currentSalesOrder.id!)}>
+                  {t('app.kuaizhizao.salesOrder.delete')}
+                </Button>
+              )}
+              <UniWorkflowActions
+                {...rowActionKind('skip')}
+                record={currentSalesOrder}
+                entityName={t('app.kuaizhizao.salesOrder.entityName')}
+                entityType="sales_order"
+                unifiedAudit
+                resourcePrefix="kuaizhizao:sales-order"
+                theme="default"
+                onSuccess={() => {
+                  invalidateMenuBadge();
+                  invalidateStatistics();
+                  refreshDrawerOrder(currentSalesOrder?.id);
+                }}
+                confirmMessages={{
+                  submit: isManualAuditEnabled(currentSalesOrder.audit)
+                    ? t('app.kuaizhizao.salesOrder.submitConfirmAudit')
+                    : t('app.kuaizhizao.salesOrder.submitConfirmAuto'),
+                }}
+              />
+              {currentSalesOrder.id != null && !detailCapabilityGates.print.disabled && (
+                <Button
+                  icon={<PrinterOutlined />}
+                  onClick={() => openPrint({ documentType: 'sales_order', documentId: currentSalesOrder.id! })}
+                >
+                  {t('components.uniAction.print')}
+                </Button>
+              )}
+            </Space>
+          ) : null
+        }
+      />
 
       <UniPullQueryModal<PullQuotationCandidate>
         title={pullFromQuotationAction.label}

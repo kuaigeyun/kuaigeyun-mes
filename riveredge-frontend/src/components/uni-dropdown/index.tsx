@@ -2,7 +2,7 @@
  * UniDropdown - 管理型下拉增强组件
  *
  * 在 Select 下拉列表下方增加「快速新建」「高级搜索」入口，可复用、可配置。
- * 支持按文案模糊搜索与拼音/拼音首字母搜索（依赖 pinyin-pro，全局单例懒加载）。
+ * 默认开启 showSearch：支持按文案模糊搜索与拼音/拼音首字母搜索（依赖 pinyin-pro，全局单例懒加载）。
  * 与 Form.Item 配合使用：<Form.Item name="customer_id"><UniDropdown options={...} quickCreate={...} advancedSearch={...} /></Form.Item>
  */
 
@@ -60,6 +60,7 @@ export const UniDropdown = forwardRef<any, UniDropdownProps>(({
   styles: stylesProp,
   virtual: virtualProp,
   options: optionsProp,
+  showSearch,
   ...selectProps
 }, ref) => {
   const { token } = theme.useToken();
@@ -272,6 +273,7 @@ export const UniDropdown = forwardRef<any, UniDropdownProps>(({
           virtual={effectiveVirtual}
           styles={mergedStyles}
           style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', ...style }}
+          showSearch={showSearch ?? true}
           filterOption={effectiveFilterOption}
           optionFilterProp={effectiveOptionFilterProp}
           onChange={onChange}

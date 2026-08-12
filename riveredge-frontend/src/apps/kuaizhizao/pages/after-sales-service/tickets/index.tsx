@@ -109,12 +109,6 @@ const PULL_STATUS_I18N: Record<string, string> = {
 const AFTER_SALES_TICKET_RESOURCE = 'kuaizhizao:after-sales-ticket';
 const SALES_RETURN_RESOURCE = 'kuaizhizao:sales-return';
 
-const AFTER_SALES_LIST_FIELD_RANK = {
-  ...SALES_DOC_LIST_FIELD_RANK,
-  registered_at: 71,
-  closed_at: 72,
-} as const;
-
 const STATUS_COLOR: Record<string, string> = {
   待处理: 'processing',
   处理中: 'warning',
@@ -1035,7 +1029,7 @@ const AfterSalesTicketsPage: React.FC = () => {
         },
       },
     ],
-    AFTER_SALES_LIST_FIELD_RANK,
+    SALES_DOC_LIST_FIELD_RANK,
   );
 
   return (

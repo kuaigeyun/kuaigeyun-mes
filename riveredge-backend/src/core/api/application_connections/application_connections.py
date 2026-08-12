@@ -16,7 +16,10 @@ from core.schemas.integration_config import (
     TestConnectionResponse,
     SyncContactsResponse,
 )
-from core.services.integration.integration_config_service import IntegrationConfigService
+from core.services.integration.integration_config_service import (
+    IntegrationConfigService,
+    build_integration_response,
+)
 from core.services.integration.wecom_contact_sync_service import WeComContactSyncService
 from core.api.deps.deps import get_current_tenant
 from core.api.deps.access import require_permission_codes
@@ -28,20 +31,27 @@ router = APIRouter(prefix="/application-connections", tags=["Core - Application 
 
 APPLICATION_TYPES = (
     "feishu", "dingtalk", "wecom",
-    "sap", "kingdee", "yonyou", "dsc", "inspur", "digiwin_e10",
-    "grasp_erp", "super_erp", "chanjet_tplus", "kingdee_kis",
-    "oracle_netsuite", "erpnext", "odoo", "sunlike_erp",
+    "kingdee_galaxy", "kingdee_xingchen", "kingdee_kis_cloud", "kingdee_kis",
+    "yonyou_yonbip", "yonyou_u8", "yonyou_u9", "yonyou_nc",
+    "sap_s4hana", "sap_b1", "oracle_netsuite", "odoo",
+    "inspur_gs", "inspur_ps",
+    "digiwin_t100", "digiwin_yifei", "digiwin_yizhu", "digiwin_yituo", "digiwin_e10",
+    "chanjet_tplus", "grasp_huihuang", "super_erp", "erpnext", "sunlike_erp",
     "teamcenter", "windchill", "caxa", "sanpin_plm", "sunlike_plm", "sipm", "inteplm",
     "salesforce", "xiaoshouyi", "fenxiang", "qidian", "supra_crm",
     "weaver", "seeyon", "landray", "cloudhub", "tongda_oa",
     "rootcloud", "casicloud", "alicloud_iot", "huaweicloud_iot", "thingsboard", "jetlinks",
     "flux_wms", "kejian_wms", "digiwin_wms", "openwms",
+    "alicloud_oss", "tencent_cos", "huaweicloud_obs", "aws_s3", "minio", "qiniu_kodo",
+    "nas_webdav", "nas_smb",
+    # AI（OpenAI 兼容；同一 type 可多条不同 model）
+    "deepseek", "openai", "qwen", "zhipu", "moonshot", "siliconflow",
 )
 
 
 def _to_response(ic) -> IntegrationConfigResponse:
-    """IntegrationConfig -> IntegrationConfigResponse"""
-    return IntegrationConfigResponse.model_validate(ic)
+    """IntegrationConfig -> IntegrationConfigResponse（config 脱敏）"""
+    return IntegrationConfigResponse.model_validate(build_integration_response(ic))
 
 
 @router.post("", response_model=IntegrationConfigResponse, status_code=status.HTTP_201_CREATED)

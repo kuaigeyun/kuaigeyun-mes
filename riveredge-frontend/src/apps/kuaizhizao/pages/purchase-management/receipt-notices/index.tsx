@@ -12,6 +12,8 @@ import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
+import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
+import { useOptionalLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import type { DescriptionsProps } from 'antd';
 import {
@@ -87,7 +89,10 @@ import {
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS, DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar';
-import { receiptNoticeInboundPushPercent } from '../../sales-management/shared/pushProgress';
+import {
+  collectReceiptInboundPushDocuments,
+  receiptNoticeInboundPushPercent,
+} from '../../sales-management/shared/pushProgress';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
@@ -198,6 +203,7 @@ const RECEIPT_NOTICE_RESOURCE = 'kuaizhizao:receipt-notice';
 const ReceiptNoticesPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const linkedDetail = useOptionalLinkedDocumentDetail();
   const { token } = theme.useToken();
   const receiptNoticeDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
@@ -713,21 +719,8 @@ const ReceiptNoticesPage: React.FC = () => {
       },
       { title: t('app.kuaizhizao.receiptNotice.supplier'), dataIndex: 'supplier_name', hideInTable: true, hideInSearch: true },
       {
-        title: t('app.kuaizhizao.receiptNotice.purchaseOrderCode'),
-        dataIndex: 'purchase_order_code',
-        width: 132,
-        uniTableKeepWidth: true,
-        sorter: true,
-        hideInSearch: false,
-        ellipsis: true,
-        render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.purchase_order_code ?? '') }} ellipsis>
-            {r.purchase_order_code ?? '-'}
-          </Typography.Text>
-        ),
-      },
-      {
         title: t('app.kuaizhizao.receiptNotice.inboundWarehouse'),
+        key: 'inbound_warehouse',
         dataIndex: 'warehouse_name',
         width: 140,
         ellipsis: true,
@@ -736,16 +729,25 @@ const ReceiptNoticesPage: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: t('app.kuaizhizao.receiptNotice.plannedReceiptDate'),
-        dataIndex: 'planned_receipt_date',
-        valueType: 'date',
-        width: 132,
+        title: t('app.kuaizhizao.receiptNotice.purchaseOrderCode'),
+        key: 'receipt_purchase_order_code',
+        dataIndex: 'purchase_order_code',
+        width: 140,
         uniTableKeepWidth: true,
         sorter: true,
-        hideInSearch: true,
+        hideInSearch: false,
+        ellipsis: true,
+        render: (_, r) => (
+          <LinkedDocumentCode
+            documentType="purchase_order"
+            documentId={r.purchase_order_id}
+            code={r.purchase_order_code}
+          />
+        ),
       },
       {
         title: t('app.kuaizhizao.receiptNotice.receiptConversion'),
+        key: 'receipt_inbound_conversion',
         dataIndex: 'purchase_receipt_code',
         width: 180,
         hideInSearch: true,
@@ -755,6 +757,12 @@ const ReceiptNoticesPage: React.FC = () => {
               <UniTableStackedPrimaryCell
                 primary={t('app.kuaizhizao.receiptNotice.pulledToInbound')}
                 secondary={String(r.purchase_receipt_code || `#${r.purchase_receipt_id}`)}
+                onSecondaryClick={() => {
+                  linkedDetail?.openLinkedDocumentDetail(
+                    'purchase_receipt',
+                    Number(r.purchase_receipt_id),
+                  );
+                }}
               />
             );
           }
@@ -767,7 +775,6 @@ const ReceiptNoticesPage: React.FC = () => {
           );
         },
       },
-      { title: t('app.kuaizhizao.shipmentNotice.notifiedAt'), dataIndex: 'notified_at', width: 132, uniTableKeepWidth: true, sorter: true, hideInSearch: true, render: (_, r) => (r.notified_at ? formatDateTime(r.notified_at, 'YYYY-MM-DD HH:mm') : '-') },
       {
         title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
         dataIndex: 'inbound_push_progress',
@@ -783,9 +790,34 @@ const ReceiptNoticesPage: React.FC = () => {
                   ? t('app.kuaizhizao.salesManagement.pushProgress.pushed')
                   : t('app.kuaizhizao.salesManagement.pushProgress.notPushed'),
               })}
+              documents={collectReceiptInboundPushDocuments(
+                r,
+                t('components.documentTrackingPanel.docType.purchase_receipt'),
+              )}
+              formatMoreDocs={(count) =>
+                t('app.kuaizhizao.salesManagement.pushProgress.moreDocs', { count })
+              }
             />
           );
         },
+      },
+      {
+        title: t('app.kuaizhizao.receiptNotice.plannedReceiptDate'),
+        dataIndex: 'planned_receipt_date',
+        valueType: 'date',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.shipmentNotice.notifiedAt'),
+        dataIndex: 'notified_at',
+        width: 132,
+        uniTableKeepWidth: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.notified_at ? formatDateTime(r.notified_at, 'YYYY-MM-DD HH:mm') : '-'),
       },
       ...buildDocumentAuditColumns<ReceiptNotice>(t),
       {
@@ -905,7 +937,7 @@ const ReceiptNoticesPage: React.FC = () => {
         },
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [handleDelete, handleDetail, handleEdit, handleNotify, handleWithdraw, navigate, receiptNoticeLifecycleValueEnum, receiptNoticeSupplierSearchOptions, t, i18n.language],
+    [handleDelete, handleDetail, handleEdit, handleNotify, handleWithdraw, linkedDetail, navigate, receiptNoticeLifecycleValueEnum, receiptNoticeSupplierSearchOptions, t, i18n.language],
   );
 
   const detailTableColumns: ProColumns<ReceiptNoticeItemRow>[] = useMemo(
@@ -993,10 +1025,7 @@ const ReceiptNoticesPage: React.FC = () => {
         key: 'line_inbound_progress',
         ...DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS,
         render: (_: unknown, record) => {
-          const percent = receiptNoticeInboundPushPercent({
-            purchase_receipt_id: record.purchase_receipt_id,
-            status: record.status,
-          });
+          const percent = receiptNoticeInboundPushPercent(record);
           return (
             <DocumentPushProgressBar
               percent={percent}
@@ -1006,6 +1035,13 @@ const ReceiptNoticesPage: React.FC = () => {
                   ? t('app.kuaizhizao.salesManagement.pushProgress.pushed')
                   : t('app.kuaizhizao.salesManagement.pushProgress.notPushed'),
               })}
+              documents={collectReceiptInboundPushDocuments(
+                record,
+                t('components.documentTrackingPanel.docType.purchase_receipt'),
+              )}
+              formatMoreDocs={(count) =>
+                t('app.kuaizhizao.salesManagement.pushProgress.moreDocs', { count })
+              }
             />
           );
         },
@@ -1764,6 +1800,7 @@ const ReceiptNoticesPage: React.FC = () => {
                   notified_at: h.notified_at,
                   status: h.status,
                   purchase_receipt_id: h.purchase_receipt_id,
+                  purchase_receipt_code: h.purchase_receipt_code,
                   lifecycle: h.lifecycle,
                 }),
                 mapEmptyHeaderRow: (h) => ({
@@ -1776,6 +1813,7 @@ const ReceiptNoticesPage: React.FC = () => {
                   notice_quantity: 0,
                   status: h.status,
                   purchase_receipt_id: h.purchase_receipt_id,
+                  purchase_receipt_code: h.purchase_receipt_code,
                   lifecycle: h.lifecycle,
                   planned_receipt_date: h.planned_receipt_date,
                   notified_at: h.notified_at,

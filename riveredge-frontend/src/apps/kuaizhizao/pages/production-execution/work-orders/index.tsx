@@ -90,6 +90,7 @@ import {
   QuestionCircleOutlined,
 } from '@ant-design/icons'
 import { UniTable } from '../../../../../components/uni-table'
+import { LinkedDocumentCode } from '../../../../../components/linked-document-code'
 import { UniBatchButton, UniBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch'
 import {
   UniTableStackedPrimaryCell,
@@ -998,7 +999,14 @@ function renderWorkOrderSourceOrderLine(
       ellipsis={{ tooltip: label }}
       style={secondaryTextStyle}
     >
-      {label}
+      来源订单{' '}
+      <LinkedDocumentCode
+        documentType="sales_order"
+        documentId={record.sales_order_id}
+        code={code}
+        ellipsis={false}
+        style={{ fontSize: 'inherit' }}
+      />
     </Typography.Text>
   )
 }
@@ -4876,7 +4884,15 @@ const WorkOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.workOrder.colSalesOrder'),
       dataIndex: 'sales_order_code',
       render: (_, record) =>
-        record.production_mode === 'MTO' ? record.sales_order_code || '-' : '-',
+        record.production_mode === 'MTO' ? (
+          <LinkedDocumentCode
+            documentType="sales_order"
+            documentId={record.sales_order_id}
+            code={record.sales_order_code}
+          />
+        ) : (
+          '-'
+        ),
     },
     {
       title: '状态',

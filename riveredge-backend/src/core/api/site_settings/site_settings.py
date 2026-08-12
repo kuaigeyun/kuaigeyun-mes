@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 from core.schemas.site_setting import SiteSettingUpdate, SiteSettingResponse
 from core.services.system.site_setting_service import SiteSettingService
 from core.utils.integration_settings import (
-    build_deepseek_public_status,
+    build_deepseek_public_status_for_tenant,
     mask_integrations_for_response,
     merge_integrations_update,
 )
@@ -142,9 +142,8 @@ async def _rollback_created_tenant(tenant_id: int) -> None:
 async def get_deepseek_integration_status(
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """查询当前租户 DeepSeek 集成是否可用于 KU-AI 对话（核心路由，不依赖 KU-AI 应用挂载）。"""
-    site_settings = await SiteSettingService.get_settings(tenant_id)
-    return build_deepseek_public_status(site_settings.settings or {})
+    """查询当前租户 AI 连接是否可用于 KU-AI 对话（核心路由，不依赖 KU-AI 应用挂载）。"""
+    return await build_deepseek_public_status_for_tenant(tenant_id)
 
 
 @router.post(

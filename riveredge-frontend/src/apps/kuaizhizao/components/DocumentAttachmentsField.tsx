@@ -7,7 +7,8 @@ import { uploadMultipleFiles } from '../../../services/file';
 interface DocumentAttachmentsFieldProps {
   /** 上传分类，如 sales_order_attachments */
   category: string;
-  label?: string;
+  /** 表单项标签；外层已有「附件」板块标题时可传 false 隐藏 */
+  label?: React.ReactNode | false;
   max?: number;
   name?: string;
 }
@@ -23,7 +24,7 @@ export const DocumentAttachmentsField: React.FC<DocumentAttachmentsFieldProps> =
   return (
     <ProFormUploadDragger
       name={name}
-      label={label ?? t('components.documentAttachments.label')}
+      label={label === undefined ? t('components.documentAttachments.label') : label}
       max={max}
       colProps={{ span: 24 }}
       icon={<InboxOutlined />}

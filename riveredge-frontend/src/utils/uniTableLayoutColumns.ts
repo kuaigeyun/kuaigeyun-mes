@@ -17,7 +17,13 @@ import {
  * 两列必须等宽等对齐，各写各的数字就会漂移。消费方见
  * `sales-management/shared/listAuditPhaseColumn.tsx` 与本文件的生命周期列宽推导。
  */
-export const UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH = 96;
+export const UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH = 80;
+
+/**
+ * 下推 / 交货 / 完成进度条列统一宽度。
+ * 与状态徽章列同宽，便于右固定组与中间进度列视觉对齐；禁止页面另写数字。
+ */
+export const UNI_TABLE_PROGRESS_COLUMN_WIDTH = UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH;
 
 /**
  * 操作列宽度布局令牌（1280 视口 / small 表格 / type="link" + 图标，Playwright 实测）：
@@ -144,15 +150,26 @@ export function isUniTableLifecycleColumnFixedRight(col: unknown): boolean {
   return (col as { fixed?: unknown }).fixed === 'right';
 }
 
+/** 列表头表进度列：须 spread `DOCUMENT_PROGRESS_COLUMN_DEFAULTS`（含 uniTableProgressColumn） */
+export function isUniTableProgressColumn(col: unknown): boolean {
+  if (!col || typeof col !== 'object') return false;
+  return (col as { uniTableProgressColumn?: unknown }).uniTableProgressColumn === true;
+}
+
 /** 明细表格下推进度列：须 spread `DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS`（含 uniTableDetailProgressColumn） */
 export function isUniTableDetailProgressColumn(col: unknown): boolean {
   if (!col || typeof col !== 'object') return false;
   return (col as { uniTableDetailProgressColumn?: unknown }).uniTableDetailProgressColumn === true;
 }
 
-/** 明细表格下推进度列宽：与执行状态徽章列同宽 */
+/** 明细表格下推进度列宽：与全局进度列同宽 */
 export function resolveUniTableDetailProgressColumnWidth(): number {
-  return UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH;
+  return UNI_TABLE_PROGRESS_COLUMN_WIDTH;
+}
+
+/** 列表头表进度列宽（下推 / 交货 / 完成进度） */
+export function resolveUniTableProgressColumnWidth(): number {
+  return UNI_TABLE_PROGRESS_COLUMN_WIDTH;
 }
 
 /** 与 UniTable 内生命周期列判定一致（key 或 dataIndex） */
@@ -213,8 +230,8 @@ export function getUniTableColumnScrollContribution(col: unknown): number {
   if (isUniTableLifecycleColumn(col)) {
     return resolveUniTableLifecycleColumnWidth();
   }
-  if (isUniTableDetailProgressColumn(col)) {
-    return resolveUniTableDetailProgressColumnWidth();
+  if (isUniTableProgressColumn(col) || isUniTableDetailProgressColumn(col)) {
+    return resolveUniTableProgressColumnWidth();
   }
   if (isUniTableOperationColumn(col)) {
     const resolved = parseUniTableColumnWidth(c.width);
