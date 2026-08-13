@@ -381,7 +381,7 @@ class DataScopeService:
             if scope == DataScopeType.CUSTOM:
                 payload = policy.scope_payload if isinstance(policy.scope_payload, dict) else {}
                 resolver = (payload.get("resolver") or "").strip().lower()
-                if resolver in {"partner", "outsourced_unit", "supplier", "customer"}:
+                if resolver in {"partner", "outsourced_unit", "supplier", "customer", "manufacturer"}:
                     needs_partner_check = True
                     break
 

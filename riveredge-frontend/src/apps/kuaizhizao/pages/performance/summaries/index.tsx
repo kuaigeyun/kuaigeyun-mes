@@ -6,8 +6,7 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, DatePicker, Descriptions, Select, Space, Typography, Table, Spin, Empty, theme as AntdTheme } from 'antd';
+import { App, Button, DatePicker, Select, Space, theme as AntdTheme } from 'antd';
 import { CalculatorOutlined, CheckOutlined, RollbackOutlined, DownloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -16,23 +15,17 @@ import {
   UniTableStackedPrimaryCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { rowActionKind } from '../../../../../components/uni-action';
-import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import {
-  detailDrawerDescriptionItems,
-  DetailDrawerTemplate,
-  DRAWER_CONFIG,
-  ListPageTemplate,
-} from '../../../../../components/layout-templates';
-import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
-import { PerformanceTraceBriefPrimaryActions } from '../PerformanceTraceBriefFooter';
+import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
+import { useDocumentTracking } from '../../../../../components/document-tracking-panel';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   getPerformanceSummaryStatusValueEnum,
   renderSummaryStatusTag,
 } from '../components/performanceMeta';
 import { employeePerformanceApi } from '../../../services/performance';
-import type { PerformanceSummary, PerformanceDetail, PerformanceDetailItem } from '../../../types/performance';
-import { getPerformanceSummaryLifecycle } from '../../../utils/performanceLifecycle';
-import { formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import type { PerformanceSummary, PerformanceDetail } from '../../../types/performance';
+import { formatDateTime } from '../../../../../utils/format';
+import { PerformanceSummaryDetailDrawer } from './components/PerformanceSummaryDetailDrawer';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
   normalizePerformanceListResponse,
@@ -54,6 +47,8 @@ const SummariesPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detail, setDetail] = useState<PerformanceDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryKeyRef = useRef<{ period: string; employee_id: number } | null>(null);
   const [calcLoading, setCalcLoading] = useState(false);
   const [summaryTrackingId, setSummaryTrackingId] = useState<number | null>(null);
   const [summaryTrackingRefreshKey, setSummaryTrackingRefreshKey] = useState(0);
@@ -67,7 +62,35 @@ const SummariesPage: React.FC = () => {
   const closeDrawer = () => {
     setDrawerVisible(false);
     setDetail(null);
+    setDetailError(null);
     setSummaryTrackingId(null);
+  };
+
+  const loadDetail = async (periodValue: string, employeeIdValue: number) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const next = await employeePerformanceApi.getDetail({
+        period: periodValue,
+        employee_id: employeeIdValue,
+      });
+      setDetail(next);
+      if (next?.summary?.id != null) {
+        setSummaryTrackingId(next.summary.id);
+      }
+      setSummaryTrackingRefreshKey((k) => k + 1);
+    } catch (error) {
+      setDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.performance.common.messages.loadFailed')));
+      setSummaryTrackingId(null);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const reloadOpenDetail = () => {
+    const key = detailRetryKeyRef.current;
+    if (key) void loadDetail(key.period, key.employee_id);
   };
 
   useEffect(() => {
@@ -95,6 +118,7 @@ const SummariesPage: React.FC = () => {
       await employeePerformanceApi.confirmSummary(record.id);
       messageApi.success(t('app.kuaizhizao.performance.summaries.messages.confirmSuccess'));
       actionRef.current?.reload();
+      if (drawerVisible) reloadOpenDetail();
     } catch (e: any) {
       messageApi.error(e?.message || t('app.kuaizhizao.performance.summaries.messages.confirmFailed'));
     }
@@ -105,6 +129,7 @@ const SummariesPage: React.FC = () => {
       await employeePerformanceApi.reopenSummary(record.id);
       messageApi.success(t('app.kuaizhizao.performance.summaries.messages.reopenSuccess'));
       actionRef.current?.reload();
+      if (drawerVisible) reloadOpenDetail();
     } catch (e: any) {
       messageApi.error(e?.message || t('app.kuaizhizao.performance.summaries.messages.reopenFailed'));
     }
@@ -143,60 +168,14 @@ const SummariesPage: React.FC = () => {
     }
   };
 
-  const handleViewDetail = async (record: PerformanceSummary) => {
-    try {
-      setSummaryTrackingId(record.id);
-      setDrawerVisible(true);
-      setDetail(null);
-      setDetailLoading(true);
-      const d = await employeePerformanceApi.getDetail({ period: record.period, employee_id: record.employee_id });
-      setDetail(d);
-      if (d?.summary?.id != null) {
-        setSummaryTrackingId(d.summary.id);
-      }
-      setSummaryTrackingRefreshKey((k) => k + 1);
-    } catch (e: any) {
-      messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
-      setDrawerVisible(false);
-      setDetail(null);
-      setSummaryTrackingId(null);
-    } finally {
-      setDetailLoading(false);
-    }
+  const handleViewDetail = (record: PerformanceSummary) => {
+    detailRetryKeyRef.current = { period: record.period, employee_id: record.employee_id };
+    setSummaryTrackingId(record.id);
+    setDrawerVisible(true);
+    setDetail(null);
+    setDetailError(null);
+    void loadDetail(record.period, record.employee_id);
   };
-
-  const detailColumns: ProDescriptionsItemProps<PerformanceDetail>[] = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.performance.common.columns.employee'), dataIndex: 'employee_name' },
-      { title: t('app.kuaizhizao.performance.common.columns.period'), dataIndex: 'period' },
-      {
-        title: t('app.kuaizhizao.performance.common.columns.totalHours'),
-        dataIndex: ['summary', 'total_hours'],
-        render: (_, r) => r?.summary?.total_hours ?? '-',
-      },
-      {
-        title: t('app.kuaizhizao.performance.common.columns.totalPieces'),
-        dataIndex: ['summary', 'total_pieces'],
-        render: (_, r) => r?.summary?.total_pieces ?? '-',
-      },
-      {
-        title: t('app.kuaizhizao.performance.common.columns.totalAmount'),
-        dataIndex: ['summary', 'total_amount'],
-        render: (_, r) => r?.summary?.total_amount ?? '-',
-      },
-      {
-        title: t('app.kuaizhizao.performance.common.columns.kpiScore'),
-        dataIndex: ['summary', 'kpi_score'],
-        render: (_, r) => r?.summary?.kpi_score ?? '-',
-      },
-      {
-        title: t('app.kuaizhizao.performance.common.columns.kpiCoefficient'),
-        dataIndex: ['summary', 'kpi_coefficient'],
-        render: (_, r) => r?.summary?.kpi_coefficient ?? '-',
-      },
-    ],
-    [t],
-  );
 
   const columns: ProColumns<PerformanceSummary>[] = useMemo(
     () => alignProColumns<PerformanceSummary>([
@@ -313,7 +292,6 @@ const SummariesPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.performance.common.columns.actions'),
         key: 'action',
-        width: 220,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => (
@@ -406,113 +384,42 @@ const SummariesPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      <DetailDrawerTemplate
-        title={t('app.kuaizhizao.performance.summaries.modal.detailTitle', {
-          name: detail?.employee_name || '',
-          period: detail?.period || '',
-        })}
+      <PerformanceSummaryDetailDrawer
         open={drawerVisible}
         zIndex={summaryDrawerZIndex}
         onClose={closeDrawer}
+        record={detail}
         loading={detailLoading}
-        width={DRAWER_CONFIG.HALF_WIDTH}
-        basicTitle={t('app.kuaizhizao.performance.common.sections.basicInfo')}
-        basic={
-          detail ? (
-            <Descriptions column={2} size="small" items={detailDrawerDescriptionItems(detailColumns, detail)} />
-          ) : undefined
-        }
-        collaborationTitle={t('app.kuaizhizao.performance.common.sections.lifecycle')}
-        collaborationLifecycle={
-          detail ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {(() => {
-                const row = (detail.summary ?? detail) as unknown as Record<string, unknown>;
-                const lc = getPerformanceSummaryLifecycle(row, t);
-                const mainStages = lc.mainStages ?? [];
-                if (mainStages.length === 0) return null;
-                return (
-                  <UniLifecycleStepper
-                    steps={mainStages}
-                    showLabels
-                    status={lc.status}
-                    nextStepSuggestions={lc.nextStepSuggestions}
-                    hideNextStepSuggestions
-                  />
-                );
-              })()}
-            </div>
-          ) : undefined
-        }
-        traceDocument={
-          summaryTrackingId != null
-            ? {
-                documentType: 'performance_summary',
-                documentId: summaryTrackingId,
-                selfDocumentId: summaryTrackingId,
-                renderBriefActions: (doc) => (
-                  <PerformanceTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={closeDrawer}
-                  />
-                ),
-              }
-            : undefined
-        }
-        supplementary={
-          detail?.kpi_scores && detail.kpi_scores.length > 0 ? (
-            <Table
-              size="small"
-              rowKey="kpi_code"
-              pagination={false}
-              dataSource={detail.kpi_scores}
-              columns={[
-                { title: t('app.kuaizhizao.performance.summaries.columns.kpiCode'), dataIndex: 'kpi_code', width: 120 },
-                { title: t('app.kuaizhizao.performance.summaries.columns.score'), dataIndex: 'score', width: 80, align: 'right' },
+        error={detailError}
+        onRetry={reloadOpenDetail}
+        trackingId={summaryTrackingId}
+        tracking={summaryTracking}
+        navigate={navigate}
+        extra={
+          detail?.summary ? (
+            <DetailDrawerActions
+              items={[
+                {
+                  key: 'confirm',
+                  visible: detail.summary.status === 'calculated',
+                  render: (
+                    <Button icon={<CheckOutlined />} onClick={() => void handleConfirm(detail.summary!)}>
+                      {t('app.kuaizhizao.performance.common.actions.confirm')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'reopen',
+                  visible: detail.summary.status === 'confirmed',
+                  render: (
+                    <Button icon={<RollbackOutlined />} onClick={() => void handleReopen(detail.summary!)}>
+                      {t('app.kuaizhizao.performance.common.actions.reopen')}
+                    </Button>
+                  ),
+                },
               ]}
             />
-          ) : undefined
-        }
-        supplementaryTitle={t('app.kuaizhizao.performance.summaries.sections.kpiScores')}
-        supplementaryVisible={Boolean(detail?.kpi_scores && detail.kpi_scores.length > 0)}
-        linesTitle={t('app.kuaizhizao.performance.summaries.sections.reportingItems')}
-        linesVisible
-        lines={
-          detail?.items && detail.items.length > 0 ? (
-            <Table<PerformanceDetailItem>
-              size="small"
-              rowKey={(r) => String(r.reporting_record_id)}
-              pagination={false}
-              dataSource={detail.items}
-              columns={[
-                { title: t('app.kuaizhizao.performance.summaries.columns.reportingRecord'), dataIndex: 'reporting_record_id', width: 88 },
-                { title: t('app.kuaizhizao.performance.summaries.columns.workOrder'), dataIndex: 'work_order_code', width: 120, ellipsis: true },
-                { title: t('app.kuaizhizao.performance.summaries.columns.operation'), dataIndex: 'operation_name', width: 120, ellipsis: true },
-                { title: t('app.kuaizhizao.performance.summaries.columns.reportedAt'), dataIndex: 'reported_at', width: 160, render: (text) => formatDateTimeBySiteSetting(text) || '-' },
-                { title: t('app.kuaizhizao.performance.common.columns.qualifiedQty'), dataIndex: 'qualified_quantity', width: 80, align: 'right' },
-                { title: t('app.kuaizhizao.performance.summaries.columns.workHours'), dataIndex: 'work_hours', width: 80, align: 'right' },
-              ]}
-            />
-          ) : (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.performance.common.empty.noReportingItems')} />
-          )
-        }
-        timelineTitle={t('app.kuaizhizao.performance.common.sections.operationLog')}
-        timelineVisible
-        timeline={
-          summaryTracking.loading ? (
-            <div style={{ textAlign: 'center', padding: 24 }}>
-              <Spin />
-            </div>
-          ) : summaryTracking.error ? (
-            <Typography.Text type="danger">{summaryTracking.error}</Typography.Text>
-          ) : summaryTracking.data ? (
-            <DocumentTrackingTimelineBody data={summaryTracking.data} />
-          ) : (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.performance.common.empty.noActivityLog')} />
-          )
+          ) : null
         }
       />
     </>

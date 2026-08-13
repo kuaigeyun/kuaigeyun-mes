@@ -146,6 +146,7 @@ import {
   DetailDrawerSection,
 
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
+  detailDrawerDescriptionItems,
 
 } from '../../../../../components/layout-templates';
 import { DOCUMENT_SUBLINE_TABLE_PROPS } from '../../../../../components/document-subline-table';
@@ -237,7 +238,6 @@ import {
   alignProColumns,
   getSalesCommonFormLabels,
   GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
-  SALES_DOC_DETAIL_BASIC_FIELD_RANK,
   SALES_DOC_LIST_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS, DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS, ratioToPushProgressPercent } from '../shared/DocumentPushProgressBar';
@@ -245,7 +245,6 @@ import {
   collectSalesContractPushDocuments,
   salesContractOrderPushPercent,
 } from '../shared/pushProgress';
-import { buildDescriptionItemsFromColumns } from '../shared/descriptionItems';
 import { applyCustomerFormFields } from '../shared/applyCustomerFormFields';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
@@ -2847,10 +2846,9 @@ const SalesContractsPage: React.FC = () => {
 
         valueType: 'option',
 
-        minWidth: 120,
+
 
         fixed: 'right',
-
         hideInSearch: true,
 
         render: (_, record) => {
@@ -3060,23 +3058,9 @@ const SalesContractsPage: React.FC = () => {
       dataIndex: 'contract_type',
 
       render: (_, r) => (
-        <Tag color="blue" bordered={false}>
+        <Tag color="blue" variant="filled">
           {contractTypeLabels[r.contract_type as keyof typeof contractTypeLabels] || r.contract_type}
         </Tag>
-      ),
-
-    },
-
-    {
-
-      title: t('app.kuaizhizao.salesOrder.status'),
-
-      dataIndex: 'status',
-
-      render: (_, r) => (
-
-        <Tag color={STATUS_COLOR[r.status || ''] || 'default'}>{renderContractStatus(r.status)}</Tag>
-
       ),
 
     },
@@ -3205,47 +3189,7 @@ const SalesContractsPage: React.FC = () => {
 
     },
 
-    {
-
-      title: t('app.kuaizhizao.salesContract.sourceQuotation'),
-
-      dataIndex: 'quotation_code',
-
-      render: (_, r) =>
-
-        r.quotation_code && r.quotation_id ? (
-
-          <Button
-
-            type="link"
-
-            size="small"
-
-            style={{ padding: 0, height: 'auto' }}
-
-            onClick={() =>
-
-              navigate('/apps/kuaizhizao/sales-management/quotations', {
-
-                state: { openQuotationId: r.quotation_id },
-
-              })
-
-            }
-
-          >
-
-            {r.quotation_code}
-
-          </Button>
-
-        ) : (
-
-          r.quotation_code || '—'
-
-        ),
-
-    },
+    { title: t('app.kuaizhizao.salesContract.sourceQuotation'), dataIndex: 'quotation_code', key: 'quotation_code_link' },
 
     { title: t('app.kuaizhizao.salesOrder.shippingAddress'), dataIndex: 'shipping_address', span: 3 },
 
@@ -3276,10 +3220,10 @@ const SalesContractsPage: React.FC = () => {
     { title: t('app.kuaizhizao.salesOrder.notes'), dataIndex: 'notes', span: 3 },
 
   ],
-    [t, contractTypeLabels, salesCommonLabels, renderContractStatus, navigate],
+    [t, contractTypeLabels, salesCommonLabels],
   );
   const alignedDetailBasicColumns = useMemo(
-    () => alignDescriptionColumns(detailBasicColumns, SALES_DOC_DETAIL_BASIC_FIELD_RANK),
+    () => alignDescriptionColumns(detailBasicColumns),
     [detailBasicColumns],
   );
 
@@ -3657,8 +3601,15 @@ const SalesContractsPage: React.FC = () => {
 
           detail ? (
 
-            <Space wrap>
+            <Space size="small">
 
+              {!detailCapabilityGates.createChange.disabled && (
+                <Button icon={<FormOutlined />} onClick={openChangeDrawer}>{t('app.kuaizhizao.salesContract.contractChange')}</Button>
+              )}
+
+              {!detailCapabilityGates.close.disabled && (
+                <Button icon={<StopOutlined />} onClick={() => setCloseModalOpen(true)}>{t('app.kuaizhizao.salesContract.closeContract')}</Button>
+              )}
               {!detailCapabilityGates.update.disabled && (
                 <Button icon={<EditOutlined />} onClick={() => handleEdit(detail)}>{t('common.edit')}</Button>
               )}
@@ -3682,13 +3633,6 @@ const SalesContractsPage: React.FC = () => {
                 onSuccess={() => handleContractWorkflowSuccess(detail.id)}
               />
 
-              {!detailCapabilityGates.createChange.disabled && (
-                <Button icon={<FormOutlined />} onClick={openChangeDrawer}>{t('app.kuaizhizao.salesContract.contractChange')}</Button>
-              )}
-
-              {!detailCapabilityGates.close.disabled && (
-                <Button icon={<StopOutlined />} onClick={() => setCloseModalOpen(true)}>{t('app.kuaizhizao.salesContract.closeContract')}</Button>
-              )}
               {!detailCapabilityGates.print.disabled && (
                 <Button icon={<PrinterOutlined />} onClick={() => void handlePrint(detail)}>{t('components.uniAction.print')}</Button>
               )}
@@ -3709,7 +3653,7 @@ const SalesContractsPage: React.FC = () => {
 
               size="small"
 
-              items={buildDescriptionItemsFromColumns(detail, alignedDetailBasicColumns, { column: 3 })}
+              items={detailDrawerDescriptionItems(alignedDetailBasicColumns, detail)}
 
             />
 
@@ -3717,51 +3661,32 @@ const SalesContractsPage: React.FC = () => {
 
         }
 
-        collaborationMetrics={
-
-          paymentSummary ? (
-
-            <Descriptions column={3} size="small" bordered>
-
-              <Descriptions.Item label={t('app.kuaizhizao.salesContract.totalContractAmount')}>¥{Number(paymentSummary.total_amount ?? 0).toFixed(2)}</Descriptions.Item>
-
-              <Descriptions.Item label={t('app.kuaizhizao.salesContract.plannedMilestones')}>¥{Number(paymentSummary.planned_milestone_amount ?? 0).toFixed(2)}</Descriptions.Item>
-
-              <Descriptions.Item label={t('app.kuaizhizao.salesContract.invoiced')}>¥{Number(paymentSummary.invoiced_amount ?? 0).toFixed(2)}</Descriptions.Item>
-
-              <Descriptions.Item label={t('app.kuaizhizao.salesContract.collected')}>¥{Number(paymentSummary.collected_amount ?? 0).toFixed(2)}</Descriptions.Item>
-
-              <Descriptions.Item label={t('app.kuaizhizao.salesContract.pendingInvoice')}>¥{Number(paymentSummary.pending_amount ?? 0).toFixed(2)}</Descriptions.Item>
-
-            </Descriptions>
-
-          ) : undefined
-
-        }
-
         collaborationAuditRecord={detail}
 
-        collaborationLifecycle={
-
-          detail ? (
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-              {detailLifecycle?.mainStages?.length ? (
-
-                <UniLifecycleStepper
-                  steps={detailLifecycle.mainStages}
-                  status={detailLifecycle.status}
-                  showLabels
-                  nextStepSuggestions={detailLifecycle.nextStepSuggestions}
-                  hideNextStepSuggestions
-                />
-
-              ) : null}
-            </div>
-
+        collaboration={
+          detail && detailLifecycle?.mainStages?.length ? (
+            <UniLifecycleStepper
+              steps={detailLifecycle.mainStages}
+              status={detailLifecycle.status}
+              showLabels
+              nextStepSuggestions={detailLifecycle.nextStepSuggestions}
+              hideNextStepSuggestions
+            />
           ) : undefined
+        }
 
+        supplementaryTitle={t('app.kuaizhizao.salesContract.paymentSummary')}
+
+        supplementary={
+          paymentSummary ? (
+            <Descriptions column={3} size="small" bordered>
+              <Descriptions.Item label={t('app.kuaizhizao.salesContract.totalContractAmount')}>¥{Number(paymentSummary.total_amount ?? 0).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.salesContract.plannedMilestones')}>¥{Number(paymentSummary.planned_milestone_amount ?? 0).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.salesContract.invoiced')}>¥{Number(paymentSummary.invoiced_amount ?? 0).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.salesContract.collected')}>¥{Number(paymentSummary.collected_amount ?? 0).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.salesContract.pendingInvoice')}>¥{Number(paymentSummary.pending_amount ?? 0).toFixed(2)}</Descriptions.Item>
+            </Descriptions>
+          ) : undefined
         }
 
         lines={

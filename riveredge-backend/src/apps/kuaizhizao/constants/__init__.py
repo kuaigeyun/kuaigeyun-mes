@@ -2,12 +2,15 @@ from enum import Enum
 from typing import Tuple
 
 class DemandStatus(str, Enum):
-    """需求状态"""
+    """需求/销售订单状态（含关闭等终态，与 DocumentStatus 对齐）"""
     DRAFT = "DRAFT"
     PENDING_REVIEW = "PENDING_REVIEW"
     AUDITED = "AUDITED"
     REJECTED = "REJECTED"
     CONFIRMED = "CONFIRMED"
+    CLOSED = "CLOSED"
+    CANCELLED = "CANCELLED"
+    COMPLETED = "COMPLETED"
 
 class ReviewStatus(str, Enum):
     """审核状态"""

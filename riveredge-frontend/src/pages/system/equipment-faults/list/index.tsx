@@ -22,11 +22,13 @@ import {
   ProFormSwitch,
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, message, Tabs, Modal, Descriptions } from 'antd';
+import { App, Popconfirm, Button, Tag, message, Tabs, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import {
   getEquipmentFaultList,
   getEquipmentFaultByUuid,
@@ -48,7 +50,7 @@ const EquipmentFaultListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const equipmentFaultDetailReqRef = useRef(0);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [activeTab, setActiveTab] = useState<'faults' | 'repairs'>('faults');
   
@@ -63,6 +65,7 @@ const EquipmentFaultListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<EquipmentFault | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   // 设备列表（用于下拉选择）
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
@@ -127,26 +130,26 @@ const EquipmentFaultListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: EquipmentFault) => {
-    const req = ++equipmentFaultDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getEquipmentFaultByUuid(record.uuid);
-      if (equipmentFaultDetailReqRef.current !== req) return;
+      const detail = await getEquipmentFaultByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (equipmentFaultDetailReqRef.current === req) {
-        messageApi.error(error.message || t('pages.system.equipmentFaults.getDetailFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.equipmentFaults.getDetailFailed')));
     } finally {
-      if (equipmentFaultDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = (record: EquipmentFault) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -578,20 +581,26 @@ const EquipmentFaultListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('pages.system.equipmentFaults.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
-          detailData ? (
-            <Descriptions
-              column={1}
-              items={detailDrawerDescriptionItems(equipmentFaultDetailDescColumns, detailData)}
-            />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryUuidRef.current;
+          if (id) void loadDetail(id);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detailData), () => {
+          if (!detailData) return;
+          void handleEdit(detailData);
+        })}
+        detail={detailData}
+        detailColumns={equipmentFaultDetailDescColumns}
       />
     </>
   );

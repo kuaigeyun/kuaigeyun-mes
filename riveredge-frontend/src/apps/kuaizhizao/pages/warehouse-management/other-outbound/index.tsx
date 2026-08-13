@@ -33,7 +33,7 @@ import { UniTableDetailHeader } from '../../../../../components/uni-table-detail
 import CodeField from '../../../../../components/code-field';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, detailDrawerBasicColumn, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getOtherOutboundLifecycle } from '../../../utils/otherOutboundLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -50,7 +50,7 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
@@ -591,7 +591,7 @@ const OtherOutboundPage: React.FC = () => {
     }
   };
 
-  const detailColumns: ProDescriptionsItemProps<OtherOutboundDetail>[] = useMemo(() => [
+  const detailColumns = useMemo(() => alignDescriptionColumns([
     { title: t('app.kuaizhizao.otherOutbound.col.outboundCode'), dataIndex: 'outbound_code' },
     {
       title: t('app.kuaizhizao.otherOutbound.col.reasonType'),
@@ -599,7 +599,7 @@ const OtherOutboundPage: React.FC = () => {
       render: (_, record) =>
         renderWarehouseReasonTypeMarkerTag(translateReasonTypeLabel(t, record.reason_type), record.reason_type),
     },
-    { title: t('app.kuaizhizao.otherOutbound.field.reasonDesc'), dataIndex: 'reason_desc', span: 2 },
+    { title: t('app.kuaizhizao.otherOutbound.field.reasonDesc'), dataIndex: 'reason_desc', span: 3 },
     { title: t('app.kuaizhizao.warehouseReports.colWarehouse'), dataIndex: 'warehouse_name' },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.status'),
@@ -616,12 +616,12 @@ const OtherOutboundPage: React.FC = () => {
     },
     { title: t('app.kuaizhizao.otherOutbound.col.deliverer'), dataIndex: 'deliverer_name' },
     { title: t('app.kuaizhizao.otherOutbound.col.deliveryTime'), dataIndex: 'delivery_time', valueType: 'dateTime' },
-  ], [t]);
+  ]), [t]);
 
   const detailNotesColumn: ProDescriptionsItemProps<OtherOutboundDetail> = useMemo(() => ({
     title: t('app.kuaizhizao.common.fieldNotes'),
     dataIndex: 'notes',
-    span: 2,
+    span: 3,
   }), [t]);
 
   const detailCollaboration = useMemo(() => {
@@ -655,7 +655,7 @@ const OtherOutboundPage: React.FC = () => {
       nodes.push(
         <Descriptions
           key="notes"
-          column={2}
+          column={detailDrawerBasicColumn(false)}
           size="small"
           style={nodes.length > 0 ? { marginTop: 16 } : undefined}
           items={detailDrawerDescriptionItems([detailNotesColumn], outboundDetail)}
@@ -750,7 +750,7 @@ const OtherOutboundPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           outboundDetail ? (
-            <Descriptions column={2} size="small" items={detailDrawerDescriptionItems(detailColumns, outboundDetail)} />
+            <Descriptions column={detailDrawerBasicColumn(false)} size="small" items={detailDrawerDescriptionItems(detailColumns, outboundDetail)} />
           ) : undefined
         }
         collaboration={detailCollaboration}

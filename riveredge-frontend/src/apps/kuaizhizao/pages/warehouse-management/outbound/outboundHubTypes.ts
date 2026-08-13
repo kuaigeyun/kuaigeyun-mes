@@ -187,6 +187,16 @@ export function outboundSourceDocNo(record: OutboundHubOrder): string {
   return parts.join(' / ');
 }
 
+export function outboundDocumentTrackingType(
+  order: Pick<OutboundHubOrder, 'outbound_type'>,
+): 'production_picking' | 'sales_delivery' | 'other_outbound' | 'material_borrow' | undefined {
+  if (order.outbound_type === 'sales_delivery') return 'sales_delivery';
+  if (order.outbound_type === 'production_picking') return 'production_picking';
+  if (order.outbound_type === 'other_outbound') return 'other_outbound';
+  if (order.outbound_type === 'material_borrow') return 'material_borrow';
+  return undefined;
+}
+
 /** Hub 统一「出库日期」原始值 */
 export function resolveOutboundHubDateRaw(record: OutboundHubOrder): unknown {
   return (

@@ -8,18 +8,19 @@ import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Descriptions } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { ListPageTemplate, flushDrawerOpen } from '../../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { ProcessMasterDetailDrawer } from '../shared/processMasterDetailDrawer';
 import { DefectTypeFormModal } from '../../../components/DefectTypeFormModal';
 
 import { defectTypeApi } from '../../../services/process';
 import type { DefectType, DefectTypeCreate } from '../../../types/process';
-import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import { generateCode } from '../../../../../services/codeRule';
 import { downloadFile } from '../../../../../utils';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
@@ -43,10 +44,7 @@ import {
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
-import {
-  CustomFieldsDetailSection,
-  hasCustomFieldsDetailContent,
-} from '../../../../../components/custom-fields';
+import { renderMasterActiveTag } from '../../../utils/masterListPresentation';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
@@ -98,11 +96,12 @@ const DefectTypesPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [defectTypeDetail, setDefectTypeDetail] = useState<DefectType | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   
   // Modal 相关状态（创建/编辑不良品）
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
-  const defectDetailReqRef = useRef(0);
 
   const {
     customFields,
@@ -128,14 +127,13 @@ const DefectTypesPage: React.FC = () => {
       {
         title: t('field.defectType.isActive'),
         dataIndex: 'isActive',
-        render: (_: unknown, record: DefectType) => {
-          const isActive = record?.isActive ?? false;
-          return (
-            <Tag color={isActive ? 'success' : 'default'} variant="solid">
-              {isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
-            </Tag>
-          );
-        },
+        render: (_: unknown, record: DefectType) =>
+          renderMasterActiveTag(
+            t,
+            record?.isActive ?? false,
+            'app.master-data.plants.enabled',
+            'app.master-data.plants.disabled',
+          ),
       },
       { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
       { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
@@ -221,34 +219,35 @@ const DefectTypesPage: React.FC = () => {
   /**
    * 处理打开详情
    */
-  const handleOpenDetail = async (record: DefectType) => {
-    const req = ++defectDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDefectTypeDetail(record);
-      setDrawerVisible(true);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await defectTypeApi.get(record.uuid);
-      if (defectDetailReqRef.current !== req) return;
+      const detail = await defectTypeApi.get(uuid);
       setDefectTypeDetail(detail);
       if (detail.id != null) {
         await loadFieldValuesForDetail(detail.id);
       }
-    } catch (error: any) {
-      if (defectDetailReqRef.current === req) {
-        messageApi.error(error.message || t('app.master-data.defectTypes.getDetailFailed'));
-      }
+    } catch (error) {
+      setDefectTypeDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.master-data.defectTypes.getDetailFailed')));
     } finally {
-      if (defectDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleOpenDetail = (record: DefectType) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDefectTypeDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setDefectTypeDetail(null);
+    setDetailError(null);
     resetDetailFieldValues();
   };
 
@@ -502,7 +501,6 @@ const DefectTypesPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 150,
       fixed: 'right',
       render: (_: any, record: DefectType) => (
         <Space>
@@ -625,26 +623,25 @@ const DefectTypesPage: React.FC = () => {
         onExport={handleExport}
       />
 
-      <UniDetail
+      <ProcessMasterDetailDrawer
         title={t('app.master-data.defectTypes.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
-          defectTypeDetail ? (
-            <Descriptions
-              column={1}
-              items={detailDrawerDescriptionItems(defectTypeDetailColumns, defectTypeDetail)}
-            />
-          ) : null
-        }
-        linesTitle={t('app.master-data.customFields')}
-        lines={
-          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
-            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        detail={defectTypeDetail}
+        detailColumns={defectTypeDetailColumns}
+        customFields={customFields}
+        customFieldValues={customFieldValues}
+        extra={buildDetailDrawerEditExtra(t, Boolean(defectTypeDetail), () => {
+          if (!defectTypeDetail) return;
+          setEditUuid(defectTypeDetail.uuid);
+          setModalVisible(true);
+        })}
       />
 
       <DefectTypeFormModal

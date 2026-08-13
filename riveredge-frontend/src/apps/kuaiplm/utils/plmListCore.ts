@@ -286,17 +286,15 @@ export function resolveChangeDeskListParams(
   return listParams;
 }
 
-/** 列表操作列：key=action 参与 GLOBAL_DOC_LIST_FIELD_RANK 排序，固定右侧。 */
+/** 列表操作列：key=action 参与 GLOBAL_DOC_LIST_FIELD_RANK 排序，固定右侧。列宽由 UniTable 注入。 */
 export function plmListActionColumn<T extends object>(
   t: TFunction,
   render: ProColumns<T>['render'],
-  width = 180,
 ): ProColumns<T> {
   return {
     title: t('common.actions'),
     key: 'action',
     valueType: 'option',
-    width,
     fixed: 'right',
     hideInSearch: true,
     render,

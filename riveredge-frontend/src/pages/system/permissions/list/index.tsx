@@ -10,11 +10,12 @@ import React, { useMemo, useRef, useState } from 'react';
 import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, message, Descriptions } from 'antd';
+import { Button, Tag, message } from 'antd';
 import { EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { flushDrawerOpen, ListPageTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { ListPageTemplate } from '../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import {
   getPermissionList,
   getPermissionByUuid,
@@ -24,9 +25,8 @@ import { extractProTableSort, mergeListKeyword, mapPermissionListSortField } fro
 
 const PermissionListPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const permissionDetailReqRef = useRef(0);
+  const detailRetryUuidRef = useRef<string | null>(null);
 
   const permissionDetailDescColumns = useMemo<ProDescriptionsItemProps<Permission>[]>(
     () => [
@@ -67,27 +67,28 @@ const PermissionListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<Permission | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
-  const handleView = async (record: Permission) => {
-    const req = ++permissionDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getPermissionByUuid(record.uuid);
-      if (permissionDetailReqRef.current !== req) return;
+      const detail = await getPermissionByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (permissionDetailReqRef.current === req) {
-        messageApi.error(error.message || t('common.loadFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('common.loadFailed')));
     } finally {
-      if (permissionDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = (record: Permission) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   const handleCreate = () => {
@@ -233,20 +234,22 @@ const PermissionListPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('field.permission.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
-          detailData ? (
-            <Descriptions
-              column={1}
-              items={detailDrawerDescriptionItems(permissionDetailDescColumns, detailData)}
-            />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryUuidRef.current;
+          if (id) void loadDetail(id);
+        }}
+        detail={detailData}
+        detailColumns={permissionDetailDescColumns}
       />
     </>
   );

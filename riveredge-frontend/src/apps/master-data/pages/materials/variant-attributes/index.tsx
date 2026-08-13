@@ -224,7 +224,6 @@ const VariantAttributesPage: React.FC = () => {
       title: t('common.actions'),
       key: 'action',
       valueType: 'option',
-      width: 160,
       fixed: 'right',
       render: (_: any, record: VariantAttributeDefinition) => (
         <Space>

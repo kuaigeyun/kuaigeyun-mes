@@ -15,7 +15,6 @@ from decimal import Decimal
 
 from core.utils.timezone_utils import (
     coerce_business_datetime_to_utc,
-    is_future_datetime,
     resolve_business_datetime,
     today_site_str,
 )
@@ -796,11 +795,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 )
                 reporting_data.work_hours = wh
 
-            # 报工时间合法性：禁止未来时间（统一 UTC 比较；naive 按业务时区解释）
-            if getattr(reporting_data, "reported_at", None):
-                if is_future_datetime(reporting_data.reported_at):
-                    raise ValidationError("报工时间不能晚于当前时间")
-
             # 数量报工：累计完成不可超过「计划+超报」上限（不允许超报时即计划数）
             if reporting_type == "quantity":
                 from apps.kuaizhizao.services.over_report_rules import (
@@ -1431,11 +1425,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             if record.status != 'pending':
                 raise ValidationError("只能审核待审核状态的报工记录")
-
-            # 审核前置校验：未来报工时间不允许通过审核（统一 UTC 比较）
-            if getattr(record, "reported_at", None):
-                if is_future_datetime(record.reported_at):
-                    raise ValidationError("报工时间不能晚于当前时间")
 
             # 获取审核人信息
             approved_by_name = await self.get_user_name(approved_by)
@@ -2505,14 +2494,11 @@ class ReportingService(AppBaseService[ReportingRecord]):
             ):
                 raise ValidationError("合格数与不合格数之和不能超过报工数量")
 
-            # 与创建口径一致：工时允许为 0；不允许负数；报工时间不得晚于当前时间
+            # 与创建口径一致：工时允许为 0；不允许负数
             if "work_hours" in update_data:
                 wh_corr = Decimal(str(update_data.get("work_hours") or 0))
                 if wh_corr < 0:
                     raise ValidationError("报工工时不能为负数")
-            if "reported_at" in update_data and update_data.get("reported_at") is not None:
-                if is_future_datetime(update_data["reported_at"]):
-                    raise ValidationError("报工时间不能晚于当前时间")
             for time_key in ("work_start_time", "work_end_time", "reported_at"):
                 if time_key in update_data and update_data.get(time_key) is not None:
                     update_data[time_key] = coerce_business_datetime_to_utc(update_data[time_key])

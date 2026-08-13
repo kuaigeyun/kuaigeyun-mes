@@ -195,6 +195,21 @@ export function resolveInboundHubDateRaw(record: InboundHubOrder): unknown {
 }
 
 /** Hub 统一「操作员」：姓名字段优先；received_by 在委外收货上是用户 ID，不可当姓名 */
+export function inboundDocumentTrackingType(
+  order: Pick<InboundHubOrder, 'receipt_type'>,
+):
+  | 'purchase_receipt'
+  | 'finished_goods_receipt'
+  | 'semi_finished_goods_receipt'
+  | 'production_return'
+  | undefined {
+  if (order.receipt_type === 'purchase') return 'purchase_receipt';
+  if (order.receipt_type === 'finished_goods') return 'finished_goods_receipt';
+  if (order.receipt_type === 'semi_finished_goods') return 'semi_finished_goods_receipt';
+  if (order.receipt_type === 'production_return') return 'production_return';
+  return undefined;
+}
+
 export function resolveInboundHubOperator(record: InboundHubOrder): string {
   const named = [
     record.received_by_name,

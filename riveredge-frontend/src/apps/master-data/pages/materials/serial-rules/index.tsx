@@ -223,7 +223,6 @@ const SerialRulesPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      width: 150,
       fixed: 'right',
       render: (_, record) => (
         <Space>

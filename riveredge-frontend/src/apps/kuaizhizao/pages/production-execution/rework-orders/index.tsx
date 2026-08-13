@@ -47,7 +47,8 @@ import {
   formDateRangeFormItemProps,
   toApiDateTimeString,
 } from '../../../../../utils/formDate';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import type { AuditPhaseRecord } from '../../../../../components/uni-audit/AuditPhaseBadge';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -248,15 +249,16 @@ const ReworkOrdersPage: React.FC = () => {
   /**
    * 详情抽屉基本信息列
    */
-  const detailBasicColumns: ProDescriptionsItemProps<ReworkOrder>[] = useMemo(() => [
+  const detailBasicColumns: ProDescriptionsItemProps<ReworkOrder>[] = useMemo(() =>
+    alignDescriptionColumns([
     {
       title: t('app.kuaizhizao.reworkOrder.colCode'),
       dataIndex: 'code',
+      key: 'rework_code',
     },
     {
       title: t('app.kuaizhizao.reworkOrder.colOriginalWorkOrderId'),
       dataIndex: 'original_work_order_code',
-      render: (_, record) => record.original_work_order_code || '-',
     },
     {
       title: t('app.kuaizhizao.reworkOrder.colProductCode'),
@@ -342,22 +344,27 @@ const ReworkOrdersPage: React.FC = () => {
       span: 2,
       render: (text) => text || '-',
     },
-  ], [t]);
+  ] as ProDescriptionsItemProps<ReworkOrder>[]), [t]);
 
   const detailCollaboration = useMemo(() => {
     if (!reworkOrderDetail) return undefined;
     const lifecycle = getReworkOrderLifecycle(reworkOrderDetail);
     const mainStages = lifecycle.mainStages ?? [];
     if (!mainStages.length) return undefined;
-    return (
-      <UniLifecycleStepper
-        steps={mainStages}
-        status={lifecycle.status}
-        showLabels
-        nextStepSuggestions={lifecycle.nextStepSuggestions}
-        hideNextStepSuggestions
-      />
-    );
+    const nextSteps = lifecycle.nextStepSuggestions;
+    const hideNext = Boolean(nextSteps?.length);
+    return {
+      stepper: (
+        <UniLifecycleStepper
+          steps={mainStages}
+          status={lifecycle.status}
+          showLabels
+          nextStepSuggestions={nextSteps}
+          hideNextStepSuggestions={hideNext}
+        />
+      ),
+      nextSteps,
+    };
   }, [reworkOrderDetail]);
 
   const reworkOrderTraceDocument = useMemo(() => {
@@ -461,10 +468,10 @@ const ReworkOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.reworkOrder.colOriginalWorkOrderId'),
       dataIndex: 'original_work_order_code',
-      width: 160,
-      ellipsis: true,
+      width: 180,
+      uniTableKeepWidth: true,
+      ellipsis: false,
       hideInSearch: false,
-      render: (_, record) => record.original_work_order_code || '-',
     },
     {
       title: t('app.kuaizhizao.reworkOrder.colProductName'),
@@ -1357,7 +1364,7 @@ const ReworkOrdersPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<ReworkOrder>
-        columnPersistenceId="apps.kuaizhizao.pages.production-execution.rework-orders"
+        columnPersistenceId="apps.kuaizhizao.pages.production-execution.rework-orders.v2"
         headerTitle={t('app.kuaizhizao.reworkOrder.title')}
         actionRef={actionRef}
         columns={columns}
@@ -1838,7 +1845,7 @@ const ReworkOrdersPage: React.FC = () => {
                     key: 'release',
                     visible: reworkCapabilityAllowed(detail, 'release'),
                     render: () => (
-                      <Button type="link" size="small" onClick={() => void handleReleaseRework(detail)}>
+                      <Button onClick={() => void handleReleaseRework(detail)}>
                         {t('app.kuaizhizao.reworkOrder.actionRelease')}
                       </Button>
                     ),
@@ -1848,8 +1855,6 @@ const ReworkOrdersPage: React.FC = () => {
                     visible: reworkCapabilityAllowed(detail, 'execute'),
                     render: () => (
                       <Button
-                        type="link"
-                        size="small"
                         icon={<FormOutlined />}
                         onClick={() => {
                           setDetailDrawerVisible(false);
@@ -1864,7 +1869,7 @@ const ReworkOrdersPage: React.FC = () => {
                     key: 'advance',
                     visible: reworkCapabilityAllowed(detail, 'advance_next'),
                     render: () => (
-                      <Button type="link" size="small" onClick={() => void handleAdvanceNext(detail)}>
+                      <Button onClick={() => void handleAdvanceNext(detail)}>
                         {t('app.kuaizhizao.reworkOrder.actionAdvanceNext')}
                       </Button>
                     ),
@@ -1873,7 +1878,7 @@ const ReworkOrdersPage: React.FC = () => {
                     key: 'complete',
                     visible: reworkCapabilityAllowed(detail, 'request_complete'),
                     render: () => (
-                      <Button type="link" size="small" onClick={() => void handleRequestComplete(detail)}>
+                      <Button onClick={() => void handleRequestComplete(detail)}>
                         {t('app.kuaizhizao.reworkOrder.actionRequestComplete')}
                       </Button>
                     ),
@@ -1885,8 +1890,6 @@ const ReworkOrdersPage: React.FC = () => {
                       Boolean(detail.verification_inspection_id),
                     render: () => (
                       <Button
-                        type="link"
-                        size="small"
                         onClick={() => {
                           setDetailDrawerVisible(false);
                           const kind =
@@ -1913,7 +1916,7 @@ const ReworkOrdersPage: React.FC = () => {
                     key: 'quality_release',
                     visible: reworkCapabilityAllowed(detail, 'quality_release'),
                     render: () => (
-                      <Button type="link" size="small" onClick={() => void handleQualityRelease(detail)}>
+                      <Button onClick={() => void handleQualityRelease(detail)}>
                         {t('app.kuaizhizao.reworkOrder.actionQualityRelease')}
                       </Button>
                     ),
@@ -1922,7 +1925,7 @@ const ReworkOrdersPage: React.FC = () => {
                     key: 'close',
                     visible: reworkCapabilityAllowed(detail, 'close'),
                     render: () => (
-                      <Button type="link" size="small" onClick={() => void handleCloseRework(detail)}>
+                      <Button onClick={() => void handleCloseRework(detail)}>
                         {t('app.kuaizhizao.reworkOrder.actionClose')}
                       </Button>
                     ),
@@ -1932,8 +1935,6 @@ const ReworkOrdersPage: React.FC = () => {
                     visible: reworkCapabilityAllowed(detail, 'update'),
                     render: () => (
                       <Button
-                        type="link"
-                        size="small"
                         icon={<EditOutlined />}
                         onClick={() => {
                           setDetailDrawerVisible(false);
@@ -1949,8 +1950,6 @@ const ReworkOrdersPage: React.FC = () => {
                     visible: reworkCapabilityAllowed(detail, 'delete'),
                     render: () => (
                       <Button
-                        type="link"
-                        size="small"
                         danger
                         icon={<DeleteOutlined />}
                         onClick={() => handleDelete(detail)}
@@ -1990,30 +1989,44 @@ const ReworkOrdersPage: React.FC = () => {
             </>
           ) : undefined
         }
-        collaboration={detailCollaboration}
+        collaboration={detailCollaboration?.stepper}
         collaborationTitle={t('app.kuaizhizao.reworkOrder.sectionLifecycle')}
+        collaborationTitleSuffix={
+          detailCollaboration?.nextSteps?.length ? (
+            <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
+              {t('components.uniLifecycle.nextStep')}：
+              {detailCollaboration.nextSteps.join(t('components.uniLifecycle.nextStepSeparator'))}
+            </Typography.Text>
+          ) : undefined
+        }
+        collaborationAuditRecord={reworkOrderDetail as AuditPhaseRecord | null}
+        linesTitle={t('app.kuaizhizao.reworkOrder.sectionRouteTimeline')}
+        lines={
+          reworkOrderDetail ? (
+            (reworkOrderDetail.rework_operations || []).length > 0 ? (
+              <Table
+                size="small"
+                pagination={false}
+                rowKey={(row) => String(row.id ?? row.work_order_operation_id)}
+                dataSource={reworkOrderDetail.rework_operations || []}
+                columns={[
+                  { title: t('app.kuaizhizao.reworkOrder.formReportOperationSequence', { sequence: '#', name: '' }).replace(' - ', ''), dataIndex: 'operation_name', render: (_: unknown, row) => row.operation_name || row.operation_code },
+                  { title: t('app.kuaizhizao.reworkOrder.colLifecycle'), dataIndex: 'status' },
+                  { title: t('app.kuaizhizao.reworkOrder.colQuantity'), dataIndex: 'input_quantity' },
+                  { title: t('app.kuaizhizao.reworkOrder.colQualifiedQty'), dataIndex: 'qualified_quantity' },
+                  { title: t('app.kuaizhizao.reworkOrder.colUnqualifiedQty'), dataIndex: 'unqualified_quantity' },
+                ]}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.salesOrder.emptyItems')} />
+            )
+          ) : undefined
+        }
         traceDocument={reworkOrderTraceDocument}
         timelineTitle={t('app.uniDetail.sectionTimeline')}
         timeline={
           reworkOrderDetail ? (
             <>
-              {(reworkOrderDetail.rework_operations || []).length > 0 ? (
-                <Card size="small" title={t('app.kuaizhizao.reworkOrder.sectionRouteTimeline')} style={{ marginBottom: 16 }}>
-                  <Table
-                    size="small"
-                    pagination={false}
-                    rowKey={(row) => String(row.id ?? row.work_order_operation_id)}
-                    dataSource={reworkOrderDetail.rework_operations || []}
-                    columns={[
-                      { title: t('app.kuaizhizao.reworkOrder.formReportOperationSequence', { sequence: '#', name: '' }).replace(' - ', ''), dataIndex: 'operation_name', render: (_: unknown, row: any) => row.operation_name || row.operation_code },
-                      { title: t('app.kuaizhizao.reworkOrder.colLifecycle'), dataIndex: 'status' },
-                      { title: t('app.kuaizhizao.reworkOrder.colQuantity'), dataIndex: 'input_quantity' },
-                      { title: t('app.kuaizhizao.reworkOrder.colQualifiedQty'), dataIndex: 'qualified_quantity' },
-                      { title: t('app.kuaizhizao.reworkOrder.colUnqualifiedQty'), dataIndex: 'unqualified_quantity' },
-                    ]}
-                  />
-                </Card>
-              ) : null}
               {reworkOrderTracking.loading ? (
                 <div style={{ textAlign: 'center', padding: 24 }}>
                   <Spin />

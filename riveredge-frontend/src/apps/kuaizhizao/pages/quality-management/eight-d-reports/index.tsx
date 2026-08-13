@@ -246,7 +246,6 @@ const EightDReportsPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 260,
       fixed: 'right',
       hideInSearch: true,
       render: (_, row) => {

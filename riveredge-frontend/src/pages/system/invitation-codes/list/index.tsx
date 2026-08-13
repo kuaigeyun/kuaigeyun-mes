@@ -10,11 +10,14 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, message, Descriptions } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, CopyOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { flushDrawerOpen, ListPageTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { ListPageTemplate } from '../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
+import { renderSystemActiveTag } from '../../utils/systemListPresentation';
 import { InvitationCodeFormModal } from '../components/InvitationCodeFormModal';
 import {
   getInvitationCodeList,
@@ -30,7 +33,7 @@ const InvitationCodeListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const invitationCodeDetailReqRef = useRef(0);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -39,6 +42,7 @@ const InvitationCodeListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<InvitationCode | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   const handleCreate = () => {
     setCurrentCodeUuid(null);
@@ -50,26 +54,26 @@ const InvitationCodeListPage: React.FC = () => {
     setModalVisible(true);
   };
 
-  const handleView = async (record: InvitationCode) => {
-    const req = ++invitationCodeDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getInvitationCodeByUuid(record.uuid);
-      if (invitationCodeDetailReqRef.current !== req) return;
+      const detail = await getInvitationCodeByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (invitationCodeDetailReqRef.current === req) {
-        messageApi.error(error.message || t('common.loadFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('common.loadFailed')));
     } finally {
-      if (invitationCodeDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = (record: InvitationCode) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   const handleDelete = async (record: InvitationCode) => {
@@ -172,6 +176,7 @@ const InvitationCodeListPage: React.FC = () => {
       {
         title: t('field.invitationCode.expiresAt'),
         dataIndex: 'expires_at',
+        valueType: 'dateTime',
         render: (_, record) => record.expires_at || t('field.invitationCode.neverExpires'),
       },
       {
@@ -182,9 +187,7 @@ const InvitationCodeListPage: React.FC = () => {
           const valid = isCodeValid(record);
           return (
             <Space>
-              <Tag color={value ? 'success' : 'default'}>
-                {value ? t('field.role.enabled') : t('field.role.disabled')}
-              </Tag>
+              {renderSystemActiveTag(t, value, 'field.role.enabled', 'field.role.disabled')}
               {!valid && value && <Tag color="error">{t('field.invitationCode.invalid')}</Tag>}
             </Space>
           );
@@ -368,20 +371,26 @@ const InvitationCodeListPage: React.FC = () => {
         onSuccess={() => actionRef.current?.reload()}
       />
 
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('field.invitationCode.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
-          detailData ? (
-            <Descriptions
-              column={1}
-              items={detailDrawerDescriptionItems(invitationDetailDescColumns, detailData)}
-            />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryUuidRef.current;
+          if (id) void loadDetail(id);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detailData), () => {
+          if (!detailData) return;
+          handleEdit(detailData);
+        })}
+        detail={detailData}
+        detailColumns={invitationDetailDescColumns}
       />
     </>
   );

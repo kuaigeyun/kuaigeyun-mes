@@ -27,7 +27,6 @@ import {
   Drawer,
   Input,
   Typography,
-  Descriptions,
 } from 'antd'
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment'
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation'
@@ -39,13 +38,12 @@ import {
 } from '@ant-design/icons'
 import { UniTable } from '../../../../components/uni-table'
 import {
-  flushDrawerOpen,
   ListPageTemplate,
   FormModalTemplate,
   MODAL_CONFIG,
-  DRAWER_CONFIG,
 } from '../../../../components/layout-templates'
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail'
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer'
+import { getApiErrorMessage } from '../../../../utils/errorHandler'
 import {
   getAPIList,
   getAPIByUuid,
@@ -117,7 +115,6 @@ const APIListPage: React.FC = () => {
   const { t } = useTranslation()
   const { message: messageApi } = App.useApp()
   const actionRef = useRef<ActionType>(null)
-  const apiDetailReqRef = useRef(0)
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
 
   // Modal 相关状态（创建/编辑接口）
@@ -133,6 +130,8 @@ const APIListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [detailData, setDetailData] = useState<API | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState<string | null>(null)
+  const detailRetryUuidRef = useRef<string | null>(null)
 
   // 测试接口状态
   const [testDrawerVisible, setTestDrawerVisible] = useState(false)
@@ -193,26 +192,26 @@ const APIListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: API) => {
-    const req = ++apiDetailReqRef.current
-    flushDrawerOpen(() => {
-      setDrawerVisible(true)
-      setDetailData(null)
-      setDetailLoading(true)
-    })
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true)
+    setDetailError(null)
     try {
-      const detail = await getAPIByUuid(record.uuid)
-      if (apiDetailReqRef.current !== req) return
+      const detail = await getAPIByUuid(uuid)
       setDetailData(detail)
-    } catch (error: any) {
-      if (apiDetailReqRef.current === req) {
-        messageApi.error(error.message || t('pages.system.apis.getDetailFailed'))
-      }
+    } catch (error) {
+      setDetailData(null)
+      setDetailError(getApiErrorMessage(error, t('pages.system.apis.getDetailFailed')))
     } finally {
-      if (apiDetailReqRef.current === req) {
-        setDetailLoading(false)
-      }
+      setDetailLoading(false)
     }
+  }
+
+  const handleView = async (record: API) => {
+    detailRetryUuidRef.current = record.uuid
+    setDrawerVisible(true)
+    setDetailData(null)
+    setDetailError(null)
+    void loadDetail(record.uuid)
   }
 
   const apiDetailDescColumns = useMemo<ProDescriptionsItemProps<API>[]>(
@@ -324,20 +323,16 @@ const APIListPage: React.FC = () => {
       {
         title: t('pages.system.apis.detailColumnActive'),
         dataIndex: 'is_active',
-        render: (_dom, entity: API) => (
-          <Tag color={entity.is_active ? 'success' : 'default'}>
-            {entity.is_active ? t('pages.system.apis.enabled') : t('pages.system.apis.disabled')}
-          </Tag>
-        ),
+        render: (_dom, entity: API) =>
+          renderSystemActiveTag(t, entity.is_active, 'pages.system.apis.enabled', 'pages.system.apis.disabled'),
       },
       {
         title: t('pages.system.apis.detailColumnSystem'),
         dataIndex: 'is_system',
         render: (_dom, entity: API) =>
-          entity.is_system ? (
-            <Tag color="purple">{t('pages.system.apis.systemTag')}</Tag>
-          ) : (
-            <Tag>{t('pages.system.apis.customTag')}</Tag>
+          renderSystemTypeMarker(
+            entity.is_system ? t('pages.system.apis.systemTag') : t('pages.system.apis.customTag'),
+            entity.is_system ? 'purple' : 'default',
           ),
       },
       { title: t('pages.system.apis.detailColumnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
@@ -944,17 +939,22 @@ const APIListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('pages.system.apis.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false)
+          setDetailData(null)
+          setDetailError(null)
+        }}
+        detail={detailData}
+        detailColumns={apiDetailDescColumns}
         loading={detailLoading}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
-        basic={
-          detailData ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(apiDetailDescColumns, detailData)} />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current
+          if (uuid) void loadDetail(uuid)
+        }}
       />
 
       {/* 接口测试 Drawer */}

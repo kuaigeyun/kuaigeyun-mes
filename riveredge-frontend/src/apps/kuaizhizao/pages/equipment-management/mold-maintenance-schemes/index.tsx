@@ -551,9 +551,7 @@ const MoldMaintenanceSchemesPage: React.FC = () => {
         title: t('common.actions'),
 
         key: 'action',
-
         fixed: 'right',
-
         hideInSearch: true,
 
         render: (_, record) =>

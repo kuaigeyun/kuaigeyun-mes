@@ -21,6 +21,7 @@ import {
   MODAL_CONFIG,
   WAREHOUSE_DETAIL_TABLE_STYLES,
   detailDrawerDescriptionItems,
+  detailDrawerBasicColumn,
 } from '../../../../../components/layout-templates';
 import type { LifecycleResult } from '../../../../../components/uni-lifecycle/types';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -44,6 +45,7 @@ import {
   resolveAssemblyDisassemblyOrderListParams,
 } from '../../../utils/warehouseListCore';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { alignDescriptionColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
@@ -599,8 +601,8 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
     [config, t, workflowStatusValueEnum],
   );
 
-  const detailColumns: ProDescriptionsItemProps<OrderLike>[] = useMemo(
-    () => [
+  const detailColumns = useMemo(
+    () => alignDescriptionColumns([
     { title: config.orderCodeLabel, dataIndex: 'code' },
     { title: t('app.kuaizhizao.warehouseCommon.colWarehouse'), dataIndex: 'warehouse_name' },
     { title: config.dateLabel, dataIndex: config.dateField, valueType: 'date' },
@@ -623,8 +625,8 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       : []),
     { title: t('app.kuaizhizao.warehouseCommon.colExecutor'), dataIndex: 'executed_by_name' },
     { title: t('app.kuaizhizao.warehouseCommon.colExecutedAt'), dataIndex: 'executed_at', valueType: 'dateTime' },
-    { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 2 },
-  ],
+    { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 3 },
+  ]),
     [config, t],
   );
 
@@ -938,7 +940,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         basic={
           currentOrder ? (
             <Descriptions
-              column={2}
+              column={detailDrawerBasicColumn(false)}
               size="small"
               items={detailDrawerDescriptionItems(detailColumns, currentOrder)}
             />

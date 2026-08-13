@@ -13,8 +13,8 @@ import {
   ProForm,
   ProFormDatePicker,
   ProFormDigit,
+  ProFormItem,
   ProFormMoney,
-  ProFormRadio,
   ProFormSelect,
   ProFormSwitch,
   ProFormText,
@@ -36,6 +36,8 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { financeColFull, financeColHalf, financeFormGridProps } from '../../../utils/financeFormLayout';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
@@ -1181,31 +1183,36 @@ const SalesInvoicesPage: React.FC = () => {
                 submitter={false}
                 onFinish={handlePullCreateSubmit}
                 layout="vertical"
+                {...financeFormGridProps}
               >
-                <ProFormText name="source_code" label={t(`${P}.form.sourceCode`)} readonly />
-                <ProFormText name="customer_name" label={t('app.kuaicaiwu.common.customer')} readonly />
+                <ProFormText name="source_code" label={t(`${P}.form.sourceCode`)} readonly colProps={financeColHalf} />
+                <ProFormText name="customer_name" label={t('app.kuaicaiwu.common.customer')} readonly colProps={financeColHalf} />
                 <ProFormText
                   name="invoice_number"
                   label={t('app.kuaicaiwu.invoice.col.invoiceNumber')}
                   placeholder={t(`${P}.form.invoiceNumberOptional`)}
+                  colProps={financeColHalf}
                 />
                 <ProFormSelect
                   name="invoice_type"
                   label={t(`${P}.col.invoiceType`)}
                   options={invoiceTypeOptions}
                   rules={[{ required: true, message: t(`${P}.form.selectInvoiceType`) }]}
+                  colProps={financeColHalf}
                 />
                 <ProFormDatePicker
                   name="invoice_date"
                   label={t('app.kuaicaiwu.common.invoiceDate')}
                   rules={[{ required: true, message: t(`${P}.form.selectInvoiceDate`) }]}
                   fieldProps={{ style: { width: '100%' } }}
+                  colProps={financeColHalf}
                 />
                 <ProFormSelect
                   name="tax_rate"
                   label={t(`${P}.form.taxRate`)}
                   options={TAX_RATE_OPTIONS}
                   rules={[{ required: true, message: t(`${P}.form.selectTaxRate`) }]}
+                  colProps={financeColHalf}
                   fieldProps={{
                     onChange: (nextRate: number) => {
                       const prevRate = pullTaxRateRef.current;
@@ -1223,16 +1230,18 @@ const SalesInvoicesPage: React.FC = () => {
                     },
                   }}
                 />
-                <ProFormRadio.Group
+                <ProFormItem
                   name="amount_input_mode"
                   label={t(`${P}.form.amountInputMode`)}
-                  options={[
-                    { label: t(`${P}.form.amountModeExcl`), value: 'tax_exclusive' },
-                    { label: t(`${P}.form.amountModeIncl`), value: 'tax_inclusive' },
-                  ]}
-                  fieldProps={{
-                    onChange: (e) => {
-                      const nextMode = e.target.value as InvoiceAmountInputMode;
+                  colProps={financeColHalf}
+                >
+                  <ThemedSegmented
+                    options={[
+                      { label: t(`${P}.form.amountModeExcl`), value: 'tax_exclusive' },
+                      { label: t(`${P}.form.amountModeIncl`), value: 'tax_inclusive' },
+                    ]}
+                    onChange={(next) => {
+                      const nextMode = next as InvoiceAmountInputMode;
                       const prevMode = pullAmountModeRef.current;
                       const taxRate = Number(pullForm.getFieldValue('tax_rate')) || 13;
                       const current = Number(pullForm.getFieldValue('invoice_amount')) || 0;
@@ -1243,9 +1252,9 @@ const SalesInvoicesPage: React.FC = () => {
                         );
                       }
                       pullAmountModeRef.current = nextMode;
-                    },
-                  }}
-                />
+                    }}
+                  />
+                </ProFormItem>
                 <ProFormDigit
                   name="invoice_amount"
                   label={
@@ -1256,8 +1265,10 @@ const SalesInvoicesPage: React.FC = () => {
                   min={0}
                   rules={[{ required: true, message: t(`${P}.amountRequired`) }]}
                   extra={pullAmountCounterpartHint || undefined}
+                  colProps={financeColHalf}
                   fieldProps={{ precision: 2, style: { width: '100%' } }}
                 />
+                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 2 }} colProps={financeColFull} />
                 {canConcurrentReceipt ? (
                   <>
                     <ProFormSwitch
@@ -1266,6 +1277,7 @@ const SalesInvoicesPage: React.FC = () => {
                       extra={t(`${P}.concurrentReceiptHint`, {
                         max: Number(pullPreviewData.remaining_settle_amount || 0).toFixed(2),
                       })}
+                      colProps={financeColFull}
                     />
                     {concurrentReceiptEnabled ? (
                       <>
@@ -1274,18 +1286,21 @@ const SalesInvoicesPage: React.FC = () => {
                           label={t(`${P}.concurrentReceiptAmount`)}
                           min={0.01}
                           rules={[{ required: true, message: t(`${P}.concurrentReceiptAmountRequired`) }]}
+                          colProps={financeColHalf}
                         />
                         <ProFormDatePicker
                           name="settle_date"
                           label={t('app.kuaicaiwu.receipt.col.receiptDate')}
                           rules={[{ required: true }]}
                           fieldProps={{ style: { width: '100%' } }}
+                          colProps={financeColHalf}
                         />
                         <ProFormSelect
                           name="payment_method"
                           label={t('app.kuaicaiwu.receipt.col.paymentMethod')}
                           options={paymentMethodOptions}
                           rules={[{ required: true, message: t('app.kuaicaiwu.receipt.selectPaymentMethod') }]}
+                          colProps={financeColHalf}
                         />
                         <LedgerAccountFormFields
                           accounts={bankAccounts}
@@ -1296,12 +1311,12 @@ const SalesInvoicesPage: React.FC = () => {
                           name="settle_notes"
                           label={t(`${P}.concurrentReceiptNotes`)}
                           fieldProps={{ rows: 2 }}
+                          colProps={financeColFull}
                         />
                       </>
                     ) : null}
                   </>
                 ) : null}
-                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} />
                 <DocumentAttachmentsField category="sales_invoice_attachments" />
               </ProForm>
             ) : null}
@@ -1344,7 +1359,8 @@ const SalesInvoicesPage: React.FC = () => {
         open={createModalVisible}
         onOpenChange={setCreateModalVisible}
         onFinish={handleCreate}
-        width={520}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        {...financeFormGridProps}
       >
         <ProFormSelect
           name="customer_id"
@@ -1353,11 +1369,13 @@ const SalesInvoicesPage: React.FC = () => {
           rules={[{ required: true, message: t('app.kuaicaiwu.common.selectCustomer') }]}
           placeholder={t('app.kuaicaiwu.common.selectCustomer')}
           showSearch
+          colProps={financeColHalf}
         />
         <ProFormText
           name="invoice_number"
           label={t('app.kuaicaiwu.invoice.col.invoiceNumber')}
           placeholder={t(`${P}.form.invoiceNumberOptional`)}
+          colProps={financeColHalf}
         />
         <ProFormSelect
           name="invoice_type"
@@ -1365,6 +1383,7 @@ const SalesInvoicesPage: React.FC = () => {
           options={invoiceTypeOptions}
           initialValue="增值税专用发票"
           rules={[{ required: true }]}
+          colProps={financeColHalf}
         />
         <ProFormDatePicker
           name="invoice_date"
@@ -1372,6 +1391,7 @@ const SalesInvoicesPage: React.FC = () => {
           rules={[{ required: true }]}
           initialValue={dayjs()}
           fieldProps={{ style: { width: '100%' } }}
+          colProps={financeColHalf}
         />
         <ProFormSelect
           name="tax_rate"
@@ -1379,6 +1399,7 @@ const SalesInvoicesPage: React.FC = () => {
           options={TAX_RATE_OPTIONS}
           initialValue={13}
           rules={[{ required: true }]}
+          colProps={financeColHalf}
         />
         <ProFormDigit
           name="invoice_amount"
@@ -1386,8 +1407,9 @@ const SalesInvoicesPage: React.FC = () => {
           min={0}
           rules={[{ required: true, message: t(`${P}.amountRequired`) }]}
           fieldProps={{ precision: 2, style: { width: '100%' } }}
+          colProps={financeColHalf}
         />
-        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
+        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} colProps={financeColFull} />
         <DocumentAttachmentsField category="sales_invoice_attachments" />
       </ModalForm>
     </ListPageTemplate>

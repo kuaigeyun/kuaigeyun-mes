@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { App, Button, Descriptions, Form, Space } from 'antd';
+import { App, Button, Descriptions, Form, Result, Space, Typography } from 'antd';
 import { MarkerTag } from '../../../../../../constants/statusBadges';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
@@ -13,6 +13,7 @@ import { buildEightDStepperSteps, getEightDNextStatus, getEightDStatusText, reso
 import { eightDReportRowGates } from '../../../../../../hooks/useDocumentCapabilities';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { alignDescriptionColumns } from '../../../sales-management/shared/documentFieldAlignment';
 
 interface EightDDetailDrawerProps {
   open: boolean;
@@ -35,6 +36,7 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
   const [report, setReport] = useState<Quality8DReport | null>(null);
@@ -43,6 +45,7 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
 
   const loadDetail = async (id: number) => {
     setLoading(true);
+    setError(null);
     try {
       const [detail, detailHistory] = await Promise.all([
         qualityImprovementApi.eightD.getById(id),
@@ -50,10 +53,8 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
       ]);
       setReport(detail);
       setHistory(detailHistory || []);
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.eightD.loadDetailFailed'));
-      setReport(null);
-      setHistory([]);
+    } catch (err: any) {
+      setError(err?.message || t('app.kuaizhizao.eightD.loadDetailFailed'));
     } finally {
       setLoading(false);
     }
@@ -61,6 +62,8 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
 
   useEffect(() => {
     if (!open || !reportId) return;
+    setReport((prev) => (prev?.id === reportId ? prev : null));
+    setHistory([]);
     void loadDetail(reportId);
   }, [open, reportId]);
 
@@ -87,70 +90,27 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
   }, [report, nextStatus, reportGates]);
 
   const detailBasicColumns = useMemo<ProDescriptionsItemProps<Quality8DReport>[]>(
-    () => [
-      {
-        title: t('app.kuaizhizao.eightD.columns.title'),
-        dataIndex: 'title',
-      },
-      {
-        title: t('app.kuaizhizao.eightD.columns.severity'),
-        dataIndex: 'severity',
-        render: (_, record) => {
-          const { label, color } = resolveEightDSeverityDisplay(t, record.severity);
-          if (label === '-') return '-';
-          return <MarkerTag color={color}>{label}</MarkerTag>;
+    () =>
+      alignDescriptionColumns([
+        { title: t('app.kuaizhizao.eightD.columns.reportCode'), dataIndex: 'report_code' },
+        { title: t('app.kuaizhizao.eightD.columns.title'), dataIndex: 'title' },
+        {
+          title: t('app.kuaizhizao.eightD.columns.severity'),
+          dataIndex: 'severity',
+          render: (_, record) => {
+            const { label, color } = resolveEightDSeverityDisplay(t, record.severity);
+            if (label === '-') return '-';
+            return <MarkerTag color={color}>{label}</MarkerTag>;
+          },
         },
-      },
-      {
-        title: t('app.kuaizhizao.eightD.columns.owner'),
-        dataIndex: 'owner_name',
-        render: (_, record) => record.owner_name || '-',
-      },
-      {
-        title: t('app.kuaizhizao.eightD.columns.dueDate'),
-        dataIndex: 'due_date',
-        valueType: 'dateTime',
-      },
-      {
-        title: t('app.kuaizhizao.eightD.columns.sourceException'),
-        dataIndex: 'quality_exception_id',
-        render: (_, record) =>
-          record.quality_exception_id ? (
-            <Button
-              type="link"
-              size="small"
-              style={{ paddingInline: 0 }}
-              onClick={() => navigate('/apps/kuaizhizao/production-execution/quality-exceptions')}
-            >
-              {t('app.kuaizhizao.eightD.source.qualityException', { id: record.quality_exception_id })}
-            </Button>
-          ) : (
-            '-'
-          ),
-      },
-      {
-        title: t('app.kuaizhizao.eightD.columns.sourceDefect'),
-        dataIndex: 'defect_record_id',
-        render: (_, record) =>
-          record.defect_record_id ? (
-            <Button
-              type="link"
-              size="small"
-              style={{ paddingInline: 0 }}
-              onClick={() =>
-                navigate(
-                  `/apps/kuaizhizao/quality-management/nonconforming-ledger?defect_id=${record.defect_record_id}`,
-                )
-              }
-            >
-              {t('app.kuaizhizao.eightD.source.nonconformingLedger', { id: record.defect_record_id })}
-            </Button>
-          ) : (
-            '-'
-          ),
-      },
-    ],
-    [navigate, t],
+        { title: t('app.kuaizhizao.eightD.columns.owner'), dataIndex: 'owner_name' },
+        {
+          title: t('app.kuaizhizao.eightD.columns.dueDate'),
+          dataIndex: 'due_date',
+          valueType: 'dateTime',
+        },
+      ]),
+    [t],
   );
 
   const detailCollaboration = useMemo(() => {
@@ -161,7 +121,7 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
         status={report.status === 'closed' ? 'success' : 'active'}
         showLabels
         nextStepSuggestions={report.next_step_suggestions || []}
-        hideNextStepSuggestions={!report.next_step_suggestions?.length}
+        hideNextStepSuggestions
       />
     );
   }, [report, t]);
@@ -232,16 +192,51 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
     }
   };
 
+  const contentReady = Boolean(report);
+  const showError = Boolean(error && !contentReady && !loading);
+  const nextLabel =
+    report?.next_step_suggestions?.[0] ||
+    (nextStatus ? getEightDStatusText(t, nextStatus) : undefined);
+
+  if (!open) return null;
+
   return (
     <DetailDrawerTemplate
-      title={`${t('app.kuaizhizao.eightD.workbenchTitle')} - ${report?.report_code || ''}`}
-      width={DRAWER_CONFIG.EXTRA_LARGE_WIDTH}
+      title={`${t('app.kuaizhizao.eightD.workbenchTitle')} ${report?.report_code || ''}`}
+      width={DRAWER_CONFIG.HALF_WIDTH}
       open={open}
       onClose={onClose}
-      loading={loading}
+      loading={loading && !contentReady}
       extra={
-        <Space>
-          <Button onClick={onClose}>{t('common.close')}</Button>
+        contentReady && (report?.quality_exception_id || report?.defect_record_id) ? (
+          <Space wrap size="small">
+            {report?.quality_exception_id ? (
+              <Button
+                onClick={() => {
+                  onClose();
+                  navigate('/apps/kuaizhizao/production-execution/quality-exceptions');
+                }}
+              >
+                {t('app.kuaizhizao.eightD.source.qualityException', { id: report.quality_exception_id })}
+              </Button>
+            ) : null}
+            {report?.defect_record_id ? (
+              <Button
+                onClick={() => {
+                  onClose();
+                  navigate(
+                    `/apps/kuaizhizao/quality-management/nonconforming-ledger?defect_id=${report.defect_record_id}`,
+                  );
+                }}
+              >
+                {t('app.kuaizhizao.eightD.source.nonconformingLedger', { id: report.defect_record_id })}
+              </Button>
+            ) : null}
+          </Space>
+        ) : null
+      }
+      footer={
+        contentReady ? (
           <Button
             type="primary"
             disabled={!nextStatus || !canTransitionToNext}
@@ -252,21 +247,45 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
               ? t('app.kuaizhizao.eightD.transitionTo', { status: getEightDStatusText(t, nextStatus) })
               : t('app.kuaizhizao.eightD.reachedFinalStage')}
           </Button>
-        </Space>
+        ) : undefined
+      }
+      plainBody={
+        showError ? (
+          <Result
+            status="error"
+            title={error}
+            extra={
+              reportId ? (
+                <Button type="primary" onClick={() => void loadDetail(reportId)}>
+                  {t('common.retry', { defaultValue: '重试' })}
+                </Button>
+              ) : null
+            }
+          />
+        ) : undefined
+      }
+      collaborationTitleSuffix={
+        contentReady && nextLabel ? (
+          <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
+            {t('components.uniLifecycle.nextStep')}：{nextLabel}
+          </Typography.Text>
+        ) : undefined
       }
       basic={
-        report ? (
+        contentReady && report ? (
           <Descriptions
             column={3}
             size="small"
             items={detailDrawerDescriptionItems(detailBasicColumns, report)}
           />
-        ) : undefined
+        ) : showError ? null : (
+          <div style={{ minHeight: 80 }} />
+        )
       }
-      collaboration={detailCollaboration}
-      collaborationTitleExtra={collaborationTitleExtra}
+      collaboration={contentReady ? detailCollaboration : undefined}
+      collaborationTitleExtra={contentReady ? collaborationTitleExtra : undefined}
       supplementary={
-        report ? (
+        contentReady && report ? (
           <EightDStageEditor
             form={form}
             report={report}
@@ -276,9 +295,7 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
         ) : undefined
       }
       supplementaryTitle={t('app.kuaizhizao.eightD.sectionStageContent')}
-      timeline={
-        report ? <EightDHistoryTimeline history={history} /> : undefined
-      }
+      timeline={contentReady && report ? <EightDHistoryTimeline history={history} /> : undefined}
     />
   );
 };

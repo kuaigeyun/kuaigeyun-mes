@@ -32,12 +32,12 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
-import { ListPageTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { ListPageTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { UniPullLoadButton } from '../../../../../components/uni-pull';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useGlobalStore } from '../../../../../stores';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
-import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
+import { InboundDetailDrawer } from './components/InboundDetailDrawer';
 import { WarehouseTraceBriefPrimaryActions } from '../WarehouseTraceBriefFooter';
 import {
   warehouseApi,
@@ -53,7 +53,7 @@ import {
   storageLocationApi,
 } from '../../../../master-data/services/warehouse';
 import { materialApi, materialBatchApi, materialSerialApi } from '../../../../master-data/services/material';
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
 import {
   loadConfirmPreviewMaterialMeta,
@@ -99,6 +99,7 @@ import {
   type InboundReceiptType,
   inboundReceiptTypeLabel,
   inboundReceiptTypeSegmentOptions,
+  inboundDocumentTrackingType,
   isInboundConfirmable,
   inboundConfirmCapabilityReasonMessage,
   inboundSourceDocNo,
@@ -178,15 +179,6 @@ function renderInboundDetailUnitCell(row: InboundOrderItem): React.ReactNode {
     );
   }
   return formatInboundMaterialUnit(row.material_unit ?? row.unit);
-}
-
-function formatInboundDateDisplay(record: InboundOrder): string {
-  const dateOnly = record.receipt_date ?? record.registration_date;
-  if (dateOnly) return formatDateBySiteSetting(dateOnly);
-  const timeValue =
-    record.receipt_time ?? record.return_time ?? record.received_at ?? record.returned_at;
-  if (timeValue) return formatDateTimeBySiteSetting(timeValue);
-  return '-';
 }
 
 /** 列表「时间」列：优先完整业务时刻，无时刻再回落业务日 */
@@ -365,21 +357,6 @@ const PURCHASE_RECEIPT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_purchase_receipts';
 const PRODUCTION_RETURN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_production_returns';
 const FINISHED_GOODS_RECEIPT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_finished_goods_receipts';
 
-function inboundDocumentTrackingType(
-  order: InboundOrder,
-):
-  | 'purchase_receipt'
-  | 'finished_goods_receipt'
-  | 'semi_finished_goods_receipt'
-  | 'production_return'
-  | undefined {
-  if (order.receipt_type === 'purchase') return 'purchase_receipt';
-  if (order.receipt_type === 'finished_goods') return 'finished_goods_receipt';
-  if (order.receipt_type === 'semi_finished_goods') return 'semi_finished_goods_receipt';
-  if (order.receipt_type === 'production_return') return 'production_return';
-  return undefined;
-}
-
 /** 列表行状态（兼容大小写/空格） */
 function inboundRowStatus(record: InboundOrder): string {
   const v = record?.status ?? (record as Record<string, unknown>)?.document_status;
@@ -533,8 +510,10 @@ const InboundPage: React.FC = () => {
   } = useCustomFieldsForList<InboundOrder>({ tableName: FINISHED_GOODS_RECEIPT_CUSTOM_FIELD_TABLE });
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [currentOrder, setCurrentOrder] = useState<InboundOrder | null>(null);
   const [inboundTrackingRefreshKey, setInboundTrackingRefreshKey] = useState(0);
+  const detailRetryRecordRef = useRef<InboundOrder | null>(null);
   const [editableReceiptQuantities, setEditableReceiptQuantities] = useState<Record<number, number>>({});
   const [savingPurchaseReceipt, setSavingPurchaseReceipt] = useState(false);
   const [purchaseReceiptAttachments, setPurchaseReceiptAttachments] = useState<any[]>([]);
@@ -595,11 +574,12 @@ const InboundPage: React.FC = () => {
   const inboundDocTrackingType = currentOrder
     ? inboundDocumentTrackingType(currentOrder)
     : undefined;
-  const inboundTracking = useDocumentTracking(inboundDocTrackingType, currentOrder?.id, inboundTrackingRefreshKey);
 
   const handleDetail = async (record: InboundOrder) => {
+    detailRetryRecordRef.current = record;
     setDetailDrawerVisible(true);
     setDetailLoading(true);
+    setDetailError(null);
     setCurrentOrder(null);
     try {
       let detailData: any;
@@ -657,8 +637,9 @@ const InboundPage: React.FC = () => {
         error?.response?.data?.message ??
         error?.message ??
         t('app.kuaizhizao.warehouseInbound.msg.loadDetailFailed');
-      messageApi.error(typeof msg === 'string' ? msg : t('app.kuaizhizao.warehouseInbound.msg.loadDetailFailed'));
-      setDetailDrawerVisible(false);
+      const text = typeof msg === 'string' ? msg : t('app.kuaizhizao.warehouseInbound.msg.loadDetailFailed');
+      setDetailError(text);
+      messageApi.error(text);
     } finally {
       setDetailLoading(false);
     }
@@ -1849,22 +1830,6 @@ const InboundPage: React.FC = () => {
   ],
   );
 
-  const inboundDetailCollaboration = useMemo(() => {
-    if (!currentOrder) return undefined;
-    const lifecycle = getInboundLifecycle(currentOrder);
-    const mainStages = lifecycle.mainStages ?? [];
-    if (mainStages.length === 0) return undefined;
-    return (
-      <UniLifecycleStepper
-        steps={mainStages}
-        status={lifecycle.status}
-        showLabels
-        nextStepSuggestions={lifecycle.nextStepSuggestions}
-        hideNextStepSuggestions
-      />
-    );
-  }, [currentOrder]);
-
   const inboundTraceDocument = useMemo(() => {
     if (!currentOrder || !inboundDocTrackingType || currentOrder.id == null) return undefined;
     return {
@@ -1922,24 +1887,6 @@ const InboundPage: React.FC = () => {
           key="finished-goods-custom-fields"
           customFields={finishedGoodsReceiptListCustomFields}
           customFieldValues={finishedGoodsReceiptDetailCustomFieldValues}
-        />,
-      );
-    }
-    if (currentOrder.notes) {
-      nodes.push(
-        <Descriptions
-          key="notes"
-          column={3}
-          size="small"
-          style={nodes.length > 0 ? { marginTop: 16 } : undefined}
-          items={[
-            {
-              key: 'notes',
-              label: t('app.kuaizhizao.warehouseInbound.field.notes'),
-              span: 3,
-              children: currentOrder.notes,
-            },
-          ]}
         />,
       );
     }
@@ -2479,21 +2426,27 @@ const InboundPage: React.FC = () => {
         </Spin>
       </Modal>
 
-      <DetailDrawerTemplate
-        title={`${currentOrder?.receipt_type === 'production_return' ? t('app.kuaizhizao.warehouseInbound.detail.productionReturnTitle') : t('app.kuaizhizao.warehouseInbound.detail.title')} - ${currentOrder?.receipt_code || currentOrder?.return_code || ''}`}
+      <InboundDetailDrawer
         open={detailDrawerVisible}
         zIndex={inboundDetailDrawerZIndex}
+        order={currentOrder}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const record = detailRetryRecordRef.current;
+          if (record) void handleDetail(record);
+        }}
+        trackingRefreshKey={inboundTrackingRefreshKey}
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentOrder(null);
+          setDetailError(null);
           setEditableReceiptQuantities({});
           setPurchaseReceiptAttachments([]);
           resetPurchaseReceiptDetailFieldValues();
           resetProductionReturnDetailFieldValues();
           resetFinishedGoodsReceiptDetailFieldValues();
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
-        loading={detailLoading}
         extra={
           currentOrder ? (
             <Space>
@@ -2554,73 +2507,6 @@ const InboundPage: React.FC = () => {
             </Space>
           ) : null
         }
-        basic={
-          currentOrder ? (
-            <Descriptions
-              column={3}
-              size="small"
-              items={[
-                {
-                  key: 'code',
-                  label: t('app.kuaizhizao.warehouseInbound.col.docNo'),
-                  children: (
-                    <Typography.Text copyable={{ text: String(currentOrder.receipt_code || currentOrder.return_code || '') }}>
-                      {currentOrder.receipt_code || currentOrder.return_code || '-'}
-                    </Typography.Text>
-                  ),
-                },
-                {
-                  key: 'type',
-                  label: t('app.kuaizhizao.warehouseInbound.field.type'),
-                  children: renderInboundReceiptTypeMarkerTag(t, currentOrder.receipt_type),
-                },
-                {
-                  key: 'status',
-                  label: t('app.kuaizhizao.warehouseInbound.field.status'),
-                  children: (
-                    <StatusTag color={resolveInboundHubStatusTagColor(currentOrder.status)}>
-                      {resolveInboundHubStatusLabel(t, currentOrder.status, currentOrder.receipt_type)}
-                    </StatusTag>
-                  ),
-                },
-                ...(currentOrder.customer_name
-                  ? [{ key: 'customer', label: t('app.kuaizhizao.warehouseInbound.col.customer'), children: currentOrder.customer_name }]
-                  : []),
-                ...(currentOrder.supplier_name
-                  ? [{ key: 'supplier', label: t('app.kuaizhizao.warehouseInbound.field.supplier'), children: currentOrder.supplier_name }]
-                  : []),
-                ...(currentOrder.purchase_order_code
-                  ? [{ key: 'po', label: t('app.kuaizhizao.warehouseInbound.field.purchaseOrderCode'), children: currentOrder.purchase_order_code }]
-                  : []),
-                ...(currentOrder.work_order_code
-                  ? [{ key: 'wo', label: t('app.kuaizhizao.warehouseInbound.field.workOrderCode'), children: currentOrder.work_order_code }]
-                  : []),
-                ...(currentOrder.picking_code
-                  ? [{ key: 'pick', label: t('app.kuaizhizao.warehouseInbound.field.pickingCode'), children: currentOrder.picking_code }]
-                  : []),
-                ...(currentOrder.workshop_name
-                  ? [{ key: 'ws', label: t('app.kuaizhizao.warehouseInbound.field.workshop'), children: currentOrder.workshop_name }]
-                  : []),
-                {
-                  key: 'wh',
-                  label: t('app.kuaizhizao.warehouseInbound.field.warehouse'),
-                  children: currentOrder.warehouse_name ?? '-',
-                },
-                {
-                  key: 'date',
-                  label: t('app.kuaizhizao.warehouseInbound.field.date'),
-                  children: formatInboundDateDisplay(currentOrder),
-                },
-                {
-                  key: 'op',
-                  label: t('app.kuaizhizao.warehouseInbound.field.operator'),
-                  children: resolveInboundHubOperator(currentOrder) || '-',
-                },
-              ]}
-            />
-          ) : undefined
-        }
-        collaboration={inboundDetailCollaboration}
         traceDocument={inboundTraceDocument}
         supplementary={inboundDetailSupplementary}
         linesTitle={inboundDetailLinesTitle}
@@ -2740,26 +2626,6 @@ const InboundPage: React.FC = () => {
                   <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.warehouseInbound.detail.noDetails')} />
                 )}
 
-            </>
-          ) : undefined
-        }
-        timeline={
-          currentOrder?.id != null ? (
-            <>
-              {inboundTracking.loading && (
-                <div style={{ textAlign: 'center', padding: 24 }}>
-                  <Spin />
-                </div>
-              )}
-              {inboundTracking.error && !inboundTracking.loading && (
-                <Typography.Text type="danger">{inboundTracking.error}</Typography.Text>
-              )}
-              {inboundTracking.data && !inboundTracking.loading && (
-                <DocumentTrackingTimelineBody data={inboundTracking.data} />
-              )}
-              {!inboundTracking.loading && !inboundTracking.data && !inboundTracking.error && (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.warehouseInbound.detail.noOperationLog')} />
-              )}
             </>
           ) : undefined
         }

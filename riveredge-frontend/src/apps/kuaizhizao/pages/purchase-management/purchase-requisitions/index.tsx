@@ -8,7 +8,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Row, Col, Checkbox, Descriptions, Empty, Spin, Typography, DatePicker, Modal, theme, Tooltip, Alert, Switch } from 'antd';
+import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Row, Col, Checkbox, Empty, Spin, Typography, DatePicker, Modal, theme, Alert, Switch } from 'antd';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   EyeOutlined,
@@ -17,7 +17,6 @@ import {
   SwapOutlined,
   FileSearchOutlined,
   DeleteOutlined,
-  CopyOutlined,
   PlusOutlined,
   SendOutlined,
   AppstoreAddOutlined,
@@ -42,7 +41,7 @@ import {
 } from '../../../../../components/uni-pull-query';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { SourceDocumentCode } from '../../../../../components/linked-document-code/SourceDocumentCode';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerSection, DetailDrawerActions, MODAL_CONFIG, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE } from '../../../../../components/layout-templates';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
@@ -92,7 +91,6 @@ import { createInquiryFromRequisition } from '../../../services/purchase-inquiry
 import {
   listDemandComputations,
   pushToPurchaseRequisition,
-  previewPushToPurchaseRequisition,
 } from '../../../services/demand-computation';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import {
@@ -103,15 +101,16 @@ import {
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { formatPurchaseRequisitionSourceType } from '../../../utils/purchaseRequisitionSourceType';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
-import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS, DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS, ratioToPushProgressPercent } from '../../sales-management/shared/DocumentPushProgressBar';
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-import { useDocumentTracking, DocumentTrackingTimelineBody } from '../../../../../components/document-tracking-panel';
-import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
+import {
+  PurchaseRequisitionDetailDrawer,
+  PURCHASE_REQUISITION_WORKFLOW_PROPS,
+} from './components/PurchaseRequisitionDetailDrawer';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { ROUTES } from '../../../constants/routes';
 import { useTranslation } from 'react-i18next';
@@ -120,16 +119,14 @@ import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-import { DetailAuditPhaseTitleExtra } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
-import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { formatDateTime, formatNumber, formatQuantity } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import {
-  demandComputationCapabilityReasonMessage,
   purchaseRequisitionCapabilityReasonMessage,
 } from '../../../../../hooks/useDocumentCapabilities';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
@@ -140,9 +137,6 @@ import {
   getDocumentFormDraft,
   setDocumentFormDraft,
 } from '../../../../../utils/documentFormDraftCache';
-
-/** 采购申请详情只读明细表最小横向宽度 */
-const PURCHASE_REQUISITION_DETAIL_ITEMS_MIN_WIDTH = 980;
 
 const INITIAL_PR_FORM_ITEM_ROW = {
   material_id: undefined,
@@ -292,11 +286,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
     [requisitionLineUnitOptions],
   );
 
-  const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
-  const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
-  const [pullPreviewConfirming, setPullPreviewConfirming] = useState(false);
-  const [pullPreviewData, setPullPreviewData] = useState<DocumentPushPreview | null>(null);
-  const [pullPreviewComputationId, setPullPreviewComputationId] = useState<number | null>(null);
 
   const [pushPoPreviewOpen, setPushPoPreviewOpen] = useState(false);
   const [pushPoPreviewLoading, setPushPoPreviewLoading] = useState(false);
@@ -314,12 +303,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const [pushInquirySelectedItemIds, setPushInquirySelectedItemIds] = useState<number[]>([]);
 
   const [prTrackingRefreshKey, setPrTrackingRefreshKey] = useState(0);
-
-  const prTracking = useDocumentTracking(
-    detailVisible ? 'purchase_requisition' : undefined,
-    detailVisible ? currentReq?.id : undefined,
-    prTrackingRefreshKey,
-  );
 
   const ensureSupplierList = useCallback(async (): Promise<Array<{ id: number; code?: string; name: string }>> => {
     if (supplierList.length > 0) return supplierList;
@@ -420,17 +403,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
       setImportModalVisible(false);
     },
     [messageApi, materialUnitImport, t],
-  );
-
-  const handleCopyRequisitionCode = useCallback(
-    (code: string) => {
-      if (!code) return;
-      void navigator.clipboard
-        .writeText(code)
-        .then(() => messageApi.success(t('common.copySuccess')))
-        .catch(() => messageApi.error(t('common.copyFailed')));
-    },
-    [messageApi, t]
   );
 
   const initialCreateItems = INITIAL_CREATE_ITEMS;
@@ -708,48 +680,19 @@ const PurchaseRequisitionsPage: React.FC = () => {
     [t],
   );
 
-  const resetPullPreviewModal = useCallback(() => {
-    setPullPreviewOpen(false);
-    setPullPreviewData(null);
-    setPullPreviewComputationId(null);
-  }, []);
-
-  const showPullCreatePreview = useCallback(
-    (computationId: number) => {
-      setPullPreviewOpen(true);
-      setPullPreviewLoading(true);
-      setPullPreviewConfirming(false);
-      setPullPreviewData(null);
-      setPullPreviewComputationId(computationId);
-      previewPushToPurchaseRequisition(computationId)
-        .then((res) => setPullPreviewData(res))
-        .catch((error: any) => {
-          messageApi.error(
-            getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.pull.previewFailed')),
-          );
-          resetPullPreviewModal();
-        })
-        .finally(() => setPullPreviewLoading(false));
+  const createRequisitionFromComputation = useCallback(
+    async (computationId: number) => {
+      try {
+        const res = await pushToPurchaseRequisition(computationId);
+        messageApi.success(res?.message || t('app.kuaizhizao.purchaseRequisition.pull.success'));
+        actionRef.current?.reload();
+        invalidateMenuBadgeCounts();
+      } catch (error: any) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.pull.failed')));
+      }
     },
-    [messageApi, resetPullPreviewModal, t],
+    [invalidateMenuBadgeCounts, messageApi, t],
   );
-
-  const handlePullPreviewConfirm = useCallback(async () => {
-    if (!pullPreviewComputationId || !pullPreviewData) return;
-    if (pullPreviewData.has_blocking_issues) return;
-    setPullPreviewConfirming(true);
-    try {
-      const res = await pushToPurchaseRequisition(pullPreviewComputationId);
-      messageApi.success(res?.message || t('app.kuaizhizao.purchaseRequisition.pull.success'));
-      actionRef.current?.reload();
-      invalidateMenuBadgeCounts();
-      resetPullPreviewModal();
-    } catch (error: any) {
-      messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.pull.failed')));
-    } finally {
-      setPullPreviewConfirming(false);
-    }
-  }, [invalidateMenuBadgeCounts, messageApi, pullPreviewComputationId, pullPreviewData, resetPullPreviewModal, t]);
 
   const pullQueryCloseRef = useRef<(() => void) | null>(null);
 
@@ -808,7 +751,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         return;
       }
       pullQueryCloseRef.current?.();
-      showPullCreatePreview(selectedId);
+      await createRequisitionFromComputation(selectedId);
     },
   });
 
@@ -954,28 +897,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
     } catch {
       messageApi.error(t('app.kuaizhizao.purchaseRequisition.detailFailed'));
     }
-  };
-
-  const handleSubmitRequisition = (record: PurchaseRequisition) => {
-    if (!record.id) return;
-    modalApi.confirm({
-      title: t('app.kuaizhizao.purchaseRequisition.submitTitle'),
-      content: purchaseRequestAuditEnabled ? t('app.kuaizhizao.purchaseRequisition.submitContentAudit') : t('app.kuaizhizao.purchaseRequisition.submitContentAuto'),
-      onOk: async () => {
-        try {
-          await submitPurchaseRequisition(record.id!);
-          messageApi.success(t('app.kuaizhizao.purchaseRequisition.submitSuccess'));
-          invalidateMenuBadgeCounts();
-          actionRef.current?.reload();
-          if (currentReq?.id === record.id) {
-            const refreshed = await getPurchaseRequisition(record.id!);
-            setCurrentReq(refreshed);
-          }
-        } catch (e: any) {
-          messageApi.error(e?.response?.data?.detail || t('app.kuaizhizao.purchaseRequisition.submitFailed'));
-        }
-      },
-    });
   };
 
   // handleSubmit removed as it is redundant with UniWorkflowActions
@@ -1367,6 +1288,10 @@ const PurchaseRequisitionsPage: React.FC = () => {
         try {
           await deletePurchaseRequisition(record.id!);
           messageApi.success(t('common.deleteSuccess'));
+          if (currentReq?.id === record.id) {
+            setDetailVisible(false);
+            setCurrentReq(null);
+          }
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
@@ -1534,7 +1459,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
       title: t('common.actions'),
       key: 'option',
       valueType: 'option',
-      width: 280,
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
@@ -2335,69 +2259,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
       />
 
       <Modal
-        title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
-        open={pullPreviewOpen}
-        destroyOnClose
-        width={1100}
-        onCancel={resetPullPreviewModal}
-        okText={t('app.kuaizhizao.purchaseRequisition.pull.ok')}
-        cancelText={t('common.cancel')}
-        confirmLoading={pullPreviewConfirming}
-        onOk={() => void handlePullPreviewConfirm()}
-        okButtonProps={{
-          disabled:
-            pullPreviewLoading ||
-            !pullPreviewData ||
-            !!pullPreviewData?.has_blocking_issues,
-        }}
-      >
-        {pullPreviewLoading ? (
-          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-            <Spin />
-            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
-          </div>
-        ) : pullPreviewData ? (
-          <div>
-            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
-            {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
-              <Alert
-                type="warning"
-                showIcon
-                style={{ marginBottom: 12 }}
-                message={
-                  demandComputationCapabilityReasonMessage(pullPreviewData.blocking_reason, t) ||
-                  t('app.kuaizhizao.purchaseRequisition.pull.failed')
-                }
-              />
-            ) : null}
-            {pullPreviewData.items?.length > 0 ? (
-              <Table
-                size="small"
-                dataSource={pullPreviewData.items}
-                rowKey={(row) => String(row.item_id)}
-                pagination={false}
-                scroll={{ x: 860 }}
-                columns={[
-                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
-                ]}
-              />
-            ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseRequisition.pull.previewNoLines')} />
-            )}
-            {pullPreviewData.tip ? (
-              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-                {pullPreviewData.tip}
-              </Typography.Paragraph>
-            ) : null}
-          </div>
-        ) : null}
-      </Modal>
-
-      <Modal
         title={pushToPurchaseOrderAction.label}
         open={pushPoPreviewOpen}
         destroyOnClose
@@ -2539,28 +2400,50 @@ const PurchaseRequisitionsPage: React.FC = () => {
       </Modal>
 
 
-      <DetailDrawerTemplate
-        title={t('app.kuaizhizao.purchaseRequisition.detailTitle', { code: currentReq?.requisition_code || '' })}
+      <PurchaseRequisitionDetailDrawer
         open={detailVisible}
         zIndex={prqDetailDrawerZIndex}
         onClose={() => {
           setDetailVisible(false);
           setCurrentReq(null);
         }}
-        dataSource={currentReq || undefined}
-        columns={[]}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        requisition={currentReq}
+        trackingRefreshKey={prTrackingRefreshKey}
         extra={
-          currentReq && (
+          currentReq ? (
             <DetailDrawerActions
               items={[
                 {
-                  key: 'edit',
-                  visible: ['草稿', 'draft', 'DRAFT'].includes((currentReq.status ?? '').toString().trim()),
+                  key: 'fixStatus',
+                  visible: ['全部转单', 'FULL_CONVERTED'].includes(currentReq.status ?? ''),
                   render: () => (
                     <Button
-                      type="link"
-                      size="small"
+                      onClick={async () => {
+                        if (!currentReq?.id) return;
+                        try {
+                          const res = await fixPurchaseRequisitionStatus(currentReq.id);
+                          setCurrentReq(res);
+                          setPrTrackingRefreshKey((k) => k + 1);
+                          invalidateMenuBadgeCounts();
+                          actionRef.current?.reload();
+                          messageApi.success(t('app.kuaizhizao.purchaseRequisition.statusFixed'));
+                        } catch (e: unknown) {
+                          const err = e as { response?: { data?: { detail?: string } } };
+                          messageApi.error(err?.response?.data?.detail || t('app.kuaizhizao.purchaseRequisition.fixFailed'));
+                        }
+                      }}
+                    >
+                      {t('app.kuaizhizao.purchaseRequisition.fixStatus')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'edit',
+                  visible:
+                    currentReq.capabilities?.update?.allowed === true && purchaseRequisitionPerms.canUpdate,
+                  render: () => (
+                    <Button
+                      {...rowActionKind('update')}
                       icon={<EditOutlined />}
                       onClick={() => {
                         const r = currentReq;
@@ -2573,272 +2456,50 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   ),
                 },
                 {
-                  key: 'submit',
-                  visible: ['草稿', 'draft', 'DRAFT'].includes((currentReq.status ?? '').toString().trim()),
+                  key: 'delete',
+                  visible:
+                    currentReq.capabilities?.delete?.allowed === true && purchaseRequisitionPerms.canDelete,
                   render: () => (
                     <Button
-                      type="link"
-                      size="small"
-                      onClick={() => currentReq && handleSubmitRequisition(currentReq)}
+                      {...rowActionKind('delete')}
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() => handleDeleteOne(currentReq)}
                     >
-                      {t('components.uniAction.submit')}
+                      {t('common.delete')}
                     </Button>
                   ),
                 },
-                { key: 'workflow', visible: true, render: () => (
-                  <UniWorkflowActions {...rowActionKind('skip')}
-                    record={currentReq}
-                    entityName={t('app.kuaizhizao.purchaseRequisition.entityName')}
-                    statusField="status"
-                    reviewStatusField="review_status"
-                    draftStatuses={['草稿', 'draft']}
-                    pendingStatuses={['待审核', 'pending_review']}
-                    approvedStatuses={['已通过', '已审核', '部分转单', '全部转单', 'audited', 'approved']}
-                    rejectedStatuses={['已驳回', 'rejected']}
-                    theme="default"
-                    size="small"
-                    confirmMessages={{ revoke: t('app.kuaizhizao.purchaseRequisition.workflowRevokeConfirm') }}
-                    onSuccess={async () => {
-                      invalidateMenuBadgeCounts();
-
-                      actionRef.current?.reload();
-                      setPrTrackingRefreshKey((k) => k + 1);
-                      if (currentReq?.id) {
-                        try {
-                          const res = await getPurchaseRequisition(currentReq.id);
-                          setCurrentReq(res);
-                        } catch { /* ignore */ }
-                      }
-                    }}
-                  />
-                ) },
                 {
-                  key: 'fixStatus',
-                  visible: ['全部转单', 'FULL_CONVERTED'].includes(currentReq.status ?? ''),
+                  key: 'workflow',
                   render: () => (
-                    <Button
-                      type="link"
-                      size="small"
-                      onClick={async () => {
-                        if (!currentReq?.id) return;
-                        try {
-                          const res = await fixPurchaseRequisitionStatus(currentReq.id);
-                          setCurrentReq(res);
-                          setPrTrackingRefreshKey((k) => k + 1);
-                          invalidateMenuBadgeCounts();
-
-                          actionRef.current?.reload();
-                          messageApi.success(t('app.kuaizhizao.purchaseRequisition.statusFixed'));
-                        } catch (e: any) {
-                          messageApi.error(e?.response?.data?.detail || t('app.kuaizhizao.purchaseRequisition.fixFailed'));
+                    <UniWorkflowActions
+                      {...rowActionKind('skip')}
+                      record={currentReq}
+                      entityName={t('app.kuaizhizao.purchaseRequisition.entityName')}
+                      {...PURCHASE_REQUISITION_WORKFLOW_PROPS}
+                      theme="default"
+                      confirmMessages={{ revoke: t('app.kuaizhizao.purchaseRequisition.workflowRevokeConfirm') }}
+                      onSuccess={async () => {
+                        invalidateMenuBadgeCounts();
+                        actionRef.current?.reload();
+                        setPrTrackingRefreshKey((k) => k + 1);
+                        if (currentReq?.id) {
+                          try {
+                            setCurrentReq(await getPurchaseRequisition(currentReq.id));
+                          } catch (e: unknown) {
+                            const err = e as { message?: string };
+                            messageApi.error(err?.message || t('app.kuaizhizao.purchaseRequisition.detailFailed'));
+                          }
                         }
                       }}
-                    >
-                      {t('app.kuaizhizao.purchaseRequisition.fixStatus')}
-                    </Button>
+                    />
                   ),
                 },
               ]}
             />
-          )
+          ) : null
         }
-        customContent={
-          currentReq && (
-            <>
-              <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
-                <Descriptions
-                  column={3}
-                  size="small"
-                  items={(() => {
-                    const lc = getPurchaseRequisitionLifecycle(currentReq, purchaseRequestAuditEnabled);
-                    const stageName = lc.stageName ?? currentReq.status ?? '草稿';
-                    const fmtDate = (v: string | undefined) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-');
-                    const fmtDt = (v: string | undefined) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-');
-                    return [
-                      {
-                        key: 'code',
-                        label: t('app.kuaizhizao.purchaseRequisition.col.code'),
-                        children: (
-                          <Space size={4}>
-                            <span>{currentReq.requisition_code ?? '-'}</span>
-                            {currentReq.requisition_code ? (
-                              <Button
-                                type="link"
-                                size="small"
-                                icon={<CopyOutlined style={{ fontSize: 12 }} />}
-                                onClick={() => handleCopyRequisitionCode(currentReq.requisition_code!)}
-                                aria-label={t('app.kuaizhizao.purchaseRequisition.form.copyCodeAria')}
-                              />
-                            ) : null}
-                          </Space>
-                        ),
-                      },
-                      { key: 'name', label: t('app.kuaizhizao.purchaseRequisition.col.name'), children: currentReq.requisition_name ?? '-' },
-                      {
-                        key: 'status',
-                        label: t('common.status'),
-                        children: <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>,
-                      },
-                      {
-                        key: 'src',
-                        label: t('app.kuaizhizao.purchaseRequisition.col.sourceCode'),
-                        children: (
-                          <SourceDocumentCode
-                            sourceType={currentReq.source_type}
-                            sourceId={currentReq.source_id}
-                            sourceCode={currentReq.source_code}
-                          />
-                        ),
-                      },
-                      {
-                        key: 'stype',
-                        label: t('app.kuaizhizao.purchaseRequisition.col.sourceType'),
-                        children: formatPurchaseRequisitionSourceType(currentReq.source_type, t),
-                      },
-                      { key: 'reqd', label: t('app.kuaizhizao.purchaseRequisition.col.requiredDate'), children: fmtDate(currentReq.required_date) },
-                      {
-                        key: 'notes',
-                        label: t('app.kuaizhizao.common.fieldNotes'),
-                        span: 3,
-                        children: currentReq.notes?.trim() ? currentReq.notes : '-',
-                      },
-                      { key: 'rd', label: t('app.kuaizhizao.purchaseRequisition.form.date'), children: fmtDate(currentReq.requisition_date) },
-                      { key: 'applicant', label: t('app.kuaizhizao.purchaseRequisition.form.applicant'), children: currentReq.applicant_name ?? '-' },
-                      { key: 'cat', label: t('common.createdAt'), children: fmtDt(currentReq.created_at) },
-                      { key: 'uat', label: t('common.updatedAt'), children: fmtDt(currentReq.updated_at) },
-                    ];
-                  })()}
-                />
-              </DetailDrawerSection>
-
-              <DetailDrawerSection
-                title={t('app.uniDetail.sectionCollaboration')}
-                titleExtra={<DetailAuditPhaseTitleExtra record={currentReq} />}
-              >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lifecycle = getPurchaseRequisitionLifecycle(currentReq, purchaseRequestAuditEnabled);
-                    const mainStages = lifecycle.mainStages ?? [];
-                    return mainStages.length > 0 ? (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        status={lifecycle.status}
-                        showLabels
-                        nextStepSuggestions={lifecycle.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
-                    ) : null;
-                  })()}
-                  
-                </div>
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
-                <style>{`
-                  .purchase-requisition-detail-drawer-items .ant-table-wrapper .ant-table-body,
-                  .purchase-requisition-detail-drawer-items .ant-table-wrapper .ant-table-content {
-                    overflow: visible !important;
-                  }
-                `}</style>
-                {currentReq.items && currentReq.items.length > 0 ? (
-                  <div
-                    className="purchase-requisition-detail-drawer-items"
-                    style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
-                  >
-                    <Table
-                      size="small"
-                      rowKey="id"
-                      tableLayout="fixed"
-                      style={{ minWidth: PURCHASE_REQUISITION_DETAIL_ITEMS_MIN_WIDTH }}
-                      pagination={false}
-                      dataSource={currentReq.items}
-                      columns={[
-                        { title: t('app.kuaizhizao.purchaseRequisition.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
-                        { title: t('app.kuaizhizao.purchaseRequisition.col.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                        { title: t('app.kuaizhizao.purchaseRequisition.col.spec'), dataIndex: 'material_spec', width: 120, ellipsis: true },
-                        { title: t('app.kuaizhizao.purchaseRequisition.col.quantity'), dataIndex: 'quantity', width: 120, align: 'right', render: (val, row) => <QuantityWithUnitDisplay quantity={val} unit={row.unit} /> },
-                        {
-                          title: t('app.kuaizhizao.purchaseRequisition.col.unit'),
-                          dataIndex: 'unit',
-                          width: 100,
-                          ellipsis: true,
-                          render: (_: unknown, record: PurchaseRequisitionItem) => (
-                            <MaterialUnitSelect
-                              materialId={record.material_id}
-                              value={record.unit}
-                              disabled
-                              size="small"
-                              noStyle
-                            />
-                          ),
-                        },
-                        {
-                          title: t('app.kuaizhizao.purchaseRequisition.col.suggestedPrice'),
-                          dataIndex: 'suggested_unit_price',
-                          width: 140,
-                          align: 'right',
-                          render: (v: number) => `¥${Number(v || 0).toFixed(priceDecimals)}`,
-                        },
-                        {
-                          title: t('app.kuaizhizao.purchaseRequisition.col.requiredDate'),
-                          dataIndex: 'required_date',
-                          width: 120,
-                          ellipsis: true,
-                          render: (v: string | undefined) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
-                        },
-                        {
-                          title: t('app.kuaizhizao.purchaseRequisition.col.converted'),
-                          dataIndex: 'purchase_order_id',
-                          width: 80,
-                          render: (v: number | undefined) => (v ? <Tag color="success">{t('app.kuaizhizao.purchaseRequisition.convertedYes')}</Tag> : <Tag>{t('app.kuaizhizao.purchaseRequisition.convertedNo')}</Tag>),
-                        },
-                      ]}
-                    />
-                  </div>
-                ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.salesOrder.emptyItems')} />
-                )}
-              </DetailDrawerSection>
-
-              {currentReq.id != null && (
-                <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
-                  {prTracking.loading && (
-                    <div style={{ textAlign: 'center', padding: 24 }}>
-                      <Spin />
-                    </div>
-                  )}
-                  {prTracking.error && !prTracking.loading && (
-                    <Typography.Text type="danger">{prTracking.error}</Typography.Text>
-                  )}
-                  {prTracking.data && !prTracking.loading && (
-                    <DocumentTrackingTimelineBody data={prTracking.data} />
-                  )}
-                </DetailDrawerSection>
-              )}
-            </>
-          )
-        }
-      
-              traceDocument={
-                currentReq?.id != null
-                  ? {
-                      documentType: 'purchase_requisition',
-                      documentId: currentReq.id,
-                      selfDocumentId: currentReq.id,
-                    renderBriefActions: (doc) => (
-                        <WarehouseTraceBriefPrimaryActions
-                          doc={doc}
-                          t={t}
-                          navigate={navigate}
-                          closeDrawer={() => {
-                            setDetailVisible(false);
-                            setCurrentReq(null);
-                          }}
-                        />
-                      )
-                    }
-                  : undefined
-              }
       />
       <UniMaterialBatchPicker
         open={materialPickerOpen}

@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse, HTMLResponse, Response
 from core.api.deps import get_current_user, get_current_tenant
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.models.user import User as CurrentUser
-from infra.exceptions.exceptions import ValidationError, NotFoundError
+from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
 
 from apps.kuaizhizao.schemas.purchase import (
     PurchaseOrderCreate, PurchaseOrderUpdate, PurchaseOrderResponse,
@@ -430,6 +430,27 @@ async def confirm_purchase_order(
         confirm_data=confirm_data,
         confirmed_by=current_user.id
     )
+
+
+@router.post("/purchase-orders/{order_id}/close", response_model=PurchaseOrderResponse, summary="Close purchase order")
+async def close_purchase_order(
+    order_id: int = Path(..., description="采购订单ID"),
+    reason: Optional[str] = Query(None, description="关闭原因"),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """关闭采购订单：终止剩余未到货，已入库数据保留。"""
+    try:
+        return await PurchaseService().close_purchase_order(
+            tenant_id=tenant_id,
+            order_id=order_id,
+            closed_by=current_user.id,
+            reason=reason,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/purchase-orders/{order_id}/push-to-receipt-notice/preview", summary="Preview push to receipt notice")

@@ -8,12 +8,15 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Typography } from 'antd';
+import { App, Button, List, Modal, Popconfirm, Space, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { MasterDataDetailDrawer } from '../../shared/masterDataDetailDrawer';
 import { workGroupApi } from '../../../services/factory';
 import {
   buildMasterCrudActiveValueEnum,
@@ -62,6 +65,8 @@ const WorkGroupsPage: React.FC = () => {
   const [editUuid, setEditUuid] = useState<string | null>(null);
 
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [workGroupDetail, setWorkGroupDetail] = useState<WorkGroup | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -97,22 +102,31 @@ const WorkGroupsPage: React.FC = () => {
     setModalVisible(true);
   };
 
-  const handleOpenDetail = async (record: WorkGroup) => {
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      setDrawerVisible(true);
-      setDetailLoading(true);
-      const detail = await workGroupApi.get(record.uuid);
-      setWorkGroupDetail(detail);
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.workGroups.getDetailFailed'));
+      setWorkGroupDetail(await workGroupApi.get(uuid));
+    } catch (error) {
+      setWorkGroupDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.master-data.workGroups.getDetailFailed')));
     } finally {
       setDetailLoading(false);
     }
   };
 
+  const handleOpenDetail = (record: WorkGroup) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setWorkGroupDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
+  };
+
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setWorkGroupDetail(null);
+    setDetailError(null);
   };
 
   const handleDelete = async (record: WorkGroup) => {
@@ -516,7 +530,6 @@ const WorkGroupsPage: React.FC = () => {
       title: t('common.actions'),
       key: 'action',
       valueType: 'option',
-      width: 150,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -653,15 +666,22 @@ const WorkGroupsPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      <DetailDrawerTemplate
+      <MasterDataDetailDrawer
         title={t('field.workGroup.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
+        detail={workGroupDetail}
+        detailColumns={detailColumns}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={workGroupDetail ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, workGroupDetail)} />
-          ) : undefined}
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(workGroupDetail), () => {
+          if (!workGroupDetail) return;
+          handleEdit(workGroupDetail);
+        })}
       />
 
       <WorkGroupFormModal

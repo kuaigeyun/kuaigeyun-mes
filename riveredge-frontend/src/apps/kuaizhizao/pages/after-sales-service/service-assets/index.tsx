@@ -1,6 +1,6 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Button, Drawer, message } from 'antd';
+import { Button, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
@@ -10,14 +10,16 @@ import {
   UniTableStackedPrimaryCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { formatDateTime } from '../../../../../utils/format';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import {
   AFTER_SALES_ASSET_STATUS_COLOR,
   renderAfterSalesStatusTag,
 } from '../shared/afterSalesListPresentation';
 import { serviceAssetApi, type ServiceAsset } from '../../../services/after-sales-service';
 import ServiceAssetFormModal from './ServiceAssetFormModal';
+import { ServiceAssetDetailDrawer } from './components/ServiceAssetDetailDrawer';
 
 const RESOURCE = 'kuaizhizao:service-asset';
 
@@ -29,6 +31,9 @@ const ServiceAssetsPage: React.FC = () => {
   const [editing, setEditing] = useState<ServiceAsset | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<ServiceAsset | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryIdRef = useRef<number | null>(null);
 
   const openCreate = () => {
     setEditing(null);
@@ -41,10 +46,25 @@ const ServiceAssetsPage: React.FC = () => {
     setModalOpen(true);
   };
 
-  const openDetail = async (row: ServiceAsset) => {
-    const full = await serviceAssetApi.get(row.id);
-    setDetail(full);
+  const loadDetail = useCallback(async (id: number) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      setDetail(await serviceAssetApi.get(id));
+    } catch (error) {
+      setDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.detail.loadFailed')));
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [t]);
+
+  const openDetail = (row: ServiceAsset) => {
+    detailRetryIdRef.current = row.id;
     setDetailOpen(true);
+    setDetail(null);
+    setDetailError(null);
+    void loadDetail(row.id);
   };
 
   const columns: ProColumns<ServiceAsset>[] = useMemo(
@@ -107,7 +127,7 @@ const ServiceAssetsPage: React.FC = () => {
             fixed: 'right',
             hideInSearch: true,
             render: (_, row) => [
-              <Button {...rowActionKind('read')} key="read" onClick={() => void openDetail(row)} />,
+              <Button {...rowActionKind('read')} key="read" onClick={() => openDetail(row)} />,
               perms.canUpdate ? (
                 <Button {...rowActionKind('update')} key="edit" onClick={() => void openEdit(row)} />
               ) : null,
@@ -167,26 +187,25 @@ const ServiceAssetsPage: React.FC = () => {
         }}
       />
 
-      <Drawer
+      <ServiceAssetDetailDrawer
         open={detailOpen}
-        width={640}
-        title={detail?.asset_code}
-        onClose={() => setDetailOpen(false)}
-      >
-        {detail ? (
-          <>
-            <p>{t('app.kuaizhizao.afterSalesService.serviceAsset.field.customerName')}: {detail.customer_name}</p>
-            <p>{t('app.kuaizhizao.afterSalesService.serviceAsset.field.materialName')}: {detail.material_name || '-'}</p>
-            <p>{t('app.kuaizhizao.afterSalesService.serviceAsset.field.serialNumber')}: {detail.serial_number || '-'}</p>
-            <p>{t('app.kuaizhizao.afterSalesService.serviceAsset.field.installAddress')}: {detail.install_address || '-'}</p>
-            <p>
-              {t('app.kuaizhizao.afterSalesService.serviceAsset.field.warrantyEndAt')}:{' '}
-              {detail.warranty_end_at ? formatDateTime(detail.warranty_end_at) : '-'}
-            </p>
-            <p>{t('app.kuaizhizao.afterSalesService.serviceAsset.field.notes')}: {detail.notes || '-'}</p>
-          </>
-        ) : null}
-      </Drawer>
+        onClose={() => {
+          setDetailOpen(false);
+          setDetail(null);
+          setDetailError(null);
+        }}
+        record={detail}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryIdRef.current;
+          if (id != null) void loadDetail(id);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detail && perms.canUpdate), () => {
+          if (!detail) return;
+          void openEdit(detail);
+        })}
+      />
     </ListPageTemplate>
   );
 };

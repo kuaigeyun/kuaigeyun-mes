@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import type { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { Button, Form, Input, Modal, Select, Switch, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
@@ -10,7 +10,13 @@ import {
   UniTableStackedPrimaryCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
+import {
+  alignDescriptionColumns,
+  alignProColumns,
+  MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
+} from '../../sales-management/shared/documentFieldAlignment';
+import { LogisticsMasterDetailDrawer } from '../shared/LogisticsMasterDetailDrawer';
 import {
   renderLogisticsEnabledTag,
   renderLogisticsOwnershipTag,
@@ -24,6 +30,8 @@ const DriversPage: React.FC = () => {
   const [form] = Form.useForm();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Driver | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detail, setDetail] = useState<Driver | null>(null);
 
   const openCreate = () => {
     setEditing(null);
@@ -43,6 +51,9 @@ const DriversPage: React.FC = () => {
     if (editing) {
       await updateDriver(editing.id, values);
       message.success(t('common.updateSuccess'));
+      if (detail?.id === editing.id) {
+        setDetail({ ...detail, ...values });
+      }
     } else {
       await createDriver(values);
       message.success(t('common.createSuccess'));
@@ -50,6 +61,36 @@ const DriversPage: React.FC = () => {
     setOpen(false);
     actionRef.current?.reload();
   };
+
+  const openDetail = (row: Driver) => {
+    setDetail(row);
+    setDetailOpen(true);
+  };
+
+  const basicColumns = useMemo(
+    () =>
+      alignDescriptionColumns<Driver>(
+        [
+          { title: t('app.kuaizhizao.logistics.field.code'), dataIndex: 'code' },
+          { title: t('app.kuaizhizao.logistics.field.driverName'), dataIndex: 'name' },
+          { title: t('app.kuaizhizao.logistics.field.phone'), dataIndex: 'phone' },
+          { title: t('app.kuaizhizao.logistics.field.licenseNumber'), dataIndex: 'license_number' },
+          {
+            title: t('app.kuaizhizao.logistics.field.ownership'),
+            dataIndex: 'ownership',
+            render: (_, record) => renderLogisticsOwnershipTag(t, record.ownership),
+          },
+          {
+            title: t('app.kuaizhizao.logistics.field.enabled'),
+            dataIndex: 'is_enabled',
+            render: (_, record) => renderLogisticsEnabledTag(t, record.is_enabled),
+          },
+          { title: t('common.remark'), dataIndex: 'remark', span: 2 },
+        ] as ProDescriptionsItemProps<Driver>[],
+        MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
+      ),
+    [t],
+  );
 
   const columns: ProColumns<Driver>[] = useMemo(
     () =>
@@ -108,6 +149,13 @@ const DriversPage: React.FC = () => {
           hideInSearch: true,
           render: (_, row) => {
             const nodes: React.ReactNode[] = [];
+            if (perms.canRead) {
+              nodes.push(
+                <Button key="detail" {...rowActionKind('read')} type="link" size="small" onClick={() => openDetail(row)}>
+                  {t('common.detail')}
+                </Button>,
+              );
+            }
             if (perms.canUpdate) {
               nodes.push(
                 <Button key="edit" {...rowActionKind('update')} type="link" size="small" onClick={() => openEdit(row)}>
@@ -136,7 +184,7 @@ const DriversPage: React.FC = () => {
           },
         },
       ]),
-    [perms.canDelete, perms.canUpdate, t],
+    [perms.canDelete, perms.canRead, perms.canUpdate, t],
   );
 
   return (
@@ -165,7 +213,26 @@ const DriversPage: React.FC = () => {
           actionRef.current?.reload();
         }}
       />
-      <Modal open={open} title={editing ? t('common.edit') : t('common.create')} onCancel={() => setOpen(false)} onOk={handleSubmit} destroyOnClose>
+      <LogisticsMasterDetailDrawer
+        open={detailOpen}
+        onClose={() => {
+          setDetailOpen(false);
+          setDetail(null);
+        }}
+        record={detail}
+        title={`${t('app.kuaizhizao.logistics.detail.driverTitle')}${detail?.name ? ` - ${detail.name}` : ''}`}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detail && perms.canUpdate), () => {
+          if (detail) openEdit(detail);
+        })}
+        basicColumns={basicColumns}
+      />
+      <Modal
+        open={open}
+        title={editing ? t('common.edit') : t('common.create')}
+        onCancel={() => setOpen(false)}
+        onOk={handleSubmit}
+        destroyOnHidden
+      >
         <Form form={form} layout="vertical">
           {!editing ? (
             <Form.Item name="code" label={t('app.kuaizhizao.logistics.field.code')}>

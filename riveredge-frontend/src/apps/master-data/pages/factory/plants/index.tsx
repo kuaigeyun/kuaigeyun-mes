@@ -8,18 +8,15 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Typography } from 'antd';
+import { App, Button, List, Modal, Popconfirm, Space, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import {
-  detailDrawerDescriptionItems,
-  DetailDrawerTemplate,
-  DRAWER_CONFIG,
-  flushDrawerOpen,
-  ListPageTemplate,
-} from '../../../../../components/layout-templates';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { MasterDataDetailDrawer } from '../../shared/masterDataDetailDrawer';
 
 import { plantApi } from '../../../services/factory';
 import {
@@ -38,10 +35,6 @@ import type { Plant, PlantCreate } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { downloadFile } from '../../../../../utils';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
-import {
-  CustomFieldsDetailSection,
-  hasCustomFieldsDetailContent,
-} from '../../../../../components/custom-fields';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
@@ -73,7 +66,8 @@ const PlantsPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [plantDetail, setPlantDetail] = useState<Plant | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const plantDetailReqRef = useRef(0);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
 
   const {
     customFields,
@@ -131,27 +125,27 @@ const PlantsPage: React.FC = () => {
   /**
    * 处理打开详情
    */
-  const handleOpenDetail = async (record: Plant) => {
-    const req = ++plantDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setPlantDetail(record);
-      setDrawerVisible(true);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await plantApi.get(record.uuid);
-      if (plantDetailReqRef.current !== req) return;
+      const detail = await plantApi.get(uuid);
       setPlantDetail(detail);
       await loadFieldValuesForDetail(detail.id);
-    } catch (error: any) {
-      if (plantDetailReqRef.current === req) {
-        messageApi.error(error.message || t('app.master-data.plants.getDetailFailed'));
-      }
+    } catch (error) {
+      setPlantDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.master-data.plants.getDetailFailed')));
     } finally {
-      if (plantDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleOpenDetail = (record: Plant) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setPlantDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -160,6 +154,7 @@ const PlantsPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setPlantDetail(null);
+    setDetailError(null);
     resetDetailFieldValues();
   };
 
@@ -596,7 +591,6 @@ const PlantsPage: React.FC = () => {
         title: t('common.actions'),
         key: 'action',
         valueType: 'option',
-        width: 150,
         fixed: 'right' as const,
         render: (_, record) => (
         <Space>
@@ -732,23 +726,24 @@ const PlantsPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      <MasterDataDetailDrawer
         title={t('app.master-data.plants.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
+        detail={plantDetail}
+        detailColumns={detailColumns}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
-          plantDetail ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, plantDetail)} />
-          ) : null
-        }
-        linesTitle={t('app.master-data.customFields')}
-        lines={
-          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
-            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        customFields={customFields}
+        customFieldValues={customFieldValues}
+        extra={buildDetailDrawerEditExtra(t, Boolean(plantDetail), () => {
+          if (!plantDetail) return;
+          handleEdit(plantDetail);
+        })}
       />
 
       {/* 创建/编辑厂区 Modal */}

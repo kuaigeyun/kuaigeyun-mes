@@ -18,11 +18,14 @@ import {
   type ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Badge, Button, Card, Descriptions, Drawer, Input, Modal, Popconfirm, Space, Tag, Tooltip, Typography, message, theme } from 'antd';
+import { App, Badge, Button, Card, Input, Modal, Popconfirm, Space, Tag, Tooltip, Typography, message, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, ApiOutlined, LinkOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
+import { renderSystemActiveTag } from '../../utils/systemListPresentation';
 import {
   getIntegrationConfigList,
   getIntegrationConfigListAllMatching,
@@ -101,7 +104,7 @@ const IntegrationConfigListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
-  const integrationDetailReqRef = useRef(0);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [allIntegrations, setAllIntegrations] = useState<IntegrationConfig[]>([]); // 用于统计
   
@@ -118,6 +121,7 @@ const IntegrationConfigListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<IntegrationConfig | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   
   // 测试连接状态
   const [testingUuid, setTestingUuid] = useState<string | null>(null);
@@ -166,26 +170,26 @@ const IntegrationConfigListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: IntegrationConfig) => {
-    const req = ++integrationDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getIntegrationConfigByUuid(record.uuid);
-      if (integrationDetailReqRef.current !== req) return;
+      const detail = await getIntegrationConfigByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (integrationDetailReqRef.current === req) {
-        messageApi.error(error.message || t('pages.system.integrationConfigs.getDetailFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.integrationConfigs.getDetailFailed')));
     } finally {
-      if (integrationDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = (record: IntegrationConfig) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -614,11 +618,8 @@ const IntegrationConfigListPage: React.FC = () => {
     {
       title: t('pages.system.integrationConfigs.enableStatusLabel'),
       dataIndex: 'is_active',
-      render: (_, r) => (
-        <Tag color={r.is_active ? 'success' : 'default'}>
-          {r.is_active ? t('pages.system.integrationConfigs.enabled') : t('pages.system.integrationConfigs.disabled')}
-        </Tag>
-      ),
+      render: (_, r) =>
+        renderSystemActiveTag(t, r.is_active, 'pages.system.integrationConfigs.enabled', 'pages.system.integrationConfigs.disabled'),
     },
     {
       title: t('pages.system.integrationConfigs.lastConnectionTime'),
@@ -855,15 +856,26 @@ const IntegrationConfigListPage: React.FC = () => {
       />
 
       {/* 查看详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('pages.system.integrationConfigs.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={detailData ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
-          ) : null}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryUuidRef.current;
+          if (id) void loadDetail(id);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detailData), () => {
+          if (!detailData) return;
+          void handleEdit(detailData);
+        })}
+        detail={detailData}
+        detailColumns={detailColumns}
       />
     </>
   );

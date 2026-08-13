@@ -33,9 +33,8 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { openPrintHtmlWindow } from '../../../../../utils/printResponseHelpers';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { formatQuantity, formatDateTimeBySiteSetting } from '../../../../../utils/format';
-import { ListPageTemplate, FormModalTemplate, flushDrawerOpen, MODAL_CONFIG, DRAWER_CONFIG, DetailDrawerSection, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates';
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../../../../utils/modalEventIsolation';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 import { bomApi, materialApi } from '../../../services/material';
 import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate, BOMBatchImport, BOMBatchImportItem, BOMVersionCreate, BOMVersionCompare, BOMVersionCompareResult, BOMHierarchy, BOMHierarchyItem, BOMQuantityResult, BOMQuantityComponent, BOMRelationImportEntity, BOMRelationImportWriteStrategy, BOMWhereUsedResult } from '../../../types/material';
 import { testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
@@ -68,10 +67,14 @@ import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
   CustomFieldsFormSection,
-  CustomFieldsDetailSection,
-  hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { masterCrudCreatedUpdatedColumns } from '../../../utils/materialListCore';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import {
+  alignDescriptionColumns,
+  MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
+} from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { ProcessMasterDetailDrawer } from '../../process/shared/processMasterDetailDrawer';
 import { isVariantSkuMaterial } from '../../../components/MaterialVariantCombinationsTable';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
@@ -297,50 +300,20 @@ const BOM_DETAIL_LINE_ONLY_DATA_INDEX = new Set<string>([
   'remark',
 ]);
 
-/**
- * 基本信息字段顺序：标识与主物料 → 审核状态 → 有效期与启用 → 配置/替代摘要 → 说明 → 审核痕迹 → 时间戳
- */
-const BOM_DETAIL_BASIC_FIELD_ORDER: string[] = [
-  'bomCode',
-  'version',
-  'materialId',
-  'approvalStatus',
-  'effectiveDate',
-  'expiryDate',
-  'isActive',
-  'isConfigurable',
-  'alternativeGroupId',
-  'description',
-  'approvedBy',
-  'approvedAt',
-  'approvalComment',
-  'createdAt',
-  'updatedAt',
-];
-
 function orderBomDetailBasicColumns(cols: ProDescriptionsItemProps<BOM>[]): ProDescriptionsItemProps<BOM>[] {
   const filtered = cols.filter(
     (c) => c.dataIndex != null && !BOM_DETAIL_LINE_ONLY_DATA_INDEX.has(String(c.dataIndex)),
   );
-  const map = new Map(filtered.map((c) => [String(c.dataIndex), c]));
-  const ordered: ProDescriptionsItemProps<BOM>[] = [];
-  for (const key of BOM_DETAIL_BASIC_FIELD_ORDER) {
-    const col = map.get(key);
-    if (col) {
-      ordered.push(col);
-      map.delete(key);
-    }
-  }
-  for (const col of map.values()) {
-    ordered.push(col);
-  }
-  return ordered.map((col) => {
+  return alignDescriptionColumns(
+    filtered as ProDescriptionsItemProps<Record<string, unknown>>[],
+    MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
+  ).map((col) => {
     const di = String(col.dataIndex ?? '');
     if (di === 'description' || di === 'approvalComment') {
-      return { ...col, span: 3 };
+      return { ...col, span: 2 };
     }
     return col;
-  });
+  }) as ProDescriptionsItemProps<BOM>[];
 }
 
 /**
@@ -372,7 +345,6 @@ const BOMPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
-  const bomDetailReqRef = useRef(0);
   const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
@@ -382,6 +354,8 @@ const BOMPage: React.FC = () => {
   const [bomDetail, setBomDetail] = useState<BOM | null>(null);
   const [bomItems, setBomItems] = useState<BOM[]>([]); // 所有子物料列表
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryKeyRef = useRef<{ materialId: number; version: string } | null>(null);
   
   // Modal 相关状态（创建/编辑BOM）
   const [modalVisible, setModalVisible] = useState(false);
@@ -1221,30 +1195,21 @@ const BOMPage: React.FC = () => {
     });
   };
 
-  /**
-   * 处理打开详情
-   */
-  const handleOpenDetail = async (record: BOM) => {
-    const req = ++bomDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setCurrentBOMUuid(record.uuid);
-      setDrawerVisible(true);
-      setDetailLoading(true);
-      setHierarchyLoading(true);
-      setBomDetail(null);
-      setBomItems([]);
-      setHierarchyData(null);
-      setHierarchyTreeData([]);
-      setExpandedKeys([]);
-    });
+  const loadDetail = async (materialId: number, version: string, uuid?: string) => {
+    setDetailLoading(true);
+    setHierarchyLoading(true);
+    setDetailError(null);
+    setBomDetail(null);
+    setBomItems([]);
+    setHierarchyData(null);
+    setHierarchyTreeData([]);
+    setExpandedKeys([]);
+    if (uuid) setCurrentBOMUuid(uuid);
     try {
-      // 获取整个BOM结构（所有子物料）
-      const allBomItems = await bomApi.getByMaterial(record.materialId, record.version, false);
-
-      if (bomDetailReqRef.current !== req) return;
+      const allBomItems = await bomApi.getByMaterial(materialId, version, false);
 
       if (!allBomItems || allBomItems.length === 0) {
-        messageApi.error(t('app.master-data.bom.bomDataNotFound'));
+        setDetailError(t('app.master-data.bom.bomDataNotFound'));
         return;
       }
       
@@ -1257,9 +1222,7 @@ const BOMPage: React.FC = () => {
       }
 
       // 并行加载层级结构
-      const hierarchy = await bomApi.getHierarchy(record.materialId, record.version).catch(() => null);
-
-      if (bomDetailReqRef.current !== req) return;
+      const hierarchy = await bomApi.getHierarchy(materialId, version).catch(() => null);
       
       // 处理层级结构数据
       if (hierarchy) {
@@ -1335,16 +1298,20 @@ const BOMPage: React.FC = () => {
         setHierarchyTreeData([]);
         setExpandedKeys([]);
       }
-    } catch (error: any) {
-      if (bomDetailReqRef.current === req) {
-        messageApi.error(error.message || t('app.master-data.bom.getDetailFailed'));
-      }
+    } catch (error) {
+      setBomDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.master-data.bom.getDetailFailed')));
     } finally {
-      if (bomDetailReqRef.current === req) {
-        setDetailLoading(false);
-        setHierarchyLoading(false);
-      }
+      setDetailLoading(false);
+      setHierarchyLoading(false);
     }
+  };
+
+  const handleOpenDetail = (record: BOM) => {
+    detailRetryKeyRef.current = { materialId: record.materialId, version: record.version };
+    setDrawerVisible(true);
+    setDetailError(null);
+    void loadDetail(record.materialId, record.version, record.uuid);
   };
 
   /**
@@ -1353,6 +1320,7 @@ const BOMPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setCurrentBOMUuid(null);
+    setDetailError(null);
     setBomDetail(null);
     setBomItems([]);
     setHierarchyData(null);
@@ -2728,7 +2696,6 @@ const BOMPage: React.FC = () => {
     {
       title: t('app.master-data.bom.actionTitle'),
       valueType: 'option',
-      width: 300,
       fixed: 'right',
       /** 主行直出详情/编辑/设计/审核；页面自管「更多」由 uni-action 钉住，不再二次折叠 */
       uniActionRenderOptions: { directMax: 5 },
@@ -3527,25 +3494,28 @@ const BOMPage: React.FC = () => {
       />
       </ListPageTemplate>
 
-      {/* 详情 Drawer：基本信息（三列）→ 子物料列表 → 层级结构 */}
-      <UniDetail
+      <ProcessMasterDetailDrawer
         title={t('app.master-data.bom.bomDetailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         loading={detailLoading}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        error={detailError}
+        onRetry={() => {
+          const key = detailRetryKeyRef.current;
+          if (key) void loadDetail(key.materialId, key.version);
+        }}
+        detail={bomDetail}
+        detailColumns={orderBomDetailBasicColumns(detailColumns)}
+        customFields={bomListCustomFields}
+        customFieldValues={bomDetailCustomFieldValues}
         extra={
           bomDetail ? (
             <Space>
-              <Button
-                size="small"
-                onClick={() => handleOpenWhereUsed(bomDetail.materialId)}
-              >
+              <Button onClick={() => handleOpenWhereUsed(bomDetail.materialId)}>
                 {t('app.master-data.bom.whereUsed')}
               </Button>
               {bomPerms.canPrint ? (
                 <Button
-                  size="small"
                   icon={<PrinterOutlined />}
                   onClick={() => handlePrintBom(bomDetail.materialId, bomDetail.version)}
                 >
@@ -3555,18 +3525,9 @@ const BOMPage: React.FC = () => {
             </Space>
           ) : null
         }
-        basic={
-          bomDetail ? (
-            <Descriptions
-              column={3}
-              items={detailDrawerDescriptionItems(orderBomDetailBasicColumns(detailColumns) as any, bomDetail)}
-            />
-          ) : null
-        }
-        collaborationTitle={t('app.master-data.bom.childMaterialListWithCount', { count: bomItems.length })}
-        collaborationVisible={bomItems.length > 0}
-        collaboration={
-          bomDetail && bomItems.length > 0 ? (
+        supplementaryTitle={t('app.master-data.bom.childMaterialListWithCount', { count: bomItems.length })}
+        supplementary={
+          bomItems.length > 0 ? (
             <Table<BOM>
               dataSource={bomItems}
               rowKey="uuid"
@@ -3575,20 +3536,11 @@ const BOMPage: React.FC = () => {
               scroll={{ x: 'max-content' }}
               columns={bomDetailChildItemsColumns}
             />
-          ) : null
+          ) : undefined
         }
         linesTitle={t('app.master-data.bom.hierarchyStructure')}
         lines={
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {hasCustomFieldsDetailContent(bomListCustomFields, bomDetailCustomFieldValues) ? (
-              <DetailDrawerSection title={t('app.master-data.customFields')}>
-                <CustomFieldsDetailSection
-                  customFields={bomListCustomFields}
-                  customFieldValues={bomDetailCustomFieldValues}
-                />
-              </DetailDrawerSection>
-            ) : null}
-            <Spin spinning={hierarchyLoading}>
+          <Spin spinning={hierarchyLoading}>
             {hierarchyTreeData.length === 0 && !hierarchyLoading ? (
               <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
                 {t('app.master-data.bom.noHierarchyData')}
@@ -3633,7 +3585,6 @@ const BOMPage: React.FC = () => {
               </div>
             )}
           </Spin>
-          </div>
         }
       />
 

@@ -16,7 +16,7 @@ import { PlusOutlined, EyeOutlined, PlayCircleOutlined, DeleteOutlined } from '@
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, detailDrawerDescriptionItems, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, detailDrawerDescriptionItems, detailDrawerBasicColumn, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { inventoryTransferApi } from '../../../services/inventory-transfer';
 import { getInventoryTransferLifecycle } from '../../../utils/inventoryTransferLifecycle';
@@ -30,7 +30,7 @@ import { normalizeDocumentAttachments } from '../../../utils/documentAttachments
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import {formatDateTime, formatQuantity} from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { renderInventoryTransferModeMarkerTag } from '../shared/warehouseMarkerTags';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -594,8 +594,8 @@ const InventoryTransferPage: React.FC = () => {
       .filter((l: any) => !storageAreaId || l.storageAreaId === storageAreaId)
       .map((l: any) => ({ label: `${l.code} - ${l.name}`, value: l.id }));
 
-  const detailBasicColumns: ProDescriptionsItemProps<InventoryTransfer>[] = useMemo(
-    () => [
+  const detailBasicColumns = useMemo(
+    () => alignDescriptionColumns([
       { title: t('app.kuaizhizao.warehouseReports.colTransferCode'), dataIndex: 'code' },
       { title: t('app.kuaizhizao.warehouseReports.colFromWarehouse'), dataIndex: 'from_warehouse_name' },
       { title: t('app.kuaizhizao.warehouseReports.colToWarehouse'), dataIndex: 'to_warehouse_name' },
@@ -622,8 +622,8 @@ const InventoryTransferPage: React.FC = () => {
         render: (_dom, entity) => `¥${Number(entity.total_amount ?? 0).toFixed(2)}`,
       },
       { title: t('app.kuaizhizao.inventoryTransfer.formTransferReason'), dataIndex: 'transfer_reason' },
-      { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 2 },
-    ],
+      { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 3 },
+    ]),
     [t],
   );
 
@@ -1242,7 +1242,7 @@ const InventoryTransferPage: React.FC = () => {
         basic={
           currentTransfer ? (
             <Descriptions
-              column={2}
+              column={detailDrawerBasicColumn(false)}
               size="small"
               items={detailDrawerDescriptionItems(detailBasicColumns, currentTransfer)}
             />

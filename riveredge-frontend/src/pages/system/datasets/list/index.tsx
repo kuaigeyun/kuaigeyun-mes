@@ -17,14 +17,15 @@ import {
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Modal, Badge, Table, Descriptions } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, Badge, Table } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined, CopyOutlined, HighlightOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../components/uni-table';
-import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { DetailDrawerActions, ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import {
   getDatasetList,
   getDatasetByUuid,
@@ -57,7 +58,6 @@ const DatasetListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
-  const datasetDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑数据集）
@@ -73,6 +73,8 @@ const DatasetListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<Dataset | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   
   // 查询执行状态
   const [executeVisible, setExecuteVisible] = useState(false);
@@ -178,26 +180,26 @@ const DatasetListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: Dataset) => {
-    const req = ++datasetDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getDatasetByUuid(record.uuid);
-      if (datasetDetailReqRef.current !== req) return;
+      const detail = await getDatasetByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (datasetDetailReqRef.current === req) {
-        messageApi.error(error.message || t('pages.system.datasets.getDetailFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.datasets.getDetailFailed')));
     } finally {
-      if (datasetDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = async (record: Dataset) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   const datasetDetailDescColumns = useMemo<ProDescriptionsItemProps<Dataset>[]>(
@@ -257,11 +259,8 @@ const DatasetListPage: React.FC = () => {
       {
         title: t('pages.system.datasets.columnEnabled'),
         dataIndex: 'is_active',
-        render: (_, record) => (
-          <Tag color={record.is_active ? 'success' : 'default'}>
-            {record.is_active ? t('pages.system.datasets.enabled') : t('pages.system.datasets.disabled')}
-          </Tag>
-        ),
+        render: (_, record) =>
+          renderSystemActiveTag(t, record.is_active, 'pages.system.datasets.enabled', 'pages.system.datasets.disabled'),
       },
       {
         title: t('pages.system.datasets.columnLastExecuted'),
@@ -883,51 +882,50 @@ const DatasetListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('pages.system.datasets.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
+        detail={detailData}
+        detailColumns={datasetDetailDescColumns}
         loading={detailLoading}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
         extra={
-          detailData && (
-            <Space>
-              <Button
-                type="primary"
-                icon={<EditOutlined />}
-                onClick={() => {
-                  setDrawerVisible(false);
-                  handleEdit(detailData);
-                }}
-              >
-                {t('pages.system.datasets.edit')}
-              </Button>
-              <Button
-                icon={<PlayCircleOutlined />}
-                loading={executingUuid === detailData.uuid}
-                onClick={() => handleExecute(detailData)}
-              >
-                {t('pages.system.datasets.executeQuery')}
-              </Button>
-              <Popconfirm
-                title={t('pages.system.datasets.confirmDelete')}
-                onConfirm={() => {
-                  handleDelete(detailData);
-                  setDrawerVisible(false);
-                }}
-                okText={t('common.confirm')}
-                cancelText={t('common.cancel')}
-              >
-                <Button danger icon={<DeleteOutlined />}>
-                  {t('pages.system.datasets.delete')}
-                </Button>
-              </Popconfirm>
-            </Space>
-          )
-        }
-        basic={
           detailData ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(datasetDetailDescColumns, detailData)} />
+            <DetailDrawerActions
+              items={[
+                {
+                  key: 'exec',
+                  visible: true,
+                  render: (
+                    <Button
+                      icon={<PlayCircleOutlined />}
+                      loading={executingUuid === detailData.uuid}
+                      onClick={() => handleExecute(detailData)}
+                    >
+                      {t('pages.system.datasets.executeQuery')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'edit',
+                  visible: true,
+                  render: (
+                    <Button {...rowActionKind('update')} icon={<EditOutlined />} onClick={() => handleEdit(detailData)}>
+                      {t('pages.system.datasets.edit')}
+                    </Button>
+                  ),
+                },
+              ]}
+            />
           ) : null
         }
       />

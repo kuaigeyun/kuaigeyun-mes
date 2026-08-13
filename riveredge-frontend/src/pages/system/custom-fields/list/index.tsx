@@ -14,12 +14,12 @@ import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProFormItem, ProFormDependency } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Badge, Button, Col, Descriptions, Form, Input, Popconfirm, Row, Space, Spin, Tag, Tooltip, theme } from 'antd';
+import { App, Badge, Button, Col, Form, Input, Popconfirm, Row, Space, Spin, Tooltip, theme } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SearchOutlined, DatabaseOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
 import { CustomFieldJsonEditor, CustomFieldJsonModeSegmented, type CustomFieldJsonEditorMode } from '../../../../components/custom-fields/CustomFieldJsonEditor';
 import { CustomFieldFormulaConfigEditor } from '../../../../components/custom-fields/CustomFieldFormulaConfigEditor';
 import { normalizeJsonFieldValue, isFlatJsonObject } from '../../../../components/custom-fields/customFieldJsonUtils';
@@ -37,7 +37,8 @@ import {
   getAssociatedDisplayModeDefault,
   type AssociatedDisplayMode,
 } from '../../../../components/custom-fields/customFieldAssociatedDisplayMode';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import {
   getCustomFieldList,
   getCustomFieldByUuid,
@@ -89,7 +90,6 @@ const CustomFieldListPage: React.FC = () => {
   const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
-  const customFieldDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // 功能页面选择状态（左右结构）
@@ -112,6 +112,8 @@ const CustomFieldListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<CustomField | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
 
   // 页面配置状态
   const [pageConfigs, setPageConfigs] = useState<CustomFieldPageConfig[]>([]);
@@ -323,26 +325,26 @@ const CustomFieldListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: CustomField) => {
-    const req = ++customFieldDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getCustomFieldByUuid(record.uuid);
-      if (customFieldDetailReqRef.current !== req) return;
+      const detail = await getCustomFieldByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (customFieldDetailReqRef.current === req) {
-        messageApi.error(error.message || t('field.customField.fetchDetailFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('field.customField.fetchDetailFailed')));
     } finally {
-      if (customFieldDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = async (record: CustomField) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -1128,39 +1130,24 @@ const CustomFieldListPage: React.FC = () => {
     {
       title: t('field.customField.isRequired'),
       dataIndex: 'is_required',
-      render: (_: any, entity: CustomField) => (
-        <Tag color={entity?.is_required ? 'success' : 'default'}>
-          {entity?.is_required ? t('field.customField.yes') : t('field.customField.no')}
-        </Tag>
-      ),
+      render: (_: any, entity: CustomField) => renderSystemYesNoTag(t, entity?.is_required),
     },
     {
       title: t('field.customField.isSearchable'),
       dataIndex: 'is_searchable',
-      render: (_: any, entity: CustomField) => (
-        <Tag color={entity?.is_searchable ? 'success' : 'default'}>
-          {entity?.is_searchable ? t('field.customField.yes') : t('field.customField.no')}
-        </Tag>
-      ),
+      render: (_: any, entity: CustomField) => renderSystemYesNoTag(t, entity?.is_searchable),
     },
     {
       title: t('field.customField.isSortable'),
       dataIndex: 'is_sortable',
-      render: (_: any, entity: CustomField) => (
-        <Tag color={entity?.is_sortable ? 'success' : 'default'}>
-          {entity?.is_sortable ? t('field.customField.yes') : t('field.customField.no')}
-        </Tag>
-      ),
+      render: (_: any, entity: CustomField) => renderSystemYesNoTag(t, entity?.is_sortable),
     },
     { title: t('field.customField.sortOrderLabel'), dataIndex: 'sort_order' },
     {
       title: t('field.customField.status'),
       dataIndex: 'is_active',
-      render: (_: any, entity: CustomField) => (
-        <Tag color={entity?.is_active ? 'success' : 'default'}>
-          {entity?.is_active ? t('field.customField.enabled') : t('field.customField.disabled')}
-        </Tag>
-      ),
+      render: (_: any, entity: CustomField) =>
+        renderSystemActiveTag(t, entity?.is_active, 'field.customField.enabled', 'field.customField.disabled'),
     },
     { title: t('field.customField.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' as const },
     { title: t('field.customField.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' as const },
@@ -1639,15 +1626,22 @@ const CustomFieldListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('field.customField.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
+        detail={detailData}
+        detailColumns={detailColumns}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={detailData ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
-          ) : null}
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
       />
     </>
   );

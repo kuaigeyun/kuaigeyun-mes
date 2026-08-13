@@ -12,6 +12,7 @@ class UserDataScopeBinding(BaseModel):
     示例：
     - dimension=outsourced_unit, scope_code=供应商主数据 code → 外协维保单 outsourced_unit_code
     - dimension=supplier, scope_code=... → 将来 SRM 采购订单 supplier_code
+    - dimension=manufacturer, scope_code=HaoligoManufacturer.code → 设备验收单 manufacturer_code
     """
 
     id = fields.IntField(pk=True, description="主键")

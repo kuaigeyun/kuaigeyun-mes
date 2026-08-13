@@ -659,11 +659,41 @@ def _validate_inspection_template_conduct(
     )
 
 
+def _assert_unqualified_qty_when_steps_fail(
+    inspection: Any,
+    template_attr: str,
+    inspection_data: Dict[str, Any],
+    unqualified_quantity: Any,
+) -> None:
+    from apps.kuaizhizao.services.inspection_step_spec import assert_unqualified_qty_when_steps_fail
+
+    assert_unqualified_qty_when_steps_fail(
+        getattr(inspection, template_attr, None),
+        inspection_data,
+        unqualified_quantity,
+    )
+
+
+def _resolve_conduct_inspector_id(inspection_data: Dict[str, Any], inspected_by: int) -> int:
+    """开展检验：优先表单检验人员，缺省为当前操作人。"""
+    raw = inspection_data.get("inspector_id")
+    if raw is None or raw == "":
+        return inspected_by
+    try:
+        inspector_id = int(raw)
+    except (TypeError, ValueError):
+        return inspected_by
+    return inspector_id if inspector_id > 0 else inspected_by
+
+
 _CONDUCT_PAYLOAD_SKIP_KEYS = frozenset({
     "item_results",
     "conduct_step_results",
     "qualified_quantity",
     "unqualified_quantity",
+    "inspector_id",
+    "inspector_name",
+    "inspector_uuid",
     # 业务时刻仅由服务端 resolve_business_datetime 写入，禁止请求体覆盖
     "inspection_time",
     "review_time",
@@ -982,7 +1012,9 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 raise NotFoundError(f"来料检验单不存在: {inspection_id}")
             assert_quality_inspection_capability(inspection_model, "conduct")
 
-            inspector_name = await self.get_user_name(inspected_by)
+            inspector_id = _resolve_conduct_inspector_id(inspection_data, inspected_by)
+            inspector_name = await self.get_user_name(inspector_id)
+            operator_name = await self.get_user_name(inspected_by)
 
             # 计算合格/不合格数量
             qualified_quantity = inspection_data.get('qualified_quantity', 0)
@@ -990,6 +1022,9 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
 
             if qualified_quantity + unqualified_quantity != inspection_model.inspection_quantity:
                 raise ValidationError("合格数量和不合格数量之和必须等于检验数量")
+            _assert_unqualified_qty_when_steps_fail(
+                inspection_model, "other_checks", inspection_data, unqualified_quantity
+            )
 
             quality_status = "合格" if unqualified_quantity == 0 else "不合格"
 
@@ -1005,10 +1040,10 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 "unqualified_quantity": unqualified_quantity,
                 "inspection_result": "已检验",
                 "quality_status": quality_status,
-                "inspector_id": inspected_by,
+                "inspector_id": inspector_id,
                 "inspector_name": inspector_name,
                 "updated_by": inspected_by,
-                "updated_by_name": inspector_name,
+                "updated_by_name": operator_name,
                 **conduct_payload,
             }
             conduct_update.update(
@@ -1016,7 +1051,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     tenant_id,
                     "incoming_inspection",
                     quality_status=quality_status,
-                    inspected_by=inspected_by,
+                    inspected_by=inspector_id,
                     inspector_name=inspector_name,
                 )
             )
@@ -1455,6 +1490,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             create_kwargs: Dict[str, Any] = {
                 "tenant_id": tenant_id,
                 "inspection_code": code,
+                "source_type": "purchase_receipt",
                 "purchase_receipt_id": purchase_receipt_id,
                 "purchase_receipt_code": receipt.receipt_code,
                 "supplier_id": receipt.supplier_id,
@@ -2812,7 +2848,9 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 raise NotFoundError(f"过程检验单不存在: {inspection_id}")
             assert_quality_inspection_capability(inspection_model, "conduct")
 
-            inspector_name = await self.get_user_name(inspected_by)
+            inspector_id = _resolve_conduct_inspector_id(inspection_data, inspected_by)
+            inspector_name = await self.get_user_name(inspector_id)
+            operator_name = await self.get_user_name(inspected_by)
 
             # 计算合格/不合格数量
             qualified_quantity = inspection_data.get('qualified_quantity', 0)
@@ -2820,6 +2858,9 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
 
             if qualified_quantity + unqualified_quantity != inspection_model.inspection_quantity:
                 raise ValidationError("合格数量和不合格数量之和必须等于检验数量")
+            _assert_unqualified_qty_when_steps_fail(
+                inspection_model, "quality_characteristics", inspection_data, unqualified_quantity
+            )
 
             quality_status = "合格" if unqualified_quantity == 0 else "不合格"
 
@@ -2832,10 +2873,10 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 "unqualified_quantity": unqualified_quantity,
                 "inspection_result": "已检验",
                 "quality_status": quality_status,
-                "inspector_id": inspected_by,
+                "inspector_id": inspector_id,
                 "inspector_name": inspector_name,
                 "updated_by": inspected_by,
-                "updated_by_name": inspector_name,
+                "updated_by_name": operator_name,
                 **conduct_payload,
             }
             conduct_update.update(
@@ -2843,7 +2884,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                     tenant_id,
                     "process_inspection",
                     quality_status=quality_status,
-                    inspected_by=inspected_by,
+                    inspected_by=inspector_id,
                     inspector_name=inspector_name,
                 )
             )
@@ -4101,7 +4142,9 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 raise NotFoundError(f"成品检验单不存在: {inspection_id}")
             assert_quality_inspection_capability(inspection_model, "conduct")
 
-            inspector_name = await self.get_user_name(inspected_by)
+            inspector_id = _resolve_conduct_inspector_id(inspection_data, inspected_by)
+            inspector_name = await self.get_user_name(inspector_id)
+            operator_name = await self.get_user_name(inspected_by)
 
             # 计算合格/不合格数量
             qualified_quantity = inspection_data.get('qualified_quantity', 0)
@@ -4109,6 +4152,9 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
 
             if qualified_quantity + unqualified_quantity != inspection_model.inspection_quantity:
                 raise ValidationError("合格数量和不合格数量之和必须等于检验数量")
+            _assert_unqualified_qty_when_steps_fail(
+                inspection_model, "other_checks", inspection_data, unqualified_quantity
+            )
 
             quality_status = "合格" if unqualified_quantity == 0 else "不合格"
 
@@ -4121,10 +4167,10 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 "unqualified_quantity": unqualified_quantity,
                 "inspection_result": "已检验",
                 "quality_status": quality_status,
-                "inspector_id": inspected_by,
+                "inspector_id": inspector_id,
                 "inspector_name": inspector_name,
                 "updated_by": inspected_by,
-                "updated_by_name": inspector_name,
+                "updated_by_name": operator_name,
                 **conduct_payload,
             }
             conduct_update.update(
@@ -4132,7 +4178,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                     tenant_id,
                     "finished_goods_inspection",
                     quality_status=quality_status,
-                    inspected_by=inspected_by,
+                    inspected_by=inspector_id,
                     inspector_name=inspector_name,
                 )
             )

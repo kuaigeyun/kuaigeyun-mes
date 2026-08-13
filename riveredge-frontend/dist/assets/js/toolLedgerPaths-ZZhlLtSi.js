@@ -1,0 +1,1 @@
+const t="/apps/kuaizhizao/equipment-management/tool-ledger";function a(e,n){const o=`${t}/${e}`;return n?`${o}?tab=${encodeURIComponent(n)}`:o}function i(e){return e&&["info","maintenances","calibrations","ops"].includes(e)?e:"info"}export{t as K,a as b,i as r};

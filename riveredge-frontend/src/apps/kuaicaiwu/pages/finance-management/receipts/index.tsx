@@ -6,7 +6,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Drawer, Descriptions, Spin, Alert, Table, Empty, Form } from 'antd';
+import { App, Button, Modal, Typography, Spin, Alert, Table, Empty, Form } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
@@ -15,7 +15,10 @@ import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { DetailDrawerActions, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { FinanceVoucherDetailDrawer } from '../shared/FinanceVoucherDetailDrawer';
+import { financeColFull, financeColHalf, financeFormGridProps } from '../../../utils/financeFormLayout';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
@@ -38,7 +41,6 @@ import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '.
 import {
   buildVoucherStatusEnum,
   formatPaymentMethod,
-  formatReceiptSettlementType,
   getPaymentMethodOptions,
   getReceiptSettlementTypeOptions,
   assertBankAccountForPaymentMethod,
@@ -90,7 +92,9 @@ const ReceiptsPage: React.FC = () => {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [detailRecord, setDetailRecord] = useState<ReceiptVoucher | null>(null);
+  const detailRetryIdRef = useRef<number | null>(null);
   const { message: messageApi } = App.useApp();
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -100,14 +104,6 @@ const ReceiptsPage: React.FC = () => {
 
   const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
   const receiptSettlementTypeOptions = useMemo(() => getReceiptSettlementTypeOptions(t), [t]);
-
-  const formatVoucherStatus = useCallback(
-    (status: string) => {
-      const enumMap = buildVoucherStatusEnum(t);
-      return (enumMap as Record<string, { text: string }>)[status]?.text ?? status;
-    },
-    [t],
-  );
 
   useEffect(() => {
     const load = async () => {
@@ -132,18 +128,36 @@ const ReceiptsPage: React.FC = () => {
     return acc ? formatBankAccountOptionLabel(acc) : `#${id}`;
   };
 
-  const openDetail = async (record: ReceiptVoucher) => {
-    setDetailOpen(true);
+  const loadDetail = useCallback(async (id: number) => {
     setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await receiptService.getReceipt(record.id);
-      setDetailRecord(detail);
-    } catch (error: any) {
-      messageApi.error(error.message || t(`${R}.loadDetailFailed`));
-      setDetailOpen(false);
+      setDetailRecord(await receiptService.getReceipt(id));
+    } catch (error) {
+      setDetailRecord(null);
+      setDetailError(getApiErrorMessage(error, t(`${R}.loadDetailFailed`)));
     } finally {
       setDetailLoading(false);
     }
+  }, [t]);
+
+  const openDetail = useCallback((record: ReceiptVoucher) => {
+    detailRetryIdRef.current = record.id;
+    setDetailOpen(true);
+    setDetailRecord(null);
+    setDetailError(null);
+    void loadDetail(record.id);
+  }, [loadDetail]);
+
+  const closeDetail = () => {
+    setDetailOpen(false);
+    setDetailRecord(null);
+    setDetailError(null);
+  };
+
+  const refreshOpenDetail = () => {
+    const id = detailRetryIdRef.current;
+    if (detailOpen && id != null) void loadDetail(id);
   };
 
   const handleCreate = async (values: any) => {
@@ -327,6 +341,7 @@ const ReceiptsPage: React.FC = () => {
           await receiptService.confirmReceipt(record.id);
           messageApi.success(t(`${R}.confirmSuccess`));
           actionRef.current?.reload();
+          refreshOpenDetail();
         } catch (e: any) {
           messageApi.error(e?.message || t('common.operationFailed'));
         }
@@ -343,6 +358,7 @@ const ReceiptsPage: React.FC = () => {
           await receiptService.cancelReceipt(record.id);
           messageApi.success(t(`${R}.voidSuccess`));
           actionRef.current?.reload();
+          refreshOpenDetail();
         } catch (e: any) {
           messageApi.error(e?.message || t('common.operationFailed'));
         }
@@ -360,6 +376,7 @@ const ReceiptsPage: React.FC = () => {
           await receiptService.deleteReceipt(record.id);
           messageApi.success(t('common.deleteSuccess'));
           actionRef.current?.reload();
+          if (detailRetryIdRef.current === record.id) closeDetail();
         } catch (e: any) {
           messageApi.error(e?.message || t('common.operationFailed'));
         }
@@ -839,39 +856,44 @@ const ReceiptsPage: React.FC = () => {
                 submitter={false}
                 onFinish={handlePullCreateSubmit}
                 layout="vertical"
+                {...financeFormGridProps}
               >
-                <ProFormText name="source_code" label={t(`${R}.pullCol.receivableCode`)} readonly />
-                <ProFormText name="customer_name" label={t('app.kuaicaiwu.common.customer')} readonly />
+                <ProFormText name="source_code" label={t(`${R}.pullCol.receivableCode`)} readonly colProps={financeColHalf} />
+                <ProFormText name="customer_name" label={t('app.kuaicaiwu.common.customer')} readonly colProps={financeColHalf} />
                 <ProFormMoney
                   name="total_amount"
                   label={t(`${R}.col.amount`)}
                   min={0.01}
                   rules={[{ required: true, message: t(`${R}.col.amount`) }]}
+                  colProps={financeColHalf}
                 />
                 <ProFormDatePicker
                   name="receipt_date"
                   label={t(`${R}.col.receiptDate`)}
                   rules={[{ required: true }]}
                   fieldProps={{ style: { width: '100%' } }}
+                  colProps={financeColHalf}
                 />
                 <ProFormSelect
                   name="payment_method"
                   label={t(`${R}.col.paymentMethod`)}
                   options={paymentMethodOptions}
                   rules={[{ required: true, message: t(`${R}.selectPaymentMethod`) }]}
+                  colProps={financeColHalf}
                 />
                 <ProFormSelect
                   name="settlement_type"
                   label={t(`${R}.settlementType.label`)}
                   options={receiptSettlementTypeOptions}
                   initialValue="normal"
+                  colProps={financeColHalf}
                 />
                 <LedgerAccountFormFields
                   accounts={bankAccounts}
                   accountLabel={t(`${R}.bankAccount`)}
                   noteLabel={t(`${R}.bankAccountNote`)}
                 />
-                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} />
+                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} colProps={financeColFull} />
                 <DocumentAttachmentsField category="receipt_attachments" />
               </ProForm>
             ) : null}
@@ -884,7 +906,8 @@ const ReceiptsPage: React.FC = () => {
         open={createModalVisible}
         onOpenChange={setCreateModalVisible}
         onFinish={handleCreate}
-        width={480}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        {...financeFormGridProps}
       >
         <ProFormSelect
           name="customer_id"
@@ -893,64 +916,116 @@ const ReceiptsPage: React.FC = () => {
           rules={[{ required: true, message: t('app.kuaicaiwu.common.selectCustomer') }]}
           placeholder={t('app.kuaicaiwu.common.selectCustomer')}
           showSearch
+          colProps={financeColHalf}
         />
-        <ProFormMoney name="total_amount" label={t(`${R}.col.amount`)} min={0.01} rules={[{ required: true }]} />
-        <ProFormDatePicker name="receipt_date" label={t(`${R}.col.receiptDate`)} rules={[{ required: true }]} initialValue={dayjs()} fieldProps={{ style: { width: '100%' } }} />
+        <ProFormMoney
+          name="total_amount"
+          label={t(`${R}.col.amount`)}
+          min={0.01}
+          rules={[{ required: true }]}
+          colProps={financeColHalf}
+        />
+        <ProFormDatePicker
+          name="receipt_date"
+          label={t(`${R}.col.receiptDate`)}
+          rules={[{ required: true }]}
+          initialValue={dayjs()}
+          fieldProps={{ style: { width: '100%' } }}
+          colProps={financeColHalf}
+        />
         <ProFormSelect
           name="payment_method"
           label={t(`${R}.col.paymentMethod`)}
           options={paymentMethodOptions}
           rules={[{ required: true, message: t(`${R}.selectPaymentMethod`) }]}
           placeholder={t(`${R}.selectPaymentMethod`)}
+          colProps={financeColHalf}
         />
         <ProFormSelect
           name="settlement_type"
           label={t(`${R}.settlementType.label`)}
           initialValue="normal"
           options={receiptSettlementTypeOptions}
+          colProps={financeColHalf}
         />
         <LedgerAccountFormFields
           accounts={bankAccounts}
           accountLabel={t(`${R}.bankAccount`)}
           noteLabel={t(`${R}.bankAccountNote`)}
+          noteColProps={financeColFull}
         />
-        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
+        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} colProps={financeColFull} />
         <DocumentAttachmentsField category="receipt_attachments" />
       </ModalForm>
 
-      <Drawer
-        title={detailRecord
-          ? t(`${R}.detailDrawerTitle`, { code: detailRecord.receipt_code })
-          : t(`${R}.detailTitle`)}
+      <FinanceVoucherDetailDrawer
+        kind="receipt"
         open={detailOpen}
-        size={520}
-        onClose={() => { setDetailOpen(false); setDetailRecord(null); }}
-        destroyOnHidden
-      >
-        <Spin spinning={detailLoading}>
-          {detailRecord ? (
-            <Descriptions column={1} bordered size="small">
-              <Descriptions.Item label={t(`${R}.detail.code`)}>{detailRecord.receipt_code}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaicaiwu.common.customer')}>{detailRecord.customer_name}</Descriptions.Item>
-              <Descriptions.Item label={t('common.status')}>{formatVoucherStatus(detailRecord.status)}</Descriptions.Item>
-              <Descriptions.Item label={t(`${R}.col.receiptDate`)}>{detailRecord.receipt_date}</Descriptions.Item>
-              <Descriptions.Item label={t(`${R}.col.paymentMethod`)}>{formatPaymentMethod(detailRecord.payment_method, t)}</Descriptions.Item>
-              <Descriptions.Item label={t(`${R}.settlementType.label`)}>
-                {formatReceiptSettlementType(detailRecord.settlement_type, t)}
-              </Descriptions.Item>
-              <Descriptions.Item label={t(`${R}.col.amount`)}>¥{Number(detailRecord.total_amount).toFixed(2)}</Descriptions.Item>
-              <Descriptions.Item label={t(`${R}.detail.settled`)}>¥{Number(detailRecord.settled_amount).toFixed(2)}</Descriptions.Item>
-              <Descriptions.Item label={t(`${R}.detail.unsettled`)}>¥{Number(detailRecord.unsettled_amount).toFixed(2)}</Descriptions.Item>
-              <Descriptions.Item label={t(`${R}.detail.bankAccount`)}>{resolveBankLabel(detailRecord.bank_account_id)}</Descriptions.Item>
-              <Descriptions.Item label={t(`${R}.detail.accountNote`)}>{detailRecord.bank_account || '—'}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaicaiwu.common.notes')}>{detailRecord.notes || '—'}</Descriptions.Item>
-              <Descriptions.Item label={t('common.createdAt')}>
-                {detailRecord.created_at ? formatDateTime(detailRecord.created_at, 'YYYY-MM-DD HH:mm') : '—'}
-              </Descriptions.Item>
-            </Descriptions>
-          ) : null}
-        </Spin>
-      </Drawer>
+        onClose={closeDetail}
+        record={detailRecord}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryIdRef.current;
+          if (id != null) void loadDetail(id);
+        }}
+        bankAccountLabel={resolveBankLabel(detailRecord?.bank_account_id)}
+        extra={
+          detailRecord ? (
+            <DetailDrawerActions
+              items={[
+                {
+                  key: 'confirm',
+                  visible: detailRecord.status === 'Draft' && Boolean(receiptPerms.canAction?.('audit')),
+                  render: (
+                    <Button {...rowActionKind('audit')} onClick={() => void handleConfirm(detailRecord)}>
+                      {t('app.kuaicaiwu.common.confirm')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'settle',
+                  visible: detailRecord.status === 'Confirmed' && Number(detailRecord.unsettled_amount ?? 0) > 0,
+                  render: (
+                    <Button
+                      {...rowActionKind('submit')}
+                      onClick={() => {
+                        const qs = new URLSearchParams({ tab: 'receivable' });
+                        if (detailRecord.customer_id != null) qs.set('customerId', String(detailRecord.customer_id));
+                        if (detailRecord.id != null) qs.set('receiptId', String(detailRecord.id));
+                        navigate(`/apps/kuaicaiwu/finance-management/settlement?${qs.toString()}`);
+                      }}
+                    >
+                      {t('app.kuaicaiwu.common.settle')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'void',
+                  visible:
+                    detailRecord.status !== 'Cancelled'
+                    && detailRecord.settled_amount === 0
+                    && Boolean(receiptPerms.canAction?.('revoke')),
+                  render: (
+                    <Button {...rowActionKind('revoke')} onClick={() => void handleCancel(detailRecord)}>
+                      {t('app.kuaicaiwu.common.void')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'delete',
+                  visible: detailRecord.status !== 'Confirmed' && Boolean(receiptPerms.canDelete),
+                  render: (
+                    <Button danger {...rowActionKind('delete')} onClick={() => void handleDelete(detailRecord)}>
+                      {t('common.delete')}
+                    </Button>
+                  ),
+                },
+              ]}
+            />
+          ) : null
+        }
+      />
     </ListPageTemplate>
   );
 };

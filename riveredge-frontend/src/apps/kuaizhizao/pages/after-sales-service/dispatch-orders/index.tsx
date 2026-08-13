@@ -1,9 +1,10 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Button, Drawer, Space, message } from 'antd';
+import { Button, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
-import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -19,6 +20,7 @@ import {
 } from '../shared/afterSalesListPresentation';
 import { serviceDispatchApi, type ServiceDispatchOrder } from '../../../services/after-sales-service';
 import DispatchOrderFormModal from './DispatchOrderFormModal';
+import { DispatchOrderDetailDrawer } from './components/DispatchOrderDetailDrawer';
 
 const RESOURCE = 'kuaizhizao:service-dispatch';
 
@@ -30,10 +32,29 @@ const DispatchOrdersPage: React.FC = () => {
   const [editing, setEditing] = useState<ServiceDispatchOrder | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<ServiceDispatchOrder | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryIdRef = useRef<number | null>(null);
 
-  const openDetail = async (row: ServiceDispatchOrder) => {
-    setDetail(await serviceDispatchApi.get(row.id));
+  const loadDetail = useCallback(async (id: number) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      setDetail(await serviceDispatchApi.get(id));
+    } catch (error) {
+      setDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.detail.loadFailed')));
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [t]);
+
+  const openDetail = (row: ServiceDispatchOrder) => {
+    detailRetryIdRef.current = row.id;
     setDetailOpen(true);
+    setDetail(null);
+    setDetailError(null);
+    void loadDetail(row.id);
   };
 
   const columns: ProColumns<ServiceDispatchOrder>[] = useMemo(
@@ -107,7 +128,7 @@ const DispatchOrdersPage: React.FC = () => {
             fixed: 'right',
             hideInSearch: true,
             render: (_, row) => [
-              <Button {...rowActionKind('read')} key="read" onClick={() => void openDetail(row)} />,
+              <Button {...rowActionKind('read')} key="read" onClick={() => openDetail(row)} />,
               perms.canUpdate ? (
                 <Button
                   {...rowActionKind('update')}
@@ -177,50 +198,62 @@ const DispatchOrdersPage: React.FC = () => {
         }}
       />
 
-      <Drawer
+      <DispatchOrderDetailDrawer
         open={detailOpen}
-        width={720}
-        title={detail?.dispatch_code}
-        onClose={() => setDetailOpen(false)}
+        onClose={() => {
+          setDetailOpen(false);
+          setDetail(null);
+          setDetailError(null);
+        }}
+        record={detail}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryIdRef.current;
+          if (id != null) void loadDetail(id);
+        }}
         extra={
-          detail ? (
-            <Space wrap>
-              {perms.canAction?.('assign') ? (
-                <Button
-                  onClick={async () => {
-                    await serviceDispatchApi.assign(detail.id, {
-                      engineer_name: detail.engineer_name ?? undefined,
-                    });
-                    setDetail(await serviceDispatchApi.get(detail.id));
-                    actionRef.current?.reload();
-                  }}
-                >
-                  {t('app.kuaizhizao.afterSalesService.dispatchOrder.actionAssign')}
-                </Button>
-              ) : null}
-              {perms.canAction?.('close') && detail.status !== '已取消' ? (
-                <Button
-                  onClick={async () => {
-                    await serviceDispatchApi.close(detail.id);
-                    setDetail(await serviceDispatchApi.get(detail.id));
-                    actionRef.current?.reload();
-                  }}
-                >
-                  {t('app.kuaizhizao.afterSalesService.dispatchOrder.actionClose')}
-                </Button>
-              ) : null}
-            </Space>
-          ) : null
+          <DetailDrawerActions
+            items={[
+              {
+                key: 'assign',
+                visible: Boolean(detail && perms.canAction?.('assign')),
+                render: () => (
+                  <Button
+                    onClick={async () => {
+                      if (!detail) return;
+                      await serviceDispatchApi.assign(detail.id, {
+                        engineer_name: detail.engineer_name ?? undefined,
+                      });
+                      setDetail(await serviceDispatchApi.get(detail.id));
+                      actionRef.current?.reload();
+                    }}
+                  >
+                    {t('app.kuaizhizao.afterSalesService.dispatchOrder.actionAssign')}
+                  </Button>
+                ),
+              },
+              {
+                key: 'close',
+                visible: Boolean(detail && perms.canAction?.('close') && detail.status !== '已取消'),
+                render: () => (
+                  <Button
+                    type="primary"
+                    onClick={async () => {
+                      if (!detail) return;
+                      await serviceDispatchApi.close(detail.id);
+                      setDetail(await serviceDispatchApi.get(detail.id));
+                      actionRef.current?.reload();
+                    }}
+                  >
+                    {t('app.kuaizhizao.afterSalesService.dispatchOrder.actionClose')}
+                  </Button>
+                ),
+              },
+            ]}
+          />
         }
-      >
-        {detail ? (
-          <>
-            <p>{t('app.kuaizhizao.afterSalesService.dispatchOrder.field.customerName')}: {detail.customer_name}</p>
-            <p>{t('app.kuaizhizao.afterSalesService.dispatchOrder.field.siteAddress')}: {detail.site_address || '-'}</p>
-            <p>{t('app.kuaizhizao.afterSalesService.dispatchOrder.field.completionNotes')}: {detail.completion_notes || '-'}</p>
-          </>
-        ) : null}
-      </Drawer>
+      />
     </ListPageTemplate>
   );
 };

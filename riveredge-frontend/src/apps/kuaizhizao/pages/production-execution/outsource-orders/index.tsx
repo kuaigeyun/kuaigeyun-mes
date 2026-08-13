@@ -11,7 +11,6 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import type { DescriptionsProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import {
   ActionType,
@@ -57,9 +56,9 @@ import {
   ListPageTemplate,
   FormModalTemplate,
   DetailDrawerTemplate,
-  DetailDrawerSection,
   MODAL_CONFIG,
   DRAWER_CONFIG,
+  detailDrawerDescriptionItems,
   type StatCard,
 } from '../../../../../components/layout-templates';
 import { SimpleSparkline } from '../../../../../components';
@@ -75,7 +74,8 @@ import dayjs from 'dayjs';
 import {formatDateTime, formatDateTimeBySiteSetting} from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateFormItemProps, formDateRangeFormItemProps, toApiDateTimeString } from '../../../../../utils/formDate';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import type { AuditPhaseRecord } from '../../../../../components/uni-audit/AuditPhaseBadge';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { useTranslation } from 'react-i18next';
@@ -150,35 +150,6 @@ interface Supplier {
   code: string;
   name: string;
   isActive: boolean;
-}
-
-function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
-  dataSource: T,
-  cols: ProDescriptionsItemProps<T>[]
-): NonNullable<DescriptionsProps['items']> {
-  return cols.map((col, index) => {
-    const dataIndex = col.dataIndex as keyof T | undefined;
-    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
-    let content: React.ReactNode = value as React.ReactNode;
-    if (col.valueType === 'dateTime' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
-    } else if (col.valueType === 'date' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD');
-    }
-    if (col.render && dataSource != null) {
-            content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
-        content,
-        dataSource,
-        index,
-      );
-    }
-    return {
-      key: String(col.key ?? col.dataIndex ?? index),
-      label: col.title as React.ReactNode,
-      children: content !== undefined && content !== null ? content : '-',
-      span: col.span ?? 1,
-    };
-  });
 }
 
 const OO_STAT_SPARK_1 = [2, 3, 4, 3, 5, 4, 6];
@@ -523,10 +494,12 @@ export const OutsourceOrdersTable: React.FC = () => {
   );
 
   const detailBaseColumns: ProDescriptionsItemProps<OutsourceOrder>[] = useMemo(
-    () => [
+    () =>
+      alignDescriptionColumns([
       {
         title: t('app.kuaizhizao.outsourceOrder.colCode'),
         dataIndex: 'code',
+        key: 'outsource_order_code',
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.code ?? '') }}>{r.code ?? '-'}</Typography.Text>
         ),
@@ -534,17 +507,10 @@ export const OutsourceOrdersTable: React.FC = () => {
       {
         title: t('app.kuaizhizao.outsourceOrder.colWorkOrderCode'),
         dataIndex: 'work_order_code',
-        render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.work_order_code ?? '') }}>{r.work_order_code ?? '-'}</Typography.Text>
-        ),
+        key: 'linked_work_order_code',
       },
       { title: t('app.kuaizhizao.outsourceOrder.colOperationName'), dataIndex: 'operation_name' },
       { title: t('app.kuaizhizao.outsourceOrder.colSupplierName'), dataIndex: 'supplier_name' },
-      {
-        title: t('app.kuaizhizao.outsourceOrder.colStatus'),
-        dataIndex: 'status',
-        render: (_, record) => getOoStatusTag(record.status),
-      },
       { title: t('app.kuaizhizao.outsourceOrder.colUnitPrice'), dataIndex: 'unit_price', valueType: 'money' },
       { title: t('app.kuaizhizao.outsourceOrder.colOutsourceQty'), dataIndex: 'outsource_quantity', valueType: 'digit' },
       { title: t('app.kuaizhizao.outsourceOrder.colTotalAmount'), dataIndex: 'total_amount', valueType: 'money' },
@@ -557,36 +523,38 @@ export const OutsourceOrdersTable: React.FC = () => {
         title: t('app.kuaizhizao.outsourceOrder.colActualStart'),
         dataIndex: 'actual_start_date',
         valueType: 'dateTime',
-        render: (text) => formatDateTimeBySiteSetting(text),
       },
       {
         title: t('app.kuaizhizao.outsourceOrder.colActualEnd'),
         dataIndex: 'actual_end_date',
         valueType: 'dateTime',
-        render: (text) => formatDateTimeBySiteSetting(text),
       },
       {
         title: t('app.kuaizhizao.outsourceOrder.colPurchaseReceiptCode'),
         dataIndex: 'purchase_receipt_code',
-        render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.purchase_receipt_code ?? '') }}>
-            {r.purchase_receipt_code || '-'}
-          </Typography.Text>
-        ),
       },
-    ],
-    [getOoStatusTag, t],
-  );
-
-  const detailRemarksColumn: ProDescriptionsItemProps<OutsourceOrder> = useMemo(
-    () => ({
-      title: t('app.kuaizhizao.common.fieldNotes'),
-      dataIndex: 'remarks',
-      span: 3,
-      render: (text) => text || '-',
-    }),
+    ] as ProDescriptionsItemProps<OutsourceOrder>[]),
     [t],
   );
+
+  const detailRemarksColumn: ProDescriptionsItemProps<OutsourceOrder>[] = useMemo(
+    () =>
+      alignDescriptionColumns([
+        {
+          title: t('app.kuaizhizao.common.fieldNotes'),
+          dataIndex: 'remarks',
+          span: 3,
+        },
+      ] as ProDescriptionsItemProps<OutsourceOrder>[]),
+    [t],
+  );
+
+  const outsourceDetailLifecycle = useMemo(
+    () => (outsourceOrderDetail ? getOutsourceOrderLifecycle(outsourceOrderDetail as Record<string, unknown>) : null),
+    [outsourceOrderDetail],
+  );
+  const outsourceNextSteps = outsourceDetailLifecycle?.nextStepSuggestions;
+  const outsourceShowNextInTitle = Boolean(outsourceNextSteps?.length);
 
   const handleDetail = async (record: OutsourceOrder) => {
     try {
@@ -1448,85 +1416,95 @@ export const OutsourceOrdersTable: React.FC = () => {
           resetOutsourceDetailFieldValues();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        column={3}
-        dataSource={outsourceOrderDetail || undefined}
-        customContent={
-          outsourceOrderDetail && (
-            <>
-              <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
-                <Descriptions
-                  column={3}
-                  size="small"
-                  items={buildDescriptionItemsFromColumns(outsourceOrderDetail, detailBaseColumns)}
-                />
-                {hasCustomFieldsDetailContent(outsourceListCustomFields, outsourceDetailCustomFieldValues) ? (
-                  <div style={{ marginTop: 16 }}>
-                    <CustomFieldsDetailSection
-                      customFields={outsourceListCustomFields}
-                      customFieldValues={outsourceDetailCustomFieldValues}
-                    />
-                  </div>
-                ) : null}
-                <Descriptions
-                  column={3}
-                  size="small"
-                  style={{ marginTop: 16 }}
-                  items={buildDescriptionItemsFromColumns(outsourceOrderDetail, [detailRemarksColumn])}
-                />
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lifecycle = getOutsourceOrderLifecycle(outsourceOrderDetail as any);
-                    const mainStages = lifecycle.mainStages ?? [];
-                    if (mainStages.length === 0) return null;
-                    return (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        status={lifecycle.status}
-                        showLabels
-                        nextStepSuggestions={lifecycle.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
-                    );
-                  })()}
-                  
-                </div>
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.outsourceOrder.noLineItems')} />
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
-                {outsourceOrderTracking.loading && (
-                  <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Spin />
-                  </div>
-                )}
-                {outsourceOrderTracking.error && !outsourceOrderTracking.loading && (
-                  <Typography.Text type="danger">{outsourceOrderTracking.error}</Typography.Text>
-                )}
-                {outsourceOrderTracking.data && !outsourceOrderTracking.loading && (
-                  <DocumentTrackingTimelineBody data={outsourceOrderTracking.data} />
-                )}
-                {!outsourceOrderTracking.loading && !outsourceOrderTracking.data && !outsourceOrderTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('components.documentTrackingPanel.noOperations')} />
-                )}
-              </DetailDrawerSection>
-            </>
-          )
+        extra={
+          outsourceOrderDetail ? (
+            <Space>
+              <Button
+                icon={<EditOutlined />}
+                disabled={outsourceOrderDetail.status === 'completed' || outsourceOrderDetail.status === 'cancelled'}
+                onClick={() => void handleEditFromRecord(outsourceOrderDetail)}
+              >
+                {t('common.edit')}
+              </Button>
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                disabled={outsourceOrderDetail.status === 'completed' || outsourceOrderDetail.status === 'in_progress'}
+                onClick={() => handleDeleteFromRecord(outsourceOrderDetail)}
+              >
+                {t('common.delete')}
+              </Button>
+            </Space>
+          ) : null
         }
-      
-                        traceDocument={
-                          outsourceOrderDetail?.id != null
-                            ? {
-                                documentType: 'outsource_order',
-                                documentId: outsourceOrderDetail.id,
-                                selfDocumentId: outsourceOrderDetail.id,
-                              renderBriefActions: (doc) => (
+        collaborationTitleSuffix={
+          outsourceOrderDetail && outsourceShowNextInTitle ? (
+            <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
+              {t('components.uniLifecycle.nextStep')}：
+              {outsourceNextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
+            </Typography.Text>
+          ) : undefined
+        }
+        collaborationAuditRecord={outsourceOrderDetail as AuditPhaseRecord | null}
+        basic={
+          outsourceOrderDetail ? (
+            <>
+              <Descriptions
+                column={3}
+                size="small"
+                items={detailDrawerDescriptionItems(detailBaseColumns, outsourceOrderDetail)}
+              />
+              {hasCustomFieldsDetailContent(outsourceListCustomFields, outsourceDetailCustomFieldValues) ? (
+                <div style={{ marginTop: 16 }}>
+                  <CustomFieldsDetailSection
+                    customFields={outsourceListCustomFields}
+                    customFieldValues={outsourceDetailCustomFieldValues}
+                  />
+                </div>
+              ) : null}
+              <Descriptions
+                column={3}
+                size="small"
+                style={{ marginTop: 16 }}
+                items={detailDrawerDescriptionItems(detailRemarksColumn, outsourceOrderDetail)}
+              />
+            </>
+          ) : undefined
+        }
+        collaboration={
+          outsourceOrderDetail && (outsourceDetailLifecycle?.mainStages ?? []).length > 0 ? (
+            <UniLifecycleStepper
+              steps={outsourceDetailLifecycle!.mainStages ?? []}
+              status={outsourceDetailLifecycle!.status}
+              showLabels
+              nextStepSuggestions={outsourceDetailLifecycle!.nextStepSuggestions}
+              hideNextStepSuggestions={outsourceShowNextInTitle}
+            />
+          ) : null
+        }
+        lines={
+          outsourceOrderDetail ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.outsourceOrder.noLineItems')} />
+          ) : undefined
+        }
+        timeline={
+          outsourceOrderDetail ? (
+            outsourceOrderTracking.data && !outsourceOrderTracking.loading ? (
+              <DocumentTrackingTimelineBody data={outsourceOrderTracking.data} />
+            ) : outsourceOrderTracking.error ? (
+              <Typography.Text type="danger">{outsourceOrderTracking.error}</Typography.Text>
+            ) : !outsourceOrderTracking.loading ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('components.documentTrackingPanel.noOperations')} />
+            ) : null
+          ) : undefined
+        }
+        traceDocument={
+          outsourceOrderDetail?.id != null
+            ? {
+                documentType: 'outsource_order',
+                documentId: outsourceOrderDetail.id,
+                selfDocumentId: outsourceOrderDetail.id,
+                renderBriefActions: (doc) => (
                   <WarehouseTraceBriefPrimaryActions
                     doc={doc}
                     t={t}
@@ -1536,10 +1514,10 @@ export const OutsourceOrdersTable: React.FC = () => {
                       setOutsourceOrderDetail(null);
                     }}
                   />
-                )
-                              }
-                            : undefined
-                        }
+                ),
+              }
+            : undefined
+        }
       />
     </>
   );

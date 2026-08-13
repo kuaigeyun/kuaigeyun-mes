@@ -24,7 +24,7 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, detailDrawerDescriptionItems, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, detailDrawerDescriptionItems, detailDrawerBasicColumn, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { stocktakingApi, inventoryReportApi } from '../../../services/stocktaking';
 import { getStocktakingLifecycle } from '../../../utils/stocktakingLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -35,7 +35,7 @@ import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLi
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { renderStocktakingTypeMarkerTag } from '../shared/warehouseMarkerTags';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -600,7 +600,7 @@ const StocktakingPage: React.FC = () => {
     },
   ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, canUpdate, canCreate, canRevoke, workflowStatusValueEnum, stocktakingTypeValueEnum]);
 
-  const detailColumns: ProDescriptionsItemProps<Stocktaking>[] = useMemo(() => [
+  const detailColumns = useMemo(() => alignDescriptionColumns([
     {
       title: t('app.kuaizhizao.warehouseReports.colStocktakingCode'),
       dataIndex: 'code',
@@ -655,8 +655,9 @@ const StocktakingPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.warehouseCommon.colRemarks'),
       dataIndex: 'remarks',
+      span: 3,
     },
-  ], [t]);
+  ]), [t]);
 
   const inventoryPickerColumns = useMemo(() => [
     { title: t('app.kuaizhizao.warehouseReports.colMaterialCode'), dataIndex: 'material_code', width: 120 },
@@ -1048,7 +1049,7 @@ const StocktakingPage: React.FC = () => {
         basic={
           currentStocktaking ? (
             <Descriptions
-              column={2}
+              column={detailDrawerBasicColumn(false)}
               size="small"
               items={detailDrawerDescriptionItems(detailColumns, currentStocktaking)}
             />

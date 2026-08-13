@@ -154,6 +154,7 @@ class OQCInspectionConduct(BaseSchema):
     quality_status: str = Field(..., description="质量状态")
     qualified_quantity: float = Field(0, description="合格数量")
     unqualified_quantity: float = Field(0, description="不合格数量")
+    inspector_id: Optional[int] = Field(None, description="检验人员ID，缺省为当前操作人")
     release_decision: str = Field("pending", description="放行结论")
     release_note: Optional[str] = Field(None, description="放行说明")
     notes: Optional[str] = Field(None, description="备注")

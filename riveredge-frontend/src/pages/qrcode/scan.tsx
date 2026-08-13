@@ -15,6 +15,7 @@ import { QRCodeScanner } from '../../components/qrcode';
 import { qrcodeApi, type QRCodeParseResponse } from '../../services/qrcode';
 import { buildDocumentQrcodeNavigateUrl } from '../../apps/kuaizhizao/utils/documentQrcodeRoutes';
 import { buildEquipmentDetailPath } from '../../apps/kuaizhizao/pages/equipment-management/equipment/equipmentPaths';
+import { buildMoldDetailPath } from '../../apps/kuaizhizao/pages/equipment-management/molds/moldPaths';
 
 /**
  * 二维码扫描页面组件
@@ -74,6 +75,16 @@ const QRCodeScanPage: React.FC = () => {
             messageApi.success(t('pages.qrcode.scan.navigatingToEquipment'));
           } else {
             messageApi.error(t('pages.qrcode.scan.equipmentDataIncomplete'));
+          }
+          break;
+        }
+        case 'MD': {
+          const moldUuid = data.mold_uuid;
+          if (moldUuid) {
+            navigate(buildMoldDetailPath(String(moldUuid)));
+            messageApi.success(t('pages.qrcode.scan.navigatingToMold'));
+          } else {
+            messageApi.error(t('pages.qrcode.scan.moldDataIncomplete'));
           }
           break;
         }

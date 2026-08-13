@@ -12,7 +12,7 @@ from datetime import datetime, date, time
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
 
-from core.utils.timezone_utils import is_future_datetime, resolve_business_datetime, today_site_str
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
@@ -1124,9 +1124,6 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         wh = _dec(reporting_data.work_hours)
         if wh < 0:
             raise ValidationError("报工工时不能为负数")
-
-        if reporting_data.reported_at and is_future_datetime(reporting_data.reported_at):
-            raise ValidationError("报工时间不能晚于当前时间")
 
         user_info = await self.get_user_info(reported_by)
         recorder_name = user_info.get("name")

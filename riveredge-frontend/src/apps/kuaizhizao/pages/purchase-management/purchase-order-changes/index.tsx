@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Alert, Button, Descriptions, Empty, Form, Input, Modal, Space, Spin, Table, Tag, Typography } from 'antd';
+import { App, Button, Descriptions, Form, Input, Space, Tag, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
@@ -20,11 +20,12 @@ import {
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -36,21 +37,20 @@ import {
   deletePurchaseOrderChange,
   getPurchaseOrderChange,
   listPurchaseOrderChanges,
-  previewPurchaseOrderChangeFromOrder,
   previewPurchaseOrderChangeImpact,
   submitPurchaseOrderChange,
   updatePurchaseOrderChange,
   withdrawPurchaseOrderChange,
   type PurchaseOrderChange,
 } from '../../../services/purchase-order-change';
-import { listPurchaseOrders, type DocumentPushPreview, type PurchaseOrder } from '../../../services/purchase';
+import { listPurchaseOrders, type PurchaseOrder } from '../../../services/purchase';
 import {
   buildOrderChangeLifecycleValueEnum,
   getOrderChangeLifecycle,
   resolveOrderChangeListLifecycleParams,
 } from '../../../utils/orderChangeLifecycle';
 import { formatOrderChangeCategory, ORDER_CHANGE_CATEGORY_LABELS } from '../../../utils/orderChangeCategory';
-import {formatDateTime, formatNumber, formatQuantity} from '../../../../../utils/format';
+import {formatDateTime, formatNumber} from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
@@ -60,7 +60,6 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
-import { purchaseOrderCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 
 const PURCHASE_ORDER_CHANGE_RESOURCE = 'kuaizhizao:purchase-order-change';
 
@@ -87,17 +86,13 @@ const PurchaseOrderChangesPage: React.FC = () => {
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<PurchaseOrderChange | null>(null);
+  const [changeTrackingRefreshKey, setChangeTrackingRefreshKey] = useState(0);
   const [editOpen, setEditOpen] = useState(false);
   const [editForm] = Form.useForm();
   const [pendingEditFormValues, setPendingEditFormValues] = useState<Record<string, any> | null>(null);
   const [editItems, setEditItems] = useState<PurchaseOrderChange['items']>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [createReason, setCreateReason] = useState(() => t('app.kuaizhizao.purchaseOrderChange.defaultReason'));
-  const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
-  const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
-  const [pullPreviewConfirming, setPullPreviewConfirming] = useState(false);
-  const [pullPreviewData, setPullPreviewData] = useState<DocumentPushPreview | null>(null);
-  const [pullPreviewOrderId, setPullPreviewOrderId] = useState<number | null>(null);
   const [impactOpen, setImpactOpen] = useState(false);
   const [impactLoading, setImpactLoading] = useState(false);
   const [impactData, setImpactData] = useState<Awaited<ReturnType<typeof previewPurchaseOrderChangeImpact>> | null>(null);
@@ -180,49 +175,22 @@ const PurchaseOrderChangesPage: React.FC = () => {
     reloadTable();
   };
 
-  const resetPullPreviewModal = useCallback(() => {
-    setPullPreviewOpen(false);
-    setPullPreviewData(null);
-    setPullPreviewOrderId(null);
-  }, []);
-
-  const showPullCreatePreview = useCallback(
-    (orderId: number) => {
-      setPullPreviewOpen(true);
-      setPullPreviewLoading(true);
-      setPullPreviewConfirming(false);
-      setPullPreviewData(null);
-      setPullPreviewOrderId(orderId);
-      previewPurchaseOrderChangeFromOrder(orderId)
-        .then((res) => setPullPreviewData(res))
-        .catch((error: unknown) => {
-          message.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseOrderChange.pull.previewFailed')));
-          resetPullPreviewModal();
-        })
-        .finally(() => setPullPreviewLoading(false));
+  const createChangeFromPurchaseOrder = useCallback(
+    async (orderId: number) => {
+      try {
+        const created = await createPurchaseOrderChangeFromOrder(
+          orderId,
+          createReason.trim() || t('app.kuaizhizao.purchaseOrderChange.defaultReason'),
+        );
+        message.success(t('app.kuaizhizao.purchaseOrderChange.created', { code: created.change_code }));
+        await openEdit(created);
+        reloadTable();
+      } catch (error: unknown) {
+        message.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseOrderChange.pull.createFailed')));
+      }
     },
-    [message, resetPullPreviewModal, t],
+    [createReason, message, openEdit, reloadTable, t],
   );
-
-  const handlePullPreviewConfirm = useCallback(async () => {
-    if (!pullPreviewOrderId || !pullPreviewData) return;
-    if (pullPreviewData.has_blocking_issues) return;
-    setPullPreviewConfirming(true);
-    try {
-      const created = await createPurchaseOrderChangeFromOrder(
-        pullPreviewOrderId,
-        createReason.trim() || t('app.kuaizhizao.purchaseOrderChange.defaultReason'),
-      );
-      message.success(t('app.kuaizhizao.purchaseOrderChange.created', { code: created.change_code }));
-      resetPullPreviewModal();
-      await openEdit(created);
-      reloadTable();
-    } catch (error: unknown) {
-      message.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseOrderChange.pull.createFailed')));
-    } finally {
-      setPullPreviewConfirming(false);
-    }
-  }, [createReason, message, openEdit, pullPreviewData, pullPreviewOrderId, resetPullPreviewModal, t]);
 
   const isPullChangeOrderSourceSelectable = useCallback(
     (record: { capabilities?: { create_change_order?: { allowed?: boolean } } }) =>
@@ -269,7 +237,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
         return;
       }
       pullQueryCloseRef.current?.();
-      showPullCreatePreview(orderId);
+      await createChangeFromPurchaseOrder(orderId);
     },
   });
 
@@ -325,7 +293,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
   useEffect(() => {
     const sourceId = searchParams.get('source_order_id');
     if (sourceId) {
-      showPullCreatePreview(Number(sourceId));
+      void createChangeFromPurchaseOrder(Number(sourceId));
       searchParams.delete('source_order_id');
       setSearchParams(searchParams, { replace: true });
     }
@@ -413,82 +381,94 @@ const PurchaseOrderChangesPage: React.FC = () => {
   }, []);
 
   const detailBasicColumns = useMemo<ProDescriptionsItemProps<PurchaseOrderChange>[]>(
-    () => [
-      {
-        title: t('app.kuaizhizao.purchaseOrderChange.colSourceOrderCode'),
-        dataIndex: 'source_order_code',
-        render: (_, record) => (
-          <LinkedDocumentCode
-            documentType="purchase_order"
-            documentId={record.source_order_id}
-            code={record.source_order_code}
-          />
-        ),
-      },
-      {
-        title: t('app.kuaizhizao.purchaseOrderChange.colVersion'),
-        dataIndex: 'change_version',
-        render: (_, record) => (record.change_version != null ? `V${record.change_version}` : '-'),
-      },
-      {
-        title: t('app.kuaizhizao.purchaseOrderChange.supplier'),
-        dataIndex: 'supplier_name',
-      },
-      {
-        title: t('app.kuaizhizao.purchaseOrderChange.colCategory'),
-        dataIndex: 'change_category',
-        render: (_, record) => formatOrderChangeCategory(record.change_category),
-      },
-      {
-        title: t('app.kuaizhizao.purchaseOrderChange.colBeforeAmount'),
-        dataIndex: 'before_total_amount',
-        render: (_, record) => formatNumber(record.before_total_amount, 2),
-      },
-      {
-        title: t('app.kuaizhizao.purchaseOrderChange.colAfterAmount'),
-        dataIndex: 'after_total_amount',
-        render: (_, record) => formatNumber(record.after_total_amount, 2),
-      },
-      {
-        title: t('app.kuaizhizao.purchaseOrderChange.colDeltaAmount'),
-        dataIndex: 'delta_amount',
-        render: (_, record) => renderDeltaAmount(record.delta_amount),
-      },
-      {
-        title: t('app.kuaizhizao.purchaseOrderChange.colAppliedAt'),
-        dataIndex: 'applied_at',
-        render: (_, record) =>
-          record.applied_at ? formatDateTime(record.applied_at, 'YYYY-MM-DD HH:mm') : '-',
-      },
-      {
-        title: t('app.kuaizhizao.purchaseOrderChange.colChangeReason'),
-        dataIndex: 'change_reason',
-        span: 2,
-      },
-      {
-        title: t('app.kuaizhizao.purchaseOrderChange.notes'),
-        dataIndex: 'notes',
-        span: 2,
-      },
-    ],
+    () =>
+      alignDescriptionColumns([
+        { title: t('app.kuaizhizao.purchaseOrderChange.colChangeCode'), dataIndex: 'change_code' },
+        {
+          title: t('app.kuaizhizao.purchaseOrderChange.colSourceOrderCode'),
+          dataIndex: 'source_order_code',
+          render: (_, record) => (
+            <LinkedDocumentCode
+              documentType="purchase_order"
+              documentId={record.source_order_id}
+              code={record.source_order_code}
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.purchaseOrderChange.colVersion'),
+          dataIndex: 'change_version',
+          render: (_, record) => (record.change_version != null ? `V${record.change_version}` : '-'),
+        },
+        {
+          title: t('app.kuaizhizao.purchaseOrderChange.supplier'),
+          dataIndex: 'supplier_name',
+        },
+        {
+          title: t('app.kuaizhizao.purchaseOrderChange.colCategory'),
+          dataIndex: 'change_category',
+          render: (_, record) => formatOrderChangeCategory(record.change_category),
+        },
+        {
+          title: t('app.kuaizhizao.purchaseOrderChange.colBeforeAmount'),
+          dataIndex: 'before_total_amount',
+          render: (_, record) => formatNumber(record.before_total_amount, 2),
+        },
+        {
+          title: t('app.kuaizhizao.purchaseOrderChange.colAfterAmount'),
+          dataIndex: 'after_total_amount',
+          render: (_, record) => formatNumber(record.after_total_amount, 2),
+        },
+        {
+          title: t('app.kuaizhizao.purchaseOrderChange.colDeltaAmount'),
+          dataIndex: 'delta_amount',
+          render: (_, record) => renderDeltaAmount(record.delta_amount),
+        },
+        {
+          title: t('app.kuaizhizao.purchaseOrderChange.colAppliedAt'),
+          dataIndex: 'applied_at',
+          valueType: 'dateTime',
+        },
+        {
+          title: t('app.kuaizhizao.purchaseOrderChange.colChangeReason'),
+          dataIndex: 'change_reason',
+          span: 3,
+        },
+        {
+          title: t('app.kuaizhizao.purchaseOrderChange.notes'),
+          dataIndex: 'notes',
+          span: 3,
+        },
+      ] as ProDescriptionsItemProps<PurchaseOrderChange>[]),
     [renderDeltaAmount, t],
   );
 
+  const changeLifecycle = useMemo(
+    () => (detail ? getOrderChangeLifecycle(detail as Record<string, unknown>, t) : null),
+    [detail, t],
+  );
+  const changeNextSteps = changeLifecycle?.nextStepSuggestions;
+  const changeShowNextInTitle = Boolean(changeNextSteps?.length);
+  const changeTracking = useDocumentTracking(
+    detailOpen && detail?.id ? 'purchase_order_change' : undefined,
+    detail?.id,
+    changeTrackingRefreshKey,
+  );
+
   const detailCollaboration = useMemo(() => {
-    if (!detail) return undefined;
-    const lc = getOrderChangeLifecycle(detail as Record<string, unknown>, t);
-    const mainStages = lc.mainStages ?? [];
+    if (!detail || !changeLifecycle) return undefined;
+    const mainStages = changeLifecycle.mainStages ?? [];
     if (!mainStages.length) return undefined;
     return (
       <UniLifecycleStepper
         steps={mainStages}
-        status={lc.status}
+        status={changeLifecycle.status}
         showLabels
-        nextStepSuggestions={lc.nextStepSuggestions}
-        hideNextStepSuggestions
+        nextStepSuggestions={changeLifecycle.nextStepSuggestions}
+        hideNextStepSuggestions={changeShowNextInTitle}
       />
     );
-  }, [detail, t]);
+  }, [detail, changeLifecycle, changeShowNextInTitle]);
 
   const columns: ProColumns<PurchaseOrderChange>[] = useMemo(
     () => alignProColumns<PurchaseOrderChange>([
@@ -605,7 +585,6 @@ const PurchaseOrderChangesPage: React.FC = () => {
       {
         title: t('common.actions'),
         valueType: 'option',
-        width: 220,
         fixed: 'right',
         render: (_, record) => [
           <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record)}>
@@ -818,66 +797,6 @@ const PurchaseOrderChangesPage: React.FC = () => {
         }
       />
 
-      <Modal
-        title={pullFromPurchaseOrderAction.label}
-        open={pullPreviewOpen}
-        destroyOnClose
-        width={1100}
-        onCancel={resetPullPreviewModal}
-        okText={t('common.create')}
-        cancelText={t('common.cancel')}
-        confirmLoading={pullPreviewConfirming}
-        onOk={() => void handlePullPreviewConfirm()}
-        okButtonProps={{
-          disabled:
-            pullPreviewLoading ||
-            !pullPreviewData ||
-            !!pullPreviewData?.has_blocking_issues,
-        }}
-      >
-        {pullPreviewLoading ? (
-          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-            <Spin />
-            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
-          </div>
-        ) : pullPreviewData ? (
-          <div>
-            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
-            {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
-              <Alert
-                type="warning"
-                showIcon
-                style={{ marginBottom: 12 }}
-                message={purchaseOrderCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
-              />
-            ) : null}
-            {pullPreviewData.items?.length > 0 ? (
-              <Table
-                size="small"
-                dataSource={pullPreviewData.items}
-                rowKey={(row) => String(row.item_id)}
-                pagination={false}
-                scroll={{ x: 960 }}
-                columns={[
-                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' , render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' , render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' , render: formatQuantity },
-                ]}
-              />
-            ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseOrderChange.pull.previewNoLines')} />
-            )}
-            {pullPreviewData.tip ? (
-              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-                {pullPreviewData.tip}
-              </Typography.Paragraph>
-            ) : null}
-          </div>
-        ) : null}
-      </Modal>
-
       <FormModalTemplate
         title={t('app.kuaizhizao.purchaseOrderChange.editTitle')}
         open={editOpen}
@@ -906,15 +825,10 @@ const PurchaseOrderChangesPage: React.FC = () => {
         title={t('app.kuaizhizao.purchaseOrderChange.detailTitle', { code: detail?.change_code ?? '' })}
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
-        width={DRAWER_CONFIG.LARGE_WIDTH ?? DRAWER_CONFIG.HALF_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           detail ? (
-            <Space>
-              {detail.capabilities?.update?.allowed && purchaseOrderChangePerms.canUpdate ? (
-                <Button icon={<EditOutlined />} onClick={() => { setDetailOpen(false); openEdit(detail); }}>
-                  {t('common.edit')}
-                </Button>
-              ) : null}
+            <Space size="small">
               {detail.capabilities?.submit?.allowed &&
               detail.capabilities?.preview_impact?.allowed &&
               purchaseOrderChangePerms.canAction?.('submit') ? (
@@ -922,29 +836,46 @@ const PurchaseOrderChangesPage: React.FC = () => {
                   {t('app.kuaizhizao.purchaseOrderChange.submit')}
                 </Button>
               ) : null}
+              {detail.capabilities?.update?.allowed && purchaseOrderChangePerms.canUpdate ? (
+                <Button icon={<EditOutlined />} onClick={() => { setDetailOpen(false); openEdit(detail); }}>
+                  {t('common.edit')}
+                </Button>
+              ) : null}
               <UniWorkflowActions {...rowActionKind('skip')}
                 record={detail}
                 entityName={t('app.kuaizhizao.purchaseOrderChange.entityName')}
+                resourcePrefix={PURCHASE_ORDER_CHANGE_RESOURCE}
+                unifiedAudit
                 statusField="status"
                 reviewStatusField="review_status"
                 draftStatuses={['DRAFT', '草稿']}
                 pendingStatuses={['PENDING_REVIEW', '待审核']}
                 approvedStatuses={['AUDITED', '已审核', 'APPLIED', '已生效']}
                 rejectedStatuses={['REJECTED', '已驳回']}
+                theme="default"
                 onSuccess={async () => {
                   reloadTable();
+                  setChangeTrackingRefreshKey((k) => k + 1);
                   if (detail.id) setDetail(await getPurchaseOrderChange(detail.id));
                 }}
               />
             </Space>
           ) : null
         }
+        collaborationTitleSuffix={
+          changeShowNextInTitle ? (
+            <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
+              {t('components.uniLifecycle.nextStep')}：
+              {changeNextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
+            </Typography.Text>
+          ) : undefined
+        }
         collaborationAuditRecord={detail}
         collaboration={detailCollaboration}
         basic={
           detail ? (
             <Descriptions
-              column={2}
+              column={3}
               size="small"
               items={detailDrawerDescriptionItems(
                 detailBasicColumns.filter((col) => {
@@ -958,6 +889,24 @@ const PurchaseOrderChangesPage: React.FC = () => {
           ) : undefined
         }
         lines={detail ? <OrderChangeItemsTable items={detail.items ?? []} /> : undefined}
+        timeline={
+          detail ? (
+            changeTracking.data && !changeTracking.loading ? (
+              <DocumentTrackingTimelineBody data={changeTracking.data} />
+            ) : changeTracking.error ? (
+              <Typography.Text type="danger">{changeTracking.error}</Typography.Text>
+            ) : null
+          ) : null
+        }
+        traceDocument={
+          detail?.id != null
+            ? {
+                documentType: 'purchase_order_change',
+                documentId: detail.id,
+                selfDocumentId: detail.id,
+              }
+            : undefined
+        }
       />
 
       <OrderChangeImpactModal

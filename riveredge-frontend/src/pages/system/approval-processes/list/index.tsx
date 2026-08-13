@@ -8,7 +8,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Descriptions } from 'antd';
+import { App, Popconfirm, Button } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined, HighlightOutlined } from '@ant-design/icons';
@@ -16,8 +16,9 @@ import { useNavigate } from 'react-router-dom';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import { UniTable } from '../../../../components/uni-table';
-import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import {
   getApprovalProcessList,
   getApprovalProcessByUuid,
@@ -43,7 +44,6 @@ const ApprovalProcessListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
-  const approvalProcessDetailReqRef = useRef(0);
 
   const approvalProcessDetailDescColumns = useMemo<ProDescriptionsItemProps<Record<string, unknown>>[]>(
     () => [
@@ -65,11 +65,13 @@ const ApprovalProcessListPage: React.FC = () => {
       {
         title: t('pages.system.approvalProcesses.enableStatus'),
         dataIndex: 'is_active',
-        render: (value: unknown) => (
-          <Tag color={value ? 'success' : 'default'}>
-            {value ? t('pages.system.approvalProcesses.enabled') : t('pages.system.approvalProcesses.disabled')}
-          </Tag>
-        ),
+        render: (value: unknown) =>
+          renderSystemActiveTag(
+            t,
+            Boolean(value),
+            'pages.system.approvalProcesses.enabled',
+            'pages.system.approvalProcesses.disabled',
+          ),
       },
       {
         title: t('pages.system.approvalProcesses.nodesConfig'),
@@ -132,6 +134,8 @@ const ApprovalProcessListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<any>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   /**
    * 处理新建审批流程
    */
@@ -169,26 +173,26 @@ const ApprovalProcessListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: ApprovalProcess) => {
-    const req = ++approvalProcessDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getApprovalProcessByUuid(record.uuid);
-      if (approvalProcessDetailReqRef.current !== req) return;
+      const detail = await getApprovalProcessByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (approvalProcessDetailReqRef.current === req) {
-        messageApi.error(error.message || t('pages.system.approvalProcesses.getDetailFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.approvalProcesses.getDetailFailed')));
     } finally {
-      if (approvalProcessDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = async (record: ApprovalProcess) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -521,20 +525,22 @@ const ApprovalProcessListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('pages.system.approvalProcesses.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
+        detail={detailData}
+        detailColumns={approvalProcessDetailDescColumns}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
-          detailData ? (
-            <Descriptions
-              column={1}
-              items={detailDrawerDescriptionItems(approvalProcessDetailDescColumns, detailData as Record<string, unknown>)}
-            />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
       />
     </>
   );

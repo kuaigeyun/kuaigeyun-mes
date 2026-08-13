@@ -16,7 +16,6 @@ import {
   AutoComplete,
   Button,
   Col,
-  Descriptions,
   Form,
   List,
   Modal,
@@ -29,8 +28,10 @@ import {
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
-import { flushDrawerOpen, ListPageTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { ListPageTemplate } from '../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import { UniTable } from '../../../../components/uni-table';
 import { DepartmentFormModal } from '../components/DepartmentFormModal';
 import {
@@ -58,7 +59,7 @@ const DepartmentListPage: React.FC = () => {
   const trialRunMode = useTrialRunMode();
   const { message: messageApi, modal } = App.useApp();
   const actionRef = useRef<any>();
-  const departmentDetailReqRef = useRef(0);
+  const detailRetryUuidRef = useRef<string | null>(null);
 
   const departmentDetailDescColumns = useMemo<ProDescriptionsItemProps<Department>[]>(
     () => [
@@ -106,6 +107,7 @@ const DepartmentListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<Department | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [loadPresetLoading, setLoadPresetLoading] = useState(false);
   const [presetModalVisible, setPresetModalVisible] = useState(false);
   const [presetList, setPresetList] = useState<PresetDepartmentItem[]>([]);
@@ -429,26 +431,26 @@ const DepartmentListPage: React.FC = () => {
     setModalVisible(true);
   };
 
-  const handleView = async (record: Department) => {
-    const req = ++departmentDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getDepartmentByUuid(record.uuid);
-      if (departmentDetailReqRef.current !== req) return;
+      const detail = await getDepartmentByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (departmentDetailReqRef.current === req) {
-        messageApi.error(error.message || t('common.loadFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('common.loadFailed')));
     } finally {
-      if (departmentDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = (record: Department) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   const isDepartmentNotFoundError = (error: unknown): boolean => {
@@ -821,20 +823,26 @@ const DepartmentListPage: React.FC = () => {
         deptTreeItems={deptTreeData}
       />
 
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('field.department.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
-          detailData ? (
-            <Descriptions
-              column={1}
-              items={detailDrawerDescriptionItems(departmentDetailDescColumns, detailData)}
-            />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryUuidRef.current;
+          if (id) void loadDetail(id);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detailData), () => {
+          if (!detailData) return;
+          void handleEdit(detailData);
+        })}
+        detail={detailData}
+        detailColumns={departmentDetailDescColumns}
       />
 
       <Modal

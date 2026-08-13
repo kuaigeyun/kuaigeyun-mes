@@ -5,7 +5,7 @@
  * 支持创建备份、恢复备份、删除备份等功能。
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import dayjs from 'dayjs';
 import { rowActionKind } from '../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
@@ -26,8 +26,9 @@ import { renderSystemStatusTag, renderSystemTypeMarker } from '../utils/systemLi
 import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea';
 import { EyeOutlined, PlusOutlined, ReloadOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined, SyncOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
+import { SystemMasterDetailDrawer } from '../shared/systemMasterDetailDrawer';
+import { getApiErrorMessage } from '../../../utils/errorHandler';
 import {
   getBackups,
   createBackup,
@@ -109,6 +110,9 @@ const DataBackupsPage: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentBackup, setCurrentBackup] = useState<DataBackup | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   const [restoreBackupRecord, setRestoreBackupRecord] = useState<DataBackup | null>(null);
   const [form] = ProForm.useForm();
@@ -166,14 +170,26 @@ const DataBackupsPage: React.FC = () => {
   /**
    * 查看备份详情
    */
-  const handleViewDetail = async (record: DataBackup) => {
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getBackupDetail(record.uuid);
+      const detail = await getBackupDetail(uuid);
       setCurrentBackup(detail);
-      setDetailDrawerVisible(true);
-    } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.dataBackups.getDetailFailed'));
+    } catch (error) {
+      setCurrentBackup(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.dataBackups.getDetailFailed')));
+    } finally {
+      setDetailLoading(false);
     }
+  };
+
+  const handleViewDetail = async (record: DataBackup) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDetailDrawerVisible(true);
+    setCurrentBackup(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -1017,17 +1033,22 @@ const DataBackupsPage: React.FC = () => {
       </Modal>
 
       {/* 备份详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('pages.system.dataBackups.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentBackup(null);
+          setDetailError(null);
         }}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={currentBackup ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, currentBackup)} />
-          ) : null}
+        detail={currentBackup}
+        detailColumns={detailColumns}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
       />
     </>
   );

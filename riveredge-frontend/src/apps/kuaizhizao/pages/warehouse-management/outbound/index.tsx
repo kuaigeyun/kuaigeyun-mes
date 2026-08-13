@@ -9,7 +9,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, type ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Tooltip, Typography, Spin, Empty, Select, Descriptions, Input, InputNumber, theme as AntdTheme } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Tooltip, Typography, Spin, Empty, Select, Input, InputNumber, theme as AntdTheme } from 'antd';
 import { CheckCircleOutlined, PlayCircleOutlined, RollbackOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
@@ -25,12 +25,9 @@ import {
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { ListPageTemplate, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { UniPullLoadButton } from '../../../../../components/uni-pull';
-import {
-  DocumentTrackingTimelineBody,
-  useDocumentTracking,
-} from '../../../../../components/document-tracking-panel';
+import { OutboundDetailDrawer } from './components/OutboundDetailDrawer';
 import { WarehouseTraceBriefPrimaryActions } from '../WarehouseTraceBriefFooter';
 import { warehouseApi, workOrderApi, outsourceMaterialIssueApi } from '../../../services/production';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
@@ -38,7 +35,7 @@ import { mapWarehouseSelectOptions, type WarehouseSelectOption } from './outboun
 import { LinkedOqcPanel } from '../../quality-management/components/LinkedInspectionPanel';
 import { getOutboundLifecycle } from '../../../utils/outboundLifecycle';
 import dayjs from 'dayjs';
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentActionRegistry';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { outboundTypeToPrintDocumentType } from '../../../utils/kuaizhizaoPrintConfig';
@@ -86,6 +83,7 @@ import {
   outboundSourceDocNo,
   resolveOutboundHubDateRaw,
   resolveOutboundHubOperator,
+  outboundDocumentTrackingType,
 } from './outboundHubTypes';
 import { outboundIssueTypeMarkerValueEnum, renderOutboundIssueTypeMarkerTag } from '../shared/warehouseMarkerTags';
 import { StatusTag } from '../../../../../constants/statusBadges';
@@ -114,16 +112,6 @@ interface OutboundOrderItem {
   batch_number?: string;
   material_unit?: string;
   delivery_quantity?: number;
-}
-
-function outboundDocumentTrackingType(
-  order: OutboundOrder,
-): 'production_picking' | 'sales_delivery' | 'other_outbound' | 'material_borrow' | undefined {
-  if (order.outbound_type === 'sales_delivery') return 'sales_delivery';
-  if (order.outbound_type === 'production_picking') return 'production_picking';
-  if (order.outbound_type === 'other_outbound') return 'other_outbound';
-  if (order.outbound_type === 'material_borrow') return 'material_borrow';
-  return undefined;
 }
 
 const SALES_DELIVERY_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_deliveries';
@@ -196,8 +184,10 @@ const OutboundPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [currentOrder, setCurrentOrder] = useState<OutboundOrder | null>(null);
   const [outboundTrackingRefreshKey, setOutboundTrackingRefreshKey] = useState(0);
+  const detailRetryRecordRef = useRef<OutboundOrder | null>(null);
   const [editablePickingQuantities, setEditablePickingQuantities] = useState<Record<number, number>>({});
   const [editablePickingWarehouses, setEditablePickingWarehouses] = useState<
     Record<number, { id: number; name: string }>
@@ -307,7 +297,6 @@ const OutboundPage: React.FC = () => {
   }, [currentOrder, invalidateMenuBadgeCounts]);
 
   const outboundDocTrackingType = currentOrder ? outboundDocumentTrackingType(currentOrder) : undefined;
-  const outboundTracking = useDocumentTracking(outboundDocTrackingType, currentOrder?.id, outboundTrackingRefreshKey);
 
   useEffect(() => {
     const loadExecutionConfig = async () => {
@@ -355,8 +344,10 @@ const OutboundPage: React.FC = () => {
    * 处理查看详情
    */
   const handleDetail = async (record: OutboundOrder) => {
+    detailRetryRecordRef.current = record;
     setDetailDrawerVisible(true);
     setDetailLoading(true);
+    setDetailError(null);
     setCurrentOrder(null);
     resetProductionPickingEditState();
     try {
@@ -399,8 +390,9 @@ const OutboundPage: React.FC = () => {
         await loadProductionPickingFieldValuesForDetail(record.id);
       }
     } catch {
-      messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.loadDetailFailed'));
-      setDetailDrawerVisible(false);
+      const text = t('app.kuaizhizao.warehouseOutbound.msg.loadDetailFailed');
+      setDetailError(text);
+      messageApi.error(text);
     } finally {
       setDetailLoading(false);
     }
@@ -1134,21 +1126,6 @@ const OutboundPage: React.FC = () => {
     ],
   );
 
-  const outboundDetailCollaboration = useMemo(() => {
-    if (!currentOrder) return undefined;
-    const lifecycle = getOutboundLifecycle(currentOrder as Record<string, unknown>, t);
-    const mainStages = lifecycle.mainStages ?? [];
-    if (mainStages.length === 0) return undefined;
-    return (
-      <UniLifecycleStepper
-        steps={mainStages}
-        status={lifecycle.status}
-        showLabels
-        nextStepSuggestions={lifecycle.nextStepSuggestions}
-      />
-    );
-  }, [currentOrder, t]);
-
   const outboundTraceDocument = useMemo(() => {
     if (!currentOrder?.id || !outboundDocTrackingType) return undefined;
     return {
@@ -1369,19 +1346,35 @@ const OutboundPage: React.FC = () => {
         onSuccess={() => void handleConfirmPreviewSuccess()}
       />
 
-      <DetailDrawerTemplate
-        title={`${t('app.kuaizhizao.warehouseOutbound.detail.title')} - ${currentOrder?.delivery_code || currentOrder?.picking_code || ''}`}
+      <OutboundDetailDrawer
         open={detailDrawerVisible}
         zIndex={outboundDetailDrawerZIndex}
+        order={currentOrder}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const record = detailRetryRecordRef.current;
+          if (record) void handleDetail(record);
+        }}
+        trackingRefreshKey={outboundTrackingRefreshKey}
+        notesEditor={
+          currentOrder && isEditableProductionPicking(currentOrder) ? (
+            <Input.TextArea
+              rows={2}
+              value={editablePickingNotes}
+              onChange={(e) => setEditablePickingNotes(e.target.value)}
+              placeholder={t('app.kuaizhizao.common.fieldNotes')}
+            />
+          ) : undefined
+        }
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentOrder(null);
+          setDetailError(null);
           resetProductionPickingEditState();
           resetSalesDeliveryDetailFieldValues();
           resetProductionPickingDetailFieldValues();
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
-        loading={detailLoading}
         extra={
           currentOrder ? (
             <Space>
@@ -1458,91 +1451,6 @@ const OutboundPage: React.FC = () => {
             </Space>
           ) : null
         }
-        basic={
-          currentOrder ? (
-            <Descriptions
-              column={3}
-              size="small"
-              items={[
-                {
-                  key: 'code',
-                  label: t('app.kuaizhizao.warehouseOutbound.field.outboundCode'),
-                  children: (
-                    <Typography.Text copyable={{ text: String(currentOrder.delivery_code || currentOrder.picking_code || '') }}>
-                      {currentOrder.delivery_code || currentOrder.picking_code || '-'}
-                    </Typography.Text>
-                  ),
-                },
-                {
-                  key: 'type',
-                  label: t('app.kuaizhizao.warehouseOutbound.field.outboundType'),
-                  children: renderOutboundIssueTypeMarkerTag(t, currentOrder.outbound_type),
-                },
-                {
-                  key: 'status',
-                  label: t('app.kuaizhizao.warehouseOutbound.col.status'),
-                  children: renderDocumentStatusTag(currentOrder.status ?? '-', currentOrder.status),
-                },
-                ...(currentOrder.customer_name
-                  ? [{ key: 'customer', label: t('app.kuaizhizao.warehouseOutbound.col.customer'), children: currentOrder.customer_name }]
-                  : []),
-                ...(currentOrder.work_order_code
-                  ? [{ key: 'wo', label: t('app.kuaizhizao.warehouseOutbound.col.workOrderCode'), children: currentOrder.work_order_code }]
-                  : []),
-                {
-                  key: 'wh',
-                  label: t('app.kuaizhizao.warehouseOutbound.field.warehouse'),
-                  children: currentOrder.warehouse_name ?? '-',
-                },
-                {
-                  key: 'date',
-                  label: t('app.kuaizhizao.warehouseOutbound.col.outboundDate'),
-                  children: (() => {
-                    const raw = resolveOutboundHubDateRaw(currentOrder);
-                    return raw ? formatDateTimeBySiteSetting(raw as string) : '-';
-                  })(),
-                },
-                {
-                  key: 'op',
-                  label: t('app.kuaizhizao.warehouseOutbound.col.operator'),
-                  children: resolveOutboundHubOperator(currentOrder) || '-',
-                },
-                {
-                  key: 'totalQty',
-                  label: t('app.kuaizhizao.warehouseOutbound.col.totalQty'),
-                  children: currentOrder.total_quantity ?? '-',
-                },
-                {
-                  key: 'totalSku',
-                  label: t('app.kuaizhizao.warehouseOutbound.col.totalSku'),
-                  children: currentOrder.total_items ?? '-',
-                },
-                ...(isEditableProductionPicking(currentOrder) || currentOrder.notes
-                  ? [
-                      {
-                        key: 'notes',
-                        label: t('app.kuaizhizao.common.fieldNotes'),
-                        span: 3 as const,
-                        children: isEditableProductionPicking(currentOrder) ? (
-                          <Input.TextArea
-                            rows={2}
-                            value={editablePickingNotes}
-                            onChange={(e) => setEditablePickingNotes(e.target.value)}
-                            placeholder={t('app.kuaizhizao.common.fieldNotes')}
-                          />
-                        ) : (
-                          <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
-                            {currentOrder.notes}
-                          </Typography.Paragraph>
-                        ),
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-          ) : undefined
-        }
-        collaboration={outboundDetailCollaboration}
         traceDocument={outboundTraceDocument}
         supplementary={outboundDetailSupplementary}
         linesTitle={t('app.kuaizhizao.warehouseOutbound.section.outboundDetails')}
@@ -1565,26 +1473,6 @@ const OutboundPage: React.FC = () => {
                     }
                     dataSource={currentOrder.items}
                   />
-            </>
-          ) : undefined
-        }
-        timeline={
-          currentOrder?.id ? (
-            <>
-              {outboundTracking.loading && (
-                <div style={{ textAlign: 'center', padding: 24 }}>
-                  <Spin />
-                </div>
-              )}
-              {outboundTracking.error && !outboundTracking.loading && (
-                <Typography.Text type="danger">{outboundTracking.error}</Typography.Text>
-              )}
-              {outboundTracking.data && !outboundTracking.loading && (
-                <DocumentTrackingTimelineBody data={outboundTracking.data} />
-              )}
-              {!outboundTracking.loading && !outboundTracking.data && !outboundTracking.error && (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.warehouseOutbound.detail.noOperationLog')} />
-              )}
             </>
           ) : undefined
         }

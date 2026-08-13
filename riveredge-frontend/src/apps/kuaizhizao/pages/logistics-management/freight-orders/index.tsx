@@ -3,19 +3,22 @@ import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import {
   App,
   Button,
-  Drawer,
   Form,
   Input,
   Modal,
   Select,
-  Space,
   Table,
-  Timeline,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
-import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  DetailDrawerActions,
+  FormModalTemplate,
+  ListPageTemplate,
+  MODAL_CONFIG,
+} from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { FreightOrderDetailDrawer } from './components/FreightOrderDetailDrawer';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -29,10 +32,8 @@ import {
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import {
-  freightOrderStatusLabel,
   renderFreightOrderStatusTag,
   renderLogisticsBusinessDirectionTag,
 } from '../shared/logisticsListPresentation';
@@ -47,6 +48,7 @@ import {
   listFreightOrders,
   listFreightPullCandidates,
   listVehicles,
+  markFreightOrderInTransit,
   shipFreightOrder,
   signFreightOrder,
   type FreightOrder,
@@ -65,6 +67,9 @@ const FreightOrdersPage: React.FC = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<FreightOrder | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryIdRef = useRef<number | null>(null);
   const [selectedSources, setSelectedSources] = useState<FreightPullCandidate[]>([]);
   const selectedSourceByKeyRef = useRef<Map<string, FreightPullCandidate>>(new Map());
   const pendingCreateSourcesRef = useRef<FreightPullCandidate[] | null>(null);
@@ -145,10 +150,26 @@ const FreightOrdersPage: React.FC = () => {
     },
   });
 
-  const openDetail = async (row: FreightOrder) => {
-    const data = await getFreightOrder(row.id);
-    setDetail(data);
+  const loadDetail = useCallback(async (id: number) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      setDetail(await getFreightOrder(id));
+    } catch (error) {
+      const msg = getApiErrorMessage(error, t('app.kuaizhizao.logistics.message.loadDetailFailed'));
+      setDetail(null);
+      setDetailError(msg);
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [t]);
+
+  const openDetail = (row: FreightOrder) => {
+    detailRetryIdRef.current = row.id;
     setDetailOpen(true);
+    setDetail(null);
+    setDetailError(null);
+    void loadDetail(row.id);
   };
 
   const handleCreate = async (values: Record<string, unknown>) => {
@@ -180,6 +201,16 @@ const FreightOrdersPage: React.FC = () => {
     const data = await getFreightOrder(id);
     setDetail(data);
     actionRef.current?.reload();
+  };
+
+  const runStatusAction = async (action: () => Promise<FreightOrder>) => {
+    try {
+      const next = await action();
+      setDetail(next);
+      actionRef.current?.reload();
+    } catch (error) {
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+    }
   };
 
   const sourceColumns = useMemo(
@@ -403,81 +434,114 @@ const FreightOrdersPage: React.FC = () => {
         </Form.Item>
       </FormModalTemplate>
 
-      <Drawer
+      <FreightOrderDetailDrawer
         open={detailOpen}
-        width={720}
-        title={detail?.order_code}
-        onClose={() => setDetailOpen(false)}
+        onClose={() => {
+          setDetailOpen(false);
+          setDetail(null);
+          setDetailError(null);
+        }}
+        order={detail}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryIdRef.current;
+          if (id != null) void loadDetail(id);
+        }}
         extra={
           detail && perms.canUpdate ? (
-            <Space wrap>
-              {detail.status === 'draft' ? (
-                <Button onClick={() => dispatchFreightOrder(detail.id).then(() => refreshDetail(detail.id))}>
-                  {t('app.kuaizhizao.logistics.action.dispatch')}
-                </Button>
-              ) : null}
-              {detail.status === 'scheduled' ? (
-                <Button onClick={() => shipFreightOrder(detail.id).then(() => refreshDetail(detail.id))}>
-                  {t('app.kuaizhizao.logistics.action.ship')}
-                </Button>
-              ) : null}
-              {detail.status === 'in_transit' ? (
-                <Button onClick={() => arriveFreightOrder(detail.id).then(() => refreshDetail(detail.id))}>
-                  {t('app.kuaizhizao.logistics.action.arrive')}
-                </Button>
-              ) : null}
-              {detail.status === 'arrived' ? (
-                <Button
-                  type="primary"
-                  onClick={() => {
-                    signForm.resetFields();
-                    Modal.confirm({
-                      title: t('app.kuaizhizao.logistics.action.signReceipt'),
-                      content: (
-                        <Form form={signForm} layout="vertical">
-                          <Form.Item name="signed_by" label={t('app.kuaizhizao.logistics.field.signedBy')} rules={[{ required: true }]}>
-                            <Input />
-                          </Form.Item>
-                          <Form.Item name="receipt_result" label={t('app.kuaizhizao.logistics.field.receiptResult')} initialValue="full">
-                            <Select
-                              options={[
-                                { label: t('app.kuaizhizao.logistics.option.receiptResult.full'), value: 'full' },
-                                { label: t('app.kuaizhizao.logistics.option.receiptResult.partial'), value: 'partial' },
-                                { label: t('app.kuaizhizao.logistics.option.receiptResult.reject'), value: 'reject' },
-                              ]}
-                            />
-                          </Form.Item>
-                        </Form>
-                      ),
-                      onOk: async () => {
-                        const values = await signForm.validateFields();
-                        await signFreightOrder(detail.id, values);
-                        await refreshDetail(detail.id);
-                      },
-                    });
-                  }}
-                >
-                  {t('app.kuaizhizao.logistics.action.signReceipt')}
-                </Button>
-              ) : null}
-            </Space>
+            <DetailDrawerActions
+              items={[
+                {
+                  key: 'dispatch',
+                  visible: detail.status === 'draft',
+                  render: (
+                    <Button onClick={() => void runStatusAction(() => dispatchFreightOrder(detail.id))}>
+                      {t('app.kuaizhizao.logistics.action.dispatch')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'ship',
+                  visible: detail.status === 'scheduled',
+                  render: (
+                    <Button onClick={() => void runStatusAction(() => shipFreightOrder(detail.id))}>
+                      {t('app.kuaizhizao.logistics.action.ship')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'inTransit',
+                  visible: detail.status === 'shipped',
+                  render: (
+                    <Button onClick={() => void runStatusAction(() => markFreightOrderInTransit(detail.id))}>
+                      {t('app.kuaizhizao.logistics.action.markInTransit')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'arrive',
+                  visible: detail.status === 'in_transit',
+                  render: (
+                    <Button onClick={() => void runStatusAction(() => arriveFreightOrder(detail.id))}>
+                      {t('app.kuaizhizao.logistics.action.arrive')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'sign',
+                  visible: detail.status === 'arrived',
+                  render: (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        signForm.resetFields();
+                        Modal.confirm({
+                          title: t('app.kuaizhizao.logistics.action.signReceipt'),
+                          content: (
+                            <Form form={signForm} layout="vertical">
+                              <Form.Item
+                                name="signed_by"
+                                label={t('app.kuaizhizao.logistics.field.signedBy')}
+                                rules={[{ required: true }]}
+                              >
+                                <Input />
+                              </Form.Item>
+                              <Form.Item
+                                name="receipt_result"
+                                label={t('app.kuaizhizao.logistics.field.receiptResult')}
+                                initialValue="full"
+                              >
+                                <Select
+                                  options={[
+                                    { label: t('app.kuaizhizao.logistics.option.receiptResult.full'), value: 'full' },
+                                    {
+                                      label: t('app.kuaizhizao.logistics.option.receiptResult.partial'),
+                                      value: 'partial',
+                                    },
+                                    { label: t('app.kuaizhizao.logistics.option.receiptResult.reject'), value: 'reject' },
+                                  ]}
+                                />
+                              </Form.Item>
+                            </Form>
+                          ),
+                          onOk: async () => {
+                            const values = await signForm.validateFields();
+                            await signFreightOrder(detail.id, values);
+                            await refreshDetail(detail.id);
+                          },
+                        });
+                      }}
+                    >
+                      {t('app.kuaizhizao.logistics.action.signReceipt')}
+                    </Button>
+                  ),
+                },
+              ]}
+            />
           ) : null
         }
-      >
-        {detail ? (
-          <>
-            <p>
-              {t('app.kuaizhizao.logistics.field.status')}: {freightOrderStatusLabel(t, detail.status)}
-            </p>
-            <p>{t('app.kuaizhizao.logistics.field.trackingNumber')}: {detail.tracking_number || '-'}</p>
-            <Timeline
-              items={(detail.tracking_events || []).map((event) => ({
-                children: `${event.event_type} ${formatDateTimeBySiteSetting(event.event_time)} ${event.location || ''}`,
-              }))}
-            />
-          </>
-        ) : null}
-      </Drawer>
+      />
     </ListPageTemplate>
   );
 };

@@ -131,37 +131,14 @@ export function EquipmentMasterDetailDrawer<T extends Record<string, unknown>>({
       extra={extra}
       basic={
         detail ? (
-          basicExtra ? (
-            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <Descriptions
-                  column={2}
-                  size="small"
-                  items={detailDrawerDescriptionItems(visibleBasicColumns, detail)}
-                />
-              </div>
-              <div
-                style={{
-                  flex: '0 0 168px',
-                  width: 168,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 8,
-                }}
-              >
-                {basicExtra}
-              </div>
-            </div>
-          ) : (
-            <Descriptions
-              column={2}
-              size="small"
-              items={detailDrawerDescriptionItems(visibleBasicColumns, detail)}
-            />
-          )
+          <Descriptions
+            column={2}
+            size="small"
+            items={detailDrawerDescriptionItems(visibleBasicColumns, detail)}
+          />
         ) : undefined
       }
+      basicExtra={basicExtra}
       lines={lines}
       linesTitle={linesTitle}
     />

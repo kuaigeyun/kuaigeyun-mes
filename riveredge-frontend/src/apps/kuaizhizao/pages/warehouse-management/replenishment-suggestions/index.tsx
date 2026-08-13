@@ -576,7 +576,6 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.replenishmentSuggestions.colRelatedDemand'),
       dataIndex: 'related_demand_code',
-      render: (_, record) => record.related_demand_code || '-',
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colStatus'),

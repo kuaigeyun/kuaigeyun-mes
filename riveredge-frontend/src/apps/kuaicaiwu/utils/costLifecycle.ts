@@ -38,12 +38,12 @@ export function getCostCalculationLifecycle(
     subStages[0].status = 'done';
     subStages[1].status = 'done';
     subStages[2].status = 'done';
-    result = { percent: 100, stageName: '已审核', status: 'success', subStages };
+    result = { percent: 100, stageName: '已审核', status: 'success', subStages, mainStages: subStages };
   } else if (s === '已核算') {
     subStages[0].status = 'done';
     subStages[1].status = 'active';
     subStages[2].status = 'pending';
-    result = { percent: 66, stageName: '已核算', status: 'normal', subStages };
+    result = { percent: 66, stageName: '已核算', status: 'normal', subStages, mainStages: subStages };
   } else {
     subStages[0].status = 'active';
     result = {
@@ -51,6 +51,7 @@ export function getCostCalculationLifecycle(
       stageName: s === '草稿' ? '草稿' : s || '草稿',
       status: 'normal',
       subStages,
+      mainStages: subStages,
     };
   }
 

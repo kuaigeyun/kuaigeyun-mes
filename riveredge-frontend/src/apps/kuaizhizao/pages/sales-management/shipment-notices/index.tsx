@@ -11,13 +11,11 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import { DetailAuditPhaseTitleExtra } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
-import { useOptionalLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, Row, Col, Typography, Dropdown, Spin, Empty, Descriptions, Switch, Alert } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, DownOutlined, PrinterOutlined } from '@ant-design/icons';
@@ -40,7 +38,7 @@ const LazyUniImport = lazy(() =>
 import type { Material } from '../../../../master-data/types/material';
 import { DocumentAmountSummaryWatch } from '../../../components/document-amount-summary/DocumentAmountSummary';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, DetailDrawerSection } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
@@ -73,7 +71,7 @@ import {
   collectShipmentOutboundPushDocuments,
   shipmentNoticeOutboundPushPercent,
 } from '../shared/pushProgress';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
+import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -169,7 +167,6 @@ const ShipmentNoticesPage: React.FC = () => {
     [t, i18n.language, materialUnitImportOptions],
   );
   const navigate = useNavigate();
-  const linkedDetail = useOptionalLinkedDocumentDetail();
   const salesOrderEntityName = t('app.kuaizhizao.salesOrder.entityName');
   const shipmentNoticeEntityName = t('app.kuaizhizao.shipmentNotice.entityName');
   const statusMap = useMemo(
@@ -439,15 +436,11 @@ const ShipmentNoticesPage: React.FC = () => {
         if (record.sales_delivery_id) {
           return (
             <UniTableStackedPrimaryCell
-              primary={t('app.kuaizhizao.shipmentNotice.pulledToOutbound')}
-              secondary={String(record.sales_delivery_code || `#${record.sales_delivery_id}`)}
-              onSecondaryClick={() => {
-                linkedDetail?.openLinkedDocumentDetail(
-                  'sales_delivery',
-                  Number(record.sales_delivery_id),
-                );
-              }}
-            />
+                record={record as Record<string, unknown>}
+                secondaryKeys={['sales_delivery_code']}
+                primary={t('app.kuaizhizao.shipmentNotice.pulledToOutbound')}
+                secondary={String(record.sales_delivery_code || `#${record.sales_delivery_id}`)}
+              />
           );
         }
         return (
@@ -562,7 +555,6 @@ const ShipmentNoticesPage: React.FC = () => {
   ], SALES_DOC_LIST_FIELD_RANK),
     [
       t,
-      linkedDetail,
       shipmentNoticeAuditColumn,
       shipmentNoticeLifecycleValueEnum,
       shipmentNoticePerms.canDelete,
@@ -1304,7 +1296,7 @@ const ShipmentNoticesPage: React.FC = () => {
     }
   };
 
-  const detailColumns: ProDescriptionsItemProps<ShipmentNoticeDetail>[] = [
+  const detailColumns: ProDescriptionsItemProps<ShipmentNoticeDetail>[] = alignDescriptionColumns([
     { title: t('app.kuaizhizao.shipmentNotice.noticeCode'), dataIndex: 'notice_code' },
     { title: t('app.kuaizhizao.shipmentNotice.salesOrderCode'), dataIndex: 'sales_order_code' },
     { title: t('app.kuaizhizao.quotation.form.customer'), dataIndex: 'customer_name' },
@@ -1312,18 +1304,10 @@ const ShipmentNoticesPage: React.FC = () => {
     { title: t('field.customer.phone'), dataIndex: 'customer_phone' },
     { title: t('app.kuaizhizao.shipmentNotice.outboundWarehouse'), dataIndex: 'warehouse_name' },
     { title: t('app.kuaizhizao.shipmentNotice.plannedShipDate'), dataIndex: 'planned_ship_date', valueType: 'date' },
-    { title: t('app.kuaizhizao.salesOrder.shippingAddress'), dataIndex: 'shipping_address', span: 2 },
-    {
-      title: t('common.status'),
-      dataIndex: 'status',
-      render: (s) => {
-        const c = statusMap[(s as string) || ''] || { text: (s as string) || '-', color: 'default' };
-        return <Tag color={c.color}>{c.text}</Tag>;
-      },
-    },
+    { title: t('app.kuaizhizao.salesOrder.shippingAddress'), dataIndex: 'shipping_address', span: 3 },
     { title: t('app.kuaizhizao.shipmentNotice.notifiedAt'), dataIndex: 'notified_at', valueType: 'dateTime' },
-    { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes', span: 2 },
-  ];
+    { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes', span: 3 },
+  ]);
 
   /** 将 Excel 行写入当前表单「通知明细」（新建弹窗内导入或列表工具栏导入共用） */
   const applyExcelRowsToNoticeForm = (data: any[][]) => {
@@ -1968,12 +1952,23 @@ const ShipmentNoticesPage: React.FC = () => {
           setNoticeDetail(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        column={3}
-        dataSource={noticeDetail || undefined}
         extra={
           noticeDetail?.id != null ? (
             <Space size="small">
+              {noticeDetail.capabilities?.notify?.allowed && shipmentNoticePerms.canUpdate ? (
+                <Button
+                  {...rowActionKind('dispatch')}
+                  icon={<SendOutlined />}
+                  onClick={() => handleNotify(noticeDetail)}
+                >
+                  {t('app.kuaizhizao.shipmentNotice.notifyWarehouse')}
+                </Button>
+              ) : null}
+              {noticeDetail.capabilities?.withdraw?.allowed && shipmentNoticePerms.canAction?.('revoke') ? (
+                <Button {...rowActionKind('revoke')} onClick={() => handleWithdraw(noticeDetail)}>
+                  {t('app.kuaizhizao.shipmentNotice.withdrawNotify')}
+                </Button>
+              ) : null}
               <UniWorkflowActions {...rowActionKind('skip')}
                 record={noticeDetail}
                 entityName={shipmentNoticeEntityName}
@@ -1994,20 +1989,6 @@ const ShipmentNoticesPage: React.FC = () => {
                   }
                 }}
               />
-              {noticeDetail.capabilities?.notify?.allowed && shipmentNoticePerms.canUpdate ? (
-                <Button
-                  {...rowActionKind('dispatch')}
-                  icon={<SendOutlined />}
-                  onClick={() => handleNotify(noticeDetail)}
-                >
-                  {t('app.kuaizhizao.shipmentNotice.notifyWarehouse')}
-                </Button>
-              ) : null}
-              {noticeDetail.capabilities?.withdraw?.allowed && shipmentNoticePerms.canAction?.('revoke') ? (
-                <Button {...rowActionKind('revoke')} onClick={() => handleWithdraw(noticeDetail)}>
-                  {t('app.kuaizhizao.shipmentNotice.withdrawNotify')}
-                </Button>
-              ) : null}
               {!(
                 noticeDetail.capabilities?.print?.allowed === false ||
                 !shipmentNoticePerms.canPrint
@@ -2022,134 +2003,110 @@ const ShipmentNoticesPage: React.FC = () => {
             </Space>
           ) : null
         }
-        customContent={
+        basic={
+          noticeDetail ? (
+            <Descriptions
+              column={3}
+              size="small"
+              items={detailDrawerDescriptionItems(detailColumns, noticeDetail)}
+            />
+          ) : undefined
+        }
+        collaboration={
+          noticeDetail
+            ? (() => {
+                const lc = getShipmentNoticeLifecycle(noticeDetail as Record<string, unknown>, t);
+                const mainStages = lc.mainStages ?? [];
+                if (mainStages.length === 0) return null;
+                return (
+                  <UniLifecycleStepper
+                    steps={mainStages}
+                    showLabels
+                    status={lc.status}
+                    nextStepSuggestions={lc.nextStepSuggestions}
+                    hideNextStepSuggestions
+                  />
+                );
+              })()
+            : undefined
+        }
+        collaborationAuditRecord={noticeDetail}
+        supplementaryTitle={t('app.kuaizhizao.shipmentNotice.oqcSection')}
+        supplementary={
+          noticeDetail?.id != null ? (
+            <LinkedOqcPanel
+              shipmentNoticeId={noticeDetail.id}
+              active={detailDrawerVisible}
+              onNavigate={(path) => {
+                setDetailDrawerVisible(false);
+                setNoticeDetail(null);
+                navigate(path);
+              }}
+            />
+          ) : undefined
+        }
+        lines={
+          noticeDetail ? (
+            noticeDetail.items && noticeDetail.items.length > 0 ? (
+              <Table
+                size="small"
+                rowKey={(record: any) => record.id || record.material_code}
+                columns={[
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
+                  { title: t('app.kuaizhizao.salesOrder.unit'), dataIndex: 'material_unit', width: 60 },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.shipmentNotice.amount'), dataIndex: 'total_amount', width: 100, align: 'right' },
+                ]}
+                dataSource={noticeDetail.items}
+                pagination={false}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.shipmentNotice.noDetailItems')} />
+            )
+          ) : undefined
+        }
+        timeline={
           noticeDetail ? (
             <>
-              <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
-                <Descriptions
-                  column={3}
-                  size="small"
-                  items={detailColumns.map((col, index) => {
-                    const value = col.dataIndex
-                      ? (noticeDetail as Record<string, unknown>)[col.dataIndex as string]
-                      : undefined;
-                    let content: React.ReactNode = value as React.ReactNode;
-                    if (col.valueType === 'dateTime' && value) {
-                      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
-                    } else if (col.valueType === 'date' && value) {
-                      content = formatDateTime(value as string, 'YYYY-MM-DD');
-                    }
-                    if (col.render && noticeDetail != null) {
-                      content = col.render(content, noticeDetail, index, undefined as any, col as any) as React.ReactNode;
-                    }
-                    return {
-                      key: String(col.key ?? col.dataIndex ?? index),
-                      label: col.title as React.ReactNode,
-                      children: content !== undefined && content !== null ? content : '-',
-                      span: col.span ?? 1,
-                    };
-                  })}
-                />
-              </DetailDrawerSection>
-
-              <DetailDrawerSection
-                title={t('app.uniDetail.sectionCollaboration')}
-                titleExtra={<DetailAuditPhaseTitleExtra record={noticeDetail} />}
-              >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lc = getShipmentNoticeLifecycle(noticeDetail as Record<string, unknown>, t);
-                    const mainStages = lc.mainStages ?? [];
-                    if (mainStages.length === 0) return null;
-                    return (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        showLabels
-                        status={lc.status}
-                        nextStepSuggestions={lc.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
-                    );
-                  })()}
-                  
+              {shipmentTracking.loading && (
+                <div style={{ textAlign: 'center', padding: 24 }}>
+                  <Spin />
                 </div>
-              </DetailDrawerSection>
-
-              {noticeDetail.id != null ? (
-                <DetailDrawerSection title={t('app.kuaizhizao.shipmentNotice.oqcSection')}>
-                  <LinkedOqcPanel
-                    shipmentNoticeId={noticeDetail.id}
-                    active={detailDrawerVisible}
-                    onNavigate={(path) => {
+              )}
+              {shipmentTracking.error && !shipmentTracking.loading && (
+                <Typography.Text type="danger">{shipmentTracking.error}</Typography.Text>
+              )}
+              {shipmentTracking.data && !shipmentTracking.loading && (
+                <DocumentTrackingTimelineBody data={shipmentTracking.data} />
+              )}
+              {!shipmentTracking.loading && !shipmentTracking.data && !shipmentTracking.error && (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.shipmentNotice.noOperationRecords')} />
+              )}
+            </>
+          ) : undefined
+        }
+        traceDocument={
+          noticeDetail?.id != null
+            ? {
+                documentType: 'shipment_notice',
+                documentId: noticeDetail.id,
+                selfDocumentId: noticeDetail.id,
+                renderBriefActions: (doc) => (
+                  <WarehouseTraceBriefPrimaryActions
+                    doc={doc}
+                    t={t}
+                    navigate={navigate}
+                    closeDrawer={() => {
                       setDetailDrawerVisible(false);
                       setNoticeDetail(null);
-                      navigate(path);
                     }}
                   />
-                </DetailDrawerSection>
-              ) : null}
-
-              <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
-                {noticeDetail.items && noticeDetail.items.length > 0 ? (
-                  <Table
-                    size="small"
-                    rowKey={(record: any) => record.id || record.material_code}
-                    columns={[
-                      { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
-                      { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
-                      { title: t('app.kuaizhizao.salesOrder.unit'), dataIndex: 'material_unit', width: 60 },
-                      { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right', render: formatQuantity },
-                      { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' },
-                      { title: t('app.kuaizhizao.shipmentNotice.amount'), dataIndex: 'total_amount', width: 100, align: 'right' },
-                    ]}
-                    dataSource={noticeDetail.items}
-                    pagination={false}
-                  />
-                ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.shipmentNotice.noDetailItems')} />
-                )}
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
-                {shipmentTracking.loading && (
-                  <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Spin />
-                  </div>
-                )}
-                {shipmentTracking.error && !shipmentTracking.loading && (
-                  <Typography.Text type="danger">{shipmentTracking.error}</Typography.Text>
-                )}
-                {shipmentTracking.data && !shipmentTracking.loading && (
-                  <DocumentTrackingTimelineBody data={shipmentTracking.data} />
-                )}
-                {!shipmentTracking.loading && !shipmentTracking.data && !shipmentTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.shipmentNotice.noOperationRecords')} />
-                )}
-              </DetailDrawerSection>
-            </>
-          ) : null
+                ),
+              }
+            : undefined
         }
-      
-                    traceDocument={
-                      noticeDetail?.id != null
-                        ? {
-                            documentType: 'shipment_notice',
-                            documentId: noticeDetail.id,
-                            selfDocumentId: noticeDetail.id,
-                          renderBriefActions: (doc) => (
-                        <WarehouseTraceBriefPrimaryActions
-                          doc={doc}
-                          t={t}
-                          navigate={navigate}
-                          closeDrawer={() => {
-                            setDetailDrawerVisible(false);
-                            setNoticeDetail(null);
-                          }}
-                        />
-                      )
-                          }
-                        : undefined
-                    }
       />
 
       <FormModalTemplate
@@ -2190,7 +2147,7 @@ const ShipmentNoticesPage: React.FC = () => {
       <Modal
         title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
         open={pullPreviewOpen}
-        destroyOnClose
+        destroyOnHidden
         width={1100}
         onCancel={resetPullPreviewModal}
         okText={t('app.kuaizhizao.shipmentNotice.createTarget', { target: shipmentNoticeEntityName })}

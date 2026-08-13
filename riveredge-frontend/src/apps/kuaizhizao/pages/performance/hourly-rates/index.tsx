@@ -19,6 +19,8 @@ import {
   FormModalTemplate,
   MODAL_CONFIG,
 } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import { PerformanceConfigDetailDrawer } from '../shared/performanceConfigDetailDrawer';
 import { employeePerformanceApi } from '../../../services/performance';
 import type { HourlyRate } from '../../../types/performance';
@@ -45,6 +47,8 @@ const HourlyRatesPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detail, setDetail] = useState<HourlyRate | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     Promise.all([employeePerformanceApi.listDepartments(), employeePerformanceApi.listPositions()])
@@ -105,18 +109,31 @@ const HourlyRatesPage: React.FC = () => {
       messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
     }
   };
-  const handleOpenDetail = async (r: HourlyRate) => {
+  const loadDetail = async (id: number) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      setDrawerVisible(true);
+      setDetail(await employeePerformanceApi.getHourlyRate(id));
+    } catch (error) {
       setDetail(null);
-      setDetailLoading(true);
-      setDetail(await employeePerformanceApi.getHourlyRate(r.id));
-    } catch (e: any) {
-      messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
-      setDrawerVisible(false);
+      setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.performance.common.messages.loadFailed')));
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const handleOpenDetail = (r: HourlyRate) => {
+    detailRetryIdRef.current = r.id;
+    setDrawerVisible(true);
+    setDetail(null);
+    setDetailError(null);
+    void loadDetail(r.id);
+  };
+
+  const handleCloseDetail = () => {
+    setDrawerVisible(false);
+    setDetail(null);
+    setDetailError(null);
   };
 
   const columns: ProColumns<HourlyRate>[] = useMemo(
@@ -173,7 +190,6 @@ const HourlyRatesPage: React.FC = () => {
         title: t('app.kuaizhizao.performance.common.columns.actions'),
         key: 'action',
         valueType: 'option',
-        width: 160,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => (
@@ -316,14 +332,20 @@ const HourlyRatesPage: React.FC = () => {
         title={t('app.kuaizhizao.performance.hourlyRates.detailTitle')}
         open={drawerVisible}
         zIndex={detailDrawerZIndex}
-        onClose={() => {
-          setDrawerVisible(false);
-          setDetail(null);
-        }}
+        onClose={handleCloseDetail}
         loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryIdRef.current;
+          if (id != null) void loadDetail(id);
+        }}
         detail={detail}
         detailColumns={detailColumns}
-        t={t}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detail), () => {
+          if (!detail) return;
+          setEditId(detail.id);
+          setModalVisible(true);
+        })}
       />
     </>
   );

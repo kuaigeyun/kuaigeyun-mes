@@ -8,13 +8,13 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, type ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Avatar, Badge, Button, Card, Descriptions, Popconfirm, Space, Tag, Tooltip, Typography, theme } from 'antd';
+import { App, Avatar, Badge, Button, Card, Popconfirm, Space, Tag, Tooltip, Typography, theme } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { EyeOutlined, BarChartOutlined, LogoutOutlined, UserOutlined, ClockCircleOutlined, GlobalOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
-import { DRAWER_CONFIG, ListPageTemplate } from '../../../components/layout-templates';
+import { ListPageTemplate } from '../../../components/layout-templates';
+import { SystemMasterDetailDrawer } from '../shared/systemMasterDetailDrawer';
 import { useListPageStatCardsVisible } from '../../../components/layout-templates/listPageStatCardsContext';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import {
   getOnlineUsers,
@@ -48,6 +48,7 @@ const OnlineUsersPage: React.FC = () => {
   const [stats, setStats] = useState<OnlineUserStats | null>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentUserInfo, setCurrentUserInfo] = useState<OnlineUser | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   /**
@@ -130,8 +131,10 @@ const OnlineUsersPage: React.FC = () => {
    * 查看用户详情
    */
   const handleViewDetail = (record: OnlineUser) => {
-    setCurrentUserInfo(record);
     setDetailDrawerVisible(true);
+    setCurrentUserInfo(null);
+    setDetailError(null);
+    setCurrentUserInfo(record);
   };
 
   /**
@@ -490,17 +493,17 @@ const OnlineUsersPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 用户详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('pages.system.onlineUsers.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentUserInfo(null);
+          setDetailError(null);
         }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
-        basic={currentUserInfo ? (
-            <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, currentUserInfo)} />
-          ) : null}
+        detail={currentUserInfo}
+        detailColumns={detailColumns}
+        error={detailError}
       />
     </>
   );

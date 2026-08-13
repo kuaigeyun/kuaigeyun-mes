@@ -123,6 +123,9 @@ const STAGE_KEY_ICONS: Record<string, LucideIcon> = {
   // 财务类
   settled: DollarSign,
   // 异常处理类
+  investigating: Search,
+  correcting: Lightbulb,
+  closed: CheckCircle,
   processing: RefreshCw,
   resolved: CheckCircle,
 };

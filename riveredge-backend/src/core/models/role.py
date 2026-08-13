@@ -45,7 +45,7 @@ class Role(BaseModel):
     external_partner_type = fields.CharField(
         max_length=20,
         null=True,
-        description="外部角色合作方类型：customer/supplier；内部与触屏专用为空",
+        description="外部角色合作方类型：customer/supplier/manufacturer；内部与触屏专用为空",
     )
     functional_domain = fields.CharField(
         max_length=32,

@@ -19,10 +19,22 @@ from apps.kuaizhizao.services.document_action_policy.types import QualityInspect
 class IncomingInspectionBase(BaseSchema):
     """来料检验单基础schema"""
     inspection_code: str = Field(..., max_length=50, description="检验单编码")
-    purchase_receipt_id: int = Field(..., description="采购入库单ID")
+    source_type: Optional[str] = Field(
+        "purchase_receipt",
+        max_length=30,
+        description="来源类型（purchase_receipt/customer_material_inbound）",
+    )
+    # 与模型一致：采购入库 / 代工来料二选一，允许为空
+    purchase_receipt_id: Optional[int] = Field(None, description="采购入库单ID")
     purchase_receipt_code: Optional[str] = Field(None, max_length=50, description="采购入库单编码")
+    customer_material_registration_id: Optional[int] = Field(None, description="代工来料单ID")
+    customer_material_registration_code: Optional[str] = Field(
+        None, max_length=50, description="代工来料单编码"
+    )
     supplier_id: Optional[int] = Field(None, description="供应商ID")
     supplier_name: Optional[str] = Field(None, max_length=200, description="供应商名称")
+    customer_id: Optional[int] = Field(None, description="客户ID")
+    customer_name: Optional[str] = Field(None, max_length=200, description="客户名称")
     material_id: Optional[int] = Field(None, description="物料ID（如果使用items则不需要）")
     material_code: Optional[str] = Field(None, max_length=50, description="物料编码（如果使用items则不需要）")
     material_name: Optional[str] = Field(None, max_length=200, description="物料名称（如果使用items则不需要）")

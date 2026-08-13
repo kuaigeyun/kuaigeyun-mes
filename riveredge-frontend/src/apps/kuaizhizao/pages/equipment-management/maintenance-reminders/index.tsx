@@ -419,7 +419,6 @@ const MaintenanceRemindersPage: React.FC = () => {
         {
           title: t('common.actions'),
           valueType: 'option',
-          width: 200,
           fixed: 'right',
           render: (_, record) => (
             <Space>

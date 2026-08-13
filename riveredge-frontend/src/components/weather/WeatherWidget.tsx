@@ -2,7 +2,7 @@
  * 天气组件
  *
  * 显示当前天气信息，包括温度、天气状况、写实图标
- * 根据IP自动定位并获取天气
+ * 按站点「用户位置」：IP 定位或手工行政区
  *
  * @author Luigi Lu
  * @date 2026-01-21
@@ -20,7 +20,9 @@ import {
   localizeWeatherData,
   reverseGeocodeLabel,
   resolveWeatherLanguage,
+  getSiteWeatherLocationKey,
 } from '../../services/weather';
+import { useConfigStore } from '../../stores/configStore';
 import { getWeatherIcon } from './weatherIcons';
 
 const { Text } = Typography;
@@ -53,6 +55,12 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
   tone = 'dark',
 }) => {
   const { t, i18n } = useTranslation();
+  const locationMode = useConfigStore((s) => s.getConfig<string>('user_location.mode', 'ip'));
+  const locationCodes = useConfigStore((s) => s.getConfig<string[]>('user_location.region_codes', []));
+  const locationKey = useMemo(
+    () => getSiteWeatherLocationKey(),
+    [locationMode, Array.isArray(locationCodes) ? locationCodes.join('/') : '']
+  );
   // 1. 优先从本地缓存读取，实现"秒开"
   const cachedWeather = getCachedWeather(i18n.language);
   const [weather, setWeather] = useState<WeatherData | null>(cachedWeather);
@@ -123,26 +131,25 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {
-      if (!weatherRef.current) {
-        // 没有任何数据（缓存键变更导致读不到旧缓存），必须立即触发加载
-        loadWeather();
-        window.sessionStorage.setItem(WEATHER_REFRESH_ONCE_PER_PAGE_KEY, '1');
+      const pageKey = `${WEATHER_REFRESH_ONCE_PER_PAGE_KEY}:${locationKey}`;
+      const cached = getCachedWeather(i18n.language);
+      if (cached && !isWeatherCacheExpired()) {
+        setWeather(cached);
+        onWeatherChange?.(cached);
+        window.sessionStorage.setItem(pageKey, '1');
         return;
       }
-      // 有数据时，仅在页面刷新后的首次访问中检查缓存是否过期
-      const hasCheckedThisPage = window.sessionStorage.getItem(WEATHER_REFRESH_ONCE_PER_PAGE_KEY) === '1';
-      if (!hasCheckedThisPage) {
-        window.sessionStorage.setItem(WEATHER_REFRESH_ONCE_PER_PAGE_KEY, '1');
-        if (isWeatherCacheExpired()) {
-          loadWeather();
-        }
+      const hasCheckedThisPage = window.sessionStorage.getItem(pageKey) === '1';
+      if (!hasCheckedThisPage || !weatherRef.current) {
+        window.sessionStorage.setItem(pageKey, '1');
+        loadWeather(true);
       }
     }, 0);
 
     return () => {
       window.clearTimeout(timerId);
     };
-  }, [loadWeather]);
+  }, [loadWeather, locationKey, i18n.language, onWeatherChange]);
 
   const iconBox = mini ? 48 : 56;
   const tempSize = mini ? 16 : compact ? 24 : 20;

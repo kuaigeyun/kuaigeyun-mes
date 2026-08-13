@@ -262,7 +262,6 @@ const SerialsPage: React.FC = () => {
       title: t('common.actions'),
       key: 'action',
       valueType: 'option',
-      width: 150,
       fixed: 'right',
       render: (_, record) => (
         <Space>

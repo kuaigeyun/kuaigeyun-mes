@@ -1378,3 +1378,53 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             "updated_by_name": (await self.get_user_info(user_id))["name"],
         }).save()
         return await self.get_inquiry_by_id(tenant_id, inquiry_id)
+
+    async def cancel_inquiry(
+        self,
+        tenant_id: int,
+        inquiry_id: int,
+        user_id: int,
+        reason: Optional[str] = None,
+    ) -> PurchaseInquiryResponse:
+        """取消询价：未转采购订单的进行中询价可终止。"""
+        await self._ensure_module_enabled(tenant_id)
+        inquiry = await PurchaseInquiry.get_or_none(
+            tenant_id=tenant_id, id=inquiry_id, deleted_at__isnull=True
+        )
+        if not inquiry:
+            raise NotFoundError(f"询价单不存在: {inquiry_id}")
+
+        st = str(inquiry.status or "").strip()
+        if st in (
+            PurchaseInquiryStatus.CANCELLED.value,
+            "已取消",
+            "cancelled",
+        ):
+            raise BusinessLogicError("询价单已取消")
+        if st in (
+            PurchaseInquiryStatus.CONVERTED.value,
+            "已转单",
+        ):
+            raise BusinessLogicError("已转采购订单的询价单不可取消")
+
+        linked = await PurchaseInquiryItem.filter(
+            tenant_id=tenant_id,
+            inquiry_id=inquiry_id,
+            purchase_order_id__isnull=False,
+        ).exists()
+        if linked:
+            raise BusinessLogicError("已关联采购订单的询价单不可取消")
+
+        user_info = await self.get_user_info(user_id)
+        notes = (inquiry.notes or "").strip()
+        cancel_reason = (reason or "取消询价，不再转单").strip()
+        prefix = f"[取消] {cancel_reason}"
+        await inquiry.update_from_dict(
+            {
+                "status": PurchaseInquiryStatus.CANCELLED.value,
+                "notes": f"{prefix}\n{notes}".strip() if notes else prefix,
+                "updated_by": user_id,
+                "updated_by_name": user_info["name"],
+            }
+        ).save()
+        return await self.get_inquiry_by_id(tenant_id, inquiry_id)

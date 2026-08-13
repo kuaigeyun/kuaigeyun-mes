@@ -11,7 +11,6 @@ import { CopyOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { NavigateFunction } from 'react-router-dom';
-import { useNavigate } from 'react-router-dom';
 import { AmountDisplay } from '../../../../../../components/permission';
 import { KUAIZHIZAO_SALES_ORDER_FIELD_RESOURCE as SO } from '../../../../constants/fieldPermissionResources';
 import { MaterialUnitLabel } from '../../../../../../components/material-unit-label';
@@ -21,7 +20,10 @@ import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle'
 import { DetailAuditPhaseTitleExtra } from '../../../../../../components/uni-audit/DetailAuditPhaseRow';
 import type { LifecycleResult } from '../../../../../../components/uni-lifecycle/types';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
-import { DetailDrawerSection, type TraceBriefDocument } from '../../../../../../components/layout-templates';
+import { DetailDrawerSection, detailDrawerDescriptionItems, type TraceBriefDocument } from '../../../../../../components/layout-templates';
+import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { alignDescriptionColumns } from '../../shared/documentFieldAlignment';
+import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
@@ -199,6 +201,7 @@ export const SalesOrderDetailReadonlyExtra: React.FC<{ onWorkflowSuccess?: () =>
 }) => {
   const { t } = useTranslation();
   const { order, handlePrintSalesOrder } = useSalesOrderDetailContext();
+  const salesOrderPerms = useResourcePermissions('kuaizhizao:sales-order');
   return (
     <Space size="small">
       <UniWorkflowActions
@@ -216,7 +219,7 @@ export const SalesOrderDetailReadonlyExtra: React.FC<{ onWorkflowSuccess?: () =>
             : t('app.kuaizhizao.salesOrder.submitConfirmAuto'),
         }}
       />
-      {order.id != null ? (
+      {order.id != null && salesOrderPerms.canPrint ? (
         <Button icon={<PrinterOutlined />} onClick={() => void handlePrintSalesOrder()}>
           {t('components.uniAction.print')}
         </Button>
@@ -257,7 +260,6 @@ function SalesOrderDetailCollaborationDrawerTitle() {
 
 export const SalesOrderDetailBasicPane: React.FC = () => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const {
     order,
@@ -268,19 +270,16 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
     customFieldValues,
   } = useSalesOrderDetailContext();
   const showCustomFields = hasCustomFieldsDetailContent(customFields, customFieldValues);
-  return (
-    <>
-    <Descriptions
-      column={3}
-      size="small"
-      items={[
-        // 单据与时间
+
+  const columns = useMemo(
+    () =>
+      alignDescriptionColumns<SalesOrder>([
         {
-          key: 'order_code',
-          label: t('app.kuaizhizao.salesOrder.orderCode'),
-          children: (
+          title: t('app.kuaizhizao.salesOrder.orderCode'),
+          dataIndex: 'order_code',
+          render: (_, record) => (
             <Space size={4}>
-              <span>{order.order_code ?? '-'}</span>
+              <span>{record.order_code ?? '-'}</span>
               <Tooltip title={t('app.kuaizhizao.salesOrder.printPdf')}>
                 <Button
                   type="link"
@@ -295,7 +294,7 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
                   size="small"
                   icon={<CopyOutlined style={{ fontSize: 12 }} />}
                   onClick={() => {
-                    const text = order.order_code ?? '';
+                    const text = record.order_code ?? '';
                     if (text) {
                       navigator.clipboard.writeText(text).then(
                         () => messageApi.success(t('common.copySuccess')),
@@ -308,94 +307,92 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
             </Space>
           ),
         },
-        { key: 'order_date', label: t('app.kuaizhizao.salesOrder.orderDate'), children: order.order_date || '-' },
-        { key: 'delivery_date', label: t('app.kuaizhizao.salesOrder.deliveryDate'), children: order.delivery_date || '-' },
-        // 客户联系
-        { key: 'customer_name', label: t('app.kuaizhizao.salesOrder.customerName'), children: order.customer_name || '-' },
-        { key: 'customer_contact', label: t('app.kuaizhizao.salesOrder.customerContact'), children: order.customer_contact || '-' },
-        { key: 'customer_phone', label: t('app.kuaizhizao.salesOrder.customerPhone'), children: order.customer_phone || '-' },
+        { title: t('app.kuaizhizao.salesOrder.orderDate'), dataIndex: 'order_date', valueType: 'date' },
+        { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', valueType: 'date' },
+        { title: t('app.kuaizhizao.salesOrder.customerName'), dataIndex: 'customer_name' },
+        { title: t('app.kuaizhizao.salesOrder.customerContact'), dataIndex: 'customer_contact' },
+        { title: t('app.kuaizhizao.salesOrder.customerPhone'), dataIndex: 'customer_phone' },
         {
-          key: 'contract_code',
-          label: t('app.kuaizhizao.salesContract.linkedContract'),
-          children: order.contract_code ? (
-            <Button
-              type="link"
-              size="small"
-              style={{ padding: 0, height: 'auto' }}
-              onClick={() =>
-                navigate('/apps/kuaizhizao/sales-management/sales-contracts', {
-                  state: { openContractId: order.contract_id },
-                })
-              }
-            >
-              {order.contract_code}
-            </Button>
-          ) : (
-            '-'
-          ),
+          title: t('app.kuaizhizao.salesContract.linkedContract'),
+          dataIndex: 'contract_code',
+          key: 'linked_contract_code',
+        },
+        { title: t('app.kuaizhizao.salesOrder.shippingAddress'), dataIndex: 'shipping_address', span: 3 },
+        { title: t('app.kuaizhizao.salesOrder.salesman'), dataIndex: 'salesman_name' },
+        {
+          title: t('app.kuaizhizao.salesOrder.shippingMethod'),
+          dataIndex: 'shipping_method',
+          render: (_, record) =>
+            shippingMethodOptions.find((o) => o.value === record.shipping_method)?.label ??
+            record.shipping_method ??
+            '-',
         },
         {
-          key: 'shipping_address',
-          label: t('app.kuaizhizao.salesOrder.shippingAddress'),
-          children: order.shipping_address || '-',
-          span: 3,
-        },
-        // 销售与履约（交货方式、付款条件）
-        { key: 'salesman_name', label: t('app.kuaizhizao.salesOrder.salesman'), children: order.salesman_name || '-' },
-        {
-          key: 'shipping_method',
-          label: t('app.kuaizhizao.salesOrder.shippingMethod'),
-          children: shippingMethodOptions.find((o) => o.value === order.shipping_method)?.label ?? order.shipping_method ?? '-',
+          title: t('app.kuaizhizao.salesOrder.paymentTerms'),
+          dataIndex: 'payment_terms',
+          render: (_, record) =>
+            paymentTermsOptions.find((o) => o.value === record.payment_terms)?.label ??
+            record.payment_terms ??
+            '-',
         },
         {
-          key: 'payment_terms',
-          label: t('app.kuaizhizao.salesOrder.paymentTerms'),
-          children: paymentTermsOptions.find((o) => o.value === order.payment_terms)?.label ?? order.payment_terms ?? '-',
-        },
-        // 计价与金额
-        {
-          key: 'price_type',
-          label: t('app.kuaizhizao.salesOrder.priceType'),
-          children:
-            order.price_type === 'tax_inclusive'
+          title: t('app.kuaizhizao.salesOrder.priceType'),
+          dataIndex: 'price_type',
+          render: (_, record) =>
+            record.price_type === 'tax_inclusive'
               ? t('app.kuaizhizao.salesOrder.taxInclusive')
               : t('app.kuaizhizao.salesOrder.taxExclusive'),
         },
         {
-          key: 'discount_amount',
-          label: t('app.kuaizhizao.salesOrder.discountAmount'),
-          children:
-            Number(order.discount_amount ?? 0) > 0 ? (
-              <AmountDisplay resource={SO} fieldName="amount" value={order.discount_amount ?? 0} />
+          title: t('app.kuaizhizao.salesOrder.discountAmount'),
+          dataIndex: 'discount_amount',
+          render: (_, record) =>
+            Number(record.discount_amount ?? 0) > 0 ? (
+              <AmountDisplay resource={SO} fieldName="amount" value={record.discount_amount ?? 0} />
             ) : (
               '-'
             ),
         },
         {
-          key: 'total_amount',
-          label: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
-          children: <AmountDisplay resource={SO} fieldName="total_amount" value={order.total_amount ?? 0} />,
+          title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
+          dataIndex: 'total_amount',
+          render: (_, record) => (
+            <AmountDisplay resource={SO} fieldName="total_amount" value={record.total_amount ?? 0} />
+          ),
         },
         {
-          key: 'total_fee_amount',
-          label: t('app.kuaizhizao.salesOrder.totalFeeAmount'),
-          children: <AmountDisplay resource={SO} fieldName="amount" value={order.total_fee_amount ?? 0} />,
+          title: t('app.kuaizhizao.salesOrder.totalFeeAmount'),
+          dataIndex: 'total_fee_amount',
+          render: (_, record) => (
+            <AmountDisplay resource={SO} fieldName="amount" value={record.total_fee_amount ?? 0} />
+          ),
         },
-      ]}
-    />
-    {showCustomFields ? (
-      <div style={{ marginTop: 16 }}>
-        <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
-      </div>
-    ) : null}
-    <Descriptions
-      column={3}
-      size="small"
-      style={{ marginTop: showCustomFields ? 16 : 0 }}
-      items={[
-        { key: 'notes', label: t('app.kuaizhizao.salesOrder.notes'), children: order.notes || '-', span: 3 },
-      ]}
-    />
+      ] as ProDescriptionsItemProps<SalesOrder>[]),
+    [t, shippingMethodOptions, paymentTermsOptions, handlePrintSalesOrder, messageApi],
+  );
+
+  const noteColumns = useMemo(
+    () =>
+      alignDescriptionColumns<SalesOrder>([
+        { title: t('app.kuaizhizao.salesOrder.notes'), dataIndex: 'notes', span: 3 },
+      ] as ProDescriptionsItemProps<SalesOrder>[]),
+    [t],
+  );
+
+  return (
+    <>
+      <Descriptions column={3} size="small" items={detailDrawerDescriptionItems(columns, order)} />
+      {showCustomFields ? (
+        <div style={{ marginTop: 16 }}>
+          <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
+        </div>
+      ) : null}
+      <Descriptions
+        column={3}
+        size="small"
+        style={{ marginTop: showCustomFields ? 16 : 0 }}
+        items={detailDrawerDescriptionItems(noteColumns, order)}
+      />
     </>
   );
 };

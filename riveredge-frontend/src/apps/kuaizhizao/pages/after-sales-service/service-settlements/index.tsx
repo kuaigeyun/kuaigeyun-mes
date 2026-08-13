@@ -1,10 +1,11 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Button, Drawer, Input, Modal, Space, message } from 'antd';
+import { Button, Input, Modal, message } from 'antd';
 import { CheckOutlined, CloseOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
-import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -13,6 +14,7 @@ import {
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { hasReviewPermission } from '../../../../../utils/permissionContract';
 import { serviceSettlementApi, type ServiceSettlement } from '../../../services/after-sales-service';
+import { ServiceSettlementDetailDrawer } from './components/ServiceSettlementDetailDrawer';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
@@ -30,12 +32,35 @@ const ServiceSettlementsPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<ServiceSettlement | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryIdRef = useRef<number | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectRemarks, setRejectRemarks] = useState('');
 
+  const loadDetail = useCallback(async (id: number) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      setDetail(await serviceSettlementApi.get(id));
+    } catch (error) {
+      setDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.detail.loadFailed')));
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [t]);
+
+  const openDetail = (row: ServiceSettlement) => {
+    detailRetryIdRef.current = row.id;
+    setDetailOpen(true);
+    setDetail(null);
+    setDetailError(null);
+    void loadDetail(row.id);
+  };
+
   const refreshDetail = async (id: number) => {
-    const data = await serviceSettlementApi.get(id);
-    setDetail(data);
+    setDetail(await serviceSettlementApi.get(id));
     actionRef.current?.reload();
   };
 
@@ -90,10 +115,7 @@ const ServiceSettlementsPage: React.FC = () => {
               <Button
                 {...rowActionKind('read')}
                 key="read"
-                onClick={async () => {
-                  setDetail(await serviceSettlementApi.get(row.id));
-                  setDetailOpen(true);
-                }}
+                onClick={() => openDetail(row)}
               />,
             ],
           },
@@ -132,49 +154,61 @@ const ServiceSettlementsPage: React.FC = () => {
         }}
       />
 
-      <Drawer
+      <ServiceSettlementDetailDrawer
         open={detailOpen}
-        width={720}
-        title={detail?.settlement_code}
-        onClose={() => setDetailOpen(false)}
+        onClose={() => {
+          setDetailOpen(false);
+          setDetail(null);
+          setDetailError(null);
+        }}
+        record={detail}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryIdRef.current;
+          if (id != null) void loadDetail(id);
+        }}
         extra={
-          detail && detail.status === '待审核' && canReview ? (
-            <Space>
-              <Button
-                type="primary"
-                icon={<CheckOutlined />}
-                onClick={async () => {
-                  await serviceSettlementApi.audit(detail.id);
-                  await refreshDetail(detail.id);
-                  message.success(t('app.kuaizhizao.afterSalesService.serviceSettlement.auditSuccess'));
-                }}
-              >
-                {t('components.uniAction.audit')}
-              </Button>
-              <Button
-                danger
-                icon={<CloseOutlined />}
-                onClick={() => {
-                  setRejectRemarks('');
-                  setRejectOpen(true);
-                }}
-              >
-                {t('components.uniAction.reject')}
-              </Button>
-            </Space>
-          ) : null
+          <DetailDrawerActions
+            items={[
+              {
+                key: 'audit',
+                visible: Boolean(detail && detail.status === '待审核' && canReview),
+                render: () => (
+                  <Button
+                    type="primary"
+                    icon={<CheckOutlined />}
+                    onClick={async () => {
+                      if (!detail) return;
+                      await serviceSettlementApi.audit(detail.id);
+                      await refreshDetail(detail.id);
+                      message.success(t('app.kuaizhizao.afterSalesService.serviceSettlement.auditSuccess'));
+                    }}
+                  >
+                    {t('components.uniAction.audit')}
+                  </Button>
+                ),
+              },
+              {
+                key: 'reject',
+                visible: Boolean(detail && detail.status === '待审核' && canReview),
+                render: () => (
+                  <Button
+                    danger
+                    icon={<CloseOutlined />}
+                    onClick={() => {
+                      setRejectRemarks('');
+                      setRejectOpen(true);
+                    }}
+                  >
+                    {t('components.uniAction.reject')}
+                  </Button>
+                ),
+              },
+            ]}
+          />
         }
-      >
-        {detail ? (
-          <>
-            <p>{t('app.kuaizhizao.afterSalesService.serviceSettlement.field.customerName')}: {detail.customer_name}</p>
-            <p>{t('app.kuaizhizao.afterSalesService.serviceSettlement.field.warrantyFreeAmount')}: {detail.warranty_free_amount ?? 0}</p>
-            <p>{t('app.kuaizhizao.afterSalesService.serviceSettlement.field.chargeableAmount')}: {detail.chargeable_amount ?? 0}</p>
-            <p>{t('app.kuaizhizao.afterSalesService.serviceSettlement.field.totalAmount')}: {detail.total_amount ?? 0}</p>
-            <p>{t('app.kuaizhizao.afterSalesService.serviceSettlement.field.notes')}: {detail.notes || '-'}</p>
-          </>
-        ) : null}
-      </Drawer>
+      />
 
       <Modal
         open={rejectOpen}

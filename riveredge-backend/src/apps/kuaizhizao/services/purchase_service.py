@@ -1307,6 +1307,40 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         return await self.get_purchase_order_by_id(tenant_id, order_id)
 
+    async def close_purchase_order(
+        self,
+        tenant_id: int,
+        order_id: int,
+        closed_by: int,
+        reason: Optional[str] = None,
+    ) -> PurchaseOrderResponse:
+        """关闭采购订单：终止剩余未到货数量（已入库数据保留）。"""
+        order = await PurchaseOrder.get_or_none(
+            tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"采购订单不存在: {order_id}")
+        st = str(order.status or "")
+        if st in (
+            DocumentStatus.CLOSED.value,
+            DocumentStatus.CANCELLED.value,
+            DocumentStatus.COMPLETED.value,
+            "已关闭",
+            "已取消",
+            "已完成",
+            "关闭",
+        ):
+            raise BusinessLogicError(f"采购订单当前状态不可关闭: {st}")
+        if st in (DocumentStatus.DRAFT.value, "草稿"):
+            raise BusinessLogicError("草稿采购订单请使用删除，不能关闭")
+
+        await PurchaseOrder.filter(tenant_id=tenant_id, id=order_id).update(
+            status=DocumentStatus.CLOSED.value,
+            updated_by=closed_by,
+            notes=(order.notes or "") + f"\n关闭原因：{reason or '手动关闭，剩余数量不再执行'}",
+        )
+        return await self.get_purchase_order_by_id(tenant_id, order_id)
+
     async def delete_purchase_order(
         self, tenant_id: int, order_id: int, operator_id: Optional[int] = None
     ) -> bool:

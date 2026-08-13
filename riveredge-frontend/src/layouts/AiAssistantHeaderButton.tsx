@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import { Tooltip } from 'antd';
 import Lottie from 'lottie-react';
 import assistAnimation from '../../static/lottie/assist.json';
@@ -6,17 +6,17 @@ import assistAnimation from '../../static/lottie/assist.json';
 type Props = {
   tooltip: string;
   onClick: () => void;
-  isLightModeLightBg: boolean;
+  /** 深色/彩色顶栏：浅色实心圆底，避免紫黑耳机融进海军蓝 */
+  isDarkHeader?: boolean;
 };
 
-/** 顶栏 AI 入口：默认静态首帧，悬停时才播放 Lottie，避免全页持续动画掉帧 */
+/** 顶栏 AI 入口：默认静态首帧，悬停时从第 0 帧重播，离开停回首帧 */
 export const AiAssistantHeaderButton = React.memo(function AiAssistantHeaderButton({
   tooltip,
   onClick,
-  isLightModeLightBg,
+  isDarkHeader = false,
 }: Props) {
   const lottieRef = useRef<any>(null);
-  const [hovered, setHovered] = useState(false);
 
   return (
     <Tooltip title={tooltip}>
@@ -27,31 +27,25 @@ export const AiAssistantHeaderButton = React.memo(function AiAssistantHeaderButt
           onClick={onClick}
           onKeyDown={(e) => e.key === 'Enter' && onClick()}
           onMouseEnter={() => {
-            setHovered(true);
-            lottieRef.current?.play?.();
+            lottieRef.current?.goToAndPlay?.(0, true);
           }}
           onMouseLeave={() => {
-            setHovered(false);
-            lottieRef.current?.stop?.();
             lottieRef.current?.goToAndStop?.(0, true);
           }}
-          className="ai-assistant-lottie-btn"
+          className={
+            isDarkHeader ? 'ai-assistant-lottie-btn ai-assistant-lottie-btn--dark-header' : 'ai-assistant-lottie-btn'
+          }
         >
           <Lottie
             lottieRef={lottieRef}
             animationData={assistAnimation}
-            loop={hovered}
+            loop
             autoplay={false}
             style={{
-              width: 52,
-              height: 52,
+              width: 54,
+              height: 54,
               display: 'block',
-              ...(!isLightModeLightBg
-                ? {
-                    filter:
-                      'brightness(2) contrast(1.2) drop-shadow(0 0 6px rgba(255, 255, 255, 0.5)) drop-shadow(0 0 16px rgba(255, 255, 255, 0.25))',
-                  }
-                : {}),
+              opacity: 1,
             }}
           />
         </span>

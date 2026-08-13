@@ -239,7 +239,6 @@ const KuaioaCrudListPage: React.FC<Props> = ({
       key: 'action',
       valueType: 'option',
       fixed: 'right',
-      width: 180,
       hideInSearch: true,
       render: (_, record) => {
         const actions = [];

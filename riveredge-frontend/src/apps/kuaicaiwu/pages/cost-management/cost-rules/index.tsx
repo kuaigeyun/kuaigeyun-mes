@@ -11,7 +11,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Button, Space, Descriptions, Typography, Timeline, Popconfirm } from 'antd';
+import { App, Button, Space, Popconfirm } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { UniTable } from '../../../../../components/uni-table';
@@ -23,17 +23,13 @@ import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import {
   ListPageTemplate,
   FormModalTemplate,
-  DetailDrawerTemplate,
-  DetailDrawerSection,
   MODAL_CONFIG,
-  DRAWER_CONFIG,
 } from '../../../../../components/layout-templates';
-import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDetailDescriptionItems';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { CostRuleDetailDrawer } from './components/CostRuleDetailDrawer';
 import { costRuleApi } from '../../../services/cost';
 import { getRuleTypeSelectOptions, getRuleTypeTag } from '../../../utils/costUiLabels';
-import { renderFinanceActiveTag } from '../../../utils/financeListPresentation';
-import dayjs from 'dayjs';
-import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   COST_CRUD_PINNED_ACTIVE_FIELD,
@@ -79,9 +75,11 @@ const CostRulePage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const formRef = useRef<any>(null);
 
-  // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [costRuleDetail, setCostRuleDetail] = useState<CostRule | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
 
   /**
    * 处理新建规则
@@ -139,21 +137,35 @@ const CostRulePage: React.FC = () => {
     }
   };
 
-  /**
-   * 处理查看详情
-   */
-  const handleDetail = async (record: CostRule) => {
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      if (!record.uuid) {
-        messageApi.error(t('app.kuaicaiwu.costRule.uuidMissing'));
-        return;
-      }
-      const detail = await costRuleApi.get(record.uuid);
-      setCostRuleDetail(detail);
-      setDrawerVisible(true);
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaicaiwu.costRule.loadDetailFailed'));
+      setCostRuleDetail(await costRuleApi.get(uuid));
+    } catch (error) {
+      setCostRuleDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.kuaicaiwu.costRule.loadDetailFailed')));
+    } finally {
+      setDetailLoading(false);
     }
+  };
+
+  const handleDetail = (record: CostRule) => {
+    if (!record.uuid) {
+      messageApi.error(t('app.kuaicaiwu.costRule.uuidMissing'));
+      return;
+    }
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setCostRuleDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
+  };
+
+  const closeDetail = () => {
+    setDrawerVisible(false);
+    setCostRuleDetail(null);
+    setDetailError(null);
   };
 
   /**
@@ -368,55 +380,6 @@ const CostRulePage: React.FC = () => {
     [t],
   );
 
-  const detailItems: any[] = useMemo(
-    () => [
-      { title: t('app.kuaicaiwu.costRule.col.code'), dataIndex: 'code' },
-      { title: t('app.kuaicaiwu.costRule.col.name'), dataIndex: 'name' },
-      { title: t('app.kuaicaiwu.costRule.col.ruleType'), dataIndex: 'rule_type' },
-      { title: t('app.kuaicaiwu.costRule.col.costType'), dataIndex: 'cost_type' },
-      { title: t('app.kuaicaiwu.costRule.col.calculationMethod'), dataIndex: 'calculation_method' },
-      {
-        title: t('app.kuaicaiwu.costRule.col.calculationFormula'),
-        dataIndex: 'calculation_formula',
-        render: (text: any) => (text ? JSON.stringify(text, null, 2) : '-'),
-      },
-      {
-        title: t('app.kuaicaiwu.costRule.col.ruleParameters'),
-        dataIndex: 'rule_parameters',
-        render: (text: any) => (text ? JSON.stringify(text, null, 2) : '-'),
-      },
-      {
-        title: t('app.kuaicaiwu.costRule.col.isActive'),
-        dataIndex: 'is_active',
-        render: (text: boolean) =>
-          renderFinanceActiveTag(
-            t,
-            text,
-            'app.kuaicaiwu.costRule.status.enabled',
-            'app.kuaicaiwu.costRule.status.disabled',
-          ),
-      },
-      { title: t('app.kuaicaiwu.costCommon.description'), dataIndex: 'description' },
-      { title: t('app.kuaicaiwu.costCommon.col.createdBy'), dataIndex: 'created_by_name' },
-      {
-        title: t('app.kuaicaiwu.costCommon.col.createdAt'),
-        dataIndex: 'created_at',
-        render: (text: string) => (text ? formatDateTime(text, 'YYYY-MM-DD HH:mm:ss') : '-'),
-      },
-      { title: t('app.kuaicaiwu.costCommon.col.updatedBy'), dataIndex: 'updated_by_name' },
-      {
-        title: t('app.kuaicaiwu.costCommon.col.updatedAt'),
-        dataIndex: 'updated_at',
-        render: (text: string) => (text ? formatDateTime(text, 'YYYY-MM-DD HH:mm:ss') : '-'),
-      },
-    ],
-    [t],
-  );
-
-  const ruleDetailBaseItems = detailItems.filter(
-    (d) => !['calculation_formula', 'rule_parameters'].includes(String((d as { dataIndex?: string }).dataIndex)),
-  );
-
   const calculationMethodOptions = useMemo(
     () => [
       { label: t('app.kuaicaiwu.costRule.calculationMethod.byQuantity'), value: '按数量' },
@@ -593,71 +556,20 @@ const CostRulePage: React.FC = () => {
         />
       </FormModalTemplate>
 
-      <DetailDrawerTemplate
-        title={t('app.kuaicaiwu.costRule.detailTitle')}
+      <CostRuleDetailDrawer
         open={drawerVisible}
-        onClose={() => {
-          setDrawerVisible(false);
-          setCostRuleDetail(null);
+        onClose={closeDetail}
+        detail={costRuleDetail}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        customContent={
-          costRuleDetail ? (
-            <>
-              <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.basicInfo')}>
-                <Descriptions
-                  column={3}
-                  size="small"
-                  items={buildMasterDetailDescriptionItems(
-                    costRuleDetail as unknown as Record<string, unknown>,
-                    ruleDetailBaseItems as any,
-                  )}
-                />
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.details')}>
-                <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
-                  <Typography.Text type="secondary">{t('app.kuaicaiwu.costRule.col.calculationFormula')}</Typography.Text>
-                  <pre style={{ marginTop: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 240, overflow: 'auto' }}>
-                    {costRuleDetail.calculation_formula ? JSON.stringify(costRuleDetail.calculation_formula, null, 2) : '-'}
-                  </pre>
-                  <Typography.Text type="secondary" style={{ display: 'block', marginTop: 16 }}>
-                    {t('app.kuaicaiwu.costRule.col.ruleParameters')}
-                  </Typography.Text>
-                  <pre style={{ marginTop: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 240, overflow: 'auto' }}>
-                    {costRuleDetail.rule_parameters ? JSON.stringify(costRuleDetail.rule_parameters, null, 2) : '-'}
-                  </pre>
-                </div>
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.operationLog')}>
-                <Timeline
-                  items={[
-                    {
-                      color: 'green',
-                      children: (
-                        <>
-                          {t('app.kuaicaiwu.costCommon.log.created')}{' '}
-                          {costRuleDetail.created_at ? formatDateTime(costRuleDetail.created_at, 'YYYY-MM-DD HH:mm:ss') : '-'}
-                          {costRuleDetail.created_by_name ? ` - ${costRuleDetail.created_by_name}` : ''}
-                        </>
-                      ),
-                    },
-                    {
-                      color: 'blue',
-                      children: (
-                        <>
-                          {t('app.kuaicaiwu.costCommon.log.updated')}{' '}
-                          {costRuleDetail.updated_at ? formatDateTime(costRuleDetail.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'}
-                          {costRuleDetail.updated_by_name ? ` - ${costRuleDetail.updated_by_name}` : ''}
-                        </>
-                      ),
-                    },
-                  ]}
-                />
-              </DetailDrawerSection>
-            </>
-          ) : null
-        }
+        extra={buildDetailDrawerEditExtra(t, Boolean(costRuleDetail), () => {
+          if (!costRuleDetail) return;
+          void handleEdit(costRuleDetail);
+        })}
       />
     </ListPageTemplate>
   );

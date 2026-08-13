@@ -20,13 +20,15 @@ import {
   type ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Button, Descriptions, Modal, Popconfirm, Tag } from 'antd';
+import { App, Button, Modal, Popconfirm } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import {
   getMessageTemplateList,
   getMessageTemplateByUuid,
@@ -54,7 +56,7 @@ const MessageTemplateListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
-  const messageTemplateDetailReqRef = useRef(0);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑消息模板）
@@ -67,6 +69,7 @@ const MessageTemplateListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<MessageTemplate | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [loadPresetLoading, setLoadPresetLoading] = useState(false);
 
   /**
@@ -118,26 +121,26 @@ const MessageTemplateListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: MessageTemplate) => {
-    const req = ++messageTemplateDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getMessageTemplateByUuid(record.uuid);
-      if (messageTemplateDetailReqRef.current !== req) return;
+      const detail = await getMessageTemplateByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (messageTemplateDetailReqRef.current === req) {
-        messageApi.error(error.message || t('pages.system.messageTemplate.getDetailFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.messageTemplate.getDetailFailed')));
     } finally {
-      if (messageTemplateDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = (record: MessageTemplate) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -414,11 +417,8 @@ const MessageTemplateListPage: React.FC = () => {
     {
       title: t('pages.system.messageConfig.activeStatus'),
       dataIndex: 'is_active',
-      render: (_, r) => (
-        <Tag color={r.is_active ? 'success' : 'default'}>
-          {r.is_active ? t('pages.system.applications.enabled') : t('pages.system.applications.disabled')}
-        </Tag>
-      ),
+      render: (_, r) =>
+        renderSystemActiveTag(t, r.is_active, 'pages.system.applications.enabled', 'pages.system.applications.disabled'),
     },
     { title: t('pages.system.messageConfig.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
     { title: t('pages.system.messageConfig.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
@@ -643,15 +643,26 @@ const MessageTemplateListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('pages.system.messageTemplate.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={detailData ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
-          ) : null}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryUuidRef.current;
+          if (id) void loadDetail(id);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detailData), () => {
+          if (!detailData) return;
+          void handleEdit(detailData);
+        })}
+        detail={detailData}
+        detailColumns={detailColumns}
       />
     </>
   );

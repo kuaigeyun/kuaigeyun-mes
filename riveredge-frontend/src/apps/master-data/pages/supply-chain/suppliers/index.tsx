@@ -15,11 +15,16 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import {
   DetailDrawerSection,
-  DRAWER_CONFIG,
-  flushDrawerOpen,
   ListPageTemplate,
+  detailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { PartnerMasterDetailDrawer } from '../../shared/PartnerMasterDetailDrawer';
+import {
+  alignDescriptionColumns,
+  MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
+} from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 import { supplierApi, getUserOptions, getDictionaryOptions } from '../../../services/supply-chain';
 import { getDictionaryLabelMapSync } from '../../../../../services/dataDictionaryCache';
@@ -95,6 +100,8 @@ const SuppliersPage: React.FC = () => {
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [supplierDetail, setSupplierDetail] = useState<Supplier | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   
@@ -114,7 +121,6 @@ const SuppliersPage: React.FC = () => {
     });
     return seed;
   });
-  const supplierDetailReqRef = useRef(0);
 
   const {
     customFields,
@@ -286,29 +292,29 @@ const SuppliersPage: React.FC = () => {
   /**
    * 处理打开详情
    */
-  const handleOpenDetail = async (record: Supplier) => {
-    const req = ++supplierDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setSupplierDetail(record);
-      setDrawerVisible(true);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await supplierApi.get(record.uuid);
-      if (supplierDetailReqRef.current !== req) return;
+      const detail = await supplierApi.get(uuid);
       setSupplierDetail(detail);
       if (detail.id != null) {
         await loadFieldValuesForDetail(detail.id);
       }
-    } catch (error: any) {
-      if (supplierDetailReqRef.current === req) {
-        messageApi.error(error.message || t('app.master-data.suppliers.getDetailFailed'));
-      }
+    } catch (error) {
+      setSupplierDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.master-data.suppliers.getDetailFailed')));
     } finally {
-      if (supplierDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleOpenDetail = (record: Supplier) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setSupplierDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -317,6 +323,7 @@ const SuppliersPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setSupplierDetail(null);
+    setDetailError(null);
     resetDetailFieldValues();
   };
 
@@ -1004,42 +1011,61 @@ const SuppliersPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 详情 Drawer（uni-detail） */}
-      <UniDetail
+      <PartnerMasterDetailDrawer
         title={t('app.master-data.suppliers.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        plainBody={
-          supplierDetail ? (
-            <>
-              <DetailDrawerSection title={t('field.partner.tabBasic')}>
-                <Descriptions
-                  column={2}
-                  items={detailDrawerDescriptionItems(detailColumnsBasic, supplierDetail)}
-                />
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(supplierDetail), () => {
+          if (!supplierDetail) return;
+          handleEdit(supplierDetail);
+        })}
+      >
+        {supplierDetail ? (
+          <>
+            <DetailDrawerSection title={t('field.partner.tabBasic')}>
+              <Descriptions
+                column={2}
+                size="small"
+                items={detailDrawerDescriptionItems(
+                  alignDescriptionColumns(detailColumnsBasic, MASTER_DATA_DETAIL_BASIC_FIELD_RANK),
+                  supplierDetail,
+                )}
+              />
+            </DetailDrawerSection>
+            <DetailDrawerSection title={t('field.partner.tabInvoice')}>
+              <Descriptions
+                column={2}
+                size="small"
+                items={detailDrawerDescriptionItems(
+                  alignDescriptionColumns(detailColumnsInvoice, MASTER_DATA_DETAIL_BASIC_FIELD_RANK),
+                  supplierDetail,
+                )}
+              />
+            </DetailDrawerSection>
+            <DetailDrawerSection title={t('field.partner.tabExtended')}>
+              <Descriptions
+                column={2}
+                size="small"
+                items={detailDrawerDescriptionItems(
+                  alignDescriptionColumns(detailColumnsExtended, MASTER_DATA_DETAIL_BASIC_FIELD_RANK),
+                  supplierDetail,
+                )}
+              />
+            </DetailDrawerSection>
+            {hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
+              <DetailDrawerSection title={t('app.master-data.customFields')} marginBottom={0}>
+                <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
               </DetailDrawerSection>
-              <DetailDrawerSection title={t('field.partner.tabInvoice')}>
-                <Descriptions
-                  column={2}
-                  items={detailDrawerDescriptionItems(detailColumnsInvoice, supplierDetail)}
-                />
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t('field.partner.tabExtended')}>
-                <Descriptions
-                  column={2}
-                  items={detailDrawerDescriptionItems(detailColumnsExtended, supplierDetail)}
-                />
-              </DetailDrawerSection>
-              {hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
-                <DetailDrawerSection title={t('app.master-data.customFields')} marginBottom={0}>
-                  <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
-                </DetailDrawerSection>
-              ) : null}
-            </>
-          ) : null
-        }
-      />
+            ) : null}
+          </>
+        ) : null}
+      </PartnerMasterDetailDrawer>
 
       {/* 创建/编辑供应商 Modal */}
       <SupplierFormModal

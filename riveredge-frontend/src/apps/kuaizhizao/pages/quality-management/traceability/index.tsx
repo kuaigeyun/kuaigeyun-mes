@@ -7,13 +7,13 @@ import {
   Spin,
   message,
   Descriptions,
-  Tag,
   Button,
   Typography,
   Table,
   Segmented,
   ConfigProvider,
 } from 'antd';
+import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { FilePdfOutlined } from '@ant-design/icons';
 import { useRequest } from 'ahooks';
 import { useNavigate } from 'react-router-dom';
@@ -26,10 +26,12 @@ import {
 } from '../../../../../components/layout-templates/constants';
 import {
   DetailDrawerTemplate,
-  DetailDrawerSection,
   ListPageTemplate,
   DRAWER_CONFIG,
+  detailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
+import { MarkerTag } from '../../../../../constants/statusBadges';
+import { alignDescriptionColumns } from '../../sales-management/shared/documentFieldAlignment';
 import {
   buildTraceabilityNodePath,
   formatTraceEventRemark,
@@ -307,6 +309,74 @@ const TraceabilityPage: React.FC<TraceabilityPageProps> = ({
 
   const nodePath = selectedNode ? buildTraceabilityNodePath(selectedNode) : null;
 
+  const nodeDetail = selectedNode
+    ? {
+        node_id: selectedNode.id,
+        node_type: selectedNode.type,
+        material_name:
+          selectedNode.data?.material_name != null ? String(selectedNode.data.material_name) : undefined,
+        material_code:
+          selectedNode.data?.material_code != null ? String(selectedNode.data.material_code) : undefined,
+        operation_name:
+          selectedNode.data?.operation_name != null ? String(selectedNode.data.operation_name) : undefined,
+        quality_status:
+          selectedNode.data?.quality_status != null ? String(selectedNode.data.quality_status) : undefined,
+      }
+    : null;
+
+  const nodeBasicColumns = useMemo<ProDescriptionsItemProps<NonNullable<typeof nodeDetail>>[]>(
+    () =>
+      alignDescriptionColumns([
+        {
+          title: t('app.kuaizhizao.quality.traceability.nodeType'),
+          dataIndex: 'node_type',
+          render: (_, record) =>
+            record.node_type ? (
+              <MarkerTag color="processing">{getTraceabilityNodeTypeLabel(record.node_type, t)}</MarkerTag>
+            ) : (
+              '-'
+            ),
+        },
+        {
+          title: t('app.kuaizhizao.quality.traceability.nodeId'),
+          dataIndex: 'node_id',
+          render: (_, record) =>
+            record.node_id ? (
+              <Typography.Text copyable={{ text: String(record.node_id) }}>{record.node_id}</Typography.Text>
+            ) : (
+              '-'
+            ),
+        },
+        {
+          title: t('app.kuaizhizao.quality.traceability.materialName'),
+          dataIndex: 'material_name',
+        },
+        {
+          title: t('app.kuaizhizao.quality.traceability.materialCode'),
+          dataIndex: 'material_code',
+          render: (_, record) =>
+            record.material_code ? (
+              <Typography.Text copyable={{ text: String(record.material_code) }}>
+                {record.material_code}
+              </Typography.Text>
+            ) : (
+              '-'
+            ),
+        },
+        {
+          title: t('app.kuaizhizao.quality.traceability.operationName'),
+          dataIndex: 'operation_name',
+        },
+        {
+          title: t('app.kuaizhizao.quality.traceability.qualityStatus'),
+          dataIndex: 'quality_status',
+          render: (_, record) =>
+            record.quality_status ? renderQualityQualityStatusTag(t, record.quality_status) : '-',
+        },
+      ]),
+    [t],
+  );
+
   const showEmpty = !loading && !data;
   const showNoGraph = !loading && data && !graphBundle.config;
   const showFlowLoading =
@@ -525,53 +595,25 @@ const TraceabilityPage: React.FC<TraceabilityPageProps> = ({
             setSelectedNode(null);
           }}
           width={DRAWER_CONFIG.HALF_WIDTH}
-          columns={[]}
-          customContent={
-            selectedNode ? (
-              <>
-                <DetailDrawerSection title={t('app.kuaizhizao.quality.traceability.basicInfo')}>
-                  <Descriptions column={1} bordered size="small">
-                    <Descriptions.Item label={t('app.kuaizhizao.quality.traceability.nodeType')}>
-                      <Tag color="blue">{getTraceabilityNodeTypeLabel(selectedNode.type, t)}</Tag>
-                    </Descriptions.Item>
-                    <Descriptions.Item label={t('app.kuaizhizao.quality.traceability.nodeId')}>
-                      <Typography.Text copyable={{ text: String(selectedNode.id) }}>
-                        {selectedNode.id}
-                      </Typography.Text>
-                    </Descriptions.Item>
-                    {selectedNode.data?.material_name && (
-                      <Descriptions.Item label={t('app.kuaizhizao.quality.traceability.materialName')}>
-                        {String(selectedNode.data.material_name)}
-                      </Descriptions.Item>
-                    )}
-                    {selectedNode.data?.material_code && (
-                      <Descriptions.Item label={t('app.kuaizhizao.quality.traceability.materialCode')}>
-                        <Typography.Text copyable={{ text: String(selectedNode.data.material_code) }}>
-                          {String(selectedNode.data.material_code)}
-                        </Typography.Text>
-                      </Descriptions.Item>
-                    )}
-                    {selectedNode.data?.operation_name && (
-                      <Descriptions.Item label={t('app.kuaizhizao.quality.traceability.operationName')}>
-                        {String(selectedNode.data.operation_name)}
-                      </Descriptions.Item>
-                    )}
-                    {selectedNode.data?.quality_status && (
-                      <Descriptions.Item label={t('app.kuaizhizao.quality.traceability.qualityStatus')}>
-                        {renderQualityQualityStatusTag(t, String(selectedNode.data.quality_status))}
-                      </Descriptions.Item>
-                    )}
-                  </Descriptions>
-                </DetailDrawerSection>
-                {nodePath ? (
-                  <DetailDrawerSection title={t('app.kuaizhizao.quality.traceability.businessNav')}>
-                    <Button type="primary" block onClick={() => navigateFromNode(selectedNode)}>
-                      {getNavigateButtonLabel(selectedNode.type)}
-                    </Button>
-                  </DetailDrawerSection>
-                ) : null}
-              </>
-            ) : null
+          basic={
+            nodeDetail ? (
+              <Descriptions
+                column={3}
+                size="small"
+                items={detailDrawerDescriptionItems(nodeBasicColumns, nodeDetail)}
+              />
+            ) : (
+              <div style={{ minHeight: 80 }} />
+            )
+          }
+          supplementaryTitle={t('app.kuaizhizao.quality.traceability.businessNav')}
+          supplementaryVisible={Boolean(nodeDetail && nodePath)}
+          supplementary={
+            nodeDetail && nodePath && selectedNode ? (
+              <Button type="primary" block onClick={() => navigateFromNode(selectedNode)}>
+                {getNavigateButtonLabel(selectedNode.type)}
+              </Button>
+            ) : undefined
           }
         />
       </div>

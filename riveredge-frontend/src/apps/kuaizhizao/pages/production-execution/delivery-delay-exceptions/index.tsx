@@ -11,7 +11,7 @@ import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button } from 'antd';
+import { App, Button, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -21,6 +21,14 @@ import {
   hasDeliveryDelayExceptionActions,
   renderDeliveryDelayExceptionActionGroup,
 } from '../components/ProductionExceptionDetailActions';
+import {
+  DeliveryDelayImpactBanner,
+  ExceptionSuggestedActionBlock,
+  ExceptionWorkbenchLifecycleStepper,
+  buildStandardExceptionLifecycle,
+  renderExceptionWorkbenchNextStepSuffix,
+  resolveExceptionNextStepLabel,
+} from '../components/productionExceptionWorkbench';
 import { apiRequest } from '../../../../../services/api';
 import { ExceptionListPage } from '../../../services/production';
 import { ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES } from '../../../constants/exceptionStatuses';
@@ -372,18 +380,49 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
           setCurrentRecord(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        basic={
+        banner={
           currentRecord ? (
-            <DeliveryDelayExceptionDetailContent
+            <DeliveryDelayImpactBanner
               record={currentRecord}
               t={t}
               alertLevelLabel={alertLevelLabel}
-              statusLabel={statusLabel}
-              suggestedActionLabel={suggestedActionLabel}
             />
           ) : undefined
         }
+        basic={
+          currentRecord ? (
+            <DeliveryDelayExceptionDetailContent record={currentRecord} t={t} />
+          ) : undefined
+        }
         collaboration={
+          currentRecord ? (
+            <ExceptionWorkbenchLifecycleStepper
+              lifecycle={buildStandardExceptionLifecycle(t, currentRecord.status)}
+              hideNextStepSuggestions
+            />
+          ) : undefined
+        }
+        collaborationTitleSuffix={
+          currentRecord
+            ? renderExceptionWorkbenchNextStepSuffix(
+                t,
+                resolveExceptionNextStepLabel(
+                  buildStandardExceptionLifecycle(t, currentRecord.status),
+                  suggestedActionLabel(currentRecord.suggested_action),
+                ),
+              )
+            : undefined
+        }
+        supplementary={
+          currentRecord && suggestedActionLabel(currentRecord.suggested_action) !== '-' ? (
+            <ExceptionSuggestedActionBlock label={suggestedActionLabel(currentRecord.suggested_action)} />
+          ) : undefined
+        }
+        supplementaryTitle={t(`${P}.col.suggestedAction`)}
+        supplementaryVisible={Boolean(
+          currentRecord && suggestedActionLabel(currentRecord.suggested_action) !== '-',
+        )}
+        footer={
           currentRecord && hasDeliveryDelayExceptionActions(currentRecord)
             ? renderDeliveryDelayExceptionActionGroup({
                 record: currentRecord,
@@ -393,7 +432,6 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
               })
             : undefined
         }
-        collaborationTitle={t(`${P}.section.actions`)}
       />
 
       <FormModalTemplate
@@ -401,7 +439,6 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
         open={handleModalVisible}
         onClose={() => {
           setHandleModalVisible(false);
-          setCurrentRecord(null);
           setCurrentAction('');
           handleFormRef.current?.resetFields();
         }}
@@ -419,10 +456,11 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
             <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
               <p><strong>{t(`${P}.col.workOrderCode`)}:</strong> {currentRecord.work_order_code}</p>
               <p><strong>{t(`${P}.col.plannedEndDate`)}:</strong> {currentRecord.planned_end_date}</p>
-              <p><strong>{t(`${P}.col.delayDays`)}:</strong>
-                <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+              <p>
+                <strong>{t(`${P}.col.delayDays`)}:</strong>{' '}
+                <Typography.Text type="danger" strong>
                   {t(`${P}.label.daysUnit`, { count: currentRecord.delay_days ?? 0 })}
-                </span>
+                </Typography.Text>
               </p>
               <p><strong>{t(`${P}.col.delayReason`)}:</strong> {currentRecord.delay_reason || '-'}</p>
             </div>

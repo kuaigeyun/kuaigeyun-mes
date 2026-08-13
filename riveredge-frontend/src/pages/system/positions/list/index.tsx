@@ -10,13 +10,15 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Space, message, Modal, Table, Descriptions } from 'antd';
+import { App, Popconfirm, Button, Space, message, Modal, Table } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { flushDrawerOpen, ListPageTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { ListPageTemplate } from '../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import { PositionFormModal } from '../components/PositionFormModal';
 import {
   getPositionList,
@@ -45,7 +47,7 @@ const PositionListPage: React.FC = () => {
   const trialRunMode = useTrialRunMode();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const positionDetailReqRef = useRef(0);
+  const detailRetryUuidRef = useRef<string | null>(null);
 
   const positionDetailDescColumns = useMemo<ProDescriptionsItemProps<Position>[]>(
     () => [
@@ -84,6 +86,7 @@ const PositionListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<Position | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [loadPresetLoading, setLoadPresetLoading] = useState(false);
   const [presetModalVisible, setPresetModalVisible] = useState(false);
   const [presetList, setPresetList] = useState<PresetPositionItem[]>([]);
@@ -131,26 +134,26 @@ const PositionListPage: React.FC = () => {
 
   };
 
-  const handleView = async (record: Position) => {
-    const req = ++positionDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getPositionByUuid(record.uuid);
-      if (positionDetailReqRef.current !== req) return;
+      const detail = await getPositionByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (positionDetailReqRef.current === req) {
-        messageApi.error(error.message || t('common.loadFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('common.loadFailed')));
     } finally {
-      if (positionDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = (record: Position) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   const handleDelete = async (record: Position) => {
@@ -452,20 +455,26 @@ const PositionListPage: React.FC = () => {
         onSuccess={() => actionRef.current?.reload()}
       />
 
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('field.position.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
-          detailData ? (
-            <Descriptions
-              column={1}
-              items={detailDrawerDescriptionItems(positionDetailDescColumns, detailData)}
-            />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryUuidRef.current;
+          if (id) void loadDetail(id);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detailData), () => {
+          if (!detailData) return;
+          handleEdit(detailData);
+        })}
+        detail={detailData}
+        detailColumns={positionDetailDescColumns}
       />
     </>
   );

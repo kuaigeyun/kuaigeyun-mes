@@ -37,6 +37,10 @@ export interface PartnerStatementPreview {
   partner_snapshot?: Record<string, unknown>;
   /** 本期因已纳入其它对账单而排除的行数 */
   excluded_from_period?: number;
+  /** 同一往来同一 YYYY-MM 已存在的对账单 */
+  existing_period_statement_id?: number | null;
+  existing_period_statement_code?: string | null;
+  existing_period?: string | null;
 }
 
 export interface PartnerStatement {

@@ -56,7 +56,7 @@ import { OrderChangeItemsTable } from '../../../components/order-change/OrderCha
 import { OrderChangeImpactModal } from '../../../components/order-change/OrderChangeImpactModal';
 import { isSourceOrderEligibleForChange } from '../../../utils/orderChangeSourceOrder';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
-import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
+import { alignProColumns, alignDescriptionColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
@@ -459,17 +459,16 @@ const SalesOrderChangesPage: React.FC = () => {
   }, []);
 
   const detailBasicColumns = useMemo<ProDescriptionsItemProps<SalesOrderChange>[]>(
-    () => [
+    () =>
+      alignDescriptionColumns([
+      {
+        title: t('app.kuaizhizao.salesOrderChange.colChangeCode'),
+        dataIndex: 'change_code',
+      },
       {
         title: t('app.kuaizhizao.salesOrderChange.colSourceOrderCode'),
         dataIndex: 'source_order_code',
-        render: (_, record) => (
-          <LinkedDocumentCode
-            documentType="sales_order"
-            documentId={record.source_order_id}
-            code={record.source_order_code}
-          />
-        ),
+        key: 'sales_order_code',
       },
       {
         title: t('app.kuaizhizao.customerFollowUp.colCustomer'),
@@ -503,20 +502,19 @@ const SalesOrderChangesPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesOrderChange.colAppliedAt'),
         dataIndex: 'applied_at',
-        render: (_, record) =>
-          record.applied_at ? formatDateTime(record.applied_at, 'YYYY-MM-DD HH:mm') : '-',
+        valueType: 'dateTime',
       },
       {
         title: t('app.kuaizhizao.salesOrderChange.colChangeReason'),
         dataIndex: 'change_reason',
-        span: 2,
+        span: 3,
       },
       {
         title: t('app.kuaizhizao.salesOrderChange.notes'),
         dataIndex: 'notes',
-        span: 2,
+        span: 3,
       },
-    ],
+    ] as ProDescriptionsItemProps<SalesOrderChange>[]),
     [renderDeltaAmount, t],
   );
 
@@ -657,7 +655,6 @@ const SalesOrderChangesPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 240,
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
@@ -978,15 +975,15 @@ const SalesOrderChangesPage: React.FC = () => {
         title={t('app.kuaizhizao.salesOrderChange.detailTitle', { code: detail?.change_code ?? '' })}
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
-        width={DRAWER_CONFIG.LARGE_WIDTH ?? DRAWER_CONFIG.HALF_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           detail ? (
-            <Space>
-              {!detailCapabilityGates.update.disabled && (
-                <Button icon={<EditOutlined />} onClick={() => { setDetailOpen(false); openEdit(detail); }}>{t('common.edit')}</Button>
-              )}
+            <Space size="small">
               {!detailCapabilityGates.submit.disabled && (
                 <Button icon={<ThunderboltOutlined />} onClick={() => runSubmitWithPreview(detail.id!)}>{t('app.kuaizhizao.salesOrderChange.submit')}</Button>
+              )}
+              {!detailCapabilityGates.update.disabled && (
+                <Button icon={<EditOutlined />} onClick={() => { setDetailOpen(false); openEdit(detail); }}>{t('common.edit')}</Button>
               )}
               <UniWorkflowActions {...rowActionKind('skip')}
                 record={detail}
@@ -1016,7 +1013,7 @@ const SalesOrderChangesPage: React.FC = () => {
         basic={
           detail ? (
             <Descriptions
-              column={2}
+              column={3}
               size="small"
               items={detailDrawerDescriptionItems(
                 detailBasicColumns.filter((col) => {

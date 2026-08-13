@@ -58,12 +58,9 @@ import {
 import dayjs from 'dayjs'
 import { UniTable } from '../../../../../components/uni-table'
 import { MaterialStackedCell, UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn'
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
+import { UniLifecycle } from '../../../../../components/uni-lifecycle'
 import {
   MultiTabListPageTemplate,
-  DetailDrawerSection,
-  DetailDrawerTemplate,
-  DRAWER_CONFIG,
   MODAL_CONFIG,
   FormModalTemplate,
   type StatCard,
@@ -77,10 +74,6 @@ import {
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query'
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push'
-import {
-  DocumentTrackingTimelineBody,
-  useDocumentTracking,
-} from '../../../../../components/document-tracking-panel'
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter'
 import {
   listDemandComputations,
@@ -96,20 +89,12 @@ import {
   getPushOptions,
   getPushPreview,
   pushAll,
-  validateMaterialSources,
-  getMaterialSources,
   getDemandComputationStatistics,
   type PushOptions,
   type PushPreview,
   type ComputationPushPreviewItem,
-  listComputationRecalcHistory,
-  getComputationSnapshot,
-  getPushRecords,
   DemandComputation,
   DemandComputationItem,
-  ComputationRecalcHistoryItem,
-  ComputationSnapshotItem,
-  type PushRecordItem,
 } from '../../../services/demand-computation'
 import {
   getDemandComputationLifecycle,
@@ -120,7 +105,6 @@ import {
 import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor, buildDemandBusinessModeValueEnum } from '../../../utils/businessMode'
 import { getDemandTypeLabel, renderDemandTypeMarkerTag } from '../../../utils/demandType'
 import { DemandComputationSourceCode } from '../../../../../components/linked-document-code/DemandComputationSourceCode'
-import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag'
 import { listDemands, getDemand, pushDemandToComputation, previewPushDemandToComputation, Demand, DemandStatus, ReviewStatus } from '../../../services/demand'
 import {
   listSalesOrders as listSalesOrdersForPull,
@@ -133,6 +117,8 @@ import { getBusinessConfig } from '../../../../../services/businessConfig'
 import { bomApi } from '../../../../master-data/services/material'
 import { warehouseApi } from '../../../../master-data/services/warehouse'
 import ComputationHistoryTab from './ComputationHistoryTab'
+import { DemandComputationDetailDrawer } from './components/DemandComputationDetailDrawer'
+import { renderAvailableInventoryCell } from './components/availableInventoryCell'
 import { MrpParametersCustomerGuideTrigger } from './MrpParametersCustomerGuide'
 import { readinessFieldHelpI18nKey } from './readinessFieldHelp'
 import { buildDemandPushPreviewSummary } from './pushPreviewSummary'
@@ -242,49 +228,8 @@ type PullSalesForecastCandidate = {
   capabilities?: SalesForecast['capabilities']
 }
 
-/** 详情明细表最小宽度（外层横滚） */
-/** 明细表列宽合计下限，保证横滚与「尽量不换行」 */
-const DEMAND_COMPUTATION_DETAIL_ITEMS_MIN_WIDTH = 1920
-
-function normalizeComputationSourceNote(computation: DemandComputation | undefined, t: TFunction): string {
-  const raw = String(computation?.notes || '').trim()
-  if (!raw) return ''
-
-  const demandNo = String(computation?.demand_code || '').trim()
-  const sourceNoFromRaw =
-    raw.match(/^从需求\s+(.+?)\s+(?:下推)?创建$/)?.[1]?.trim()
-    ?? raw.match(/^从需求计划\s+(.+?)\s+(?:下推)?创建$/)?.[1]?.trim()
-    ?? raw.match(/^从销售订单\s+(.+?)\s+(?:下推)?创建$/)?.[1]?.trim()
-    ?? raw.match(/^从销售预测\s+(.+?)\s+(?:下推)?创建$/)?.[1]?.trim()
-
-  const sourceNo = demandNo || sourceNoFromRaw || ''
-
-  if (
-    /^从需求\s+.+\s+(?:下推)?创建$/.test(raw)
-    || /^从需求计划\s+.+\s+(?:下推)?创建$/.test(raw)
-    || /^从销售订单\s+.+\s+(?:下推)?创建$/.test(raw)
-    || /^从销售预测\s+.+\s+(?:下推)?创建$/.test(raw)
-  ) {
-    if (computation?.demand_type === 'sales_order') return t('app.kuaizhizao.demandComputation.sourceNoteFromSalesOrder', { code: sourceNo }).trim()
-    if (computation?.demand_type === 'sales_forecast') return t('app.kuaizhizao.demandComputation.sourceNoteFromSalesForecast', { code: sourceNo }).trim()
-    return t('app.kuaizhizao.demandComputation.sourceNoteFromDemandPlan', { code: sourceNo }).trim()
-  }
-
-  return raw
-}
-
 function normalizeComputationStatusValue(status?: string): string {
   return String(status ?? '').trim().toLowerCase()
-}
-
-const MATERIAL_SOURCE_TAG_COLORS: Record<string, string> = {
-  Make: 'blue',
-  Buy: 'green',
-  Phantom: 'orange',
-  Outsource: 'purple',
-  CustomerProvided: 'magenta',
-  Gift: 'gold',
-  Service: 'geekblue',
 }
 
 const PREVIEW_SOURCE_TAB_ALL = 'all'
@@ -329,16 +274,6 @@ function buildPreviewSourceTabItems(
   return tabs
 }
 
-function getPushDocTypeLabel(t: TFunction, type?: string): string {
-  const map: Record<string, string> = {
-    work_order: t('app.kuaizhizao.demandComputation.pushDocWorkOrder'),
-    outsource_work_order: t('app.kuaizhizao.demandComputation.pushDocOutsourceWorkOrder'),
-    purchase_order: t('app.kuaizhizao.demandComputation.pushDocPurchaseOrder'),
-    purchase_requisition: t('app.kuaizhizao.demandComputation.pushDocPurchaseRequisition'),
-  }
-  return map[type || ''] || type || '-'
-}
-
 const COMPUTATION_COMPLETED_STATUSES = new Set(['完成', '已完成', 'completed', 'success'])
 const COMPUTATION_FAILED_STATUSES = new Set(['失败', 'failed', 'error'])
 const COMPUTATION_EXECUTABLE_STATUSES = new Set(['进行中', 'pending', 'running'])
@@ -353,131 +288,6 @@ function isComputationFailed(status?: string): boolean {
 
 function canExecuteComputation(status?: string): boolean {
   return COMPUTATION_EXECUTABLE_STATUSES.has(normalizeComputationStatusValue(status))
-}
-
-/** 可用库存列：hover 展示分仓库构成与净需求计算说明（依赖 detail_results.inventory_breakdown） */
-function AvailableInventoryPopoverContent({ detail }: { detail?: Record<string, unknown> | null }) {
-  const { t } = useTranslation()
-  const bd = detail?.inventory_breakdown as Record<string, unknown> | undefined
-  const supply = detail?.supply_calculation as { lines_zh?: string[] } | undefined
-  const lines = supply?.lines_zh?.length ? supply.lines_zh : []
-
-  if (!bd && lines.length === 0) {
-    return (
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-        {t('app.kuaizhizao.demandComputation.inventoryNoDetail')}
-      </Typography.Text>
-    )
-  }
-
-  const mainBatch = bd?.main_batch as { label?: string; quantity?: number; note_zh?: string } | undefined
-  const lineRows = (bd?.line_side_rows as Array<Record<string, unknown>>) || []
-  const formulaZh = (bd?.formula_zh as string[]) || []
-  const scopeZh = bd?.line_side_scope_zh as string | undefined
-
-  return (
-    <div style={{ maxWidth: 440, fontSize: 12 }}>
-      {bd ? (
-        <>
-          <Typography.Text strong>{t('app.kuaizhizao.demandComputation.inventoryComposition')}</Typography.Text>
-          <div style={{ marginTop: 8 }}>
-            {mainBatch != null ? (
-              <div style={{ marginBottom: 8 }}>
-                <div>
-                  {mainBatch.label ?? t('app.kuaizhizao.demandComputation.mainBatchDefault')}:
-                  <strong>{Number(mainBatch.quantity ?? 0).toLocaleString()}</strong>
-                </div>
-                {mainBatch.note_zh ? (
-                  <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
-                    {mainBatch.note_zh}
-                  </Typography.Text>
-                ) : null}
-              </div>
-            ) : null}
-            {scopeZh ? (
-              <Typography.Paragraph type="secondary" style={{ marginBottom: 8, fontSize: 11 }}>
-                {t('app.kuaizhizao.demandComputation.lineSideScope', { scope: scopeZh })}
-              </Typography.Paragraph>
-            ) : null}
-            {lineRows.length > 0 ? (
-              <Table
-                size="small"
-                pagination={false}
-                rowKey={(r) => String(r.warehouse_id)}
-                columns={[
-                  { title: t('app.kuaizhizao.demandComputation.colWarehouse'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
-                  {
-                    title: t('app.kuaizhizao.demandComputation.colOnHand'),
-                    dataIndex: 'quantity',
-                    width: 72,
-                    align: 'right' as const,
-                    render: (n: unknown) => Number(n ?? 0).toLocaleString(),
-                  },
-                  {
-                    title: t('app.kuaizhizao.demandComputation.colReserved'),
-                    dataIndex: 'reserved',
-                    width: 60,
-                    align: 'right' as const,
-                    render: (n: unknown) => Number(n ?? 0).toLocaleString(),
-                  },
-                  {
-                    title: t('app.kuaizhizao.demandComputation.colAvailable'),
-                    dataIndex: 'available',
-                    width: 72,
-                    align: 'right' as const,
-                    render: (n: unknown) => Number(n ?? 0).toLocaleString(),
-                  },
-                ]}
-                dataSource={lineRows}
-              />
-            ) : (
-              <Typography.Text type="secondary">{t('app.kuaizhizao.demandComputation.noLineSideRows')}</Typography.Text>
-            )}
-            {formulaZh.length > 0 ? (
-              <ul style={{ margin: '8px 0 0', paddingLeft: 18, color: 'rgba(0,0,0,0.55)' }}>
-                {formulaZh.map((formulaLine, i) => (
-                  <li key={i}>{formulaLine}</li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        </>
-      ) : null}
-
-      {lines.length > 0 ? (
-        <>
-          <Divider style={{ margin: '12px 0 8px' }} />
-          <Typography.Text strong>{t('app.kuaizhizao.demandComputation.netRequirementHow')}</Typography.Text>
-          <ul style={{ margin: '8px 0 0', paddingLeft: 18, color: 'rgba(0,0,0,0.55)' }}>
-            {lines.map((line, i) => (
-              <li key={i}>{line}</li>
-            ))}
-          </ul>
-        </>
-      ) : null}
-    </div>
-  )
-}
-
-function renderAvailableInventoryCell(
-  val: number | undefined,
-  detail: Record<string, unknown> | undefined | null
-) {
-  const text = val != null && val !== 0 ? Number(val).toLocaleString() : val === 0 ? '0' : '-'
-  const supply = detail?.supply_calculation as { lines_zh?: string[] } | undefined
-  const hasTip = detail?.inventory_breakdown != null || (supply?.lines_zh?.length ?? 0) > 0
-  if (!hasTip) {
-    return <span>{text}</span>
-  }
-  return (
-    <Popover
-      content={<AvailableInventoryPopoverContent detail={detail} />}
-      trigger="hover"
-      mouseEnterDelay={0.2}
-    >
-      <span style={{ cursor: 'help', borderBottom: '1px dashed rgba(0,0,0,0.22)' }}>{text}</span>
-    </Popover>
-  )
 }
 
 const PARAM_DEFAULTS: Record<string, any> = {
@@ -952,63 +762,7 @@ const DemandComputationPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [currentComputation, setCurrentComputation] = useState<DemandComputation | null>(null)
-  const [computationRecalcHistory, setComputationRecalcHistory] = useState<ComputationRecalcHistoryItem[]>([])
-  const [pushRecords, setPushRecords] = useState<PushRecordItem[]>([])
-  const [recalcHistoryLoading, setRecalcHistoryLoading] = useState(false)
-  const [pushRecordsLoading, setPushRecordsLoading] = useState(false)
-  const [recalcSnapshotModalOpen, setRecalcSnapshotModalOpen] = useState(false)
-  const [recalcSnapshotModalLoading, setRecalcSnapshotModalLoading] = useState(false)
-  const [recalcSnapshotModalData, setRecalcSnapshotModalData] = useState<ComputationSnapshotItem | null>(null)
-  const [detailTabKey, setDetailTabKey] = useState<string>('detail')
   const [computationTrackingRefreshKey, setComputationTrackingRefreshKey] = useState(0)
-
-  const computationTracking = useDocumentTracking(
-    drawerVisible && detailTabKey === 'detail' && currentComputation?.id != null ? 'demand_computation' : undefined,
-    drawerVisible && detailTabKey === 'detail' ? currentComputation?.id ?? undefined : undefined,
-    computationTrackingRefreshKey,
-  )
-
-  /** 详情抽屉「下推与历史」：并行加载下推记录、重算历史（快照按需从「重算历史」打开） */
-  const loadComputationRecordsTabData = useCallback(
-    (computationId: number) => {
-      setPushRecordsLoading(true)
-      setRecalcHistoryLoading(true)
-      void Promise.all([
-        getPushRecords(computationId)
-          .then((res) => setPushRecords(res.records || []))
-          .catch(() => messageApi.error(t('app.kuaizhizao.demandComputation.fetchPushRecordsFailed')))
-          .finally(() => setPushRecordsLoading(false)),
-        listComputationRecalcHistory(computationId, { limit: 50 })
-          .then(setComputationRecalcHistory)
-          .catch(() => messageApi.error(t('app.kuaizhizao.demandComputation.fetchRecalcHistoryFailed')))
-          .finally(() => setRecalcHistoryLoading(false)),
-      ])
-    },
-    [messageApi, t],
-  )
-
-  const openRecalcSnapshotPreview = useCallback(
-    async (snapshotId: number) => {
-      const cid = currentComputation?.id
-      if (!cid) return
-      setRecalcSnapshotModalOpen(true)
-      setRecalcSnapshotModalLoading(true)
-      setRecalcSnapshotModalData(null)
-      try {
-        const data = await getComputationSnapshot(cid, snapshotId)
-        setRecalcSnapshotModalData(data)
-      } catch {
-        messageApi.error(t('app.kuaizhizao.demandComputation.fetchSnapshotFailed'))
-        setRecalcSnapshotModalOpen(false)
-      } finally {
-        setRecalcSnapshotModalLoading(false)
-      }
-    },
-    [currentComputation?.id, messageApi],
-  )
-
-  // 物料来源信息状态
-  const [validationResults, setValidationResults] = useState<any>(null)
 
   // 需求列表（用于选择需求）
   const [demandList, setDemandList] = useState<Demand[]>([])
@@ -1570,23 +1324,6 @@ const DemandComputationPage: React.FC = () => {
       try {
         const data = await getDemandComputation(id, true)
         setCurrentComputation(data)
-
-        await Promise.all([
-          prefetchMaterialsForUnitSelect((data.items || []).map((i) => i.material_id)),
-          getMaterialSources(id).catch((error) => {
-            console.error('获取物料来源信息失败:', error)
-          }),
-          validateMaterialSources(id)
-            .then((validation) => {
-              setValidationResults(validation)
-            })
-            .catch((error) => {
-              console.error('获取验证结果失败:', error)
-              setValidationResults(null)
-            }),
-        ])
-
-        setDetailTabKey('detail')
         setDrawerVisible(true)
         setComputationTrackingRefreshKey((k) => k + 1)
       } catch (error: any) {
@@ -2197,11 +1934,7 @@ const DemandComputationPage: React.FC = () => {
         void getDemandComputation(executedId, true)
           .then(setCurrentComputation)
           .catch(() => {})
-        if (detailTabKey === 'detail') {
-          setComputationTrackingRefreshKey((k) => k + 1)
-        } else if (detailTabKey === 'records') {
-          loadComputationRecordsTabData(executedId)
-        }
+        setComputationTrackingRefreshKey((k) => k + 1)
       }
     } catch (error: any) {
       messageApi.error(error?.response?.data?.detail || t('app.kuaizhizao.demandComputation.executeFailed'))
@@ -2275,20 +2008,8 @@ const DemandComputationPage: React.FC = () => {
         }
 
         setCurrentComputation(data)
-        setDetailTabKey(drawerTab === 'records' ? 'records' : 'detail')
         setDrawerVisible(true)
         setComputationTrackingRefreshKey((k) => k + 1)
-        if (drawerTab === 'records') {
-          loadComputationRecordsTabData(computationId)
-        } else {
-          void Promise.all([
-            prefetchMaterialsForUnitSelect((data.items || []).map((i) => i.material_id)),
-            getMaterialSources(computationId).catch(() => {}),
-            validateMaterialSources(computationId)
-              .then(setValidationResults)
-              .catch(() => setValidationResults(null)),
-          ])
-        }
       } catch {
         messageApi.error(t('app.kuaizhizao.demandComputation.openFailed'))
         deepLinkHandledRef.current = null
@@ -2299,7 +2020,6 @@ const DemandComputationPage: React.FC = () => {
     location.pathname,
     navigate,
     messageApi,
-    loadComputationRecordsTabData,
   ])
 
   /** 下推面板确认执行 */
@@ -2336,11 +2056,7 @@ const DemandComputationPage: React.FC = () => {
         void getDemandComputation(record.id!, true)
           .then(setCurrentComputation)
           .catch(() => {})
-        if (detailTabKey === 'detail') {
-          setComputationTrackingRefreshKey((k) => k + 1)
-        } else if (detailTabKey === 'records') {
-          loadComputationRecordsTabData(record.id!)
-        }
+        setComputationTrackingRefreshKey((k) => k + 1)
       }
     } catch (e: any) {
       messageApi.error(e?.response?.data?.detail || t('app.kuaizhizao.demandComputation.pushFailed'))
@@ -4041,702 +3757,24 @@ const DemandComputationPage: React.FC = () => {
         )}
       </Modal>
 
-      <Modal
-        title={t('app.kuaizhizao.demandComputation.snapshotTitle')}
-        open={recalcSnapshotModalOpen}
-        zIndex={token.zIndexPopupBase + 80}
-        onCancel={() => {
-          setRecalcSnapshotModalOpen(false)
-          setRecalcSnapshotModalData(null)
-        }}
-        footer={null}
-        width={720}
-        destroyOnHidden
-      >
-        {recalcSnapshotModalLoading ? (
-          <div style={{ textAlign: 'center', padding: 24 }}>
-            <Spin />
-          </div>
-        ) : recalcSnapshotModalData ? (
-          <div style={{ maxHeight: '70vh', overflow: 'auto' }}>
-            {recalcSnapshotModalData.snapshot_at ? (
-              <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-                {t('app.kuaizhizao.demandComputation.snapshotAt', { time: recalcSnapshotModalData.snapshot_at })}
-                {recalcSnapshotModalData.trigger ? t('app.kuaizhizao.demandComputation.snapshotTrigger', { trigger: recalcSnapshotModalData.trigger }) : null}
-              </Typography.Paragraph>
-            ) : null}
-            {recalcSnapshotModalData.computation_summary_snapshot ? (
-              <div style={{ marginBottom: 16 }}>
-                <Typography.Text strong>{t('app.kuaizhizao.demandComputation.snapshotSummary')}</Typography.Text>
-                <pre
-                  style={{
-                    margin: '8px 0 0',
-                    padding: 12,
-                    fontSize: 12,
-                    background: 'var(--ant-color-fill-quaternary)',
-                    borderRadius: token.borderRadius,
-                    overflow: 'auto',
-                    maxHeight: 240,
-                  }}
-                >
-                  {JSON.stringify(recalcSnapshotModalData.computation_summary_snapshot, null, 2)}
-                </pre>
-              </div>
-            ) : null}
-            {recalcSnapshotModalData.items_snapshot && recalcSnapshotModalData.items_snapshot.length > 0 ? (
-              <div>
-                <Typography.Text strong>{t('app.kuaizhizao.demandComputation.snapshotItems')}</Typography.Text>
-                <pre
-                  style={{
-                    margin: '8px 0 0',
-                    padding: 12,
-                    fontSize: 12,
-                    background: 'var(--ant-color-fill-quaternary)',
-                    borderRadius: token.borderRadius,
-                    overflow: 'auto',
-                    maxHeight: 320,
-                  }}
-                >
-                  {JSON.stringify(recalcSnapshotModalData.items_snapshot, null, 2)}
-                </pre>
-              </div>
-            ) : null}
-            {!recalcSnapshotModalData.computation_summary_snapshot &&
-            (!recalcSnapshotModalData.items_snapshot ||
-              recalcSnapshotModalData.items_snapshot.length === 0) ? (
-              <Typography.Text type="secondary">{t('app.kuaizhizao.demandComputation.snapshotEmpty')}</Typography.Text>
-            ) : null}
-          </div>
-        ) : null}
-      </Modal>
-
-      <DetailDrawerTemplate
-        title={
-          currentComputation?.computation_code ? (
-            <Space align="center" size={8}>
-              <span>{t('app.kuaizhizao.demandComputation.detailTitleWithCode', { code: currentComputation.computation_code })}</span>
-              <Tooltip title={t('field.invitationCode.copy')}>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<CopyOutlined />}
-                  onClick={() =>
-                    void navigator.clipboard
-                      .writeText(currentComputation.computation_code!)
-                      .then(() => messageApi.success(t('app.kuaizhizao.demandComputation.copied')), () => messageApi.error(t('app.kuaizhizao.demandComputation.copyFailed')))
-                  }
-                />
-              </Tooltip>
-            </Space>
-          ) : (
-            t('app.kuaizhizao.demandComputation.detailTitle')
-          )
-        }
+      <DemandComputationDetailDrawer
         open={drawerVisible}
         zIndex={computationDetailDrawerZIndex}
         onClose={() => {
           setDrawerVisible(false)
-          setRecalcSnapshotModalOpen(false)
-          setRecalcSnapshotModalData(null)
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
-        className="demand-computation-drawer"
-        styles={{
-          body: { paddingTop: 8, paddingBottom: 8 },
-        }}
-        plainBody={
-          currentComputation ? (
-          <Tabs
-            activeKey={detailTabKey}
-            onChange={(key) => {
-              setDetailTabKey(key)
-              if (key === 'records' && currentComputation.id) {
-                loadComputationRecordsTabData(currentComputation.id)
-              }
+        computation={currentComputation}
+        trackingRefreshKey={computationTrackingRefreshKey}
+        renderBriefActions={(doc) => (
+          <WarehouseTraceBriefPrimaryActions
+            doc={doc}
+            t={t}
+            navigate={navigate}
+            closeDrawer={() => {
+              setDrawerVisible(false)
             }}
-            items={[
-              {
-                key: 'detail',
-                label: t('app.kuaizhizao.demandComputation.drawerTabDetail'),
-                children: (
-                  <>
-                    <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
-                      <Descriptions
-                        column={3}
-                        size="small"
-                        items={[
-                          {
-                            key: 'code',
-                            label: t('app.kuaizhizao.demandComputation.colComputationCode'),
-                            children: (
-                              <Space size={4}>
-                                <span>{currentComputation.computation_code ?? '—'}</span>
-                                {currentComputation.computation_code ? (
-                                  <Tooltip title={t('field.invitationCode.copy')}>
-                                    <Button
-                                      type="link"
-                                      size="small"
-                                      icon={<CopyOutlined style={{ fontSize: 12 }} />}
-                                      onClick={() =>
-                                        void navigator.clipboard
-                                          .writeText(currentComputation.computation_code!)
-                                          .then(() => messageApi.success(t('app.kuaizhizao.demandComputation.copied')), () => messageApi.error(t('app.kuaizhizao.demandComputation.copyFailed')))
-                                      }
-                                    />
-                                  </Tooltip>
-                                ) : null}
-                              </Space>
-                            ),
-                          },
-                          {
-                            key: 'demand',
-                            label: t('app.kuaizhizao.demandComputation.colSourceNo'),
-                            children: (
-                              <DemandComputationSourceCode
-                                demandCode={currentComputation.demand_code}
-                                demandType={currentComputation.demand_type}
-                                demandId={currentComputation.demand_id}
-                                demandIds={currentComputation.demand_ids}
-                                sourceId={currentComputation.source_id}
-                              />
-                            ),
-                          },
-                          {
-                            key: 'ctype',
-                            label: t('app.kuaizhizao.demandComputation.colComputationType'),
-                            children: t('app.kuaizhizao.demandComputation.computationTypeMrp'),
-                          },
-                          {
-                            key: 'bm',
-                            label: t('app.kuaizhizao.demandComputation.colBusinessMode'),
-                            children: (
-                              <Tag color={getDemandBusinessModeTagColor(currentComputation.business_mode)}>
-                                {getDemandBusinessModeLabel(currentComputation.business_mode)}
-                              </Tag>
-                            ),
-                          },
-                          {
-                            key: 'dtype',
-                            label: t('app.kuaizhizao.demandComputation.colSourceType'),
-                            children: renderDemandTypeMarkerTag(currentComputation.demand_type),
-                          },
-                          {
-                            key: 'st',
-                            label: t('app.kuaizhizao.demandComputation.colComputationStatus'),
-                            children: (
-                              <Tag
-                                {...getDocumentLifecycleStageTagProps(
-                                  currentComputation.computation_status ?? '进行中'
-                                )}
-                              >
-                                {currentComputation.computation_status ?? '—'}
-                              </Tag>
-                            ),
-                          },
-                          {
-                            key: 't1',
-                            label: t('app.kuaizhizao.demandComputation.colStartTime'),
-                            children: formatDateTimeBySiteSetting(currentComputation.computation_start_time) || '—',
-                          },
-                          {
-                            key: 't2',
-                            label: t('app.kuaizhizao.demandComputation.colEndTime'),
-                            span: validationResults ? 1 : 2,
-                            children: formatDateTimeBySiteSetting(currentComputation.computation_end_time) || '—',
-                          },
-                          ...(validationResults
-                            ? [
-                                {
-                                  key: 'v0',
-                                  label: t('app.kuaizhizao.demandComputation.sourceValidation'),
-                                  children: (
-                                    <Tag color={validationResults.all_passed ? 'success' : 'error'}>
-                                      {validationResults.all_passed ? t('app.kuaizhizao.demandComputation.validationAllPassed') : t('app.kuaizhizao.demandComputation.validationHasFailed')}
-                                    </Tag>
-                                  ),
-                                },
-                                {
-                                  key: 'v1',
-                                  label: t('app.kuaizhizao.demandComputation.validationCounts'),
-                                  span: 3,
-                                  children: `${validationResults.passed_count ?? 0} / ${validationResults.failed_count ?? 0} / ${validationResults.total_count ?? 0}`,
-                                },
-                              ]
-                            : []),
-                          {
-                            key: 'notes',
-                            label: t('app.kuaizhizao.demandComputation.colNotes'),
-                            span: 3,
-                            children: normalizeComputationSourceNote(currentComputation, t) || '—',
-                          },
-                        ]}
-                      />
-                      {validationResults && validationResults.failed_count > 0 && (
-                        <div style={{ marginTop: 12 }}>
-                          <Typography.Text strong type="danger">
-                            {t('app.kuaizhizao.demandComputation.validationFailedMaterialsDetail')}
-                          </Typography.Text>
-                          <ul style={{ marginTop: 8, marginBottom: 0, paddingLeft: 20 }}>
-                            {validationResults.validation_results
-                              .filter((r: any) => !r.validation_passed)
-                              .map((r: any, index: number) => (
-                                <li key={index} style={{ marginBottom: 4 }}>
-                                  <strong>{r.material_code}</strong> ({r.material_name}): {r.errors.join(', ')}
-                                </li>
-                              ))}
-                          </ul>
-                        </div>
-                      )}
-                    </DetailDrawerSection>
-
-                    <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        {(() => {
-                          const lifecycle = getDemandComputationLifecycle(currentComputation, t)
-                          const mainStages = lifecycle.mainStages ?? []
-                          return mainStages.length > 0 ? (
-                            <UniLifecycleStepper
-                              steps={mainStages}
-                              status={lifecycle.status}
-                              showLabels
-                              nextStepSuggestions={lifecycle.nextStepSuggestions}
-                              hideNextStepSuggestions
-                            />
-                          ) : (
-                            <Typography.Text type="secondary">{t('app.kuaizhizao.demandComputation.noStageData')}</Typography.Text>
-                          )
-                        })()}
-                        
-                      </div>
-                    </DetailDrawerSection>
-
-                    <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
-                      {/*
-                        横滚仅在外层；内层表体覆盖 global.less 的 overflow，避免只读明细双滚动（与 quotation-detail-drawer-items 同思路）。
-                      */}
-                      <style>{`
-                        .demand-computation-detail-items .ant-table-wrapper .ant-table-body,
-                        .demand-computation-detail-items .ant-table-wrapper .ant-table-content {
-                          overflow: visible !important;
-                        }
-                        .demand-computation-detail-items .ant-table-cell {
-                          white-space: nowrap;
-                        }
-                      `}</style>
-                      {currentComputation.items && currentComputation.items.length > 0 ? (
-                        <div
-                          className="demand-computation-detail-items"
-                          style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
-                        >
-                          <Table<DemandComputationItem>
-                            size="small"
-                            dataSource={currentComputation.items}
-                            rowKey="id"
-                            tableLayout="fixed"
-                            scroll={{ x: DEMAND_COMPUTATION_DETAIL_ITEMS_MIN_WIDTH }}
-                            style={{ minWidth: DEMAND_COMPUTATION_DETAIL_ITEMS_MIN_WIDTH }}
-                            pagination={false}
-                            columns={[
-                            {
-                              title: t('app.kuaizhizao.demandComputation.colMaterial'),
-                              key: 'material',
-                              width: 220,
-                              render: (_: unknown, record: DemandComputationItem) => (
-                                <MaterialStackedCell
-                                  material_name={record.material_name}
-                                  material_code={record.material_code}
-                                  material_spec={record.material_spec}
-                                />
-                              ),
-                            },
-                            {
-                              title: t('app.kuaizhizao.demandComputation.colUnit'),
-                              dataIndex: 'material_unit',
-                              width: 88,
-                              render: (_: unknown, record: DemandComputationItem) => (
-                                <MaterialUnitSelect
-                                  materialId={record.material_id}
-                                  value={record.material_unit}
-                                  size="small"
-                                  disabled
-                                  noStyle
-                                />
-                              ),
-                            },
-                            { title: t('app.kuaizhizao.demandComputation.colRequiredQty'), dataIndex: 'required_quantity', width: 96, align: 'right' , render: formatQuantity },
-                            {
-                              title: t('app.kuaizhizao.demandComputation.colAvailableInventory'),
-                              dataIndex: 'available_inventory',
-                              width: 96,
-                              align: 'right' as const,
-                              render: (v: number, record: DemandComputationItem) =>
-                                renderAvailableInventoryCell(v, record.detail_results as Record<string, unknown> | undefined),
-                            },
-                            { title: t('app.kuaizhizao.demandComputation.colNetRequirement'), dataIndex: 'net_requirement', width: 90, align: 'right', render: (v) => <span style={{ fontWeight: 'bold' }}>{v}</span> },
-                            {
-                              title: (
-                                <Tooltip title={t('app.kuaizhizao.demandComputation.readinessTooltip')}>
-                                  <span>{t('app.kuaizhizao.demandComputation.colReadinessStatus')}</span>
-                                </Tooltip>
-                              ),
-                              dataIndex: 'readiness_status',
-                              width: 148,
-                              render: (status: string, record: DemandComputationItem) => {
-                                const map: Record<string, { label: string; color: string }> = {
-                                  Ready: { label: t('app.kuaizhizao.demandComputation.readinessReady'), color: 'success' },
-                                  Partial: { label: t('app.kuaizhizao.demandComputation.readinessPartial'), color: 'warning' },
-                                  Shortage: { label: t('app.kuaizhizao.demandComputation.readinessShortage'), color: 'error' },
-                                }
-                                const info = map[status || 'Shortage'] || { label: t('app.kuaizhizao.demandComputation.statusUnknown'), color: 'default' }
-                                const rate = record.readiness_rate
-                                const pctLabel =
-                                  rate != null && rate < 1
-                                    ? (() => {
-                                        const p = Number(rate) * 100
-                                        if (p <= 0) return '0%'
-                                        if (p < 0.1) return '<0.1%'
-                                        if (p < 1) return `${p.toFixed(1)}%`
-                                        return `${Math.round(p)}%`
-                                      })()
-                                    : null
-                                return (
-                                  <span
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: 6,
-                                      whiteSpace: 'nowrap',
-                                    }}
-                                  >
-                                    <Tag color={info.color} style={{ margin: 0, flexShrink: 0 }}>
-                                      {info.label}
-                                    </Tag>
-                                    {pctLabel ? (
-                                      <span style={{ fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
-                                        {pctLabel}
-                                      </span>
-                                    ) : null}
-                                  </span>
-                                )
-                              },
-                            },
-                            {
-                              title: t('app.kuaizhizao.demandComputation.colMaterialSource'),
-                              dataIndex: 'material_source_type',
-                              width: 96,
-                              render: (type: string) => {
-                                const normalized = normalizeMaterialSourceType(type)
-                                const label = getMaterialSourceTypeLabel(type, t)
-                                const color = MATERIAL_SOURCE_TAG_COLORS[normalized] || 'default'
-                                return <Tag color={color}>{label}</Tag>
-                              },
-                            },
-                            {
-                              title: t('app.kuaizhizao.demandComputation.colDeliveryRequirement'),
-                              dataIndex: 'delivery_date',
-                              width: 300,
-                              render: (date: string, record: DemandComputationItem) => {
-                                const startDate = record.production_start_date || record.procurement_start_date
-                                const isRisk = record.is_overdue_risk
-                                return (
-                                  <div style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
-                                    <span
-                                      style={{
-                                        color: isRisk ? '#ff4d4f' : 'inherit',
-                                        fontWeight: isRisk ? 'bold' : 'normal',
-                                      }}
-                                    >
-                                      {date || '—'}
-                                    </span>
-                                    {isRisk ? (
-                                      <Tag color="error" style={{ marginLeft: 6, fontSize: 10 }}>
-                                        {t('app.kuaizhizao.demandComputation.deliveryRisk')}
-                                      </Tag>
-                                    ) : null}
-                                    {startDate ? (
-                                      <span
-                                        style={{
-                                          marginLeft: 8,
-                                          fontSize: 12,
-                                          color: 'var(--ant-color-text-secondary)',
-                                        }}
-                                      >
-                                        {t('app.kuaizhizao.demandComputation.plannedStart', { date: startDate })}
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                )
-                              },
-                            },
-                            {
-                              title: t('app.kuaizhizao.demandComputation.colSuggestedWorkOrder'),
-                              dataIndex: 'suggested_work_order_quantity',
-                              width: 100,
-                              align: 'right',
-                              render: (v: number, r: DemandComputationItem) =>
-                                r.material_source_type === 'Outsource' ? '-' : (v ?? '-'),
-                            },
-                            {
-                              title: t('app.kuaizhizao.demandComputation.colSuggestedOutsource'),
-                              dataIndex: 'suggested_work_order_quantity',
-                              width: 100,
-                              align: 'right',
-                              render: (v: number, r: DemandComputationItem) =>
-                                r.material_source_type === 'Outsource' ? (v ?? '-') : '-',
-                            },
-                            {
-                              title: t('app.kuaizhizao.demandComputation.colSuggestedPurchase'),
-                              dataIndex: 'suggested_purchase_order_quantity',
-                              width: 100,
-                              align: 'right',
-                            },
-                            {
-                              title: t('app.kuaizhizao.demandComputation.colMrpExceptions'),
-                              dataIndex: 'id',
-                              width: 88,
-                              render: (_, record: DemandComputationItem) => {
-                                const exceptions = Array.isArray(record.detail_results?.exceptions)
-                                  ? record.detail_results.exceptions
-                                  : []
-                                if (!exceptions.length) return '-'
-                                const color =
-                                  exceptions.some((e: { code?: string }) =>
-                                    ['PAST_DUE_START', 'SHORTAGE_WITHIN_LEAD_TIME', 'PAST_DUE_SUPPLY'].includes(
-                                      String(e?.code || ''),
-                                    ),
-                                  )
-                                    ? 'error'
-                                    : 'warning'
-                                return (
-                                  <Button
-                                    type="link"
-                                    size="small"
-                                    danger={color === 'error'}
-                                    onClick={() => {
-                                      modalApi.info({
-                                        title: t('app.kuaizhizao.demandComputation.mrpExceptionTitle'),
-                                        width: 560,
-                                        content: (
-                                          <ul style={{ maxHeight: 320, overflow: 'auto', paddingLeft: 18 }}>
-                                            {exceptions.map(
-                                              (
-                                                ex: { code?: string; severity?: string; message?: string; qty?: number },
-                                                idx: number,
-                                              ) => (
-                                                <li key={idx} style={{ marginBottom: 6 }}>
-                                                  <Tag color={color}>{ex.code || 'INFO'}</Tag>
-                                                  <span>{ex.message || '-'}</span>
-                                                  {ex.qty != null ? (
-                                                    <Typography.Text type="secondary" style={{ marginLeft: 6 }}>
-                                                      ({ex.qty})
-                                                    </Typography.Text>
-                                                  ) : null}
-                                                </li>
-                                              ),
-                                            )}
-                                          </ul>
-                                        ),
-                                      })
-                                    }}
-                                  >
-                                    {t('app.kuaizhizao.demandComputation.mrpExceptionCount', {
-                                      count: exceptions.length,
-                                    })}
-                                  </Button>
-                                )
-                              },
-                            },
-                            {
-                              title: t('app.kuaizhizao.demandComputation.colTraceability'),
-                              dataIndex: 'id',
-                              width: 72,
-                              render: (_, record) => {
-                                const ids =
-                                  (Array.isArray(record.demand_item_ids) && record.demand_item_ids.length
-                                    ? record.demand_item_ids
-                                    : null) ||
-                                  (Array.isArray(record.detail_results?.demand_item_ids)
-                                    ? record.detail_results.demand_item_ids
-                                    : []) ||
-                                  []
-                                return (
-                                  <Button
-                                    type="link"
-                                    size="small"
-                                    disabled={!ids.length}
-                                    onClick={() => {
-                                      modalApi.info({
-                                        title: t('app.kuaizhizao.demandComputation.traceTitle'),
-                                        content: (
-                                          <div>
-                                            <p>{t('app.kuaizhizao.demandComputation.traceContent')}</p>
-                                            <ul style={{ maxHeight: 300, overflow: 'auto' }}>
-                                              {ids.map((id: number, idx: number) => (
-                                                <li key={idx}>{t('app.kuaizhizao.demandComputation.traceItemId', { id })}</li>
-                                              ))}
-                                            </ul>
-                                            <p style={{ color: '#999', fontSize: 12 }}>
-                                              {t('app.kuaizhizao.demandComputation.traceHint')}
-                                            </p>
-                                          </div>
-                                        ),
-                                      })
-                                    }}
-                                  >
-                                    {t('app.kuaizhizao.demandComputation.actionTrace')}
-                                  </Button>
-                                )
-                              },
-                            },
-                          ]}
-                          />
-                        </div>
-                      ) : (
-                        <Empty description={t('app.kuaizhizao.demandComputation.noComputationItems')} />
-                      )}
-                    </DetailDrawerSection>
-
-                    <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
-                      {computationTracking.loading ? (
-                        <Spin />
-                      ) : computationTracking.error ? (
-                        <Typography.Text type="danger">{computationTracking.error}</Typography.Text>
-                      ) : computationTracking.data ? (
-                        <DocumentTrackingTimelineBody data={computationTracking.data} />
-                      ) : (
-                        <Typography.Text type="secondary">{t('app.kuaizhizao.demandComputation.noTimeline')}</Typography.Text>
-                      )}
-                    </DetailDrawerSection>
-                  </>
-                ),
-              },
-              {
-                key: 'records',
-                label: t('app.kuaizhizao.demandComputation.drawerTabRecords'),
-                children: (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                    <div>
-                      <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
-                        {t('app.kuaizhizao.demandComputation.pushRecords')}
-                      </Typography.Text>
-                      <Table<PushRecordItem>
-                        size="small"
-                        loading={pushRecordsLoading}
-                        dataSource={pushRecords}
-                        rowKey={(r) => `${r.target_type}-${r.target_id}`}
-                        scroll={{ x: 'max-content' }}
-                        tableLayout="fixed"
-                        style={{ minWidth: '100%' }}
-                        columns={[
-                          {
-                            title: t('app.kuaizhizao.demandComputation.colDocumentType'),
-                            dataIndex: 'target_type',
-                            width: 112,
-                            ellipsis: true,
-                            render: (targetType: string) => getPushDocTypeLabel(t, targetType),
-                          },
-                          {
-                            title: t('app.kuaizhizao.demandComputation.colDocumentCode'),
-                            dataIndex: 'target_code',
-                            width: 220,
-                            ellipsis: true,
-                          },
-                          {
-                            title: t('app.kuaizhizao.demandComputation.colDocumentName'),
-                            dataIndex: 'target_name',
-                            width: 280,
-                            ellipsis: true,
-                          },
-                          {
-                            title: t('app.kuaizhizao.demandComputation.colPushTime'),
-                            dataIndex: 'created_at',
-                            width: 176,
-                            ellipsis: true,
-                            render: (createdAt: string) => (createdAt ? formatDateTime(createdAt, 'YYYY-MM-DD HH:mm:ss') : '—'),
-                          },
-                          {
-                            title: t('app.kuaizhizao.demandComputation.colStatus'),
-                            dataIndex: 'target_exists',
-                            width: 88,
-                            render: (exists: boolean) =>
-                              exists ? (
-                                <Tag color="success">{t('app.kuaizhizao.demandComputation.statusNormal')}</Tag>
-                              ) : (
-                                <Tag color="default">{t('app.kuaizhizao.demandComputation.statusDeleted')}</Tag>
-                              ),
-                          },
-                        ]}
-                        pagination={false}
-                      />
-                    </div>
-                    <Divider style={{ margin: 0 }} />
-                    <div>
-                      <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
-                        {t('app.kuaizhizao.demandComputation.recalcHistory')}
-                      </Typography.Text>
-                      <Typography.Paragraph type="secondary" style={{ marginBottom: 8, fontSize: 12 }}>
-                        {t('app.kuaizhizao.demandComputation.recalcHistoryHint')}
-                      </Typography.Paragraph>
-                      <Table<ComputationRecalcHistoryItem>
-                        size="small"
-                        loading={recalcHistoryLoading}
-                        dataSource={computationRecalcHistory}
-                        rowKey="id"
-                        scroll={{ x: 'max-content' }}
-                        columns={[
-                          { title: t('app.kuaizhizao.demandComputation.colRecalcTime'), dataIndex: 'recalc_at', width: 180, render: (recalcAt) => recalcAt || '-' },
-                          { title: t('app.kuaizhizao.demandComputation.colTrigger'), dataIndex: 'trigger', width: 120 },
-                          { title: t('app.kuaizhizao.demandComputation.colResult'), dataIndex: 'result', width: 80 },
-                          {
-                            title: t('app.kuaizhizao.demandComputation.colSnapshot'),
-                            key: 'snapshot',
-                            width: 108,
-                            render: (_: unknown, r: ComputationRecalcHistoryItem) =>
-                              r.snapshot_id != null ? (
-                                <Button
-                                  type="link"
-                                  size="small"
-                                  style={{ padding: 0 }}
-                                  onClick={() => void openRecalcSnapshotPreview(r.snapshot_id!)}
-                                >
-                                  {t('app.kuaizhizao.demandComputation.actionView')}
-                                </Button>
-                              ) : (
-                                <span style={{ color: 'var(--ant-color-text-secondary)' }}>—</span>
-                              ),
-                          },
-                          { title: t('app.kuaizhizao.demandComputation.colNotes'), dataIndex: 'message', ellipsis: true },
-                        ]}
-                        pagination={false}
-                      />
-                    </div>
-                  </div>
-                ),
-              },
-            ]}
           />
-          ) : null
-        }
-      
-                        traceDocument={
-                          currentComputation?.id != null
-                            ? {
-                                documentType: 'demand_computation',
-                                documentId: currentComputation.id,
-                                selfDocumentId: currentComputation.id,
-                              renderBriefActions: (doc) => (
-                              <WarehouseTraceBriefPrimaryActions
-                                doc={doc}
-                                t={t}
-                                navigate={navigate}
-                                closeDrawer={() => {
-                                  setDrawerVisible(false)
-                                }}
-                              />
-                            )
-                              }
-                            : undefined
-                        }
+        )}
       />
 
       </>

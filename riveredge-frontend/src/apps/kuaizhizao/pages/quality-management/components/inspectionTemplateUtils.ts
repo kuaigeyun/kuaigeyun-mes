@@ -58,9 +58,13 @@ export function hasConductStepResults(inspection: Record<string, unknown> | null
   return Object.keys(getConductStepResults(template)).length > 0;
 }
 
-/** 从表单值提取 conduct 所需的 measurement_data / item_results / conduct_step_results */
+/** 从表单值提取 conduct 所需的 measurement_data / item_results / conduct_step_results / inspector_id */
 export function pickInspectionConductExtras(values: Record<string, unknown>): Record<string, unknown> {
   const extras: Record<string, unknown> = {};
+  const inspectorId = Number(values.inspector_id);
+  if (Number.isFinite(inspectorId) && inspectorId > 0) {
+    extras.inspector_id = inspectorId;
+  }
   const measurement = values.measurement_data;
   const itemResults = values.item_results;
   const stepResults = values.conduct_step_results;

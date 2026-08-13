@@ -282,7 +282,6 @@ const EquipmentTransfersPage: React.FC = () => {
         title: t(`${P}.col.status`),
         key: 'lifecycle',
         dataIndex: 'status',
-        sorter: true,
         hideInSearch: true,
         fixed: 'right',
         render: (_, r) => (

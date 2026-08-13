@@ -1,7 +1,8 @@
 /**
- * 关联单号列全局约定（UniTable / 详情 Descriptions 唯一自动挂链路径）。
- * 列 dataIndex 命中约定、且列没有自定义 render 时，自动渲染可点链接打开嵌套抽屉。
- * 已有叠列 render 不得覆盖。页面特殊 UI 可设 skipLinkedDocumentLink: true 退出。
+ * 关联单号全局约定（唯一挂链路径）。
+ * - 普通列：UniTable / 详情 Descriptions 按 dataIndex 自动挂链（列无自定义 render）。
+ * - 叠列次行：UniTableStackedPrimaryCell 传入 record 后按 *_code + *_id 自动挂链。
+ * 已有叠列主行 render 不得被 UniTable 覆盖。页面特殊 UI 可设 skipLinkedDocumentLink。
  */
 
 import type { LinkedDocumentType } from './linkedDocumentDetail';
@@ -13,6 +14,28 @@ export type LinkedCodeBinding = {
   idField: string;
   codeField: string;
 };
+
+export function toSnakeField(key: string): string {
+  return String(key)
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/-/g, '_')
+    .toLowerCase();
+}
+
+export function toCamelField(snake: string): string {
+  return snake.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+}
+
+function pickRecordValue(record: Record<string, unknown>, field: string): unknown {
+  const snake = toSnakeField(field);
+  const camel = toCamelField(snake);
+  for (const k of [field, snake, camel]) {
+    if (!k) continue;
+    const v = record[k];
+    if (v != null && String(v).trim() !== '') return v;
+  }
+  return undefined;
+}
 
 /** 前缀 → 单据类型（original_work_order_code → work_order） */
 const PREFIX_TO_DOCUMENT_TYPE: Record<string, LinkedDocumentType> = {
@@ -36,6 +59,8 @@ const PREFIX_TO_DOCUMENT_TYPE: Record<string, LinkedDocumentType> = {
   purchase_receipt: 'purchase_receipt',
   quotation: 'quotation',
   demand: 'demand',
+  related_demand: 'demand',
+  freight_order: 'freight_order',
 };
 
 /** 显式 dataIndex 绑定（含 source_code 三元组） */
@@ -44,6 +69,7 @@ const EXPLICIT_BINDINGS: Record<string, Omit<LinkedCodeBinding, 'codeField'>> = 
   original_work_order_code: { documentType: 'work_order', idField: 'original_work_order_id' },
   work_order_code: { documentType: 'work_order', idField: 'work_order_id' },
   sales_order_code: { documentType: 'sales_order', idField: 'sales_order_id' },
+  source_order_code: { documentType: 'sales_order', idField: 'source_order_id' },
   purchase_order_code: { documentType: 'purchase_order', idField: 'purchase_order_id' },
   purchase_requisition_code: {
     documentType: 'purchase_requisition',
@@ -52,6 +78,7 @@ const EXPLICIT_BINDINGS: Record<string, Omit<LinkedCodeBinding, 'codeField'>> = 
   requisition_code: { documentType: 'purchase_requisition', idField: 'requisition_id' },
   quotation_code: { documentType: 'quotation', idField: 'quotation_id' },
   computation_code: { documentType: 'demand_computation', idField: 'computation_id' },
+  demand_code: { documentType: 'demand', idField: 'demand_id' },
   demand_computation_code: {
     documentType: 'demand_computation',
     idField: 'demand_computation_id',
@@ -60,6 +87,8 @@ const EXPLICIT_BINDINGS: Record<string, Omit<LinkedCodeBinding, 'codeField'>> = 
   sales_forecast_code: { documentType: 'sales_forecast', idField: 'sales_forecast_id' },
   sales_delivery_code: { documentType: 'sales_delivery', idField: 'sales_delivery_id' },
   purchase_receipt_code: { documentType: 'purchase_receipt', idField: 'purchase_receipt_id' },
+  related_demand_code: { documentType: 'demand', idField: 'related_demand_id' },
+  freight_order_code: { documentType: 'freight_order', idField: 'freight_order_id' },
 };
 
 /** 列已有自定义 render 时不得覆盖（报价单等主从叠列用 quotation_code 作 dataIndex）。 */
@@ -75,10 +104,11 @@ export function shouldInjectLinkedDocumentRender(col: {
 }
 
 export function resolveLinkedDocumentColumn(dataIndex: string | null | undefined): LinkedCodeBinding | null {
-  const key = String(dataIndex ?? '').trim();
-  if (!key) return null;
+  const raw = String(dataIndex ?? '').trim();
+  if (!raw) return null;
+  const key = toSnakeField(raw);
 
-  const explicit = EXPLICIT_BINDINGS[key];
+  const explicit = EXPLICIT_BINDINGS[raw] ?? EXPLICIT_BINDINGS[key];
   if (explicit) {
     return { ...explicit, codeField: key };
   }
@@ -102,20 +132,56 @@ export function resolveLinkedDocumentFromRecord(
   record: Record<string, unknown> | null | undefined,
 ): { documentType: string; documentId: number; code: string } | null {
   if (!record) return null;
-  const code = String(record[binding.codeField] ?? '').trim();
+  const code = String(pickRecordValue(record, binding.codeField) ?? '').trim();
   if (!code) return null;
 
-  const idRaw = record[binding.idField];
+  const idRaw = pickRecordValue(record, binding.idField);
   const documentId = Number(idRaw);
   if (!Number.isFinite(documentId) || documentId <= 0) return null;
 
   let documentType =
     binding.documentType === 'from_source_type'
-      ? normalizeLinkedDocumentType(record.source_type as string)
+      ? normalizeLinkedDocumentType(String(pickRecordValue(record, 'source_type') ?? ''))
       : binding.documentType;
 
   documentType = normalizeLinkedDocumentType(documentType);
   if (!documentType || !canOpenLinkedDocumentDetail(documentType)) return null;
 
   return { documentType, documentId, code };
+}
+
+/**
+ * 叠列次行：用 secondaryKeys 或 record 上与次行文案相同的 *_code 解析关联抽屉。
+ * 次行不是约定单号（物料编码、时间、未登记类型）时返回 null。
+ */
+export function resolveStackedSecondaryLinkedDocument(
+  record: Record<string, unknown> | null | undefined,
+  secondaryText: string,
+  secondaryKeys?: string[],
+): { documentType: string; documentId: number; code: string } | null {
+  if (!record) return null;
+  const text = String(secondaryText ?? '').trim();
+  if (!text || text === '-') return null;
+
+  const keysToTry: string[] = [];
+  const seen = new Set<string>();
+  const pushKey = (raw: string) => {
+    const snake = toSnakeField(raw);
+    if (!snake || seen.has(snake)) return;
+    seen.add(snake);
+    keysToTry.push(snake);
+  };
+  for (const k of secondaryKeys ?? []) pushKey(k);
+  for (const k of Object.keys(record)) {
+    if (toSnakeField(k).endsWith('_code')) pushKey(k);
+  }
+
+  for (const key of keysToTry) {
+    const binding = resolveLinkedDocumentColumn(key);
+    if (!binding) continue;
+    const resolved = resolveLinkedDocumentFromRecord(binding, record);
+    if (!resolved) continue;
+    if (resolved.code === text) return resolved;
+  }
+  return null;
 }

@@ -20,8 +20,7 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Tag, Button, Space, Modal, Steps, Timeline, Card, Divider } from 'antd';
-import { ProDescriptions } from '@ant-design/pro-components';
+import { App, Button, Space, Modal, Timeline, Descriptions, Typography } from 'antd';
 import { EyeOutlined, UserOutlined, ArrowRightOutlined, CheckCircleOutlined, CloseCircleOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { UniTable } from '../../../../../components/uni-table';
@@ -29,7 +28,7 @@ import { UNI_TABLE_OPERATION_STEPS_COLUMN_DEFAULTS } from '../../../../../compon
 import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 import { resolveUserDisplay } from '../../../../../services/user';
 import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { exceptionApi } from '../../../services/production';
 import {
   ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES,
@@ -38,7 +37,7 @@ import {
 import { apiRequest } from '../../../../../services/api';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { exceptionProcessBatchCancelAllowed } from '../../../../../hooks/useDocumentCapabilities';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import {
   buildExceptionProcessStatusValueEnum,
@@ -46,16 +45,18 @@ import {
 } from '../../../utils/productionExceptionList';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { WorkOrderOperationStepsStrip } from '../work-orders/components/WorkOrderOperationStepsStrip';
 import type { WorkOrderOperationStep } from '../work-orders/workOrderOperationSteps';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import type { SubStage } from '../../../../../components/uni-lifecycle/types';
 
 const EXCEPTION_PROCESS_RESOURCE = 'kuaizhizao:production-execution-exception-process';
 
 const P = 'app.kuaizhizao.productionException';
 const PROC = `${P}.process`;
 
-/** 异常处理流程标准步骤（与详情 Steps 一致；取消单独成节点） */
+/** 异常处理流程标准步骤（与详情 UniLifecycleStepper 一致；取消单独成节点） */
 const EXCEPTION_PROCESS_STEP_KEYS = [
   'detected',
   'assigned',
@@ -78,6 +79,13 @@ function exceptionProcessStepLabel(t: (key: string) => string, key: string): str
   return t(map[key] || `${P}.exceptionType.unknown`);
 }
 
+function exceptionProcessStepKeys(currentStep?: string, processStatus?: string): string[] {
+  const cancelled = processStatus === 'cancelled' || currentStep === 'cancelled';
+  return cancelled
+    ? [...EXCEPTION_PROCESS_STEP_KEYS.filter((k) => k !== 'closed'), 'cancelled']
+    : [...EXCEPTION_PROCESS_STEP_KEYS];
+}
+
 function buildExceptionProcessStepNodes(
   t: (key: string) => string,
   currentStep?: string,
@@ -85,9 +93,7 @@ function buildExceptionProcessStepNodes(
 ): WorkOrderOperationStep[] {
   const cancelled = processStatus === 'cancelled' || currentStep === 'cancelled';
   const resolved = processStatus === 'resolved' || currentStep === 'closed';
-  const keys: string[] = cancelled
-    ? [...EXCEPTION_PROCESS_STEP_KEYS.filter((k) => k !== 'closed'), 'cancelled']
-    : [...EXCEPTION_PROCESS_STEP_KEYS];
+  const keys = exceptionProcessStepKeys(currentStep, processStatus);
   const activeKey = cancelled ? 'cancelled' : resolved ? 'closed' : currentStep || 'detected';
   let activeIdx = keys.findIndex((k) => k === activeKey);
   if (activeIdx < 0) activeIdx = 0;
@@ -107,6 +113,28 @@ function buildExceptionProcessStepNodes(
       status,
     };
   });
+}
+
+function buildExceptionProcessMainStages(
+  t: (key: string) => string,
+  currentStep?: string,
+  processStatus?: string,
+): { stages: SubStage[]; nextStepSuggestions?: string[]; status: 'success' | 'exception' | 'active' } {
+  const cancelled = processStatus === 'cancelled' || currentStep === 'cancelled';
+  const resolved = processStatus === 'resolved' || currentStep === 'closed';
+  const keys = exceptionProcessStepKeys(currentStep, processStatus);
+  const nodes = buildExceptionProcessStepNodes(t, currentStep, processStatus);
+  const stages: SubStage[] = nodes.map((node, index) => ({
+    key: keys[index] ?? `step-${index}`,
+    label: node.name,
+    status: node.status,
+  }));
+  const next = stages.find((s) => s.status === 'pending');
+  return {
+    stages,
+    nextStepSuggestions: next ? [next.label] : undefined,
+    status: cancelled ? 'exception' : resolved ? 'success' : 'active',
+  };
 }
 
 interface ExceptionProcessRecord {
@@ -129,6 +157,7 @@ interface ExceptionProcessRecord {
   capabilities?: {
     cancel?: { allowed: boolean; reason?: string | null };
   };
+  [key: string]: unknown;
 }
 
 interface ExceptionProcessHistory {
@@ -196,23 +225,6 @@ const ExceptionProcessPage: React.FC = () => {
       };
       const item = typeMap[type || ''] || { color: 'default', text: type || t(`${P}.exceptionType.unknown`) };
       return <MarkerTag color={item.color}>{item.text}</MarkerTag>;
-    },
-    [t],
-  );
-
-  const getStepTag = useCallback(
-    (step?: string) => {
-      const stepMap: Record<string, { color: string; text: string }> = {
-        detected: { color: 'blue', text: t(`${P}.step.detected`) },
-        assigned: { color: 'cyan', text: t(`${P}.step.assigned`) },
-        investigating: { color: 'orange', text: t(`${P}.step.investigating`) },
-        handling: { color: 'processing', text: t(`${P}.step.handling`) },
-        verifying: { color: 'purple', text: t(`${P}.step.verifying`) },
-        closed: { color: 'success', text: t(`${P}.step.closed`) },
-        cancelled: { color: 'error', text: t(`${P}.status.cancelled`) },
-      };
-      const item = stepMap[step || ''] || { color: 'default', text: step || t(`${P}.exceptionType.unknown`) };
-      return <Tag color={item.color}>{item.text}</Tag>;
     },
     [t],
   );
@@ -505,39 +517,28 @@ const ExceptionProcessPage: React.FC = () => {
     },
   ], [t, getExceptionTypeTag, getStatusTag, processStatusValueEnum, exceptionTypeValueEnum]);
 
-  const getStepsConfig = useCallback(
-    (currentStep?: string) => {
-      const steps = [
-        { title: t(`${P}.step.detected`), key: 'detected' },
-        { title: t(`${P}.step.assigned`), key: 'assigned' },
-        { title: t(`${P}.step.investigating`), key: 'investigating' },
-        { title: t(`${P}.step.handling`), key: 'handling' },
-        { title: t(`${P}.step.verifying`), key: 'verifying' },
-        { title: t(`${P}.step.closed`), key: 'closed' },
-      ];
-
-      const currentIndex = steps.findIndex((s) => s.key === currentStep);
-      return {
-        current: currentIndex >= 0 ? currentIndex : 0,
-        steps,
-      };
-    },
-    [t],
+  const exceptionProcessDetailLifecycle = useMemo(
+    () =>
+      currentRecord
+        ? buildExceptionProcessMainStages(t, currentRecord.current_step, currentRecord.process_status)
+        : null,
+    [currentRecord, t],
   );
+  const exceptionProcessNextSteps = exceptionProcessDetailLifecycle?.nextStepSuggestions;
+  const exceptionProcessShowNextInTitle = Boolean(exceptionProcessNextSteps?.length);
 
   const detailDescriptionColumns = useMemo(
-    () => [
-      { title: t(`${P}.col.exceptionType`), dataIndex: 'exception_type' },
-      { title: t(`${P}.col.workOrderCode`), dataIndex: 'work_order_code' },
-      { title: t(`${P}.col.processStatus`), dataIndex: 'process_status' },
-      { title: t(`${P}.col.currentStep`), dataIndex: 'current_step' },
+    () =>
+      alignDescriptionColumns([
+      { title: t(`${P}.col.exceptionType`), dataIndex: 'exception_type', render: (_, r) => getExceptionTypeTag(r.exception_type as string | undefined) },
+      { title: t(`${P}.col.workOrderCode`), dataIndex: 'work_order_code', key: 'linked_work_order_code' },
       { title: t(`${P}.col.assignedTo`), dataIndex: 'assigned_to_name' },
-      { title: t(`${P}.col.assignedAt`), dataIndex: 'assigned_at' },
-      { title: t(`${P}.col.startTime`), dataIndex: 'started_at' },
-      { title: t(`${P}.col.endTime`), dataIndex: 'completed_at' },
-      { title: t(`${P}.field.remarks`), dataIndex: 'remarks', span: 2 },
-    ],
-    [t],
+      { title: t(`${P}.col.assignedAt`), dataIndex: 'assigned_at', valueType: 'dateTime' },
+      { title: t(`${P}.col.startTime`), dataIndex: 'started_at', valueType: 'dateTime' },
+      { title: t(`${P}.col.endTime`), dataIndex: 'completed_at', valueType: 'dateTime' },
+      { title: t(`${P}.field.remarks`), dataIndex: 'remarks', span: 3 },
+    ]),
+    [t, getExceptionTypeTag],
   );
 
   return (
@@ -668,7 +669,7 @@ const ExceptionProcessPage: React.FC = () => {
 
       <DetailDrawerTemplate
         title={t(`${PROC}.detailTitle`)}
-        visible={detailDrawerVisible}
+        open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentRecord(null);
@@ -715,63 +716,63 @@ const ExceptionProcessPage: React.FC = () => {
             </Space>
           ) : null
         }
-      >
-        {currentRecord && (
-          <div>
-            <ProDescriptions
-              column={2}
-              bordered
-              dataSource={{
-                exception_type: getExceptionTypeTag(currentRecord.exception_type),
-                work_order_code: currentRecord.work_order_code || '-',
-                process_status: getStatusTag(currentRecord.process_status),
-                current_step: getStepTag(currentRecord.current_step),
-                assigned_to_name: currentRecord.assigned_to_name || '-',
-                assigned_at: currentRecord.assigned_at ? formatDateTime(currentRecord.assigned_at, 'YYYY-MM-DD HH:mm:ss') : '-',
-                started_at: currentRecord.started_at ? formatDateTime(currentRecord.started_at, 'YYYY-MM-DD HH:mm:ss') : '-',
-                completed_at: currentRecord.completed_at ? formatDateTime(currentRecord.completed_at, 'YYYY-MM-DD HH:mm:ss') : '-',
-                remarks: currentRecord.remarks || '-',
-              }}
-              columns={detailDescriptionColumns}
+        basic={
+          currentRecord ? (
+            <Descriptions
+              column={3}
+              size="small"
+              items={detailDrawerDescriptionItems(detailDescriptionColumns, currentRecord)}
             />
-
-            <Divider />
-
-            <Card title={t(`${PROC}.section.flow`)} style={{ marginBottom: 16 }}>
-              <Steps
-                {...getStepsConfig(currentRecord.current_step)}
-                items={getStepsConfig(currentRecord.current_step).steps.map((step) => ({ title: step.title }))}
-              />
-            </Card>
-
-            {currentRecord.histories && currentRecord.histories.length > 0 && (
-              <Card title={t(`${PROC}.section.history`)}>
-                <Timeline>
-                  {currentRecord.histories.map((history, index) => (
-                    <Timeline.Item key={index}>
-                      <div>
-                        <div>
-                          <strong>{history.action_by_name}</strong> - {history.action}
-                          {history.from_step && history.to_step && (
-                            <span>
-                              {' '}
-                              ({history.from_step} → {history.to_step})
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ color: '#666', fontSize: '12px', marginTop: 4 }}>
-                          {formatDateTime(history.action_at, 'YYYY-MM-DD HH:mm:ss')}
-                        </div>
-                        {history.comment && <div style={{ marginTop: 8 }}>{history.comment}</div>}
-                      </div>
-                    </Timeline.Item>
-                  ))}
-                </Timeline>
-              </Card>
-            )}
-          </div>
-        )}
-      </DetailDrawerTemplate>
+          ) : undefined
+        }
+        collaborationTitleSuffix={
+          currentRecord && exceptionProcessShowNextInTitle ? (
+            <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
+              {t('components.uniLifecycle.nextStep')}：
+              {exceptionProcessNextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
+            </Typography.Text>
+          ) : undefined
+        }
+        collaboration={
+          currentRecord && (exceptionProcessDetailLifecycle?.stages ?? []).length > 0 ? (
+            <UniLifecycleStepper
+              steps={exceptionProcessDetailLifecycle!.stages}
+              status={exceptionProcessDetailLifecycle!.status}
+              showLabels
+              nextStepSuggestions={exceptionProcessDetailLifecycle!.nextStepSuggestions}
+              hideNextStepSuggestions={exceptionProcessShowNextInTitle}
+            />
+          ) : null
+        }
+        timeline={
+          currentRecord?.histories && currentRecord.histories.length > 0 ? (
+            <Timeline
+              items={currentRecord.histories.map((history, index) => ({
+                key: String(index),
+                children: (
+                  <div>
+                    <div>
+                      <strong>{history.action_by_name}</strong> - {history.action}
+                      {history.from_step && history.to_step ? (
+                        <span>
+                          {' '}
+                          ({history.from_step} → {history.to_step})
+                        </span>
+                      ) : null}
+                    </div>
+                    <div style={{ color: '#666', fontSize: 12, marginTop: 4 }}>
+                      {history.action_at ? formatDateTimeBySiteSetting(history.action_at) : '-'}
+                    </div>
+                    {history.comment ? <div style={{ marginTop: 8 }}>{history.comment}</div> : null}
+                  </div>
+                ),
+              }))}
+            />
+          ) : currentRecord ? (
+            <Typography.Text type="secondary">{t('components.documentTrackingPanel.noOperations')}</Typography.Text>
+          ) : undefined
+        }
+      />
 
       <FormModalTemplate
         title={t(`${PROC}.modal.start`)}

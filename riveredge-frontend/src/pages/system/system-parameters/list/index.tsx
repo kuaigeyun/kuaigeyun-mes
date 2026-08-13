@@ -20,11 +20,14 @@ import {
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Modal, Popconfirm, Button, Tag, Space, Card, Typography, Descriptions } from 'antd';
+import { App, Modal, Popconfirm, Button, Tag, Space, Card, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
+import { renderSystemActiveTag } from '../../utils/systemListPresentation';
 import { theme } from 'antd';
 import {
   getSystemParameterList,
@@ -47,7 +50,7 @@ const SystemParameterListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token: themeToken } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
-  const systemParameterDetailReqRef = useRef(0);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑参数）
@@ -62,6 +65,7 @@ const SystemParameterListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<SystemParameter | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   /**
    * 处理新建参数
@@ -110,26 +114,26 @@ const SystemParameterListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: SystemParameter) => {
-    const req = ++systemParameterDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getSystemParameterByUuid(record.uuid);
-      if (systemParameterDetailReqRef.current !== req) return;
+      const detail = await getSystemParameterByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (systemParameterDetailReqRef.current === req) {
-        messageApi.error(error.message || t('field.systemParameter.fetchDetailFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('field.systemParameter.fetchDetailFailed')));
     } finally {
-      if (systemParameterDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = (record: SystemParameter) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -307,11 +311,8 @@ const SystemParameterListPage: React.FC = () => {
       {
         title: t('field.systemParameter.status'),
         dataIndex: 'is_active',
-        render: (_: unknown, record: SystemParameter) => (
-          <Tag color={record?.is_active ? 'success' : 'default'}>
-            {record?.is_active ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')}
-          </Tag>
-        ),
+        render: (_: unknown, record: SystemParameter) =>
+          renderSystemActiveTag(t, record?.is_active, 'field.systemParameter.enabled', 'field.systemParameter.disabled'),
       },
       {
         title: t('field.systemParameter.createdAt'),
@@ -762,20 +763,26 @@ const SystemParameterListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('field.systemParameter.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
-          detailData ? (
-            <Descriptions
-              column={1}
-              items={detailDrawerDescriptionItems(systemParameterDetailDescColumns, detailData)}
-            />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryUuidRef.current;
+          if (id) void loadDetail(id);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detailData), () => {
+          if (!detailData) return;
+          void handleEdit(detailData);
+        })}
+        detail={detailData}
+        detailColumns={systemParameterDetailDescColumns}
       />
     </>
   );

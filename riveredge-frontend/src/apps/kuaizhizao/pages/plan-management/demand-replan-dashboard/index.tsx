@@ -10,6 +10,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
+import { UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH } from '../../../../../utils/uniTableLayoutColumns';
 import {
   ensureReplanTaskForEvent,
   executeDemandReplanTask,
@@ -465,11 +466,14 @@ const DemandReplanDashboardPage: React.FC = () => {
           },
           {
             title: t('app.kuaizhizao.demandReplan.col.approvalStatus'),
+            key: 'audit_phase',
             dataIndex: 'approval_status',
             fixed: 'right',
-            width: 130,
+            width: UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH,
+            minWidth: UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH,
             uniTableKeepWidth: true,
-            sorter: true,
+            resizable: false,
+            align: 'center',
             hideInSearch: false,
             valueType: 'select',
             valueEnum: taskApprovalValueEnum,
@@ -484,9 +488,6 @@ const DemandReplanDashboardPage: React.FC = () => {
             key: 'lifecycle',
             dataIndex: 'status',
             fixed: 'right',
-            width: 110,
-            uniTableKeepWidth: true,
-            sorter: true,
             hideInSearch: false,
             valueType: 'select',
             valueEnum: taskStatusValueEnum,
@@ -718,7 +719,7 @@ const DemandReplanDashboardPage: React.FC = () => {
             },
             content: (
               <UniTable<DemandReplanTaskItem>
-                columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-replan-dashboard.tasks.rank-v2"
+                columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-replan-dashboard.tasks.rank-v3"
                 actionRef={taskTableActionRef}
                 columns={taskColumns}
                 rowKey="id"

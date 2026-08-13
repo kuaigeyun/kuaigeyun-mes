@@ -21,11 +21,12 @@ import {
   NodeCollapseOutlined,
   NodeExpandOutlined,
 } from '@ant-design/icons';
-import { App, Button, Space, Popconfirm, Tooltip, Descriptions, Col, Modal, Spin, Switch, Typography } from 'antd';
+import { App, Button, Space, Popconfirm, Tooltip, Col, Modal, Spin, Switch, Typography } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../utils/systemListPresentation';
-import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
+import { SystemMasterDetailDrawer } from '../shared/systemMasterDetailDrawer';
+import { getApiErrorMessage } from '../../../utils/errorHandler';
 import { UniTable } from '../../../components/uni-table';
 import MenuIconPicker, { renderMenuIconByKey } from '../../../components/MenuIconPicker';
 import {
@@ -155,7 +156,6 @@ const MenuListPage: React.FC = () => {
   });
   const actionRef = useRef<any>();
   const menuFormRef = useRef<ProFormInstance>();
-  const menuDetailReqRef = useRef(0);
 
   const menuDetailDescColumns = useMemo<ProDescriptionsItemProps<Menu>[]>(
     () => [
@@ -261,6 +261,8 @@ const MenuListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<Menu | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
 
   /** 菜单变更后刷新侧边栏/UniTabs/面包屑（统一数据源） */
   const refreshLayoutMenus = useCallback(() => {
@@ -624,29 +626,32 @@ const MenuListPage: React.FC = () => {
     }
   }, [messageApi, t]);
   
-  const handleView = useCallback(
-    async (record: Menu) => {
-      const req = ++menuDetailReqRef.current;
-      flushDrawerOpen(() => {
-        setDrawerVisible(true);
-        setDetailData(null);
-        setDetailLoading(true);
-      });
+  const loadDetail = useCallback(
+    async (uuid: string) => {
+      setDetailLoading(true);
+      setDetailError(null);
       try {
-        const detail = await getMenuDetail(record.uuid);
-        if (menuDetailReqRef.current !== req) return;
+        const detail = await getMenuDetail(uuid);
         setDetailData(detail);
-      } catch (error: any) {
-        if (menuDetailReqRef.current === req) {
-          messageApi.error(error.message || t('pages.system.menus.getDetailFailed'));
-        }
+      } catch (error) {
+        setDetailData(null);
+        setDetailError(getApiErrorMessage(error, t('pages.system.menus.getDetailFailed')));
       } finally {
-        if (menuDetailReqRef.current === req) {
-          setDetailLoading(false);
-        }
+        setDetailLoading(false);
       }
     },
-    [messageApi, t]
+    [t]
+  );
+
+  const handleView = useCallback(
+    async (record: Menu) => {
+      detailRetryUuidRef.current = record.uuid;
+      setDrawerVisible(true);
+      setDetailData(null);
+      setDetailError(null);
+      void loadDetail(record.uuid);
+    },
+    [loadDetail]
   );
 
   const handleSubmit = useCallback(async (values: any) => {
@@ -1129,20 +1134,22 @@ const MenuListPage: React.FC = () => {
              />
         </FormModalTemplate>
 
-        <UniDetail
+        <SystemMasterDetailDrawer
             title={t('pages.system.menus.detailTitle')}
             open={drawerVisible}
-            onClose={() => setDrawerVisible(false)}
+            onClose={() => {
+              setDrawerVisible(false);
+              setDetailData(null);
+              setDetailError(null);
+            }}
+            detail={detailData}
+            detailColumns={menuDetailDescColumns}
             loading={detailLoading}
-            width={DRAWER_CONFIG.STANDARD_WIDTH}
-            basic={
-              detailData ? (
-                <Descriptions
-                  column={1}
-                  items={detailDrawerDescriptionItems(menuDetailDescColumns, detailData)}
-                />
-              ) : null
-            }
+            error={detailError}
+            onRetry={() => {
+              const uuid = detailRetryUuidRef.current;
+              if (uuid) void loadDetail(uuid);
+            }}
         />
 
         <Modal

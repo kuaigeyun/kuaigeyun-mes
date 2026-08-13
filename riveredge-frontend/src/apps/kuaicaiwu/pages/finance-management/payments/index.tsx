@@ -6,7 +6,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Drawer, Descriptions, Spin, Alert, Table, Empty, Form } from 'antd';
+import { App, Button, Modal, Typography, Spin, Alert, Table, Empty, Form } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { PlusOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
@@ -15,7 +15,10 @@ import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { DetailDrawerActions, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { FinanceVoucherDetailDrawer } from '../shared/FinanceVoucherDetailDrawer';
+import { financeColFull, financeColHalf, financeFormGridProps } from '../../../utils/financeFormLayout';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
@@ -37,7 +40,6 @@ import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '.
 import {
   buildVoucherStatusEnum,
   formatPaymentMethod,
-  formatPaymentSettlementType,
   getPaymentMethodOptions,
   getPaymentSettlementTypeOptions,
   assertBankAccountForPaymentMethod,
@@ -90,7 +92,9 @@ const PaymentsPage: React.FC = () => {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [detailRecord, setDetailRecord] = useState<PaymentVoucher | null>(null);
+  const detailRetryIdRef = useRef<number | null>(null);
   const { message: messageApi } = App.useApp();
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -100,14 +104,6 @@ const PaymentsPage: React.FC = () => {
 
   const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
   const paymentSettlementTypeOptions = useMemo(() => getPaymentSettlementTypeOptions(t), [t]);
-
-  const formatVoucherStatus = useCallback(
-    (status: string) => {
-      const enumMap = buildVoucherStatusEnum(t);
-      return (enumMap as Record<string, { text: string }>)[status]?.text ?? status;
-    },
-    [t],
-  );
 
   useEffect(() => {
     const load = async () => {
@@ -132,18 +128,36 @@ const PaymentsPage: React.FC = () => {
     return acc ? formatBankAccountOptionLabel(acc) : `#${id}`;
   };
 
-  const openDetail = async (record: PaymentVoucher) => {
-    setDetailOpen(true);
+  const loadDetail = useCallback(async (id: number) => {
     setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await paymentService.getPayment(record.id);
-      setDetailRecord(detail);
-    } catch (error: any) {
-      messageApi.error(error.message || t(`${P}.loadDetailFailed`));
-      setDetailOpen(false);
+      setDetailRecord(await paymentService.getPayment(id));
+    } catch (error) {
+      setDetailRecord(null);
+      setDetailError(getApiErrorMessage(error, t(`${P}.loadDetailFailed`)));
     } finally {
       setDetailLoading(false);
     }
+  }, [t]);
+
+  const openDetail = useCallback((record: PaymentVoucher) => {
+    detailRetryIdRef.current = record.id;
+    setDetailOpen(true);
+    setDetailRecord(null);
+    setDetailError(null);
+    void loadDetail(record.id);
+  }, [loadDetail]);
+
+  const closeDetail = () => {
+    setDetailOpen(false);
+    setDetailRecord(null);
+    setDetailError(null);
+  };
+
+  const refreshOpenDetail = () => {
+    const id = detailRetryIdRef.current;
+    if (detailOpen && id != null) void loadDetail(id);
   };
 
   const handleCreate = async (values: any) => {
@@ -327,6 +341,7 @@ const PaymentsPage: React.FC = () => {
           await paymentService.confirmPayment(record.id);
           messageApi.success(t(`${P}.confirmSuccess`));
           actionRef.current?.reload();
+          refreshOpenDetail();
         } catch (e: any) {
           messageApi.error(e?.message || t('common.operationFailed'));
         }
@@ -343,6 +358,7 @@ const PaymentsPage: React.FC = () => {
           await paymentService.cancelPayment(record.id);
           messageApi.success(t(`${P}.voidSuccess`));
           actionRef.current?.reload();
+          refreshOpenDetail();
         } catch (e: any) {
           messageApi.error(e?.message || t('common.operationFailed'));
         }
@@ -794,39 +810,44 @@ const PaymentsPage: React.FC = () => {
                 submitter={false}
                 onFinish={handlePullCreateSubmit}
                 layout="vertical"
+                {...financeFormGridProps}
               >
-                <ProFormText name="source_code" label={t(`${P}.sourcePayable`)} readonly />
-                <ProFormText name="supplier_name" label={t('app.kuaicaiwu.common.supplier')} readonly />
+                <ProFormText name="source_code" label={t(`${P}.sourcePayable`)} readonly colProps={financeColHalf} />
+                <ProFormText name="supplier_name" label={t('app.kuaicaiwu.common.supplier')} readonly colProps={financeColHalf} />
                 <ProFormMoney
                   name="total_amount"
                   label={t(`${P}.col.amount`)}
                   min={0.01}
                   rules={[{ required: true }]}
+                  colProps={financeColHalf}
                 />
                 <ProFormDatePicker
                   name="payment_date"
                   label={t(`${P}.col.paymentDate`)}
                   rules={[{ required: true }]}
                   fieldProps={{ style: { width: '100%' } }}
+                  colProps={financeColHalf}
                 />
                 <ProFormSelect
                   name="payment_method"
                   label={t(`${P}.col.paymentMethod`)}
                   options={paymentMethodOptions}
                   rules={[{ required: true, message: t(`${P}.selectPaymentMethod`) }]}
+                  colProps={financeColHalf}
                 />
                 <ProFormSelect
                   name="settlement_type"
                   label={t(`${P}.settlementType.label`)}
                   options={paymentSettlementTypeOptions}
                   initialValue="normal"
+                  colProps={financeColHalf}
                 />
                 <LedgerAccountFormFields
                   accounts={bankAccounts}
                   accountLabel={t(`${P}.outBankAccount`)}
                   noteLabel={t(`${P}.outAccountNote`)}
                 />
-                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} />
+                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} colProps={financeColFull} />
                 <DocumentAttachmentsField category="payment_attachments" />
               </ProForm>
             ) : null}
@@ -839,7 +860,8 @@ const PaymentsPage: React.FC = () => {
         open={createModalVisible}
         onOpenChange={setCreateModalVisible}
         onFinish={handleCreate}
-        width={480}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        {...financeFormGridProps}
       >
         <ProFormSelect
           name="supplier_id"
@@ -848,64 +870,107 @@ const PaymentsPage: React.FC = () => {
           rules={[{ required: true, message: t('app.kuaicaiwu.common.selectSupplier') }]}
           placeholder={t('app.kuaicaiwu.common.selectSupplier')}
           showSearch
+          colProps={financeColHalf}
         />
-        <ProFormMoney name="total_amount" label={t(`${P}.col.amount`)} min={0.01} rules={[{ required: true }]} />
-        <ProFormDatePicker name="payment_date" label={t(`${P}.col.paymentDate`)} rules={[{ required: true }]} initialValue={dayjs()} fieldProps={{ style: { width: '100%' } }} />
+        <ProFormMoney
+          name="total_amount"
+          label={t(`${P}.col.amount`)}
+          min={0.01}
+          rules={[{ required: true }]}
+          colProps={financeColHalf}
+        />
+        <ProFormDatePicker
+          name="payment_date"
+          label={t(`${P}.col.paymentDate`)}
+          rules={[{ required: true }]}
+          initialValue={dayjs()}
+          fieldProps={{ style: { width: '100%' } }}
+          colProps={financeColHalf}
+        />
         <ProFormSelect
           name="payment_method"
           label={t(`${P}.col.paymentMethod`)}
           options={paymentMethodOptions}
           rules={[{ required: true, message: t(`${P}.selectPaymentMethod`) }]}
           placeholder={t(`${P}.selectPaymentMethod`)}
+          colProps={financeColHalf}
         />
         <ProFormSelect
           name="settlement_type"
           label={t(`${P}.settlementType.label`)}
           initialValue="normal"
           options={paymentSettlementTypeOptions}
+          colProps={financeColHalf}
         />
         <LedgerAccountFormFields
           accounts={bankAccounts}
           accountLabel={t(`${P}.outBankAccount`)}
           noteLabel={t(`${P}.outAccountNote`)}
+          noteColProps={financeColFull}
         />
-        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
+        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} colProps={financeColFull} />
         <DocumentAttachmentsField category="payment_attachments" />
       </ModalForm>
 
-      <Drawer
-        title={detailRecord
-          ? t(`${P}.detailDrawerTitle`, { code: detailRecord.payment_code })
-          : t(`${P}.detailTitle`)}
+      <FinanceVoucherDetailDrawer
+        kind="payment"
         open={detailOpen}
-        size={520}
-        onClose={() => { setDetailOpen(false); setDetailRecord(null); }}
-        destroyOnHidden
-      >
-        <Spin spinning={detailLoading}>
-          {detailRecord ? (
-            <Descriptions column={1} bordered size="small">
-              <Descriptions.Item label={t('app.kuaicaiwu.receipt.detail.code')}>{detailRecord.payment_code}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaicaiwu.common.supplier')}>{detailRecord.supplier_name}</Descriptions.Item>
-              <Descriptions.Item label={t('common.status')}>{formatVoucherStatus(detailRecord.status)}</Descriptions.Item>
-              <Descriptions.Item label={t(`${P}.col.paymentDate`)}>{detailRecord.payment_date}</Descriptions.Item>
-              <Descriptions.Item label={t(`${P}.col.paymentMethod`)}>{formatPaymentMethod(detailRecord.payment_method, t)}</Descriptions.Item>
-              <Descriptions.Item label={t(`${P}.settlementType.label`)}>
-                {formatPaymentSettlementType(detailRecord.settlement_type, t)}
-              </Descriptions.Item>
-              <Descriptions.Item label={t(`${P}.col.amount`)}>¥{Number(detailRecord.total_amount).toFixed(2)}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaicaiwu.receipt.detail.settled')}>¥{Number(detailRecord.settled_amount).toFixed(2)}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaicaiwu.receipt.detail.unsettled')}>¥{Number(detailRecord.unsettled_amount).toFixed(2)}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaicaiwu.receipt.detail.bankAccount')}>{resolveBankLabel(detailRecord.bank_account_id)}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaicaiwu.receipt.detail.accountNote')}>{detailRecord.bank_account || '—'}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaicaiwu.common.notes')}>{detailRecord.notes || '—'}</Descriptions.Item>
-              <Descriptions.Item label={t('common.createdAt')}>
-                {detailRecord.created_at ? formatDateTime(detailRecord.created_at, 'YYYY-MM-DD HH:mm') : '—'}
-              </Descriptions.Item>
-            </Descriptions>
-          ) : null}
-        </Spin>
-      </Drawer>
+        onClose={closeDetail}
+        record={detailRecord}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryIdRef.current;
+          if (id != null) void loadDetail(id);
+        }}
+        bankAccountLabel={resolveBankLabel(detailRecord?.bank_account_id)}
+        extra={
+          detailRecord ? (
+            <DetailDrawerActions
+              items={[
+                {
+                  key: 'confirm',
+                  visible: detailRecord.status === 'Draft' && Boolean(paymentPerms.canAction?.('audit')),
+                  render: (
+                    <Button {...rowActionKind('audit')} onClick={() => void handleConfirm(detailRecord)}>
+                      {t('app.kuaicaiwu.common.confirm')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'settle',
+                  visible: detailRecord.status === 'Confirmed' && Number(detailRecord.unsettled_amount ?? 0) > 0,
+                  render: (
+                    <Button
+                      {...rowActionKind('submit')}
+                      onClick={() => {
+                        const qs = new URLSearchParams({ tab: 'payable' });
+                        if (detailRecord.supplier_id != null) qs.set('supplierId', String(detailRecord.supplier_id));
+                        if (detailRecord.id != null) qs.set('paymentId', String(detailRecord.id));
+                        navigate(`/apps/kuaicaiwu/finance-management/settlement?${qs.toString()}`);
+                      }}
+                    >
+                      {t('app.kuaicaiwu.common.settle')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'void',
+                  visible:
+                    detailRecord.status !== 'Cancelled'
+                    && detailRecord.settled_amount === 0
+                    && Boolean(paymentPerms.canAction?.('revoke')),
+                  render: (
+                    <Button {...rowActionKind('revoke')} onClick={() => void handleCancelVoucher(detailRecord)}>
+                      {t('app.kuaicaiwu.common.void')}
+                    </Button>
+                  ),
+                },
+              ]}
+            />
+          ) : null
+        }
+      />
     </ListPageTemplate>
   );
 };

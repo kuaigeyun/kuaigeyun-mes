@@ -34,7 +34,8 @@ function reviewSubStages(review: string): { reviewDone: boolean; reviewRejected:
 function translateResult(result: LifecycleResult, t: LifecycleTranslateFn | undefined, subStageKeys: Record<string, string>): LifecycleResult {
   if (!t) return result;
   const stageNameKey = STAGE_NAME_KEYS[result.stageName];
-  const withSub = result.subStages?.length
+  const hasStages = Boolean(result.subStages?.length || result.mainStages?.length);
+  const withSub = hasStages
     ? applyLifecycleI18n({ ...result, stageName: result.stageName }, t, subStageKeys)
     : result;
   return stageNameKey ? { ...withSub, stageName: t(stageNameKey) } : withSub;
@@ -261,14 +262,56 @@ export function getFinanceVoucherLifecycle(
   t?: LifecycleTranslateFn,
 ): LifecycleResult {
   const s = String(record.status ?? '');
+  const stageKeys = {
+    draft: `${FL}.voucherDraft`,
+    confirmed: `${FL}.voucherConfirmed`,
+    voided: `${FL}.voided`,
+  };
+
   if (s === 'Cancelled') {
-    return translateResult({ percent: 0, stageName: '已作废', status: 'exception' }, t, {});
+    return translateResult(
+      {
+        percent: 0,
+        stageName: '已作废',
+        status: 'exception',
+        mainStages: [
+          { key: 'draft', label: '草稿', status: 'done' },
+          { key: 'voided', label: '已作废', status: 'active' },
+        ],
+      },
+      t,
+      stageKeys,
+    );
   }
   if (s === 'Draft') {
-    return translateResult({ percent: 35, stageName: '草稿', status: 'normal' }, t, {});
+    return translateResult(
+      {
+        percent: 35,
+        stageName: '草稿',
+        status: 'normal',
+        mainStages: [
+          { key: 'draft', label: '草稿', status: 'active' },
+          { key: 'confirmed', label: '已确认', status: 'pending' },
+        ],
+      },
+      t,
+      stageKeys,
+    );
   }
   if (s === 'Confirmed') {
-    return translateResult({ percent: 100, stageName: '已确认', status: 'success' }, t, {});
+    return translateResult(
+      {
+        percent: 100,
+        stageName: '已确认',
+        status: 'success',
+        mainStages: [
+          { key: 'draft', label: '草稿', status: 'done' },
+          { key: 'confirmed', label: '已确认', status: 'done' },
+        ],
+      },
+      t,
+      stageKeys,
+    );
   }
-  return { percent: 50, stageName: s || '-', status: 'normal' };
+  return { percent: 50, stageName: s || '-', status: 'normal', mainStages: [] };
 }

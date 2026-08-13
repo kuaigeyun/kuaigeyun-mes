@@ -9,14 +9,15 @@ import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormItem, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Button, Descriptions, Input, Space, Tag, Tooltip, Typography } from 'antd';
+import { App, Button, Input, Space, Tag, Tooltip, Typography } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemStatusTag } from '../../utils/systemListPresentation';
 import { EyeOutlined, CheckOutlined, CloseOutlined, StopOutlined, SwapOutlined } from '@ant-design/icons';
 import { useGlobalStore } from '../../../../stores';
 import { UniTable } from '../../../../components/uni-table';
-import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { theme } from 'antd';
 import { useCurrentUser } from '../../../../hooks/useCurrentUser';
 import {
@@ -45,7 +46,6 @@ const ApprovalInstanceListPage: React.FC = () => {
   const { token: themeToken } = theme.useToken();
   const currentUser = useCurrentUser();
   const actionRef = useRef<ActionType>(null);
-  const approvalInstanceDetailReqRef = useRef(0);
   const [tableData, setTableData] = useState<ApprovalInstance[]>([]);
   
   // Modal 相关状态（提交审批）
@@ -62,6 +62,8 @@ const ApprovalInstanceListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<ApprovalInstance | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [batchLoading, setBatchLoading] = useState(false);
 
@@ -161,26 +163,26 @@ const ApprovalInstanceListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: ApprovalInstance) => {
-    const req = ++approvalInstanceDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getApprovalInstanceByUuid(record.uuid);
-      if (approvalInstanceDetailReqRef.current !== req) return;
+      const detail = await getApprovalInstanceByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (approvalInstanceDetailReqRef.current === req) {
-        messageApi.error(error.message || t('pages.system.approvalInstances.getDetailFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.approvalInstances.getDetailFailed')));
     } finally {
-      if (approvalInstanceDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = async (record: ApprovalInstance) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -446,7 +448,7 @@ const ApprovalInstanceListPage: React.FC = () => {
             cancelled: { color: 'default', text: t('pages.system.approvalInstances.statusCancelled') },
           };
           const statusInfo = statusMap[value] || { color: 'default', text: value };
-          return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+          return renderSystemStatusTag(statusInfo.text, statusInfo.color);
         },
       },
       { title: t('pages.system.approvalInstances.currentNode'), dataIndex: 'current_node' },
@@ -696,15 +698,22 @@ const ApprovalInstanceListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('pages.system.approvalInstances.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
+        detail={detailData}
+        detailColumns={approvalInstanceDetailDescColumns}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={detailData ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(approvalInstanceDetailDescColumns, detailData)} />
-          ) : null}
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
       />
     </>
   );

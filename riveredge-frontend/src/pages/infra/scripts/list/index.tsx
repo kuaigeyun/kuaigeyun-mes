@@ -10,10 +10,14 @@ import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Row, Col } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, message, Input, Row, Col } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { SystemMasterDetailDrawer } from '../../../system/shared/systemMasterDetailDrawer';
+import { MarkerTag } from '../../../../constants/statusBadges';
 import {
   getScriptList,
   getScriptByUuid,
@@ -60,6 +64,8 @@ const ScriptListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<Script | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
 
   /**
    * 处理新建脚本
@@ -102,17 +108,26 @@ const ScriptListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: Script) => {
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      setDetailLoading(true);
-      setDrawerVisible(true);
-      const detail = await getScriptByUuid(record.uuid);
+      const detail = await getScriptByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      messageApi.error(error.message || t('pages.infra.scripts.getDetailFailed'));
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.infra.scripts.getDetailFailed')));
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const handleView = (record: Script) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -333,7 +348,6 @@ const ScriptListPage: React.FC = () => {
     {
       title: t('pages.infra.scripts.columnActions'),
       valueType: 'option',
-      width: 300,
       fixed: 'right',
       render: (_, record) => {
         return [
@@ -598,14 +612,25 @@ const ScriptListPage: React.FC = () => {
       </Modal>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      <SystemMasterDetailDrawer
         title={t('pages.infra.scripts.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
         loading={detailLoading}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
-        dataSource={detailData}
-        columns={[
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detailData), () => {
+          if (detailData) void handleEdit(detailData);
+        })}
+        detail={detailData}
+        detailColumns={[
           {
             title: t('pages.infra.scripts.columnName'),
             dataIndex: 'name',
@@ -628,9 +653,9 @@ const ScriptListPage: React.FC = () => {
             render: (_: React.ReactNode, record: Script) => {
               const value = record.is_active;
               return (
-              <Tag color={value ? 'success' : 'default'}>
+              <MarkerTag color={value ? 'success' : 'default'}>
                 {value ? t('pages.infra.scripts.activeEnabled') : t('pages.infra.scripts.activeDisabled')}
-              </Tag>
+              </MarkerTag>
             ); },
           },
           {
@@ -639,9 +664,9 @@ const ScriptListPage: React.FC = () => {
             render: (_: React.ReactNode, record: Script) => {
               const value = record.is_running;
               return (
-              <Tag color={value ? 'processing' : 'default'}>
+              <MarkerTag color={value ? 'processing' : 'default'}>
                 {value ? t('pages.infra.scripts.runningRunning') : t('pages.infra.scripts.runningIdle')}
-              </Tag>
+              </MarkerTag>
             ); },
           },
           {
@@ -678,7 +703,7 @@ const ScriptListPage: React.FC = () => {
                 running: { color: 'processing', text: t('pages.infra.scripts.statusRunning') },
               };
               const statusInfo = statusMap[value] || { color: 'default', text: value };
-              return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+              return <MarkerTag color={statusInfo.color}>{statusInfo.text}</MarkerTag>;
             },
           },
           {

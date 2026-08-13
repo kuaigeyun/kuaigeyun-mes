@@ -7,8 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormDatePicker, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Col, DatePicker, Descriptions, Empty, Form, Input, InputNumber, Modal, Row, Select, Space, Spin, Switch, Table, Tag, Tooltip, Typography, Alert } from 'antd';
-import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, FormOutlined, PlusOutlined, SwapOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { App, Button, Col, DatePicker, Descriptions, Empty, Form, Input, InputNumber, Modal, Row, Select, Space, Spin, Switch, Table, Tag, Typography, Alert } from 'antd';
+import { CheckOutlined, EditOutlined, FormOutlined, PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
 import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
@@ -30,12 +30,14 @@ import {
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import {
   alignProColumns,
+  alignDescriptionColumns,
   GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
   SALES_DOC_LIST_FIELD_RANK,
 } from '../../sales-management/shared/documentFieldAlignment';
@@ -81,7 +83,7 @@ import {
 } from '../../../utils/purchaseInquiryLifecycle';
 import { listPurchaseRequisitions, previewPushToInquiry, type PurchaseRequisition, type DocumentPushPreview } from '../../../services/purchase-requisition';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
-import { formatDateTime, formatNumber, formatQuantity } from '../../../../../utils/format';
+import { formatDateTime, formatDateBySiteSetting, formatNumber, formatQuantity } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -146,6 +148,7 @@ const PurchaseInquiriesPage: React.FC = () => {
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<PurchaseInquiry | null>(null);
+  const [inquiryTrackingRefreshKey, setInquiryTrackingRefreshKey] = useState(0);
   const [editOpen, setEditOpen] = useState(false);
   const [editForm] = Form.useForm();
   const [pendingEditFormValues, setPendingEditFormValues] = useState<Record<string, any> | null>(null);
@@ -812,7 +815,6 @@ const PurchaseInquiriesPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      minWidth: 280,
       fixed: 'right',
       render: (_, record) => {
         const isDraft = isInquiryDraft(record);
@@ -1337,62 +1339,77 @@ const PurchaseInquiriesPage: React.FC = () => {
       { title: t('app.kuaizhizao.purchaseInquiry.colMaterialName'), dataIndex: 'material_name' },
       { title: t('app.kuaizhizao.purchaseInquiry.quantity'), dataIndex: 'quantity', width: 90, render: formatQuantity },
       { title: t('app.kuaizhizao.purchaseInquiry.colUnit'), dataIndex: 'unit', width: 60 },
-      { title: t('app.kuaizhizao.purchaseInquiry.requiredDate'), dataIndex: 'required_date', width: 110, render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-') },
+      { title: t('app.kuaizhizao.purchaseInquiry.requiredDate'), dataIndex: 'required_date', width: 110, render: (v: string) => (v ? formatDateBySiteSetting(v) : '-') },
     ],
     [t],
   );
 
   const detailBasicColumns = useMemo<ProDescriptionsItemProps<PurchaseInquiry>[]>(
-    () => [
-      {
-        title: t('app.kuaizhizao.purchaseInquiry.source'),
-        dataIndex: 'source_code',
-        render: (_, r) => (
-          <SourceDocumentCode
-            sourceType={r?.source_type}
-            sourceId={r?.source_id}
-            sourceCode={r?.source_code}
-          />
-        ),
-      },
-      {
-        title: t('app.kuaizhizao.purchaseInquiry.colBuyer'),
-        dataIndex: 'buyer_name',
-      },
-      {
-        title: t('app.kuaizhizao.purchaseInquiry.inquiryDate'),
-        dataIndex: 'inquiry_date',
-        valueType: 'date',
-      },
-      {
-        title: t('app.kuaizhizao.purchaseInquiry.colQuoteDeadline'),
-        dataIndex: 'quote_deadline',
-        valueType: 'date',
-      },
-      {
-        title: t('app.kuaizhizao.purchaseInquiry.notes'),
-        dataIndex: 'notes',
-        span: 2,
-      },
-    ],
+    () =>
+      alignDescriptionColumns([
+        { title: t('app.kuaizhizao.purchaseInquiry.colInquiryCode'), dataIndex: 'inquiry_code' },
+        {
+          title: t('app.kuaizhizao.purchaseInquiry.source'),
+          dataIndex: 'source_code',
+          key: 'linked_source_code',
+          render: (_, r) => (
+            <SourceDocumentCode
+              sourceType={r?.source_type}
+              sourceId={r?.source_id}
+              sourceCode={r?.source_code}
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.purchaseInquiry.colBuyer'),
+          dataIndex: 'buyer_name',
+        },
+        {
+          title: t('app.kuaizhizao.purchaseInquiry.inquiryDate'),
+          dataIndex: 'inquiry_date',
+          valueType: 'date',
+        },
+        {
+          title: t('app.kuaizhizao.purchaseInquiry.colQuoteDeadline'),
+          dataIndex: 'quote_deadline',
+          valueType: 'date',
+        },
+        {
+          title: t('app.kuaizhizao.purchaseInquiry.notes'),
+          dataIndex: 'notes',
+          span: 3,
+        },
+      ] as ProDescriptionsItemProps<PurchaseInquiry>[]),
     [t],
   );
 
+  const inquiryLifecycle = useMemo(
+    () => (detail ? getPurchaseInquiryLifecycle(detail as Record<string, unknown>) : null),
+    [detail],
+  );
+  const inquiryNextSteps = inquiryLifecycle?.nextStepSuggestions;
+  const inquiryShowNextInTitle = Boolean(inquiryNextSteps?.length);
+
+  const inquiryTracking = useDocumentTracking(
+    detailOpen && detail?.id ? 'purchase_inquiry' : undefined,
+    detail?.id,
+    inquiryTrackingRefreshKey,
+  );
+
   const detailCollaboration = useMemo(() => {
-    if (!detail) return undefined;
-    const lifecycle = getPurchaseInquiryLifecycle(detail as Record<string, unknown>);
-    const mainStages = lifecycle.mainStages ?? [];
+    if (!detail || !inquiryLifecycle) return undefined;
+    const mainStages = inquiryLifecycle.mainStages ?? [];
     if (!mainStages.length) return undefined;
     return (
       <UniLifecycleStepper
         steps={mainStages}
-        status={lifecycle.status}
+        status={inquiryLifecycle.status}
         showLabels
-        nextStepSuggestions={lifecycle.nextStepSuggestions}
-        hideNextStepSuggestions
+        nextStepSuggestions={inquiryLifecycle.nextStepSuggestions}
+        hideNextStepSuggestions={inquiryShowNextInTitle}
       />
     );
-  }, [detail]);
+  }, [detail, inquiryLifecycle, inquiryShowNextInTitle]);
 
   const detailSupplementary = useMemo(() => {
     if (!detail) return undefined;
@@ -1780,21 +1797,10 @@ const PurchaseInquiriesPage: React.FC = () => {
         title={t('app.kuaizhizao.purchaseInquiry.detailTitle', { code: detail?.inquiry_code ?? '' })}
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
-        width={DRAWER_CONFIG.LARGE_WIDTH ?? DRAWER_CONFIG.HALF_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           detail ? (
-            <Space wrap>
-              {isInquiryDraft(detail) && (
-                <Button icon={<EditOutlined />} onClick={() => { setDetailOpen(false); void openEdit(detail); }}>{t('common.edit')}</Button>
-              )}
-              {isInquiryDraft(detail) && (
-                <Button icon={<ThunderboltOutlined />} onClick={async () => {
-                  await submitPurchaseInquiry(detail.id!);
-                  message.success(t('app.kuaizhizao.purchaseInquiry.submitSuccess'));
-                  setDetail(await getPurchaseInquiry(detail.id!));
-                  actionRef.current?.reload();
-                }}>{t('app.kuaizhizao.purchaseInquiry.submit')}</Button>
-              )}
+            <Space size="small" wrap>
               {isInquiryDraft(detail) && (
                 <Button type="primary" onClick={async () => {
                   await publishPurchaseInquiry(detail.id!);
@@ -1814,22 +1820,37 @@ const PurchaseInquiriesPage: React.FC = () => {
               {(isInquiryPendingCompare(detail) || isInquiryQuoting(detail)) && (
                 <Button onClick={() => void openCompare(detail)}>{t('app.kuaizhizao.purchaseInquiry.compareAward')}</Button>
               )}
+              {isInquiryDraft(detail) && (
+                <Button icon={<EditOutlined />} onClick={() => { setDetailOpen(false); void openEdit(detail); }}>{t('common.edit')}</Button>
+              )}
               <UniWorkflowActions {...rowActionKind('skip')}
                 record={detail}
                 entityName={t('app.kuaizhizao.purchaseInquiry.entityName')}
+                resourcePrefix={PURCHASE_INQUIRY_RESOURCE}
+                unifiedAudit
                 statusField="status"
                 reviewStatusField="review_status"
                 draftStatuses={['DRAFT', '草稿']}
                 pendingStatuses={['PENDING', 'PENDING_REVIEW', '待审核']}
                 approvedStatuses={['APPROVED', '已通过', '审核通过']}
                 rejectedStatuses={['REJECTED', '已驳回']}
+                theme="default"
                 onSuccess={async () => {
                   actionRef.current?.reload();
+                  setInquiryTrackingRefreshKey((k) => k + 1);
                   if (detail.id) setDetail(await getPurchaseInquiry(detail.id));
                 }}
               />
             </Space>
           ) : null
+        }
+        collaborationTitleSuffix={
+          inquiryShowNextInTitle ? (
+            <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
+              {t('components.uniLifecycle.nextStep')}：
+              {inquiryNextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
+            </Typography.Text>
+          ) : undefined
         }
         basic={
           detail ? (
@@ -1853,6 +1874,24 @@ const PurchaseInquiriesPage: React.FC = () => {
         supplementary={detailSupplementary}
         linesTitle={t('app.kuaizhizao.purchaseInquiry.inquiryItems')}
         lines={detailLines}
+        timeline={
+          detail ? (
+            inquiryTracking.data && !inquiryTracking.loading ? (
+              <DocumentTrackingTimelineBody data={inquiryTracking.data} />
+            ) : inquiryTracking.error ? (
+              <Typography.Text type="danger">{inquiryTracking.error}</Typography.Text>
+            ) : null
+          ) : null
+        }
+        traceDocument={
+          detail?.id != null
+            ? {
+                documentType: 'purchase_inquiry',
+                documentId: detail.id,
+                selfDocumentId: detail.id,
+              }
+            : undefined
+        }
       />
 
       <Modal

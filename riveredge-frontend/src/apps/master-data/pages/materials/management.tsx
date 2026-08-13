@@ -14,7 +14,6 @@ import {
   Button,
   Space,
   Modal,
-  Descriptions,
   Popconfirm,
   Tag,
   theme,
@@ -101,13 +100,14 @@ import type { ImportPrecheckResult } from '../../../../components/uni-import/uni
 import { usePagePermissionResource } from '../../../../hooks/usePagePermissionResource'
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions'
 import { UniBatchSplitToolbar } from '../../../../components/uni-batch'
-import { TwoColumnLayout, FormModalTemplate, flushDrawerOpen } from '../../../../components/layout-templates'
+import { TwoColumnLayout, FormModalTemplate } from '../../../../components/layout-templates'
+import { getApiErrorMessage } from '../../../../utils/errorHandler'
+import { buildDetailDrawerEditExtra } from '../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail'
+import { MasterDataDetailDrawer } from '../shared/masterDataDetailDrawer'
 import {
   MODAL_CONFIG,
-  DRAWER_CONFIG,
   LIST_PAGE_TABLE_SCROLL,
 } from '../../../../components/layout-templates/constants'
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail'
 import { MaterialForm } from '../../components/MaterialForm'
 import { MaterialGroupFormModal } from '../../components/MaterialGroupFormModal'
 import { DEFAULT_MATERIAL_BASE_UNIT } from '../../constants/materialDefaults'
@@ -352,11 +352,6 @@ import { getSuspendedModal, clearSuspendedModal } from '../../utils/suspendedMod
 import { useCustomFieldsForList } from '../../../../hooks/useCustomFieldsForList'
 import { useCustomFields } from '../../../../hooks/useCustomFields'
 import { useTrialRunMode } from '../../../../hooks/useTrialRunMode'
-import {
-  CustomFieldsDetailSection,
-  CustomFieldsFormSection,
-  hasCustomFieldsDetailContent,
-} from '../../../../components/custom-fields'
 
 /** 与 MaterialForm 一致：表示使用系统默认批号/序列号规则 */
 const SYSTEM_DEFAULT_BATCH_SERIAL_RULE = '__SYSTEM_DEFAULT__'
@@ -602,6 +597,8 @@ const MaterialsManagementPage: React.FC = () => {
   const [materialDrawerVisible, setMaterialDrawerVisible] = useState(false)
   const [currentMaterial, setCurrentMaterial] = useState<Material | null>(null)
   const [materialDetailLoading, setMaterialDetailLoading] = useState(false)
+  const [materialDetailError, setMaterialDetailError] = useState<string | null>(null)
+  const materialRetryUuidRef = useRef<string | null>(null)
   const [linkedDrawings, setLinkedDrawings] = useState<EngineeringDrawing[]>([])
   const [linkedDrawingsLoading, setLinkedDrawingsLoading] = useState(false)
   const [fabricationWizardOpen, setFabricationWizardOpen] = useState(false)
@@ -645,7 +642,6 @@ const MaterialsManagementPage: React.FC = () => {
   const {
     customFields,
     customFieldValues,
-    generateCustomFieldColumns,
     enrichRecordsWithCustomFields,
     loadFieldValuesForDetail,
     resetDetailFieldValues,
@@ -861,33 +857,40 @@ const MaterialsManagementPage: React.FC = () => {
     [messageApi, t]
   )
 
-  const handleViewMaterial = useCallback(
-    async (record: Material) => {
-      flushDrawerOpen(() => {
-        setMaterialDrawerVisible(true)
-        setMaterialDetailLoading(true)
-        setCurrentMaterial(null)
-        setLinkedDrawings([])
-        setLinkedDrawingsLoading(true)
-        resetDetailFieldValues()
-      })
+  const loadMaterialDetail = useCallback(
+    async (uuid: string) => {
+      setMaterialDetailLoading(true)
+      setMaterialDetailError(null)
+      setLinkedDrawingsLoading(true)
       try {
-        const detail = await materialApi.get(record.uuid)
+        const detail = await materialApi.get(uuid)
         setCurrentMaterial(detail)
         await loadFieldValuesForDetail(detail.id)
-        const drawings = await drawingApi.listByContext({ materialUuid: record.uuid })
+        const drawings = await drawingApi.listByContext({ materialUuid: uuid })
         setLinkedDrawings(drawings)
-      } catch (error: any) {
-        messageApi.error(error.message || t('app.master-data.materials.getDetailFailed'))
-        setMaterialDrawerVisible(false)
+      } catch (error) {
         setCurrentMaterial(null)
         setLinkedDrawings([])
+        setMaterialDetailError(getApiErrorMessage(error, t('app.master-data.materials.getDetailFailed')))
       } finally {
         setMaterialDetailLoading(false)
         setLinkedDrawingsLoading(false)
       }
     },
-    [messageApi, t, loadFieldValuesForDetail, resetDetailFieldValues]
+    [loadFieldValuesForDetail, t],
+  )
+
+  const handleViewMaterial = useCallback(
+    (record: Material) => {
+      materialRetryUuidRef.current = record.uuid
+      setMaterialDrawerVisible(true)
+      setCurrentMaterial(null)
+      setLinkedDrawings([])
+      setMaterialDetailError(null)
+      resetDetailFieldValues()
+      void loadMaterialDetail(record.uuid)
+    },
+    [loadMaterialDetail, resetDetailFieldValues],
   )
 
   const handleOpenMaterialForEdit = useCallback(
@@ -3352,6 +3355,7 @@ const MaterialsManagementPage: React.FC = () => {
       {
         title: t('app.master-data.materials.materialCode'),
         dataIndex: 'mainCode',
+        key: 'code',
         render: (_, record) => {
           const val =
             (record as any).mainCode ?? (record as any).main_code ?? (record as any).code ?? '-'
@@ -3503,9 +3507,8 @@ const MaterialsManagementPage: React.FC = () => {
         dataIndex: 'updatedAt',
         valueType: 'dateTime',
       },
-      ...generateCustomFieldColumns(),
     ],
-    [t, getMaterialGroupName, generateCustomFieldColumns]
+    [t, getMaterialGroupName]
   )
 
   /**
@@ -3819,7 +3822,6 @@ const MaterialsManagementPage: React.FC = () => {
       handleViewMaterial,
       handleEditMaterial,
       handleDeleteMaterial,
-      generateCustomFieldColumns,
     ]
   )
 
@@ -5012,78 +5014,61 @@ const MaterialsManagementPage: React.FC = () => {
         }
       />
 
-      <UniDetail
+      <MasterDataDetailDrawer
         title={t('app.master-data.materials.materialDetail')}
         open={materialDrawerVisible}
         onClose={() => {
           setMaterialDrawerVisible(false)
           setCurrentMaterial(null)
           setLinkedDrawings([])
+          setMaterialDetailError(null)
         }}
         loading={materialDetailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        styles={{ body: { position: 'relative' } }}
-        basic={
+        error={materialDetailError}
+        onRetry={() => {
+          const uuid = materialRetryUuidRef.current
+          if (uuid) void loadMaterialDetail(uuid)
+        }}
+        extra={
+          currentMaterial
+            ? buildDetailDrawerEditExtra(t, true, () => {
+                void handleEditMaterial(currentMaterial)
+              })
+            : null
+        }
+        detail={currentMaterial}
+        detailColumns={materialDetailBasicColumns}
+        customFields={customFields}
+        customFieldValues={customFieldValues}
+        basicExtra={
           currentMaterial ? (
-            <div style={{ position: 'relative', paddingRight: 168 }}>
-              <Descriptions
-                column={1}
-                items={detailDrawerDescriptionItems(materialDetailBasicColumns as any, currentMaterial)}
-              />
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  right: 0,
-                  width: 152,
-                  padding: 12,
-                  background: '#fff',
-                  borderRadius: token.borderRadiusLG,
-                  border: '1px solid rgba(0, 0, 0, 0.06)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  zIndex: 10,
-                }}
-              >
-                <QRCodeGenerator
-                  qrcodeType="MAT"
-                  data={{
-                    material_uuid: currentMaterial.uuid,
-                    material_code: currentMaterial.mainCode || currentMaterial.code || '',
-                    material_name: currentMaterial.name,
-                  }}
-                  autoGenerate={true}
-                  showCardTitle={false}
-                  size={6}
-                  noCard={true}
-                />
-              </div>
-              
-              <CustomFieldsDetailSection
-                customFields={customFields}
-                customFieldValues={customFieldValues}
-              />
-            </div>
-          ) : null
+            <QRCodeGenerator
+              qrcodeType="MAT"
+              data={{
+                material_uuid: currentMaterial.uuid,
+                material_code: currentMaterial.mainCode || currentMaterial.code || '',
+                material_name: currentMaterial.name,
+              }}
+              autoGenerate={true}
+              showCardTitle={false}
+              size={6}
+              noCard={true}
+            />
+          ) : undefined
         }
         lines={
-          currentMaterial ? (
+          currentMaterial &&
+          (!!currentMaterial.variantManaged ||
+            !!(currentMaterial.variantAttributes ?? (currentMaterial as any)?.variant_attributes)) ? (
             <MaterialVariantSkusPanel
               masterMaterial={currentMaterial}
               onRefresh={() => actionRef.current?.reload()}
             />
-          ) : null
+          ) : undefined
         }
         linesTitle={t('app.master-data.materials.variantSkusSection', '属性 SKU（预组合）')}
-        linesVisible={
-          !!currentMaterial?.variantManaged ||
-          !!(currentMaterial?.variantAttributes ?? (currentMaterial as any)?.variant_attributes)
-        }
-        collaborationTitle={t('app.master-data.materials.linkedDrawings')}
-        collaborationVisible={!!currentMaterial}
-        collaborationRelations={
+        supplementaryTitle={t('app.master-data.materials.linkedDrawings')}
+        supplementary={
           currentMaterial ? (
             linkedDrawingsLoading ? (
               <Skeleton active paragraph={{ rows: 3 }} />
@@ -5136,7 +5121,7 @@ const MaterialsManagementPage: React.FC = () => {
                 {t('app.master-data.materials.noLinkedDrawings')}
               </span>
             )
-          ) : null
+          ) : undefined
         }
       />
 

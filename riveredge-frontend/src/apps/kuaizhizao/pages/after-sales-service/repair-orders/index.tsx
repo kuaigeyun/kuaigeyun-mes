@@ -1,9 +1,10 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Button, Drawer, Space, message } from 'antd';
+import { Button, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
-import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -19,6 +20,7 @@ import {
 } from '../shared/afterSalesListPresentation';
 import { repairOrderApi, type RepairOrder } from '../../../services/after-sales-service';
 import RepairOrderFormModal from './RepairOrderFormModal';
+import { RepairOrderDetailDrawer } from './components/RepairOrderDetailDrawer';
 
 const RESOURCE = 'kuaizhizao:repair-order';
 
@@ -30,10 +32,29 @@ const RepairOrdersPage: React.FC = () => {
   const [editing, setEditing] = useState<RepairOrder | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<RepairOrder | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryIdRef = useRef<number | null>(null);
 
-  const openDetail = async (row: RepairOrder) => {
-    setDetail(await repairOrderApi.get(row.id));
+  const loadDetail = useCallback(async (id: number) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      setDetail(await repairOrderApi.get(id));
+    } catch (error) {
+      setDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.detail.loadFailed')));
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [t]);
+
+  const openDetail = (row: RepairOrder) => {
+    detailRetryIdRef.current = row.id;
     setDetailOpen(true);
+    setDetail(null);
+    setDetailError(null);
+    void loadDetail(row.id);
   };
 
   const columns: ProColumns<RepairOrder>[] = useMemo(
@@ -92,7 +113,7 @@ const RepairOrdersPage: React.FC = () => {
             fixed: 'right',
             hideInSearch: true,
             render: (_, row) => [
-              <Button {...rowActionKind('read')} key="read" onClick={() => void openDetail(row)} />,
+              <Button {...rowActionKind('read')} key="read" onClick={() => openDetail(row)} />,
               perms.canUpdate ? (
                 <Button
                   {...rowActionKind('update')}
@@ -162,38 +183,45 @@ const RepairOrdersPage: React.FC = () => {
         }}
       />
 
-      <Drawer
+      <RepairOrderDetailDrawer
         open={detailOpen}
-        width={720}
-        title={detail?.order_code}
-        onClose={() => setDetailOpen(false)}
+        onClose={() => {
+          setDetailOpen(false);
+          setDetail(null);
+          setDetailError(null);
+        }}
+        record={detail}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryIdRef.current;
+          if (id != null) void loadDetail(id);
+        }}
         extra={
-          detail && perms.canAction?.('close') && detail.status !== '已关闭' ? (
-            <Space>
-              <Button
-                onClick={async () => {
-                  await repairOrderApi.close(detail.id);
-                  setDetail(await repairOrderApi.get(detail.id));
-                  actionRef.current?.reload();
-                  message.success(t('app.kuaizhizao.afterSalesService.repairOrder.closeSuccess'));
-                }}
-              >
-                {t('app.kuaizhizao.afterSalesService.repairOrder.actionClose')}
-              </Button>
-            </Space>
-          ) : null
+          <DetailDrawerActions
+            items={[
+              {
+                key: 'close',
+                visible: Boolean(detail && perms.canAction?.('close') && detail.status !== '已关闭'),
+                render: () => (
+                  <Button
+                    type="primary"
+                    onClick={async () => {
+                      if (!detail) return;
+                      await repairOrderApi.close(detail.id);
+                      setDetail(await repairOrderApi.get(detail.id));
+                      actionRef.current?.reload();
+                      message.success(t('app.kuaizhizao.afterSalesService.repairOrder.closeSuccess'));
+                    }}
+                  >
+                    {t('app.kuaizhizao.afterSalesService.repairOrder.actionClose')}
+                  </Button>
+                ),
+              },
+            ]}
+          />
         }
-      >
-        {detail ? (
-          <>
-            <p>{t('app.kuaizhizao.afterSalesService.repairOrder.field.customerName')}: {detail.customer_name}</p>
-            <p>{t('app.kuaizhizao.afterSalesService.repairOrder.field.faultDescription')}: {detail.fault_description}</p>
-            <p>{t('app.kuaizhizao.afterSalesService.repairOrder.field.diagnosisResult')}: {detail.diagnosis_result || '-'}</p>
-            <p>{t('app.kuaizhizao.afterSalesService.repairOrder.field.resolution')}: {detail.resolution || '-'}</p>
-            <p>{t('app.kuaizhizao.afterSalesService.repairOrder.field.totalCost')}: {detail.total_cost ?? '-'}</p>
-          </>
-        ) : null}
-      </Drawer>
+      />
     </ListPageTemplate>
   );
 };

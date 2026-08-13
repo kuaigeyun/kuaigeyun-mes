@@ -8,10 +8,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActionType,
   ProColumns,
-  ProDescriptionsItemProps,
   ProForm,
 } from '@ant-design/pro-components';
-import { App, Button, Descriptions, InputNumber, Modal, Space, Table, Typography } from 'antd';
+import { App, Button, InputNumber, Modal, Table, Typography } from 'antd';
 import {
   PlusOutlined,
   DeleteOutlined,
@@ -21,12 +20,8 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  ListPageTemplate,
-  DetailDrawerTemplate,
-  DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
-} from '../../../../../components/layout-templates';
+import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
@@ -56,6 +51,7 @@ import {
   AfterSalesTicketFormModal,
   type AfterSalesTicketPreset,
 } from '../../../components/AfterSalesTicketFormModal';
+import { AfterSalesTicketDetailDrawer } from './components/AfterSalesTicketDetailDrawer';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -157,6 +153,8 @@ const AfterSalesTicketsPage: React.FC = () => {
   const [tableTickets, setTableTickets] = useState<AfterSalesTicket[]>([]);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [detailRecord, setDetailRecord] = useState<AfterSalesTicket | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   const [pushOpen, setPushOpen] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
@@ -213,13 +211,23 @@ const AfterSalesTicketsPage: React.FC = () => {
 
   const reloadTable = () => actionRef.current?.reload();
 
+  const loadDetail = useCallback(async (id: number) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      setDetailRecord(await afterSalesTicketApi.get(id));
+    } catch (error) {
+      setDetailRecord(null);
+      setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.afterSalesTicket.loadFailed')));
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [t]);
+
   const refreshOpenDetail = useCallback(() => {
     const id = detailIdRef.current;
     if (!detailDrawerVisible || id == null) return;
-    afterSalesTicketApi
-      .get(id)
-      .then(setDetailRecord)
-      .catch(() => undefined);
+    afterSalesTicketApi.get(id).then(setDetailRecord).catch(() => undefined);
   }, [detailDrawerVisible]);
 
   const openCreate = () => {
@@ -245,21 +253,19 @@ const AfterSalesTicketsPage: React.FC = () => {
     }
   };
 
-  const handleDetail = async (id: number) => {
-    try {
-      const row = await afterSalesTicketApi.get(id);
-      detailIdRef.current = id;
-      setDetailRecord(row);
-      setDetailDrawerVisible(true);
-    } catch (e: any) {
-      message.error(e?.message || t('app.kuaizhizao.afterSalesTicket.loadFailed'));
-    }
+  const handleDetail = (id: number) => {
+    detailIdRef.current = id;
+    setDetailDrawerVisible(true);
+    setDetailRecord(null);
+    setDetailError(null);
+    void loadDetail(id);
   };
 
   const closeDetailDrawer = () => {
     setDetailDrawerVisible(false);
     detailIdRef.current = null;
     setDetailRecord(null);
+    setDetailError(null);
   };
 
   const handleDelete = (record: AfterSalesTicket, opts?: { closeDrawer?: boolean }) => {
@@ -770,113 +776,6 @@ const AfterSalesTicketsPage: React.FC = () => {
     [pushQtys, t],
   );
 
-  const detailBasicColumns: ProDescriptionsItemProps<AfterSalesTicket>[] = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.afterSalesTicket.colTicketCode'), dataIndex: 'ticket_code' },
-      { title: t('app.kuaizhizao.afterSalesTicket.colCustomer'), dataIndex: 'customer_name' },
-      { title: t('app.kuaizhizao.afterSalesTicket.colRequestType'), dataIndex: 'request_type' },
-      {
-        title: t('app.kuaizhizao.afterSalesTicket.colStatus'),
-        dataIndex: 'status',
-        render: (_, row) =>
-          renderAfterSalesStatusTag(row.status, AFTER_SALES_TICKET_STATUS_COLOR),
-      },
-      {
-        title: t('app.kuaizhizao.afterSalesTicket.colSalesOrder'),
-        dataIndex: 'sales_order_code',
-        render: (_, r) => r.sales_order_code || '—',
-      },
-      {
-        title: t('app.kuaizhizao.afterSalesTicket.colSalesReturn'),
-        dataIndex: 'sales_return_code',
-        render: (_, r) => r.sales_return_code || '—',
-      },
-      {
-        title: t('app.kuaizhizao.afterSalesTicket.colRegisteredAt'),
-        dataIndex: 'registered_at',
-        render: (_, row) =>
-          row.registered_at ? formatDateTime(row.registered_at, 'YYYY-MM-DD HH:mm') : '—',
-      },
-      {
-        title: t('app.kuaizhizao.afterSalesTicket.colClosedAt'),
-        dataIndex: 'closed_at',
-        render: (_, row) =>
-          row.closed_at ? formatDateTime(row.closed_at, 'YYYY-MM-DD HH:mm') : '—',
-      },
-      {
-        title: t('app.kuaizhizao.afterSalesTicket.fieldClaimAmount'),
-        dataIndex: 'claim_amount',
-        render: (_, r) => (r.claim_amount != null ? String(r.claim_amount) : '—'),
-      },
-      {
-        title: t('app.kuaizhizao.afterSalesTicket.colItemCount'),
-        dataIndex: 'item_count',
-        render: (_, r) => String(r.item_count ?? r.items?.length ?? 0),
-      },
-      {
-        title: t('app.kuaizhizao.afterSalesTicket.fieldContent'),
-        dataIndex: 'content',
-        span: 3,
-        render: (_, r) => (
-          <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
-            {r.content?.trim() ? r.content : '—'}
-          </Typography.Paragraph>
-        ),
-      },
-    ],
-    [t],
-  );
-
-  const detailItemColumns = useMemo(
-    () => [
-      {
-        title: t('app.kuaizhizao.afterSalesTicket.fieldMaterialCode'),
-        dataIndex: 'material_code',
-        width: 140,
-        render: (_: unknown, row: NonNullable<AfterSalesTicket['items']>[number]) =>
-          row.material_code || '—',
-      },
-      {
-        title: t('app.kuaizhizao.afterSalesTicket.fieldMaterialName'),
-        dataIndex: 'material_name',
-        width: 180,
-        render: (_: unknown, row: NonNullable<AfterSalesTicket['items']>[number]) =>
-          row.material_name || '—',
-      },
-      {
-        title: t('app.kuaizhizao.afterSalesTicket.fieldBatchNo'),
-        dataIndex: 'batch_no',
-        width: 120,
-        render: (_: unknown, row: NonNullable<AfterSalesTicket['items']>[number]) =>
-          row.batch_no || '—',
-      },
-      {
-        title: t('app.kuaizhizao.afterSalesTicket.fieldQuantity'),
-        dataIndex: 'quantity',
-        width: 100,
-        align: 'right' as const,
-        render: (_: unknown, row: NonNullable<AfterSalesTicket['items']>[number]) =>
-          row.quantity != null ? String(row.quantity) : '—',
-      },
-      {
-        title: t('app.kuaizhizao.afterSalesTicket.fieldClaimAmount'),
-        dataIndex: 'claim_amount',
-        width: 120,
-        align: 'right' as const,
-        render: (_: unknown, row: NonNullable<AfterSalesTicket['items']>[number]) =>
-          row.claim_amount != null ? String(row.claim_amount) : '—',
-      },
-      {
-        title: t('app.kuaizhizao.afterSalesTicket.fieldLineNotes'),
-        dataIndex: 'notes',
-        ellipsis: true,
-        render: (_: unknown, row: NonNullable<AfterSalesTicket['items']>[number]) =>
-          row.notes?.trim() ? row.notes : '—',
-      },
-    ],
-    [t],
-  );
-
   const columns = alignProColumns<AfterSalesTicket>(
     [
       {
@@ -983,7 +882,6 @@ const AfterSalesTicketsPage: React.FC = () => {
         key: 'lifecycle',
         dataIndex: 'status',
         fixed: 'right',
-        sorter: true,
         hideInSearch: true,
         render: (_, row) =>
           renderAfterSalesStatusTag(row.status, AFTER_SALES_TICKET_STATUS_COLOR),
@@ -1004,7 +902,7 @@ const AfterSalesTicketsPage: React.FC = () => {
         hideInSearch: true,
         render: (_, record) => {
           const parts: React.ReactNode[] = [
-            <Button {...rowActionKind('read')} key="d" onClick={() => void handleDetail(record.id)} />,
+            <Button {...rowActionKind('read')} key="d" onClick={() => handleDetail(record.id)} />,
           ];
           if (perms.canUpdate && record.status !== '已关闭') {
             parts.push(
@@ -1154,79 +1052,66 @@ const AfterSalesTicketsPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      <DetailDrawerTemplate
-        title={t('app.kuaizhizao.afterSalesTicket.detailTitle', {
-          suffix: detailRecord?.ticket_code ? ` - ${detailRecord.ticket_code}` : '',
-        })}
+      <AfterSalesTicketDetailDrawer
         open={detailDrawerVisible}
         onClose={closeDetailDrawer}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        record={detailRecord}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const id = detailIdRef.current;
+          if (id != null) void loadDetail(id);
+        }}
         extra={
-          detailRecord ? (
-            <Space wrap>
-              {perms.canUpdate && detailRecord.status !== '已关闭' ? (
-                <Button icon={<EditOutlined />} onClick={() => void openEdit(detailRecord)}>
-                  {t('common.edit')}
-                </Button>
-              ) : null}
-              {canPushSalesReturn(detailRecord) ? (
-                <Button
-                  icon={<ExportOutlined />}
-                  onClick={() => void openPushSalesReturn(detailRecord)}
-                >
-                  {t('app.kuaizhizao.afterSalesTicket.actionPushSalesReturn')}
-                </Button>
-              ) : null}
-              {perms.canAction?.('close') && detailRecord.status !== '已关闭' ? (
-                <Button
-                  type="primary"
-                  icon={<CheckOutlined />}
-                  onClick={() => handleCloseTicket(detailRecord)}
-                >
-                  {t('app.kuaizhizao.afterSalesTicket.actionClose')}
-                </Button>
-              ) : null}
-              {perms.canDelete ? (
-                <Button
-                  danger
-                  icon={<DeleteOutlined />}
-                  onClick={() => handleDelete(detailRecord, { closeDrawer: true })}
-                >
-                  {t('common.delete')}
-                </Button>
-              ) : null}
-            </Space>
-          ) : undefined
+          <DetailDrawerActions
+            items={[
+              {
+                key: 'edit',
+                visible: Boolean(perms.canUpdate && detailRecord && detailRecord.status !== '已关闭'),
+                render: () => (
+                  <Button icon={<EditOutlined />} onClick={() => void openEdit(detailRecord!)}>
+                    {t('common.edit')}
+                  </Button>
+                ),
+              },
+              {
+                key: 'close',
+                visible: Boolean(perms.canAction?.('close') && detailRecord && detailRecord.status !== '已关闭'),
+                render: () => (
+                  <Button
+                    type="primary"
+                    icon={<CheckOutlined />}
+                    onClick={() => handleCloseTicket(detailRecord!)}
+                  >
+                    {t('app.kuaizhizao.afterSalesTicket.actionClose')}
+                  </Button>
+                ),
+              },
+              {
+                key: 'delete',
+                visible: Boolean(perms.canDelete && detailRecord),
+                render: () => (
+                  <Button
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={() => handleDelete(detailRecord!, { closeDrawer: true })}
+                  >
+                    {t('common.delete')}
+                  </Button>
+                ),
+              },
+            ]}
+          />
         }
-        basic={
-          detailRecord ? (
-            <Descriptions
-              column={3}
-              size="small"
-              items={detailDrawerDescriptionItems(detailBasicColumns, detailRecord)}
-            />
-          ) : undefined
-        }
-        linesTitle={t('app.kuaizhizao.afterSalesTicket.itemsTitle')}
-        lines={
-          detailRecord ? (
-            <Table
-              size="small"
-              rowKey={(r) => String(r.id ?? `${r.material_code}-${r.line_no}`)}
-              pagination={false}
-              columns={detailItemColumns}
-              dataSource={detailRecord.items ?? []}
-              locale={{ emptyText: t('app.kuaizhizao.afterSalesTicket.itemsEmpty') }}
-              scroll={{ x: 800 }}
-            />
-          ) : undefined
-        }
-        timelineTitle={t('app.kuaizhizao.afterSalesTicket.fieldResolution')}
-        timeline={
-          detailRecord ? (
-            <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
-              {detailRecord.resolution?.trim() ? detailRecord.resolution : '—'}
-            </Typography.Paragraph>
+        footer={
+          detailRecord && canPushSalesReturn(detailRecord) ? (
+            <Button
+              type="primary"
+              icon={<ExportOutlined />}
+              onClick={() => void openPushSalesReturn(detailRecord)}
+            >
+              {t('app.kuaizhizao.afterSalesTicket.actionPushSalesReturn')}
+            </Button>
           ) : undefined
         }
       />

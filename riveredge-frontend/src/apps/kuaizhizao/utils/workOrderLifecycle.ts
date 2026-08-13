@@ -232,7 +232,7 @@ const WORK_ORDER_OVERDUE_EXCLUDED_STATUSES = new Set([
 
 /** 计划完工时刻已过，且工单非终态（与菜单逾期徽章、延期异常检测口径一致） */
 export function isWorkOrderPlannedEndOverdue(
-  record: Pick<WorkOrder, 'planned_end_date' | 'status'>,
+  record: { planned_end_date?: string | null; status?: string | null },
 ): boolean {
   if (!record.planned_end_date) {
     return false;

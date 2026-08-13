@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import type { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { Button, Form, Input, Modal, Select, Switch, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
@@ -11,7 +11,13 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown';
-import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
+import {
+  alignDescriptionColumns,
+  alignProColumns,
+  MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
+} from '../../sales-management/shared/documentFieldAlignment';
+import { LogisticsMasterDetailDrawer } from '../shared/LogisticsMasterDetailDrawer';
 import {
   renderLogisticsCarrierTypeTag,
   renderLogisticsEnabledTag,
@@ -41,6 +47,8 @@ const CarriersPage: React.FC = () => {
   const [form] = Form.useForm();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<LogisticsCarrier | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detail, setDetail] = useState<LogisticsCarrier | null>(null);
 
   const openCreate = () => {
     setEditing(null);
@@ -60,6 +68,9 @@ const CarriersPage: React.FC = () => {
     if (editing) {
       await updateCarrier(editing.id, values);
       message.success(t('common.updateSuccess'));
+      if (detail?.id === editing.id) {
+        setDetail({ ...detail, ...values });
+      }
     } else {
       await createCarrier(values);
       message.success(t('common.createSuccess'));
@@ -67,6 +78,46 @@ const CarriersPage: React.FC = () => {
     setOpen(false);
     actionRef.current?.reload();
   };
+
+  const openDetail = (row: LogisticsCarrier) => {
+    setDetail(row);
+    setDetailOpen(true);
+  };
+
+  const basicColumns = useMemo(
+    () =>
+      alignDescriptionColumns<LogisticsCarrier>(
+        [
+          { title: t('app.kuaizhizao.logistics.field.code'), dataIndex: 'code' },
+          { title: t('app.kuaizhizao.logistics.field.name'), dataIndex: 'name' },
+          {
+            title: t('app.kuaizhizao.logistics.field.carrierType'),
+            dataIndex: 'carrier_type',
+            render: (_, record) => renderLogisticsCarrierTypeTag(t, record.carrier_type),
+          },
+          { title: t('app.kuaizhizao.logistics.field.contactName'), dataIndex: 'contact_name' },
+          { title: t('app.kuaizhizao.logistics.field.contactPhone'), dataIndex: 'contact_phone' },
+          {
+            title: t('app.kuaizhizao.logistics.field.settlementMethod'),
+            dataIndex: 'settlement_method',
+            render: (_, record) => {
+              const code = String(record.settlement_method ?? '').trim();
+              if (!code) return '-';
+              const opt = SETTLEMENT_METHOD_OPTIONS.find((item) => item.value === code);
+              return opt ? t(opt.labelKey) : code;
+            },
+          },
+          {
+            title: t('app.kuaizhizao.logistics.field.enabled'),
+            dataIndex: 'is_enabled',
+            render: (_, record) => renderLogisticsEnabledTag(t, record.is_enabled),
+          },
+          { title: t('common.remark'), dataIndex: 'remark', span: 2 },
+        ] as ProDescriptionsItemProps<LogisticsCarrier>[],
+        MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
+      ),
+    [t],
+  );
 
   const columns: ProColumns<LogisticsCarrier>[] = useMemo(
     () =>
@@ -137,6 +188,13 @@ const CarriersPage: React.FC = () => {
           hideInSearch: true,
           render: (_, row) => {
             const nodes: React.ReactNode[] = [];
+            if (perms.canRead) {
+              nodes.push(
+                <Button key="detail" {...rowActionKind('read')} type="link" size="small" onClick={() => openDetail(row)}>
+                  {t('common.detail')}
+                </Button>,
+              );
+            }
             if (perms.canUpdate) {
               nodes.push(
                 <Button key="edit" {...rowActionKind('update')} type="link" size="small" onClick={() => openEdit(row)}>
@@ -165,7 +223,7 @@ const CarriersPage: React.FC = () => {
           },
         },
       ]),
-    [perms.canDelete, perms.canUpdate, t],
+    [perms.canDelete, perms.canRead, perms.canUpdate, t],
   );
 
   return (
@@ -194,12 +252,25 @@ const CarriersPage: React.FC = () => {
           actionRef.current?.reload();
         }}
       />
+      <LogisticsMasterDetailDrawer
+        open={detailOpen}
+        onClose={() => {
+          setDetailOpen(false);
+          setDetail(null);
+        }}
+        record={detail}
+        title={`${t('app.kuaizhizao.logistics.detail.carrierTitle')}${detail?.name ? ` - ${detail.name}` : ''}`}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detail && perms.canUpdate), () => {
+          if (detail) openEdit(detail);
+        })}
+        basicColumns={basicColumns}
+      />
       <Modal
         open={open}
         title={editing ? t('common.edit') : t('common.create')}
         onCancel={() => setOpen(false)}
         onOk={handleSubmit}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical">
           {!editing ? (

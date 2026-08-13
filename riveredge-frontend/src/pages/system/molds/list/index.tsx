@@ -22,11 +22,14 @@ import {
   ProFormDigit,
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, message, Modal, Descriptions } from 'antd';
+import { App, Popconfirm, Button, Tag, message, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
+import { renderSystemActiveTag } from '../../utils/systemListPresentation';
 import {
   getMoldList,
   getMoldByUuid,
@@ -47,7 +50,7 @@ const MoldListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const moldDetailReqRef = useRef(0);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑）
@@ -61,6 +64,7 @@ const MoldListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<Mold | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   /**
    * 处理新建模具
@@ -110,26 +114,26 @@ const MoldListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: Mold) => {
-    const req = ++moldDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getMoldByUuid(record.uuid);
-      if (moldDetailReqRef.current !== req) return;
+      const detail = await getMoldByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (moldDetailReqRef.current === req) {
-        messageApi.error(error.message || t('pages.system.molds.getDetailFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.molds.getDetailFailed')));
     } finally {
-      if (moldDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = (record: Mold) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -215,8 +219,8 @@ const MoldListPage: React.FC = () => {
       { title: t('pages.system.molds.columnSerialNumber'), dataIndex: 'serial_number' },
       { title: t('pages.system.molds.labelManufacturer'), dataIndex: 'manufacturer' },
       { title: t('pages.system.molds.labelSupplier'), dataIndex: 'supplier' },
-      { title: t('pages.system.molds.labelPurchaseDate'), dataIndex: 'purchase_date' },
-      { title: t('pages.system.molds.labelInstallDate'), dataIndex: 'installation_date' },
+      { title: t('pages.system.molds.labelPurchaseDate'), dataIndex: 'purchase_date', valueType: 'date' },
+      { title: t('pages.system.molds.labelInstallDate'), dataIndex: 'installation_date', valueType: 'date' },
       { title: t('pages.system.molds.labelWarranty'), dataIndex: 'warranty_period' },
       { title: t('pages.system.molds.columnTotalUsage'), dataIndex: 'total_usage_count' },
       {
@@ -237,11 +241,8 @@ const MoldListPage: React.FC = () => {
       {
         title: t('pages.system.molds.columnActive'),
         dataIndex: 'is_active',
-        render: (_: unknown, entity: Mold) => (
-          <Tag color={entity?.is_active ? 'success' : 'default'}>
-            {entity?.is_active ? t('pages.system.molds.enabled') : t('pages.system.molds.disabled')}
-          </Tag>
-        ),
+        render: (_: unknown, entity: Mold) =>
+          renderSystemActiveTag(t, entity?.is_active, 'pages.system.molds.enabled', 'pages.system.molds.disabled'),
       },
       { title: t('pages.system.molds.labelDescription'), dataIndex: 'description', span: 2 },
       { title: t('pages.system.molds.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
@@ -561,17 +562,26 @@ const MoldListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('pages.system.molds.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
-          detailData ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(moldDetailDescColumns, detailData)} />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryUuidRef.current;
+          if (id) void loadDetail(id);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detailData), () => {
+          if (!detailData) return;
+          void handleEdit(detailData);
+        })}
+        detail={detailData}
+        detailColumns={moldDetailDescColumns}
       />
     </>
   );

@@ -75,7 +75,7 @@ async def replace_user_data_scope_bindings(
 @router.get("/by-uuid/{user_uuid}/data-scope-bindings", response_model=List[UserDataScopeBindingItem])
 async def list_user_data_scope_bindings_by_uuid(
     user_uuid: str,
-    dimension: Optional[str] = Query(None, description="按维度筛选，如 supplier/customer"),
+    dimension: Optional[str] = Query(None, description="按维度筛选，如 supplier/customer/manufacturer"),
     _auth: object = Depends(require_access("system:user", "read")),
     tenant_id: int = Depends(get_current_tenant),
     _: User = Depends(soil_get_current_user),

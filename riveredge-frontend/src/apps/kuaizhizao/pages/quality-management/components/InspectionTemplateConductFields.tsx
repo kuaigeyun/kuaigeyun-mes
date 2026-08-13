@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
-import { ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea, ProFormCheckbox, ProFormItem } from '@ant-design/pro-components';
-import { Alert, Divider, Typography, Tag, Form } from 'antd';
+import { Alert, Card, Checkbox, Col, Form, Input, InputNumber, Select, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   getInspectionTemplateSource,
@@ -24,7 +23,10 @@ import {
   type InspectionTemplateStepItem,
   type StepConductEntry,
 } from '../../../types/inspectionStepSpec';
+import { valueTypeOptions } from '../../../components/InspectionStepValueSpecFields';
 import InspectionStepConductPhotoField from '../../../components/InspectionStepConductPhotoField';
+import { MarkerTag } from '../../../../../constants/statusBadges';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 
 const { Text } = Typography;
 
@@ -46,9 +48,9 @@ function JudgmentTag({ judgment }: { judgment?: string | null }) {
         ? t('app.kuaizhizao.quality.common.result.qualified')
         : t('app.kuaizhizao.quality.common.result.unqualified');
   return (
-    <Tag color={pass ? 'success' : judgment === 'na' ? 'default' : 'error'} style={{ marginLeft: 8 }}>
+    <MarkerTag color={pass ? 'success' : judgment === 'na' ? 'default' : 'error'}>
       {label}
-    </Tag>
+    </MarkerTag>
   );
 }
 
@@ -74,7 +76,7 @@ const InspectionConductStepSummary: React.FC<{
         type="error"
         showIcon
         style={{ marginBottom: 12 }}
-        message={t('app.kuaizhizao.quality.template.criticalFailAlert', {
+        title={t('app.kuaizhizao.quality.template.criticalFailAlert', {
           items: summary.criticalFailLabels.join('、'),
         })}
       />
@@ -86,7 +88,7 @@ const InspectionConductStepSummary: React.FC<{
       type="warning"
       showIcon
       style={{ marginBottom: 12 }}
-      message={t('app.kuaizhizao.quality.template.stepFailHint', {
+      title={t('app.kuaizhizao.quality.template.stepFailHint', {
         count: summary.failCount,
         items: summary.failLabels.join('、'),
       })}
@@ -130,16 +132,17 @@ const DerivedNumericValue: React.FC<{
   }, [computed, form, stepKey]);
 
   return (
-    <ProFormDigit
+    <Form.Item
       name={['conduct_step_results', stepKey, 'value']}
       label={unitLabel}
-      fieldProps={{
-        precision: (spec.decimal_places as number) ?? 4,
-        style: { width: '100%' },
-        disabled: true,
-      }}
       extra={t('app.kuaizhizao.quality.template.derivedValueHint')}
-    />
+    >
+      <InputNumber
+        disabled
+        precision={(spec.decimal_places as number) ?? 4}
+        style={{ width: '100%' }}
+      />
+    </Form.Item>
   );
 };
 
@@ -193,148 +196,186 @@ const TypedStepFields: React.FC<{
     },
   });
 
+  const typeLabels = Object.fromEntries(valueTypeOptions(t).map((o) => [o.value, o.label]));
+  const typeLabel = typeLabels[vt] || t('app.kuaizhizao.quality.plans.stepSpec.typeBoolean');
+  const form = Form.useFormInstance();
+  const valueWatch = Form.useWatch([...basePath, 'value']);
+
+  const stepTitle = (
+    <span>
+      <Text strong>{label}</Text>
+      {isCritical ? (
+        <MarkerTag color="error" style={{ marginLeft: 8 }}>
+          {t('app.kuaizhizao.quality.plans.stepSpec.critical')}
+        </MarkerTag>
+      ) : null}
+      {isDerived ? (
+        <MarkerTag color="processing" style={{ marginLeft: 8 }}>
+          {t('app.kuaizhizao.quality.plans.stepSpec.derived')}
+        </MarkerTag>
+      ) : null}
+    </span>
+  );
+
+  const stepExtra = (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      <MarkerTag>{typeLabel}</MarkerTag>
+      {isTypedInspectionStep(step) ? <StepAutoJudgment step={step} stepKey={stepKey} /> : null}
+    </span>
+  );
+
   if (!isTypedInspectionStep(step)) {
     return (
-      <div style={{ marginBottom: 12 }}>
-        <Text strong>{label}</Text>
+      <Card size="small" type="inner" style={{ marginBottom: 8 }} title={stepTitle} extra={stepExtra}>
         {hint ? (
-          <div>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {hint}
-            </Text>
-          </div>
+          <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
+            {hint}
+          </Text>
         ) : null}
-        <ProFormSelect
+        <Form.Item
           name={['item_results', stepKey]}
-          label={t('app.kuaizhizao.quality.template.judgment')}
           rules={[{ required: true, message: t('app.kuaizhizao.quality.template.judgmentRequired', { label }) }]}
-          valueEnum={{ pass: passLabel, fail: failLabel }}
-        />
-      </div>
+        >
+          <ThemedSegmented
+            options={[
+              { label: passLabel, value: 'pass' },
+              { label: failLabel, value: 'fail' },
+            ]}
+          />
+        </Form.Item>
+      </Card>
     );
   }
 
   const unitLabel = t('app.kuaizhizao.quality.template.measurementValue', {
     unit: spec.unit ? ` (${spec.unit})` : '',
   });
+  const selectOptions = ((spec.options as Array<{ value: string; label: string; defect?: boolean }>) || []).map((o) => ({
+    value: o.value,
+    label: o.defect ? `${o.label || o.value} (${t('app.kuaizhizao.quality.plans.stepSpec.defectOption')})` : o.label || o.value,
+  }));
+  const booleanSegValue =
+    isNa
+      ? 'na'
+      : valueWatch === true || valueWatch === 'true' || valueWatch === 1
+        ? 'true'
+        : valueWatch === false || valueWatch === 'false' || valueWatch === 0
+          ? 'false'
+          : undefined;
 
   return (
-    <div style={{ marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--river-border-color)' }}>
-      <div style={{ marginBottom: 8 }}>
-        <Text strong>{label}</Text>
-        {isCritical ? (
-          <Tag color="red" style={{ marginLeft: 8 }}>
-            {t('app.kuaizhizao.quality.plans.stepSpec.critical')}
-          </Tag>
-        ) : null}
-        {isDerived ? (
-          <Tag color="blue" style={{ marginLeft: 8 }}>
-            {t('app.kuaizhizao.quality.plans.stepSpec.derived')}
-          </Tag>
-        ) : null}
-        <StepAutoJudgment step={step} stepKey={stepKey} />
-      </div>
+    <Card size="small" type="inner" style={{ marginBottom: 8 }} title={stepTitle} extra={stepExtra}>
       {hint ? (
-        <div style={{ marginBottom: 8 }}>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {hint}
-          </Text>
-        </div>
+        <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
+          {hint}
+        </Text>
       ) : null}
 
-      {allowsNa && vt !== 'text' && (
-        <ProFormSelect
-          name={[...basePath, 'judgment']}
-          label={t('app.kuaizhizao.quality.plans.stepSpec.markNa')}
-          allowClear
-          options={[{ label: naLabel, value: 'na' }]}
-        />
-      )}
-
-      {!isNa && vt === 'boolean' && (
-        <ProFormSelect
+      {vt === 'boolean' ? (
+        <Form.Item
           name={[...basePath, 'value']}
-          label={t('app.kuaizhizao.quality.plans.stepSpec.typeBoolean')}
           rules={[skipValueRule()]}
-          options={[
-            { label: t('app.kuaizhizao.quality.plans.stepSpec.passWhenYes'), value: true },
-            { label: t('app.kuaizhizao.quality.plans.stepSpec.passWhenNo'), value: false },
-          ]}
-        />
-      )}
-
-      {!isNa && vt === 'numeric' && isDerived && (
-        <DerivedNumericValue stepKey={stepKey} spec={spec} unitLabel={unitLabel} />
-      )}
-
-      {!isNa && vt === 'numeric' && !isDerived && (
-        <ProFormDigit
-          name={[...basePath, 'value']}
-          label={unitLabel}
-          rules={[skipValueRule()]}
-          fieldProps={{
-            precision: (spec.decimal_places as number) ?? 4,
-            style: { width: '100%' },
+          getValueProps={() => ({ value: booleanSegValue })}
+          normalize={(next) => {
+            if (next === 'na') {
+              form.setFieldValue([...basePath, 'judgment'], 'na');
+              return undefined;
+            }
+            form.setFieldValue([...basePath, 'judgment'], undefined);
+            return next === 'true';
           }}
-        />
-      )}
-
-      {!isNa && vt === 'single_select' && (
-        <ProFormSelect
-          name={[...basePath, 'value']}
-          label={t('app.kuaizhizao.quality.template.selectValue')}
-          rules={[skipValueRule()]}
-          options={((spec.options as Array<{ value: string; label: string }>) || []).map((o) => ({
-            value: o.value,
-            label: o.label || o.value,
-          }))}
-        />
-      )}
-
-      {!isNa && vt === 'multi_select' && (
-        <ProFormCheckbox.Group
-          name={[...basePath, 'value']}
-          label={t('app.kuaizhizao.quality.template.selectValue')}
-          initialValue={[]}
-          rules={[skipValueRule()]}
-          options={((spec.options as Array<{ value: string; label: string; defect?: boolean }>) || []).map((o) => ({
-            value: o.value,
-            label: o.defect ? `${o.label || o.value} (${t('app.kuaizhizao.quality.plans.stepSpec.defectOption')})` : o.label || o.value,
-          }))}
-        />
-      )}
-
-      {vt === 'text' && (
-        <>
-          {!isNa && (spec.multiline ? (
-            <ProFormTextArea
-              name={[...basePath, 'value']}
-              label={t('app.kuaizhizao.quality.plans.stepSpec.typeText')}
-              rules={[skipValueRule()]}
-              fieldProps={{ maxLength: (spec.max_length as number) || 500 }}
-            />
-          ) : (
-            <ProFormText
-              name={[...basePath, 'value']}
-              label={t('app.kuaizhizao.quality.plans.stepSpec.typeText')}
-              rules={[skipValueRule()]}
-            />
-          ))}
-          <ProFormSelect
-            name={[...basePath, 'judgment']}
-            label={t('app.kuaizhizao.quality.template.judgment')}
-            rules={[{ required: true, message: t('app.kuaizhizao.quality.template.judgmentRequired', { label }) }]}
+        >
+          <ThemedSegmented
             options={[
-              { label: passLabel, value: 'pass' },
-              { label: failLabel, value: 'fail' },
+              { label: t('app.kuaizhizao.quality.plans.stepSpec.passWhenYes'), value: 'true' },
+              { label: t('app.kuaizhizao.quality.plans.stepSpec.passWhenNo'), value: 'false' },
               ...(allowsNa ? [{ label: naLabel, value: 'na' }] : []),
             ]}
           />
-        </>
-      )}
+        </Form.Item>
+      ) : null}
 
-      {templateWantsPhoto && photoCategory && !isNa && (
-        <ProFormItem
+      {allowsNa && vt !== 'text' && vt !== 'boolean' ? (
+        <Form.Item name={[...basePath, 'judgment']} style={{ marginBottom: 8 }}>
+          <ThemedSegmented
+            options={[
+              { label: t('app.kuaizhizao.quality.plans.stepSpec.markNa'), value: 'na' },
+            ]}
+            value={isNa ? 'na' : undefined}
+            onChange={(next) => {
+              form.setFieldValue([...basePath, 'judgment'], next === 'na' ? 'na' : undefined);
+            }}
+          />
+        </Form.Item>
+      ) : null}
+
+      {!isNa && vt === 'numeric' && isDerived ? (
+        <DerivedNumericValue stepKey={stepKey} spec={spec} unitLabel={unitLabel} />
+      ) : null}
+
+      {!isNa && vt === 'numeric' && !isDerived ? (
+        <Form.Item name={[...basePath, 'value']} label={unitLabel} rules={[skipValueRule()]}>
+          <InputNumber
+            precision={(spec.decimal_places as number) ?? 4}
+            style={{ width: '100%' }}
+          />
+        </Form.Item>
+      ) : null}
+
+      {!isNa && vt === 'single_select' ? (
+        selectOptions.length > 0 && selectOptions.length <= 4 ? (
+          <Form.Item name={[...basePath, 'value']} rules={[skipValueRule()]}>
+            <ThemedSegmented
+              options={selectOptions}
+            />
+          </Form.Item>
+        ) : (
+          <Form.Item name={[...basePath, 'value']} rules={[skipValueRule()]}>
+            <Select
+              allowClear
+              options={selectOptions}
+              placeholder={t('app.kuaizhizao.quality.template.selectValue')}
+            />
+          </Form.Item>
+        )
+      ) : null}
+
+      {!isNa && vt === 'multi_select' ? (
+        <Form.Item name={[...basePath, 'value']} initialValue={[]} rules={[skipValueRule()]}>
+          <Checkbox.Group options={selectOptions} />
+        </Form.Item>
+      ) : null}
+
+      {vt === 'text' ? (
+        <>
+          {!isNa ? (
+            spec.multiline ? (
+              <Form.Item name={[...basePath, 'value']} rules={[skipValueRule()]}>
+                <Input.TextArea maxLength={(spec.max_length as number) || 500} rows={3} />
+              </Form.Item>
+            ) : (
+              <Form.Item name={[...basePath, 'value']} rules={[skipValueRule()]}>
+                <Input maxLength={(spec.max_length as number) || 500} />
+              </Form.Item>
+            )
+          ) : null}
+          <Form.Item
+            name={[...basePath, 'judgment']}
+            rules={[{ required: true, message: t('app.kuaizhizao.quality.template.judgmentRequired', { label }) }]}
+          >
+            <ThemedSegmented
+              options={[
+                { label: passLabel, value: 'pass' },
+                { label: failLabel, value: 'fail' },
+                ...(allowsNa ? [{ label: naLabel, value: 'na' }] : []),
+              ]}
+            />
+          </Form.Item>
+        </>
+      ) : null}
+
+      {templateWantsPhoto && photoCategory && !isNa ? (
+        <Form.Item
           name={[...basePath, 'photos']}
           label={t('app.kuaizhizao.quality.template.stepPhoto')}
           rules={enforcePhoto ? [photoRule()] : undefined}
@@ -344,9 +385,9 @@ const TypedStepFields: React.FC<{
             required={enforcePhoto}
             label={label}
           />
-        </ProFormItem>
-      )}
-    </div>
+        </Form.Item>
+      ) : null}
+    </Card>
   );
 };
 
@@ -372,41 +413,44 @@ const InspectionTemplateConductFields: React.FC<InspectionTemplateConductFieldsP
 
   if (hasInspectionPlanSteps(template)) {
     return (
-      <>
-        <Divider orientation="left" plain>
-          {planName
-            ? t('app.kuaizhizao.quality.template.planItemsTitleWithName', { planName })
-            : t('app.kuaizhizao.quality.template.planItemsTitle')}
-        </Divider>
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 12 }}
-          message={t('app.kuaizhizao.quality.template.planModeHintTyped')}
-        />
-        <InspectionConductStepSummary inspection={inspection} />
-        {steps.map((step, idx) => {
-          const stepKey = getStepConductKey(step, idx);
-          const label = step.inspection_item || t('app.kuaizhizao.quality.template.inspectionItemFallback', { index: idx + 1 });
-          // 用 value_spec 现场重算合格范围，避免陈旧 acceptance_criteria / 抽检文案重复，且避免「 - -0.5」吞掉负号
-          const typeHint = formatAcceptanceCriteriaPreview(step.value_type || 'boolean', step.value_spec, t);
-          const samplingHint = formatSamplingCriteriaPreview(step.sampling_type, step.value_spec, t);
-          const hint = [step.inspection_method, typeHint || step.acceptance_criteria, samplingHint]
-            .filter(Boolean)
-            .join(' / ');
-          return (
-            <TypedStepFields
-              key={stepKey}
-              step={step}
-              stepKey={stepKey}
-              label={label}
-              hint={hint || undefined}
-              photoCategory={photoCategory}
-              stepPhotoRequired={stepPhotoRequired}
-            />
-          );
-        })}
-      </>
+      <Col span={24}>
+        <Card
+          size="small"
+          title={t('app.kuaizhizao.quality.template.planItemsTitle')}
+          extra={planName ? <Text type="secondary">{planName}</Text> : null}
+          style={{ marginBottom: 8 }}
+        >
+          <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
+            {t('app.kuaizhizao.quality.template.planModeHintTyped')}
+          </Text>
+          <InspectionConductStepSummary inspection={inspection} />
+          {steps.map((step, idx) => {
+            const stepKey = getStepConductKey(step, idx);
+            const label = step.inspection_item || t('app.kuaizhizao.quality.template.inspectionItemFallback', { index: idx + 1 });
+            const typeHint = formatAcceptanceCriteriaPreview(step.value_type || 'boolean', step.value_spec, t);
+            const samplingHint = formatSamplingCriteriaPreview(step.sampling_type, step.value_spec, t);
+            const method = String(step.inspection_method || '').trim();
+            const hint = [
+              method && method !== label ? method : null,
+              typeHint || step.acceptance_criteria,
+              samplingHint,
+            ]
+              .filter(Boolean)
+              .join(' / ');
+            return (
+              <TypedStepFields
+                key={stepKey}
+                step={step}
+                stepKey={stepKey}
+                label={label}
+                hint={hint || undefined}
+                photoCategory={photoCategory}
+                stepPhotoRequired={stepPhotoRequired}
+              />
+            );
+          })}
+        </Card>
+      </Col>
     );
   }
 
@@ -415,36 +459,38 @@ const InspectionTemplateConductFields: React.FC<InspectionTemplateConductFieldsP
   if (!criteria && !standardItems) return null;
 
   return (
-    <>
-      <Divider orientation="left" plain>
-        {planName
-          ? t('app.kuaizhizao.quality.template.standardTitleWithName', { planName })
-          : t('app.kuaizhizao.quality.template.standardTitle')}
-      </Divider>
-      {criteria ? (
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 12 }}
-          title={t('app.kuaizhizao.quality.template.acceptanceCriteria', { criteria })}
-        />
-      ) : null}
-      {standardItems ? (
-        <div style={{ marginBottom: 12 }}>
-          <Text type="secondary" style={{ fontSize: 12 }}>
+    <Col span={24}>
+      <Card
+        size="small"
+        title={t('app.kuaizhizao.quality.template.standardTitle')}
+        extra={planName ? <Text type="secondary">{planName}</Text> : null}
+        style={{ marginBottom: 8 }}
+      >
+        {criteria ? (
+          <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
+            {t('app.kuaizhizao.quality.template.acceptanceCriteria', { criteria })}
+          </Text>
+        ) : null}
+        {standardItems ? (
+          <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
             {t('app.kuaizhizao.quality.template.inspectionItems', {
               items: typeof standardItems === 'string' ? standardItems : JSON.stringify(standardItems),
             })}
           </Text>
-        </div>
-      ) : null}
-      <ProFormSelect
-        name={['item_results', '0']}
-        label={t('app.kuaizhizao.quality.template.overallJudgment')}
-        rules={[{ required: true, message: t('app.kuaizhizao.quality.template.overallJudgmentRequired') }]}
-        valueEnum={{ pass: passLabel, fail: failLabel }}
-      />
-    </>
+        ) : null}
+        <Form.Item
+          name={['item_results', '0']}
+          rules={[{ required: true, message: t('app.kuaizhizao.quality.template.overallJudgmentRequired') }]}
+        >
+          <ThemedSegmented
+            options={[
+              { label: passLabel, value: 'pass' },
+              { label: failLabel, value: 'fail' },
+            ]}
+          />
+        </Form.Item>
+      </Card>
+    </Col>
   );
 };
 

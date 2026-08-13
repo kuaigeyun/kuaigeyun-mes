@@ -1019,6 +1019,15 @@ class SalesOrderService:
         normalized = normalize_status(raw)
         return normalized == DocumentStatus.CANCELLED.value or raw in ("已取消", "CANCELLED")
 
+    def _is_terminal_business_status(self, status: Optional[str]) -> bool:
+        """已关闭/已完成/已取消：禁止被「审核状态自动修复」回写成 AUDITED。"""
+        return (
+            self._is_closed(status)
+            or self._is_completed_status(status)
+            or self._is_cancelled_status(status)
+            or self._is_rejected_status(status)
+        )
+
     def _assert_order_executable(self, order: SalesOrder) -> None:
         """已关闭/已取消/已完成的订单不可再下推或继续执行。"""
         if self._is_closed(order.status):
@@ -1510,8 +1519,10 @@ class SalesOrderService:
                 ).order_by("id").all()
             return self._order_to_options_response(order, items=option_items)
 
-        # 不同步时自动修复
-        if self._is_review_approved(order.review_status) and not self._is_audited(order.status):
+        # 不同步时自动修复（终态 CLOSED/COMPLETED/CANCELLED 不得回写成 AUDITED）
+        if self._is_terminal_business_status(order.status):
+            pass
+        elif self._is_review_approved(order.review_status) and not self._is_audited(order.status):
             await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(status=DemandStatus.AUDITED)
             order = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
         elif self._is_audited(order.status) and not self._is_review_approved(order.review_status):
@@ -1916,10 +1927,12 @@ class SalesOrderService:
 
         order_ids = [o.id for o in orders]
 
-        # 1. 批量状态同步（不同步时自动修复）
+        # 1. 批量状态同步（不同步时自动修复；终态不回写 AUDITED）
         need_audit_sync = []
         need_review_sync = []
         for order in orders:
+            if self._is_terminal_business_status(order.status):
+                continue
             if self._is_review_approved(order.review_status) and not self._is_audited(order.status):
                 need_audit_sync.append(order.id)
             elif self._is_audited(order.status) and not self._is_review_approved(order.review_status):
@@ -3780,7 +3793,14 @@ class SalesOrderService:
                 close_reason,
             )
 
-        return await self.get_sales_order_by_id(tenant_id, sales_order_id)
+        # 关闭已落库；详情组装失败不得回滚业务结果（历史曾因枚举缺 CLOSED / 自动修复误伤）
+        try:
+            return await self.get_sales_order_by_id(tenant_id, sales_order_id)
+        except Exception as e:
+            logger.warning("close_sales_order 后详情组装失败，返回轻量结果: {}", e)
+            return await self.get_sales_order_by_id(
+                tenant_id, sales_order_id, view="options"
+            )
 
     async def bulk_close_sales_orders(
         self,

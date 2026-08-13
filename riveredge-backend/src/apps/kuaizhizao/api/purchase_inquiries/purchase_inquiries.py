@@ -306,3 +306,20 @@ async def withdraw_approval(
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await PurchaseInquiryService().withdraw_approval(tenant_id, inquiry_id, current_user.id)
+
+
+@router.post(
+    "/purchase-inquiries/{inquiry_id}/cancel",
+    response_model=PurchaseInquiryResponse,
+    summary="Cancel purchase inquiry",
+    dependencies=[Depends(require_kuaizhizao_module_access("purchase-inquiry"))],
+)
+async def cancel_inquiry(
+    inquiry_id: int = Path(...),
+    reason: Optional[str] = Query(None, description="取消原因"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await PurchaseInquiryService().cancel_inquiry(
+        tenant_id, inquiry_id, current_user.id, reason=reason
+    )

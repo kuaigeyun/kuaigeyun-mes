@@ -547,6 +547,39 @@ async def reject_demand(
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "驳回需求失败", "/demands/{demand_id}/reject", tenant_id)
 
 
+@router.post("/{demand_id}/close", response_model=DemandResponse, summary="Close demand")
+async def close_demand(
+    demand_id: int = Path(..., description="需求ID"),
+    reason: Optional[str] = Query(None, description="关闭原因"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """关闭已审核/已确认需求：终止剩余计划，进入 CLOSED。"""
+    try:
+        return await demand_service.close_demand(
+            tenant_id=tenant_id,
+            demand_id=demand_id,
+            closed_by=current_user.id,
+            reason=reason,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/close", tenant_id
+        )
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST, str(e), "/demands/{demand_id}/close", tenant_id
+        )
+    except Exception as e:
+        logger.error(f"关闭需求失败: {e}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "关闭需求失败",
+            "/demands/{demand_id}/close",
+            tenant_id,
+        )
+
+
 # ==================== 需求明细管理 ====================
 
 @router.post("/{demand_id}/items", response_model=DemandItemResponse, summary="Add demand line")

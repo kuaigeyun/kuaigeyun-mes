@@ -10,6 +10,7 @@
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import PageSkeleton from '../../components/page-skeleton';
+import { LinkedDocumentDetailProvider } from '../../components/linked-document-detail';
 
 const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
   <Suspense fallback={<PageSkeleton />}><LazyComponent /></Suspense>
@@ -51,7 +52,8 @@ const StandardCostsPage = lazy(() => import('./pages/cost-management/standard-co
 
 const KuaicaiwuApp: React.FC = () => {
   return (
-    <Routes>
+    <LinkedDocumentDetailProvider>
+      <Routes>
       {/* 财务管理路由 */}
       <Route path="finance-management/dashboard" element={withPageSuspense(FinanceCenterDashboard)} />
       <Route path="finance-management/receivables" element={withPageSuspense(ReceivableListPage)} />
@@ -111,7 +113,8 @@ const KuaicaiwuApp: React.FC = () => {
           <p>业务驱动的管理会计，提供成本、账款、盈利分析等核心功能</p>
         </div>
       } />
-    </Routes>
+      </Routes>
+    </LinkedDocumentDetailProvider>
   );
 };
 

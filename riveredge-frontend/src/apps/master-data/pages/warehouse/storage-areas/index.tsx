@@ -8,13 +8,16 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Typography, theme } from 'antd';
+import { App, Button, List, Modal, Popconfirm, Space, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { MasterDataDetailDrawer } from '../../shared/masterDataDetailDrawer';
 import { storageAreaApi, warehouseApi } from '../../../services/warehouse';
 import {
   buildMasterCrudActiveValueEnum,
@@ -35,10 +38,6 @@ import type { StorageArea, StorageAreaCreate, Warehouse } from '../../../types/w
 import { batchImport } from '../../../../../utils/batchOperations';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
-  CustomFieldsDetailSection,
-  hasCustomFieldsDetailContent,
-} from '../../../../../components/custom-fields';
-import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
@@ -56,13 +55,14 @@ import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 const StorageAreasPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [currentStorageAreaUuid, setCurrentStorageAreaUuid] = useState<string | null>(null);
   const [storageAreaDetail, setStorageAreaDetail] = useState<StorageArea | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -513,20 +513,28 @@ const StorageAreasPage: React.FC = () => {
   /**
    * 处理打开详情
    */
-  const handleOpenDetail = async (record: StorageArea) => {
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      setCurrentStorageAreaUuid(record.uuid);
-      setDrawerVisible(true);
-      setDetailLoading(true);
-      
-      const detail = await storageAreaApi.get(record.uuid);
+      const detail = await storageAreaApi.get(uuid);
       setStorageAreaDetail(detail);
       await loadFieldValuesForDetail(detail.id);
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.storageAreas.getDetailFailed'));
+    } catch (error) {
+      setStorageAreaDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.master-data.storageAreas.getDetailFailed')));
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const handleOpenDetail = (record: StorageArea) => {
+    detailRetryUuidRef.current = record.uuid;
+    setCurrentStorageAreaUuid(record.uuid);
+    setDrawerVisible(true);
+    setStorageAreaDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -536,6 +544,7 @@ const StorageAreasPage: React.FC = () => {
     setDrawerVisible(false);
     setCurrentStorageAreaUuid(null);
     setStorageAreaDetail(null);
+    setDetailError(null);
     resetDetailFieldValues();
   };
 
@@ -646,7 +655,6 @@ const StorageAreasPage: React.FC = () => {
       title: t('app.master-data.warehouses.action'),
       key: 'action',
       valueType: 'option',
-      width: 150,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -697,6 +705,7 @@ const StorageAreasPage: React.FC = () => {
     {
       title: t('app.master-data.storageAreas.warehouse'),
       dataIndex: 'warehouseId',
+      key: 'warehouseName',
       render: (_, record) => formatWarehouseDisplay(record),
     },
     {
@@ -806,50 +815,38 @@ const StorageAreasPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      <MasterDataDetailDrawer
         title={t('app.master-data.storageAreas.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
+        detail={storageAreaDetail}
+        detailColumns={detailColumns}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={storageAreaDetail ? (
-            <div style={{ position: 'relative', paddingRight: 8 }}>
-              <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, storageAreaDetail)} />
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  right: 0,
-                  width: 152,
-                  padding: 12,
-                  background: '#fff',
-                  borderRadius: token.borderRadiusLG,
-                  border: '1px solid rgba(0, 0, 0, 0.06)',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  zIndex: 10,
-                }}
-              >
-                <QRCodeGenerator
-                  data={{
-                    area_uuid: storageAreaDetail.uuid,
-                    area_code: storageAreaDetail.code,
-                    area_name: storageAreaDetail.name,
-                  }}
-                  qrcodeType="TRACE"
-                  size={6}
-                  noCard={true}
-                />
-              </div>
-            </div>
-          ) : undefined}
-        linesTitle={t('app.master-data.customFields')}
-        lines={
-          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
-            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
-          ) : null
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        customFields={customFields}
+        customFieldValues={customFieldValues}
+        basicExtra={
+          storageAreaDetail ? (
+            <QRCodeGenerator
+              data={{
+                area_uuid: storageAreaDetail.uuid,
+                area_code: storageAreaDetail.code,
+                area_name: storageAreaDetail.name,
+              }}
+              qrcodeType="TRACE"
+              size={6}
+              noCard={true}
+            />
+          ) : undefined
         }
+        extra={buildDetailDrawerEditExtra(t, Boolean(storageAreaDetail), () => {
+          if (!storageAreaDetail) return;
+          handleEdit(storageAreaDetail);
+        })}
       />
 
       {/* 创建/编辑库区 Modal */}

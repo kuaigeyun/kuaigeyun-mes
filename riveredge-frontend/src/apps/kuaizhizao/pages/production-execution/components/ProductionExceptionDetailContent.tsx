@@ -1,23 +1,17 @@
 import React, { useMemo } from 'react';
-import { Button, Descriptions, Space, Tag } from 'antd';
+import { Descriptions } from 'antd';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import type { TFunction } from 'i18next';
-import type { NavigateFunction } from 'react-router-dom';
 import {
   detailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
-import { StatusTag } from '../../../../../constants/statusBadges';
-import { formatDateTime } from '../../../../../utils/format';
-import {
-  resolveQualityExceptionStatusTagColor,
-  resolveStandardProductionExceptionStatusTagColor,
-} from '../../../utils/productionExceptionList';
-import { buildInspectionDetailPath } from '../../quality-management/components/inspectionTemplateUtils';
+import { alignDescriptionColumns } from '../../sales-management/shared/documentFieldAlignment';
 
 const P = 'app.kuaizhizao.productionException';
 const Q = `${P}.quality`;
 
 export interface MaterialShortageExceptionDetailRecord {
+  work_order_id?: number;
   work_order_code?: string;
   material_code?: string;
   material_name?: string;
@@ -30,9 +24,11 @@ export interface MaterialShortageExceptionDetailRecord {
   alternative_material_name?: string;
   handled_by_name?: string;
   handled_at?: string;
+  [key: string]: unknown;
 }
 
 export interface DeliveryDelayExceptionDetailRecord {
+  work_order_id?: number;
   work_order_code?: string;
   planned_end_date?: string;
   actual_end_date?: string;
@@ -44,10 +40,12 @@ export interface DeliveryDelayExceptionDetailRecord {
   handled_by_name?: string;
   handled_at?: string;
   remarks?: string;
+  [key: string]: unknown;
 }
 
 export interface QualityExceptionDetailRecord {
   exception_type?: string;
+  work_order_id?: number;
   work_order_code?: string;
   material_code?: string;
   material_name?: string;
@@ -67,30 +65,7 @@ export interface QualityExceptionDetailRecord {
   handled_by_name?: string;
   handled_at?: string;
   remarks?: string;
-}
-
-type LabelFns = {
-  alertLevelLabel: (level?: string) => string;
-  statusLabel: (status?: string) => string;
-  suggestedActionLabel: (action?: string) => string;
-};
-
-type QualityLabelFns = LabelFns & {
-  exceptionTypeLabel: (type?: string) => string;
-  severityLabel: (severity?: string) => string;
-};
-
-function alertLevelTagColor(level?: string): string {
-  if (level === 'critical') return 'red';
-  if (level === 'high') return 'orange';
-  if (level === 'medium') return 'gold';
-  return 'default';
-}
-
-function severityTagColor(severity?: string): string {
-  if (severity === 'critical') return 'red';
-  if (severity === 'major') return 'orange';
-  return 'default';
+  [key: string]: unknown;
 }
 
 type DetailColumn<T extends Record<string, unknown>> = ProDescriptionsItemProps<T> & {
@@ -118,9 +93,9 @@ function filterVisibleColumns<T extends Record<string, unknown>>(
 function renderDescriptions<T extends Record<string, unknown>>(
   columns: DetailColumn<T>[],
   record: T,
-  column = 2,
+  column = 3,
 ) {
-  const visibleColumns = filterVisibleColumns(columns, record);
+  const visibleColumns = alignDescriptionColumns(filterVisibleColumns(columns, record));
   return (
     <Descriptions
       column={column}
@@ -133,52 +108,15 @@ function renderDescriptions<T extends Record<string, unknown>>(
 export function MaterialShortageExceptionDetailContent({
   record,
   t,
-  alertLevelLabel,
-  statusLabel,
-  suggestedActionLabel,
 }: {
   record: MaterialShortageExceptionDetailRecord;
   t: TFunction;
-} & LabelFns) {
+}) {
   const columns = useMemo<DetailColumn<MaterialShortageExceptionDetailRecord>[]>(
     () => [
       { title: t(`${P}.col.workOrderCode`), dataIndex: 'work_order_code', showInDescriptions: true },
       { title: t(`${P}.col.materialCode`), dataIndex: 'material_code', showInDescriptions: true },
       { title: t(`${P}.col.materialName`), dataIndex: 'material_name', showInDescriptions: true },
-      { title: t(`${P}.col.requiredQty`), dataIndex: 'required_quantity', showInDescriptions: true },
-      { title: t(`${P}.col.availableQty`), dataIndex: 'available_quantity', showInDescriptions: true },
-      {
-        title: t(`${P}.col.shortageQty`),
-        dataIndex: 'shortage_quantity',
-        showInDescriptions: true,
-        render: (_, row) => (
-          <span style={{ color: '#ff4d4f', fontWeight: 600 }}>{row.shortage_quantity ?? '-'}</span>
-        ),
-      },
-      {
-        title: t(`${P}.col.alertLevel`),
-        dataIndex: 'alert_level',
-        showInDescriptions: true,
-        render: (_, row) => (
-          <Tag color={alertLevelTagColor(row.alert_level)}>{alertLevelLabel(row.alert_level)}</Tag>
-        ),
-      },
-      {
-        title: t(`${P}.col.status`),
-        dataIndex: 'status',
-        showInDescriptions: true,
-        render: (_, row) => (
-          <StatusTag color={resolveStandardProductionExceptionStatusTagColor(row.status)}>
-            {statusLabel(row.status)}
-          </StatusTag>
-        ),
-      },
-      {
-        title: t(`${P}.col.suggestedAction`),
-        dataIndex: 'suggested_action',
-        showInDescriptions: true,
-        render: (_, row) => suggestedActionLabel(row.suggested_action),
-      },
       { title: t(`${P}.field.alternativeMaterial`), dataIndex: 'alternative_material_name' },
       { title: t(`${P}.field.handler`), dataIndex: 'handled_by_name' },
       {
@@ -187,7 +125,7 @@ export function MaterialShortageExceptionDetailContent({
         valueType: 'dateTime',
       },
     ],
-    [alertLevelLabel, statusLabel, suggestedActionLabel, t],
+    [t],
   );
 
   return renderDescriptions(columns, record);
@@ -196,64 +134,14 @@ export function MaterialShortageExceptionDetailContent({
 export function DeliveryDelayExceptionDetailContent({
   record,
   t,
-  alertLevelLabel,
-  statusLabel,
-  suggestedActionLabel,
 }: {
   record: DeliveryDelayExceptionDetailRecord;
   t: TFunction;
-} & LabelFns) {
+}) {
   const columns = useMemo<DetailColumn<DeliveryDelayExceptionDetailRecord>[]>(
     () => [
       { title: t(`${P}.col.workOrderCode`), dataIndex: 'work_order_code', showInDescriptions: true },
-      {
-        title: t(`${P}.col.plannedEndDate`),
-        dataIndex: 'planned_end_date',
-        showInDescriptions: true,
-        render: (_, row) =>
-          row.planned_end_date ? formatDateTime(row.planned_end_date, 'YYYY-MM-DD HH:mm') : '-',
-      },
-      {
-        title: t(`${P}.field.actualEndDate`),
-        dataIndex: 'actual_end_date',
-        render: (_, row) =>
-          row.actual_end_date ? formatDateTime(row.actual_end_date, 'YYYY-MM-DD HH:mm') : '-',
-      },
-      {
-        title: t(`${P}.col.delayDays`),
-        dataIndex: 'delay_days',
-        showInDescriptions: true,
-        render: (_, row) => (
-          <span style={{ color: '#ff4d4f', fontWeight: 600 }}>
-            {t(`${P}.label.daysUnit`, { count: row.delay_days ?? 0 })}
-          </span>
-        ),
-      },
       { title: t(`${P}.col.delayReason`), dataIndex: 'delay_reason', showInDescriptions: true },
-      {
-        title: t(`${P}.col.alertLevel`),
-        dataIndex: 'alert_level',
-        showInDescriptions: true,
-        render: (_, row) => (
-          <Tag color={alertLevelTagColor(row.alert_level)}>{alertLevelLabel(row.alert_level)}</Tag>
-        ),
-      },
-      {
-        title: t(`${P}.col.status`),
-        dataIndex: 'status',
-        showInDescriptions: true,
-        render: (_, row) => (
-          <StatusTag color={resolveStandardProductionExceptionStatusTagColor(row.status)}>
-            {statusLabel(row.status)}
-          </StatusTag>
-        ),
-      },
-      {
-        title: t(`${P}.col.suggestedAction`),
-        dataIndex: 'suggested_action',
-        showInDescriptions: true,
-        render: (_, row) => suggestedActionLabel(row.suggested_action),
-      },
       { title: t(`${P}.field.handler`), dataIndex: 'handled_by_name' },
       {
         title: t(`${P}.field.handledAt`),
@@ -262,7 +150,7 @@ export function DeliveryDelayExceptionDetailContent({
       },
       { title: t(`${P}.field.remarks`), dataIndex: 'remarks', span: 2 },
     ],
-    [alertLevelLabel, statusLabel, suggestedActionLabel, t],
+    [t],
   );
 
   return renderDescriptions(columns, record);
@@ -271,25 +159,12 @@ export function DeliveryDelayExceptionDetailContent({
 export function QualityExceptionDetailBasicContent({
   record,
   t,
-  exceptionTypeLabel,
-  severityLabel,
-  statusLabel,
-  navigate,
-  onCloseDrawer,
 }: {
   record: QualityExceptionDetailRecord;
   t: TFunction;
-  navigate: NavigateFunction;
-  onCloseDrawer: () => void;
-} & Pick<QualityLabelFns, 'exceptionTypeLabel' | 'severityLabel' | 'statusLabel'>) {
+}) {
   const basicColumns = useMemo<DetailColumn<QualityExceptionDetailRecord>[]>(
     () => [
-      {
-        title: t(`${P}.col.exceptionType`),
-        dataIndex: 'exception_type',
-        showInDescriptions: true,
-        render: (_, row) => exceptionTypeLabel(row.exception_type),
-      },
       { title: t(`${P}.col.workOrderCode`), dataIndex: 'work_order_code', showInDescriptions: true },
       { title: t(`${P}.col.materialCode`), dataIndex: 'material_code', showInDescriptions: true },
       { title: t(`${P}.col.materialName`), dataIndex: 'material_name', showInDescriptions: true },
@@ -300,73 +175,11 @@ export function QualityExceptionDetailBasicContent({
         showInDescriptions: true,
         span: 2,
       },
-      {
-        title: t(`${Q}.col.severity`),
-        dataIndex: 'severity',
-        showInDescriptions: true,
-        render: (_, row) => (
-          <Tag color={severityTagColor(row.severity)}>{severityLabel(row.severity)}</Tag>
-        ),
-      },
-      {
-        title: t(`${P}.col.status`),
-        dataIndex: 'status',
-        showInDescriptions: true,
-        render: (_, row) => (
-          <StatusTag color={resolveQualityExceptionStatusTagColor(row.status)}>
-            {statusLabel(row.status)}
-          </StatusTag>
-        ),
-      },
     ],
-    [exceptionTypeLabel, severityLabel, statusLabel, t],
+    [t],
   );
 
-  return (
-    <>
-      {renderDescriptions(basicColumns, record)}
-      {record.inspection_record_id ? (
-        <Space wrap style={{ marginTop: 16 }}>
-          <Button
-            type="link"
-            size="small"
-            style={{ paddingInline: 0 }}
-            onClick={() => {
-              const path = buildInspectionDetailPath(
-                record.inspection_source_type,
-                record.inspection_record_id,
-              );
-              if (path) {
-                onCloseDrawer();
-                navigate(path);
-              }
-            }}
-          >
-            {t(`${Q}.action.viewSourceInspection`)}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            style={{ paddingInline: 0 }}
-            onClick={() => {
-              onCloseDrawer();
-              const q = new URLSearchParams();
-              if (record.inspection_source_type === 'incoming_inspection') {
-                q.set('incoming_inspection_id', String(record.inspection_record_id));
-              } else if (record.inspection_source_type === 'process_inspection') {
-                q.set('process_inspection_id', String(record.inspection_record_id));
-              } else if (record.inspection_source_type === 'finished_goods_inspection') {
-                q.set('finished_goods_inspection_id', String(record.inspection_record_id));
-              }
-              navigate(`/apps/kuaizhizao/quality-management/nonconforming-ledger?${q.toString()}`);
-            }}
-          >
-            {t(`${Q}.action.viewNonconformingLedger`)}
-          </Button>
-        </Space>
-      ) : null}
-    </>
-  );
+  return renderDescriptions(basicColumns, record);
 }
 
 export function QualityExceptionDetailHandlingContent({
@@ -382,8 +195,16 @@ export function QualityExceptionDetailHandlingContent({
       { title: t(`${Q}.field.correctiveAction`), dataIndex: 'corrective_action', span: 2 },
       { title: t(`${Q}.field.preventiveAction`), dataIndex: 'preventive_action', span: 2 },
       { title: t(`${P}.col.responsiblePerson`), dataIndex: 'responsible_person_name' },
-      { title: t(`${Q}.field.plannedCompletionDate`), dataIndex: 'planned_completion_date' },
-      { title: t(`${Q}.field.actualCompletionDate`), dataIndex: 'actual_completion_date' },
+      {
+        title: t(`${Q}.field.plannedCompletionDate`),
+        dataIndex: 'planned_completion_date',
+        valueType: 'dateTime',
+      },
+      {
+        title: t(`${Q}.field.actualCompletionDate`),
+        dataIndex: 'actual_completion_date',
+        valueType: 'dateTime',
+      },
       { title: t(`${Q}.field.verificationResult`), dataIndex: 'verification_result', span: 2 },
       { title: t(`${P}.field.handler`), dataIndex: 'handled_by_name' },
       {

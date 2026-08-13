@@ -1715,7 +1715,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           height: 32px !important;
           line-height: 24px !important;
         }
-        /* AI 助手 Lottie 按钮：仅图标 48x48，无背景、无动效 */
+        /* AI 助手 Lottie：浅色顶栏无底；深色顶栏用实心浅色圆托住小人，避免紫黑件融进海军蓝 */
         .ai-assistant-lottie-btn-wrapper {
           display: inline-flex;
           align-items: center;
@@ -1724,16 +1724,48 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         .ant-pro-layout .ant-pro-layout-header .ai-assistant-lottie-btn,
         .ant-pro-layout .ant-layout-header .ai-assistant-lottie-btn {
           display: block !important;
+          position: relative !important;
+          isolation: isolate;
           padding: 0 !important;
           margin: 0 !important;
           background: none !important;
           border: none !important;
           cursor: pointer !important;
           line-height: 0 !important;
+          opacity: 1 !important;
+          filter: none !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ai-assistant-lottie-btn svg,
+        .ant-pro-layout .ant-layout-header .ai-assistant-lottie-btn svg {
+          opacity: 1 !important;
+          filter: none !important;
         }
         .ant-pro-layout .ant-pro-layout-header .ai-assistant-lottie-btn:hover,
         .ant-pro-layout .ant-layout-header .ai-assistant-lottie-btn:hover {
           background: none !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ai-assistant-lottie-btn--dark-header::before,
+        .ant-pro-layout .ant-layout-header .ai-assistant-lottie-btn--dark-header::before {
+          content: '';
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 32px;
+          height: 32px;
+          transform: translate(-50%, -50%);
+          border-radius: 50%;
+          background: #f2f4f7;
+          z-index: 0;
+          pointer-events: none;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ai-assistant-lottie-btn--dark-header:hover::before,
+        .ant-pro-layout .ant-layout-header .ai-assistant-lottie-btn--dark-header:hover::before {
+          background: #ffffff;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ai-assistant-lottie-btn--dark-header > *,
+        .ant-pro-layout .ant-layout-header .ai-assistant-lottie-btn--dark-header > * {
+          position: relative;
+          z-index: 1;
         }
         /* 上线向导：图标与文案间距 4px，!important 避免被 Space/主题覆盖 */
         .ant-pro-layout .ant-pro-layout-header .riveredge-header-onboarding-space.ant-space,

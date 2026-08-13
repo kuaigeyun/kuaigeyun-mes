@@ -19,7 +19,7 @@ import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import CodeField from '../../../../../components/code-field';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, detailDrawerBasicColumn, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { getMaterialReturnLifecycle } from '../../../utils/materialReturnLifecycle';
@@ -29,7 +29,7 @@ import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import {formatDateTime, formatQuantity} from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
@@ -513,8 +513,8 @@ const MaterialReturnsPage: React.FC = () => {
     [t, materialReturnStatusValueEnum],
   );
 
-  const detailColumns: ProDescriptionsItemProps<MaterialReturnDetail>[] = useMemo(
-    () => [
+  const detailColumns = useMemo(
+    () => alignDescriptionColumns([
       { title: t('app.kuaizhizao.warehouseMaterialReturn.col.returnCode'), dataIndex: 'return_code' },
       { title: t('app.kuaizhizao.warehouseMaterialReturn.col.borrowCode'), dataIndex: 'borrow_code' },
       { title: t('app.kuaizhizao.warehouseMaterialReturn.col.warehouse'), dataIndex: 'warehouse_name' },
@@ -533,8 +533,8 @@ const MaterialReturnsPage: React.FC = () => {
         },
       },
       { title: t('app.kuaizhizao.warehouseMaterialReturn.col.returnTime'), dataIndex: 'return_time', valueType: 'dateTime' },
-      { title: t('app.kuaizhizao.warehouseMaterialReturn.field.notes'), dataIndex: 'notes', span: 2 },
-    ],
+      { title: t('app.kuaizhizao.warehouseMaterialReturn.field.notes'), dataIndex: 'notes', span: 3 },
+    ]),
     [t],
   );
 
@@ -668,7 +668,7 @@ const MaterialReturnsPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           returnDetail ? (
-            <Descriptions column={2} size="small" items={detailDrawerDescriptionItems(detailColumns, returnDetail)} />
+            <Descriptions column={detailDrawerBasicColumn(false)} size="small" items={detailDrawerDescriptionItems(detailColumns, returnDetail)} />
           ) : undefined
         }
         collaboration={detailCollaboration}

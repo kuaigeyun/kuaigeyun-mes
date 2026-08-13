@@ -10,6 +10,9 @@ export function defaultCustomPayloadForResource(
   if (/molds-documents-trial|molds-reports-trial-record/.test(resource)) {
     return { resolver: 'partner', dimension: 'supplier', code_field: 'supplier_code' };
   }
+  if (/equipment-documents-acceptance|injection-documents-acceptance/.test(resource)) {
+    return { resolver: 'partner', dimension: 'manufacturer', code_field: 'manufacturer_code' };
+  }
   return undefined;
 }
 

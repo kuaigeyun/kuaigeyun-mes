@@ -9,15 +9,14 @@
  * @date 2025-01-14
  */
 
-import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useCallback, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation, type TFunction } from 'react-i18next';
-import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Row, Col, Table, Input, InputNumber, Alert, Spin, Form as AntForm, DatePicker, Typography, Tooltip, Dropdown, Empty, Tabs, theme as AntdTheme, Switch } from 'antd';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { useTranslation } from 'react-i18next';
+import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormInstance } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Row, Col, Table, Input, InputNumber, Alert, Spin, Form as AntForm, DatePicker, Typography, Tooltip, Dropdown, Empty, theme as AntdTheme, Switch } from 'antd';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, type StatCard } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import {
   listDemands,
@@ -25,26 +24,17 @@ import {
   createDemand,
   updateDemand,
   deleteDemand,
-  submitDemand,
-  approveDemand,
-  rejectDemand,
   pushDemandToComputation,
   previewPushDemandToComputation,
   withdrawDemandFromComputation,
   type DemandPushPreviewResponse,
-  listDemandRecalcHistory,
-  listDemandSnapshots,
   getDemandStatistics,
   Demand,
-  DemandItem,
   DemandStatus,
   ReviewStatus,
-  DemandRecalcHistoryItem,
-  DemandSnapshotItem,
 } from '../../../services/demand';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { demandPushCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
-import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
@@ -57,7 +47,6 @@ import {
   DeleteOutlined,
   PlusOutlined,
   AppstoreAddOutlined,
-  CopyOutlined,
   QuestionCircleOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -86,16 +75,11 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { getDemandBusinessModeTagColor, buildDemandBusinessModeValueEnum } from '../../../utils/businessMode';
 import { getDemandTypeTagProps, normalizeDemandTypeKey } from '../../../utils/demandType';
-import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import dayjs from 'dayjs';
 import {formatDateTime as formatDateTimeValue, formatQuantity} from '../../../../../utils/format';
-import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import {
-  getMaterialUnitDisplayMapShared,
-  resolveMaterialUnitLabel,
-} from '../../../../../utils/materialUnitDisplay';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
+import { DemandDetailDrawer, DEMAND_WORKFLOW_PROPS } from './components/DemandDetailDrawer';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
@@ -104,41 +88,7 @@ import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 
-const DEMAND_ORIGIN_SUB_KEYS = new Set(['from_forecast', 'from_order', 'manual_plan']);
 const DEMAND_RESOURCE = 'kuaizhizao:demand';
-
-/** 根据字典 code 和 value 获取标签，无匹配时返回原值（支持大小写不敏感匹配） */
-function getDictLabel(map: Record<string, Record<string, string>>, code: string, value: string | undefined): string {
-  if (!value) return '-';
-  const dict = map[code];
-  if (!dict) return value;
-  const label = dict[value] ?? Object.entries(dict).find(([k]) => k.toUpperCase() === value.toUpperCase())?.[1];
-  return label ?? value;
-}
-
-/** 格式化时间为 YYYY-MM-DD HH:mm:ss */
-function formatDateTime(t: string | undefined): string {
-  if (!t) return '-';
-  const d = dayjs(t);
-  return d.isValid() ? formatDateTimeValue(d, 'YYYY-MM-DD HH:mm:ss') : t;
-}
-
-/** 详情「生命周期」区块标题：主标题 + 来源文案（无圆环、无单独来源子轨） */
-function buildDemandLifecycleSectionTitle(record: Demand, t: TFunction) {
-  const lifecycle = getDemandLifecycle(record as Record<string, unknown>, t);
-  const originLabel = (lifecycle.subStages ?? []).find((s: any) => DEMAND_ORIGIN_SUB_KEYS.has(s.key))?.label;
-  if (!originLabel) {
-    return t('app.kuaizhizao.salesOrder.lifecycle');
-  }
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'baseline', flexWrap: 'wrap', columnGap: 8, rowGap: 0 }}>
-      <span>{t('app.kuaizhizao.salesOrder.lifecycle')}</span>
-      <Typography.Text type="secondary" style={{ fontWeight: 400 }}>
-        {originLabel}
-      </Typography.Text>
-    </span>
-  );
-}
 
 /** 统一状态判断（兼容枚举与中文） */
 function isDemandDraft(d: Demand): boolean {
@@ -255,19 +205,7 @@ const DemandManagementPage: React.FC = () => {
 
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentDemand, setCurrentDemand] = useState<Demand | null>(null);
-  const [recalcHistory, setRecalcHistory] = useState<DemandRecalcHistoryItem[]>([]);
-  const [snapshots, setSnapshots] = useState<DemandSnapshotItem[]>([]);
-  const [recalcHistoryLoading, setRecalcHistoryLoading] = useState(false);
-  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const [demandTrackingRefreshKey, setDemandTrackingRefreshKey] = useState(0);
-  const [dictLabelMap, setDictLabelMap] = useState<Record<string, Record<string, string>>>({});
-  const [unitLabelMap, setUnitLabelMap] = useState<Record<string, string>>({});
-
-  const demandTracking = useDocumentTracking(
-    drawerVisible && currentDemand?.id != null ? 'demand' : undefined,
-    drawerVisible ? currentDemand?.id ?? undefined : undefined,
-    demandTrackingRefreshKey
-  );
 
   // 需求计划页仅管理手工需求计划（demand_plan）
   const demandType = 'demand_plan' as const;
@@ -291,53 +229,6 @@ const DemandManagementPage: React.FC = () => {
     if (selectedRowKeys.length !== 1) return null;
     return selectedDemandsForBatch[0] ?? null;
   }, [selectedDemandsForBatch, selectedRowKeys.length]);
-
-  useEffect(() => {
-    const loadDicts = async () => {
-      const result: Record<string, Record<string, string>> = {};
-      const codes = ['SHIPPING_METHOD', 'PAYMENT_TERMS'];
-      for (const code of codes) {
-        try {
-          const dict = await getDataDictionaryByCode(code);
-          const items = await getDictionaryItemList(dict.uuid, true);
-          const map: Record<string, string> = {};
-          items.forEach((it) => {
-            map[it.value] = it.label;
-          });
-          result[code] = map;
-        } catch {
-          result[code] = {};
-        }
-      }
-      setDictLabelMap(result);
-    };
-    loadDicts();
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    getMaterialUnitDisplayMapShared()
-      .then((map) => {
-        if (!cancelled) setUnitLabelMap(map);
-      })
-      .catch(() => {
-        if (!cancelled) setUnitLabelMap({});
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const handleCopy = useCallback(
-    (text: string) => {
-      if (!text?.trim()) return;
-      void navigator.clipboard.writeText(text).then(
-        () => messageApi.success(t('common.copySuccess')),
-        () => messageApi.error(t('common.copyFailed'))
-      );
-    },
-    [messageApi, t]
-  );
 
   const handleCreatePlanSubmit = async (values: any) => {
     setCreatePlanLoading(true);
@@ -414,34 +305,6 @@ const DemandManagementPage: React.FC = () => {
       throw error;
     }
   };
-
-  useEffect(() => {
-    if (!drawerVisible || !currentDemand?.id) return;
-
-    const loadExtraData = async () => {
-      setRecalcHistoryLoading(true);
-      try {
-        const history = await listDemandRecalcHistory(currentDemand.id!, { limit: 50 });
-        setRecalcHistory(history);
-      } catch {
-        messageApi.error(t('app.kuaizhizao.demandManagement.recalcHistoryFailed'));
-      } finally {
-        setRecalcHistoryLoading(false);
-      }
-
-      setSnapshotsLoading(true);
-      try {
-        const list = await listDemandSnapshots(currentDemand.id!, { limit: 20 });
-        setSnapshots(list);
-      } catch {
-        messageApi.error(t('app.kuaizhizao.demandManagement.snapshotsFailed'));
-      } finally {
-        setSnapshotsLoading(false);
-      }
-    };
-
-    loadExtraData();
-  }, [drawerVisible, currentDemand?.id, messageApi]);
 
   const handleDetail = async (keys: React.Key[]) => {
     if (keys.length === 1) {
@@ -923,13 +786,7 @@ const DemandManagementPage: React.FC = () => {
             key="workflow-actions"
             record={record}
             entityName={t('app.kuaizhizao.demandManagement.entityName')}
-            auditNodeKey="demand"
-            statusField="status"
-            reviewStatusField="review_status"
-            draftStatuses={[DemandStatus.DRAFT, '草稿']}
-            pendingStatuses={[DemandStatus.PENDING_REVIEW, '待审核', '已提交']}
-            approvedStatuses={[DemandStatus.AUDITED, '已审核', ReviewStatus.APPROVED, '审核通过', '通过', '已通过']}
-            rejectedStatuses={[DemandStatus.REJECTED, '已驳回', ReviewStatus.REJECTED, '审核驳回', '驳回']}
+            {...DEMAND_WORKFLOW_PROPS}
             theme="link"
             size="small"
             onSuccess={() => {
@@ -1079,109 +936,6 @@ const DemandManagementPage: React.FC = () => {
         ),
       },
     ];
-
-  const detailItemColumns = useMemo(
-    () => (demandType: Demand['demand_type']) => [
-      { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
-      { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
-      { title: t('app.kuaizhizao.salesOrder.materialSpec'), dataIndex: 'material_spec', width: 120 },
-      {
-        title: t('app.kuaizhizao.salesForecast.variantAttributes'),
-        dataIndex: 'variant_attributes',
-        width: 140,
-        ellipsis: true,
-        render: (v: Record<string, unknown> | string | undefined) => {
-          if (v == null) return '-';
-          if (typeof v === 'string') return v || '-';
-          return Object.keys(v).length > 0 ? JSON.stringify(v) : '-';
-        },
-      },
-      {
-        title: t('app.kuaizhizao.salesOrder.unit'),
-        dataIndex: 'material_unit',
-        width: 80,
-        render: (v: string) => resolveMaterialUnitLabel(v, unitLabelMap) || v || '-',
-      },
-      { title: t('app.kuaizhizao.planReports.colRequirementQty'), dataIndex: 'required_quantity', width: 100, align: 'right' as const , render: formatQuantity },
-      ...(demandType === 'sales_forecast'
-        ? [
-            { title: t('app.kuaizhizao.salesForecast.forecastDate'), dataIndex: 'forecast_date', width: 120 },
-            { title: t('app.kuaizhizao.demandManagement.forecastMonth'), dataIndex: 'forecast_month', width: 100 },
-          ]
-        : [
-            { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', width: 120 },
-            { title: t('app.kuaizhizao.salesOrder.deliveredQty'), dataIndex: 'delivered_quantity', width: 100, align: 'right' as const },
-            { title: t('app.kuaizhizao.salesOrder.remainingQty'), dataIndex: 'remaining_quantity', width: 100, align: 'right' as const },
-          ]),
-    ],
-    [unitLabelMap, t]
-  );
-
-  const recalcHistoryColumns = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.demandManagement.colRecalcAt'), dataIndex: 'recalc_at', width: 180, render: (val: string) => formatDateTime(val) },
-      {
-        title: t('app.kuaizhizao.demandManagement.colTriggerType'),
-        dataIndex: 'trigger_type',
-        width: 100,
-        render: (v: string) =>
-          v === 'upstream_change'
-            ? t('app.kuaizhizao.demandManagement.triggerUpstreamChange')
-            : v === 'manual'
-              ? t('app.kuaizhizao.demandManagement.triggerManual')
-              : v || '-',
-      },
-      {
-        title: t('app.kuaizhizao.demandManagement.colSourceType'),
-        dataIndex: 'source_type',
-        width: 100,
-        render: (v: string) =>
-          v === 'sales_order'
-            ? t('app.kuaizhizao.salesOrder.entityName')
-            : v === 'sales_forecast'
-              ? t('app.kuaizhizao.salesForecast.title')
-              : v || '-',
-      },
-      { title: t('app.kuaizhizao.demandManagement.colChangeReason'), dataIndex: 'trigger_reason', ellipsis: true, render: (v: string) => v || '-' },
-      {
-        title: t('app.kuaizhizao.demandManagement.colResult'),
-        dataIndex: 'result',
-        width: 90,
-        render: (v: string) =>
-          v === 'success'
-            ? t('app.kuaizhizao.demandManagement.resultSuccess')
-            : v === 'failed'
-              ? t('app.kuaizhizao.demandManagement.resultFailed')
-              : v || '-',
-      },
-      { title: t('app.kuaizhizao.demandManagement.colDescription'), dataIndex: 'message', ellipsis: true, render: (v: string) => v || '-' },
-    ],
-    [t]
-  );
-
-  const snapshotColumns = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.demandManagement.colSnapshotAt'), dataIndex: 'snapshot_at', width: 180, render: (val: string) => formatDateTime(val) },
-      {
-        title: t('app.kuaizhizao.demandManagement.colSnapshotType'),
-        dataIndex: 'snapshot_type',
-        width: 100,
-        render: (v: string) => (v === 'before_recalc' ? t('app.kuaizhizao.demandManagement.snapshotBeforeRecalc') : v || '-'),
-      },
-      {
-        title: t('app.kuaizhizao.demandManagement.colChangeReason'),
-        dataIndex: 'trigger_reason',
-        ellipsis: true,
-        render: (v: string) => {
-          if (!v) return '-';
-          if (v.includes('sales_order')) return t('app.kuaizhizao.demandManagement.changeSalesOrder');
-          if (v.includes('sales_forecast')) return t('app.kuaizhizao.demandManagement.changeSalesForecast');
-          return v;
-        },
-      },
-    ],
-    [t]
-  );
 
   return (
     <>
@@ -1564,64 +1318,36 @@ const DemandManagementPage: React.FC = () => {
         </ProForm>
       </Modal>
 
-      <DetailDrawerTemplate
-        title={
-          currentDemand?.demand_code ? (
-            <Space align="center" size={8}>
-              <span>{t('app.kuaizhizao.demandManagement.detailTitleWithCode', { code: currentDemand.demand_code })}</span>
-              <Tooltip title={t('field.invitationCode.copy')}>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<CopyOutlined />}
-                  onClick={() => handleCopy(currentDemand.demand_code!)}
-                />
-              </Tooltip>
-            </Space>
-          ) : (
-            t('app.kuaizhizao.demandManagement.detailTitle')
-          )
-        }
+      <DemandDetailDrawer
         open={drawerVisible}
         zIndex={demandDetailDrawerZIndex}
         onClose={() => {
           setDrawerVisible(false);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        demand={currentDemand}
+        trackingRefreshKey={demandTrackingRefreshKey}
         extra={
           currentDemand && (
-            <Space>
-              <UniWorkflowActions {...rowActionKind('skip')}
-                record={currentDemand}
-                entityName={t('app.kuaizhizao.demandManagement.entityName')}
-                auditNodeKey="demand"
-                statusField="status"
-                reviewStatusField="review_status"
-                draftStatuses={[DemandStatus.DRAFT, '草稿']}
-                pendingStatuses={[DemandStatus.PENDING_REVIEW, '待审核', '已提交']}
-                approvedStatuses={[DemandStatus.AUDITED, '已审核', ReviewStatus.APPROVED, '审核通过', '通过', '已通过']}
-                rejectedStatuses={[DemandStatus.REJECTED, '已驳回', ReviewStatus.REJECTED, '审核驳回', '驳回']}
-                theme="default"
-                size="middle"
-                onSuccess={async () => {
-                  invalidateStatistics();
-                  actionRef.current?.reload();
-                  setDemandTrackingRefreshKey((k) => k + 1);
-                  if (currentDemand?.id) {
-                    const updated = await getDemand(currentDemand.id, true, false);
-                    setCurrentDemand(updated);
-                  }
-                }}
-              />
-              <Button
-                icon={<EditOutlined />}
-                onClick={() => {
-                  setDrawerVisible(false);
-                  handleEdit([currentDemand.id!]);
-                }}
-              >
-                {t('common.edit')}
-              </Button>
+            <Space size="small">
+              {demandCanWithdrawComputation(currentDemand) ? (
+                <Button
+                  icon={<RollbackOutlined />}
+                  onClick={() => void handleWithdrawFromComputation(currentDemand.id!)}
+                >
+                  {t('app.kuaizhizao.demandManagement.withdrawPush')}
+                </Button>
+              ) : null}
+              {(isDemandDraft(currentDemand) || isDemandPendingReview(currentDemand)) ? (
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={() => {
+                    setDrawerVisible(false);
+                    handleEdit([currentDemand.id!]);
+                  }}
+                >
+                  {t('common.edit')}
+                </Button>
+              ) : null}
               {currentDemand.demand_type === 'demand_plan' &&
                 (isDemandDraft(currentDemand) || isDemandPendingReview(currentDemand)) && (
                   <Button
@@ -1635,262 +1361,44 @@ const DemandManagementPage: React.FC = () => {
                     {t('common.delete')}
                   </Button>
                 )}
+              <UniWorkflowActions
+                {...rowActionKind('skip')}
+                record={currentDemand}
+                entityName={t('app.kuaizhizao.demandManagement.entityName')}
+                {...DEMAND_WORKFLOW_PROPS}
+                theme="default"
+                onSuccess={async () => {
+                  invalidateStatistics();
+                  actionRef.current?.reload();
+                  setDemandTrackingRefreshKey((k) => k + 1);
+                  if (currentDemand?.id) {
+                    const updated = await getDemand(currentDemand.id, true, false);
+                    setCurrentDemand(updated);
+                  }
+                }}
+              />
             </Space>
           )
         }
-        traceDocument={
-          currentDemand?.id != null
-            ? {
-                documentType: 'demand',
-                documentId: currentDemand.id,
-                selfDocumentId: currentDemand.id,
-                renderBriefActions: (doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDrawerVisible(false);
-                    }}
-                  />
-                ),
-              }
-            : undefined
-        }
-      >
-        {currentDemand && (
-          <div style={{ padding: '0 0 16px 0' }}>
-            {currentDemand.pushed_to_computation && currentDemand.computation_id && (
-              <Alert
-                type="info"
-                showIcon
-                message={t('app.kuaizhizao.demandManagement.alertChangedMessage')}
-                description={
-                  <span>
-                    {t('app.kuaizhizao.demandManagement.alertPushedDescription')}
-                    {currentDemand.computation_code && `（${currentDemand.computation_code}）`}
-                    {t('app.kuaizhizao.demandManagement.alertPushedMiddle')}
-                    <Button
-                      type="link"
-                      size="small"
-                      style={{ padding: 0 }}
-                      onClick={() => {
-                        setDrawerVisible(false);
-                        navigate(`/apps/kuaizhizao/plan-management/demand-computation?highlight=${currentDemand.computation_id}`);
-                      }}
-                    >
-                      {t('app.kuaizhizao.demandManagement.goToComputation')}
-                    </Button>
-                    {t('app.kuaizhizao.demandManagement.recomputeSuffix')}
-                  </span>
-                }
-                style={{ marginBottom: 16 }}
-              />
-            )}
-
-            <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
-              <ProDescriptions column={3} dataSource={currentDemand}>
-                <ProDescriptions.Item label={t('app.kuaizhizao.demandManagement.demandCode')} dataIndex="demand_code">
-                  <Space size={4}>
-                    <span>{currentDemand.demand_code ?? '-'}</span>
-                    {currentDemand.demand_code ? (
-                      <Tooltip title={t('field.invitationCode.copy')}>
-                        <Button
-                          type="link"
-                          size="small"
-                          icon={<CopyOutlined style={{ fontSize: 12 }} />}
-                          onClick={() => handleCopy(currentDemand.demand_code!)}
-                        />
-                      </Tooltip>
-                    ) : null}
-                  </Space>
-                </ProDescriptions.Item>
-                <ProDescriptions.Item label={t('app.kuaizhizao.demandManagement.demandType')}>
-                  <Tag {...getDemandTypeTagProps(currentDemand.demand_type)}>{formatDemandTypeLabel(currentDemand.demand_type)}</Tag>
-                </ProDescriptions.Item>
-                <ProDescriptions.Item label={t('app.kuaizhizao.demandManagement.demandName')} dataIndex="demand_name" />
-                <ProDescriptions.Item label={t('app.kuaizhizao.demandManagement.businessMode')} dataIndex="business_mode">
-                  <Tag color={getDemandBusinessModeTagColor(currentDemand.business_mode)}>
-                    {formatBusinessModeLabel(currentDemand.business_mode)}
-                  </Tag>
-                </ProDescriptions.Item>
-                <ProDescriptions.Item label={t('app.kuaizhizao.salesForecast.startDate')} dataIndex="start_date" valueType="date" />
-                <ProDescriptions.Item label={t('app.kuaizhizao.salesForecast.endDate')} dataIndex="end_date" valueType="date" />
-                {currentDemand.demand_type === 'sales_forecast' && (
-                  <ProDescriptions.Item label={t('app.kuaizhizao.salesForecast.forecastPeriod')} dataIndex="forecast_period" />
-                )}
-                {currentDemand.demand_type === 'sales_order' && (
-                  <>
-                    <ProDescriptions.Item label={t('app.kuaizhizao.salesOrder.orderDate')} dataIndex="order_date" valueType="date" />
-                    <ProDescriptions.Item label={t('app.kuaizhizao.salesOrder.deliveryDate')} dataIndex="delivery_date" valueType="date" />
-                  </>
-                )}
-                <ProDescriptions.Item label={t('app.kuaizhizao.salesOrder.customerName')} dataIndex="customer_name" />
-                {currentDemand.demand_type === 'sales_order' && (
-                  <>
-                    <ProDescriptions.Item label={t('app.kuaizhizao.salesOrder.salesman')} dataIndex="salesman_name" />
-                    <ProDescriptions.Item label={t('app.kuaizhizao.salesOrder.shippingAddress')} dataIndex="shipping_address" span={3} />
-                    <ProDescriptions.Item label={t('app.kuaizhizao.salesOrder.shippingMethod')}>
-                      {getDictLabel(dictLabelMap, 'SHIPPING_METHOD', currentDemand.shipping_method)}
-                    </ProDescriptions.Item>
-                    <ProDescriptions.Item label={t('app.kuaizhizao.salesOrder.paymentTerms')}>
-                      {getDictLabel(dictLabelMap, 'PAYMENT_TERMS', currentDemand.payment_terms)}
-                    </ProDescriptions.Item>
-                  </>
-                )}
-                <ProDescriptions.Item label={t('app.kuaizhizao.salesOrder.totalQuantity')} dataIndex="total_quantity" />
-                <ProDescriptions.Item label={t('common.status')}>
-                  {(() => {
-                    const lifecycle = getDemandLifecycle(currentDemand as Record<string, unknown>, t);
-                    return (
-                      <Tag {...getDocumentLifecycleStageTagProps(lifecycle.stageName)}>
-                        {lifecycle.stageName}
-                      </Tag>
-                    );
-                  })()}
-                </ProDescriptions.Item>
-                <ProDescriptions.Item label={t('app.kuaizhizao.salesOrder.notes')} dataIndex="notes" span={3} />
-              </ProDescriptions>
-            </DetailDrawerSection>
-
-            <DetailDrawerSection title={buildDemandLifecycleSectionTitle(currentDemand, t)}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {(() => {
-                  const lifecycle = getDemandLifecycle(currentDemand as Record<string, unknown>, t);
-                  const mainStages = lifecycle.mainStages ?? [];
-                  const hasStepper = mainStages.length > 0;
-                  return (
-                    <>
-                      {mainStages.length > 0 && (
-                        <UniLifecycleStepper
-                          steps={mainStages}
-                          status={lifecycle.status}
-                          showLabels
-                          nextStepSuggestions={lifecycle.nextStepSuggestions}
-                          hideNextStepSuggestions
-                        />
-                      )}
-                      {!hasStepper && (
-                        <Typography.Text type="secondary">{t('app.kuaizhizao.demandManagement.lifecycleEmpty')}</Typography.Text>
-                      )}
-                    </>
-                  );
-                })()}
-                
-              </div>
-            </DetailDrawerSection>
-
-            <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
-              <style>{`
-                .demand-detail-items .ant-table-wrapper .ant-table-body,
-                .demand-detail-items .ant-table-wrapper .ant-table-content {
-                  overflow: visible !important;
-                }
-                .demand-detail-items .ant-table-thead > tr > th {
-                  white-space: nowrap !important;
-                }
-              `}</style>
-              {currentDemand.items && currentDemand.items.length > 0 ? (
-                <div
-                  className="demand-detail-items"
-                  style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
-                >
-                  <Table<DemandItem>
-                    size="small"
-                    tableLayout="fixed"
-                    style={{ minWidth: 1100 }}
-                    columns={detailItemColumns(currentDemand.demand_type)}
-                    dataSource={currentDemand.items}
-                    pagination={false}
-                    bordered
-                    rowKey="id"
-                  />
-                </div>
-              ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.salesOrder.emptyItems')} />
-              )}
-            </DetailDrawerSection>
-
-            <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
-              <Tabs
-                tabPosition="left"
-                size="small"
-                style={{ minHeight: 120 }}
-                items={[
-                  {
-                    key: 'timeline',
-                    label: t('app.uniDetail.sectionTimeline'),
-                    children: (
-                      <div style={{ paddingLeft: 8, minHeight: 80 }}>
-                        {demandTracking.loading && <Spin size="small" />}
-                        {demandTracking.error && <Typography.Text type="danger">{demandTracking.error}</Typography.Text>}
-                        {demandTracking.data && <DocumentTrackingTimelineBody data={demandTracking.data} />}
-                      </div>
-                    ),
-                  },
-                  {
-                    key: 'recalc',
-                    label: t('app.kuaizhizao.demandManagement.recalcHistory'),
-                    children: (
-                      <div style={{ paddingLeft: 8, overflowX: 'auto' }}>
-                        <Table<DemandRecalcHistoryItem>
-                          size="small"
-                          loading={recalcHistoryLoading}
-                          dataSource={recalcHistory}
-                          rowKey="id"
-                          columns={recalcHistoryColumns}
-                          pagination={false}
-                        />
-                      </div>
-                    ),
-                  },
-                  {
-                    key: 'snapshots',
-                    label: t('app.kuaizhizao.demandManagement.changeSnapshots'),
-                    children: (
-                      <div style={{ paddingLeft: 8, overflowX: 'auto' }}>
-                        <Table<DemandSnapshotItem>
-                          size="small"
-                          loading={snapshotsLoading}
-                          dataSource={snapshots}
-                          rowKey="id"
-                          expandable={{
-                            expandedRowRender: (record) => (
-                              <div style={{ padding: 8 }}>
-                                {record.demand_snapshot && (
-                                  <div style={{ marginBottom: 12 }}>
-                                    <strong>{t('app.kuaizhizao.demandManagement.snapshotBeforeDemand')}</strong>
-                                    <pre style={{ margin: '4px 0 0', fontSize: 12, maxHeight: 200, overflow: 'auto' }}>
-                                      {JSON.stringify(record.demand_snapshot, null, 2)}
-                                    </pre>
-                                  </div>
-                                )}
-                                {record.demand_items_snapshot && record.demand_items_snapshot.length > 0 && (
-                                  <>
-                                    <strong>{t('app.kuaizhizao.demandManagement.snapshotBeforeItems')}</strong>
-                                    <pre style={{ margin: '4px 0 0', fontSize: 12, maxHeight: 200, overflow: 'auto' }}>
-                                      {JSON.stringify(record.demand_items_snapshot, null, 2)}
-                                    </pre>
-                                  </>
-                                )}
-                                {!record.demand_snapshot && (!record.demand_items_snapshot || record.demand_items_snapshot.length === 0) && (
-                                  <span style={{ color: '#999' }}>{t('app.kuaizhizao.demandManagement.noDetailData')}</span>
-                                )}
-                              </div>
-                            ),
-                          }}
-                          columns={snapshotColumns}
-                          pagination={false}
-                        />
-                      </div>
-                    ),
-                  },
-                ]}
-              />
-            </DetailDrawerSection>
-          </div>
+        renderBriefActions={(doc) => (
+          <WarehouseTraceBriefPrimaryActions
+            doc={doc}
+            t={t}
+            navigate={navigate}
+            closeDrawer={() => {
+              setDrawerVisible(false);
+            }}
+          />
         )}
-      </DetailDrawerTemplate>
+        onWorkflowSuccess={() => {
+          invalidateStatistics();
+          actionRef.current?.reload();
+          setDemandTrackingRefreshKey((k) => k + 1);
+          if (currentDemand?.id) {
+            void getDemand(currentDemand.id, true, false).then(setCurrentDemand);
+          }
+        }}
+      />
 
       <Modal
         title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}

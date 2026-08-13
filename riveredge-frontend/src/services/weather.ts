@@ -9,6 +9,8 @@
  */
 
 import i18n from '../config/i18n';
+import { resolveWeatherCityLabel } from '../constants/chinaAdminRegions';
+import { useConfigStore } from '../stores/configStore';
 
 /**
  * 天气数据接口
@@ -319,12 +321,36 @@ export function localizeWeatherData(
   };
 }
 
-const WEATHER_CACHE_KEY = 'RIVEREDGE_WEATHER_CACHE_V2';
+const WEATHER_CACHE_KEY = 'RIVEREDGE_WEATHER_CACHE_V3';
 const WEATHER_CACHE_DURATION = 60 * 60 * 1000; // 缓存1小时
 
 interface WeatherCachePayload {
   data: WeatherData;
   timestamp: number;
+  /** 定位来源指纹：变更站点用户位置后须失效 */
+  locationKey: string;
+}
+
+export type SiteWeatherLocationMode = 'ip' | 'manual';
+
+export function getSiteWeatherLocationMode(): SiteWeatherLocationMode {
+  const mode = useConfigStore.getState().getConfig<string>('user_location.mode', 'ip');
+  return mode === 'manual' ? 'manual' : 'ip';
+}
+
+export function getSiteWeatherManualCity(): string | null {
+  const labels = useConfigStore.getState().getConfig<string[]>('user_location.region_labels', []);
+  return resolveWeatherCityLabel(Array.isArray(labels) ? labels : null);
+}
+
+export function getSiteWeatherLocationKey(): string {
+  const mode = getSiteWeatherLocationMode();
+  if (mode === 'manual') {
+    const city = getSiteWeatherManualCity() || '';
+    const codes = useConfigStore.getState().getConfig<string[]>('user_location.region_codes', []);
+    return `manual:${Array.isArray(codes) ? codes.join('/') : ''}:${city}`;
+  }
+  return 'ip';
 }
 
 function readWeatherCache(): WeatherCachePayload | null {
@@ -335,6 +361,9 @@ function readWeatherCache(): WeatherCachePayload | null {
     const parsed = JSON.parse(cached) as WeatherCachePayload;
     if (!parsed?.data || typeof parsed.timestamp !== 'number') {
       window.localStorage.removeItem(WEATHER_CACHE_KEY);
+      return null;
+    }
+    if (parsed.locationKey !== getSiteWeatherLocationKey()) {
       return null;
     }
     return parsed;
@@ -362,16 +391,22 @@ export function isWeatherCacheExpired(maxAge = WEATHER_CACHE_DURATION): boolean 
 }
 
 /**
- * 根据IP自动获取天气
- * 先获取IP定位，再获取天气
- * 增加本地缓存逻辑，减少拉取频率
- * 
+ * 按站点「用户位置」获取天气：IP 定位或手工行政区。
+ * 增加本地缓存逻辑，减少拉取频率。
+ *
  * @param force 是否强制拉取最新数据（跳过缓存）
  */
 export async function getWeatherByIP(force = false, language?: string): Promise<WeatherData | null> {
+  return getSiteWeather(force, language);
+}
+
+/**
+ * 工作台天气入口：读取站点用户位置配置。
+ */
+export async function getSiteWeather(force = false, language?: string): Promise<WeatherData | null> {
   const lang = resolveWeatherLanguage(language);
+  const locationKey = getSiteWeatherLocationKey();
   try {
-    // 1. 尝试从缓存读取
     if (!force) {
       const cached = readWeatherCache();
       if (cached && Date.now() - cached.timestamp < WEATHER_CACHE_DURATION) {
@@ -379,43 +414,57 @@ export async function getWeatherByIP(force = false, language?: string): Promise<
       }
     }
 
-    // 2. 无缓存、已过期或强制刷新，则拉取新数据
-    const location = await getLocationByIP();
-    if (!location || (!location.city && (location.lat == null || location.lon == null))) {
-      return null;
-    }
-    const locationParam =
-      location.lat != null && location.lon != null
-        ? `${location.lat},${location.lon}`
-        : location.city;
+    let weather: WeatherData | null = null;
+    if (getSiteWeatherLocationMode() === 'manual') {
+      const city = getSiteWeatherManualCity();
+      if (!city) return null;
+      weather = await getWeather(city, lang);
+      if (weather) {
+        weather.city = city;
+        weather.description = getWeatherDescription(parseInt(weather.iconCode, 10) || 0, lang);
+      }
+    } else {
+      const location = await getLocationByIP();
+      if (!location || (!location.city && (location.lat == null || location.lon == null))) {
+        return null;
+      }
+      const locationParam =
+        location.lat != null && location.lon != null
+          ? `${location.lat},${location.lon}`
+          : location.city;
 
-    const weather = await getWeather(locationParam, lang);
-    if (weather) {
-      if (location.lat != null && location.lon != null) {
-        weather.lat = location.lat;
-        weather.lon = location.lon;
-        const localizedCity = await reverseGeocodeLabel(location.lat, location.lon, lang);
-        if (localizedCity) {
-          weather.city = localizedCity;
-        } else if (!weather.city || weather.city.includes(',')) {
+      weather = await getWeather(locationParam, lang);
+      if (weather) {
+        if (location.lat != null && location.lon != null) {
+          weather.lat = location.lat;
+          weather.lon = location.lon;
+          const localizedCity = await reverseGeocodeLabel(location.lat, location.lon, lang);
+          if (localizedCity) {
+            weather.city = localizedCity;
+          } else if (!weather.city || weather.city.includes(',')) {
+            weather.city = location.city || location.region || weather.city;
+          }
+        } else {
           weather.city = location.city || location.region || weather.city;
         }
-      } else {
-        weather.city = location.city || location.region || weather.city;
+        weather.description = getWeatherDescription(parseInt(weather.iconCode, 10) || 0, lang);
       }
-      weather.description = getWeatherDescription(parseInt(weather.iconCode, 10) || 0, lang);
+    }
 
-      // 3. 存入本地缓存
-      const cacheData = {
-        data: weather,
-        timestamp: Date.now(),
-      };
-      window.localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(cacheData));
+    if (weather && typeof window !== 'undefined') {
+      window.localStorage.setItem(
+        WEATHER_CACHE_KEY,
+        JSON.stringify({
+          data: weather,
+          timestamp: Date.now(),
+          locationKey,
+        } satisfies WeatherCachePayload)
+      );
     }
     return weather;
   } catch (error) {
     if (typeof window !== 'undefined') {
-      window.console.error('根据IP获取天气失败:', error);
+      window.console.error('获取站点天气失败:', error);
     }
     return null;
   }

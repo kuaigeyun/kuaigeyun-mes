@@ -29,6 +29,7 @@ export function createListAuditPhaseColumn<T extends AuditPhaseRecord>(
     width,
     fixed,
     align: 'center',
+    sorter: false,
     hideInSearch: true,
     render: (_: unknown, record: T) => <ListAuditPhaseCell record={record} />,
   };

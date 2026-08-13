@@ -8,13 +8,16 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Typography, theme } from 'antd';
+import { App, Button, List, Modal, Popconfirm, Space, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { MasterDataDetailDrawer } from '../../shared/masterDataDetailDrawer';
 import {
   workstationApi,
   productionLineApi,
@@ -39,10 +42,6 @@ import type { Workstation, WorkstationCreate, ProductionLine } from '../../../ty
 import { batchImport } from '../../../../../utils/batchOperations';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
-  CustomFieldsDetailSection,
-  hasCustomFieldsDetailContent,
-} from '../../../../../components/custom-fields';
-import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
@@ -60,13 +59,14 @@ import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 const WorkstationsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [, setCurrentWorkstationUuid] = useState<string | null>(null);
   const [workstationDetail, setWorkstationDetail] = useState<Workstation | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -532,19 +532,27 @@ const WorkstationsPage: React.FC = () => {
   /**
    * 处理打开详情
    */
-  const handleOpenDetail = async (record: Workstation) => {
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      setDrawerVisible(true);
-      setDetailLoading(true);
-      
-      const detail = await workstationApi.get(record.uuid);
+      const detail = await workstationApi.get(uuid);
       setWorkstationDetail(detail);
       await loadFieldValuesForDetail(detail.id);
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.workstations.getDetailFailed'));
+    } catch (error) {
+      setWorkstationDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.master-data.workstations.getDetailFailed')));
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const handleOpenDetail = (record: Workstation) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setWorkstationDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -553,6 +561,7 @@ const WorkstationsPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setWorkstationDetail(null);
+    setDetailError(null);
     resetDetailFieldValues();
   };
 
@@ -660,7 +669,6 @@ const WorkstationsPage: React.FC = () => {
       title: t('common.actions'),
       key: 'action',
       valueType: 'option',
-      width: 150,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -710,6 +718,7 @@ const WorkstationsPage: React.FC = () => {
     {
       title: t('app.master-data.workstations.productionLineName'),
       dataIndex: 'productionLineId',
+      key: 'productionLineName',
       render: (_, record) => formatProductionLineDisplay(record),
     },
     {
@@ -819,53 +828,38 @@ const WorkstationsPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      <MasterDataDetailDrawer
         title={t('app.master-data.workstations.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
+        detail={workstationDetail}
+        detailColumns={detailColumns}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        styles={{ body: { position: 'relative' } }}
-        basic={
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        customFields={customFields}
+        customFieldValues={customFieldValues}
+        basicExtra={
           workstationDetail ? (
-            <div style={{ position: 'relative', paddingRight: 8 }}>
-              <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, workstationDetail)} />
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  right: 0,
-                  width: 152,
-                  padding: 12,
-                  background: '#fff',
-                  borderRadius: token.borderRadiusLG,
-                  border: '1px solid rgba(0, 0, 0, 0.06)',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  zIndex: 10,
-                }}
-              >
-                <QRCodeGenerator
-                  data={{
-                    station_uuid: workstationDetail.uuid,
-                    station_code: workstationDetail.code,
-                    station_name: workstationDetail.name,
-                  }}
-                  qrcodeType="STATION"
-                  size={6}
-                  noCard={true}
-                />
-              </div>
-            </div>
-          ) : null
+            <QRCodeGenerator
+              data={{
+                station_uuid: workstationDetail.uuid,
+                station_code: workstationDetail.code,
+                station_name: workstationDetail.name,
+              }}
+              qrcodeType="STATION"
+              size={6}
+              noCard={true}
+            />
+          ) : undefined
         }
-        linesTitle={t('app.master-data.customFields')}
-        lines={
-          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
-            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
-          ) : null
-        }
+        extra={buildDetailDrawerEditExtra(t, Boolean(workstationDetail), () => {
+          if (!workstationDetail) return;
+          handleEdit(workstationDetail);
+        })}
       />
 
       {/* 创建/编辑工位 Modal */}

@@ -132,7 +132,6 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
       {
         title: t('common.actions'),
         valueType: 'option',
-        width: 140,
         fixed: 'right',
         render: (_, record) => (
           <Space>
@@ -184,7 +183,6 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
       {
         title: t('common.actions'),
         valueType: 'option',
-        width: 140,
         fixed: 'right',
         render: (_, record) => (
           <Space>
@@ -418,7 +416,10 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
           targetKeys={selectedItemIds.map(String)}
           onChange={(keys) => setSelectedItemIds(keys.map(Number))}
           render={(item) => item.title}
-          listStyle={{ width: 280, height: 280 }}
+          styles={{
+            root: { width: '100%' },
+            section: { flex: 1, width: 'auto', minWidth: 0, height: 280 },
+          }}
           showSearch
         />
         <ProFormTextArea name="description" label={t('app.kuaizhizao.salesContract.terms.colDescription')} />

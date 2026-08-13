@@ -7,9 +7,13 @@
 
 import React, { useState, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col, InputNumber, Card, ColorPicker, Modal, Table, Tag, Typography, theme } from 'antd';
+import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col, InputNumber, Card, ColorPicker, Modal, Table, Tag, Typography, theme, Radio, Cascader } from 'antd';
 import dayjs from 'dayjs';
 import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined, InfoCircleOutlined, SettingOutlined, CloudDownloadOutlined, ApartmentOutlined, GlobalOutlined, FolderOpenOutlined, BgColorsOutlined } from '@ant-design/icons';
+import {
+  CHINA_ADMIN_REGION_OPTIONS,
+  resolveChinaAdminRegionLabels,
+} from '../../../constants/chinaAdminRegions';
 import { ThemedSegmented } from '../../../components/themed-segmented';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 import type { UploadFile, UploadProps } from 'antd';
@@ -124,6 +128,9 @@ function getInitialValuesFromConfigStore(
     'ui.default_page_size': configs['ui.default_page_size'] ?? configs.ui?.default_page_size ?? 20,
     'ui.table_loading_delay': configs['ui.table_loading_delay'] ?? configs.ui?.table_loading_delay ?? 0,
     'theme_config.colorPrimary': configs['theme_config.colorPrimary'] ?? themeConfig.colorPrimary ?? normalizedThemeColor ?? '#1890ff',
+    'user_location.mode': configs['user_location.mode'] ?? configs.user_location?.mode ?? 'ip',
+    'user_location.region_codes':
+      configs['user_location.region_codes'] ?? configs.user_location?.region_codes ?? [],
     'network.timeout': configs['network.timeout'] ?? configs.network?.timeout ?? 10000,
     'system.max_retries': configs['system.max_retries'] ?? configs.system?.max_retries ?? 3,
   };
@@ -189,6 +196,8 @@ const SITE_SETTINGS_SYSTEM_TAB_FIELDS = [
   'ui.default_page_size',
   'ui.table_loading_delay',
   'theme_config.colorPrimary',
+  'user_location.mode',
+  'user_location.region_codes',
   'network.timeout',
   'system.max_retries',
 ] as const;
@@ -667,6 +676,8 @@ const SiteSettingsPage: React.FC = () => {
       'ui.default_page_size': values['ui.default_page_size'],
       'ui.table_loading_delay': values['ui.table_loading_delay'],
       'theme_config.colorPrimary': values['theme_config.colorPrimary'],
+      'user_location.mode': values['user_location.mode'],
+      'user_location.region_codes': values['user_location.region_codes'],
       'network.timeout': values['network.timeout'],
       'system.max_retries': values['system.max_retries'],
     };
@@ -738,6 +749,8 @@ const SiteSettingsPage: React.FC = () => {
         'ui.default_page_size': setting.settings?.ui?.default_page_size ?? 20,
         'ui.table_loading_delay': setting.settings?.ui?.table_loading_delay ?? 0,
         'theme_config.colorPrimary': setting.settings?.theme_config?.colorPrimary ?? normalizedThemeColor ?? '#1890ff',
+        'user_location.mode': setting.settings?.user_location?.mode ?? 'ip',
+        'user_location.region_codes': setting.settings?.user_location?.region_codes ?? [],
         'network.timeout': setting.settings?.network?.timeout ?? 10000,
         'system.max_retries': setting.settings?.system?.max_retries ?? 3,
       };
@@ -764,6 +777,8 @@ const SiteSettingsPage: React.FC = () => {
         'ui.default_page_size': setting.settings?.ui?.default_page_size ?? 20,
         'ui.table_loading_delay': setting.settings?.ui?.table_loading_delay ?? 0,
         'theme_config.colorPrimary': setting.settings?.theme_config?.colorPrimary ?? normalizedThemeColor ?? '#1890ff',
+        'user_location.mode': setting.settings?.user_location?.mode ?? 'ip',
+        'user_location.region_codes': setting.settings?.user_location?.region_codes ?? [],
         'network.timeout': setting.settings?.network?.timeout ?? 10000,
         'system.max_retries': setting.settings?.system?.max_retries ?? 3,
       };
@@ -1110,6 +1125,16 @@ const SiteSettingsPage: React.FC = () => {
         if (sys['theme_config.colorPrimary'] !== undefined) {
           settings.theme_config = { colorPrimary: sys['theme_config.colorPrimary'] };
         }
+        if (sys['user_location.mode'] !== undefined) {
+          const regionCodes = Array.isArray(sys['user_location.region_codes'])
+            ? sys['user_location.region_codes'].map(String)
+            : [];
+          settings.user_location = {
+            mode: sys['user_location.mode'] === 'manual' ? 'manual' : 'ip',
+            region_codes: regionCodes,
+            region_labels: resolveChinaAdminRegionLabels(regionCodes),
+          };
+        }
         if (sys['network.timeout'] !== undefined) {
           settings.network = { timeout: sys['network.timeout'] };
         }
@@ -1136,6 +1161,8 @@ const SiteSettingsPage: React.FC = () => {
           'ui.default_page_size': settings.ui?.default_page_size,
           'ui.table_loading_delay': settings.ui?.table_loading_delay,
           'theme_config.colorPrimary': settings.theme_config?.colorPrimary,
+          'user_location.mode': settings.user_location?.mode,
+          'user_location.region_codes': settings.user_location?.region_codes,
           'network.timeout': settings.network?.timeout,
           'system.max_retries': settings.system?.max_retries,
         };
@@ -1452,7 +1479,11 @@ const SiteSettingsPage: React.FC = () => {
   const systemSettingsContent = (
     <Row gutter={[0, 16]}>
       <Col span={24}>
-        <Card title={t('pages.system.siteSettings.tabFunction')} size="small">
+        <Card
+          title={t('pages.system.siteSettings.tabFunction')}
+          size="small"
+          className="detail-drawer-section-title-accent"
+        >
           <Row gutter={[16, 0]}>
             <Col xs={24} sm={12} md={12} lg={12} xl={12}>
               <Form.Item
@@ -1478,7 +1509,11 @@ const SiteSettingsPage: React.FC = () => {
         </Card>
       </Col>
       <Col span={24}>
-        <Card title={t('pages.system.siteSettings.groupSecurity')} size="small">
+        <Card
+          title={t('pages.system.siteSettings.groupSecurity')}
+          size="small"
+          className="detail-drawer-section-title-accent"
+        >
           <Row gutter={[16, 0]}>
             <Col xs={24} sm={12} md={8}>
               <Form.Item
@@ -1511,7 +1546,11 @@ const SiteSettingsPage: React.FC = () => {
         </Card>
       </Col>
       <Col span={24}>
-        <Card title={t('pages.system.siteSettings.groupUi')} size="small">
+        <Card
+          title={t('pages.system.siteSettings.groupUi')}
+          size="small"
+          className="detail-drawer-section-title-accent"
+        >
           <Row gutter={[16, 0]}>
             <Col xs={24} sm={12} md={8}>
               <Form.Item
@@ -1544,22 +1583,88 @@ const SiteSettingsPage: React.FC = () => {
         </Card>
       </Col>
       <Col span={24}>
-        <Row gutter={[16, 16]}>
-          <Col xs={24} lg={12}>
-            <Card title={t('pages.system.configCenter.param.theme_config_colorPrimary')} size="small">
-              <Form.Item
-                name="theme_config.colorPrimary"
-                label={t('pages.system.configCenter.param.theme_config_colorPrimary')}
-                tooltip={t('pages.system.configCenter.param.theme_config_colorPrimary_desc')}
-                getValueFromEvent={(c: any) => (typeof c?.toHexString === 'function' ? c.toHexString() : c)}
-                style={{ marginBottom: 0 }}
-              >
-                <ColorPicker showText />
-              </Form.Item>
+        <Row gutter={[16, 16]} align="stretch">
+          <Col xs={24} lg={12} style={{ display: 'flex' }}>
+            <Card
+              title={t('pages.system.configCenter.param.theme_config_colorPrimary')}
+              size="small"
+              className="detail-drawer-section-title-accent"
+              style={{ width: '100%', height: '100%' }}
+              styles={{ body: { height: '100%' } }}
+            >
+              <Row gutter={[16, 0]}>
+                <Col xs={24} sm={12}>
+                  <Form.Item
+                    name="theme_config.colorPrimary"
+                    label={t('pages.system.configCenter.param.theme_config_colorPrimary')}
+                    tooltip={t('pages.system.configCenter.param.theme_config_colorPrimary_desc')}
+                    getValueFromEvent={(c: any) => (typeof c?.toHexString === 'function' ? c.toHexString() : c)}
+                    style={{ marginBottom: 0 }}
+                  >
+                    <ColorPicker showText />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item
+                    name="user_location.mode"
+                    label={t('pages.system.configCenter.param.user_location')}
+                    tooltip={t('pages.system.configCenter.param.user_location_desc')}
+                    style={{ marginBottom: 8 }}
+                    initialValue="ip"
+                  >
+                    <Radio.Group
+                      options={[
+                        {
+                          label: t('pages.system.configCenter.param.user_location_mode_ip'),
+                          value: 'ip',
+                        },
+                        {
+                          label: t('pages.system.configCenter.param.user_location_mode_manual'),
+                          value: 'manual',
+                        },
+                      ]}
+                    />
+                  </Form.Item>
+                  <Form.Item noStyle shouldUpdate={(prev, cur) => prev['user_location.mode'] !== cur['user_location.mode']}>
+                    {() =>
+                      form.getFieldValue('user_location.mode') === 'manual' ? (
+                        <Form.Item
+                          name="user_location.region_codes"
+                          label={t('pages.system.configCenter.param.user_location_region')}
+                          tooltip={t('pages.system.configCenter.param.user_location_region_desc')}
+                          rules={[
+                            {
+                              required: true,
+                              type: 'array',
+                              min: 1,
+                              message: t('pages.system.configCenter.param.user_location_region_required'),
+                            },
+                          ]}
+                          style={{ marginBottom: 0 }}
+                        >
+                          <Cascader
+                            options={CHINA_ADMIN_REGION_OPTIONS}
+                            placeholder={t('pages.system.configCenter.param.user_location_region_placeholder')}
+                            showSearch
+                            changeOnSelect
+                            style={{ width: '100%' }}
+                          />
+                        </Form.Item>
+                      ) : null
+                    }
+                  </Form.Item>
+                </Col>
+              </Row>
             </Card>
           </Col>
-          <Col xs={24} lg={12}>
-            <Card title={t('pages.system.siteSettings.groupNetwork')} size="small">
+          <Col xs={24} lg={12} style={{ display: 'flex' }}>
+            <Card
+              title={t('pages.system.siteSettings.groupNetwork')}
+              size="small"
+              className="detail-drawer-section-title-accent"
+              style={{ width: '100%', height: '100%' }}
+              styles={{ body: { height: '100%' } }}
+            >
               <Row gutter={[16, 0]}>
                 <Col xs={24} sm={12}>
                   <Form.Item
@@ -1599,7 +1704,11 @@ const SiteSettingsPage: React.FC = () => {
   const loginPageSettingsContent = (
     <Row gutter={[0, 16]}>
       <Col span={24}>
-        <Card title={t('pages.infra.platform.loginConfig')} size="small">
+        <Card
+          title={t('pages.infra.platform.loginConfig')}
+          size="small"
+          className="detail-drawer-section-title-accent"
+        >
           <Row gutter={[16, 16]}>
             <Col span={24}>
               <LoginPageEditorSplitPanel

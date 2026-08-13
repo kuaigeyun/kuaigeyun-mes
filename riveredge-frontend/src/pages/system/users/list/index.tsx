@@ -9,13 +9,15 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography, theme } from 'antd';
+import { App, Button, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag, SystemUserAvatar } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { flushDrawerOpen, DRAWER_CONFIG, ListPageTemplate } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { ListPageTemplate } from '../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import {
   getUserList,
   getUserByUuid,
@@ -46,7 +48,6 @@ import { downloadFile } from '../../../../utils';
 const UserListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -54,8 +55,6 @@ const UserListPage: React.FC = () => {
   const [departmentOptions, setDepartmentOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [positionOptions, setPositionOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [roleOptions, setRoleOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const userDetailReqRef = useRef(0);
-
   const [userFormOpen, setUserFormOpen] = useState(false);
   const [userEditUuid, setUserEditUuid] = useState<string | null>(null);
   
@@ -63,6 +62,8 @@ const UserListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<User | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
 
   const handleOpenRoleEdit = useCallback((roleUuid: string) => {
     navigate(`/system/roles?uuid=${encodeURIComponent(roleUuid)}&action=edit`);
@@ -71,27 +72,27 @@ const UserListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = useCallback(async (record: User) => {
-    const req = ++userDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = useCallback(async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getUserByUuid(record.uuid);
-      if (userDetailReqRef.current !== req) return;
+      const detail = await getUserByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (userDetailReqRef.current === req) {
-        messageApi.error(error.message || t('field.user.fetchDetailFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('field.user.fetchDetailFailed')));
     } finally {
-      if (userDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
-  }, [messageApi, t]);
+  }, [t]);
+
+  const handleView = useCallback((record: User) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
+  }, [loadDetail]);
 
   /**
    * 处理批量生成二维码
@@ -698,11 +699,8 @@ const UserListPage: React.FC = () => {
     {
       title: t('field.user.status'),
       dataIndex: 'is_active',
-      render: (_: any, record: User) => (
-        <Tag color={record?.is_active ? 'success' : 'default'}>
-          {record?.is_active ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')}
-        </Tag>
-      ),
+      render: (_: unknown, record: User) =>
+        renderSystemActiveTag(t, record?.is_active, 'field.systemParameter.enabled', 'field.systemParameter.disabled'),
     },
     {
       title: t('field.user.isTenantAdmin'),
@@ -852,49 +850,41 @@ const UserListPage: React.FC = () => {
       />
 
       {/* 详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('field.user.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        styles={{ body: { position: 'relative' } }}
-        basic={
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryUuidRef.current;
+          if (id) void loadDetail(id);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detailData), () => {
+          if (!detailData) return;
+          handleEdit(detailData);
+        })}
+        detail={detailData}
+        detailColumns={detailColumns}
+        basicExtra={
           detailData ? (
-            <div style={{ position: 'relative', paddingRight: 8 }}>
-              <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  right: 0,
-                  width: 152,
-                  zIndex: 10,
-                  background: '#fff',
-                  padding: '12px',
-                  borderRadius: token.borderRadiusLG,
-                  border: '1px solid rgba(0, 0, 0, 0.06)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <QRCodeGenerator
-                  qrcodeType="EMP"
-                  data={{
-                    employee_uuid: detailData.uuid,
-                    employee_code: detailData.username,
-                    employee_name: detailData.full_name || detailData.username,
-                  }}
-                  autoGenerate={true}
-                  showCardTitle={false}
-                  size={6}
-                  noCard={true}
-                />
-              </div>
-            </div>
-          ) : null
+            <QRCodeGenerator
+              qrcodeType="EMP"
+              data={{
+                employee_uuid: detailData.uuid,
+                employee_code: detailData.username,
+                employee_name: detailData.full_name || detailData.username,
+              }}
+              autoGenerate={true}
+              showCardTitle={false}
+              size={6}
+              noCard={true}
+            />
+          ) : undefined
         }
       />
     </>

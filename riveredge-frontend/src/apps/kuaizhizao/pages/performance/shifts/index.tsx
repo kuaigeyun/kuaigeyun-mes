@@ -14,6 +14,8 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import { PerformanceConfigDetailDrawer } from '../shared/performanceConfigDetailDrawer';
 import { shiftApi } from '../../../services/performance';
 import type { Shift } from '../../../types/performance';
@@ -43,6 +45,8 @@ const ShiftsPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [shiftDetail, setShiftDetail] = useState<Shift | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
 
   const detailColumns: ProDescriptionsItemProps<Shift>[] = useMemo(
     () => [
@@ -87,24 +91,31 @@ const ShiftsPage: React.FC = () => {
     }
   };
 
-  const handleOpenDetail = async (record: Shift) => {
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      setDrawerVisible(true);
+      setShiftDetail(await shiftApi.get(uuid));
+    } catch (error) {
       setShiftDetail(null);
-      setDetailLoading(true);
-      const detail = await shiftApi.get(record.uuid);
-      setShiftDetail(detail);
-    } catch (e: any) {
-      messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
-      setDrawerVisible(false);
+      setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.performance.common.messages.loadFailed')));
     } finally {
       setDetailLoading(false);
     }
   };
 
+  const handleOpenDetail = (record: Shift) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setShiftDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
+  };
+
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setShiftDetail(null);
+    setDetailError(null);
   };
 
   const columns: ProColumns<Shift>[] = useMemo(
@@ -177,7 +188,6 @@ const ShiftsPage: React.FC = () => {
         title: t('app.kuaizhizao.performance.common.columns.actions'),
         key: 'action',
         valueType: 'option',
-        width: 160,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => (
@@ -276,9 +286,18 @@ const ShiftsPage: React.FC = () => {
         zIndex={detailDrawerZIndex}
         onClose={handleCloseDetail}
         loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
         detail={shiftDetail}
         detailColumns={detailColumns}
-        t={t}
+        extra={buildDetailDrawerEditExtra(t, Boolean(shiftDetail), () => {
+          if (!shiftDetail) return;
+          setEditUuid(shiftDetail.uuid);
+          setModalVisible(true);
+        })}
       />
     </>
   );

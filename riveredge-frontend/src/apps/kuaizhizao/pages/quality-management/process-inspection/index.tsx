@@ -9,7 +9,6 @@
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
-import type { DescriptionsProps } from 'antd';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
@@ -30,7 +29,6 @@ import {
   Card,
   Row,
   Col,
-  Descriptions,
   Typography,
   Spin,
   Empty,
@@ -54,6 +52,7 @@ import {
 import {
   buildInspectorNameColumn,
   buildQualityInspectionListCodeColumn,
+  buildQualityInspectionListKindColumn,
   buildQualityInspectionListMaterialColumn,
   buildQualityInspectionListMaterialHiddenColumns,
   buildQualityInspectionListQuantityResultColumns,
@@ -63,6 +62,7 @@ import {
 import {
   buildQualityInspectionDetailCodeColumn,
   buildQualityInspectionDetailMaterialColumns,
+  buildQualityInspectionDetailNotesColumn,
   buildQualityInspectionDetailPeopleColumns,
   buildQualityInspectionDetailQuantityStatusColumns,
 } from '../components/qualityDetailColumns';
@@ -70,10 +70,10 @@ import {
   buildProcessWorkOrderPullColumns,
   type QualityPullCandidateBase,
 } from '../components/qualityPullQueryColumns';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
+import { useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
@@ -82,10 +82,16 @@ import { apiRequest } from '../../../../../services/api';
 import { qualityApi } from '../../../services/production';
 import type { DocumentPushPreview } from '../../../services/purchase-requisition';
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
-import InspectionTemplateConductResultsTable from '../components/InspectionTemplateConductResultsTable';
-import QualityInspectionDetailAttachments from '../components/QualityInspectionDetailAttachments';
-import InspectionDetailQualityActions from '../components/InspectionDetailQualityActions';
-import { pickInspectionConductExtras } from '../components/inspectionTemplateUtils';
+import { QualityInspectionDetailDrawer } from '../components/QualityInspectionDetailDrawer';
+import {
+  InspectionUnqualifiedBanner,
+  buildInspectionQualityExtraButtons,
+} from '../components/InspectionDetailQualityActions';
+import {
+  getInspectionTemplateSource,
+  hasInspectionPlanSteps,
+  pickInspectionConductExtras,
+} from '../components/inspectionTemplateUtils';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { downloadFile } from '../../../services/common';
@@ -100,11 +106,12 @@ import {
   resolveQualityInspectionListParams,
 } from '../../../utils/qualityInspectionListCore';
 import dayjs from 'dayjs';
-import {formatDateTime, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format';
+import { formatQuantity } from '../../../../../utils/format';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
 import {
   InspectionConductQuantityFields,
   InspectionDefectQuantityField,
+  InspectionNonconformanceReasonField,
   normalizeInspectionConductPayload,
 } from '../../../../../components/quantity-with-unit/inspectionConductQuantities';
 import { useTranslation } from 'react-i18next';
@@ -121,8 +128,6 @@ import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
   CustomFieldsFormSection,
-  CustomFieldsDetailSection,
-  hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import {
   getQualityFinishedDisposalFallback,
@@ -154,33 +159,6 @@ type ProcessPullWorkOrderCandidate = QualityPullCandidateBase & {
   completed_quantity?: number | null;
   capabilities?: { pull_process_inspection?: { allowed?: boolean; reason?: string } };
 };
-
-function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
-  dataSource: T,
-  cols: ProDescriptionsItemProps<T>[]
-): NonNullable<DescriptionsProps['items']> {
-  return cols.map((col, index) => {
-    const dataIndex = col.dataIndex as keyof T | undefined;
-    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
-    let content: React.ReactNode = value as React.ReactNode;
-    if (col.valueType === 'dateTime' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
-    }
-    if (col.render && dataSource != null) {
-            content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
-        content,
-        dataSource,
-        index,
-      );
-    }
-    return {
-      key: String(col.key ?? col.dataIndex ?? index),
-      label: col.title as React.ReactNode,
-      children: content !== undefined && content !== null ? content : '-',
-      span: col.span ?? 1,
-    };
-  });
-}
 
 // 过程检验接口定义
 interface ProcessInspection {
@@ -378,6 +356,9 @@ const ProcessInspectionPage: React.FC = () => {
   // 详情Drawer状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [inspectionDetail, setInspectionDetail] = useState<ProcessInspection | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailInspectionId, setDetailInspectionId] = useState<number | null>(null);
 
   const [piTrackingRefreshKey, setPiTrackingRefreshKey] = useState(0);
 
@@ -414,18 +395,30 @@ const ProcessInspectionPage: React.FC = () => {
   };
 
   // 处理详情查看
-  const handleDetail = async (record: ProcessInspection) => {
+  const loadInspectionDetail = async (id: number) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await qualityApi.processInspection.get(record.id!.toString());
+      const detail = await qualityApi.processInspection.get(id.toString());
       setInspectionDetail(detail);
-      setDetailDrawerVisible(true);
       setPiTrackingRefreshKey((k) => k + 1);
-      if (record.id != null) {
-        await loadInspectionFieldValuesForDetail(record.id);
-      }
-    } catch (error) {
-      messageApi.error(t('app.kuaizhizao.quality.common.messages.loadDetailFailed'));
+      await loadInspectionFieldValuesForDetail(id);
+      return detail;
+    } catch (error: any) {
+      setDetailError(error?.message || t('app.kuaizhizao.quality.common.messages.loadDetailFailed'));
+      setInspectionDetail((prev) => (prev?.id === id ? prev : null));
+      return null;
+    } finally {
+      setDetailLoading(false);
     }
+  };
+
+  const handleDetail = (record: ProcessInspection) => {
+    if (record.id == null) return;
+    setDetailInspectionId(record.id);
+    setDetailDrawerVisible(true);
+    setInspectionDetail((prev) => (prev?.id === record.id ? prev : null));
+    void loadInspectionDetail(record.id);
   };
 
   // URL 深链只过滤列表，不自动打开详情抽屉（详情仅操作列「详情」按钮）
@@ -719,31 +712,19 @@ const ProcessInspectionPage: React.FC = () => {
     () => [
       buildQualityInspectionDetailCodeColumn<ProcessInspection>(t),
       ...buildQualityInspectionDetailMaterialColumns<ProcessInspection>(t),
-      { title: t('app.kuaizhizao.quality.common.columns.materialSpec'), dataIndex: 'material_spec', render: (val) => val || '-' },
-      { title: t('app.kuaizhizao.quality.common.columns.batchNo'), dataIndex: 'batch_number', render: (val) => val || '-' },
+      { title: t('app.kuaizhizao.quality.common.columns.materialSpec'), dataIndex: 'material_spec' },
+      { title: t('app.kuaizhizao.quality.common.columns.batchNo'), dataIndex: 'batch_number' },
       {
         title: t('app.kuaizhizao.quality.common.columns.workOrderCode'),
         dataIndex: 'work_order_code',
-        render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.work_order_code ?? '') }}>{r.work_order_code ?? '-'}</Typography.Text>
-        ),
       },
       { title: t('app.kuaizhizao.quality.common.columns.operationName'), dataIndex: 'operation_name' },
-      { title: t('app.kuaizhizao.quality.common.columns.workshop'), dataIndex: 'workshop_name', render: (val) => val || '-' },
-      { title: t('app.kuaizhizao.quality.common.columns.workstation'), dataIndex: 'workstation_name', render: (val) => val || '-' },
+      { title: t('app.kuaizhizao.quality.common.columns.workshop'), dataIndex: 'workshop_name' },
+      { title: t('app.kuaizhizao.quality.common.columns.workstation'), dataIndex: 'workstation_name' },
       ...buildQualityInspectionDetailQuantityStatusColumns<ProcessInspection>(t),
       ...buildQualityInspectionDetailPeopleColumns<ProcessInspection>(t),
+      buildQualityInspectionDetailNotesColumn<ProcessInspection>(t),
     ],
-    [t]
-  );
-
-  const detailNotesColumn: ProDescriptionsItemProps<ProcessInspection> = useMemo(
-    () => ({
-      title: t('app.kuaizhizao.quality.common.columns.inspectionNotes'),
-      dataIndex: 'notes',
-      span: 2,
-      render: (val) => val || '-',
-    }),
     [t]
   );
 
@@ -958,6 +939,7 @@ const ProcessInspectionPage: React.FC = () => {
       inspectionQualityStatusValueEnum,
     ),
     buildQualityInspectionListCodeColumn<ProcessInspection>(t),
+    buildQualityInspectionListKindColumn<ProcessInspection>(t),
     buildQualityInspectionPartnerStackedColumn<ProcessInspection>(
       t('app.kuaizhizao.quality.common.columns.operationWorkOrder'),
       ['operation_name', 'operationName'],
@@ -1044,7 +1026,7 @@ const ProcessInspectionPage: React.FC = () => {
     >
       <UniTable<ProcessInspection>
         headerTitle={t('app.kuaizhizao.quality.process.pageTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.quality-management.process-inspection.rank-v4"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.process-inspection.rank-v7"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -1155,38 +1137,43 @@ const ProcessInspectionPage: React.FC = () => {
           unqualified_quantity: 0,
           notes: '',
         }}
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        width={
+          hasInspectionPlanSteps(getInspectionTemplateSource(currentInspection as Record<string, unknown>))
+            ? MODAL_CONFIG.LARGE_WIDTH
+            : MODAL_CONFIG.STANDARD_WIDTH
+        }
+        grid
         formRef={formRef}
       >
-        {currentInspection && (
-          <Card title={t('app.kuaizhizao.quality.common.sections.inspectionInfo')} size="small" style={{ marginBottom: 16 }}>
-            <Row gutter={16}>
-              <Col span={12}>
-                <strong>{t('app.kuaizhizao.quality.common.label.workOrderCode')}：</strong>{currentInspection.work_order_code}
-              </Col>
-              <Col span={12}>
-                <strong>{t('app.kuaizhizao.quality.common.label.operationName')}：</strong>{currentInspection.operation_name}
-              </Col>
-            </Row>
-            <Row gutter={16} style={{ marginTop: 8 }}>
-              <Col span={12}>
-                <strong>{t('app.kuaizhizao.quality.common.label.materialCode')}：</strong>{currentInspection.material_code}
-              </Col>
-              <Col span={12}>
-                <strong>{t('app.kuaizhizao.quality.common.label.materialName')}：</strong>{currentInspection.material_name}
-              </Col>
-            </Row>
-            <Row gutter={16} style={{ marginTop: 8 }}>
-              <Col span={24}>
-                <strong>{t('app.kuaizhizao.quality.common.label.inspectionQty')}：</strong>
-                {formatQuantityWithUnit(
-                  currentInspection.inspection_quantity,
-                  currentInspection.material_unit,
-                )}
-              </Col>
-            </Row>
-          </Card>
-        )}
+        {currentInspection ? (
+          <Col span={24}>
+            <Card title={t('app.kuaizhizao.quality.common.sections.inspectionInfo')} size="small" style={{ marginBottom: 8 }}>
+              <Row gutter={16}>
+                <Col span={8}>
+                  <strong>{t('app.kuaizhizao.quality.common.label.workOrderCode')}：</strong>{currentInspection.work_order_code}
+                </Col>
+                <Col span={8}>
+                  <strong>{t('app.kuaizhizao.quality.common.label.operationName')}：</strong>{currentInspection.operation_name}
+                </Col>
+                <Col span={8}>
+                  <strong>{t('app.kuaizhizao.quality.common.label.materialCode')}：</strong>{currentInspection.material_code}
+                </Col>
+              </Row>
+              <Row gutter={16} style={{ marginTop: 8 }}>
+                <Col span={8}>
+                  <strong>{t('app.kuaizhizao.quality.common.label.materialName')}：</strong>{currentInspection.material_name}
+                </Col>
+                <Col span={8}>
+                  <strong>{t('app.kuaizhizao.quality.common.label.inspectionQty')}：</strong>
+                  {formatQuantityWithUnit(
+                    currentInspection.inspection_quantity,
+                    currentInspection.material_unit,
+                  )}
+                </Col>
+              </Row>
+            </Card>
+          </Col>
+        ) : null}
         <InspectionTemplateConductFields
           inspection={currentInspection as Record<string, unknown>}
           photoCategory="process_inspection_attachments"
@@ -1196,28 +1183,23 @@ const ProcessInspectionPage: React.FC = () => {
           materialUnit={currentInspection?.material_unit}
           scenario="production"
           inspectionQuantity={Number(currentInspection?.inspection_quantity || 0)}
+          inspection={currentInspection as Record<string, unknown> | undefined}
           t={t}
         />
-        <ProFormTextArea
-          name="nonconformance_reason"
-          label={t('app.kuaizhizao.quality.common.form.nonconformanceReason')}
-          placeholder={t('app.kuaizhizao.quality.common.placeholder.nonconformanceReason')}
-          fieldProps={{ rows: 2 }}
-          colProps={{ span: 24 }}
-        />
+        <InspectionNonconformanceReasonField t={t} />
         <CustomFieldsFormSection
           customFields={inspectionFormCustomFields}
           customFieldValues={inspectionFormCustomFieldValues}
           gridColumns={2}
         />
-        <DocumentAttachmentsField category="process_inspection_attachments" />
         <ProFormTextArea
           name="notes"
           label={t('app.kuaizhizao.quality.common.form.notes')}
           placeholder={t('app.kuaizhizao.quality.common.placeholder.notes')}
-          fieldProps={{ rows: 3 }}
+          fieldProps={{ rows: 2 }}
           colProps={{ span: 24 }}
         />
+        <DocumentAttachmentsField category="process_inspection_attachments" />
       </FormModalTemplate>
 
       <UniPullQueryModal<ProcessPullWorkOrderCandidate>
@@ -1324,152 +1306,81 @@ const ProcessInspectionPage: React.FC = () => {
       </Modal>
 
       {/* 过程检验详情 Drawer */}
-      <DetailDrawerTemplate
+      <QualityInspectionDetailDrawer
         title={t('app.kuaizhizao.quality.process.modal.detailTitle', { code: inspectionDetail?.inspection_code || '' })}
         open={detailDrawerVisible}
         zIndex={processInspectionDetailDrawerZIndex}
         onClose={() => {
           setDetailDrawerVisible(false);
           setInspectionDetail(null);
+          setDetailError(null);
+          setDetailInspectionId(null);
           resetInspectionDetailFieldValues();
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        column={3}
+        inspection={inspectionDetail}
+        documentType="process_inspection"
+        loading={detailLoading}
+        error={detailError}
+        onRetry={detailInspectionId != null ? () => void loadInspectionDetail(detailInspectionId) : undefined}
         extra={
           inspectionDetail ? (
-            <UniWorkflowActions
-              {...rowActionKind('skip')}
-              record={inspectionDetail}
-              {...qualityInspectionUniAuditProps({
-                entityType: 'process_inspection',
-                resourcePrefix: PROCESS_RESOURCE,
-                entityName: t('app.kuaizhizao.quality.common.entity.processInspection'),
-                theme: 'default',
-                onSuccess: () => {
-                  actionRef.current?.reload();
-                  if (inspectionDetail?.id) {
-                    qualityApi.processInspection
-                      .get(inspectionDetail.id.toString())
-                      .then(async (d) => {
-                        setInspectionDetail(d);
-                        setPiTrackingRefreshKey((k) => k + 1);
-                        await loadInspectionFieldValuesForDetail(inspectionDetail.id!);
-                      })
-                      .catch(() => {});
-                  }
+            <Space wrap size="small">
+              {buildInspectionQualityExtraButtons({
+                inspection: inspectionDetail,
+                inspectionType: 'process',
+                t,
+                navigate,
+                onRegisterDefect: () => handleCreateDefect(inspectionDetail),
+                canRegisterDefect:
+                  qualityInspectionRowGates(inspectionDetail, processPerms, ncPerms, t).createDefect.allowed &&
+                  !qualityInspectionRowGates(inspectionDetail, processPerms, ncPerms, t).createDefect.disabled,
+                onCloseDrawer: () => {
+                  setDetailDrawerVisible(false);
+                  setInspectionDetail(null);
                 },
               })}
-            />
-          ) : null
-        }
-        customContent={
-          inspectionDetail ? (
-            <>
-              <InspectionDetailQualityActions
-                inspection={inspectionDetail}
-                inspectionType="process"
-                onRegisterDefect={() => handleCreateDefect(inspectionDetail)}
-                canRegisterDefect={
-                  qualityInspectionRowGates(inspectionDetail, processPerms, ncPerms, t).createDefect.allowed &&
-                  !qualityInspectionRowGates(inspectionDetail, processPerms, ncPerms, t).createDefect.disabled
-                }
+              <UniWorkflowActions
+                {...rowActionKind('skip')}
+                record={inspectionDetail}
+                {...qualityInspectionUniAuditProps({
+                  entityType: 'process_inspection',
+                  resourcePrefix: PROCESS_RESOURCE,
+                  entityName: t('app.kuaizhizao.quality.common.entity.processInspection'),
+                  theme: 'default',
+                  onSuccess: () => {
+                    actionRef.current?.reload();
+                    if (inspectionDetail?.id) {
+                      qualityApi.processInspection
+                        .get(inspectionDetail.id.toString())
+                        .then(async (d) => {
+                          setInspectionDetail(d);
+                          setPiTrackingRefreshKey((k) => k + 1);
+                          await loadInspectionFieldValuesForDetail(inspectionDetail.id!);
+                        })
+                        .catch(() => {});
+                    }
+                  },
+                })}
               />
-              <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.basicInfo')}>
-                <Descriptions
-                  column={3}
-                  size="small"
-                  items={buildDescriptionItemsFromColumns(inspectionDetail, detailBaseColumns)}
-                />
-                {hasCustomFieldsDetailContent(inspectionListCustomFields, inspectionDetailCustomFieldValues) ? (
-                  <div style={{ marginTop: 16 }}>
-                    <CustomFieldsDetailSection
-                      customFields={inspectionListCustomFields}
-                      customFieldValues={inspectionDetailCustomFieldValues}
-                    />
-                  </div>
-                ) : null}
-                {inspectionDetail.notes ? (
-                  <Descriptions
-                    column={3}
-                    size="small"
-                    style={{ marginTop: 16 }}
-                    items={buildDescriptionItemsFromColumns(inspectionDetail, [detailNotesColumn])}
-                  />
-                ) : null}
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.lifecycle')}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lc = getIncomingInspectionLifecycle(inspectionDetail as Record<string, unknown>);
-                    const mainStages = lc.mainStages ?? [];
-                    if (mainStages.length === 0) return null;
-                    return (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        showLabels
-                        status={lc.status}
-                        nextStepSuggestions={lc.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
-                    );
-                  })()}
-                  
-                </div>
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.detailInfo')}>
-                <InspectionTemplateConductResultsTable inspection={inspectionDetail as Record<string, unknown>} />
-              </DetailDrawerSection>
-
-              {Array.isArray(inspectionDetail.attachments) && inspectionDetail.attachments.length > 0 ? (
-                <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.attachments')}>
-                  <QualityInspectionDetailAttachments attachments={inspectionDetail.attachments} />
-                </DetailDrawerSection>
-              ) : null}
-
-
-              <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.operationLog')}>
-                {processTracking.loading && (
-                  <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Spin />
-                  </div>
-                )}
-                {processTracking.error && !processTracking.loading && (
-                  <Typography.Text type="danger">{processTracking.error}</Typography.Text>
-                )}
-                {processTracking.data && !processTracking.loading && (
-                  <DocumentTrackingTimelineBody data={processTracking.data} />
-                )}
-                {!processTracking.loading && !processTracking.data && !processTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.quality.common.empty.noActivityLog')} />
-                )}
-              </DetailDrawerSection>
-            </>
+            </Space>
           ) : null
         }
-      
-                        traceDocument={
-                          inspectionDetail?.id != null
-                            ? {
-                                documentType: 'process_inspection',
-                                documentId: inspectionDetail.id,
-                                selfDocumentId: inspectionDetail.id,
-                              renderBriefActions: (doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailDrawerVisible(false);
-                      setInspectionDetail(null);
-                    }}
-                  />
-                )
-                              }
-                            : undefined
-                        }
+        banner={<InspectionUnqualifiedBanner inspection={inspectionDetail} />}
+        basicColumns={detailBaseColumns}
+        customFields={inspectionListCustomFields}
+        customFieldValues={inspectionDetailCustomFieldValues}
+        tracking={processTracking}
+        renderBriefActions={(doc) => (
+          <WarehouseTraceBriefPrimaryActions
+            doc={doc}
+            t={t}
+            navigate={navigate}
+            closeDrawer={() => {
+              setDetailDrawerVisible(false);
+              setInspectionDetail(null);
+            }}
+          />
+        )}
       />
 
       {/* 创建不合格品记录Modal */}

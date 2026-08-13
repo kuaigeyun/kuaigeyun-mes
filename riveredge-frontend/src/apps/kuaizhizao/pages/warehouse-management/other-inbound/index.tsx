@@ -34,7 +34,7 @@ import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import CodeField from '../../../../../components/code-field';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, detailDrawerBasicColumn, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getOtherInboundLifecycle } from '../../../utils/otherInboundLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -53,7 +53,7 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
@@ -726,8 +726,8 @@ const OtherInboundPage: React.FC = () => {
     formRef.current?.setFieldValue(['items', idx, 'default_serial_rule_id'], defaultSerialRuleId);
   };
 
-  const detailColumns: ProDescriptionsItemProps<OtherInboundDetail>[] = useMemo(
-    () => [
+  const detailColumns = useMemo(
+    () => alignDescriptionColumns([
       { title: t('app.kuaizhizao.warehouseOtherInbound.col.inboundCode'), dataIndex: 'inbound_code' },
       {
         title: t('app.kuaizhizao.warehouseOtherInbound.col.reasonType'),
@@ -735,7 +735,7 @@ const OtherInboundPage: React.FC = () => {
         render: (_, record) =>
           renderWarehouseReasonTypeMarkerTag(translateReasonTypeLabel(t, record.reason_type), record.reason_type),
       },
-      { title: t('app.kuaizhizao.warehouseOtherInbound.field.reasonDesc'), dataIndex: 'reason_desc', span: 2 },
+      { title: t('app.kuaizhizao.warehouseOtherInbound.field.reasonDesc'), dataIndex: 'reason_desc', span: 3 },
       { title: t('app.kuaizhizao.warehouseOtherInbound.col.warehouse'), dataIndex: 'warehouse_name' },
       {
         title: t('app.kuaizhizao.warehouseOtherInbound.field.status'),
@@ -752,7 +752,7 @@ const OtherInboundPage: React.FC = () => {
       },
       { title: t('app.kuaizhizao.warehouseOtherInbound.col.receiver'), dataIndex: 'receiver_name' },
       { title: t('app.kuaizhizao.warehouseOtherInbound.col.receiptTime'), dataIndex: 'receipt_time', valueType: 'dateTime' },
-    ],
+    ]),
     [t],
   );
 
@@ -760,7 +760,7 @@ const OtherInboundPage: React.FC = () => {
     () => ({
       title: t('app.kuaizhizao.warehouseOtherInbound.col.notes'),
       dataIndex: 'notes',
-      span: 2,
+      span: 3,
     }),
     [t],
   );
@@ -826,7 +826,7 @@ const OtherInboundPage: React.FC = () => {
       nodes.push(
         <Descriptions
           key="notes"
-          column={2}
+          column={detailDrawerBasicColumn(false)}
           size="small"
           style={nodes.length > 0 ? { marginTop: 16 } : undefined}
           items={detailDrawerDescriptionItems([detailNotesColumn], inboundDetail)}
@@ -921,7 +921,7 @@ const OtherInboundPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           inboundDetail ? (
-            <Descriptions column={2} size="small" items={detailDrawerDescriptionItems(detailColumns, inboundDetail)} />
+            <Descriptions column={detailDrawerBasicColumn(false)} size="small" items={detailDrawerDescriptionItems(detailColumns, inboundDetail)} />
           ) : undefined
         }
         collaboration={detailCollaboration}

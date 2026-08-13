@@ -14,6 +14,7 @@ import httpx  # 仅用于 BasicAuth 等类型
 
 from core.models.integration_config import IntegrationConfig
 from core.schemas.integration_config import IntegrationConfigCreate, IntegrationConfigUpdate
+from core.utils.timezone_utils import resolve_business_datetime
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.http import get_http_client
 from core.config.data_source_type_spec import (
@@ -371,7 +372,6 @@ class IntegrationConfigService:
             raise ValidationError("系统默认数据源不可删除")
         
         # 软删除
-        from datetime import datetime
         integration.deleted_at = resolve_business_datetime()
         await integration.save()
 

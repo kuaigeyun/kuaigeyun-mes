@@ -92,13 +92,17 @@ export async function getUserFormCoreReferenceOptions(
   return promise;
 }
 
-const partnerInflight: Partial<Record<'supplier' | 'customer', Promise<UserFormSelectOption[]>>> = {};
+const partnerInflight: Partial<Record<'supplier' | 'customer' | 'manufacturer', Promise<UserFormSelectOption[]>>> = {};
 
-async function fetchPartnerOptions(dimension: 'supplier' | 'customer'): Promise<UserFormSelectOption[]> {
+async function fetchPartnerOptions(
+  dimension: 'supplier' | 'customer' | 'manufacturer',
+): Promise<UserFormSelectOption[]> {
   const resource =
     dimension === 'supplier'
       ? 'master-data:supply-chain:supplier'
-      : 'master-data:supply-chain:customer';
+      : dimension === 'customer'
+        ? 'master-data:supply-chain:customer'
+        : 'haoligo:equipment-manufacturers';
   const display = await searchReferenceDisplay({
     resource,
     pageSize: 200,
@@ -111,9 +115,9 @@ async function fetchPartnerOptions(dimension: 'supplier' | 'customer'): Promise<
     .filter((x) => !!x.value);
 }
 
-/** 外部角色绑定供应商/客户时按需加载（每次调用均请求最新数据） */
+/** 外部角色绑定供应商/客户/设备制造商时按需加载（每次调用均请求最新数据） */
 export async function getUserFormPartnerOptions(
-  dimension: 'supplier' | 'customer',
+  dimension: 'supplier' | 'customer' | 'manufacturer',
 ): Promise<UserFormSelectOption[]> {
   const inflight = partnerInflight[dimension];
   if (inflight) return inflight;
@@ -129,7 +133,7 @@ export async function getUserFormPartnerOptions(
 export function roleUuidsNeedPartnerDimension(
   roleUuids: string[],
   roleMetaByUuid: Record<string, UserFormRoleMeta>,
-  dimension: 'supplier' | 'customer',
+  dimension: 'supplier' | 'customer' | 'manufacturer',
 ): boolean {
   return roleUuids.some((uuid) => {
     const meta = roleMetaByUuid[uuid];

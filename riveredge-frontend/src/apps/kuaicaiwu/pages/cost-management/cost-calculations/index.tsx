@@ -14,7 +14,6 @@ import { useSearchParams } from 'react-router-dom';
 import {
   ActionType,
   ProColumns,
-  ProDescriptionsItemProps,
   ProFormSelect,
   ProFormDigit,
   ProFormDatePicker,
@@ -34,8 +33,6 @@ import {
   Divider,
   Alert,
   Typography,
-  Descriptions,
-  Timeline,
 } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
 import {
@@ -58,15 +55,13 @@ import {
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import {
   ListPageTemplate,
-  DetailDrawerTemplate,
-  DetailDrawerSection,
   MultiTabListPageTemplate,
   FormModalTemplate,
-  DRAWER_CONFIG,
   MODAL_CONFIG,
 } from '../../../../../components/layout-templates';
 import { rowActionKind } from '../../../../../components/uni-action';
-import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDetailDescriptionItems';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { CostCalculationDetailDrawer } from './components/CostCalculationDetailDrawer';
 import { costCalculationApi, costComparisonApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
@@ -257,6 +252,9 @@ const CostCalculationPage: React.FC = () => {
 
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [costCalculationDetail, setCostCalculationDetail] = useState<CostCalculation | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [execModal, setExecModal] = useState<null | 'work_order' | 'product'>(null);
   const [workOrderCalcResult, setWorkOrderCalcResult] = useState<CostCalculation | null>(null);
   const [productCalcResult, setProductCalcResult] = useState<CostCalculation | null>(null);
@@ -492,18 +490,35 @@ const CostCalculationPage: React.FC = () => {
     setCatWithSub(key as TopCat);
   };
 
-  const handleDetail = async (record: CostCalculation) => {
+  const loadDetail = useCallback(async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      if (!record.uuid) {
-        messageApi.error(t('app.kuaicaiwu.costCalculation.uuidMissing'));
-        return;
-      }
-      const detail = await costCalculationApi.get(record.uuid);
-      setCostCalculationDetail(detail);
-      setDrawerVisible(true);
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaicaiwu.costCalculation.loadDetailFailed'));
+      setCostCalculationDetail(await costCalculationApi.get(uuid));
+    } catch (error) {
+      setCostCalculationDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.kuaicaiwu.costCalculation.loadDetailFailed')));
+    } finally {
+      setDetailLoading(false);
     }
+  }, [t]);
+
+  const handleDetail = useCallback((record: CostCalculation) => {
+    if (!record.uuid) {
+      messageApi.error(t('app.kuaicaiwu.costCalculation.uuidMissing'));
+      return;
+    }
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setCostCalculationDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
+  }, [loadDetail, messageApi, t]);
+
+  const closeDetail = () => {
+    setDrawerVisible(false);
+    setCostCalculationDetail(null);
+    setDetailError(null);
   };
 
   const handleSaveWorkOrderCalculation = async (values: any) => {
@@ -631,7 +646,10 @@ const CostCalculationPage: React.FC = () => {
         sorter: true,
         render: (_, r) => (
           <UniTableStackedPrimaryCell
-            primary={String(r.product_name || r.product_code || '')}
+            primary={[r.product_code, r.product_name]
+              .map((v) => String(v ?? '').trim())
+              .filter(Boolean)
+              .join(' ')}
             secondary={String(r.calculation_no ?? '')}
             onSecondaryClick={() => handleDetail(r)}
           />
@@ -659,36 +677,13 @@ const CostCalculationPage: React.FC = () => {
       {
         title: t('app.kuaicaiwu.costCalculation.col.workOrderCode'),
         dataIndex: 'work_order_code',
-        key: 'work_order_code',
+        key: 'cost_calculation_work_order_code',
         width: 150,
         minWidth: 150,
         uniTableKeepWidth: true,
         resizable: false,
         hideInSearch: true,
         sorter: true,
-        render: (_, r) =>
-          r.work_order_code ? (
-            <Typography.Text copyable={{ text: String(r.work_order_code) }} ellipsis>{r.work_order_code}</Typography.Text>
-          ) : (
-            '-'
-          ),
-      },
-      {
-        title: t('app.kuaicaiwu.costCalculation.col.productCode'),
-        dataIndex: 'product_code',
-        key: 'product_code',
-        width: 150,
-        minWidth: 150,
-        uniTableKeepWidth: true,
-        resizable: false,
-        hideInSearch: true,
-        sorter: true,
-        render: (_, r) =>
-          r.product_code ? (
-            <Typography.Text copyable={{ text: String(r.product_code) }} ellipsis>{r.product_code}</Typography.Text>
-          ) : (
-            '-'
-          ),
       },
       { title: t('app.kuaicaiwu.costCalculation.col.productName'), dataIndex: 'product_name', key: 'product_name', hideInTable: true },
       {
@@ -798,91 +793,19 @@ const CostCalculationPage: React.FC = () => {
         key: 'action',
         fixed: 'right',
         hideInSearch: true,
-        render: (_: any, record: CostCalculation) => (
-          <Button {...rowActionKind('read')} size="small" onClick={() => handleDetail(record)}>
-            {t('app.kuaicaiwu.costCommon.detail')}
-          </Button>
-        ),
+        render: (_: unknown, record: CostCalculation) => [
+          <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)} />,
+        ],
       },
     ],
     [t, calculationStatusEnum, handleDetail],
   );
 
-  const detailItems: ProDescriptionsItemProps<CostCalculation>[] = useMemo(
-    () => [
-      { title: t('app.kuaicaiwu.costCalculation.col.calculationNo'), dataIndex: 'calculation_no' },
-      {
-        title: t('app.kuaicaiwu.costCalculation.col.calculationType'),
-        dataIndex: 'calculation_type',
-        render: (_, entity) => formatCalculationType(entity.calculation_type, t),
-      },
-      { title: t('app.kuaicaiwu.costCalculation.col.workOrderCode'), dataIndex: 'work_order_code' },
-      { title: t('app.kuaicaiwu.costCalculation.col.productCode'), dataIndex: 'product_code' },
-      { title: t('app.kuaicaiwu.costCalculation.col.productName'), dataIndex: 'product_name' },
-      {
-        title: t('app.kuaicaiwu.costCommon.col.quantity'),
-        dataIndex: 'quantity',
-        render: (_, entity) => formatQuantity(entity.quantity),
-      },
-      {
-        title: t('app.kuaicaiwu.costCommon.col.materialCost'),
-        dataIndex: 'material_cost',
-        render: (_, entity) => `¥${entity.material_cost != null ? Number(entity.material_cost).toFixed(2) : '0.00'}`,
-      },
-      {
-        title: t('app.kuaicaiwu.costCommon.col.laborCost'),
-        dataIndex: 'labor_cost',
-        render: (_, entity) => `¥${entity.labor_cost != null ? Number(entity.labor_cost).toFixed(2) : '0.00'}`,
-      },
-      {
-        title: t('app.kuaicaiwu.costCommon.col.manufacturingCost'),
-        dataIndex: 'manufacturing_cost',
-        render: (_, entity) =>
-          `¥${entity.manufacturing_cost != null ? Number(entity.manufacturing_cost).toFixed(2) : '0.00'}`,
-      },
-      {
-        title: t('app.kuaicaiwu.costCommon.col.totalCost'),
-        dataIndex: 'total_cost',
-        render: (_, entity) => `¥${entity.total_cost != null ? Number(entity.total_cost).toFixed(2) : '0.00'}`,
-      },
-      {
-        title: t('app.kuaicaiwu.costCommon.col.unitCost'),
-        dataIndex: 'unit_cost',
-        render: (_, entity) => `¥${entity.unit_cost != null ? Number(entity.unit_cost).toFixed(2) : '0.00'}`,
-      },
-      { title: t('app.kuaicaiwu.costCalculation.col.calculationStatus'), dataIndex: 'calculation_status' },
-      {
-        title: t('app.kuaicaiwu.costCommon.col.calculationDate'),
-        dataIndex: 'calculation_date',
-        render: (_, entity) =>
-          entity.calculation_date ? formatDateTime(entity.calculation_date as string, 'YYYY-MM-DD') : '-',
-      },
-      { title: t('app.kuaicaiwu.costCommon.remark'), dataIndex: 'remark' },
-      { title: t('app.kuaicaiwu.costCommon.col.createdBy'), dataIndex: 'created_by_name' },
-      {
-        title: t('app.kuaicaiwu.costCommon.col.createdAt'),
-        dataIndex: 'created_at',
-        render: (_, entity) =>
-          entity.created_at ? formatDateTime(entity.created_at as string, 'YYYY-MM-DD HH:mm:ss') : '-',
-      },
-      { title: t('app.kuaicaiwu.costCommon.col.updatedBy'), dataIndex: 'updated_by_name' },
-      {
-        title: t('app.kuaicaiwu.costCommon.col.updatedAt'),
-        dataIndex: 'updated_at',
-        render: (_, entity) =>
-          entity.updated_at ? formatDateTime(entity.updated_at as string, 'YYYY-MM-DD HH:mm:ss') : '-',
-      },
-    ],
-    [t],
-  );
-
-  const calculationDetailBaseItems = detailItems;
-
   const ledgerPanel = (
     <ListPageTemplate>
       <UniTable<CostCalculation>
         actionRef={actionRef}
-        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-calculations.list-v1"
+        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-calculations.list-v5"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={COST_CALCULATION_PINNED_STATUS_FIELD}
@@ -1124,70 +1047,16 @@ const CostCalculationPage: React.FC = () => {
           </>
         )}
       </FormModalTemplate>
-      <DetailDrawerTemplate
-        title={t('app.kuaicaiwu.costCalculation.detailTitle')}
+      <CostCalculationDetailDrawer
         open={drawerVisible}
-        onClose={() => {
-          setDrawerVisible(false);
-          setCostCalculationDetail(null);
+        onClose={closeDetail}
+        detail={costCalculationDetail}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        customContent={
-          costCalculationDetail ? (
-            <>
-              <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.basicInfo')}>
-                <Descriptions
-                  column={3}
-                  size="small"
-                  items={buildMasterDetailDescriptionItems(
-                    costCalculationDetail as Record<string, unknown>,
-                    calculationDetailBaseItems as any,
-                  )}
-                />
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.details')}>
-                <div style={{ maxHeight: 420, overflow: 'auto', minWidth: 320 }}>
-                  {costCalculationDetail.cost_details ? (
-                    <StructuredCostDataView data={costCalculationDetail.cost_details} />
-                  ) : (
-                    '-'
-                  )}
-                </div>
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.operationLog')}>
-                <Timeline
-                  items={[
-                    {
-                      color: 'green',
-                      children: (
-                        <>
-                          {t('app.kuaicaiwu.costCommon.log.created')}{' '}
-                          {costCalculationDetail.created_at
-                            ? formatDateTime(costCalculationDetail.created_at, 'YYYY-MM-DD HH:mm:ss')
-                            : '-'}
-                          {costCalculationDetail.created_by_name ? ` - ${costCalculationDetail.created_by_name}` : ''}
-                        </>
-                      ),
-                    },
-                    {
-                      color: 'blue',
-                      children: (
-                        <>
-                          {t('app.kuaicaiwu.costCommon.log.updated')}{' '}
-                          {costCalculationDetail.updated_at
-                            ? formatDateTime(costCalculationDetail.updated_at, 'YYYY-MM-DD HH:mm:ss')
-                            : '-'}
-                          {costCalculationDetail.updated_by_name ? ` - ${costCalculationDetail.updated_by_name}` : ''}
-                        </>
-                      ),
-                    },
-                  ]}
-                />
-              </DetailDrawerSection>
-            </>
-          ) : null
-        }
       />
     </ListPageTemplate>
   );

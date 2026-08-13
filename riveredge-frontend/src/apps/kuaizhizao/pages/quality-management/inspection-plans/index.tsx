@@ -9,7 +9,6 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
-import type { DescriptionsProps } from 'antd';
 import { useSearchParams } from 'react-router-dom';
 import {
   ActionType,
@@ -24,7 +23,7 @@ import {
 } from '@ant-design/pro-components';
 import CodeField from '../../../../../components/code-field';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
-import { App, Button, Tag, Space, Table, Modal, Row, Col, Descriptions, Typography, Empty } from 'antd';
+import { App, Button, Space, Table, Modal, Row, Col, Descriptions, Typography, Empty, Result } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -33,7 +32,7 @@ import {
   ListPageTemplate,
   FormModalTemplate,
   DetailDrawerTemplate,
-  DetailDrawerSection,
+  detailDrawerDescriptionItems,
   MODAL_CONFIG,
   DRAWER_CONFIG,
 } from '../../../../../components/layout-templates';
@@ -48,50 +47,20 @@ import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import {
   buildInspectionPlanActiveValueEnum,
   buildInspectionPlanTypeValueEnum,
-  formatQualityDateTimeCell,
   INSPECTION_PLAN_PINNED_STATUS_FIELD,
   normalizeQualityImprovementListResponse,
   resolveInspectionPlanListParams,
 } from '../../../utils/qualityImprovementListCore';
-import { formatDateTime } from '../../../../../utils/format';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import {
+  alignDescriptionColumns,
+  alignProColumns,
+  MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
+  SALES_DOC_LIST_FIELD_RANK,
+} from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-
-function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
-  dataSource: T,
-  cols: ProDescriptionsItemProps<T>[]
-): NonNullable<DescriptionsProps['items']> {
-  return cols.map((col, index) => {
-    const dataIndex = col.dataIndex as keyof T | undefined;
-    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
-    let content: React.ReactNode = value as React.ReactNode;
-    if (col.valueType === 'dateTime' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
-    }
-    if (col.render && dataSource != null) {
-            content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
-        content,
-        dataSource,
-        index,
-      );
-    }
-    return {
-      key: String(col.key ?? col.dataIndex ?? index),
-      label: col.title as React.ReactNode,
-      children: content !== undefined && content !== null ? content : '-',
-      span: col.span ?? 1,
-    };
-  });
-}
-
-function renderPlanActiveStatus(t: (key: string) => string, isActive?: boolean): React.ReactNode {
-  return (
-    <Tag color={isActive ? 'success' : 'default'}>
-      {isActive ? t('app.kuaizhizao.quality.plans.active.enabled') : t('app.kuaizhizao.quality.plans.active.disabled')}
-    </Tag>
-  );
-}
+import { renderMasterActiveTag } from '../../../../master-data/utils/masterListPresentation';
+import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 
 interface InspectionPlan {
   id?: number;
@@ -155,6 +124,9 @@ const InspectionPlansPage: React.FC = () => {
 
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [planDetail, setPlanDetail] = useState<InspectionPlan | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailPlanId, setDetailPlanId] = useState<number | null>(null);
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号。支持 URL 参数 operationId 预填过程检验 */
   const handleCreate = async () => {
@@ -216,14 +188,26 @@ const InspectionPlansPage: React.FC = () => {
     }
   };
 
-  const handleDetail = async (record: InspectionPlan) => {
+  const loadPlanDetail = async (id: number) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await inspectionPlanApi.get(record.id!.toString());
+      const detail = await inspectionPlanApi.get(id.toString());
       setPlanDetail(detail);
-      setDrawerVisible(true);
-    } catch (error) {
-      messageApi.error(t('app.kuaizhizao.quality.plans.messages.loadDetailFailed'));
+    } catch (error: any) {
+      setDetailError(error?.message || t('app.kuaizhizao.quality.plans.messages.loadDetailFailed'));
+      setPlanDetail((prev) => (prev?.id === id ? prev : null));
+    } finally {
+      setDetailLoading(false);
     }
+  };
+
+  const handleDetail = (record: InspectionPlan) => {
+    if (record.id == null) return;
+    setDetailPlanId(record.id);
+    setDrawerVisible(true);
+    setPlanDetail((prev) => (prev?.id === record.id ? prev : null));
+    void loadPlanDetail(record.id);
   };
 
   const handleDelete = async (record: InspectionPlan) => {
@@ -291,28 +275,45 @@ const InspectionPlansPage: React.FC = () => {
   const planTypeLabel = (planType: string | undefined) => getQualityTypeText(t, planType);
 
   const detailBaseColumns: ProDescriptionsItemProps<InspectionPlan>[] = useMemo(
-    () => [
-      {
-        title: t('app.kuaizhizao.quality.plans.columns.planCode'),
-        dataIndex: 'plan_code',
-        render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.plan_code ?? '') }}>{r.plan_code ?? '-'}</Typography.Text>
-        ),
-      },
-      { title: t('app.kuaizhizao.quality.plans.columns.planName'), dataIndex: 'plan_name' },
-      {
-        title: t('app.kuaizhizao.quality.plans.columns.planType'),
-        dataIndex: 'plan_type',
-        render: (_, r) => planTypeLabel(r?.plan_type),
-      },
-      { title: t('app.kuaizhizao.quality.plans.columns.version'), dataIndex: 'version' },
-      {
-        title: t('app.kuaizhizao.quality.common.columns.status'),
-        dataIndex: 'is_active',
-        render: (_, r) => (r ? renderPlanActiveStatus(t, r.is_active) : '-'),
-      },
-      { title: t('app.kuaizhizao.quality.common.form.remarks'), dataIndex: 'remarks', span: 2, render: (val) => val || '-' },
-    ],
+    () =>
+      alignDescriptionColumns(
+        [
+          {
+            title: t('app.kuaizhizao.quality.plans.columns.planCode'),
+            dataIndex: 'plan_code',
+            render: (_, r) => (
+              <Typography.Text copyable={{ text: String(r.plan_code ?? '') }}>{r.plan_code ?? '-'}</Typography.Text>
+            ),
+          },
+          { title: t('app.kuaizhizao.quality.plans.columns.planName'), dataIndex: 'plan_name' },
+          {
+            title: t('app.kuaizhizao.quality.plans.columns.planType'),
+            dataIndex: 'plan_type',
+            render: (_, r) => getQualityTypeText(t, r?.plan_type),
+          },
+          { title: t('app.kuaizhizao.quality.plans.columns.version'), dataIndex: 'version' },
+          {
+            title: t('app.kuaizhizao.quality.common.columns.status'),
+            dataIndex: 'is_active',
+            render: (_, r) =>
+              r
+                ? renderMasterActiveTag(
+                    t,
+                    r.is_active,
+                    'app.kuaizhizao.quality.plans.active.enabled',
+                    'app.kuaizhizao.quality.plans.active.disabled',
+                  )
+                : '-',
+          },
+          {
+            title: t('app.kuaizhizao.quality.common.form.remarks'),
+            dataIndex: 'remarks',
+            span: 2,
+            render: (val) => val || '-',
+          },
+        ],
+        MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
+      ),
     [t],
   );
 
@@ -408,12 +409,17 @@ const InspectionPlansPage: React.FC = () => {
         align: 'center',
         hideInSearch: true,
         valueEnum: planActiveValueEnum,
-        render: (_, record) => renderPlanActiveStatus(t, record.is_active),
+        render: (_, record) =>
+          renderMasterActiveTag(
+            t,
+            record.is_active,
+            'app.kuaizhizao.quality.plans.active.enabled',
+            'app.kuaizhizao.quality.plans.active.disabled',
+          ),
       },
       {
         title: t('app.kuaizhizao.quality.common.columns.actions'),
         key: 'action',
-        width: 200,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => (
@@ -501,6 +507,8 @@ const InspectionPlansPage: React.FC = () => {
             if (planDetail?.id != null && ids.includes(planDetail.id)) {
               setDrawerVisible(false);
               setPlanDetail(null);
+              setDetailError(null);
+              setDetailPlanId(null);
             }
             actionRef.current?.reload();
           } catch (error: any) {
@@ -610,78 +618,98 @@ const InspectionPlansPage: React.FC = () => {
         onClose={() => {
           setDrawerVisible(false);
           setPlanDetail(null);
+          setDetailError(null);
+          setDetailPlanId(null);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        column={3}
-        customContent={
+        loading={detailLoading && !planDetail}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        extra={
+          planDetail
+            ? buildDetailDrawerEditExtra(t, true, () => {
+                setDrawerVisible(false);
+                void handleEdit(planDetail);
+              })
+            : null
+        }
+        plainBody={
+          detailError && !planDetail && !detailLoading ? (
+            <Result
+              status="error"
+              title={detailError}
+              extra={
+                detailPlanId != null ? (
+                  <Button type="primary" onClick={() => void loadPlanDetail(detailPlanId)}>
+                    {t('common.retry', { defaultValue: '重试' })}
+                  </Button>
+                ) : null
+              }
+            />
+          ) : undefined
+        }
+        basic={
           planDetail ? (
-            <>
-              <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.basicInfo')}>
-                <Descriptions
-                  column={3}
+            <Descriptions
+              column={2}
+              size="small"
+              items={detailDrawerDescriptionItems(detailBaseColumns, planDetail)}
+            />
+          ) : detailError && !detailLoading ? null : (
+            <div style={{ minHeight: 80 }} />
+          )
+        }
+        linesTitle={t('app.kuaizhizao.quality.common.sections.detailInfo')}
+        lines={
+          planDetail ? (
+            planDetail.steps && planDetail.steps.length > 0 ? (
+              <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
+                <Table
+                  style={{ minWidth: 720 }}
+                  dataSource={planDetail.steps}
+                  rowKey={(_, i) => `step-${i}`}
+                  pagination={false}
                   size="small"
-                  items={buildDescriptionItemsFromColumns(planDetail, detailBaseColumns)}
+                  columns={[
+                    {
+                      title: t('app.kuaizhizao.quality.plans.step.sequence'),
+                      key: 'index',
+                      width: 60,
+                      render: (_, __, i) => i + 1,
+                    },
+                    { title: t('app.kuaizhizao.quality.plans.step.inspectionItem'), dataIndex: 'inspection_item' },
+                    {
+                      title: t('app.kuaizhizao.quality.plans.stepSpec.valueType'),
+                      dataIndex: 'value_type',
+                      width: 96,
+                      render: (v: string) => (
+                        <InspectionValueTypeTag
+                          valueType={v}
+                          label={stepValueTypeLabels[normalizeValueType(v)] || v}
+                        />
+                      ),
+                    },
+                    { title: t('app.kuaizhizao.quality.plans.step.inspectionMethod'), dataIndex: 'inspection_method', width: 120 },
+                    {
+                      title: t('app.kuaizhizao.quality.plans.step.acceptanceCriteria'),
+                      dataIndex: 'acceptance_criteria',
+                      width: 150,
+                      ellipsis: true,
+                      render: (v: string, row: InspectionPlanStepItem) =>
+                        v ||
+                        formatAcceptanceCriteriaPreview(row.value_type || 'boolean', row.value_spec, t) ||
+                        '-',
+                    },
+                    {
+                      title: t('app.kuaizhizao.quality.plans.step.samplingType'),
+                      dataIndex: 'sampling_type',
+                      width: 90,
+                      render: (v: string) => <InspectionSamplingTypeTag samplingType={v} t={t} />,
+                    },
+                  ]}
                 />
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.detailInfo')}>
-                {planDetail.steps && planDetail.steps.length > 0 ? (
-                  <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
-                    <Table
-                      style={{ minWidth: 720 }}
-                      dataSource={planDetail.steps}
-                      rowKey={(_, i) => `step-${i}`}
-                      pagination={false}
-                      size="small"
-                      columns={[
-                        {
-                          title: t('app.kuaizhizao.quality.plans.step.sequence'),
-                          key: 'index',
-                          width: 60,
-                          render: (_, __, i) => i + 1,
-                        },
-                        { title: t('app.kuaizhizao.quality.plans.step.inspectionItem'), dataIndex: 'inspection_item' },
-                        {
-                          title: t('app.kuaizhizao.quality.plans.stepSpec.valueType'),
-                          dataIndex: 'value_type',
-                          width: 96,
-                          render: (v: string) => (
-                            <InspectionValueTypeTag
-                              valueType={v}
-                              label={stepValueTypeLabels[normalizeValueType(v)] || v}
-                            />
-                          ),
-                        },
-                        { title: t('app.kuaizhizao.quality.plans.step.inspectionMethod'), dataIndex: 'inspection_method', width: 120 },
-                        {
-                          title: t('app.kuaizhizao.quality.plans.step.acceptanceCriteria'),
-                          dataIndex: 'acceptance_criteria',
-                          width: 150,
-                          ellipsis: true,
-                          render: (v: string, row: InspectionPlanStepItem) =>
-                            v ||
-                            formatAcceptanceCriteriaPreview(row.value_type || 'boolean', row.value_spec, t) ||
-                            '-',
-                        },
-                        {
-                          title: t('app.kuaizhizao.quality.plans.step.samplingType'),
-                          dataIndex: 'sampling_type',
-                          width: 90,
-                          render: (v: string) => <InspectionSamplingTypeTag samplingType={v} t={t} />,
-                        },
-                      ]}
-                    />
-                  </div>
-                ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.quality.plans.detail.noSteps')} />
-                )}
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.operationLog')}>
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.quality.common.empty.noActivityLog')} />
-              </DetailDrawerSection>
-            </>
+              </div>
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.quality.plans.detail.noSteps')} />
+            )
           ) : null
         }
       />

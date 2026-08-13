@@ -18,6 +18,7 @@ export const LINKED_DOCUMENT_DETAIL_TYPES = new Set([
   'purchase_requisition',
   'demand_computation',
   'work_order',
+  'freight_order',
 ]);
 
 export type LinkedDocumentType =
@@ -30,7 +31,8 @@ export type LinkedDocumentType =
   | 'demand'
   | 'purchase_requisition'
   | 'demand_computation'
-  | 'work_order';
+  | 'work_order'
+  | 'freight_order';
 
 /** 后端偶发别名 → 标准 snake */
 const LINKED_DOCUMENT_TYPE_ALIASES: Record<string, string> = {
@@ -42,6 +44,7 @@ const LINKED_DOCUMENT_TYPE_ALIASES: Record<string, string> = {
   purchaseorder: 'purchase_order',
   purchasereceipt: 'purchase_receipt',
   workorder: 'work_order',
+  freightorder: 'freight_order',
 };
 
 /**

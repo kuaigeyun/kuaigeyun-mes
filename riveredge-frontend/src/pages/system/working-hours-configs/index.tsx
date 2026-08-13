@@ -9,12 +9,14 @@
 
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormTextArea, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Tag, Button, Space, Popconfirm } from 'antd';
+import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormTextArea, ProFormDatePicker, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Button, Space, Popconfirm } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
-import { UniDetail } from '../../../components/uni-detail';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
+import { SystemMasterDetailDrawer } from '../shared/systemMasterDetailDrawer';
+import { getApiErrorMessage } from '../../../utils/errorHandler';
+import { renderIsActiveTag } from '../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
 import { apiRequest } from '../../../services/api';
 import { fetchAllListItems } from '../../../utils/fetchAllListPages';
 import { pickListSearchKeyword } from '../../../utils/tableQueryKey';
@@ -65,6 +67,9 @@ const WorkingHoursConfigsPage: React.FC = () => {
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<WorkingHoursConfig | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryIdRef = useRef<number | null>(null);
 
   /**
    * 处理新建
@@ -123,16 +128,27 @@ const WorkingHoursConfigsPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleDetail = async (record: WorkingHoursConfig) => {
-    if (record.id) {
-      try {
-        const detailData = await apiRequest(`/core/working-hours-configs/${record.id}`, { method: 'GET' });
-        setCurrentRecord(detailData);
-        setDetailDrawerVisible(true);
-      } catch (error) {
-        messageApi.error(t('pages.system.workingHoursConfigs.getDetailFailed'));
-      }
+  const loadDetail = async (id: number) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const detailData = await apiRequest(`/core/working-hours-configs/${id}`, { method: 'GET' });
+      setCurrentRecord(detailData);
+    } catch (error) {
+      setCurrentRecord(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.workingHoursConfigs.getDetailFailed')));
+    } finally {
+      setDetailLoading(false);
     }
+  };
+
+  const handleDetail = async (record: WorkingHoursConfig) => {
+    if (!record.id) return;
+    detailRetryIdRef.current = record.id;
+    setDetailDrawerVisible(true);
+    setCurrentRecord(null);
+    setDetailError(null);
+    void loadDetail(record.id);
   };
 
   /**
@@ -190,11 +206,7 @@ const WorkingHoursConfigsPage: React.FC = () => {
       title: t('pages.system.workingHoursConfigs.columnEnabled'),
       dataIndex: 'is_enabled',
       width: 100,
-      render: (_, record) => (
-        <Tag color={record.is_enabled ? 'success' : 'default'}>
-          {record.is_enabled ? t('pages.system.workingHoursConfigs.enabled') : t('pages.system.workingHoursConfigs.disabled')}
-        </Tag>
-      ),
+      render: (_, record) => renderIsActiveTag(t, record.is_enabled),
     },
     {
       title: t('pages.system.workingHoursConfigs.columnPriority'),
@@ -279,6 +291,57 @@ const WorkingHoursConfigsPage: React.FC = () => {
       setFormLoading(false);
     }
   };
+
+  const detailColumns: ProDescriptionsItemProps<WorkingHoursConfig>[] = [
+    { title: t('pages.system.workingHoursConfigs.columnName'), dataIndex: 'name' },
+    {
+      title: t('pages.system.workingHoursConfigs.columnScopeType'),
+      dataIndex: 'scope_type',
+      render: (_, record) =>
+        record.scope_type && SCOPE_TYPE_KEYS[record.scope_type]
+          ? t(`pages.system.workingHoursConfigs.${SCOPE_TYPE_KEYS[record.scope_type]}`)
+          : record.scope_type || '-',
+    },
+    {
+      title: t('pages.system.workingHoursConfigs.columnScopeName'),
+      dataIndex: 'scope_name',
+      render: (_, record) => record.scope_name || t('pages.system.workingHoursConfigs.scopeAll'),
+    },
+    {
+      title: t('pages.system.workingHoursConfigs.columnDayOfWeek'),
+      dataIndex: 'day_of_week',
+      render: (_, record) =>
+        record.day_of_week === null || record.day_of_week === undefined
+          ? t('pages.system.workingHoursConfigs.dayAll')
+          : t(`pages.system.workingHoursConfigs.${DAY_KEYS[record.day_of_week]}`),
+    },
+    {
+      title: t('pages.system.workingHoursConfigs.columnWorkingHours'),
+      dataIndex: 'working_hours',
+      render: (_, record) =>
+        record.working_hours && record.working_hours.length > 0
+          ? record.working_hours.map((h) => `${h.start}-${h.end}`).join(', ')
+          : '-',
+    },
+    {
+      title: t('pages.system.workingHoursConfigs.columnEnabled'),
+      dataIndex: 'is_enabled',
+      render: (_, record) => renderIsActiveTag(t, record.is_enabled),
+    },
+    { title: t('pages.system.workingHoursConfigs.columnPriority'), dataIndex: 'priority' },
+    {
+      title: t('pages.system.workingHoursConfigs.labelStartDate'),
+      dataIndex: 'start_date',
+      valueType: 'date',
+    },
+    {
+      title: t('pages.system.workingHoursConfigs.labelEndDate'),
+      dataIndex: 'end_date',
+      valueType: 'date',
+    },
+    { title: t('pages.system.workingHoursConfigs.labelRemarks'), dataIndex: 'remarks' },
+    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+  ];
 
   return (
     <ListPageTemplate>
@@ -431,37 +494,22 @@ const WorkingHoursConfigsPage: React.FC = () => {
         />
       </FormModalTemplate>
 
-      {/* 详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={`${t('pages.system.workingHoursConfigs.detailTitle')} - ${currentRecord?.name || ''}`}
         open={detailDrawerVisible}
-        onClose={() => setDetailDrawerVisible(false)}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
-        plainBody={
-          currentRecord ? (
-            <div style={{ padding: '16px 0' }}>
-              <p><strong>{t('pages.system.workingHoursConfigs.columnName')}：</strong>{currentRecord.name}</p>
-              <p><strong>{t('pages.system.workingHoursConfigs.columnScopeType')}：</strong>{currentRecord.scope_type && SCOPE_TYPE_KEYS[currentRecord.scope_type] ? t(`pages.system.workingHoursConfigs.${SCOPE_TYPE_KEYS[currentRecord.scope_type]}`) : currentRecord.scope_type || '-'}</p>
-              <p><strong>{t('pages.system.workingHoursConfigs.columnScopeName')}：</strong>{currentRecord.scope_name || t('pages.system.workingHoursConfigs.scopeAll')}</p>
-              <p><strong>{t('pages.system.workingHoursConfigs.columnDayOfWeek')}：</strong>
-                {currentRecord.day_of_week === null || currentRecord.day_of_week === undefined
-                  ? t('pages.system.workingHoursConfigs.dayAll')
-                  : t(`pages.system.workingHoursConfigs.${DAY_KEYS[currentRecord.day_of_week]}`)}
-              </p>
-              <p><strong>{t('pages.system.workingHoursConfigs.columnWorkingHours')}：</strong>
-                {currentRecord.working_hours && currentRecord.working_hours.length > 0
-                  ? currentRecord.working_hours.map((h: any) => `${h.start}-${h.end}`).join(', ')
-                  : '-'}
-              </p>
-              <p><strong>{t('pages.system.workingHoursConfigs.columnEnabled')}：</strong>
-                <Tag color={currentRecord.is_enabled ? 'success' : 'default'}>
-                  {currentRecord.is_enabled ? t('pages.system.workingHoursConfigs.enabled') : t('pages.system.workingHoursConfigs.disabled')}
-                </Tag>
-              </p>
-              <p><strong>{t('pages.system.workingHoursConfigs.columnPriority')}：</strong>{currentRecord.priority}</p>
-            </div>
-          ) : null
-        }
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setCurrentRecord(null);
+          setDetailError(null);
+        }}
+        detail={currentRecord}
+        detailColumns={detailColumns}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryIdRef.current;
+          if (id != null) void loadDetail(id);
+        }}
       />
     </ListPageTemplate>
   );

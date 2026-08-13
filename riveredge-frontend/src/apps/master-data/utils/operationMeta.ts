@@ -1,14 +1,14 @@
 /**
  * 工序管理：报工类型 / 超报方式 / 不良品项 / 启用状态徽章（唯一真源）
  *
- * - 状态（启用）：StatusTag solid
+ * - 启用：MarkerTag filled
  * - 类型 / 模式 / 分类标识：MarkerTag filled
  */
 
 import React from 'react';
 import { Space } from 'antd';
 import type { TFunction } from 'i18next';
-import { MarkerTag, StatusTag } from '../../../constants/statusBadges';
+import { MarkerTag } from '../../../constants/statusBadges';
 import type { DefectTypeMinimal } from '../types/process';
 
 export type OperationReportingType = 'quantity' | 'status';
@@ -149,7 +149,7 @@ export function renderOperationActiveStatusTag(
 ): React.ReactNode {
   const active = Boolean(isActive);
   return React.createElement(
-    StatusTag,
+    MarkerTag,
     { color: active ? 'success' : 'default' },
     active ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled'),
   );

@@ -385,15 +385,32 @@ export async function apiRequest<T = any>(
         } else {
           // 其他接口返回 401：先尝试静默刷新并重试一次，避免仅因过期/竞态就踢出登录
           if (!options?.__skipAuthRefresh) {
+            let refreshResult: Awaited<
+              ReturnType<
+                typeof import('../utils/tokenRefresh').refreshAccessTokenDetailed
+              >
+            >;
             try {
-              const { refreshAccessTokenSilently } = await import('../utils/tokenRefresh');
-              const refreshed = await refreshAccessTokenSilently();
-              if (refreshed) {
-                return apiRequest<T>(url, { ...options, __skipAuthRefresh: true });
-              }
+              const { refreshAccessTokenDetailed } = await import('../utils/tokenRefresh');
+              refreshResult = await refreshAccessTokenDetailed();
             } catch {
-              // 刷新失败则走下方登出
+              // 续期模块异常等同网络失败，不清会话
+              const error = new Error('网络异常，请重试') as any;
+              error.response = { data, status: response.status };
+              error.isTransientAuthRefreshFailure = true;
+              throw error;
             }
+            if (refreshResult.ok) {
+              return apiRequest<T>(url, { ...options, __skipAuthRefresh: true });
+            }
+            // 网络抖动导致续期失败：保留会话，让调用方重试；禁止 clearAuth 误踢操作中用户
+            if (refreshResult.reason === 'network') {
+              const error = new Error('网络异常，请重试') as any;
+              error.response = { data, status: response.status };
+              error.isTransientAuthRefreshFailure = true;
+              throw error;
+            }
+            // rejected / no_token：走下方登出
           }
 
           clearAuth();

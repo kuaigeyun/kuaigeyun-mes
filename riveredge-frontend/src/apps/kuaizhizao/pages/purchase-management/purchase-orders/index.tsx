@@ -13,9 +13,8 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
-import type { DescriptionsProps } from 'antd';
-import { App, Button, Tag, Space, Modal, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, List, Typography, theme, Dropdown, Descriptions, Spin, Select, Switch, Alert } from 'antd';
+import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
+import { App, Button, Space, Modal, Row, Col, Table, Empty, Form as AntForm, Input, InputNumber, List, Typography, theme, Spin, Select, Switch, Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
@@ -31,7 +30,7 @@ import {
   buildImportPriceTypeOptions,
   parseImportPriceType,
 } from '../../sales-management/shared/salesPriceType';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, DownOutlined, FileTextOutlined, AppstoreAddOutlined, ArrowLeftOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, DownOutlined, FileTextOutlined, AppstoreAddOutlined, ArrowLeftOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } from '../../../../../services/dataDictionary';
 import { mapSystemDictionaryItemOptions, resolveSystemDictionaryItemLabel } from '../../../../../utils/systemDictionaryI18n';
@@ -48,10 +47,8 @@ import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../.
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import {
   ListPageTemplate,
-  DetailDrawerTemplate,
   DetailDrawerActions,
   MODAL_CONFIG,
-  DRAWER_CONFIG,
   DocumentFormPageLayout,
   DocumentFormPageHeaderActions,
   DetailDrawerSection,
@@ -64,8 +61,6 @@ import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
   CustomFieldsFormSection,
-  CustomFieldsDetailSection,
-  hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
@@ -135,7 +130,6 @@ import {
   purchaseOrderCapabilityReasonMessage,
   purchaseRequisitionCapabilityReasonMessage,
 } from '../../../../../hooks/useDocumentCapabilities';
-import { listPurchaseOrderChangesByOrder, type PurchaseOrderChange } from '../../../services/purchase-order-change';
 import LandingCostAllocationModal from './LandingCostAllocationModal';
 import { bankAccountService, type BankAccount } from '../../../../kuaicaiwu/services/finance/bank-account';
 import { formatBankAccountOptionLabel } from '../../../../kuaicaiwu/utils/financeSharedOptions';
@@ -145,13 +139,11 @@ import {
   applyPurchaseDocumentLineMaterialPricing,
   resolvePurchaseDocumentMaterialLinesPricing,
 } from '../../../../master-data/utils/resolve-partner-material-price';
-import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 );
-import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { searchUserDisplay, type User } from '../../../../../services/user';
 import {
   referenceDisplayToIdOptions,
@@ -162,15 +154,16 @@ import { displayItemsToUsers } from '../../../../../utils/userDisplay';
 import {
   DocumentStatus,
   ReviewStatusEnum,
-  getStatusDisplay,
-  getReviewStatusDisplay,
   isDraftStatus,
   isAuditedStatus,
 } from '../../../constants/documentStatus';
-import { resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
 import { getPurchaseOrderLifecycle, buildPurchaseOrderLifecycleValueEnum, resolvePurchaseOrderListLifecycleParams, isPurchaseOrderDeliveryOverdue } from '../../../utils/purchaseOrderLifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { PurchaseOrderAiCreateTrigger } from './components/PurchaseOrderAiCreateDrawer';
+import {
+  PurchaseOrderDetailDrawer,
+  PURCHASE_ORDER_WORKFLOW_PROPS,
+} from './components/PurchaseOrderDetailDrawer';
 import { useKuaiaiEntryAvailable } from '../../../../kuaiai/hooks/useKuaiaiEntryAvailable';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
@@ -198,7 +191,6 @@ import {
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown';
 import { batchImport } from '../../../../../utils/batchOperations';
-import { ROUTES } from '../../../constants/routes';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
@@ -256,53 +248,6 @@ const PO_STAT_SPARKLINE_ARRIVAL = [60, 75, 80, 78, 85, 90, 88];
 const PO_STAT_SPARKLINE_ANNUAL = [1000, 2000, 1500, 3000, 2500, 4000, 3500];
 const PO_STAT_SPARKLINE_SUPPLIER = [92, 95, 88, 96, 94, 98, 95];
 const PO_STAT_SPARKLINE_OVERDUE = [5, 8, 3, 12, 7, 15, 10];
-
-/** 详情只读明细表最小宽度（外层横滚） */
-const PO_DETAIL_ITEMS_MIN_WIDTH = 1200;
-
-/** 与销售订单 Uni-detail 一致：生命周期（协作）区块标题旁展示「下一步」建议 */
-const PurchaseOrderCollaborationTitleSuffix: React.FC<{
-  lifecycle: ReturnType<typeof getPurchaseOrderLifecycle> | null;
-}> = ({ lifecycle }) => {
-  const { t } = useTranslation();
-  const next = lifecycle?.nextStepSuggestions;
-  if (!next?.length) return null;
-  return (
-    <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-      {t('components.uniLifecycle.nextStep')}：
-      {next.join(t('components.uniLifecycle.nextStepSeparator'))}
-    </Typography.Text>
-  );
-};
-
-function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
-  dataSource: T,
-  cols: ProDescriptionsItemProps<T>[]
-): NonNullable<DescriptionsProps['items']> {
-  return cols.map((col, index) => {
-    const dataIndex = col.dataIndex as keyof T | undefined;
-    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
-    let content: React.ReactNode = value as React.ReactNode;
-    if (col.valueType === 'dateTime' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
-    } else if (col.valueType === 'date' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD');
-    }
-    if (col.render && dataSource != null) {
-            content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
-        content,
-        dataSource,
-        index,
-      );
-    }
-    return {
-      key: String(col.key ?? col.dataIndex ?? index),
-      label: col.title as React.ReactNode,
-      children: content !== undefined && content !== null ? content : '-',
-      span: col.span ?? 1,
-    };
-  });
-}
 
 function renderPurchaseOrderRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
   return nodes;
@@ -552,26 +497,7 @@ const PurchaseOrdersPage: React.FC = () => {
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [orderDetail, setOrderDetail] = useState<PurchaseOrderDetail | null>(null);
-  const [orderChangeHistory, setOrderChangeHistory] = useState<PurchaseOrderChange[]>([]);
   const [poTrackingRefreshKey, setPoTrackingRefreshKey] = useState(0);
-  const purchaseOrderTracking = useDocumentTracking(
-    detailDrawerVisible && orderDetail?.id ? 'purchase_order' : undefined,
-    orderDetail?.id,
-    poTrackingRefreshKey,
-  );
-
-  const purchaseOrderLifecycle = useMemo(
-    () => (orderDetail ? getPurchaseOrderLifecycle(orderDetail, purchaseOrderAuditEnabled, t) : null),
-    [orderDetail, purchaseOrderAuditEnabled, t],
-  );
-
-  useEffect(() => {
-    if (!orderDetail?.id) {
-      setOrderChangeHistory([]);
-      return;
-    }
-    listPurchaseOrderChangesByOrder(orderDetail.id).then(setOrderChangeHistory).catch(() => setOrderChangeHistory([]));
-  }, [orderDetail?.id]);
 
   const lifecycleValueEnum = useMemo(
     () => buildPurchaseOrderLifecycleValueEnum(t, purchaseOrderAuditEnabled),
@@ -604,9 +530,6 @@ const PurchaseOrdersPage: React.FC = () => {
   const currentUser = useCurrentUser();
   const [usersLoading, setUsersLoading] = useState(false);
 
-  // 审批流程相关状态
-  const [approvalStatus, setApprovalStatus] = useState<ApprovalStatusResponse | null>(null);
-  const [approvalLoading, setApprovalLoading] = useState(false);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
 
   // 下推退货 Modal
@@ -1347,10 +1270,6 @@ const PurchaseOrdersPage: React.FC = () => {
     try {
       const detail = await getPurchaseOrder(record.id!);
       setOrderDetail(detail as PurchaseOrderDetail);
-
-      // 获取审批流程状态和记录（采购审批流程增强）
-      await loadApprovalData(record.id!);
-
       setDetailDrawerVisible(true);
       setPoTrackingRefreshKey((k) => k + 1);
       if (record.id != null) {
@@ -1358,20 +1277,6 @@ const PurchaseOrdersPage: React.FC = () => {
       }
     } catch (error) {
       messageApi.error(t('app.kuaizhizao.purchaseOrder.detailFailed'));
-    }
-  };
-
-  // 加载审批流程数据
-  const loadApprovalData = async (orderId: number) => {
-    setApprovalLoading(true);
-    try {
-      const status = await getApprovalStatus('purchase_order', orderId);
-      setApprovalStatus(status);
-    } catch (error) {
-      console.error('获取审批流程数据失败:', error);
-      setApprovalStatus(null);
-    } finally {
-      setApprovalLoading(false);
     }
   };
 
@@ -1823,6 +1728,11 @@ const PurchaseOrdersPage: React.FC = () => {
         try {
           await deletePurchaseOrder(record.id!);
           messageApi.success(t('app.kuaizhizao.purchaseOrder.deleteSuccess'));
+          if (orderDetail?.id === record.id) {
+            setDetailDrawerVisible(false);
+            setOrderDetail(null);
+            resetPurchaseOrderDetailFieldValues();
+          }
           invalidateStatistics();
           invalidateMenuBadgeCounts();
 
@@ -2589,85 +2499,6 @@ const PurchaseOrdersPage: React.FC = () => {
       throw error;
     }
   };
-
-  // 详情列定义
-  const detailColumns: ProDescriptionsItemProps<PurchaseOrderDetail>[] = useMemo(() => [
-    {
-      title: t('app.kuaizhizao.purchaseOrder.col.orderCode'),
-      dataIndex: 'order_code',
-      render: (_: unknown, entity: PurchaseOrderDetail) => (
-        <Typography.Text copyable={{ text: String(entity.order_code ?? '') }}>{entity.order_code ?? '-'}</Typography.Text>
-      ),
-    },
-    {
-      title: t('app.kuaizhizao.purchaseOrder.col.supplier'),
-      dataIndex: 'supplier_name',
-      render: (_: unknown, entity: PurchaseOrderDetail) => entity.supplier_name ?? '—',
-    },
-    {
-      title: t('app.kuaizhizao.purchaseOrder.col.orderType'),
-      dataIndex: 'order_type',
-      render: (_: unknown, entity: PurchaseOrderDetail) =>
-        resolveSystemDictionaryItemLabel(
-          'ORDER_TYPE',
-          { value: entity.order_type ?? '', label: entity.order_type ?? '', is_system_managed: true },
-          t,
-        ) || '—',
-    },
-    {
-      title: t('app.kuaizhizao.purchaseOrder.col.orderDate'),
-      dataIndex: 'order_date',
-      valueType: 'date',
-    },
-    {
-      title: t('app.kuaizhizao.purchaseOrder.col.deliveryDate'),
-      dataIndex: 'delivery_date',
-      valueType: 'date',
-    },
-    {
-      title: t('common.status'),
-      dataIndex: 'status',
-      render: (status: any) => {
-        const config = getStatusDisplay(status);
-        return <Tag {...resolveStatusTagDisplayProps(config)}>{config.text}</Tag> as any;
-      },
-    },
-    {
-      title: t('app.kuaizhizao.purchaseOrder.col.reviewStatus'),
-      dataIndex: 'review_status',
-      render: (status: any) => {
-        const config = getReviewStatusDisplay(status);
-        return <Tag color={config.color}>{config.text}</Tag> as any;
-      },
-    },
-    {
-      title: t('app.kuaizhizao.purchaseOrder.col.orderAmount'),
-      dataIndex: 'total_amount',
-      render: (text: any) => `¥${formatAmount(text)}`,
-    },
-    {
-      title: t('app.kuaizhizao.purchaseOrder.col.taxRate'),
-      dataIndex: 'tax_rate',
-      render: (text: any) => text ? `${text}%` : '-',
-    },
-    {
-      title: t('app.kuaizhizao.purchaseOrder.col.taxAmount'),
-      dataIndex: 'tax_amount',
-      render: (text: any) => (text != null && text !== '') ? `¥${formatAmount(text)}` : '-',
-    },
-    {
-      title: t('app.kuaizhizao.purchaseOrder.col.inclAmount'),
-      dataIndex: 'net_amount',
-      render: (text: any) => (text != null && text !== '') ? `¥${formatAmount(text)}` : '-',
-    },
-  ], [t]);
-
-  const detailNotesColumn: ProDescriptionsItemProps<PurchaseOrderDetail> = useMemo(() => ({
-    title: t('app.kuaizhizao.common.fieldNotes'),
-    dataIndex: 'notes',
-    span: 3,
-    render: (text: any) => text || '-',
-  }), [t]);
 
   const statCards: StatCard[] = statistics
     ? [
@@ -4177,69 +4008,28 @@ const PurchaseOrdersPage: React.FC = () => {
         orderCode={landingCostOrder?.order_code || ''}
       />
 
-      <DetailDrawerTemplate
-        title={t('app.kuaizhizao.purchaseOrder.detailTitle', { code: orderDetail?.order_code || '' })}
+      <PurchaseOrderDetailDrawer
         open={detailDrawerVisible}
         zIndex={purchaseOrderDetailDrawerZIndex}
         onClose={() => {
           setDetailDrawerVisible(false);
           setOrderDetail(null);
-          setApprovalStatus(null);
           resetPurchaseOrderDetailFieldValues();
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
-        collaborationTitleSuffix={
-          orderDetail ? <PurchaseOrderCollaborationTitleSuffix lifecycle={purchaseOrderLifecycle} /> : null
-        }
-        collaborationAuditRecord={orderDetail}
+        order={orderDetail}
+        trackingRefreshKey={poTrackingRefreshKey}
+        customFields={purchaseOrderListCustomFields}
+        customFieldValues={purchaseOrderDetailCustomFieldValues}
+        feeTypeOptions={feeTypeOptions}
         extra={
-          orderDetail && (
+          orderDetail ? (
             <DetailDrawerActions
               items={[
-                {
-                  key: 'edit',
-                  visible: orderDetail.capabilities?.update?.allowed === true && purchaseOrderPerms.canUpdate,
-                  render: () => (
-                    <Button type="link" size="small" icon={<EditOutlined />} onClick={() => { setDetailDrawerVisible(false); handleEdit(orderDetail); }}>
-                      {t('common.edit')}
-                    </Button>
-                  ),
-                },
-                {
-                  key: 'workflow',
-                  render: () => (
-                    <UniWorkflowActions {...rowActionKind('skip')}
-                      record={orderDetail}
-                      entityName={t('app.kuaizhizao.purchaseOrder.entityName')}
-                      entityType="purchase_order"
-                      unifiedAudit
-                      resourcePrefix="kuaizhizao:purchase-order"
-                      statusField="status"
-                      reviewStatusField="review_status"
-                      draftStatuses={PO_WORKFLOW_DRAFT_STATUSES}
-                      pendingStatuses={PO_WORKFLOW_PENDING_STATUSES}
-                      approvedStatuses={PO_WORKFLOW_APPROVED_STATUSES}
-                      rejectedStatuses={PO_WORKFLOW_REJECTED_STATUSES}
-                      submitActionLabel={t('app.kuaizhizao.purchaseOrder.submitForReview')}
-                      theme="link"
-                      size="small"
-                      onSuccess={() => {
-                        invalidateStatistics();
-                        actionRef.current?.reload();
-                        loadApprovalData(orderDetail.id!);
-                        getPurchaseOrder(orderDetail.id!).then(setOrderDetail);
-                        setPoTrackingRefreshKey((k) => k + 1);
-                      }}
-                    />
-                  ),
-                },
                 {
                   key: 'create-change',
                   visible: orderDetail.capabilities?.create_change_order?.allowed === true,
                   render: () => (
                     <Button
-                      type="link"
-                      size="small"
                       icon={<EditOutlined />}
                       onClick={() =>
                         navigate(
@@ -4252,12 +4042,57 @@ const PurchaseOrdersPage: React.FC = () => {
                   ),
                 },
                 {
+                  key: 'edit',
+                  visible: orderDetail.capabilities?.update?.allowed === true && purchaseOrderPerms.canUpdate,
+                  render: () => (
+                    <Button
+                      {...rowActionKind('update')}
+                      icon={<EditOutlined />}
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        handleEdit(orderDetail);
+                      }}
+                    >
+                      {t('common.edit')}
+                    </Button>
+                  ),
+                },
+                {
                   key: 'delete',
                   visible: orderDetail.capabilities?.delete?.allowed === true && purchaseOrderPerms.canDelete,
                   render: () => (
-                    <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(orderDetail)}>
+                    <Button
+                      {...rowActionKind('delete')}
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() => handleDelete(orderDetail)}
+                    >
                       {t('common.delete')}
                     </Button>
+                  ),
+                },
+                {
+                  key: 'workflow',
+                  render: () => (
+                    <UniWorkflowActions
+                      {...rowActionKind('skip')}
+                      record={orderDetail}
+                      entityName={t('app.kuaizhizao.purchaseOrder.entityName')}
+                      {...PURCHASE_ORDER_WORKFLOW_PROPS}
+                      submitActionLabel={t('app.kuaizhizao.purchaseOrder.submitForReview')}
+                      theme="default"
+                      onSuccess={() => {
+                        invalidateStatistics();
+                        actionRef.current?.reload();
+                        setPoTrackingRefreshKey((k) => k + 1);
+                        void getPurchaseOrder(orderDetail.id!)
+                          .then(setOrderDetail)
+                          .catch((e: unknown) => {
+                            const err = e as { message?: string };
+                            messageApi.error(err?.message || t('app.kuaizhizao.purchaseOrder.detailFailed'));
+                          });
+                      }}
+                    />
                   ),
                 },
                 {
@@ -4265,8 +4100,6 @@ const PurchaseOrdersPage: React.FC = () => {
                   visible: orderDetail.id != null && purchaseOrderPerms.canPrint,
                   render: () => (
                     <Button
-                      type="link"
-                      size="small"
                       icon={<PrinterOutlined />}
                       onClick={() => openPrint({ documentType: 'purchase_order', documentId: orderDetail.id! })}
                     >
@@ -4276,351 +4109,8 @@ const PurchaseOrdersPage: React.FC = () => {
                 },
               ]}
             />
-          )
-        }
-        basic={
-          orderDetail ? (
-            <>
-              <Descriptions
-                column={3}
-                size="small"
-                items={buildDescriptionItemsFromColumns(orderDetail, detailColumns)}
-              />
-              {orderDetail.fee_details && orderDetail.fee_details.length > 0 && (
-                <>
-                  <Divider style={{ margin: '16px 0' }} />
-                  <Typography.Title level={5} style={{ margin: '0 0 8px' }}>
-                    {t('app.kuaizhizao.salesOrder.feeDetailsTitle')}
-                  </Typography.Title>
-                  <div style={{ marginBottom: 12 }}>
-                    <Typography.Text type="secondary">
-                      {t('app.kuaizhizao.purchaseOrder.totalFeeAmount')}：<strong>¥{formatAmount(orderDetail.total_fee_amount)}</strong>
-                    </Typography.Text>
-                  </div>
-                  <Table
-                    size="small"
-                    columns={[
-                      {
-                        title: t('app.kuaizhizao.salesOrder.feeType'),
-                        dataIndex: 'type',
-                        width: 120,
-                        render: (val) => {
-                          const opt = feeTypeOptions.find((o: any) => o.value === val);
-                          return opt?.label || val;
-                        },
-                      },
-                      {
-                        title: t('app.kuaizhizao.purchaseOrder.col.orderAmount'),
-                        dataIndex: 'amount',
-                        width: 120,
-                        align: 'right',
-                        render: (val) => `¥${formatAmount(val)}`,
-                      },
-                      {
-                        title: t('app.kuaizhizao.salesOrder.feeBearer'),
-                        dataIndex: 'bearer',
-                        width: 100,
-                        render: (val) => (val === 'our_side' ? t('app.kuaizhizao.salesOrder.feeBearerOurSide') : t('app.kuaizhizao.salesOrder.feeBearerCounterparty')),
-                      },
-                      { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes' },
-                    ]}
-                    dataSource={orderDetail.fee_details}
-                    rowKey={(_: any, i?: number) => i ?? 0}
-                    pagination={false}
-                  />
-                </>
-              )}
-              {hasCustomFieldsDetailContent(purchaseOrderListCustomFields, purchaseOrderDetailCustomFieldValues) ? (
-                <div style={{ marginTop: 16 }}>
-                  <CustomFieldsDetailSection
-                    customFields={purchaseOrderListCustomFields}
-                    customFieldValues={purchaseOrderDetailCustomFieldValues}
-                  />
-                </div>
-              ) : null}
-              <Descriptions
-                column={3}
-                size="small"
-                style={{ marginTop: 16 }}
-                items={buildDescriptionItemsFromColumns(orderDetail, [detailNotesColumn])}
-              />
-            </>
           ) : null
         }
-        collaboration={
-          orderDetail ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {purchaseOrderLifecycle && (purchaseOrderLifecycle.mainStages ?? []).length > 0 ? (
-                <UniLifecycleStepper
-                  steps={purchaseOrderLifecycle.mainStages ?? []}
-                  status={purchaseOrderLifecycle.status}
-                  showLabels
-                  nextStepSuggestions={purchaseOrderLifecycle.nextStepSuggestions}
-                  hideNextStepSuggestions={Boolean(purchaseOrderLifecycle.nextStepSuggestions?.length)}
-                />
-              ) : null}
-            </div>
-          ) : null
-        }
-        lines={
-          orderDetail ? (
-            <>
-              {orderDetail.items && orderDetail.items.length > 0 ? (
-                  <Table
-                    size="small"
-                    tableLayout="fixed"
-                    style={{ minWidth: PO_DETAIL_ITEMS_MIN_WIDTH }}
-                    columns={[
-                      { title: t('app.kuaizhizao.purchaseOrder.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
-                      { title: t('app.kuaizhizao.purchaseOrder.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true, render: (_, record) => record.material_name || record.materialName || '—' },
-                      { title: t('app.kuaizhizao.purchaseOrder.col.orderedQty'), dataIndex: 'ordered_quantity', width: 120, align: 'right' , render: (val, row) => <QuantityWithUnitDisplay quantity={val} unit={row.unit} /> },
-                      {
-                        title: t('app.kuaizhizao.purchaseOrder.col.unitPrice'),
-                        dataIndex: 'unit_price',
-                        width: 100,
-                        align: 'right',
-                        render: (text) => `¥${text}`,
-                      },
-                      {
-                        title: t('app.kuaizhizao.purchaseOrder.col.totalPrice'),
-                        dataIndex: 'total_price',
-                        width: 120,
-                        align: 'right',
-                        render: (text) => `¥${text?.toLocaleString()}`,
-                      },
-                      { title: t('app.kuaizhizao.purchaseOrder.col.receivedQty'), dataIndex: 'received_quantity', width: 120, align: 'right', render: (val, row) => <QuantityWithUnitDisplay quantity={val} unit={row.unit} /> },
-                      { title: t('app.kuaizhizao.purchaseOrder.col.outstandingQty'), dataIndex: 'outstanding_quantity', width: 100, align: 'right' },
-                      { title: t('app.kuaizhizao.purchaseOrder.form.requiredDate'), dataIndex: 'required_date', width: 120 },
-                      {
-                        title: t('app.kuaizhizao.purchaseOrder.col.inspectionRequired'),
-                        dataIndex: 'inspection_required',
-                        width: 100,
-                        render: (val) => (val ? t('app.kuaizhizao.purchaseRequisition.convertedYes') : t('app.kuaizhizao.purchaseRequisition.convertedNo')),
-                      },
-                    ]}
-                    dataSource={orderDetail.items}
-                    pagination={false}
-                    rowKey="id"
-                  />
-              ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.salesOrder.emptyItems')} />
-              )}
-            </>
-          ) : null
-        }
-        timeline={
-          orderDetail?.id ? (
-            <>
-              {purchaseOrderTracking.loading && (
-                <div style={{ textAlign: 'center', padding: 24 }}>
-                  <Spin />
-                </div>
-              )}
-              {purchaseOrderTracking.error && !purchaseOrderTracking.loading && (
-                <Typography.Text type="danger">{purchaseOrderTracking.error}</Typography.Text>
-              )}
-              {purchaseOrderTracking.data && !purchaseOrderTracking.loading && (
-                <DocumentTrackingTimelineBody data={purchaseOrderTracking.data} />
-              )}
-
-              <Divider style={{ margin: '16px 0' }} />
-              <Typography.Title level={5} style={{ margin: '0 0 8px' }}>{t('app.kuaizhizao.purchaseOrder.changeHistoryTitle')}</Typography.Title>
-              {orderChangeHistory.length ? (
-                <Table
-                  size="small"
-                  rowKey="id"
-                  pagination={false}
-                  dataSource={orderChangeHistory}
-                  columns={[
-                    { title: t('app.kuaizhizao.purchaseOrder.col.changeCode'), dataIndex: 'change_code' },
-                    { title: t('app.kuaizhizao.purchaseOrder.col.changeVersion'), dataIndex: 'change_version', width: 70 },
-                    { title: t('app.kuaizhizao.purchaseOrder.col.deltaAmount'), dataIndex: 'delta_amount', width: 100 },
-                    { title: t('common.status'), dataIndex: 'status', width: 100 },
-                    { title: t('app.kuaizhizao.purchaseOrder.col.appliedAt'), dataIndex: 'applied_at', width: 160, render: (v: string) => v || '-' },
-                  ]}
-                />
-              ) : (
-                <Typography.Text type="secondary">{t('app.kuaizhizao.purchaseOrder.emptyChanges')}</Typography.Text>
-              )}
-
-              {approvalStatus && approvalStatus.has_flow && (
-                <Spin spinning={approvalLoading}>
-                  <>
-                    <Divider style={{ margin: '16px 0' }} />
-                    <div
-                      style={{
-                        marginBottom: 8,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        flexWrap: 'wrap',
-                        gap: 8,
-                      }}
-                    >
-                      <Typography.Title level={5} style={{ margin: 0 }}>
-                        {t('app.kuaizhizao.purchaseOrder.approvalFlowTitle')}
-                      </Typography.Title>
-                      <Tag
-                        color={
-                          approvalStatus.status === 'approved'
-                            ? 'success'
-                            : approvalStatus.status === 'rejected'
-                              ? 'error'
-                              : 'processing'
-                        }
-                      >
-                        {approvalStatus.status === 'approved'
-                          ? t('app.kuaizhizao.purchaseOrder.approvalPassed')
-                          : approvalStatus.status === 'rejected'
-                            ? t('app.kuaizhizao.purchaseOrder.approvalRejected')
-                            : t('app.kuaizhizao.purchaseOrder.approvalInProgress')}
-                      </Tag>
-                    </div>
-                    <div style={{ marginBottom: 16 }}>
-                      {approvalStatus.current_node && (
-                        <div>
-                          <strong>{t('app.kuaizhizao.purchaseOrder.currentNode')}</strong>
-                          <Tag color="blue">{approvalStatus.current_node}</Tag>
-                        </div>
-                      )}
-                    </div>
-                    {approvalStatus?.history && approvalStatus.history.length > 0 && (
-                      <div>
-                        <Divider titlePlacement="left">{t('app.kuaizhizao.purchaseOrder.approvalRecords')}</Divider>
-                        <Timeline
-                          items={approvalStatus.history.map((h) => {
-                            const isPassed = h.action === 'approve';
-                            const isRejected = h.action === 'reject';
-                            return {
-                              icon: isPassed ? (
-                                <CheckCircleTwoTone twoToneColor="#52c41a" />
-                              ) : isRejected ? (
-                                <CloseCircleTwoTone twoToneColor="#ff4d4f" />
-                              ) : (
-                                <ClockCircleOutlined style={{ color: '#1890ff' }} />
-                              ),
-                              color: isPassed ? 'green' : isRejected ? 'red' : 'blue',
-                              content: (
-                                <div>
-                                  <div style={{ marginBottom: 4 }}>
-                                    <Tag color={isPassed ? 'success' : isRejected ? 'error' : 'processing'}>
-                                      {isPassed ? t('app.kuaizhizao.purchaseOrder.approvalPass') : isRejected ? t('app.kuaizhizao.purchaseOrder.approvalReject') : h.action || '-'}
-                                    </Tag>
-                                  </div>
-                                  <div style={{ color: '#666', fontSize: '12px', marginBottom: 4 }}>
-                                    {h.action_at && t('app.kuaizhizao.purchaseOrder.approvalTime', { time: h.action_at })}
-                                  </div>
-                                  {h.comment && (
-                                    <div style={{ color: '#999', fontSize: '12px', marginTop: 4 }}>
-                                      {t('app.kuaizhizao.purchaseOrder.approvalComment', { comment: h.comment })}
-                                    </div>
-                                  )}
-                                </div>
-                              ),
-                            };
-                          })}
-                        />
-                      </div>
-                    )}
-                    {(!approvalStatus?.history || approvalStatus.history.length === 0) && approvalStatus?.has_flow && (
-                      <Empty
-                        description={t('app.kuaizhizao.purchaseOrder.emptyApprovalRecords')}
-                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                        style={{ margin: '20px 0' }}
-                      />
-                    )}
-                  </>
-                </Spin>
-              )}
-            </>
-          ) : null
-        }
-      
-                        traceDocument={
-                          orderDetail?.id != null
-                            ? {
-                                documentType: 'purchase_order',
-                                documentId: orderDetail.id,
-                                selfDocumentId: orderDetail.id,
-                              renderBriefActions: (doc) => (
-                    <>
-                      {doc.document_type === 'purchase_requisition' ? (
-                        <Button
-                          type="primary"
-                          size="small"
-                          onClick={() => {
-                            setDetailDrawerVisible(false);
-                            navigate(ROUTES.PURCHASE_REQUISITIONS);
-                          }}
-                        >
-                          {t('components.documentTrackingPanel.traceBriefOpenPurchaseRequisition')}
-                        </Button>
-                      ) : null}
-                      {doc.document_type === 'receipt_notice' ? (
-                        <Button
-                          type="primary"
-                          size="small"
-                          onClick={() => {
-                            setDetailDrawerVisible(false);
-                            navigate(ROUTES.RECEIPT_NOTICES);
-                          }}
-                        >
-                          {t('components.documentTrackingPanel.traceBriefOpenReceiptNotice')}
-                        </Button>
-                      ) : null}
-                      {doc.document_type === 'purchase_return' ? (
-                        <Button
-                          type="primary"
-                          size="small"
-                          onClick={() => {
-                            setDetailDrawerVisible(false);
-                            navigate(ROUTES.PURCHASE_RETURNS);
-                          }}
-                        >
-                          {t('components.documentTrackingPanel.traceBriefOpenPurchaseReturn')}
-                        </Button>
-                      ) : null}
-                      {doc.document_type === 'purchase_invoice' ? (
-                        <Button
-                          type="primary"
-                          size="small"
-                          onClick={() => {
-                            setDetailDrawerVisible(false);
-                            navigate(`/apps/kuaicaiwu/finance-management/purchase-invoices/${doc.document_id}`);
-                          }}
-                        >
-                          {t('components.documentTrackingPanel.traceBriefOpenPurchaseInvoice')}
-                        </Button>
-                      ) : null}
-                      {doc.document_type === 'payable' ? (
-                        <Button
-                          type="primary"
-                          size="small"
-                          onClick={() => {
-                            setDetailDrawerVisible(false);
-                            navigate(`/apps/kuaicaiwu/finance-management/payables/${doc.document_id}`);
-                          }}
-                        >
-                          {t('components.documentTrackingPanel.traceBriefOpenPayable')}
-                        </Button>
-                      ) : null}
-                      {doc.document_type === 'payment' ? (
-                        <Button
-                          type="primary"
-                          size="small"
-                          onClick={() => {
-                            setDetailDrawerVisible(false);
-                            navigate('/apps/kuaicaiwu/finance-management/payments');
-                          }}
-                        >
-                          {t('components.documentTrackingPanel.traceBriefOpenPayment')}
-                        </Button>
-                      ) : null}
-                    </>
-                  )
-                              }
-                            : undefined
-                        }
       />
 
       <SyncFromDatasetModal

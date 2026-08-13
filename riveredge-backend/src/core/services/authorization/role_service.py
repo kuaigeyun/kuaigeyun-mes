@@ -39,7 +39,7 @@ class RoleService:
     """
     
     ALLOWED_ROLE_TYPES = {"internal", "external", "station"}
-    ALLOWED_EXTERNAL_PARTNER_TYPES = {"customer", "supplier"}
+    ALLOWED_EXTERNAL_PARTNER_TYPES = {"customer", "supplier", "manufacturer"}
 
     @staticmethod
     def _normalize_home_path(value: Optional[str]) -> Optional[str]:
@@ -67,7 +67,7 @@ class RoleService:
         if rt in {"internal", "station"}:
             return rt, None
         if pt not in RoleService.ALLOWED_EXTERNAL_PARTNER_TYPES:
-            raise ValidationError("外部角色必须指定合作方类型：customer / supplier")
+            raise ValidationError("外部角色必须指定合作方类型：customer / supplier / manufacturer")
         return "external", pt
 
     @staticmethod

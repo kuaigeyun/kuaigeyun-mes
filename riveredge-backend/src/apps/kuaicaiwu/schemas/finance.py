@@ -571,6 +571,11 @@ class PartnerStatementPreviewResponse(BaseSchema):
     excluded_from_period: int = Field(
         0, description="本期因已纳入其它对账单而排除的明细行数"
     )
+    existing_period_statement_id: Optional[int] = Field(
+        None, description="同一往来同一 YYYY-MM 已存在的未删除对账单"
+    )
+    existing_period_statement_code: Optional[str] = None
+    existing_period: Optional[str] = None
 
 
 class PartnerStatementCreate(BaseSchema):

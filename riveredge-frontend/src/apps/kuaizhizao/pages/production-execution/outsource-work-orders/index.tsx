@@ -14,7 +14,6 @@ import { rowActionKind } from '../../../../../components/uni-action';
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import type { DescriptionsProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { inboundOutsourceEntryPath } from '../../warehouse-management/inbound/inboundPaths';
 import { outboundOutsourceEntryPath } from '../../warehouse-management/outbound/outboundPaths';
@@ -63,9 +62,9 @@ import {
   ListPageTemplate,
   FormModalTemplate,
   DetailDrawerTemplate,
-  DetailDrawerSection,
   MODAL_CONFIG,
   DRAWER_CONFIG,
+  detailDrawerDescriptionItems,
   type StatCard,
 } from '../../../../../components/layout-templates';
 import { SimpleSparkline } from '../../../../../components';
@@ -96,10 +95,11 @@ import { buildDocumentCreateDraftKey, setDocumentFormDraft } from '../../../../.
 import { outsourceWorkOrderCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import type { PushPreviewResponse } from '../../../services/sales-order';
-import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { formatDateTime, formatDateTimeBySiteSetting, formatQuantity } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateFormItemProps, formDateRangeFormItemProps, toApiDateTimeString } from '../../../../../utils/formDate';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import type { AuditPhaseRecord } from '../../../../../components/uni-audit/AuditPhaseBadge';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar';
 import { outsourceWorkOrderPushPercent } from '../../sales-management/shared/pushProgress';
@@ -208,35 +208,6 @@ async function resolveOutsourceOperationName(value?: string | null): Promise<str
   } catch {
     return raw;
   }
-}
-
-function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
-  dataSource: T,
-  cols: ProDescriptionsItemProps<T>[]
-): NonNullable<DescriptionsProps['items']> {
-  return cols.map((col, index) => {
-    const dataIndex = col.dataIndex as keyof T | undefined;
-    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
-    let content: React.ReactNode = value as React.ReactNode;
-    if (col.valueType === 'dateTime' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
-    } else if (col.valueType === 'date' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD');
-    }
-    if (col.render && dataSource != null) {
-            content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
-        content,
-        dataSource,
-        index,
-      );
-    }
-    return {
-      key: String(col.key ?? col.dataIndex ?? index),
-      label: col.title as React.ReactNode,
-      children: content !== undefined && content !== null ? content : '-',
-      span: col.span ?? 1,
-    };
-  });
 }
 
 /** 委外总金额只读展示：须在 ProForm 内用 Form.useWatch，勿用 ProFormDependency 包 colProps（会打断栅格导致左侧裁切） */
@@ -572,11 +543,6 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         },
       },
       {
-        title: t('app.kuaizhizao.outsourceWorkOrder.colStatus'),
-        dataIndex: 'status',
-        render: (_, record) => getOwoStatusTag(record.status),
-      },
-      {
         title: t('app.kuaizhizao.outsourceWorkOrder.colPriority'),
         dataIndex: 'priority',
         render: (_, record) => getOwoPriorityTag(record.priority),
@@ -619,7 +585,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         valueType: 'dateTime',
         render: (_, record) => {
           const date = record.plannedStartDate || record.planned_start_date;
-          return date ? formatDateTime(date, 'YYYY-MM-DD HH:mm:ss') : '-';
+          return date ? formatDateTimeBySiteSetting(date) : '-';
         },
       },
       {
@@ -628,7 +594,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         valueType: 'dateTime',
         render: (_, record) => {
           const date = record.plannedEndDate || record.planned_end_date;
-          return date ? formatDateTime(date, 'YYYY-MM-DD HH:mm:ss') : '-';
+          return date ? formatDateTimeBySiteSetting(date) : '-';
         },
       },
       {
@@ -637,7 +603,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         valueType: 'dateTime',
         render: (_, record) => {
           const date = record.actualStartDate || record.actual_start_date;
-          return date ? formatDateTime(date, 'YYYY-MM-DD HH:mm:ss') : '-';
+          return date ? formatDateTimeBySiteSetting(date) : '-';
         },
       },
       {
@@ -646,7 +612,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         valueType: 'dateTime',
         render: (_, record) => {
           const date = record.actualEndDate || record.actual_end_date;
-          return date ? formatDateTime(date, 'YYYY-MM-DD HH:mm:ss') : '-';
+          return date ? formatDateTimeBySiteSetting(date) : '-';
         },
       },
     ],
@@ -658,10 +624,16 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       title: t('app.kuaizhizao.common.fieldNotes'),
       dataIndex: 'remarks',
       span: 3,
-      render: (text) => text || '-',
     }),
     [t],
   );
+
+  const owoDetailLifecycle = useMemo(
+    () => (workOrderDetail ? getOutsourceWorkOrderLifecycle(workOrderDetail as Record<string, unknown>) : null),
+    [workOrderDetail],
+  );
+  const owoNextSteps = owoDetailLifecycle?.nextStepSuggestions;
+  const owoShowNextInTitle = Boolean(owoNextSteps?.length);
 
   /** 产品选择变更：获取物料来源信息并自动填充 */
   const handleProductChange = async (value: number | undefined) => {
@@ -2087,9 +2059,6 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           resetOwoDetailFieldValues();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        column={3}
-        dataSource={workOrderDetail || undefined}
         extra={
           workOrderDetail ? (
             <Space>
@@ -2111,82 +2080,74 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
             </Space>
           ) : null
         }
-        customContent={
-          workOrderDetail && (
-            <>
-              <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
-                <Descriptions
-                  column={3}
-                  size="small"
-                  items={buildDescriptionItemsFromColumns(workOrderDetail, detailBaseColumns)}
-                />
-                {hasCustomFieldsDetailContent(owoListCustomFields, owoDetailCustomFieldValues) ? (
-                  <div style={{ marginTop: 16 }}>
-                    <CustomFieldsDetailSection
-                      customFields={owoListCustomFields}
-                      customFieldValues={owoDetailCustomFieldValues}
-                    />
-                  </div>
-                ) : null}
-                <Descriptions
-                  column={3}
-                  size="small"
-                  style={{ marginTop: 16 }}
-                  items={buildDescriptionItemsFromColumns(workOrderDetail, [detailRemarksColumn])}
-                />
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lifecycle = getOutsourceWorkOrderLifecycle(workOrderDetail as Record<string, unknown>);
-                    const mainStages = lifecycle.mainStages ?? [];
-                    if (mainStages.length === 0) return null;
-                    return (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        status={lifecycle.status}
-                        showLabels
-                        nextStepSuggestions={lifecycle.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
-                    );
-                  })()}
-                  
-                </div>
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.outsourceWorkOrder.noLineItems')} />
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
-                {outsourceWorkOrderTracking.loading && (
-                  <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Spin />
-                  </div>
-                )}
-                {outsourceWorkOrderTracking.error && !outsourceWorkOrderTracking.loading && (
-                  <Typography.Text type="danger">{outsourceWorkOrderTracking.error}</Typography.Text>
-                )}
-                {outsourceWorkOrderTracking.data && !outsourceWorkOrderTracking.loading && (
-                  <DocumentTrackingTimelineBody data={outsourceWorkOrderTracking.data} />
-                )}
-                {!outsourceWorkOrderTracking.loading && !outsourceWorkOrderTracking.data && !outsourceWorkOrderTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('components.documentTrackingPanel.noOperations')} />
-                )}
-              </DetailDrawerSection>
-            </>
-          )
+        collaborationTitleSuffix={
+          workOrderDetail && owoShowNextInTitle ? (
+            <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
+              {t('components.uniLifecycle.nextStep')}：
+              {owoNextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
+            </Typography.Text>
+          ) : undefined
         }
-      
-                        traceDocument={
-                          workOrderDetail?.id != null
-                            ? {
-                                documentType: 'outsource_work_order',
-                                documentId: workOrderDetail.id,
-                                selfDocumentId: workOrderDetail.id,
-                              renderBriefActions: (doc) => (
+        collaborationAuditRecord={workOrderDetail as AuditPhaseRecord | null}
+        basic={
+          workOrderDetail ? (
+            <>
+              <Descriptions
+                column={3}
+                size="small"
+                items={detailDrawerDescriptionItems(detailBaseColumns, workOrderDetail)}
+              />
+              {hasCustomFieldsDetailContent(owoListCustomFields, owoDetailCustomFieldValues) ? (
+                <div style={{ marginTop: 16 }}>
+                  <CustomFieldsDetailSection
+                    customFields={owoListCustomFields}
+                    customFieldValues={owoDetailCustomFieldValues}
+                  />
+                </div>
+              ) : null}
+              <Descriptions
+                column={3}
+                size="small"
+                style={{ marginTop: 16 }}
+                items={detailDrawerDescriptionItems([detailRemarksColumn], workOrderDetail)}
+              />
+            </>
+          ) : undefined
+        }
+        collaboration={
+          workOrderDetail && (owoDetailLifecycle?.mainStages ?? []).length > 0 ? (
+            <UniLifecycleStepper
+              steps={owoDetailLifecycle!.mainStages ?? []}
+              status={owoDetailLifecycle!.status}
+              showLabels
+              nextStepSuggestions={owoDetailLifecycle!.nextStepSuggestions}
+              hideNextStepSuggestions={owoShowNextInTitle}
+            />
+          ) : null
+        }
+        lines={
+          workOrderDetail ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.outsourceWorkOrder.noLineItems')} />
+          ) : undefined
+        }
+        timeline={
+          workOrderDetail ? (
+            outsourceWorkOrderTracking.data && !outsourceWorkOrderTracking.loading ? (
+              <DocumentTrackingTimelineBody data={outsourceWorkOrderTracking.data} />
+            ) : outsourceWorkOrderTracking.error ? (
+              <Typography.Text type="danger">{outsourceWorkOrderTracking.error}</Typography.Text>
+            ) : !outsourceWorkOrderTracking.loading ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('components.documentTrackingPanel.noOperations')} />
+            ) : null
+          ) : undefined
+        }
+        traceDocument={
+          workOrderDetail?.id != null
+            ? {
+                documentType: 'outsource_work_order',
+                documentId: workOrderDetail.id,
+                selfDocumentId: workOrderDetail.id,
+                renderBriefActions: (doc) => (
                   <WarehouseTraceBriefPrimaryActions
                     doc={doc}
                     t={t}
@@ -2196,10 +2157,10 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
                       setWorkOrderDetail(null);
                     }}
                   />
-                )
-                              }
-                            : undefined
-                        }
+                ),
+              }
+            : undefined
+        }
       />
 
       <Modal

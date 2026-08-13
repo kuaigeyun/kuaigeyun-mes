@@ -17,11 +17,10 @@ import {
   ProFormInstance,
   ProFormDependency,
   ProFormDigit,
-  ProFormGroup,
   type ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Button, Descriptions, Input, Modal, Popconfirm, Tag } from 'antd';
+import { App, Button, Input, Modal, Popconfirm } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag } from '../../utils/systemListPresentation';
 import {
@@ -33,8 +32,10 @@ import {
   CheckCircleOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import {
   getMessageConfigList,
   getMessageConfigByUuid,
@@ -58,7 +59,7 @@ const MessageConfigListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
-  const messageConfigDetailReqRef = useRef(0);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑消息配置）
@@ -71,6 +72,7 @@ const MessageConfigListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<MessageConfig | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   const BUILTIN_INTERNAL_CHANNEL_UUID = '__builtin_internal_channel__';
   const BUILTIN_INTERNAL_CHANNEL_CODE = 'IN_APP_DEFAULT';
@@ -134,34 +136,34 @@ const MessageConfigListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: MessageConfig) => {
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const detail = await getMessageConfigByUuid(uuid);
+      setDetailData(detail);
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.messageConfig.getDetailFailed')));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleView = (record: MessageConfig) => {
     if (isBuiltInChannel(record)) {
-      flushDrawerOpen(() => {
-        setDetailData(builtInInternalChannel);
-        setDrawerVisible(true);
-        setDetailLoading(false);
-      });
+      detailRetryUuidRef.current = null;
+      setDrawerVisible(true);
+      setDetailLoading(false);
+      setDetailError(null);
+      setDetailData(builtInInternalChannel);
       return;
     }
-    const req = ++messageConfigDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
-    try {
-      const detail = await getMessageConfigByUuid(record.uuid);
-      if (messageConfigDetailReqRef.current !== req) return;
-      setDetailData(detail);
-    } catch (error: any) {
-      if (messageConfigDetailReqRef.current === req) {
-        messageApi.error(error.message || t('pages.system.messageConfig.getDetailFailed'));
-      }
-    } finally {
-      if (messageConfigDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
-    }
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -520,20 +522,13 @@ const MessageConfigListPage: React.FC = () => {
     {
       title: t('pages.system.messageConfig.activeStatus'),
       dataIndex: 'is_active',
-      render: (_, r) => (
-        <Tag color={r.is_active ? 'success' : 'default'}>
-          {r.is_active ? t('pages.system.applications.enabled') : t('pages.system.applications.disabled')}
-        </Tag>
-      ),
+      render: (_, r) =>
+        renderSystemActiveTag(t, r.is_active, 'pages.system.applications.enabled', 'pages.system.applications.disabled'),
     },
     {
       title: t('pages.system.messageConfig.defaultConfig'),
       dataIndex: 'is_default',
-      render: (_, r) => (
-        <Tag color={r.is_default ? 'success' : 'default'}>
-          {r.is_default ? t('field.customField.yes') : t('field.customField.no')}
-        </Tag>
-      ),
+      render: (_, r) => renderSystemYesNoTag(t, r.is_default),
     },
     { title: t('pages.system.messageConfig.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
     { title: t('pages.system.messageConfig.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
@@ -636,172 +631,177 @@ const MessageConfigListPage: React.FC = () => {
         isEdit={isEdit}
         loading={formLoading}
         width={MODAL_CONFIG.SMALL_WIDTH}
+        grid
       >
-        <div style={{ padding: '0' }}>
-          <ProFormText
-            name="code"
-            label={t('pages.system.messageConfig.code')}
-            rules={[
-              { required: true, message: t('pages.system.messageConfig.codeRequired') },
-              { pattern: /^[A-Z0-9_]+$/, message: t('pages.system.messageConfig.codePattern') },
-            ]}
-            placeholder={t('pages.system.messageConfig.codePlaceholder')}
-            disabled={isEdit}
-          />
-          <ProFormText
-            name="name"
-            label={t('pages.system.messageConfig.name')}
-            rules={[{ required: true, message: t('pages.system.messageConfig.nameRequired') }]}
-            placeholder={t('pages.system.messageConfig.namePlaceholder')}
-          />
-          <SafeProFormSelect
-            name="type"
-            label={t('pages.system.messageConfig.type')}
-            rules={[{ required: true, message: t('pages.system.messageConfig.typeRequired') }]}
-            options={[
-              { label: t('pages.system.messageConfig.typeEmailOption'), value: 'email' },
-              { label: t('pages.system.messageConfig.typeSmsOption'), value: 'sms' },
-              { label: t('pages.system.messageConfig.typeInternalOption'), value: 'internal' },
-              { label: t('pages.system.messageConfig.typePushOption'), value: 'push' },
-            ]}
-            disabled={isEdit}
-          />
+        <ProFormText
+          name="code"
+          label={t('pages.system.messageConfig.code')}
+          rules={[
+            { required: true, message: t('pages.system.messageConfig.codeRequired') },
+            { pattern: /^[A-Z0-9_]+$/, message: t('pages.system.messageConfig.codePattern') },
+          ]}
+          placeholder={t('pages.system.messageConfig.codePlaceholder')}
+          disabled={isEdit}
+          colProps={{ span: 24 }}
+        />
+        <ProFormText
+          name="name"
+          label={t('pages.system.messageConfig.name')}
+          rules={[{ required: true, message: t('pages.system.messageConfig.nameRequired') }]}
+          placeholder={t('pages.system.messageConfig.namePlaceholder')}
+          colProps={{ span: 24 }}
+        />
+        <SafeProFormSelect
+          name="type"
+          label={t('pages.system.messageConfig.type')}
+          rules={[{ required: true, message: t('pages.system.messageConfig.typeRequired') }]}
+          options={[
+            { label: t('pages.system.messageConfig.typeEmailOption'), value: 'email' },
+            { label: t('pages.system.messageConfig.typeSmsOption'), value: 'sms' },
+            { label: t('pages.system.messageConfig.typeInternalOption'), value: 'internal' },
+            { label: t('pages.system.messageConfig.typePushOption'), value: 'push' },
+          ]}
+          disabled={isEdit}
+          colProps={{ span: 24 }}
+        />
 
-          <ProFormDependency name={['type']}>
-            {({ type }) => {
-              if (type === 'email') {
-                return (
-                  <div style={{ marginTop: 24 }}>
-                    <ProFormGroup grid>
-                      <ProFormText
-                        name="smtp_host"
-                        label={t('pages.system.messageConfig.smtpHost')}
-                        rules={[{ required: true }]}
-                        placeholder={t('pages.system.messageConfig.smtpHostPlaceholder')}
-                        colProps={{ span: 24 }}
-                      />
-                      <ProFormDigit
-                        name="smtp_port"
-                        label={t('pages.system.messageConfig.smtpPort')}
-                        rules={[{ required: true }]}
-                        placeholder={t('pages.system.messageConfig.smtpPortPlaceholder')}
-                        colProps={{ span: 24 }}
-                      />
-                      <ProFormText
-                        name="smtp_username"
-                        label={t('pages.system.messageConfig.smtpUsername')}
-                        rules={[{ required: true, type: 'email' }]}
-                        placeholder="your-account@example.com"
-                        colProps={{ span: 24 }}
-                      />
-                      <ProFormText.Password
-                        name="smtp_password"
-                        label={t('pages.system.messageConfig.smtpPassword')}
-                        rules={[{ required: true }]}
-                        placeholder={t('pages.system.messageConfig.smtpPasswordPlaceholder')}
-                        colProps={{ span: 24 }}
-                      />
-                      <ProFormText
-                        name="from_name"
-                        label={t('pages.system.messageConfig.fromName')}
-                        placeholder={t('pages.system.messageConfig.fromNamePlaceholder')}
-                        colProps={{ span: 24 }}
-                      />
-                      <div style={{ display: 'flex', alignItems: 'center', height: 60 }}>
-                        <ProFormSwitch
-                          name="smtp_use_tls"
-                          label={t('pages.system.messageConfig.smtpUseTls')}
-                          initialValue={true}
-                        />
-                      </div>
-                    </ProFormGroup>
-                  </div>
-                );
-              }
-              if (type === 'sms') {
-                return (
-                  <div style={{ marginTop: 24 }}>
-                    <ProFormGroup grid>
-                      <SafeProFormSelect
-                        name="provider"
-                        label={t('pages.system.messageConfig.provider')}
-                        initialValue="aliyun"
-                        options={[
-                          { label: t('pages.system.messageConfig.providerAliyun'), value: 'aliyun' },
-                          { label: t('pages.system.messageConfig.providerTencent'), value: 'tencent' },
-                        ]}
-                        colProps={{ span: 24 }}
-                      />
-                      <ProFormText
-                        name="access_key_id"
-                        label={t('pages.system.messageConfig.accessKeyId')}
-                        rules={[{ required: true }]}
-                        placeholder={t('pages.system.messageConfig.accessKeyIdPlaceholder')}
-                        colProps={{ span: 24 }}
-                        fieldProps={{ prefix: <SafetyCertificateOutlined style={{ color: '#bfbfbf' }} /> }}
-                      />
-                      <ProFormText.Password
-                        name="access_key_secret"
-                        label={t('pages.system.messageConfig.accessKeySecret')}
-                        rules={[{ required: true }]}
-                        placeholder={t('pages.system.messageConfig.accessKeySecretPlaceholder')}
-                        colProps={{ span: 24 }}
-                      />
-                      <ProFormText
-                        name="sign_name"
-                        label={t('pages.system.messageConfig.signName')}
-                        placeholder={t('pages.system.messageConfig.signNamePlaceholder')}
-                        colProps={{ span: 24 }}
-                        fieldProps={{ prefix: <CheckCircleOutlined style={{ color: '#bfbfbf' }} /> }}
-                      />
-                      <ProFormText
-                        name="region"
-                        label={t('pages.system.messageConfig.region')}
-                        placeholder={t('pages.system.messageConfig.regionPlaceholder')}
-                        colProps={{ span: 24 }}
-                      />
-                    </ProFormGroup>
-                  </div>
-                );
-              }
-              return null;
-            }}
-          </ProFormDependency>
+        <ProFormDependency name={['type']}>
+          {({ type }) => {
+            if (type === 'email') {
+              return (
+                <>
+                  <ProFormText
+                    name="smtp_host"
+                    label={t('pages.system.messageConfig.smtpHost')}
+                    rules={[{ required: true }]}
+                    placeholder={t('pages.system.messageConfig.smtpHostPlaceholder')}
+                    colProps={{ span: 16 }}
+                  />
+                  <ProFormDigit
+                    name="smtp_port"
+                    label={t('pages.system.messageConfig.smtpPort')}
+                    rules={[{ required: true }]}
+                    placeholder={t('pages.system.messageConfig.smtpPortPlaceholder')}
+                    colProps={{ span: 8 }}
+                    fieldProps={{ style: { width: '100%' } }}
+                  />
+                  <ProFormText
+                    name="smtp_username"
+                    label={t('pages.system.messageConfig.smtpUsername')}
+                    rules={[{ required: true, type: 'email' }]}
+                    placeholder="your-account@example.com"
+                    colProps={{ span: 12 }}
+                  />
+                  <ProFormText.Password
+                    name="smtp_password"
+                    label={t('pages.system.messageConfig.smtpPassword')}
+                    rules={[{ required: true }]}
+                    placeholder={t('pages.system.messageConfig.smtpPasswordPlaceholder')}
+                    colProps={{ span: 12 }}
+                  />
+                  <ProFormText
+                    name="from_name"
+                    label={t('pages.system.messageConfig.fromName')}
+                    placeholder={t('pages.system.messageConfig.fromNamePlaceholder')}
+                    colProps={{ span: 12 }}
+                  />
+                  <ProFormSwitch
+                    name="smtp_use_tls"
+                    label={t('pages.system.messageConfig.smtpUseTls')}
+                    initialValue={true}
+                    colProps={{ span: 12 }}
+                  />
+                </>
+              );
+            }
+            if (type === 'sms') {
+              return (
+                <>
+                  <SafeProFormSelect
+                    name="provider"
+                    label={t('pages.system.messageConfig.provider')}
+                    initialValue="aliyun"
+                    options={[
+                      { label: t('pages.system.messageConfig.providerAliyun'), value: 'aliyun' },
+                      { label: t('pages.system.messageConfig.providerTencent'), value: 'tencent' },
+                    ]}
+                    colProps={{ span: 12 }}
+                  />
+                  <ProFormText
+                    name="region"
+                    label={t('pages.system.messageConfig.region')}
+                    placeholder={t('pages.system.messageConfig.regionPlaceholder')}
+                    colProps={{ span: 12 }}
+                  />
+                  <ProFormText
+                    name="access_key_id"
+                    label={t('pages.system.messageConfig.accessKeyId')}
+                    rules={[{ required: true }]}
+                    placeholder={t('pages.system.messageConfig.accessKeyIdPlaceholder')}
+                    colProps={{ span: 12 }}
+                    fieldProps={{ prefix: <SafetyCertificateOutlined style={{ color: '#bfbfbf' }} /> }}
+                  />
+                  <ProFormText.Password
+                    name="access_key_secret"
+                    label={t('pages.system.messageConfig.accessKeySecret')}
+                    rules={[{ required: true }]}
+                    placeholder={t('pages.system.messageConfig.accessKeySecretPlaceholder')}
+                    colProps={{ span: 12 }}
+                  />
+                  <ProFormText
+                    name="sign_name"
+                    label={t('pages.system.messageConfig.signName')}
+                    placeholder={t('pages.system.messageConfig.signNamePlaceholder')}
+                    colProps={{ span: 24 }}
+                    fieldProps={{ prefix: <CheckCircleOutlined style={{ color: '#bfbfbf' }} /> }}
+                  />
+                </>
+              );
+            }
+            return null;
+          }}
+        </ProFormDependency>
 
-          <div style={{ marginTop: 24 }}>
-            <ProFormTextArea
-              name="description"
-              label={t('pages.system.messageConfig.remark')}
-              placeholder={t('pages.system.messageConfig.remarkPlaceholder')}
-              fieldProps={{ rows: 2 }}
-            />
-          </div>
-
-          <div style={{ marginTop: 24 }}>
-            <ProFormSwitch
-              name="is_active"
-              label={t('pages.system.messageConfig.activeStatus')}
-              colProps={{ span: 24 }}
-            />
-            <ProFormSwitch
-              name="is_default"
-              label={t('pages.system.messageConfig.defaultConfig')}
-              colProps={{ span: 24 }}
-            />
-          </div>
-        </div>
+        <ProFormTextArea
+          name="description"
+          label={t('pages.system.messageConfig.remark')}
+          placeholder={t('pages.system.messageConfig.remarkPlaceholder')}
+          fieldProps={{ rows: 2 }}
+          colProps={{ span: 24 }}
+        />
+        <ProFormSwitch
+          name="is_active"
+          label={t('pages.system.messageConfig.activeStatus')}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSwitch
+          name="is_default"
+          label={t('pages.system.messageConfig.defaultConfig')}
+          colProps={{ span: 12 }}
+        />
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('pages.system.messageConfig.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={detailData ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns as ProDescriptionsItemProps<MessageConfig>[], detailData)} />
-          ) : null}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryUuidRef.current;
+          if (id) void loadDetail(id);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detailData) && !isBuiltInChannel(detailData), () => {
+          if (!detailData) return;
+          void handleEdit(detailData);
+        })}
+        detail={detailData}
+        detailColumns={detailColumns as ProDescriptionsItemProps<MessageConfig>[]}
       />
     </>
   );

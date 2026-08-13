@@ -2847,7 +2847,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               key="aiAssistant"
               tooltip={t('ui.aiAssistant.tooltip')}
               onClick={openAiAssistant}
-              isLightModeLightBg={isLightModeLightBg}
+              isDarkHeader={!isLightModeLightBg}
             />,
           );
           }

@@ -8,24 +8,26 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Card, Form as AntForm, Modal, Select, Space, Table, Tag, Typography } from 'antd';
+import { App, Button, Form as AntForm, Modal, Select, Space, Table, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import {
-  DRAWER_CONFIG,
-  DetailDrawerTemplate,
   FormModalTemplate,
   ListPageTemplate,
   MODAL_CONFIG,
   WAREHOUSE_DETAIL_TABLE_STYLES,
 } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
+import { MasterDataDetailDrawer } from '../../../../master-data/pages/shared/masterDataDetailDrawer';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { assemblyTemplateApi } from '../../../services/assembly-template';
-import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { formatDateTimeBySiteSetting, formatQuantity } from '../../../../../utils/format';
 
 const ASSEMBLY_ORDERS_RESOURCE = 'kuaizhizao:warehouse-management-assembly-orders';
 
@@ -67,6 +69,9 @@ export const AssemblyTemplatesTab: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [itemModalVisible, setItemModalVisible] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryIdRef = useRef<number | null>(null);
   const [editingTemplate, setEditingTemplate] = useState<AssemblyTemplate | null>(null);
   const [currentTemplate, setCurrentTemplate] = useState<AssemblyTemplate | null>(null);
   const [editingItem, setEditingItem] = useState<TemplateItem | null>(null);
@@ -83,15 +88,24 @@ export const AssemblyTemplatesTab: React.FC = () => {
 
   const reloadList = () => actionRef.current?.reload();
 
+  const loadDetail = async (templateId: number) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const detail = await assemblyTemplateApi.get(String(templateId));
+      setCurrentTemplate(detail as AssemblyTemplate);
+    } catch (error) {
+      setCurrentTemplate(null);
+      setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.assemblyTemplate.loadDetailFailed')));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
   const refreshCurrentTemplate = async (templateId?: number) => {
     const targetId = templateId ?? currentTemplate?.id;
     if (!targetId) return;
-    try {
-      const detail = await assemblyTemplateApi.get(String(targetId));
-      setCurrentTemplate(detail as AssemblyTemplate);
-    } catch {
-      // keep drawer content
-    }
+    await loadDetail(targetId);
   };
 
   const openCreateModal = () => {
@@ -124,14 +138,13 @@ export const AssemblyTemplatesTab: React.FC = () => {
     }
   };
 
-  const openDetailDrawer = async (record: AssemblyTemplate) => {
-    try {
-      const detail = await assemblyTemplateApi.get(String(record.id));
-      setCurrentTemplate(detail as AssemblyTemplate);
-      setDrawerVisible(true);
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.loadDetailFailed'));
-    }
+  const openDetailDrawer = (record: AssemblyTemplate) => {
+    if (record.id == null) return;
+    detailRetryIdRef.current = record.id;
+    setDrawerVisible(true);
+    setCurrentTemplate(null);
+    setDetailError(null);
+    void loadDetail(record.id);
   };
 
   const submitTemplate = async (values: any) => {
@@ -349,9 +362,9 @@ export const AssemblyTemplatesTab: React.FC = () => {
           false: { text: t('app.kuaizhizao.warehouseCommon.disabled'), status: 'Default' },
         },
         render: (_, r) => (
-          <Tag color={r.is_active ? 'success' : 'default'}>
+          <MarkerTag color={r.is_active ? 'success' : 'default'}>
             {r.is_active ? t('app.kuaizhizao.warehouseCommon.enabled') : t('app.kuaizhizao.warehouseCommon.disabled')}
-          </Tag>
+          </MarkerTag>
         ),
       },
       {
@@ -359,7 +372,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
         dataIndex: 'updated_at',
         width: 168,
         hideInSearch: true,
-        render: (_, r) => (r.updated_at ? formatDateTime(r.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
+        render: (_, r) => (r.updated_at ? formatDateTimeBySiteSetting(r.updated_at) : '-'),
       },
       {
         title: t('app.kuaizhizao.warehouseCommon.colActions'),
@@ -384,8 +397,8 @@ export const AssemblyTemplatesTab: React.FC = () => {
 
   const detailColumns: ProDescriptionsItemProps<AssemblyTemplate>[] = useMemo(
     () => [
-      { title: t('app.kuaizhizao.assemblyTemplate.colTemplateCode'), dataIndex: 'template_code' },
-      { title: t('app.kuaizhizao.assemblyTemplate.colTemplateName'), dataIndex: 'template_name' },
+      { title: t('app.kuaizhizao.assemblyTemplate.colTemplateCode'), dataIndex: 'template_code', key: 'code', copyable: true },
+      { title: t('app.kuaizhizao.assemblyTemplate.colTemplateName'), dataIndex: 'template_name', key: 'name' },
       { title: t('app.kuaizhizao.warehouseCommon.colProductMaterial'), dataIndex: 'product_material_name' },
       { title: t('app.kuaizhizao.assemblyTemplate.colBaseQuantity'), dataIndex: 'base_quantity' },
       {
@@ -397,12 +410,13 @@ export const AssemblyTemplatesTab: React.FC = () => {
       {
         title: t('app.kuaizhizao.warehouseCommon.colStatus'),
         dataIndex: 'is_active',
-        render: (value) =>
-          value ? (
-            <Tag color="success">{t('app.kuaizhizao.warehouseCommon.enabled')}</Tag>
-          ) : (
-            <Tag>{t('app.kuaizhizao.warehouseCommon.disabled')}</Tag>
-          ),
+        render: (_, record) => (
+          <MarkerTag color={record.is_active ? 'success' : 'default'}>
+            {record.is_active
+              ? t('app.kuaizhizao.warehouseCommon.enabled')
+              : t('app.kuaizhizao.warehouseCommon.disabled')}
+          </MarkerTag>
+        ),
       },
       { title: t('app.kuaizhizao.assemblyTemplate.colLineCount'), dataIndex: 'total_items' },
       { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 2 },
@@ -480,11 +494,6 @@ export const AssemblyTemplatesTab: React.FC = () => {
 
   const draftActions = currentTemplate ? (
     <Space>
-      {canUpdate && (
-        <Button size="small" onClick={() => openEditModal(currentTemplate)}>
-          {t('app.kuaizhizao.warehouseCommon.editMainOrder')}
-        </Button>
-      )}
       {canCreate && (
         <Button size="small" icon={<PlusOutlined />} onClick={() => openItemModal(currentTemplate)}>
           {t('app.kuaizhizao.warehouseCommon.addItem')}
@@ -636,32 +645,49 @@ export const AssemblyTemplatesTab: React.FC = () => {
         />
       </FormModalTemplate>
 
-      <DetailDrawerTemplate
-        title={`${t('app.kuaizhizao.assemblyTemplate.detailTitle')}${currentTemplate?.template_code ? ` - ${currentTemplate.template_code}` : ''}`}
+      <MasterDataDetailDrawer
+        title={t('app.kuaizhizao.assemblyTemplate.detailTitle')}
         open={drawerVisible}
         onClose={() => {
           setDrawerVisible(false);
           setCurrentTemplate(null);
+          setDetailError(null);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
-        dataSource={currentTemplate || {}}
-        columns={detailColumns}
-        customContent={
-          <Card title={t('app.kuaizhizao.assemblyTemplate.componentItems')} extra={draftActions}>
-            <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
-            {currentTemplate?.items && currentTemplate.items.length > 0 ? (
-              <Table<TemplateItem>
-                className="warehouse-detail-table"
-                size="small"
-                rowKey="id"
-                pagination={false}
-                dataSource={currentTemplate.items}
-                columns={itemTableColumns}
-              />
-            ) : (
-              <Typography.Text type="secondary">{t('app.kuaizhizao.assemblyTemplate.noItemsHint')}</Typography.Text>
-            )}
-          </Card>
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryIdRef.current;
+          if (id != null) void loadDetail(id);
+        }}
+        extra={
+          currentTemplate
+            ? buildDetailDrawerEditExtra(t, Boolean(canUpdate), () => {
+                void openEditModal(currentTemplate);
+              })
+            : null
+        }
+        detail={currentTemplate}
+        detailColumns={detailColumns}
+        linesTitle={t('app.kuaizhizao.assemblyTemplate.componentItems')}
+        lines={
+          currentTemplate ? (
+            <>
+              <div style={{ marginBottom: 12 }}>{draftActions}</div>
+              <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+              {currentTemplate.items && currentTemplate.items.length > 0 ? (
+                <Table<TemplateItem>
+                  className="warehouse-detail-table"
+                  size="small"
+                  rowKey="id"
+                  pagination={false}
+                  dataSource={currentTemplate.items}
+                  columns={itemTableColumns}
+                />
+              ) : (
+                <Typography.Text type="secondary">{t('app.kuaizhizao.assemblyTemplate.noItemsHint')}</Typography.Text>
+              )}
+            </>
+          ) : undefined
         }
       />
 

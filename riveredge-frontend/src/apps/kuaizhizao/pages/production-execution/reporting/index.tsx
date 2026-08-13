@@ -9,17 +9,14 @@ import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import type { DescriptionsProps } from 'antd';
+import type { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import {
-  ActionType,
-  ProColumns,
   ProFormSelect,
   ProFormRadio,
   ProFormDigit,
   ProFormTextArea,
   ProFormItem,
   ProFormDependency,
-  ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import {
   App,
@@ -60,8 +57,8 @@ import {
   FormModalTemplate,
   MODAL_CONFIG,
   DetailDrawerTemplate,
-  DetailDrawerSection,
   DRAWER_CONFIG,
+  detailDrawerDescriptionItems,
   type StatCard,
 } from '../../../../../components/layout-templates';
 import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates/constants';
@@ -76,6 +73,7 @@ import type { DefectType } from '../../../../master-data/types/process';
 import { reportingApi, workOrderApi, materialBindingApi, getReportingStatistics } from '../../../services/production';
 import { getReportingLifecycle, reportingRecordUniAuditProps, buildReportingStatusValueEnum, resolveReportingListStatusParams } from '../../../utils/reportingLifecycle';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
+import type { AuditPhaseRecord } from '../../../../../components/uni-audit/AuditPhaseBadge';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
@@ -109,7 +107,7 @@ import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
@@ -244,35 +242,6 @@ function resolveWorkOrderDisplayName(workOrder?: {
 
 function getReportingWorkOrderCode(record: ReportingRecord): string {
   return String(record.work_order_code ?? record.workOrderCode ?? '').trim() || '-';
-}
-
-function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
-  dataSource: T,
-  cols: ProDescriptionsItemProps<T>[]
-): NonNullable<DescriptionsProps['items']> {
-  return cols.map((col, index) => {
-    const dataIndex = col.dataIndex as keyof T | undefined;
-    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
-    let content: React.ReactNode = value as React.ReactNode;
-    if (col.valueType === 'dateTime' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
-    } else if (col.valueType === 'date' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD');
-    }
-    if (col.render && dataSource != null) {
-            content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
-        content,
-        dataSource,
-        index,
-      );
-    }
-    return {
-      key: String(col.key ?? col.dataIndex ?? index),
-      label: col.title as React.ReactNode,
-      children: content !== undefined && content !== null ? content : '-',
-      span: col.span ?? 1,
-    };
-  });
 }
 
 /** 获取报工员工信息：优先使用工序派工的 assigned_worker，否则使用当前登录用户 */
@@ -1446,7 +1415,7 @@ const ReportingPage: React.FC = () => {
             primary={start}
             secondary={end}
             secondaryCopyable={false}
-            primaryBold={false}
+            uniformText
           />
         )
       },
@@ -1497,63 +1466,58 @@ const ReportingPage: React.FC = () => {
 
 
   const reportingDetailBaseColumns: ProDescriptionsItemProps<ReportingRecord>[] = useMemo(
-    () => [
-      {
-        title: t('app.kuaizhizao.workReporting.colWorkOrderCode'),
-        dataIndex: 'work_order_code',
-        render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.work_order_code ?? '') }}>{r.work_order_code ?? '-'}</Typography.Text>
-        ),
-      },
-      { title: t('app.kuaizhizao.workReporting.colWorkOrderName'), dataIndex: 'work_order_name' },
-      { title: t('app.kuaizhizao.workReporting.colOperation'), dataIndex: 'operation_name' },
-      { title: t('app.kuaizhizao.workReporting.colWorker'), dataIndex: 'worker_name' },
-      {
-        title: t('app.kuaizhizao.workReporting.colRecordedBy'),
-        dataIndex: 'recorded_by_name',
-        render: (_: any, r: ReportingRecord) =>
-          r.recorded_by_name || r.worker_name || '—',
-      },
-      {
-        title: t('app.kuaizhizao.workReporting.colReviewStatus'),
-        dataIndex: 'status',
-        render: (s) => {
-          const m: Record<string, { text: string; color: string }> = {
-            pending: { text: t('app.kuaizhizao.workReporting.statusPending'), color: 'default' },
-            approved: { text: t('app.kuaizhizao.workReporting.statusApproved'), color: 'success' },
-            rejected: { text: t('app.kuaizhizao.workReporting.statusRejected'), color: 'error' },
-          };
-          const x = m[String(s)] || { text: String(s ?? '-'), color: 'default' };
-          return <Tag color={x.color} variant="solid">{x.text}</Tag>;
+    () =>
+      alignDescriptionColumns([
+        {
+          title: t('app.kuaizhizao.workReporting.colWorkOrderCode'),
+          dataIndex: 'work_order_code',
+          key: 'linked_work_order_code',
         },
-      },
-      { title: t('app.kuaizhizao.workReporting.colQualifiedQty'), dataIndex: 'qualified_quantity' },
-      { title: t('app.kuaizhizao.workReporting.colUnqualifiedQty'), dataIndex: 'unqualified_quantity' },
-      { title: t('app.kuaizhizao.workReporting.colReportedQty'), dataIndex: 'reported_quantity' },
-      { title: t('app.kuaizhizao.workReporting.colWorkHours'), dataIndex: 'work_hours' },
-      {
-        title: t('app.kuaizhizao.workReporting.colWorkStartTime'),
-        dataIndex: 'work_start_time',
-        valueType: 'dateTime',
-      },
-      {
-        title: t('app.kuaizhizao.workReporting.colWorkEndTime'),
-        dataIndex: 'work_end_time',
-        valueType: 'dateTime',
-      },
-      { title: t('app.kuaizhizao.workReporting.colReportedAt'), dataIndex: 'reported_at', valueType: 'dateTime' },
-      { title: t('app.kuaizhizao.workReporting.colApprovedAt'), dataIndex: 'approved_at', valueType: 'dateTime' },
-      { title: t('app.kuaizhizao.workReporting.colApprovedBy'), dataIndex: 'approved_by_name' },
-      { title: t('app.kuaizhizao.workReporting.colRejectionReason'), dataIndex: 'rejection_reason', span: 3, render: (t: any) => t || '-' },
-      {
-        title: t('app.kuaizhizao.workReporting.colRemarks'),
-        dataIndex: 'remarks',
-        span: 3,
-        render: (text: any) => text || '-',
-      },
-    ],
+        { title: t('app.kuaizhizao.workReporting.colWorkOrderName'), dataIndex: 'work_order_name' },
+        { title: t('app.kuaizhizao.workReporting.colOperation'), dataIndex: 'operation_name' },
+        { title: t('app.kuaizhizao.workReporting.colWorker'), dataIndex: 'worker_name' },
+        {
+          title: t('app.kuaizhizao.workReporting.colRecordedBy'),
+          dataIndex: 'recorded_by_name',
+          render: (_: unknown, r: ReportingRecord) => r.recorded_by_name || r.worker_name || '—',
+        },
+        { title: t('app.kuaizhizao.workReporting.colQualifiedQty'), dataIndex: 'qualified_quantity' },
+        { title: t('app.kuaizhizao.workReporting.colUnqualifiedQty'), dataIndex: 'unqualified_quantity' },
+        { title: t('app.kuaizhizao.workReporting.colReportedQty'), dataIndex: 'reported_quantity' },
+        { title: t('app.kuaizhizao.workReporting.colWorkHours'), dataIndex: 'work_hours' },
+        {
+          title: t('app.kuaizhizao.workReporting.colWorkStartTime'),
+          dataIndex: 'work_start_time',
+          valueType: 'dateTime',
+        },
+        {
+          title: t('app.kuaizhizao.workReporting.colWorkEndTime'),
+          dataIndex: 'work_end_time',
+          valueType: 'dateTime',
+        },
+        { title: t('app.kuaizhizao.workReporting.colReportedAt'), dataIndex: 'reported_at', valueType: 'dateTime' },
+        { title: t('app.kuaizhizao.workReporting.colApprovedAt'), dataIndex: 'approved_at', valueType: 'dateTime' },
+        { title: t('app.kuaizhizao.workReporting.colApprovedBy'), dataIndex: 'approved_by_name' },
+        {
+          title: t('app.kuaizhizao.workReporting.colRejectionReason'),
+          dataIndex: 'rejection_reason',
+          span: 3,
+        },
+        {
+          title: t('app.kuaizhizao.workReporting.colRemarks'),
+          dataIndex: 'remarks',
+          span: 3,
+        },
+      ] as ProDescriptionsItemProps<ReportingRecord>[]),
     [t]
   );
+
+  const reportingDetailLifecycle = useMemo(
+    () => (reportingDetail ? getReportingLifecycle(reportingDetail as Record<string, unknown>, t) : null),
+    [reportingDetail, t],
+  );
+  const reportingNextSteps = reportingDetailLifecycle?.nextStepSuggestions;
+  const reportingShowNextInTitle = Boolean(reportingNextSteps?.length);
 
   return (
     <>
@@ -2253,8 +2217,6 @@ const ReportingPage: React.FC = () => {
           resetReportingDetailFieldValues();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        column={3}
         extra={
           reportingDetail ? (
             <UniWorkflowActions
@@ -2268,117 +2230,101 @@ const ReportingPage: React.FC = () => {
             />
           ) : null
         }
-        dataSource={reportingDetail || undefined}
-        customContent={
-          reportingDetail && (
+        collaborationTitleSuffix={
+          reportingDetail && reportingShowNextInTitle ? (
+            <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
+              {t('components.uniLifecycle.nextStep')}：
+              {reportingNextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
+            </Typography.Text>
+          ) : undefined
+        }
+        collaborationAuditRecord={reportingDetail as AuditPhaseRecord | null}
+        basic={
+          reportingDetail ? (
             <>
-              <DetailDrawerSection title={t('app.kuaizhizao.workReporting.sectionBasicInfo')}>
-                <Descriptions
-                  column={3}
-                  size="small"
-                  items={buildDescriptionItemsFromColumns(reportingDetail, reportingDetailBaseColumns)}
-                />
-                {reportingDetail.sop_parameters && Object.keys(reportingDetail.sop_parameters).length > 0 && (
-                  <div style={{ marginTop: 12 }}>
-                    <Typography.Text strong>{t('app.kuaizhizao.workReporting.sopParameters')}</Typography.Text>
-                    <pre style={{ marginTop: 8, fontSize: 12, whiteSpace: 'pre-wrap' }}>
-                      {JSON.stringify(reportingDetail.sop_parameters, null, 2)}
-                    </pre>
-                  </div>
-                )}
-              </DetailDrawerSection>
-
-              {hasCustomFieldsDetailContent(reportingListCustomFields, reportingDetailCustomFieldValues) && (
-                <DetailDrawerSection title={t('app.master-data.customFields')}>
+              <Descriptions
+                column={3}
+                size="small"
+                items={detailDrawerDescriptionItems(reportingDetailBaseColumns, reportingDetail)}
+              />
+              {hasCustomFieldsDetailContent(reportingListCustomFields, reportingDetailCustomFieldValues) ? (
+                <div style={{ marginTop: 16 }}>
                   <CustomFieldsDetailSection
                     customFields={reportingListCustomFields}
                     customFieldValues={reportingDetailCustomFieldValues}
                   />
-                </DetailDrawerSection>
-              )}
-
-              <DetailDrawerSection title={t('app.kuaizhizao.workReporting.sectionLifecycle')}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lifecycle = getReportingLifecycle(reportingDetail as Record<string, unknown>, t);
-                    const mainStages = lifecycle.mainStages ?? [];
-                    if (mainStages.length === 0) return null;
-                    return (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        status={lifecycle.status}
-                        showLabels
-                        nextStepSuggestions={lifecycle.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
-                    );
-                  })()}
-                  
                 </div>
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.kuaizhizao.workReporting.sectionDetailInfo')}>
-                <style>{`
-                  .reporting-detail-bindings .ant-table-wrapper .ant-table-body,
-                  .reporting-detail-bindings .ant-table-wrapper .ant-table-content {
-                    overflow: visible !important;
-                  }
-                `}</style>
-                {detailMaterialBindings.length > 0 ? (
-                  <div
-                    className="reporting-detail-bindings"
-                    style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
-                  >
-                    <Table
-                      size="small"
-                      tableLayout="fixed"
-                      style={{ minWidth: REPORTING_DETAIL_BINDINGS_MIN_WIDTH }}
-                      columns={[
-                        { title: t('app.kuaizhizao.workReporting.bindingColType'), dataIndex: 'binding_type', width: 100, ellipsis: true },
-                        { title: t('app.kuaizhizao.workReporting.bindingColMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
-                        { title: t('app.kuaizhizao.workReporting.bindingColMaterialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                        { title: t('app.kuaizhizao.workReporting.bindingColQuantity'), dataIndex: 'quantity', width: 100, align: 'right' as const , render: formatQuantity },
-                        { title: t('app.kuaizhizao.workReporting.bindingColWarehouse'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
-                        { title: t('app.kuaizhizao.workReporting.bindingColMethod'), dataIndex: 'binding_method', width: 100 },
-                      ]}
-                      dataSource={detailMaterialBindings}
-                      pagination={false}
-                      rowKey={(r: any) => String(r.id ?? `${r.material_code}-${r.binding_type}`)}
-                      bordered
-                    />
-                  </div>
-                ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.workReporting.noMaterialBindings')} />
-                )}
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.kuaizhizao.workReporting.sectionOperationLog')}>
-                {reportingTracking.loading && (
-                  <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Spin />
-                  </div>
-                )}
-                {reportingTracking.error && !reportingTracking.loading && (
-                  <Typography.Text type="danger">{reportingTracking.error}</Typography.Text>
-                )}
-                {reportingTracking.data && !reportingTracking.loading && (
-                  <DocumentTrackingTimelineBody data={reportingTracking.data} />
-                )}
-                {!reportingTracking.loading && !reportingTracking.data && !reportingTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.workReporting.noOperationLog')} />
-                )}
-              </DetailDrawerSection>
+              ) : null}
             </>
-          )
+          ) : undefined
         }
-      
-                      traceDocument={
-                        reportingDetail?.id != null
-                          ? {
-                              documentType: 'reporting_record',
-                              documentId: reportingDetail.id,
-                              selfDocumentId: reportingDetail.id,
-                            renderBriefActions: (doc) => (
+        collaboration={
+          reportingDetail && (reportingDetailLifecycle?.mainStages ?? []).length > 0 ? (
+            <UniLifecycleStepper
+              steps={reportingDetailLifecycle!.mainStages ?? []}
+              status={reportingDetailLifecycle!.status}
+              showLabels
+              nextStepSuggestions={reportingDetailLifecycle!.nextStepSuggestions}
+              hideNextStepSuggestions={reportingShowNextInTitle}
+            />
+          ) : null
+        }
+        supplementary={
+          reportingDetail?.sop_parameters && Object.keys(reportingDetail.sop_parameters).length > 0 ? (
+            <pre style={{ margin: 0, fontSize: 12, whiteSpace: 'pre-wrap' }}>
+              {JSON.stringify(reportingDetail.sop_parameters, null, 2)}
+            </pre>
+          ) : undefined
+        }
+        supplementaryTitle={t('app.kuaizhizao.workReporting.sopParameters')}
+        supplementaryVisible={Boolean(
+          reportingDetail?.sop_parameters && Object.keys(reportingDetail.sop_parameters).length > 0,
+        )}
+        linesTitle={t('app.kuaizhizao.workReporting.sectionDetailInfo')}
+        lines={
+          reportingDetail ? (
+            detailMaterialBindings.length > 0 ? (
+              <Table
+                size="small"
+                tableLayout="fixed"
+                style={{ minWidth: REPORTING_DETAIL_BINDINGS_MIN_WIDTH }}
+                columns={[
+                  { title: t('app.kuaizhizao.workReporting.bindingColType'), dataIndex: 'binding_type', width: 100, ellipsis: true },
+                  { title: t('app.kuaizhizao.workReporting.bindingColMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+                  { title: t('app.kuaizhizao.workReporting.bindingColMaterialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
+                  { title: t('app.kuaizhizao.workReporting.bindingColQuantity'), dataIndex: 'quantity', width: 100, align: 'right' as const, render: formatQuantity },
+                  { title: t('app.kuaizhizao.workReporting.bindingColWarehouse'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
+                  { title: t('app.kuaizhizao.workReporting.bindingColMethod'), dataIndex: 'binding_method', width: 100 },
+                ]}
+                dataSource={detailMaterialBindings}
+                pagination={false}
+                rowKey={(r: { id?: number; material_code?: string; binding_type?: string }) =>
+                  String(r.id ?? `${r.material_code}-${r.binding_type}`)
+                }
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.workReporting.noMaterialBindings')} />
+            )
+          ) : undefined
+        }
+        timeline={
+          reportingDetail ? (
+            reportingTracking.data && !reportingTracking.loading ? (
+              <DocumentTrackingTimelineBody data={reportingTracking.data} />
+            ) : reportingTracking.error ? (
+              <Typography.Text type="danger">{reportingTracking.error}</Typography.Text>
+            ) : !reportingTracking.loading ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.workReporting.noOperationLog')} />
+            ) : null
+          ) : undefined
+        }
+        traceDocument={
+          reportingDetail?.id != null
+            ? {
+                documentType: 'reporting_record',
+                documentId: reportingDetail.id,
+                selfDocumentId: reportingDetail.id,
+                renderBriefActions: (doc) => (
                   <WarehouseTraceBriefPrimaryActions
                     doc={doc}
                     t={t}
@@ -2389,10 +2335,10 @@ const ReportingPage: React.FC = () => {
                       setDetailMaterialBindings([]);
                     }}
                   />
-                )
-                            }
-                          : undefined
-                      }
+                ),
+              }
+            : undefined
+        }
       />
 
     </ListPageTemplate>

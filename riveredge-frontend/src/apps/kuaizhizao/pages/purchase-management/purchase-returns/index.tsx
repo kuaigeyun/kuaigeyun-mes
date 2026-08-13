@@ -22,7 +22,6 @@ import {
   ProFormSelect,
   ProFormInstance,
 } from '@ant-design/pro-components';
-import type { DescriptionsProps } from 'antd';
 import {
   App,
   Alert,
@@ -65,10 +64,10 @@ import {
   ListPageTemplate,
   DetailDrawerTemplate,
   FormModalTemplate,
-  DetailDrawerSection,
   DetailDrawerActions,
   MODAL_CONFIG,
   DRAWER_CONFIG,
+  detailDrawerDescriptionItems,
   type StatCard,
 } from '../../../../../components/layout-templates';
 const LazyUniImport = lazy(() =>
@@ -104,7 +103,6 @@ import {
   purchaseReturnBatchConfirmAllowed,
   purchaseReturnBatchWithdrawAllowed,
   purchaseOrderCapabilityReasonMessage,
-  qualityInspectionCapabilityReasonMessage,
 } from '../../../../../hooks/useDocumentCapabilities';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import { supplierApi, getDictionaryOptions } from '../../../../master-data/services/supply-chain';
@@ -116,7 +114,7 @@ import {
   resolvePurchaseReturnListLifecycleParams,
 } from '../../../utils/purchaseReturnLifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
@@ -218,35 +216,6 @@ function getImportRowValue(row: Record<string, unknown>, keys: string[]) {
     }
   }
   return undefined;
-}
-
-function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
-  dataSource: T,
-  cols: ProDescriptionsItemProps<T>[]
-): NonNullable<DescriptionsProps['items']> {
-  return cols.map((col, index) => {
-    const dataIndex = col.dataIndex as keyof T | undefined;
-    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
-    let content: React.ReactNode = value as React.ReactNode;
-    if (col.valueType === 'dateTime' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
-    } else if (col.valueType === 'date' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD');
-    }
-    if (col.render && dataSource != null) {
-            content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
-        content,
-        dataSource,
-        index,
-      );
-    }
-    return {
-      key: String(col.key ?? col.dataIndex ?? index),
-      label: col.title as React.ReactNode,
-      children: content !== undefined && content !== null ? content : '-',
-      span: col.span ?? 1,
-    };
-  });
 }
 
 type PullPurchaseOrderCandidate = PurchaseOrder & {
@@ -393,11 +362,6 @@ const PurchaseReturnsPage: React.FC = () => {
   const [pullPoPreviewData, setPullPoPreviewData] = useState<DocumentPushPreview | null>(null);
   const [pullPoPreviewOrderId, setPullPoPreviewOrderId] = useState<number | null>(null);
   const [pullPoSelectedItemIds, setPullPoSelectedItemIds] = useState<number[]>([]);
-  const [pullIiPreviewOpen, setPullIiPreviewOpen] = useState(false);
-  const [pullIiPreviewLoading, setPullIiPreviewLoading] = useState(false);
-  const [pullIiPreviewConfirming, setPullIiPreviewConfirming] = useState(false);
-  const [pullIiPreviewData, setPullIiPreviewData] = useState<DocumentPushPreview | null>(null);
-  const [pullIiPreviewInspectionId, setPullIiPreviewInspectionId] = useState<number | null>(null);
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const formRef = useRef<ProFormInstance>(null);
@@ -529,6 +493,10 @@ const PurchaseReturnsPage: React.FC = () => {
 
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [returnDetail, setReturnDetail] = useState<PurchaseReturnDetail | null>(null);
+  const purchaseReturnLifecycle = useMemo(
+    () => (returnDetail ? getPurchaseReturnLifecycle(returnDetail, t) : null),
+    [returnDetail, t],
+  );
   const [prRetTrackingRefreshKey, setPrRetTrackingRefreshKey] = useState(0);
   const purchaseReturnTracking = useDocumentTracking(
     detailDrawerVisible && returnDetail?.id ? 'purchase_return' : undefined,
@@ -690,70 +658,40 @@ const PurchaseReturnsPage: React.FC = () => {
     t,
   ]);
 
-  const resetPullIiPreviewModal = useCallback(() => {
-    setPullIiPreviewOpen(false);
-    setPullIiPreviewData(null);
-    setPullIiPreviewInspectionId(null);
-  }, []);
-
-  const showPullIiPreview = useCallback(
-    (inspectionId: number) => {
-      setPullIiPreviewOpen(true);
-      setPullIiPreviewLoading(true);
-      setPullIiPreviewConfirming(false);
-      setPullIiPreviewData(null);
-      setPullIiPreviewInspectionId(inspectionId);
-      qualityApi.incomingInspection.previewPushToPurchaseReturn(String(inspectionId))
-        .then((res) => setPullIiPreviewData(res as DocumentPushPreview))
-        .catch((error: unknown) => {
-          messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseReturn.pull.previewFailed')));
-          resetPullIiPreviewModal();
-        })
-        .finally(() => setPullIiPreviewLoading(false));
-    },
-    [messageApi, resetPullIiPreviewModal, t],
-  );
-
-  const handlePullIiPreviewConfirm = useCallback(async () => {
-    if (!pullIiPreviewInspectionId || !pullIiPreviewData) return;
-    if (pullIiPreviewData.has_blocking_issues) return;
-    setPullIiPreviewConfirming(true);
-    try {
-      await qualityApi.incomingInspection.pushToPurchaseReturn(String(pullIiPreviewInspectionId));
-      messageApi.success(
-        t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
-          source: pullFromIncomingInspectionAction.sourceLabel,
-          target: pullFromIncomingInspectionAction.targetLabel,
-        }),
-      );
-      invalidatePurchaseReturnStatistics();
-      invalidateMenuBadgeCounts();
-      actionRef.current?.reload();
-      resetPullIiPreviewModal();
-    } catch (error: unknown) {
-      messageApi.error(
-        getApiErrorMessage(
-          error,
-          t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
+  const createPurchaseReturnFromIncomingInspection = useCallback(
+    async (inspectionId: number) => {
+      try {
+        await qualityApi.incomingInspection.pushToPurchaseReturn(String(inspectionId));
+        messageApi.success(
+          t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
             source: pullFromIncomingInspectionAction.sourceLabel,
             target: pullFromIncomingInspectionAction.targetLabel,
           }),
-        ),
-      );
-    } finally {
-      setPullIiPreviewConfirming(false);
-    }
-  }, [
-    invalidateMenuBadgeCounts,
-    invalidatePurchaseReturnStatistics,
-    messageApi,
-    pullFromIncomingInspectionAction.sourceLabel,
-    pullFromIncomingInspectionAction.targetLabel,
-    pullIiPreviewData,
-    pullIiPreviewInspectionId,
-    resetPullIiPreviewModal,
-    t,
-  ]);
+        );
+        invalidatePurchaseReturnStatistics();
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(
+            error,
+            t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
+              source: pullFromIncomingInspectionAction.sourceLabel,
+              target: pullFromIncomingInspectionAction.targetLabel,
+            }),
+          ),
+        );
+      }
+    },
+    [
+      invalidateMenuBadgeCounts,
+      invalidatePurchaseReturnStatistics,
+      messageApi,
+      pullFromIncomingInspectionAction.sourceLabel,
+      pullFromIncomingInspectionAction.targetLabel,
+      t,
+    ],
+  );
 
   const isPullPurchaseReturnSourceSelectable = useCallback(
     (record: { capabilities?: { push_purchase_return?: { allowed?: boolean } } }) =>
@@ -848,7 +786,7 @@ const PurchaseReturnsPage: React.FC = () => {
         return;
       }
       pullIiQueryCloseRef.current?.();
-      showPullIiPreview(selectedId);
+      await createPurchaseReturnFromIncomingInspection(selectedId);
     },
   });
 
@@ -1209,73 +1147,46 @@ const PurchaseReturnsPage: React.FC = () => {
   };
 
   const detailColumns: ProDescriptionsItemProps<PurchaseReturnDetail>[] = useMemo(
-    () => [
-      {
-        title: t('app.kuaizhizao.purchaseReturn.colReturnCode'),
-        dataIndex: 'return_code',
-        render: (_, entity) => (
-          <Typography.Text copyable={{ text: String(entity.return_code ?? '') }}>{entity.return_code ?? '-'}</Typography.Text>
-        ),
-      },
-      {
-        title: t('app.kuaizhizao.purchaseReturn.colPurchaseReceiptCode'),
-        dataIndex: 'purchase_receipt_code',
-        render: (_, entity) => {
-          const code = String(entity.purchase_receipt_code ?? '').trim();
-          if (!code) return '-';
-          return <Typography.Text copyable={{ text: code }}>{code}</Typography.Text>;
+    () =>
+      alignDescriptionColumns([
+        {
+          title: t('app.kuaizhizao.purchaseReturn.colReturnCode'),
+          dataIndex: 'return_code',
+          render: (_, entity) => (
+            <Typography.Text copyable={{ text: String(entity.return_code ?? '') }}>{entity.return_code ?? '-'}</Typography.Text>
+          ),
         },
-      },
-      {
-        title: t('app.kuaizhizao.purchaseReturn.colPurchaseOrderCode'),
-        dataIndex: 'purchase_order_code',
-        render: (_, entity) => {
-          const code = String(entity.purchase_order_code ?? '').trim();
-          if (!code) return '-';
-          return <Typography.Text copyable={{ text: code }}>{code}</Typography.Text>;
+        {
+          title: t('app.kuaizhizao.purchaseReturn.colPurchaseReceiptCode'),
+          dataIndex: 'purchase_receipt_code',
         },
-      },
-      { title: t('app.kuaizhizao.purchaseReturn.supplier'), dataIndex: 'supplier_name' },
-      { title: t('app.kuaizhizao.purchaseReturn.colWarehouse'), dataIndex: 'warehouse_name' },
-      {
-        title: t('app.kuaizhizao.purchaseReturn.returnStatus'),
-        dataIndex: 'status',
-        render: (status) => {
-          const config = returnStatusMap[(status as string) || ''] || { text: getReturnStatusLabel(status as string), color: 'default' };
-          return <Tag color={config.color}>{config.text}</Tag>;
+        {
+          title: t('app.kuaizhizao.purchaseReturn.colPurchaseOrderCode'),
+          dataIndex: 'purchase_order_code',
         },
-      },
-      {
-        title: t('app.kuaizhizao.purchaseReturn.reviewStatus'),
-        dataIndex: 'review_status',
-        render: (status) => {
-          const config = reviewStatusMap[(status as string) || ''] || { text: getReviewStatusLabel(status as string), color: 'default' };
-          return <Tag color={config.color}>{config.text}</Tag>;
+        { title: t('app.kuaizhizao.purchaseReturn.supplier'), dataIndex: 'supplier_name' },
+        { title: t('app.kuaizhizao.purchaseReturn.colWarehouse'), dataIndex: 'warehouse_name' },
+        { title: t('app.kuaizhizao.purchaseReturn.returnReason'), dataIndex: 'return_reason' },
+        { title: t('app.kuaizhizao.purchaseReturn.returnType'), dataIndex: 'return_type' },
+        { title: t('app.kuaizhizao.purchaseReturn.totalQuantity'), dataIndex: 'total_quantity', render: formatQuantity },
+        {
+          title: t('app.kuaizhizao.purchaseReturn.totalAmount'),
+          dataIndex: 'total_amount',
+          render: (text: unknown) => (text != null && text !== '' ? `¥${formatNumber(text, 2)}` : '-'),
         },
-      },
-      { title: t('app.kuaizhizao.purchaseReturn.returnReason'), dataIndex: 'return_reason' },
-      { title: t('app.kuaizhizao.purchaseReturn.returnType'), dataIndex: 'return_type' },
-      { title: t('app.kuaizhizao.purchaseReturn.totalQuantity'), dataIndex: 'total_quantity', render: formatQuantity },
-      {
-        title: t('app.kuaizhizao.purchaseReturn.totalAmount'),
-        dataIndex: 'total_amount',
-        render: (text: any) => (text != null && text !== '' ? `¥${formatNumber(text, 2)}` : '-'),
-      },
-      { title: t('app.kuaizhizao.purchaseReturn.returnTime'), dataIndex: 'return_time', valueType: 'dateTime' },
-      { title: t('app.kuaizhizao.purchaseReturn.returner'), dataIndex: 'returner_name' },
-      { title: t('app.kuaizhizao.purchaseReturn.reviewer'), dataIndex: 'reviewer_name' },
-      { title: t('app.kuaizhizao.purchaseReturn.reviewTime'), dataIndex: 'review_time', valueType: 'dateTime' },
-    ],
-    [getReturnStatusLabel, getReviewStatusLabel, returnStatusMap, reviewStatusMap, t, i18n.language],
+        { title: t('app.kuaizhizao.purchaseReturn.returnTime'), dataIndex: 'return_time', valueType: 'dateTime' },
+        { title: t('app.kuaizhizao.purchaseReturn.returner'), dataIndex: 'returner_name' },
+        { title: t('app.kuaizhizao.purchaseReturn.reviewer'), dataIndex: 'reviewer_name' },
+        { title: t('app.kuaizhizao.purchaseReturn.reviewTime'), dataIndex: 'review_time', valueType: 'dateTime' },
+      ] as ProDescriptionsItemProps<PurchaseReturnDetail>[]),
+    [t, i18n.language],
   );
 
-  const detailNotesColumn: ProDescriptionsItemProps<PurchaseReturnDetail> = useMemo(
-    () => ({
-      title: t('app.kuaizhizao.common.fieldNotes'),
-      dataIndex: 'notes',
-      span: 3,
-      render: (text: any) => text || '-',
-    }),
+  const detailNotesColumn: ProDescriptionsItemProps<PurchaseReturnDetail>[] = useMemo(
+    () =>
+      alignDescriptionColumns([
+        { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes', span: 3 },
+      ] as ProDescriptionsItemProps<PurchaseReturnDetail>[]),
     [t, i18n.language],
   );
 
@@ -2382,63 +2293,6 @@ const PurchaseReturnsPage: React.FC = () => {
         ) : null}
       </Modal>
 
-      <Modal
-        title={pullFromIncomingInspectionAction.label}
-        open={pullIiPreviewOpen}
-        destroyOnClose
-        width={900}
-        onCancel={resetPullIiPreviewModal}
-        okText={pullFromIncomingInspectionAction.label}
-        cancelText={t('common.cancel')}
-        confirmLoading={pullIiPreviewConfirming}
-        onOk={() => void handlePullIiPreviewConfirm()}
-        okButtonProps={{
-          disabled:
-            pullIiPreviewLoading ||
-            !pullIiPreviewData ||
-            !!pullIiPreviewData?.has_blocking_issues,
-        }}
-      >
-        {pullIiPreviewLoading ? (
-          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-            <Spin />
-            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
-          </div>
-        ) : pullIiPreviewData ? (
-          <div>
-            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullIiPreviewData.summary}</p>
-            {pullIiPreviewData.has_blocking_issues && pullIiPreviewData.blocking_reason ? (
-              <Alert
-                type="warning"
-                showIcon
-                style={{ marginBottom: 12 }}
-                message={qualityInspectionCapabilityReasonMessage(pullIiPreviewData.blocking_reason, t)}
-              />
-            ) : null}
-            {pullIiPreviewData.items?.length > 0 ? (
-              <Table
-                size="small"
-                dataSource={pullIiPreviewData.items}
-                rowKey={(row) => String(row.item_id)}
-                pagination={false}
-                columns={[
-                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'), dataIndex: 'max_push_quantity', width: 120, align: 'right', render: formatQuantity },
-                ]}
-              />
-            ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseReturn.pull.previewNoLines')} />
-            )}
-            {pullIiPreviewData.tip ? (
-              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-                {pullIiPreviewData.tip}
-              </Typography.Paragraph>
-            ) : null}
-          </div>
-        ) : null}
-      </Modal>
-
       <UniMaterialBatchPicker
         open={materialPickerOpen}
         onCancel={() => setMaterialPickerOpen(false)}
@@ -2485,33 +2339,17 @@ const PurchaseReturnsPage: React.FC = () => {
           resetPurchaseReturnDetailFieldValues();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        column={3}
-        dataSource={returnDetail || undefined}
         extra={
           returnDetail ? (
             <DetailDrawerActions
               items={[
-                {
-                  key: 'edit',
-                  visible: returnDetail.capabilities?.update?.allowed === true && purchaseReturnPerms.canUpdate,
-                  render: () => (
-                    <Button {...rowActionKind('update')} size="small" onClick={() => void handleEdit(returnDetail)}>
-                      {t('common.edit')}
-                    </Button>
-                  ),
-                },
                 {
                   key: 'confirm',
                   visible:
                     returnDetail.capabilities?.confirm?.allowed === true &&
                     (purchaseReturnPerms.canAction?.('submit') ?? false),
                   render: () => (
-                    <Button
-                      {...rowActionKind('submit')}
-                      size="small"
-                      onClick={() => handleConfirm(returnDetail)}
-                    >
+                    <Button {...rowActionKind('submit')} onClick={() => handleConfirm(returnDetail)}>
                       {t('app.kuaizhizao.purchaseReturn.confirmReturn')}
                     </Button>
                   ),
@@ -2522,8 +2360,17 @@ const PurchaseReturnsPage: React.FC = () => {
                     returnDetail.capabilities?.withdraw?.allowed === true &&
                     (purchaseReturnPerms.canAction?.('revoke') ?? false),
                   render: () => (
-                    <Button {...rowActionKind('revoke')} size="small" onClick={() => void handleWithdraw(returnDetail)}>
+                    <Button {...rowActionKind('revoke')} onClick={() => void handleWithdraw(returnDetail)}>
                       {t('app.kuaizhizao.purchaseReturn.withdrawConfirm')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'edit',
+                  visible: returnDetail.capabilities?.update?.allowed === true && purchaseReturnPerms.canUpdate,
+                  render: () => (
+                    <Button {...rowActionKind('update')} onClick={() => void handleEdit(returnDetail)}>
+                      {t('common.edit')}
                     </Button>
                   ),
                 },
@@ -2531,106 +2378,87 @@ const PurchaseReturnsPage: React.FC = () => {
             />
           ) : null
         }
-        customContent={
-          returnDetail && (
-            <>
-              <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
-                <Descriptions
-                  column={3}
-                  size="small"
-                  items={buildDescriptionItemsFromColumns(returnDetail, detailColumns)}
-                />
-                {hasCustomFieldsDetailContent(purchaseReturnListCustomFields, purchaseReturnDetailCustomFieldValues) ? (
-                  <div style={{ marginTop: 16 }}>
-                    <CustomFieldsDetailSection
-                      customFields={purchaseReturnListCustomFields}
-                      customFieldValues={purchaseReturnDetailCustomFieldValues}
-                    />
-                  </div>
-                ) : null}
-                <Descriptions
-                  column={3}
-                  size="small"
-                  style={{ marginTop: 16 }}
-                  items={buildDescriptionItemsFromColumns(returnDetail, [detailNotesColumn])}
-                />
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lifecycle = getPurchaseReturnLifecycle(returnDetail, t);
-                    const mainStages = lifecycle.mainStages ?? [];
-                    if (mainStages.length === 0) return null;
-                    return (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        status={lifecycle.status}
-                        showLabels
-                        nextStepSuggestions={lifecycle.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
-                    );
-                  })()}
-                  
-                </div>
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
-                <style>{`
-                  .purchase-return-detail-items .ant-table-wrapper .ant-table-body,
-                  .purchase-return-detail-items .ant-table-wrapper .ant-table-content {
-                    overflow: visible !important;
-                  }
-                `}</style>
-                {returnDetail.items && returnDetail.items.length > 0 ? (
-                  <div
-                    className="purchase-return-detail-items"
-                    style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
-                  >
-                    <Table
-                      size="small"
-                      tableLayout="fixed"
-                      style={{ minWidth: PR_DETAIL_ITEMS_MIN_WIDTH }}
-                      columns={detailItemColumns}
-                      dataSource={returnDetail.items}
-                      pagination={false}
-                      rowKey="id"
-                      bordered
-                    />
-                  </div>
-                ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseReturn.emptyItems')} />
-                )}
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
-                {purchaseReturnTracking.loading && (
-                  <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Spin />
-                  </div>
-                )}
-                {purchaseReturnTracking.error && !purchaseReturnTracking.loading && (
-                  <Typography.Text type="danger">{purchaseReturnTracking.error}</Typography.Text>
-                )}
-                {purchaseReturnTracking.data && !purchaseReturnTracking.loading && (
-                  <DocumentTrackingTimelineBody data={purchaseReturnTracking.data} />
-                )}
-                {!purchaseReturnTracking.loading && !purchaseReturnTracking.data && !purchaseReturnTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.shipmentNotice.noOperationRecords')} />
-                )}
-              </DetailDrawerSection>
-            </>
-          )
+        collaborationTitleSuffix={
+          purchaseReturnLifecycle?.nextStepSuggestions?.length ? (
+            <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
+              {t('components.uniLifecycle.nextStep')}：
+              {purchaseReturnLifecycle.nextStepSuggestions.join(t('components.uniLifecycle.nextStepSeparator'))}
+            </Typography.Text>
+          ) : undefined
         }
-      
-                      traceDocument={
-                        returnDetail?.id != null
-                          ? {
-                              documentType: 'purchase_return',
-                              documentId: returnDetail.id,
-                              selfDocumentId: returnDetail.id,
-                            renderBriefActions: (doc) => (
+        collaborationAuditRecord={returnDetail}
+        basic={
+          returnDetail ? (
+            <>
+              <Descriptions
+                column={3}
+                size="small"
+                items={detailDrawerDescriptionItems(detailColumns, returnDetail as unknown as Record<string, unknown>)}
+              />
+              {hasCustomFieldsDetailContent(purchaseReturnListCustomFields, purchaseReturnDetailCustomFieldValues) ? (
+                <div style={{ marginTop: 16 }}>
+                  <CustomFieldsDetailSection
+                    customFields={purchaseReturnListCustomFields}
+                    customFieldValues={purchaseReturnDetailCustomFieldValues}
+                  />
+                </div>
+              ) : null}
+              <Descriptions
+                column={3}
+                size="small"
+                style={{ marginTop: 16 }}
+                items={detailDrawerDescriptionItems(detailNotesColumn, returnDetail as unknown as Record<string, unknown>)}
+              />
+            </>
+          ) : null
+        }
+        collaboration={
+          purchaseReturnLifecycle && (purchaseReturnLifecycle.mainStages ?? []).length > 0 ? (
+            <UniLifecycleStepper
+              steps={purchaseReturnLifecycle.mainStages ?? []}
+              status={purchaseReturnLifecycle.status}
+              showLabels
+              nextStepSuggestions={purchaseReturnLifecycle.nextStepSuggestions}
+              hideNextStepSuggestions={Boolean(purchaseReturnLifecycle.nextStepSuggestions?.length)}
+            />
+          ) : null
+        }
+        lines={
+          returnDetail ? (
+            returnDetail.items && returnDetail.items.length > 0 ? (
+              <Table
+                size="small"
+                tableLayout="fixed"
+                style={{ minWidth: PR_DETAIL_ITEMS_MIN_WIDTH }}
+                columns={detailItemColumns}
+                dataSource={returnDetail.items}
+                pagination={false}
+                rowKey="id"
+                bordered
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseReturn.emptyItems')} />
+            )
+          ) : null
+        }
+        timeline={
+          returnDetail ? (
+            purchaseReturnTracking.data && !purchaseReturnTracking.loading ? (
+              <DocumentTrackingTimelineBody data={purchaseReturnTracking.data} />
+            ) : purchaseReturnTracking.error ? (
+              <Typography.Text type="danger">{purchaseReturnTracking.error}</Typography.Text>
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.shipmentNotice.noOperationRecords')} />
+            )
+          ) : null
+        }
+        traceDocument={
+          returnDetail?.id != null
+            ? {
+                documentType: 'purchase_return',
+                documentId: returnDetail.id,
+                selfDocumentId: returnDetail.id,
+                renderBriefActions: (doc) => (
                   <WarehouseTraceBriefPrimaryActions
                     doc={doc}
                     t={t}
@@ -2640,10 +2468,10 @@ const PurchaseReturnsPage: React.FC = () => {
                       setReturnDetail(null);
                     }}
                   />
-                )
-                            }
-                          : undefined
-                      }
+                ),
+              }
+            : undefined
+        }
       />
     </>
   );

@@ -64,7 +64,7 @@ import dayjs from 'dayjs';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { getSalesReturnLifecycle, buildSalesReturnLifecycleValueEnum, resolveSalesReturnListLifecycleParams } from '../../../utils/salesReturnLifecycle';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
+import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { isManualAuditEnabled } from '../../../../../utils/auditMode';
@@ -364,16 +364,6 @@ const SalesReturnsPage: React.FC = () => {
     [t],
   );
 
-  const getReturnStatusLabel = (status?: string) => {
-    if (!status) return '-';
-    const statusLabelMap: Record<string, string> = {
-      '待退货': t('app.kuaizhizao.salesReturn.statusPending'),
-      '已退货': t('app.kuaizhizao.salesReturn.statusReturned'),
-      '已取消': t('app.kuaizhizao.salesReturn.statusCancelled'),
-      '草稿': t('app.kuaizhizao.salesReturn.statusDraft'),
-    };
-    return statusLabelMap[status] ?? status;
-  };
   // 创建/编辑相关状态
   const [modalVisible, setModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -1468,7 +1458,8 @@ const SalesReturnsPage: React.FC = () => {
   };
 
   const detailBasicColumns = useMemo<ProDescriptionsItemProps<SalesReturnDetail>[]>(
-    () => [
+    () =>
+      alignDescriptionColumns([
       {
         title: t('app.kuaizhizao.salesReturn.colReturnCode'),
         dataIndex: 'return_code',
@@ -1494,23 +1485,6 @@ const SalesReturnsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesReturn.colWarehouse'),
         dataIndex: 'warehouse_name',
-      },
-      {
-        title: t('app.kuaizhizao.salesReturn.returnStatus'),
-        dataIndex: 'status',
-        render: (_, record) => {
-          const status = record.status;
-          const statusMap: Record<string, { text: string; color: string }> = {
-            '待退货': { text: t('app.kuaizhizao.salesReturn.statusPending'), color: 'default' },
-            '已退货': { text: t('app.kuaizhizao.salesReturn.statusReturned'), color: 'success' },
-            '已取消': { text: t('app.kuaizhizao.salesReturn.statusCancelled'), color: 'error' },
-          };
-          const config = statusMap[status || ''] || {
-            text: getReturnStatusLabel(status),
-            color: 'default',
-          };
-          return <Tag color={config.color}>{config.text}</Tag>;
-        },
       },
       {
         title: t('app.kuaizhizao.salesReturn.returnReason'),
@@ -1542,10 +1516,10 @@ const SalesReturnsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.common.fieldNotes'),
         dataIndex: 'notes',
-        span: 2,
+        span: 3,
       },
-    ],
-    [getReturnStatusLabel, t],
+    ] as ProDescriptionsItemProps<SalesReturnDetail>[]),
+    [t],
   );
 
   const detailCollaboration = useMemo(() => {

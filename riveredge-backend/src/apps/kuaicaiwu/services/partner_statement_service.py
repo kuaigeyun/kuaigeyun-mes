@@ -640,6 +640,10 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         debit_total, credit_total, closing, lines = self._apply_running_balance(opening, raw_lines)
         company_name = await self._get_tenant_company_name(tenant_id)
         balance_label = "应收余额" if partner_type == "Customer" else "应付余额"
+        stmt_period = start_date.strftime("%Y-%m")
+        existing = await self._get_active_period_statement(
+            tenant_id, partner_id, partner_type, stmt_period
+        )
         return {
             "partner_id": partner_id,
             "partner_name": partner["name"],
@@ -657,7 +661,32 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             "lines": lines,
             "partner_snapshot": partner,
             "excluded_from_period": excluded_from_period,
+            "existing_period_statement_id": existing.id if existing else None,
+            "existing_period_statement_code": existing.statement_code if existing else None,
+            "existing_period": stmt_period if existing else None,
         }
+
+    async def _get_active_period_statement(
+        self,
+        tenant_id: int,
+        partner_id: int,
+        partner_type: str,
+        statement_period: str,
+    ) -> Optional[PartnerStatement]:
+        """库唯一约束 uidx_partner_stmt_tenant_partner_period：同一往来同一 YYYY-MM 仅一张未删除对账单。"""
+        return await PartnerStatement.get_or_none(
+            tenant_id=tenant_id,
+            partner_id=partner_id,
+            partner_type=partner_type,
+            statement_period=statement_period,
+            deleted_at__isnull=True,
+        )
+
+    def _period_already_exists_message(self, period: str, statement_code: str) -> str:
+        return (
+            f"该往来单位在 {period} 已有对账单 {statement_code}，同一期间不能重复生成。"
+            f"请打开已有对账单，或删除草稿后重新生成"
+        )
 
     async def _generate_statement_code(self, tenant_id: int) -> str:
         today = today_site_str()
@@ -679,12 +708,20 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             if end_date < start_date:
                 raise ValidationError("结束日期不能早于起始日期")
             period_label = f"{to_api_isoformat(start_date)}~{to_api_isoformat(end_date)}"
-            # 列表「对账期间」仍用起始月；唯一性按下方 start/end 精确区间判断
+            # 列表「对账期间」与库唯一约束均为起始月 YYYY-MM（uidx_partner_stmt_tenant_partner_period）
             stmt_period = period or start_date.strftime("%Y-%m")
         else:
             start_date, end_date = period_to_date_range(period)
             period_label = period
             stmt_period = period
+
+        existing_period = await self._get_active_period_statement(
+            tenant_id, partner_id, partner_type, stmt_period
+        )
+        if existing_period:
+            raise BusinessLogicError(
+                self._period_already_exists_message(stmt_period, existing_period.statement_code)
+            )
 
         preview = await self.preview_statement(
             tenant_id, partner_id, partner_type, start_date, end_date

@@ -380,7 +380,6 @@ const MoldMaintenancesPage: React.FC = () => {
         key: 'lifecycle',
         dataIndex: 'status',
         width: 90,
-        sorter: true,
         hideInSearch: true,
         fixed: 'right',
         render: (_, r) => (
@@ -390,7 +389,6 @@ const MoldMaintenancesPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        width: 320,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => (

@@ -262,7 +262,6 @@ const MoldTrialsPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        width: 180,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => (

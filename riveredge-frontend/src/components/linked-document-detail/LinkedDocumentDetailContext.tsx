@@ -20,6 +20,7 @@ import { DemandLinkedDetailDrawer } from './drawers/DemandLinkedDetailDrawer';
 import { PurchaseRequisitionLinkedDetailDrawer } from './drawers/PurchaseRequisitionLinkedDetailDrawer';
 import { DemandComputationLinkedDetailDrawer } from './drawers/DemandComputationLinkedDetailDrawer';
 import { WorkOrderLinkedDetailDrawer } from './drawers/WorkOrderLinkedDetailDrawer';
+import { FreightOrderLinkedDetailDrawer } from './drawers/FreightOrderLinkedDetailDrawer';
 
 /** 高于列表详情抽屉与报价单内嵌关联抽屉（常见 base+50） */
 const LINKED_DRAWER_Z_OFFSET = 60;
@@ -147,6 +148,15 @@ function LinkedDocumentDetailHost({
     case 'work_order':
       return (
         <WorkOrderLinkedDetailDrawer
+          open
+          documentId={documentId}
+          onClose={onClose}
+          zIndex={zIndex}
+        />
+      );
+    case 'freight_order':
+      return (
+        <FreightOrderLinkedDetailDrawer
           open
           documentId={documentId}
           onClose={onClose}

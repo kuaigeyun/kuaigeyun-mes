@@ -5,8 +5,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * 提供假期的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Space, theme as AntdTheme } from 'antd';
@@ -16,14 +15,14 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
   UniTableStackedPrimaryCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import { PerformanceConfigDetailDrawer } from '../shared/performanceConfigDetailDrawer';
 import { holidayApi } from '../../../services/performance';
 import { HolidayFormModal } from '../../../components/HolidayFormModal';
 import { HolidayCnImportModal } from '../../../components/HolidayCnImportModal';
 import type { Holiday } from '../../../types/performance';
-import { getPerformanceConfigActiveLifecycle } from '../../../utils/performanceLifecycle';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
@@ -43,7 +42,6 @@ const HOLIDAY_RESOURCE = 'kuaizhizao:performance-holidays';
 
 const HolidaysPage: React.FC = () => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { token } = AntdTheme.useToken();
   const holidayDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
@@ -53,7 +51,8 @@ const HolidaysPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [holidayDetail, setHolidayDetail] = useState<Holiday | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [holidayTrackingRefreshKey, setHolidayTrackingRefreshKey] = useState(0);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
@@ -66,18 +65,16 @@ const HolidaysPage: React.FC = () => {
     loadFieldValuesForDetail,
     resetDetailFieldValues,
   } = useCustomFieldsForList<Holiday>({ tableName: 'master_data_holidays' });
-  const holidayTracking = useDocumentTracking(
-    drawerVisible && holidayDetail?.id != null ? 'performance_holiday' : undefined,
-    holidayDetail?.id,
-    holidayTrackingRefreshKey,
-  );
-
   const holidayDetailColumns: ProDescriptionsItemProps<Holiday>[] = useMemo(
     () => [
       { title: t('app.kuaizhizao.performance.holidays.columns.holidayName'), dataIndex: 'name' },
       { title: t('app.kuaizhizao.performance.holidays.columns.holidayDate'), dataIndex: 'holidayDate', valueType: 'date' },
-      { title: t('app.kuaizhizao.performance.holidays.columns.holidayType'), dataIndex: 'holidayType' },
-      { title: t('app.kuaizhizao.performance.common.columns.description'), dataIndex: 'description', span: 3 },
+      {
+        title: t('app.kuaizhizao.performance.holidays.columns.holidayType'),
+        dataIndex: 'holidayType',
+        render: (_, record) => renderPerformanceTypeMarker(record?.holidayType),
+      },
+      { title: t('app.kuaizhizao.performance.common.columns.description'), dataIndex: 'description', span: 2 },
       {
         title: t('app.kuaizhizao.performance.holidays.columns.activeStatus'),
         dataIndex: 'isActive',
@@ -128,30 +125,36 @@ const HolidaysPage: React.FC = () => {
     }
   };
 
-  const handleOpenDetail = async (record: Holiday) => {
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      setDrawerVisible(true);
-      setHolidayDetail(null);
-      setDetailLoading(true);
-      const detail = await holidayApi.get(record.uuid);
+      const detail = await holidayApi.get(uuid);
       setHolidayDetail(detail);
       if (detail.id != null) {
         await loadFieldValuesForDetail(detail.id);
       }
-      setHolidayTrackingRefreshKey((k) => k + 1);
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.holidays.getDetailFailed'));
-      setDrawerVisible(false);
+    } catch (error) {
       setHolidayDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.master-data.holidays.getDetailFailed')));
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const handleOpenDetail = (record: Holiday) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setHolidayDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   const handleModalSuccess = () => { setModalVisible(false); setEditUuid(null); actionRef.current?.reload(); };
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setHolidayDetail(null);
+    setDetailError(null);
     resetDetailFieldValues();
   };
 
@@ -185,8 +188,9 @@ const HolidaysPage: React.FC = () => {
       hideInTable: true,
     },
     {
-      title: t('app.kuaizhizao.performance.holidays.columns.holidayType'),
-      dataIndex: 'holidayType',
+        title: t('app.kuaizhizao.performance.holidays.columns.holidayType'),
+        dataIndex: 'holidayType',
+        render: (_, record) => renderPerformanceTypeMarker(record?.holidayType),
       width: 110,
       minWidth: 110,
       uniTableKeepWidth: true,
@@ -227,7 +231,6 @@ const HolidaysPage: React.FC = () => {
       title: t('app.kuaizhizao.performance.common.columns.actions'),
       key: 'action',
       valueType: 'option',
-      width: 150,
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => (
@@ -309,18 +312,19 @@ const HolidaysPage: React.FC = () => {
         zIndex={holidayDetailDrawerZIndex}
         onClose={handleCloseDetail}
         loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
         detail={holidayDetail}
         detailColumns={holidayDetailColumns}
-        basicColumn={3}
-        documentType="performance_holiday"
-        detailId={holidayDetail?.id ?? null}
-        lifecycleResolver={(row, tr) => getPerformanceConfigActiveLifecycle(row as Record<string, unknown>, tr)}
-        tracking={holidayTracking}
         customFields={customFields}
         customFieldValues={customFieldValues}
-        showEmptyDetailPlaceholder
-        t={t}
-        navigate={navigate}
+        extra={buildDetailDrawerEditExtra(t, Boolean(holidayDetail && holidayPerms.canUpdate), () => {
+          if (!holidayDetail) return;
+          handleEdit(holidayDetail);
+        })}
       />
       <HolidayFormModal open={modalVisible} onClose={() => { setModalVisible(false); setEditUuid(null); }} editUuid={editUuid} onSuccess={handleModalSuccess} />
       <HolidayCnImportModal

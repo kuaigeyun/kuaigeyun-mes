@@ -13,6 +13,7 @@ export type DocumentPrintApiResult = {
   output_format?: string;
   content_encoding?: string;
   mime_type?: string;
+  filename?: string;
 };
 
 export function escapeHtml(s: string | number | undefined | null): string {
@@ -107,7 +108,7 @@ export function openPrintHtmlWindow(html: string, title = '打印'): Window | nu
   return w;
 }
 
-/** 将 print API 返回的 base64 PDF 解码为 Blob */
+/** 将 print API 返回的 base64 内容解码为 Blob（PDF / Excel 等） */
 export function decodePrintPdfBlob(result: DocumentPrintApiResult): Blob | null {
   const content = result.content;
   if (!content) return null;
@@ -122,11 +123,12 @@ export function decodePrintPdfBlob(result: DocumentPrintApiResult): Blob | null 
   return new Blob([content], { type: result.mime_type || 'application/pdf' });
 }
 
-/** 下载 print API 返回的 PDF（output_format=pdf, response_format=json） */
+/** 下载 print API 返回的文件（output_format=pdf/xlsx, response_format=json） */
 export function downloadPrintPdfFromApiResult(result: DocumentPrintApiResult, filename: string): void {
   const blob = decodePrintPdfBlob(result);
   if (!blob) {
     throw new Error('PDF content is empty');
   }
-  downloadFile(blob, filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
+  const fallbackExt = result.output_format === 'xlsx' ? '.xlsx' : '.pdf';
+  downloadFile(blob, filename.endsWith(fallbackExt) ? filename : `${filename}${fallbackExt}`);
 }

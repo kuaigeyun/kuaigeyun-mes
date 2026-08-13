@@ -9,7 +9,6 @@
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
-import type { DescriptionsProps } from 'antd';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
@@ -29,13 +28,7 @@ import {
   Row,
   Col,
   Modal,
-  Descriptions,
-  Typography,
   Dropdown,
-  Spin,
-  Empty,
-  Alert,
-  Table,
   theme as AntdTheme,
 } from 'antd';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -55,6 +48,7 @@ import {
 import {
   buildInspectorNameColumn,
   buildQualityInspectionListCodeColumn,
+  buildQualityInspectionListKindColumn,
   buildQualityInspectionListMaterialColumn,
   buildQualityInspectionListMaterialHiddenColumns,
   buildQualityInspectionListQuantityResultColumns,
@@ -64,6 +58,7 @@ import {
 import {
   buildQualityInspectionDetailCodeColumn,
   buildQualityInspectionDetailMaterialColumns,
+  buildQualityInspectionDetailNotesColumn,
   buildQualityInspectionDetailPeopleColumns,
   buildQualityInspectionDetailQuantityStatusColumns,
 } from '../components/qualityDetailColumns';
@@ -72,26 +67,30 @@ import {
   buildIncomingPurchaseReceiptPullColumns,
   type QualityPullCandidateBase,
 } from '../components/qualityPullQueryColumns';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
+import { useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
-import { DetailAuditPhaseTitleExtra } from '../../../../../components/uni-audit/DetailAuditPhaseRow';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../../../../services/api';
 import { qualityApi } from '../../../services/production';
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
-import InspectionTemplateConductResultsTable from '../components/InspectionTemplateConductResultsTable';
-import QualityInspectionDetailAttachments from '../components/QualityInspectionDetailAttachments';
-import InspectionDetailQualityActions from '../components/InspectionDetailQualityActions';
-import { pickInspectionConductExtras } from '../components/inspectionTemplateUtils';
+import { QualityInspectionDetailDrawer } from '../components/QualityInspectionDetailDrawer';
+import {
+  InspectionUnqualifiedBanner,
+  buildInspectionQualityExtraButtons,
+} from '../components/InspectionDetailQualityActions';
+import {
+  getInspectionTemplateSource,
+  hasInspectionPlanSteps,
+  pickInspectionConductExtras,
+} from '../components/inspectionTemplateUtils';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { downloadFile } from '../../../services/common';
-import type { DocumentPushPreview } from '../../../services/purchase-requisition';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
@@ -106,11 +105,11 @@ import {
   resolveQualityInspectionListParams,
 } from '../../../utils/qualityInspectionListCore';
 import dayjs from 'dayjs';
-import {formatDateTime, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
 import {
   InspectionConductQuantityFields,
   InspectionDefectQuantityField,
+  InspectionNonconformanceReasonField,
   normalizeInspectionConductPayload,
 } from '../../../../../components/quantity-with-unit/inspectionConductQuantities';
 import { useTranslation } from 'react-i18next';
@@ -128,8 +127,6 @@ import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
   CustomFieldsFormSection,
-  CustomFieldsDetailSection,
-  hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import {
@@ -151,33 +148,6 @@ import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 const INCOMING_RESOURCE = 'kuaizhizao:quality-management-incoming-inspection';
 const INCOMING_INSPECTION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_incoming_inspections';
 const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
-
-function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
-  dataSource: T,
-  cols: ProDescriptionsItemProps<T>[]
-): NonNullable<DescriptionsProps['items']> {
-  return cols.map((col, index) => {
-    const dataIndex = col.dataIndex as keyof T | undefined;
-    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
-    let content: React.ReactNode = value as React.ReactNode;
-    if (col.valueType === 'dateTime' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
-    }
-    if (col.render && dataSource != null) {
-            content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
-        content,
-        dataSource,
-        index,
-      );
-    }
-    return {
-      key: String(col.key ?? col.dataIndex ?? index),
-      label: col.title as React.ReactNode,
-      children: content !== undefined && content !== null ? content : '-',
-      span: col.span ?? 1,
-    };
-  });
-}
 
 // 来料检验接口定义
 interface IncomingInspection {
@@ -374,6 +344,9 @@ const IncomingInspectionPage: React.FC = () => {
   // 详情Drawer状态
   const [detailVisible, setDetailVisible] = useState(false);
   const [inspectionDetail, setInspectionDetail] = useState<IncomingInspection | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailInspectionId, setDetailInspectionId] = useState<number | null>(null);
 
   const [iiTrackingRefreshKey, setIiTrackingRefreshKey] = useState(0);
 
@@ -386,18 +359,6 @@ const IncomingInspectionPage: React.FC = () => {
   // 创建不合格品记录Modal状态
   const [createDefectModalVisible, setCreateDefectModalVisible] = useState(false);
   const [currentDefectInspection, setCurrentDefectInspection] = useState<IncomingInspection | null>(null);
-  const [pushPurchaseReturnPreviewOpen, setPushPurchaseReturnPreviewOpen] = useState(false);
-  const [pushPurchaseReturnPreviewLoading, setPushPurchaseReturnPreviewLoading] = useState(false);
-  const [pushPurchaseReturnPreviewConfirming, setPushPurchaseReturnPreviewConfirming] = useState(false);
-  const [pushPurchaseReturnPreviewData, setPushPurchaseReturnPreviewData] = useState<DocumentPushPreview | null>(null);
-  const [pushPurchaseReturnPreviewSourceId, setPushPurchaseReturnPreviewSourceId] = useState<number | null>(null);
-  type PullPreviewKind = 'purchase_receipt' | 'customer_material';
-  const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
-  const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
-  const [pullPreviewConfirming, setPullPreviewConfirming] = useState(false);
-  const [pullPreviewData, setPullPreviewData] = useState<DocumentPushPreview | null>(null);
-  const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
-  const [pullPreviewKind, setPullPreviewKind] = useState<PullPreviewKind | null>(null);
   const pullFromPurchaseReceiptCloseRef = useRef<(() => void) | null>(null);
   const pullFromCustomerMaterialCloseRef = useRef<(() => void) | null>(null);
   const defectFormRef = useRef<any>(null);
@@ -472,18 +433,30 @@ const IncomingInspectionPage: React.FC = () => {
   };
 
   // 处理详情查看
-  const handleDetail = async (record: IncomingInspection) => {
+  const loadInspectionDetail = async (id: number) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await qualityApi.incomingInspection.get(record.id!.toString());
+      const detail = await qualityApi.incomingInspection.get(id.toString());
       setInspectionDetail(detail);
-      setDetailVisible(true);
       setIiTrackingRefreshKey((k) => k + 1);
-      if (record.id != null) {
-        await loadInspectionFieldValuesForDetail(record.id);
-      }
-    } catch (error) {
-      messageApi.error(t('app.kuaizhizao.quality.common.messages.loadDetailFailed'));
+      await loadInspectionFieldValuesForDetail(id);
+      return detail;
+    } catch (error: any) {
+      setDetailError(error?.message || t('app.kuaizhizao.quality.common.messages.loadDetailFailed'));
+      setInspectionDetail((prev) => (prev?.id === id ? prev : null));
+      return null;
+    } finally {
+      setDetailLoading(false);
     }
+  };
+
+  const handleDetail = (record: IncomingInspection) => {
+    if (record.id == null) return;
+    setDetailInspectionId(record.id);
+    setDetailVisible(true);
+    setInspectionDetail((prev) => (prev?.id === record.id ? prev : null));
+    void loadInspectionDetail(record.id);
   };
 
   // URL 深链：入库确认「前往来料检验」带 purchase_receipt_id / incoming_inspection_id
@@ -495,21 +468,14 @@ const IncomingInspectionPage: React.FC = () => {
     if (inspId && /^\d+$/.test(inspId)) {
       deepLinkOpenedRef.current = true;
       void (async () => {
-        try {
-          const detail = await qualityApi.incomingInspection.get(inspId);
-          if (detail.purchase_receipt_id != null) {
-            urlListFiltersRef.current = { purchase_receipt_id: Number(detail.purchase_receipt_id) };
-          }
-          setInspectionDetail(detail);
-          setDetailVisible(true);
-          setIiTrackingRefreshKey((k) => k + 1);
-          if (detail.id != null) {
-            await loadInspectionFieldValuesForDetail(detail.id);
-          }
-          actionRef.current?.reload();
-        } catch {
-          messageApi.error(t('app.kuaizhizao.quality.common.messages.loadDetailFailed'));
+        setDetailInspectionId(Number(inspId));
+        setDetailVisible(true);
+        setInspectionDetail((prev) => (prev?.id === Number(inspId) ? prev : null));
+        const detail = await loadInspectionDetail(Number(inspId));
+        if (detail?.purchase_receipt_id != null) {
+          urlListFiltersRef.current = { purchase_receipt_id: Number(detail.purchase_receipt_id) };
         }
+        actionRef.current?.reload();
       })();
       return;
     }
@@ -592,55 +558,26 @@ const IncomingInspectionPage: React.FC = () => {
     [t],
   );
 
-  const resetPullPreview = () => {
-    setPullPreviewOpen(false);
-    setPullPreviewSourceId(null);
-    setPullPreviewKind(null);
-    setPullPreviewData(null);
-  };
-
-  const openPullPreview = async (kind: PullPreviewKind, sourceId: number) => {
-    setPullPreviewKind(kind);
-    setPullPreviewOpen(true);
-    setPullPreviewLoading(true);
-    setPullPreviewConfirming(false);
-    setPullPreviewSourceId(sourceId);
-    setPullPreviewData(null);
+  const createIncomingFromPullSource = async (
+    kind: 'purchase_receipt' | 'customer_material',
+    sourceId: number,
+  ) => {
     try {
-      const data =
-        kind === 'purchase_receipt'
-          ? await qualityApi.incomingInspection.previewPullFromPurchaseReceipt(String(sourceId))
-          : await qualityApi.incomingInspection.previewPullFromCustomerMaterial(String(sourceId));
-      setPullPreviewData(data as DocumentPushPreview);
-    } catch (error: any) {
-      messageApi.error(
-        error?.message || t('app.kuaizhizao.purchaseReturn.pull.previewFailed'),
-      );
-      resetPullPreview();
-    } finally {
-      setPullPreviewLoading(false);
-    }
-  };
-
-  const handlePullPreviewConfirm = async () => {
-    if (!pullPreviewSourceId || !pullPreviewData || !pullPreviewKind) return;
-    if (pullPreviewData.has_blocking_issues) return;
-    setPullPreviewConfirming(true);
-    try {
-      if (pullPreviewKind === 'purchase_receipt') {
-        await qualityApi.incomingInspection.createFromPurchaseReceipt(String(pullPreviewSourceId));
+      if (kind === 'purchase_receipt') {
+        await qualityApi.incomingInspection.createFromPurchaseReceipt(String(sourceId));
         messageApi.success(t('app.kuaizhizao.quality.incoming.messages.createSuccess'));
       } else {
-        await qualityApi.incomingInspection.createFromCustomerMaterial(String(pullPreviewSourceId));
+        await qualityApi.incomingInspection.createFromCustomerMaterial(String(sourceId));
         messageApi.success(t('app.kuaizhizao.quality.incoming.messages.createFromCustomerMaterialSuccess'));
       }
-      resetPullPreview();
       invalidateStats();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.quality.incoming.messages.createFailed'));
-    } finally {
-      setPullPreviewConfirming(false);
+      messageApi.error(
+        qualityInspectionCapabilityReasonMessage(error?.message, t) ||
+          error?.message ||
+          t('app.kuaizhizao.quality.incoming.messages.createFailed'),
+      );
     }
   };
 
@@ -685,7 +622,7 @@ const IncomingInspectionPage: React.FC = () => {
         return;
       }
       pullFromPurchaseReceiptCloseRef.current?.();
-      await openPullPreview('purchase_receipt', selected.id);
+      await createIncomingFromPullSource('purchase_receipt', selected.id);
     },
   });
   pullFromPurchaseReceiptCloseRef.current = pullFromPurchaseReceiptQuery.closeModal;
@@ -718,7 +655,7 @@ const IncomingInspectionPage: React.FC = () => {
         return;
       }
       pullFromCustomerMaterialCloseRef.current?.();
-      await openPullPreview('customer_material', selected.id);
+      await createIncomingFromPullSource('customer_material', selected.id);
     },
   });
   pullFromCustomerMaterialCloseRef.current = pullFromCustomerMaterialQuery.closeModal;
@@ -783,55 +720,28 @@ const IncomingInspectionPage: React.FC = () => {
     }
   };
 
-  const resetPushPurchaseReturnPreview = () => {
-    setPushPurchaseReturnPreviewOpen(false);
-    setPushPurchaseReturnPreviewSourceId(null);
-    setPushPurchaseReturnPreviewData(null);
-  };
-
-  const openPushPurchaseReturnPreview = async (record: IncomingInspection) => {
+  const pushPurchaseReturnDirect = async (record: IncomingInspection) => {
     if (!record.id) return;
-    setPushPurchaseReturnPreviewOpen(true);
-    setPushPurchaseReturnPreviewLoading(true);
-    setPushPurchaseReturnPreviewConfirming(false);
-    setPushPurchaseReturnPreviewSourceId(record.id);
-    setPushPurchaseReturnPreviewData(null);
     try {
-      const data = await qualityApi.incomingInspection.previewPushToPurchaseReturn(String(record.id));
-      setPushPurchaseReturnPreviewData(data);
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.quality.common.messages.pushPurchaseReturnFailed'));
-      resetPushPurchaseReturnPreview();
-    } finally {
-      setPushPurchaseReturnPreviewLoading(false);
-    }
-  };
-
-  const handlePushPurchaseReturnPreviewConfirm = async () => {
-    if (!pushPurchaseReturnPreviewSourceId || !pushPurchaseReturnPreviewData) return;
-    if (pushPurchaseReturnPreviewData.has_blocking_issues) return;
-    setPushPurchaseReturnPreviewConfirming(true);
-    try {
-      const result = await qualityApi.incomingInspection.pushToPurchaseReturn(
-        String(pushPurchaseReturnPreviewSourceId),
-      );
+      const result = await qualityApi.incomingInspection.pushToPurchaseReturn(String(record.id));
       const returnCode = (result as { return_code?: string })?.return_code;
       messageApi.success(
         returnCode
           ? t('app.kuaizhizao.quality.common.messages.pushPurchaseReturnSuccess', { code: returnCode })
           : t('app.kuaizhizao.quality.common.messages.pushPurchaseReturnSuccess', { code: '-' }),
       );
-      resetPushPurchaseReturnPreview();
       invalidateStats();
       actionRef.current?.reload();
-      if (inspectionDetail?.id === pushPurchaseReturnPreviewSourceId) {
-        const detail = await qualityApi.incomingInspection.get(String(pushPurchaseReturnPreviewSourceId));
+      if (inspectionDetail?.id === record.id) {
+        const detail = await qualityApi.incomingInspection.get(String(record.id));
         setInspectionDetail(detail as IncomingInspection);
       }
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.quality.common.messages.pushPurchaseReturnFailed'));
-    } finally {
-      setPushPurchaseReturnPreviewConfirming(false);
+      messageApi.error(
+        qualityInspectionCapabilityReasonMessage(error?.message, t) ||
+          error?.message ||
+          t('app.kuaizhizao.quality.common.messages.pushPurchaseReturnFailed'),
+      );
     }
   };
 
@@ -876,7 +786,7 @@ const IncomingInspectionPage: React.FC = () => {
             : undefined,
           onClick: () => {
             if (selectedIncomingForToolbar && canPushPurchaseReturnToolbar) {
-              void openPushPurchaseReturnPreview(selectedIncomingForToolbar);
+              void pushPurchaseReturnDirect(selectedIncomingForToolbar);
             }
           },
         },
@@ -896,24 +806,12 @@ const IncomingInspectionPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.quality.common.columns.purchaseReceiptCode'),
         dataIndex: 'purchase_receipt_code',
-        render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.purchase_receipt_code ?? '') }}>{r.purchase_receipt_code ?? '-'}</Typography.Text>
-        ),
       },
       { title: t('app.kuaizhizao.quality.common.columns.supplier'), dataIndex: 'supplier_name' },
       ...buildQualityInspectionDetailQuantityStatusColumns<IncomingInspection>(t),
       ...buildQualityInspectionDetailPeopleColumns<IncomingInspection>(t),
+      buildQualityInspectionDetailNotesColumn<IncomingInspection>(t),
     ],
-    [t]
-  );
-
-  const detailNotesColumn: ProDescriptionsItemProps<IncomingInspection> = useMemo(
-    () => ({
-      title: t('app.kuaizhizao.quality.common.columns.inspectionNotes'),
-      dataIndex: 'notes',
-      span: 2,
-      render: (val) => val || '-',
-    }),
     [t]
   );
 
@@ -1133,6 +1031,7 @@ const IncomingInspectionPage: React.FC = () => {
       inspectionQualityStatusValueEnum,
     ),
     buildQualityInspectionListCodeColumn<IncomingInspection>(t),
+    buildQualityInspectionListKindColumn<IncomingInspection>(t),
     stackedPrimarySecondaryColumn<IncomingInspection>(
       t('app.kuaizhizao.quality.common.columns.supplierReceipt'),
       'supplierReceipt',
@@ -1241,7 +1140,7 @@ const IncomingInspectionPage: React.FC = () => {
     >
       <UniTable<IncomingInspection>
         headerTitle={t('app.kuaizhizao.quality.incoming.pageTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.quality-management.incoming-inspection.rank-v4"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.incoming-inspection.rank-v7"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -1364,30 +1263,35 @@ const IncomingInspectionPage: React.FC = () => {
             unqualified_quantity: 0,
           } : {}
         }
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        width={
+          hasInspectionPlanSteps(getInspectionTemplateSource(currentInspection as Record<string, unknown>))
+            ? MODAL_CONFIG.LARGE_WIDTH
+            : MODAL_CONFIG.STANDARD_WIDTH
+        }
+        grid
         formRef={formRef}
       >
-        {currentInspection && (
-          <Card title={t('app.kuaizhizao.quality.common.sections.inspectionInfo')} size="small" style={{ marginBottom: 16 }}>
-            <Row gutter={16}>
-              <Col span={12}>
-                <strong>{t('app.kuaizhizao.quality.common.label.materialCode')}：</strong>{currentInspection.material_code}
-              </Col>
-              <Col span={12}>
-                <strong>{t('app.kuaizhizao.quality.common.label.materialName')}：</strong>{currentInspection.material_name}
-              </Col>
-            </Row>
-            <Row gutter={16} style={{ marginTop: 8 }}>
-              <Col span={24}>
-                <strong>{t('app.kuaizhizao.quality.common.label.inspectionQty')}：</strong>
-                {formatQuantityWithUnit(
-                  currentInspection.inspection_quantity,
-                  currentInspection.material_unit,
-                )}
-              </Col>
-            </Row>
-          </Card>
-        )}
+        {currentInspection ? (
+          <Col span={24}>
+            <Card title={t('app.kuaizhizao.quality.common.sections.inspectionInfo')} size="small" style={{ marginBottom: 8 }}>
+              <Row gutter={16}>
+                <Col span={8}>
+                  <strong>{t('app.kuaizhizao.quality.common.label.materialCode')}：</strong>{currentInspection.material_code}
+                </Col>
+                <Col span={8}>
+                  <strong>{t('app.kuaizhizao.quality.common.label.materialName')}：</strong>{currentInspection.material_name}
+                </Col>
+                <Col span={8}>
+                  <strong>{t('app.kuaizhizao.quality.common.label.inspectionQty')}：</strong>
+                  {formatQuantityWithUnit(
+                    currentInspection.inspection_quantity,
+                    currentInspection.material_unit,
+                  )}
+                </Col>
+              </Row>
+            </Card>
+          </Col>
+        ) : null}
         <InspectionTemplateConductFields
           inspection={currentInspection as Record<string, unknown>}
           photoCategory="incoming_inspection_attachments"
@@ -1398,180 +1302,101 @@ const IncomingInspectionPage: React.FC = () => {
           materialUnit={currentInspection?.material_unit}
           scenario="purchase"
           inspectionQuantity={Number(currentInspection?.inspection_quantity || 0)}
+          inspection={currentInspection as Record<string, unknown> | undefined}
           t={t}
         />
-        <ProFormTextArea
-          name="nonconformance_reason"
-          label={t('app.kuaizhizao.quality.common.form.nonconformanceReason')}
-          placeholder={t('app.kuaizhizao.quality.common.placeholder.nonconformanceReason')}
-          fieldProps={{ rows: 2 }}
-          colProps={{ span: 24 }}
-        />
+        <InspectionNonconformanceReasonField t={t} />
         <CustomFieldsFormSection
           customFields={inspectionFormCustomFields}
           customFieldValues={inspectionFormCustomFieldValues}
           gridColumns={2}
         />
-        <DocumentAttachmentsField category="incoming_inspection_attachments" />
         <ProFormTextArea
           name="notes"
           label={t('app.kuaizhizao.quality.common.form.notes')}
           placeholder={t('app.kuaizhizao.quality.common.placeholder.notes')}
-          fieldProps={{ rows: 3 }}
+          fieldProps={{ rows: 2 }}
           colProps={{ span: 24 }}
         />
+        <DocumentAttachmentsField category="incoming_inspection_attachments" />
       </FormModalTemplate>
 
-      <DetailDrawerTemplate
+      <QualityInspectionDetailDrawer
         title={t('app.kuaizhizao.quality.common.modal.detailTitle', { code: inspectionDetail?.inspection_code || '' })}
         open={detailVisible}
         zIndex={incomingInspectionDetailDrawerZIndex}
         onClose={() => {
           setDetailVisible(false);
           setInspectionDetail(null);
+          setDetailError(null);
+          setDetailInspectionId(null);
           resetInspectionDetailFieldValues();
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        column={3}
+        inspection={inspectionDetail}
+        documentType="incoming_inspection"
+        loading={detailLoading}
+        error={detailError}
+        onRetry={detailInspectionId != null ? () => void loadInspectionDetail(detailInspectionId) : undefined}
         extra={
           inspectionDetail ? (
-            <UniWorkflowActions
-              {...rowActionKind('skip')}
-              record={inspectionDetail}
-              {...qualityInspectionUniAuditProps({
-                entityType: 'incoming_inspection',
-                resourcePrefix: INCOMING_RESOURCE,
-                entityName: t('app.kuaizhizao.quality.common.entity.incomingInspection'),
-                theme: 'default',
-                onSuccess: () => {
-                  actionRef.current?.reload();
-                  invalidateStats();
-                  if (inspectionDetail?.id) {
-                    qualityApi.incomingInspection
-                      .get(inspectionDetail.id.toString())
-                      .then(async (d) => {
-                        setInspectionDetail(d);
-                        setIiTrackingRefreshKey((k) => k + 1);
-                        await loadInspectionFieldValuesForDetail(inspectionDetail.id!);
-                      })
-                      .catch(() => {});
-                  }
+            <Space wrap size="small">
+              {buildInspectionQualityExtraButtons({
+                inspection: inspectionDetail,
+                inspectionType: 'incoming',
+                t,
+                navigate,
+                onRegisterDefect: () => handleCreateDefect(inspectionDetail),
+                canRegisterDefect:
+                  qualityInspectionRowGates(inspectionDetail, incomingPerms, ncPerms, t).createDefect.allowed &&
+                  !qualityInspectionRowGates(inspectionDetail, incomingPerms, ncPerms, t).createDefect.disabled,
+                onCloseDrawer: () => {
+                  setDetailVisible(false);
+                  setInspectionDetail(null);
                 },
               })}
-            />
-          ) : null
-        }
-        customContent={
-          inspectionDetail ? (
-            <>
-              <InspectionDetailQualityActions
-                inspection={inspectionDetail}
-                inspectionType="incoming"
-                onRegisterDefect={() => handleCreateDefect(inspectionDetail)}
-                canRegisterDefect={
-                  qualityInspectionRowGates(inspectionDetail, incomingPerms, ncPerms, t).createDefect.allowed &&
-                  !qualityInspectionRowGates(inspectionDetail, incomingPerms, ncPerms, t).createDefect.disabled
-                }
+              <UniWorkflowActions
+                {...rowActionKind('skip')}
+                record={inspectionDetail}
+                {...qualityInspectionUniAuditProps({
+                  entityType: 'incoming_inspection',
+                  resourcePrefix: INCOMING_RESOURCE,
+                  entityName: t('app.kuaizhizao.quality.common.entity.incomingInspection'),
+                  theme: 'default',
+                  onSuccess: () => {
+                    actionRef.current?.reload();
+                    invalidateStats();
+                    if (inspectionDetail?.id) {
+                      qualityApi.incomingInspection
+                        .get(inspectionDetail.id.toString())
+                        .then(async (d) => {
+                          setInspectionDetail(d);
+                          setIiTrackingRefreshKey((k) => k + 1);
+                          await loadInspectionFieldValuesForDetail(inspectionDetail.id!);
+                        })
+                        .catch(() => {});
+                    }
+                  },
+                })}
               />
-              <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.basicInfo')}>
-                <Descriptions
-                  column={3}
-                  size="small"
-                  items={buildDescriptionItemsFromColumns(inspectionDetail, detailBaseColumns)}
-                />
-                {hasCustomFieldsDetailContent(inspectionListCustomFields, inspectionDetailCustomFieldValues) ? (
-                  <div style={{ marginTop: 16 }}>
-                    <CustomFieldsDetailSection
-                      customFields={inspectionListCustomFields}
-                      customFieldValues={inspectionDetailCustomFieldValues}
-                    />
-                  </div>
-                ) : null}
-                {inspectionDetail.notes ? (
-                  <Descriptions
-                    column={3}
-                    size="small"
-                    style={{ marginTop: 16 }}
-                    items={buildDescriptionItemsFromColumns(inspectionDetail, [detailNotesColumn])}
-                  />
-                ) : null}
-              </DetailDrawerSection>
-
-              <DetailDrawerSection
-                title={t('app.kuaizhizao.quality.common.sections.lifecycle')}
-                titleExtra={<DetailAuditPhaseTitleExtra record={inspectionDetail} />}
-              >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lc = getIncomingInspectionLifecycle(inspectionDetail as Record<string, unknown>);
-                    const mainStages = lc.mainStages ?? [];
-                    if (mainStages.length === 0) return null;
-                    return (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        showLabels
-                        status={lc.status}
-                        nextStepSuggestions={lc.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
-                    );
-                  })()}
-                    
-                </div>
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.detailInfo')}>
-                <InspectionTemplateConductResultsTable inspection={inspectionDetail as Record<string, unknown>} />
-              </DetailDrawerSection>
-
-              {Array.isArray(inspectionDetail.attachments) && inspectionDetail.attachments.length > 0 ? (
-                <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.attachments')}>
-                  <QualityInspectionDetailAttachments attachments={inspectionDetail.attachments} />
-                </DetailDrawerSection>
-              ) : null}
-
-
-              <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.operationLog')}>
-                {incomingTracking.loading && (
-                  <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Spin />
-                  </div>
-                )}
-                {incomingTracking.error && !incomingTracking.loading && (
-                  <Typography.Text type="danger">{incomingTracking.error}</Typography.Text>
-                )}
-                {incomingTracking.data && !incomingTracking.loading && (
-                  <DocumentTrackingTimelineBody data={incomingTracking.data} />
-                )}
-                {!incomingTracking.loading && !incomingTracking.data && !incomingTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.quality.common.empty.noActivityLog')} />
-                )}
-              </DetailDrawerSection>
-            </>
+            </Space>
           ) : null
         }
-      
-                        traceDocument={
-                          inspectionDetail?.id != null
-                            ? {
-                                documentType: 'incoming_inspection',
-                                documentId: inspectionDetail.id,
-                                selfDocumentId: inspectionDetail.id,
-                              renderBriefActions: (doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDetailVisible(false);
-                      setInspectionDetail(null);
-                    }}
-                  />
-                )
-                              }
-                            : undefined
-                        }
+        banner={<InspectionUnqualifiedBanner inspection={inspectionDetail} />}
+        basicColumns={detailBaseColumns}
+        customFields={inspectionListCustomFields}
+        customFieldValues={inspectionDetailCustomFieldValues}
+        tracking={incomingTracking}
+        renderBriefActions={(doc) => (
+          <WarehouseTraceBriefPrimaryActions
+            doc={doc}
+            t={t}
+            navigate={navigate}
+            closeDrawer={() => {
+              setDetailVisible(false);
+              setInspectionDetail(null);
+            }}
+          />
+        )}
       />
 
       <UniPullQueryModal<PullSourceCandidate>
@@ -1631,140 +1456,6 @@ const IncomingInspectionPage: React.FC = () => {
         scope={pullFromPurchaseReceiptQuery.scope}
         onScopeChange={pullFromPurchaseReceiptQuery.handleScopeChange}
       />
-
-      <Modal
-        title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
-        open={pullPreviewOpen}
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
-        onCancel={resetPullPreview}
-        okText={
-          pullPreviewKind === 'customer_material'
-            ? pullFromCustomerMaterialAction.label
-            : pullFromPurchaseReceiptAction.label
-        }
-        cancelText={t('common.cancel')}
-        confirmLoading={pullPreviewConfirming}
-        onOk={handlePullPreviewConfirm}
-        okButtonProps={{
-          disabled:
-            pullPreviewLoading ||
-            !pullPreviewData ||
-            !!pullPreviewData?.has_blocking_issues ||
-            !(pullPreviewData?.items || []).some(
-              (row) => Number(row.max_push_quantity ?? 0) > 0,
-            ),
-        }}
-      >
-        {pullPreviewLoading ? (
-          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-            <Spin />
-            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
-          </div>
-        ) : pullPreviewData ? (
-          <div>
-            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
-            {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
-              <Alert
-                type="warning"
-                showIcon
-                style={{ marginBottom: 12 }}
-                message={qualityInspectionCapabilityReasonMessage(
-                  pullPreviewData.blocking_reason,
-                  t,
-                )}
-              />
-            ) : null}
-            {pullPreviewData.items?.length > 0 ? (
-              <Table
-                size="small"
-                dataSource={pullPreviewData.items}
-                rowKey={(row) => String(row.item_id)}
-                pagination={false}
-                scroll={{ x: 960 }}
-                columns={[
-                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' , render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' , render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' , render: formatQuantity },
-                ]}
-              />
-            ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseReturn.pull.previewNoLines')} />
-            )}
-            {pullPreviewData.tip ? (
-              <p style={{ marginTop: 12, marginBottom: 0, fontSize: 12, color: '#666' }}>
-                {pullPreviewData.tip}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-      </Modal>
-
-      <Modal
-        title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
-        open={pushPurchaseReturnPreviewOpen}
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
-        onCancel={resetPushPurchaseReturnPreview}
-        okText={pushToPurchaseReturnAction.label}
-        cancelText={t('common.cancel')}
-        confirmLoading={pushPurchaseReturnPreviewConfirming}
-        onOk={handlePushPurchaseReturnPreviewConfirm}
-        okButtonProps={{
-          disabled:
-            pushPurchaseReturnPreviewLoading ||
-            !pushPurchaseReturnPreviewData ||
-            !!pushPurchaseReturnPreviewData?.has_blocking_issues ||
-            !(pushPurchaseReturnPreviewData?.items || []).some(
-              (row) => Number(row.max_push_quantity ?? 0) > 0,
-            ),
-        }}
-      >
-        {pushPurchaseReturnPreviewLoading ? (
-          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-            <Spin />
-            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
-          </div>
-        ) : pushPurchaseReturnPreviewData ? (
-          <div>
-            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pushPurchaseReturnPreviewData.summary}</p>
-            {pushPurchaseReturnPreviewData.has_blocking_issues && pushPurchaseReturnPreviewData.blocking_reason ? (
-              <Alert
-                type="warning"
-                showIcon
-                style={{ marginBottom: 12 }}
-                message={qualityInspectionCapabilityReasonMessage(
-                  pushPurchaseReturnPreviewData.blocking_reason,
-                  t,
-                )}
-              />
-            ) : null}
-            {pushPurchaseReturnPreviewData.items?.length > 0 ? (
-              <Table
-                size="small"
-                dataSource={pushPurchaseReturnPreviewData.items}
-                rowKey={(row) => String(row.item_id)}
-                pagination={false}
-                scroll={{ x: 960 }}
-                columns={[
-                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' , render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' , render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' , render: formatQuantity },
-                ]}
-              />
-            ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseReturn.pull.previewNoLines')} />
-            )}
-            {pushPurchaseReturnPreviewData.tip ? (
-              <p style={{ marginTop: 12, marginBottom: 0, fontSize: 12, color: '#666' }}>
-                {pushPurchaseReturnPreviewData.tip}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-      </Modal>
 
       {/* 创建不合格品记录Modal */}
       <FormModalTemplate

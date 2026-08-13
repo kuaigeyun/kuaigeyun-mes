@@ -29,7 +29,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES, detailDrawerDescriptionItems, detailDrawerBasicColumn } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { UniPullQueryModal, filterByPullScope, paginatePullRows, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
@@ -57,7 +57,7 @@ import { resolveDeliveryNoticeQualityCertificates } from '../../../services/prin
 import { SafetyCertificateOutlined } from '@ant-design/icons';
 import {formatDateTime, formatQuantity} from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
@@ -763,29 +763,15 @@ const DeliveryNotesPage: React.FC = () => {
     }
   };
 
-  const detailColumns: ProDescriptionsItemProps<DeliveryNoticeDetail>[] = useMemo(() => [
+  const detailColumns = useMemo(() => alignDescriptionColumns([
     { title: t('app.kuaizhizao.deliveryNote.col.noticeCode'), dataIndex: 'notice_code' },
     {
       title: t('app.kuaizhizao.deliveryNote.col.salesDeliveryCode'),
       dataIndex: 'sales_delivery_code',
-      render: (_, r) => (
-        <LinkedDocumentCode
-          documentType="sales_delivery"
-          documentId={r.sales_delivery_id}
-          code={r.sales_delivery_code}
-        />
-      ),
     },
     {
       title: t('app.kuaizhizao.deliveryNote.col.salesOrderCode'),
       dataIndex: 'sales_order_code',
-      render: (_, r) => (
-        <LinkedDocumentCode
-          documentType="sales_order"
-          documentId={r.sales_order_id}
-          code={r.sales_order_code}
-        />
-      ),
     },
     { title: t('app.kuaizhizao.deliveryNote.field.customer'), dataIndex: 'customer_name' },
     { title: t('app.kuaizhizao.deliveryNote.field.contact'), dataIndex: 'customer_contact' },
@@ -793,7 +779,7 @@ const DeliveryNotesPage: React.FC = () => {
     { title: t('app.kuaizhizao.deliveryNote.col.plannedDelivery'), dataIndex: 'planned_delivery_date', valueType: 'date' },
     { title: t('app.kuaizhizao.deliveryNote.col.carrier'), dataIndex: 'carrier' },
     { title: t('app.kuaizhizao.deliveryNote.col.trackingNumber'), dataIndex: 'tracking_number' },
-    { title: t('app.kuaizhizao.deliveryNote.field.shippingAddress'), dataIndex: 'shipping_address', span: 2 },
+    { title: t('app.kuaizhizao.deliveryNote.field.shippingAddress'), dataIndex: 'shipping_address', span: 3 },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.status'),
       dataIndex: 'status',
@@ -803,8 +789,8 @@ const DeliveryNotesPage: React.FC = () => {
       },
     },
     { title: t('app.kuaizhizao.deliveryNote.col.sentAt'), dataIndex: 'sent_at', valueType: 'dateTime' },
-    { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes', span: 2 },
-  ], [t]);
+    { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes', span: 3 },
+  ]), [t]);
 
   const detailItemColumns = useMemo(
     () => [
@@ -1390,7 +1376,7 @@ const DeliveryNotesPage: React.FC = () => {
         basic={
           noticeDetail ? (
             <Descriptions
-              column={3}
+              column={detailDrawerBasicColumn(false)}
               size="small"
               items={detailDrawerDescriptionItems(detailColumns, noticeDetail)}
             />

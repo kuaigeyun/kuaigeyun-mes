@@ -2,6 +2,7 @@
  * UniTable 布局列（生命周期 / 操作）— 全局唯一宽度与识别约定
  *
  * 页面列定义禁止再写 lifecycle / operation 的 width（由 UniTable 注入）；
+ * 审核 / 生命周期列不排序（UniTable 覆盖 sorter）。
  * 识别规则、宽度常量与 scroll.x 列宽贡献仅在此维护。
  */
 
@@ -16,6 +17,7 @@ import {
  * 状态徽章列统一宽度：审核状态与执行状态（生命周期）等单徽章列共用这一个真源。
  * 两列必须等宽等对齐，各写各的数字就会漂移。消费方见
  * `sales-management/shared/listAuditPhaseColumn.tsx` 与本文件的生命周期列宽推导。
+ * 审核 / 生命周期列不参与排序：UniTable 注入 `sorter: false`。
  */
 export const UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH = 80;
 
@@ -187,6 +189,24 @@ export function isUniTableLifecycleColumn(col: unknown): boolean {
     LIFECYCLE_COLUMN_KEYS.has(key) ||
     LIFECYCLE_COLUMN_KEYS.has(dataIndex)
   );
+}
+
+const AUDIT_PHASE_COLUMN_KEYS = new Set(['audit_phase']);
+
+/** 审核状态列：key=audit_phase，或 dataIndex 为 audit.phase */
+export function isUniTableAuditPhaseColumn(col: unknown): boolean {
+  if (!col || typeof col !== 'object') return false;
+  const c = col as { key?: unknown; dataIndex?: unknown };
+  const key = String(c.key ?? '');
+  const dataIndex = Array.isArray(c.dataIndex)
+    ? c.dataIndex.join('.')
+    : String(c.dataIndex ?? '');
+  return AUDIT_PHASE_COLUMN_KEYS.has(key) || dataIndex === 'audit.phase';
+}
+
+/** 审核状态 + 生命周期：单徽章状态列（等宽、居中、不排序） */
+export function isUniTableStatusBadgeColumn(col: unknown): boolean {
+  return isUniTableLifecycleColumn(col) || isUniTableAuditPhaseColumn(col);
 }
 
 /** 生命周期（执行状态）列宽：与审核状态列同宽，无论是否右固定 */

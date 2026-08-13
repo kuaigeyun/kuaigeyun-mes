@@ -10,16 +10,16 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Tag, Space, Drawer, Typography, Descriptions, App, Button } from 'antd';
+import { ActionType, ProColumns, type ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Button } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemStatusTag } from '../utils/systemListPresentation';
 import { EyeOutlined, BarChartOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea';
-import { ListPageTemplate, DRAWER_CONFIG } from '../../../components/layout-templates';
+import { ListPageTemplate } from '../../../components/layout-templates';
+import { SystemMasterDetailDrawer } from '../shared/systemMasterDetailDrawer';
 import { useListPageStatCardsVisible } from '../../../components/layout-templates/listPageStatCardsContext';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import {
   getLoginLogs,
@@ -45,6 +45,7 @@ const LoginLogsPage: React.FC = () => {
   const [stats, setStats] = useState<LoginLogStats | null>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentLog, setCurrentLog] = useState<LoginLog | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   /**
    * 加载统计信息
@@ -77,8 +78,10 @@ const LoginLogsPage: React.FC = () => {
    * 查看日志详情
    */
   const handleViewDetail = (record: LoginLog) => {
-    setCurrentLog(record);
     setDetailDrawerVisible(true);
+    setCurrentLog(null);
+    setDetailError(null);
+    setCurrentLog(record);
   };
 
   /**
@@ -97,7 +100,7 @@ const LoginLogsPage: React.FC = () => {
   /**
    * 详情列定义
    */
-  const detailColumns = [
+  const detailColumns: ProDescriptionsItemProps<LoginLog>[] = [
     {
       title: 'UUID',
       dataIndex: 'uuid',
@@ -151,7 +154,7 @@ const LoginLogsPage: React.FC = () => {
     {
       title: t('pages.system.loginLogs.loginTime'),
       dataIndex: 'created_at',
-      render: (_: unknown, record: LoginLog) => formatDateTimeBySiteSetting(record.created_at),
+      valueType: 'dateTime' as const,
     },
   ];
 
@@ -387,17 +390,17 @@ const LoginLogsPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 日志详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('pages.system.loginLogs.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentLog(null);
+          setDetailError(null);
         }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
-        basic={currentLog ? (
-            <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, currentLog)} />
-          ) : null}
+        detail={currentLog}
+        detailColumns={detailColumns}
+        error={detailError}
       />
     </>
   );

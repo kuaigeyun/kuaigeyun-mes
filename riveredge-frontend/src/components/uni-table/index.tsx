@@ -147,6 +147,7 @@ import {
   isUniTableDetailProgressColumn,
   isUniTableLifecycleColumn,
   isUniTableProgressColumn,
+  isUniTableStatusBadgeColumn,
   resolveUniTableDetailProgressColumnWidth,
   resolveUniTableLifecycleColumnWidth,
   resolveUniTableProgressColumnWidth,
@@ -184,12 +185,29 @@ import {
 
 export { readPersistedUniTableViewType } from './uniTableViewPreference'
 
-/** 执行状态（生命周期）列与审核状态列同为单徽章列：统一居中，页面自写的 align 一律覆盖 */
-function applyLifecycleColumnAlign<T extends Record<string, any>>(columns: T[]): T[] {
+function isStatusFieldNoSortColumn(col: unknown): boolean {
+  if (!col || typeof col !== 'object') return false
+  const c = col as { key?: unknown; dataIndex?: unknown }
+  const key = String(c.key ?? '')
+  const dataIndex = Array.isArray(c.dataIndex)
+    ? c.dataIndex.join('.')
+    : String(c.dataIndex ?? '')
+  return key === 'status' || dataIndex === 'status' || dataIndex === 'approval_status'
+}
+
+/** 审核 / 生命周期 / status 状态列：徽章列居中；状态列一律不排序 */
+function applyStatusBadgeColumnPolicy<T extends Record<string, any>>(columns: T[]): T[] {
   if (!columns?.length) return columns
   return columns.map((col: any) => {
-    if (!isUniTableLifecycleColumn(col)) return col
-    return { ...col, align: 'center' as const }
+    const isBadge = isUniTableStatusBadgeColumn(col)
+    const isStatusField = isStatusFieldNoSortColumn(col)
+    if (!isBadge && !isStatusField) return col
+    const { sorter: _sorter, defaultSortOrder: _defaultSortOrder, ...rest } = col
+    return {
+      ...rest,
+      ...(isBadge ? { align: 'center' as const } : {}),
+      sorter: false,
+    }
   })
 }
 
@@ -228,7 +246,7 @@ function applyUniTableHeaderCellPolicy(columns: any[]): any[] {
 
 function finalizeUniTableColumns(columns: any[]): any[] {
   return applyUniTableHeaderCellPolicy(
-    applyLifecycleColumnAlign(normalizeFixedColumnOrder(columns)),
+    applyStatusBadgeColumnPolicy(normalizeFixedColumnOrder(columns)),
   )
 }
 
@@ -1484,9 +1502,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           uniTableKeepWidth: true,
         }
       }
-      /** 生命周期列统一策略：固定收缩锚点 + 最小宽度，屏蔽历史固定宽度带来的留白。 */
+      /** 生命周期列统一策略：固定收缩锚点 + 最小宽度，屏蔽历史固定宽度带来的留白；不排序。 */
       if (isUniTableLifecycleColumn(col)) {
-        const { width: _w, minWidth: _mw, ...lifecycleRest } = col
+        const { width: _w, minWidth: _mw, sorter: _sorter, defaultSortOrder: _dso, ...lifecycleRest } = col
         const userOnCell = lifecycleRest.onCell
         const lifecycleCellClass = getUniTableLifecycleCellClassName(lifecycleRest)
         return {
@@ -1494,6 +1512,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           width: resolveUniTableLifecycleColumnWidth(),
           minWidth: resolveUniTableLifecycleColumnWidth(),
           resizable: false,
+          sorter: false,
           onCell: (record: any, rowIndex?: number) => {
             const base =
               typeof userOnCell === 'function' ? userOnCell(record, rowIndex) || {} : {}

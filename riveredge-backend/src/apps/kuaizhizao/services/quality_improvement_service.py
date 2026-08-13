@@ -646,16 +646,24 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         )
         from apps.kuaizhizao.services.quality_service import (
             _apply_template_conduct_to_payload,
+            _assert_unqualified_qty_when_steps_fail,
             _maybe_create_quality_exception_from_inspection,
             _quality_inspection_conduct_finalize_fields,
+            _resolve_conduct_inspector_id,
         )
 
         row = await OQCInspection.get_or_none(id=inspection_id, tenant_id=tenant_id, deleted_at__isnull=True)
         if not row:
             raise NotFoundError("OQC 检验单不存在")
         assert_oqc_inspection_capability(row, "conduct")
+
         user_info = await self.get_user_info(user_id)
         conduct_data = payload.model_dump(exclude_unset=True)
+        _assert_unqualified_qty_when_steps_fail(
+            row, "other_checks", conduct_data, payload.unqualified_quantity
+        )
+        inspector_id = _resolve_conduct_inspector_id(conduct_data, user_id)
+        inspector_info = await self.get_user_info(inspector_id) if inspector_id != user_id else user_info
         conduct_extra = _apply_template_conduct_to_payload(row, "other_checks", conduct_data)
         row.inspection_result = payload.inspection_result
         row.quality_status = payload.quality_status
@@ -674,8 +682,8 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
             tenant_id,
             "oqc_inspection",
             quality_status=payload.quality_status,
-            inspected_by=user_id,
-            inspector_name=user_info["name"],
+            inspected_by=inspector_id,
+            inspector_name=inspector_info["name"],
         )
         row.status = finalize_fields.get("status", "已检验")
         if finalize_fields.get("review_status") is not None:
@@ -684,8 +692,8 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
             row.reviewer_id = finalize_fields["reviewer_id"]
             row.reviewer_name = finalize_fields["reviewer_name"]
             row.review_time = finalize_fields["review_time"]
-        row.inspector_id = user_id
-        row.inspector_name = user_info["name"]
+        row.inspector_id = inspector_id
+        row.inspector_name = inspector_info["name"]
         row.inspection_time = resolve_business_datetime()
         row.updated_by = user_id
         row.updated_by_name = user_info["name"]

@@ -93,7 +93,9 @@ const EquipmentDetailPage = lazy(() => import('./pages/equipment-management/equi
 const EquipmentFaultsPage = lazy(() => import('./pages/equipment-management/equipment-faults'));
 const MaintenancePlansPage = lazy(() => import('./pages/equipment-management/maintenance-plans'));
 const MoldsPage = lazy(() => import('./pages/equipment-management/molds'));
+const MoldDetailPage = lazy(() => import('./pages/equipment-management/molds/detail'));
 const ToolLedgerPage = lazy(() => import('./pages/equipment-management/tool-ledger'));
+const ToolLedgerDetailPage = lazy(() => import('./pages/equipment-management/tool-ledger/detail'));
 const EquipmentStatusPage = lazy(() => import('./pages/equipment-management/equipment-status'));
 const MaintenanceRemindersPage = lazy(() => import('./pages/equipment-management/maintenance-reminders'));
 const MoldCalibrationsPage = lazy(() => import('./pages/equipment-management/mold-calibrations'));
@@ -375,7 +377,9 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="equipment-management/maintenance-executions" element={withPageSuspense(MaintenanceExecutionsPage)} />
       <Route path="equipment-management/equipment-repairs" element={withPageSuspense(EquipmentRepairsPage)} />
       <Route path="equipment-management/equipment-calibrations" element={withPageSuspense(EquipmentCalibrationsPage)} />
+      <Route path="equipment-management/molds/:uuid" element={withPageSuspense(MoldDetailPage)} />
       <Route path="equipment-management/molds" element={withPageSuspense(MoldsPage)} />
+      <Route path="equipment-management/tool-ledger/:uuid" element={withPageSuspense(ToolLedgerDetailPage)} />
       <Route path="equipment-management/tool-ledger" element={withPageSuspense(ToolLedgerPage)} />
       <Route path="equipment-management/equipment-status" element={withPageSuspense(EquipmentStatusPage)} />
       <Route path="equipment-management/maintenance-reminders" element={withPageSuspense(MaintenanceRemindersPage)} />

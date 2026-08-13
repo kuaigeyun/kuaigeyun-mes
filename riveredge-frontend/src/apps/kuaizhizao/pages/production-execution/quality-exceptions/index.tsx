@@ -33,9 +33,17 @@ import {
 } from '../components/ProductionExceptionDetailContent';
 import {
   buildQualityExceptionActionButtons,
-  hasQualityExceptionActions,
-  renderQualityExceptionActionGroup,
+  hasQualityExceptionHandleActions,
+  renderQualityExceptionHandleGroup,
+  renderQualityExceptionWorkbenchExtra,
 } from '../components/ProductionExceptionDetailActions';
+import {
+  ExceptionWorkbenchLifecycleStepper,
+  QualityExceptionImpactBanner,
+  buildQualityExceptionLifecycle,
+  renderExceptionWorkbenchNextStepSuffix,
+  resolveExceptionNextStepLabel,
+} from '../components/productionExceptionWorkbench';
 import { formatDateTime } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -432,21 +440,54 @@ const QualityExceptionsPage: React.FC = () => {
           setCurrentRecord(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        basic={
+        extra={
+          currentRecord
+            ? renderQualityExceptionWorkbenchExtra({
+                record: currentRecord,
+                t,
+                navigate,
+                onCloseDrawer: () => {
+                  setDetailDrawerVisible(false);
+                  setCurrentRecord(null);
+                },
+                onStart8D: () => { void handleStart8D(currentRecord); },
+                canCreate8D,
+                keyPrefix: `quality-exception-drawer-${currentRecord.id ?? 'row'}`,
+              })
+            : undefined
+        }
+        banner={
           currentRecord ? (
-            <QualityExceptionDetailBasicContent
+            <QualityExceptionImpactBanner
               record={currentRecord}
               t={t}
               exceptionTypeLabel={exceptionTypeLabel}
               severityLabel={severityLabel}
-              statusLabel={statusLabel}
-              navigate={navigate}
-              onCloseDrawer={() => {
-                setDetailDrawerVisible(false);
-                setCurrentRecord(null);
-              }}
             />
           ) : undefined
+        }
+        basic={
+          currentRecord ? (
+            <QualityExceptionDetailBasicContent record={currentRecord} t={t} />
+          ) : undefined
+        }
+        collaboration={
+          currentRecord ? (
+            <ExceptionWorkbenchLifecycleStepper
+              lifecycle={buildQualityExceptionLifecycle(t, currentRecord.status)}
+              hideNextStepSuggestions
+            />
+          ) : undefined
+        }
+        collaborationTitleSuffix={
+          currentRecord
+            ? renderExceptionWorkbenchNextStepSuffix(
+                t,
+                resolveExceptionNextStepLabel(
+                  buildQualityExceptionLifecycle(t, currentRecord.status),
+                ),
+              )
+            : undefined
         }
         lines={
           currentRecord && hasQualityExceptionHandlingInfo(currentRecord) ? (
@@ -454,19 +495,16 @@ const QualityExceptionsPage: React.FC = () => {
           ) : undefined
         }
         linesTitle={t(`${Q}.section.corrective`)}
-        collaboration={
-          currentRecord && hasQualityExceptionActions(currentRecord, canCreate8D)
-            ? renderQualityExceptionActionGroup({
+        footer={
+          currentRecord && hasQualityExceptionHandleActions(currentRecord)
+            ? renderQualityExceptionHandleGroup({
                 record: currentRecord,
                 t,
                 onAction: (action) => openHandleModal(currentRecord, action),
-                onStart8D: () => { void handleStart8D(currentRecord); },
-                canCreate8D,
                 keyPrefix: `quality-exception-drawer-${currentRecord.id ?? 'row'}`,
               })
             : undefined
         }
-        collaborationTitle={t(`${P}.section.actions`)}
       />
 
       <FormModalTemplate
@@ -474,7 +512,6 @@ const QualityExceptionsPage: React.FC = () => {
         open={handleModalVisible}
         onClose={() => {
           setHandleModalVisible(false);
-          setCurrentRecord(null);
           setCurrentAction('');
           handleFormRef.current?.resetFields();
         }}

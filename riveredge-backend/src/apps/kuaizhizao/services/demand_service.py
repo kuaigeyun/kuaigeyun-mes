@@ -1291,6 +1291,58 @@ class DemandService(AppBaseService[Demand]):
             # 删除需求
             await Demand.filter(tenant_id=tenant_id, id=demand_id).delete()
 
+    async def close_demand(
+        self,
+        tenant_id: int,
+        demand_id: int,
+        closed_by: int,
+        reason: Optional[str] = None,
+    ) -> DemandResponse:
+        """关闭需求：终止剩余计划执行（已下推计算保留，状态进入 CLOSED）。"""
+        async with in_transaction():
+            demand = await Demand.get_or_none(
+                tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True
+            )
+            if not demand:
+                raise NotFoundError("需求", str(demand_id))
+
+            st = str(demand.status or "").strip()
+            terminal = {
+                DemandStatus.CLOSED.value,
+                DemandStatus.CANCELLED.value,
+                DemandStatus.COMPLETED.value,
+                DemandStatus.REJECTED.value,
+                "已关闭",
+                "已取消",
+                "已完成",
+                "已驳回",
+            }
+            if st in terminal:
+                raise BusinessLogicError(f"需求已处于终态，不可关闭: {st}")
+
+            closable = {
+                DemandStatus.AUDITED.value,
+                DemandStatus.CONFIRMED.value,
+                "已审核",
+                "已确认",
+                "EFFECTIVE",
+                "已生效",
+            }
+            if st not in closable and st not in LEGACY_AUDITED_VALUES:
+                raise BusinessLogicError(
+                    f"仅已审核/已确认的需求可关闭，当前状态: {st}"
+                )
+
+            notes = (demand.notes or "").strip()
+            close_reason = (reason or "关闭需求，剩余计划不再执行").strip()
+            prefix = f"[关闭] {close_reason}"
+            demand.status = DemandStatus.CLOSED.value
+            demand.notes = f"{prefix}\n{notes}".strip() if notes else prefix
+            demand.updated_by = closed_by
+            await demand.save(update_fields=["status", "notes", "updated_by", "updated_at"])
+
+        return await self.get_demand_by_id(tenant_id, demand_id)
+
     async def bulk_delete_demands(
         self,
         tenant_id: int,

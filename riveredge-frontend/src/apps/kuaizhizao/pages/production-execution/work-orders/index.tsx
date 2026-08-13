@@ -19,8 +19,6 @@ import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } f
 import {
   ActionType,
   ProColumns,
-  ProDescriptions,
-  ProDescriptionsItemProps,
   ProFormText,
   ProFormSelect,
   ProFormDatePicker,
@@ -122,8 +120,7 @@ const SyncFromDatasetModal = lazy(() => import('../../../../../components/sync-f
 import {
   ListPageTemplate,
   FormModalTemplate,
-  DetailDrawerTemplate,
-  DetailDrawerSection,
+  DetailDrawerActions,
   MODAL_CONFIG,
   TOUCH_SCREEN_CONFIG,
   type StatCard,
@@ -136,8 +133,6 @@ import {
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query'
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push'
-import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel'
-import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter'
 import { useCustomFields } from '../../../../../hooks/useCustomFields'
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList'
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions'
@@ -230,12 +225,15 @@ const LazyWorkOrderPeerGroupCreateDetail = lazy(
 )
 import { EMPTY_PEER_GROUP_ITEM } from './components/WorkOrderPeerGroupCreateDetail'
 import { buildOperationsForCreatePayload } from './workOrderCreateOperations'
-const LazyWorkOrderOperationsList = lazy(() => import('./components/WorkOrderDetailDndOperations'))
 const LazyWorkOrderReadinessModal = lazy(() =>
   import('./components/WorkOrderReadinessPopover').then((m) => ({ default: m.WorkOrderReadinessModal })),
 )
 import { WorkOrderOperationStepsStrip } from './components/WorkOrderOperationStepsStrip'
-import { WorkOrderMaterialMovementsPanel } from './components/WorkOrderMaterialMovementsPanel'
+import {
+  WorkOrderDetailDrawer,
+  WORK_ORDER_WORKFLOW_PROPS,
+  type WorkOrderDetailRecord,
+} from './components/WorkOrderDetailDrawer'
 import WorkOrderTrackingFields from './components/WorkOrderTrackingFields'
 import WorkOrderTrackingEditFields from './components/WorkOrderTrackingEditFields'
 import WorkOrderCompleteTrackingModal, {
@@ -250,12 +248,6 @@ import {
   workOrderRowExpandQueryKey,
   type WorkOrderOperationsBundle,
 } from './workOrderRowExpandCache'
-const LazyQRCodeGenerator = lazy(() =>
-  import('../../../../../components/qrcode/QRCodeGenerator').then(m => ({ default: m.QRCodeGenerator }))
-)
-const LazyUniLifecycleStepper = lazy(() =>
-  import('../../../../../components/uni-lifecycle').then(m => ({ default: m.UniLifecycleStepper }))
-)
 const LazyUniMaterialSelect = lazy(() => import('../../../../../components/uni-material-select'))
 import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus, LIST_LIFECYCLE_STAGE_FIELD, isWorkOrderPlannedEndOverdue, isWorkOrderPlannedDatesLocked } from '../../../utils/workOrderLifecycle'
 import { commitListPageSearchParams } from '../../../../../utils/listLifecycleStage'
@@ -274,7 +266,6 @@ import {
   getProcessInspectionStatusTagColor,
   getRemainingReportableQuantity,
   getStatusReportingCompleteQuantity,
-  getWorkOrderHeaderQuantitiesFromOperations,
   isOperationEffectivelyCompleted,
   isReportBlockedByUpstreamQc,
   resolveDefaultReportingQuantityFields,
@@ -333,12 +324,6 @@ import { createListAuditPhaseColumn } from '../../sales-management/shared/listAu
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions'
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired'
 import { isManualAuditEnabled } from '../../../../../utils/auditMode'
-
-/** 工单 UniWorkflowActions 状态集合（与后端 review_status / status 对齐） */
-const WO_WORKFLOW_DRAFT_STATUSES = ['草稿', 'draft']
-const WO_WORKFLOW_PENDING_STATUSES = ['待审核', 'pending_review', 'pending_approval', 'PENDING']
-const WO_WORKFLOW_APPROVED_STATUSES = ['已通过', '审核通过', 'approved', 'APPROVED']
-const WO_WORKFLOW_REJECTED_STATUSES = ['已驳回', '审核驳回', 'rejected', 'REJECTED']
 
 const getFirstNonEmptyString = (...candidates: Array<unknown>): string | undefined => {
   for (const candidate of candidates) {
@@ -2181,12 +2166,6 @@ const WorkOrdersPage: React.FC = () => {
   )
   /** 详情抽屉：单据跟踪 refresh（生命周期时间线共用） */
   const [woTrackingRefreshKey, setWoTrackingRefreshKey] = useState(0)
-
-  const workOrderTracking = useDocumentTracking(
-    drawerVisible && workOrderDetail ? 'work_order' : undefined,
-    workOrderDetail?.id,
-    woTrackingRefreshKey,
-  )
 
   const [workOrderOperations, setWorkOrderOperations] = useState<any[]>([])
   const [operationsModalVisible, setOperationsModalVisible] = useState(false)
@@ -4876,174 +4855,6 @@ const WorkOrdersPage: React.FC = () => {
     }
   }
 
-  /**
-   * 详情列定义
-   */
-  const detailHeaderQuantities = useMemo(
-    () => getWorkOrderHeaderQuantitiesFromOperations(workOrderOperations),
-    [workOrderOperations],
-  );
-
-  const detailColumns: ProDescriptionsItemProps<WorkOrder>[] = useMemo(() => [
-    {
-      title: t('app.kuaizhizao.workOrder.colCode'),
-      dataIndex: 'code',
-    },
-    {
-      title: t('app.kuaizhizao.workOrder.colName'),
-      dataIndex: 'name',
-    },
-    {
-      title: t('app.kuaizhizao.workOrder.colProductCode'),
-      dataIndex: 'product_code',
-    },
-    {
-      title: '产品名称',
-      dataIndex: 'product_name',
-    },
-    {
-      title: t('app.kuaizhizao.workOrder.colPlannedQty'),
-      dataIndex: 'quantity',
-    },
-    {
-      title: t('app.kuaizhizao.workOrder.colBatchNo'),
-      dataIndex: 'effective_batch_no',
-      render: (_, record) => record.effective_batch_no || record.planned_batch_no || '-',
-    },
-    {
-      title: t('app.kuaizhizao.workOrder.colSerialNo'),
-      dataIndex: 'effective_serial_no',
-      render: (_, record) => record.effective_serial_no || record.planned_serial_no || '-',
-    },
-    {
-      title: t('app.kuaizhizao.workOrder.colProductionMode'),
-      dataIndex: 'production_mode',
-      render: (_, record) => (
-        <Tag color={record.production_mode === 'MTO' ? 'blue' : 'green'} variant="filled">
-          {record.production_mode === 'MTO' ? '按订单生产' : '按库存生产'}
-        </Tag>
-      ),
-    },
-    {
-      title: t('app.kuaizhizao.workOrder.colManufacturingMode'),
-      dataIndex: 'manufacturing_mode',
-      render: (_, record) => manufacturingModeTag(record.manufacturing_mode),
-    },
-    {
-      title: t('app.kuaizhizao.workOrder.colSalesOrder'),
-      dataIndex: 'sales_order_code',
-      render: (_, record) =>
-        record.production_mode === 'MTO' ? (
-          <LinkedDocumentCode
-            documentType="sales_order"
-            documentId={record.sales_order_id}
-            code={record.sales_order_code}
-          />
-        ) : (
-          '-'
-        ),
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      render: (dom, record) => {
-        const lifecycle = getWorkOrderLifecycle(record)
-        const colorMap: Record<string, string> = {
-          success: 'success',
-          exception: 'error',
-          active: 'processing',
-          normal: 'default',
-        }
-        const color = colorMap[lifecycle.status || 'normal'] || 'default'
-        const isOverdue = isWorkOrderPlannedEndOverdue(record)
-        return (
-          <Space>
-            <Tag color={color} variant="solid">{lifecycle.stageName || '-'}</Tag>
-            {isOverdue && <Tag color="error" variant="solid">{t('app.kuaizhizao.workOrder.tagOverdue')}</Tag>}
-          </Space>
-        )
-      },
-    },
-    {
-      title: t('app.kuaizhizao.workOrder.colPriority'),
-      dataIndex: 'priority',
-      render: (_, record) => {
-        const config = WORK_ORDER_PRIORITY_MAP[record.priority || 'normal'] || {
-          text: record.priority || '正常',
-          color: 'blue',
-        }
-        return <Tag color={config.color} variant="filled">{config.text}</Tag>
-      },
-    },
-    {
-      title: t('app.kuaizhizao.workOrder.colPlannedStart'),
-      dataIndex: 'planned_start_date',
-      valueType: 'dateTime',
-    },
-    {
-      title: t('app.kuaizhizao.workOrder.colPlannedEnd'),
-      dataIndex: 'planned_end_date',
-      valueType: 'dateTime',
-    },
-    {
-      title: '实际开始时间',
-      dataIndex: 'actual_start_date',
-      render: (_, record) =>
-        record.actual_start_date
-          ? formatDateTime(record.actual_start_date, 'YYYY-MM-DD HH:mm:ss')
-          : '-',
-    },
-    {
-      title: '实际结束时间',
-      dataIndex: 'actual_end_date',
-      render: (_, record) =>
-        record.actual_end_date ? formatDateTime(record.actual_end_date, 'YYYY-MM-DD HH:mm:ss') : '-',
-    },
-    {
-      title: t('app.kuaizhizao.workOrder.colCompletedQty'),
-      dataIndex: 'completed_quantity',
-      render: (_, record) => detailHeaderQuantities?.completed ?? record.completed_quantity ?? 0,
-    },
-    {
-      title: t('app.kuaizhizao.workOrder.colQualifiedQty'),
-      dataIndex: 'qualified_quantity',
-      render: (_, record) => detailHeaderQuantities?.qualified ?? record.qualified_quantity ?? 0,
-    },
-    {
-      title: t('app.kuaizhizao.workOrder.colUnqualifiedQty'),
-      dataIndex: 'unqualified_quantity',
-      render: (_, record) => detailHeaderQuantities?.unqualified ?? record.unqualified_quantity ?? 0,
-    },
-    {
-      title: t('app.kuaizhizao.workOrder.colRemarks'),
-      dataIndex: 'remarks',
-      span: 2,
-      render: text => text || '-',
-    },
-    {
-      title: t('app.kuaizhizao.workOrder.colAttachments'),
-      dataIndex: 'attachments',
-      span: 2,
-      render: (_, record) => {
-        const files = mapWorkOrderAttachmentsToUploadList(record.attachments)
-        if (!files.length) return '-'
-        return (
-          <Space wrap size={[8, 4]}>
-            {files.map((file, index) =>
-              file.url ? (
-                <Typography.Link key={`${file.uid || file.name || 'attachment'}-${index}`} href={file.url} target="_blank">
-                  {file.name || `附件${index + 1}`}
-                </Typography.Link>
-              ) : (
-                <span key={`${file.uid || file.name || 'attachment'}-${index}`}>{file.name || `附件${index + 1}`}</span>
-              )
-            )}
-          </Space>
-        )
-      },
-    },
-  ], [t, detailHeaderQuantities])
-
   // 批量下达相关状态
   const [batchReleaseModalVisible, setBatchReleaseModalVisible] = useState(false)
   const [batchReleaseCheckResults, setBatchReleaseCheckResults] = useState<any[]>([])
@@ -7445,16 +7256,7 @@ const WorkOrdersPage: React.FC = () => {
                 key="wo-workflow"
                 record={record}
                 entityName={t('app.kuaizhizao.workOrder.entityName')}
-                entityType="work_order"
-                auditNodeKey="work_order"
-                unifiedAudit
-                resourcePrefix={WORK_ORDER_RESOURCE}
-                statusField="status"
-                reviewStatusField="review_status"
-                draftStatuses={WO_WORKFLOW_DRAFT_STATUSES}
-                pendingStatuses={WO_WORKFLOW_PENDING_STATUSES}
-                approvedStatuses={WO_WORKFLOW_APPROVED_STATUSES}
-                rejectedStatuses={WO_WORKFLOW_REJECTED_STATUSES}
+                {...WORK_ORDER_WORKFLOW_PROPS}
                 theme="link"
                 size="small"
                 onSuccess={() => {
@@ -9569,9 +9371,7 @@ const WorkOrdersPage: React.FC = () => {
         />
       </Modal>
 
-      {/* 工单详情 Drawer */}
-      <DetailDrawerTemplate
-        title={`工单详情 - ${workOrderDetail?.code || ''}`}
+      <WorkOrderDetailDrawer
         open={drawerVisible}
         zIndex={workOrderDetailDrawerZIndex}
         onClose={() => {
@@ -9580,209 +9380,128 @@ const WorkOrdersPage: React.FC = () => {
           setWorkOrderOperations([])
           resetWorkOrderDetailFieldValues()
         }}
-        dataSource={workOrderDetail || undefined}
-        columns={detailColumns}
-        width="50%"
-        styles={{ wrapper: { width: '50%' } }}
+        workOrder={workOrderDetail as WorkOrderDetailRecord | null}
+        operations={workOrderOperations}
+        trackingRefreshKey={woTrackingRefreshKey}
+        customFields={workOrderListCustomFields}
+        customFieldValues={workOrderDetailCustomFieldValues}
+        onOperationsUpdate={async () => {
+          if (workOrderDetail?.id) {
+            const ops = await workOrderApi.getOperations(workOrderDetail.id.toString())
+            setWorkOrderOperations(ops)
+          }
+        }}
+        onEditOperation={(operation) => {
+          setCurrentOperation(operation)
+          setOperationsModalVisible(true)
+          operationFormRef.current?.setFieldsValue(operation)
+        }}
         extra={
-          workOrderDetail && (
-            <Space wrap>
-              <Button type="default" onClick={() => setSopSidebarOpen(true)}>
-                相关 SOP
-              </Button>
-              {workOrderAuditEnabled ? (
-                <UniWorkflowActions
-                  record={workOrderDetail}
-                  entityName={t('app.kuaizhizao.workOrder.entityName')}
-                  entityType="work_order"
-                  auditNodeKey="work_order"
-                  unifiedAudit
-                  resourcePrefix={WORK_ORDER_RESOURCE}
-                  statusField="status"
-                  reviewStatusField="review_status"
-                  draftStatuses={WO_WORKFLOW_DRAFT_STATUSES}
-                  pendingStatuses={WO_WORKFLOW_PENDING_STATUSES}
-                  approvedStatuses={WO_WORKFLOW_APPROVED_STATUSES}
-                  rejectedStatuses={WO_WORKFLOW_REJECTED_STATUSES}
-                  onSuccess={() => {
-                    void handleWorkOrderAuditSuccess()
-                  }}
-                  confirmMessages={{
-                    submit: isManualAuditEnabled(workOrderDetail.audit)
-                      ? t('app.kuaizhizao.workOrder.submitConfirmAudit')
-                      : t('app.kuaizhizao.workOrder.submitConfirmAuto'),
-                  }}
-                />
-              ) : null}
-              {['draft', '草稿'].includes(workOrderDetail.status || '') &&
-              (workOrderDetail.capabilities?.release?.allowed ?? true) ? (
-                <Button type="primary" onClick={() => handleRelease(workOrderDetail!)}>
-                  下达工单
-                </Button>
-              ) : null}
-              {workOrderDetail.capabilities?.revoke?.allowed === true &&
-                (workOrderPerms.canAction?.('revoke') ?? false) && (
-                  <Button type="default" danger onClick={() => handleRevoke(workOrderDetail!)}>
-                    撤回
-                  </Button>
-                )}
-              {['draft', 'released'].includes(workOrderDetail.status || '') && (
-                <Button
-                  type="primary"
-                  icon={<PlusOutlined />}
-                  onClick={() => {
-                    setCurrentOperation(null)
-                    setOperationsModalVisible(true)
-                    operationFormRef.current?.resetFields()
-                  }}
-                >
-                  {t('app.kuaizhizao.workOrder.modalAddOperation')}
-                </Button>
-              )}
-              <Select
-                value={workOrderDetail?.priority || 'normal'}
-                onChange={value => handleSetPriority(workOrderDetail!, value)}
-                disabled={!workOrderDetail}
-                style={{ width: 120 }}
-              >
-                <Select.Option value="low">{t('app.kuaizhizao.workOrder.priorityLow')}</Select.Option>
-                <Select.Option value="normal">{t('app.kuaizhizao.workOrder.priorityNormal')}</Select.Option>
-                <Select.Option value="high">{t('app.kuaizhizao.workOrder.priorityHigh')}</Select.Option>
-                <Select.Option value="urgent">{t('app.kuaizhizao.workOrder.priorityUrgent')}</Select.Option>
-              </Select>
-            </Space>
-          )
-        }
-        customContent={
-          drawerVisible && workOrderDetail ? (
-            <Suspense fallback={<Spin style={{ margin: 48 }} />}>
-              <>
-                {/* 1. 基本信息（含二维码） */}
-                <DetailDrawerSection title="基本信息">
-                  <Row gutter={16}>
-                    <Col span={16}>
-                      <ProDescriptions
-                        dataSource={workOrderDetail}
-                        column={2}
-                        columns={detailColumns}
-                      />
-                    </Col>
-                    <Col span={8}>
-                      <LazyQRCodeGenerator
-                        qrcodeType="WO"
-                        data={{
-                          work_order_uuid: workOrderDetail.id?.toString() || '',
-                          work_order_code: workOrderDetail.code || '',
-                          work_order_name: workOrderDetail.name || '',
-                        }}
-                        autoGenerate={true}
-                        size={6}
-                        showCardTitle={false}
-                      />
-                    </Col>
-                  </Row>
-                </DetailDrawerSection>
-
-                {hasCustomFieldsDetailContent(workOrderListCustomFields, workOrderDetailCustomFieldValues) ? (
-                  <DetailDrawerSection title={t('app.master-data.customFields', { defaultValue: '自定义字段' })}>
-                    <CustomFieldsDetailSection
-                      customFields={workOrderListCustomFields}
-                      customFieldValues={workOrderDetailCustomFieldValues}
+          workOrderDetail ? (
+            <DetailDrawerActions
+              items={[
+                {
+                  key: 'sop',
+                  render: () => (
+                    <Button onClick={() => setSopSidebarOpen(true)}>
+                      {t('app.kuaizhizao.workOrder.actionRelatedSop')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'release',
+                  visible:
+                    ['draft', '草稿'].includes(workOrderDetail.status || '') &&
+                    (workOrderDetail.capabilities?.release?.allowed ?? true),
+                  render: () => (
+                    <Button type="primary" onClick={() => handleRelease(workOrderDetail)}>
+                      {t('app.kuaizhizao.workOrder.actionRelease')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'revoke',
+                  visible:
+                    workOrderDetail.capabilities?.revoke?.allowed === true &&
+                    (workOrderPerms.canAction?.('revoke') ?? false),
+                  render: () => (
+                    <Button danger onClick={() => handleRevoke(workOrderDetail)}>
+                      {t('app.kuaizhizao.workOrder.actionRevoke')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'add-operation',
+                  visible: ['draft', 'released'].includes(workOrderDetail.status || ''),
+                  render: () => (
+                    <Button
+                      type="primary"
+                      icon={<PlusOutlined />}
+                      onClick={() => {
+                        setCurrentOperation(null)
+                        setOperationsModalVisible(true)
+                        operationFormRef.current?.resetFields()
+                      }}
+                    >
+                      {t('app.kuaizhizao.workOrder.modalAddOperation')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'priority',
+                  render: () => (
+                    <Select
+                      value={workOrderDetail.priority || 'normal'}
+                      onChange={(value) => handleSetPriority(workOrderDetail, value)}
+                      style={{ width: 120 }}
+                      options={[
+                        { value: 'low', label: t('app.kuaizhizao.workOrder.priorityLow') },
+                        { value: 'normal', label: t('app.kuaizhizao.workOrder.priorityNormal') },
+                        { value: 'high', label: t('app.kuaizhizao.workOrder.priorityHigh') },
+                        { value: 'urgent', label: t('app.kuaizhizao.workOrder.priorityUrgent') },
+                      ]}
                     />
-                  </DetailDrawerSection>
-                ) : null}
-
-                {/* 2. 生命周期（上下游关联见左侧全链路浮层） */}
-                {(() => {
-                  const lifecycle = getWorkOrderLifecycle(workOrderDetail)
-                  const mainStages = lifecycle.mainStages ?? []
-                  if (mainStages.length === 0) return null
-                  return (
-                    <DetailDrawerSection title="生命周期">
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        <LazyUniLifecycleStepper
-                          steps={mainStages}
-                          status={lifecycle.status}
-                          showLabels
-                          nextStepSuggestions={lifecycle.nextStepSuggestions}
-                          hideNextStepSuggestions
-                        />
-                      </div>
-                    </DetailDrawerSection>
-                  )
-                })()}
-
-                {/* 3. 明细信息（工单工序） */}
-                <DetailDrawerSection title="工单工序">
-                  <LazyWorkOrderOperationsList
-                    workOrderId={workOrderDetail?.id}
-                    operations={workOrderOperations}
-                    workOrderStatus={workOrderDetail?.status}
-                    onUpdate={async () => {
-                      if (workOrderDetail?.id) {
-                        const ops = await workOrderApi.getOperations(workOrderDetail.id.toString())
-                        setWorkOrderOperations(ops)
+                  ),
+                },
+                {
+                  key: 'workflow',
+                  visible: workOrderAuditEnabled,
+                  render: () => (
+                    <UniWorkflowActions
+                      {...rowActionKind('skip')}
+                      record={workOrderDetail}
+                      entityName={t('app.kuaizhizao.workOrder.entityName')}
+                      {...WORK_ORDER_WORKFLOW_PROPS}
+                      theme="default"
+                      onSuccess={() => {
+                        void handleWorkOrderAuditSuccess()
+                      }}
+                      confirmMessages={{
+                        submit: isManualAuditEnabled(workOrderDetail.audit)
+                          ? t('app.kuaizhizao.workOrder.submitConfirmAudit')
+                          : t('app.kuaizhizao.workOrder.submitConfirmAuto'),
+                      }}
+                    />
+                  ),
+                },
+                {
+                  key: 'print',
+                  visible: workOrderDetail.id != null && workOrderPerms.canPrint,
+                  render: () => (
+                    <Button
+                      icon={<PrinterOutlined />}
+                      onClick={() =>
+                        openPrint({ documentType: 'work_order', documentId: workOrderDetail.id! })
                       }
-                    }}
-                    onEdit={operation => {
-                      setCurrentOperation(operation)
-                      setOperationsModalVisible(true)
-                      operationFormRef.current?.setFieldsValue(operation)
-                    }}
-                  />
-                </DetailDrawerSection>
-
-                {/* 4. 物料移动 */}
-                {workOrderDetail?.id ? (
-                  <DetailDrawerSection title={t('app.kuaizhizao.workOrder.materialMovementsTitle')}>
-                    <WorkOrderMaterialMovementsPanel
-                      workOrderId={workOrderDetail.id}
-                      enabled={drawerVisible}
-                    />
-                  </DetailDrawerSection>
-                ) : null}
-
-                {/* 5. 操作记录：时间线 */}
-                {workOrderDetail?.id ? (
-                  <DetailDrawerSection title="操作记录">
-                    {workOrderTracking.loading && (
-                      <div style={{ textAlign: 'center', padding: 24 }}>
-                        <Spin />
-                      </div>
-                    )}
-                    {workOrderTracking.error && !workOrderTracking.loading && (
-                      <Typography.Text type="danger">{workOrderTracking.error}</Typography.Text>
-                    )}
-                    {workOrderTracking.data && !workOrderTracking.loading && (
-                      <DocumentTrackingTimelineBody data={workOrderTracking.data} />
-                    )}
-                  </DetailDrawerSection>
-                ) : null}
-              </>
-            </Suspense>
+                    >
+                      {t('components.uniAction.print')}
+                    </Button>
+                  ),
+                },
+              ]}
+            />
           ) : null
         }
-      
-                      traceDocument={
-                        workOrderDetail?.id != null
-                          ? {
-                              documentType: 'work_order',
-                              documentId: workOrderDetail.id,
-                              selfDocumentId: workOrderDetail.id,
-                            renderBriefActions: (doc) => (
-                              <WarehouseTraceBriefPrimaryActions
-                                doc={doc}
-                                t={t}
-                                navigate={navigate}
-                                closeDrawer={() => {
-                                  setDrawerVisible(false);
-                                  setWorkOrderDetail(null);
-                                }}
-                              />
-                            )
-                            }
-                          : undefined
-                      }
       />
 
       <ReworkOrderCreateModal

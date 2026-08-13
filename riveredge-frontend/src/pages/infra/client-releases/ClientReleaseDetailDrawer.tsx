@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
-import { Alert, Button, Descriptions, Tag } from 'antd';
+import { Alert, Button } from 'antd';
 import { DownloadOutlined } from '@ant-design/icons';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 
-import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
-import { DRAWER_CONFIG } from '../../../components/layout-templates';
+import { SystemMasterDetailDrawer } from '../../system/shared/systemMasterDetailDrawer';
+import { MarkerTag } from '../../../constants/statusBadges';
 import type { ClientRelease } from '../../../services/clientRelease';
 
 function formatFileSize(bytes?: number | null): string {
@@ -31,7 +31,7 @@ export function ClientReleaseDetailDrawer({ open, release, clientLabel, onClose 
     return [
       {
         title: t('pages.infra.clientReleases.columnClient'),
-        key: 'client',
+        key: 'name',
         render: () => clientLabel ?? release?.client_key ?? '—',
       },
       {
@@ -56,12 +56,13 @@ export function ClientReleaseDetailDrawer({ open, release, clientLabel, onClose 
       {
         title: t('pages.infra.clientReleases.columnStatus'),
         dataIndex: 'is_active',
-        render: (_, record) =>
-          record.is_active ? (
-            <Tag color="success">{t('pages.infra.clientReleases.statusActive')}</Tag>
-          ) : (
-            <Tag>{t('pages.infra.clientReleases.statusHistory')}</Tag>
-          ),
+        render: (_, record) => (
+          <MarkerTag color={record.is_active ? 'success' : 'default'}>
+            {record.is_active
+              ? t('pages.infra.clientReleases.statusActive')
+              : t('pages.infra.clientReleases.statusHistory')}
+          </MarkerTag>
+        ),
       },
       {
         title: t('pages.infra.clientReleases.formForceUpdate'),
@@ -130,15 +131,13 @@ export function ClientReleaseDetailDrawer({ open, release, clientLabel, onClose 
   }, [clientLabel, release?.client_key, t]);
 
   return (
-    <UniDetail
+    <SystemMasterDetailDrawer
       title={t('pages.infra.clientReleases.detailTitle')}
       open={open}
       onClose={onClose}
-      width={DRAWER_CONFIG.STANDARD_WIDTH}
-      banner={
-        <Alert type="info" showIcon title={t('pages.infra.clientReleases.detailActivateHint')} />
-      }
-      footer={
+      detail={release}
+      detailColumns={detailColumns}
+      extra={
         packageUrl ? (
           <Button
             type="primary"
@@ -147,15 +146,10 @@ export function ClientReleaseDetailDrawer({ open, release, clientLabel, onClose 
           >
             {t('pages.infra.clientReleases.downloadPackage')}
           </Button>
-        ) : undefined
-      }
-      basic={
-        release ? (
-          <Descriptions
-            column={2}
-            items={detailDrawerDescriptionItems(detailColumns, release)}
-          />
         ) : null
+      }
+      supplementary={
+        <Alert type="info" showIcon title={t('pages.infra.clientReleases.detailActivateHint')} />
       }
     />
   );

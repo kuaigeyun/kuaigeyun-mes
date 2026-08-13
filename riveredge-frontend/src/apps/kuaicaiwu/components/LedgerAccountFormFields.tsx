@@ -17,6 +17,8 @@ type Props = {
   accountLabel: string;
   noteLabel: string;
   noteName?: string;
+  accountColProps?: { span: number };
+  noteColProps?: { span: number };
 };
 
 function SyncLedgerAccountWithPaymentMethod({ accounts }: { accounts: BankAccount[] }) {
@@ -62,6 +64,8 @@ export const LedgerAccountFormFields: React.FC<Props> = ({
   accountLabel,
   noteLabel,
   noteName = 'bank_account',
+  accountColProps = { span: 12 },
+  noteColProps = { span: 12 },
 }) => {
   const { t } = useTranslation();
 
@@ -91,6 +95,7 @@ export const LedgerAccountFormFields: React.FC<Props> = ({
             <ProFormSelect
               name="bank_account_id"
               label={accountLabel}
+              colProps={accountColProps}
               options={options}
               placeholder={placeholder}
               showSearch
@@ -115,6 +120,7 @@ export const LedgerAccountFormFields: React.FC<Props> = ({
       <ProFormText
         name={noteName}
         label={noteLabel}
+        colProps={noteColProps}
         placeholder={t('app.kuaicaiwu.receipt.bankAccountNotePlaceholder')}
       />
     </>

@@ -15,12 +15,17 @@ import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import {
+  DetailDrawerActions,
   DetailDrawerSection,
-  DRAWER_CONFIG,
-  flushDrawerOpen,
   ListPageTemplate,
+  detailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { PartnerMasterDetailDrawer } from '../../shared/PartnerMasterDetailDrawer';
+import {
+  alignDescriptionColumns,
+  MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
+} from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 import { customerApi, getUserOptions, getDictionaryOptions } from '../../../services/supply-chain';
 import { getDictionaryLabelMapSync } from '../../../../../services/dataDictionaryCache';
@@ -102,6 +107,8 @@ const CustomersPage: React.FC = () => {
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [customerDetail, setCustomerDetail] = useState<Customer | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   
@@ -121,7 +128,6 @@ const CustomersPage: React.FC = () => {
     });
     return seed;
   });
-  const customerDetailReqRef = useRef(0);
 
   const {
     customFields,
@@ -139,35 +145,32 @@ const CustomersPage: React.FC = () => {
     selectedRowKeys,
     setSelectedRowKeys,
   });
-  const openDetailByUuid = useCallback(
-    async (uuid: string) => {
-      const req = ++customerDetailReqRef.current;
-      flushDrawerOpen(() => {
-        setCustomerDetail(null);
-        setDrawerVisible(true);
-        setDetailLoading(true);
-      });
-      try {
-        const detail = await customerApi.get(uuid);
-        if (customerDetailReqRef.current !== req) return;
-        setCustomerDetail(detail);
-        if (detail.id != null) {
-          await loadFieldValuesForDetail(detail.id);
-        }
-        if (detail.id != null) {
-          await loadFieldValuesForDetail(detail.id);
-        }
-      } catch (error: any) {
-        if (customerDetailReqRef.current === req) {
-          messageApi.error(error.message || t('app.master-data.customers.getDetailFailed'));
-        }
-      } finally {
-        if (customerDetailReqRef.current === req) {
-          setDetailLoading(false);
-        }
+  const loadDetail = useCallback(async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const detail = await customerApi.get(uuid);
+      setCustomerDetail(detail);
+      if (detail.id != null) {
+        await loadFieldValuesForDetail(detail.id);
       }
+    } catch (error) {
+      setCustomerDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.master-data.customers.getDetailFailed')));
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [loadFieldValuesForDetail, t]);
+
+  const openDetailByUuid = useCallback(
+    (uuid: string) => {
+      detailRetryUuidRef.current = uuid;
+      setDrawerVisible(true);
+      setCustomerDetail(null);
+      setDetailError(null);
+      void loadDetail(uuid);
     },
-    [messageApi, t],
+    [loadDetail],
   );
 
   useEffect(() => {
@@ -361,29 +364,8 @@ const CustomersPage: React.FC = () => {
     }
   };
 
-  const handleOpenDetail = async (record: Customer) => {
-    const req = ++customerDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setCustomerDetail(record);
-      setDrawerVisible(true);
-      setDetailLoading(true);
-    });
-    try {
-      const detail = await customerApi.get(record.uuid);
-      if (customerDetailReqRef.current !== req) return;
-      setCustomerDetail(detail);
-      if (detail.id != null) {
-        await loadFieldValuesForDetail(detail.id);
-      }
-    } catch (error: any) {
-      if (customerDetailReqRef.current === req) {
-        messageApi.error(error.message || t('app.master-data.customers.getDetailFailed'));
-      }
-    } finally {
-      if (customerDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
-    }
+  const handleOpenDetail = (record: Customer) => {
+    openDetailByUuid(record.uuid);
   };
 
   /**
@@ -392,6 +374,7 @@ const CustomersPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setCustomerDetail(null);
+    setDetailError(null);
     resetDetailFieldValues();
   };
 
@@ -1107,49 +1090,34 @@ const CustomersPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 详情 Drawer（uni-detail） */}
-      <UniDetail
+      <PartnerMasterDetailDrawer
         title={t('app.master-data.customers.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        plainBody={
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        extra={
           customerDetail ? (
-            <>
-              <DetailDrawerSection title={t('field.partner.tabBasic')}>
-                <Descriptions
-                  column={2}
-                  items={detailDrawerDescriptionItems(detailColumnsBasic, customerDetail)}
-                />
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t('field.partner.tabInvoice')}>
-                <Descriptions
-                  column={2}
-                  items={detailDrawerDescriptionItems(detailColumnsInvoice, customerDetail)}
-                />
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t('field.partner.tabExtended')}>
-                <Descriptions
-                  column={2}
-                  items={detailDrawerDescriptionItems(detailColumnsExtended, customerDetail)}
-                />
-              </DetailDrawerSection>
-              {hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
-                <DetailDrawerSection title={t('app.master-data.customFields')} marginBottom={0}>
-                  <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
-                </DetailDrawerSection>
-              ) : null}
-              <DetailDrawerSection title={t('app.kuaizhizao.customerFollowUp.new')} marginBottom={0}>
-                <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-                  {t('app.kuaizhizao.quotationStage.detailHint')}
-                </Typography.Text>
-                <Space wrap>
-                  <Button type="primary" size="small" onClick={handleOpenFollowUp}>
-                    {t('app.kuaizhizao.customerFollowUp.new')}
-                  </Button>
-                  {customerDetail.id ? (
+            <DetailDrawerActions
+              items={[
+                {
+                  key: 'followUp',
+                  visible: Boolean(customerDetail.id),
+                  render: (
+                    <Button onClick={handleOpenFollowUp}>
+                      {t('app.kuaizhizao.customerFollowUp.new')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'pool',
+                  visible: Boolean(customerDetail.id),
+                  render: (
                     <Button
-                      size="small"
                       onClick={() =>
                         navigate(
                           `/apps/kuaizhizao/sales-management/customer-pool?customerId=${customerDetail.id}`,
@@ -1158,13 +1126,61 @@ const CustomersPage: React.FC = () => {
                     >
                       {t('field.customer.viewInPool')}
                     </Button>
-                  ) : null}
-                </Space>
-              </DetailDrawerSection>
-            </>
+                  ),
+                },
+                {
+                  key: 'edit',
+                  render: (
+                    <Button {...rowActionKind('update')} onClick={() => handleEdit(customerDetail)}>
+                      {t('common.edit')}
+                    </Button>
+                  ),
+                },
+              ]}
+            />
           ) : null
         }
-      />
+      >
+        {customerDetail ? (
+          <>
+            <DetailDrawerSection title={t('field.partner.tabBasic')}>
+              <Descriptions
+                column={2}
+                size="small"
+                items={detailDrawerDescriptionItems(
+                  alignDescriptionColumns(detailColumnsBasic, MASTER_DATA_DETAIL_BASIC_FIELD_RANK),
+                  customerDetail,
+                )}
+              />
+            </DetailDrawerSection>
+            <DetailDrawerSection title={t('field.partner.tabInvoice')}>
+              <Descriptions
+                column={2}
+                size="small"
+                items={detailDrawerDescriptionItems(
+                  alignDescriptionColumns(detailColumnsInvoice, MASTER_DATA_DETAIL_BASIC_FIELD_RANK),
+                  customerDetail,
+                )}
+              />
+            </DetailDrawerSection>
+            <DetailDrawerSection title={t('field.partner.tabExtended')}>
+              <Descriptions
+                column={2}
+                size="small"
+                items={detailDrawerDescriptionItems(
+                  alignDescriptionColumns(detailColumnsExtended, MASTER_DATA_DETAIL_BASIC_FIELD_RANK),
+                  customerDetail,
+                )}
+              />
+            </DetailDrawerSection>
+            {hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
+              <DetailDrawerSection title={t('app.master-data.customFields')} marginBottom={0}>
+                <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
+              </DetailDrawerSection>
+            ) : null}
+          </>
+        ) : null}
+      </PartnerMasterDetailDrawer>
 
       {/* 创建/编辑客户 Modal */}
       <CustomerFormModal

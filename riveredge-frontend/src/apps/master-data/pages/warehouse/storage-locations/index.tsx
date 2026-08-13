@@ -8,11 +8,14 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Typography, theme } from 'antd';
+import { App, Button, List, Modal, Popconfirm, Space, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { MasterDataDetailDrawer } from '../../shared/masterDataDetailDrawer';
 import { storageLocationApi, storageAreaApi } from '../../../services/warehouse';
 import {
   buildMasterCrudActiveValueEnum,
@@ -37,10 +40,6 @@ import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
-import {
-  CustomFieldsDetailSection,
-  hasCustomFieldsDetailContent,
-} from '../../../../../components/custom-fields';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   buildFactoryImportTemplate,
@@ -55,13 +54,14 @@ import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 const StorageLocationsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [currentStorageLocationUuid, setCurrentStorageLocationUuid] = useState<string | null>(null);
   const [storageLocationDetail, setStorageLocationDetail] = useState<StorageLocation | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -516,20 +516,28 @@ const StorageLocationsPage: React.FC = () => {
   /**
    * 处理打开详情
    */
-  const handleOpenDetail = async (record: StorageLocation) => {
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      setCurrentStorageLocationUuid(record.uuid);
-      setDrawerVisible(true);
-      setDetailLoading(true);
-      
-      const detail = await storageLocationApi.get(record.uuid);
+      const detail = await storageLocationApi.get(uuid);
       setStorageLocationDetail(detail);
       await loadFieldValuesForDetail(detail.id);
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.storageLocations.getDetailFailed'));
+    } catch (error) {
+      setStorageLocationDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.master-data.storageLocations.getDetailFailed')));
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const handleOpenDetail = (record: StorageLocation) => {
+    detailRetryUuidRef.current = record.uuid;
+    setCurrentStorageLocationUuid(record.uuid);
+    setDrawerVisible(true);
+    setStorageLocationDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -539,6 +547,7 @@ const StorageLocationsPage: React.FC = () => {
     setDrawerVisible(false);
     setCurrentStorageLocationUuid(null);
     setStorageLocationDetail(null);
+    setDetailError(null);
     resetDetailFieldValues();
   };
 
@@ -649,7 +658,6 @@ const StorageLocationsPage: React.FC = () => {
       title: t('app.master-data.warehouses.action'),
       key: 'action',
       valueType: 'option',
-      width: 150,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -699,6 +707,7 @@ const StorageLocationsPage: React.FC = () => {
     {
       title: t('app.master-data.storageLocations.storageArea'),
       dataIndex: 'storageAreaId',
+      key: 'storageAreaName',
       render: (_, record) => formatStorageAreaDisplay(record),
     },
     {
@@ -817,52 +826,38 @@ const StorageLocationsPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      <MasterDataDetailDrawer
         title={t('app.master-data.storageLocations.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
+        detail={storageLocationDetail}
+        detailColumns={detailColumns}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        customFields={customFields}
+        customFieldValues={customFieldValues}
+        basicExtra={
           storageLocationDetail ? (
-            <div style={{ position: 'relative', paddingRight: 8 }}>
-              <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, storageLocationDetail)} />
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  right: 0,
-                  width: 152,
-                  padding: 12,
-                  background: '#fff',
-                  borderRadius: token.borderRadiusLG,
-                  border: '1px solid rgba(0, 0, 0, 0.06)',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  zIndex: 10,
-                }}
-              >
-                <QRCodeGenerator
-                  data={{
-                    location_uuid: storageLocationDetail.uuid,
-                    location_code: storageLocationDetail.code,
-                    location_name: storageLocationDetail.name,
-                  }}
-                  qrcodeType="TRACE"
-                  size={6}
-                  noCard={true}
-                />
-              </div>
-            </div>
+            <QRCodeGenerator
+              data={{
+                location_uuid: storageLocationDetail.uuid,
+                location_code: storageLocationDetail.code,
+                location_name: storageLocationDetail.name,
+              }}
+              qrcodeType="TRACE"
+              size={6}
+              noCard={true}
+            />
           ) : undefined
         }
-        linesTitle={t('app.master-data.customFields')}
-        lines={
-          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
-            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
-          ) : null
-        }
+        extra={buildDetailDrawerEditExtra(t, Boolean(storageLocationDetail), () => {
+          if (!storageLocationDetail) return;
+          handleEdit(storageLocationDetail);
+        })}
       />
 
       {/* 创建/编辑库位 Modal */}

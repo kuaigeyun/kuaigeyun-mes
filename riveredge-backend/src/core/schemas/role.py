@@ -25,7 +25,7 @@ class RoleBase(BaseModel):
     )
     external_partner_type: Optional[str] = Field(
         None,
-        description="外部角色合作方类型：customer/supplier；station 与 internal 为空",
+        description="外部角色合作方类型：customer/supplier/manufacturer；station 与 internal 为空",
     )
     functional_domain: Optional[str] = Field(
         None,
@@ -79,7 +79,7 @@ class RoleUpdate(BaseModel):
     )
     external_partner_type: Optional[str] = Field(
         None,
-        description="外部角色合作方类型：customer/supplier；station 与 internal 为空",
+        description="外部角色合作方类型：customer/supplier/manufacturer；station 与 internal 为空",
     )
     functional_domain: Optional[str] = Field(
         None,
@@ -155,7 +155,7 @@ class RoleListItem(BaseModel):
     role_type: str = Field(..., description="角色类型：internal/external/station（触屏专用）")
     external_partner_type: Optional[str] = Field(
         None,
-        description="外部角色合作方类型：customer/supplier；station 与 internal 为空",
+        description="外部角色合作方类型：customer/supplier/manufacturer；station 与 internal 为空",
     )
     functional_domain: Optional[str] = Field(
         None,

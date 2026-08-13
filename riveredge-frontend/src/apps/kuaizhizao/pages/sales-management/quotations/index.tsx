@@ -70,7 +70,7 @@ import {
 } from '../../../../master-data/utils/resolve-partner-material-price';
 import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
 import { parseVariantAttributesValue } from '../../../../master-data/components/VariantAttributeFields';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG, MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG, MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
@@ -167,14 +167,12 @@ import {
   TaxRateBatchColumnTitle,
   TaxRateDetailCell,
 } from '../../../components/document-detail-table/documentDetailTable';
-import { RE_STATUS_BADGE_DRAFT, resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import {
   alignDescriptionColumns,
   alignProColumns,
   getSalesCommonFormLabels,
-  SALES_DOC_DETAIL_BASIC_FIELD_RANK,
   SALES_DOC_LIST_FIELD_RANK,
   GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
@@ -183,7 +181,6 @@ import {
   collectQuotationPushDocuments,
   quotationDownstreamPushPercent,
 } from '../shared/pushProgress';
-import { buildDescriptionItemsFromColumns } from '../shared/descriptionItems';
 import { applyCustomerFormFields } from '../shared/applyCustomerFormFields';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
@@ -201,21 +198,6 @@ const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport }))
 );
 const LazySyncFromDatasetModal = lazy(() => import('../../../../../components/sync-from-dataset-modal'));
-
-/** 详情/列表状态 Tag：与生命周期主轴文案一致（含待审核等子态） */
-function getQuotationStatusTagProps(
-  record: Quotation,
-  auditRequired: boolean,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): { text: string; color: string } {
-  const lc = getQuotationLifecycle(record, auditRequired, t);
-  if (lc.status === 'exception') return { text: lc.stageName, color: 'error' };
-  if (lc.status === 'success') return { text: lc.stageName, color: 'success' };
-  const activeKey = lc.mainStages?.find((s) => s.status === 'active')?.key;
-  if (activeKey === 'draft') return { text: lc.stageName, color: RE_STATUS_BADGE_DRAFT };
-  if (activeKey === 'converted') return { text: lc.stageName, color: 'success' };
-  return { text: lc.stageName, color: 'processing' };
-}
 
 /** 列表快速筛选：DB status → 生命周期展示（筛选值仍为后端 status） */
 function getQuotationStatusFilterEnum(t: (key: string) => string) {
@@ -2885,14 +2867,6 @@ const QuotationsPage: React.FC = () => {
         </span>
       ),
     },
-    {
-      title: t('common.status'),
-      dataIndex: 'status',
-      render: (_, r) => {
-        const c = getQuotationStatusTagProps(r, quotationAuditRequired, t);
-        return <Tag {...resolveStatusTagDisplayProps(c)}>{c.text}</Tag>;
-      },
-    },
     // —— 客户信息 ——
     { title: t('app.kuaizhizao.quotation.form.customer'), dataIndex: 'customer_name' },
     { title: salesCommonFormLabels.contact, dataIndex: 'customer_contact' },
@@ -2965,10 +2939,7 @@ const QuotationsPage: React.FC = () => {
     // —— 系统信息 ——
     { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
-  const alignedDetailBasicColumns = alignDescriptionColumns(
-    detailBasicColumns,
-    SALES_DOC_DETAIL_BASIC_FIELD_RANK,
-  );
+  const alignedDetailBasicColumns = alignDescriptionColumns(detailBasicColumns);
 
   const closeQuotationDetailDrawer = useCallback(() => {
     setDetailDrawerVisible(false);
@@ -4170,7 +4141,24 @@ const QuotationsPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           quotationDetail && (
-            <Space wrap>
+            <Space size="small">
+              {!detailCapabilityGates.confirmCustomer.disabled && (
+                <Button color="green" variant="solid" icon={<SendOutlined />} onClick={() => handleConfirmCustomer(quotationDetail)}>{t('app.kuaizhizao.quotation.customerConfirm')}</Button>
+              )}
+              {!detailCapabilityGates.cancelCustomerConfirm.disabled && (
+                <Button color="orange" variant="solid" icon={<CloseCircleOutlined />} onClick={() => handleCancelCustomerConfirm(quotationDetail)}>{t('app.kuaizhizao.quotation.cancelCustomerConfirm')}</Button>
+              )}
+              {!detailCapabilityGates.revokePush.disabled && (
+                <Button icon={<RollbackOutlined />} onClick={() => handleRevokePush(quotationDetail)}>{t('app.kuaizhizao.quotation.revokePush')}</Button>
+              )}
+              {!detailCapabilityGates.createRevision.disabled && (
+                <Button icon={<BranchesOutlined />} onClick={() => handleRevision(quotationDetail)}>
+                  {t('app.kuaizhizao.quotation.saveAsRevision')}
+                </Button>
+              )}
+              {!detailCapabilityGates.reopen.disabled && (
+                <Button icon={<EditOutlined />} onClick={() => handleReopen(quotationDetail)}>{t('app.kuaizhizao.quotation.reopenEdit')}</Button>
+              )}
               {!detailCapabilityGates.delete.disabled && (
                 <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(quotationDetail)}>{t('common.delete')}</Button>
               )}
@@ -4192,23 +4180,6 @@ const QuotationsPage: React.FC = () => {
                   void loadQuotationDetail(quotationDetail.id!);
                 }}
               />
-              {!detailCapabilityGates.confirmCustomer.disabled && (
-                <Button color="green" variant="solid" icon={<SendOutlined />} onClick={() => handleConfirmCustomer(quotationDetail)}>{t('app.kuaizhizao.quotation.customerConfirm')}</Button>
-              )}
-              {!detailCapabilityGates.cancelCustomerConfirm.disabled && (
-                <Button color="orange" variant="solid" icon={<CloseCircleOutlined />} onClick={() => handleCancelCustomerConfirm(quotationDetail)}>{t('app.kuaizhizao.quotation.cancelCustomerConfirm')}</Button>
-              )}
-              {!detailCapabilityGates.reopen.disabled && (
-                <Button icon={<EditOutlined />} onClick={() => handleReopen(quotationDetail)}>{t('app.kuaizhizao.quotation.reopenEdit')}</Button>
-              )}
-              {!detailCapabilityGates.revokePush.disabled && (
-                <Button icon={<RollbackOutlined />} onClick={() => handleRevokePush(quotationDetail)}>{t('app.kuaizhizao.quotation.revokePush')}</Button>
-              )}
-              {!detailCapabilityGates.createRevision.disabled && (
-                <Button icon={<BranchesOutlined />} onClick={() => handleRevision(quotationDetail)}>
-                  {t('app.kuaizhizao.quotation.saveAsRevision')}
-                </Button>
-              )}
               <Tooltip
                 title={
                   detailCapabilityGates.printFormal.disabled
@@ -4235,7 +4206,7 @@ const QuotationsPage: React.FC = () => {
               <Descriptions
                 column={3}
                 size="small"
-                items={buildDescriptionItemsFromColumns(quotationDetail, alignedDetailBasicColumns, { column: 3 })}
+                items={detailDrawerDescriptionItems(alignedDetailBasicColumns, quotationDetail)}
               />
               {hasCustomFieldsDetailContent(quotationListCustomFields, quotationDetailCustomFieldValues) ? (
                 <div style={{ marginTop: 16 }}>

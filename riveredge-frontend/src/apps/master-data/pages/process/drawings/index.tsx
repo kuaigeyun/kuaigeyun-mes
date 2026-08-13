@@ -7,7 +7,7 @@ import React, { lazy, startTransition, Suspense, useCallback, useDeferredValue, 
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Grid, Input, Modal, Popconfirm, Segmented, Space, Spin, Tag, Timeline, Tooltip, theme, Descriptions } from 'antd';
+import { App, Button, Grid, Input, Modal, Popconfirm, Segmented, Space, Spin, Tag, Timeline, Tooltip, theme } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import {
   DeleteOutlined,
@@ -23,13 +23,13 @@ import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
   TwoColumnLayout,
-  flushDrawerOpen,
   LIST_PAGE_TABLE_SCROLL,
   TWO_COLUMN_LAYOUT,
 } from '../../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { ProcessMasterDetailDrawer } from '../shared/processMasterDetailDrawer';
 import { DetailDrawerActions } from '../../../../../components/layout-templates/DetailDrawerActions';
-import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { DrawingFormModal } from '../../../components/DrawingFormModal';
 import { StepBomImportWizard } from '../../../components/StepBomImportWizard';
 import FilePreviewModal from '../../../../../components/file-preview';
@@ -64,10 +64,6 @@ import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForL
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { MASTER_DATA_LIST_FIELD_RANK } from '../../../utils/masterListCore';
 import { masterCrudCreatedUpdatedColumns } from '../../../utils/masterListCore';
-import {
-  CustomFieldsDetailSection,
-  hasCustomFieldsDetailContent,
-} from '../../../../../components/custom-fields';
 
 const STATUS_COLOR: Record<DrawingStatus, string> = {
   Draft: 'default',
@@ -233,7 +229,8 @@ const DrawingsPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detail, setDetail] = useState<EngineeringDrawing | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const detailReqRef = useRef(0);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
@@ -415,26 +412,28 @@ const DrawingsPage: React.FC = () => {
   }, []);
 
   const loadDetail = async (uuid: string) => {
-    const reqId = ++detailReqRef.current;
     setDetailLoading(true);
-    setDrawerVisible(true);
-    flushDrawerOpen();
+    setDetailError(null);
     try {
       const data = await drawingApi.get(uuid);
-      if (reqId === detailReqRef.current) {
-        setDetail(data);
-        if (data.id != null) {
-          await loadFieldValuesForDetail(data.id);
-        }
+      setDetail(data);
+      if (data.id != null) {
+        await loadFieldValuesForDetail(data.id);
       }
-    } catch (err: any) {
-      if (reqId === detailReqRef.current) {
-        messageApi.error(err?.message || t('app.master-data.drawings.getDetailFailed'));
-        setDrawerVisible(false);
-      }
+    } catch (error) {
+      setDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.master-data.drawings.getDetailFailed')));
     } finally {
-      if (reqId === detailReqRef.current) setDetailLoading(false);
+      setDetailLoading(false);
     }
+  };
+
+  const handleOpenDetail = (uuid: string) => {
+    detailRetryUuidRef.current = uuid;
+    setDrawerVisible(true);
+    setDetail(null);
+    setDetailError(null);
+    void loadDetail(uuid);
   };
 
   const handleCreate = useCallback(() => {
@@ -517,7 +516,7 @@ const DrawingsPage: React.FC = () => {
       try {
         const data = await drawingApi.get(deepLinkUuid);
         selectRowForPreview(data);
-        await loadDetail(deepLinkUuid);
+        handleOpenDetail(deepLinkUuid);
       } catch (err: any) {
         messageApi.error(err?.message || t('app.master-data.drawings.getDetailFailed'));
       } finally {
@@ -577,7 +576,7 @@ const DrawingsPage: React.FC = () => {
               onConfirm={() => handleDeleteDrawing(record)}
             >
               <Button
-                type="link"
+                type={compact ? 'default' : 'link'}
                 size="small"
                 danger
                 icon={<DeleteOutlined />}
@@ -639,7 +638,7 @@ const DrawingsPage: React.FC = () => {
       {
         title: t('app.master-data.drawings.status'),
         dataIndex: 'status',
-        render: (_, r) => <Tag color={STATUS_COLOR[r.status]} variant="solid">{statusLabel(r.status)}</Tag>,
+        render: (_, r) => <MarkerTag color={STATUS_COLOR[r.status]}>{statusLabel(r.status)}</MarkerTag>,
       },
       {
         title: t('app.master-data.drawings.file'),
@@ -842,12 +841,11 @@ const DrawingsPage: React.FC = () => {
       {
         title: t('common.actions'),
         valueType: 'option',
-        width: 320,
         fixed: 'right' as const,
         onCell: () => ({ style: { whiteSpace: 'nowrap' } }),
         render: (_, record) => (
           <Space size={0} style={{ whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
-            <Button key="view" {...rowActionKind('read')} onClick={() => loadDetail(record.uuid)}>
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record.uuid)}>
               {t('common.detail')}
             </Button>
             {renderLifecycleActions(record)}
@@ -1038,16 +1036,25 @@ const DrawingsPage: React.FC = () => {
         }}
       />
 
-      <UniDetail
+      <ProcessMasterDetailDrawer
         title={t('app.master-data.drawings.detailTitle')}
         open={drawerVisible}
         onClose={() => {
           setDrawerVisible(false);
           setDetail(null);
+          setDetailError(null);
           resetDetailFieldValues();
         }}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        detail={detail}
+        detailColumns={detailColumns}
+        customFields={customFields}
+        customFieldValues={customFieldValues}
         extra={
           detail ? (
             <DetailDrawerActions
@@ -1060,67 +1067,53 @@ const DrawingsPage: React.FC = () => {
             />
           ) : null
         }
-        basic={
-          detail ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detail)} />
-          ) : null
-        }
-        linesTitle={t('app.master-data.customFields')}
+        linesTitle={t('app.master-data.drawings.revisionHistory')}
         lines={
-          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
-            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
-          ) : null
-        }
-        timelineTitle={t('app.master-data.drawings.revisionHistory')}
-        timelineVisible={!!detail}
-        timeline={
-          detail ? (
-            revisionsLoading ? (
-              <Spin />
-            ) : revisions.length ? (
-              <Timeline
-                items={revisions.map((rev) => ({
-                  color: STATUS_COLOR[rev.status],
-                  children: (
-                    <Space orientation="vertical" size={0}>
-                      <Space wrap>
-                        <Button
-                          type={rev.uuid === detail.uuid ? 'primary' : 'link'}
-                          size="small"
-                          style={{ padding: rev.uuid === detail.uuid ? undefined : 0 }}
-                          onClick={() => {
-                            if (rev.uuid !== detail.uuid) {
-                              void loadDetail(rev.uuid);
-                              if (rev.uuid) {
-                                void drawingApi.get(rev.uuid).then(selectRowForPreview);
-                              }
+          revisionsLoading ? (
+            <Spin />
+          ) : revisions.length ? (
+            <Timeline
+              items={revisions.map((rev) => ({
+                color: STATUS_COLOR[rev.status],
+                children: (
+                  <Space orientation="vertical" size={0}>
+                    <Space wrap>
+                      <Button
+                        type={rev.uuid === detail?.uuid ? 'primary' : 'default'}
+                        size="small"
+                        onClick={() => {
+                          if (rev.uuid !== detail?.uuid) {
+                            detailRetryUuidRef.current = rev.uuid;
+                            void loadDetail(rev.uuid);
+                            if (rev.uuid) {
+                              void drawingApi.get(rev.uuid).then(selectRowForPreview);
                             }
-                          }}
-                        >
-                          {t('app.master-data.drawings.revision')} {rev.revision}
-                        </Button>
-                        <Tag color={STATUS_COLOR[rev.status]} variant="solid">{statusLabel(rev.status)}</Tag>
-                      </Space>
-                      {rev.releasedAt ? (
-                        <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>
-                          {t('app.master-data.drawings.releasedAt')}: {rev.releasedAt}
-                        </span>
-                      ) : null}
-                      {rev.obsoleteReason ? (
-                        <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>
-                          {rev.obsoleteReason}
-                        </span>
-                      ) : null}
+                          }
+                        }}
+                      >
+                        {t('app.master-data.drawings.revision')} {rev.revision}
+                      </Button>
+                      <MarkerTag color={STATUS_COLOR[rev.status]}>{statusLabel(rev.status)}</MarkerTag>
                     </Space>
-                  ),
-                }))}
-              />
-            ) : (
-              <span style={{ color: 'var(--ant-color-text-secondary)' }}>
-                {t('app.master-data.drawings.noRevisionHistory')}
-              </span>
-            )
-          ) : null
+                    {rev.releasedAt ? (
+                      <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>
+                        {t('app.master-data.drawings.releasedAt')}: {rev.releasedAt}
+                      </span>
+                    ) : null}
+                    {rev.obsoleteReason ? (
+                      <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>
+                        {rev.obsoleteReason}
+                      </span>
+                    ) : null}
+                  </Space>
+                ),
+              }))}
+            />
+          ) : (
+            <span style={{ color: 'var(--ant-color-text-secondary)' }}>
+              {t('app.master-data.drawings.noRevisionHistory')}
+            </span>
+          )
         }
       />
 

@@ -12,13 +12,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { rowActionKind } from '../../../../components/uni-action';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDatePicker, ProFormDigit } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, message, Card, Modal } from 'antd';
-import { ProDescriptions } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDatePicker, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Modal, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
-import { UniDetail } from '../../../../components/uni-detail';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { renderSystemActiveTag, renderSystemStatusTag } from '../../utils/systemListPresentation';
 import {
   getEquipmentList,
   getEquipmentByUuid,
@@ -42,7 +43,6 @@ const EquipmentListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
-  const equipmentDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑）
@@ -56,6 +56,8 @@ const EquipmentListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<Equipment | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
   /**
@@ -173,26 +175,26 @@ const EquipmentListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: Equipment) => {
-    const req = ++equipmentDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getEquipmentByUuid(record.uuid);
-      if (equipmentDetailReqRef.current !== req) return;
+      const detail = await getEquipmentByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (equipmentDetailReqRef.current === req) {
-        messageApi.error(error.message || t('pages.system.equipment.getDetailFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.equipment.getDetailFailed')));
     } finally {
-      if (equipmentDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = async (record: Equipment) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -269,6 +271,47 @@ const EquipmentListPage: React.FC = () => {
     '停用': 'statusStopped',
     '报废': 'statusScrapped',
   };
+  const statusColorMap: Record<string, string> = {
+    '正常': 'success',
+    '维修中': 'warning',
+    '停用': 'default',
+    '报废': 'error',
+  };
+  const renderEquipmentStatus = (status?: string) => {
+    const key = status ? statusTextKey[status] : undefined;
+    const text = key ? t(`pages.system.equipment.${key}`) : (status || '-');
+    return renderSystemStatusTag(text, status ? statusColorMap[status] || 'default' : 'default');
+  };
+
+  const detailColumns: ProDescriptionsItemProps<Equipment>[] = [
+    { title: t('pages.system.equipment.columnCode'), dataIndex: 'code' },
+    { title: t('pages.system.equipment.columnName'), dataIndex: 'name' },
+    { title: t('pages.system.equipment.columnType'), dataIndex: 'type' },
+    { title: t('pages.system.equipment.columnCategory'), dataIndex: 'category' },
+    { title: t('pages.system.equipment.columnBrand'), dataIndex: 'brand' },
+    { title: t('pages.system.equipment.columnModel'), dataIndex: 'model' },
+    { title: t('pages.system.equipment.columnSerialNumber'), dataIndex: 'serial_number' },
+    { title: t('pages.system.equipment.labelManufacturer'), dataIndex: 'manufacturer' },
+    { title: t('pages.system.equipment.labelSupplier'), dataIndex: 'supplier' },
+    { title: t('pages.system.equipment.labelPurchaseDate'), dataIndex: 'purchase_date', valueType: 'date' },
+    { title: t('pages.system.equipment.labelInstallDate'), dataIndex: 'installation_date', valueType: 'date' },
+    { title: t('pages.system.equipment.labelWarranty'), dataIndex: 'warranty_period' },
+    { title: t('pages.system.equipment.columnWorkstation'), dataIndex: 'workstation_name' },
+    {
+      title: t('pages.system.equipment.columnStatus'),
+      dataIndex: 'status',
+      render: (_: unknown, record: Equipment) => renderEquipmentStatus(record.status),
+    },
+    {
+      title: t('pages.system.equipment.columnActive'),
+      dataIndex: 'is_active',
+      render: (_: unknown, record: Equipment) =>
+        renderSystemActiveTag(t, record?.is_active, 'pages.system.equipment.enabled', 'pages.system.equipment.disabled'),
+    },
+    { title: t('pages.system.equipment.labelDescription'), dataIndex: 'description' },
+    { title: t('pages.system.equipment.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('pages.system.equipment.labelUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+  ];
 
   const columns: ProColumns<Equipment>[] = [
     {
@@ -336,17 +379,7 @@ const EquipmentListPage: React.FC = () => {
         '停用': { text: t('pages.system.equipment.statusStopped'), status: 'Default' },
         '报废': { text: t('pages.system.equipment.statusScrapped'), status: 'Error' },
       },
-      render: (_, record) => {
-        const key = statusTextKey[record.status];
-        const text = key ? t(`pages.system.equipment.${key}`) : record.status;
-        const colorMap: Record<string, string> = {
-          '正常': 'success',
-          '维修中': 'warning',
-          '停用': 'default',
-          '报废': 'error',
-        };
-        return <Tag color={colorMap[record.status] || 'default'}>{text}</Tag>;
-      },
+      render: (_, record) => renderEquipmentStatus(record.status),
     },
     {
       title: t('pages.system.equipment.columnActive'),
@@ -357,11 +390,8 @@ const EquipmentListPage: React.FC = () => {
         true: { text: t('pages.system.equipment.enabled'), status: 'Success' },
         false: { text: t('pages.system.equipment.disabled'), status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('pages.system.equipment.enabled') : t('pages.system.equipment.disabled')}
-        </Tag>
-      ),
+      render: (_, record) =>
+        renderSystemActiveTag(t, record.is_active, 'pages.system.equipment.enabled', 'pages.system.equipment.disabled'),
     },
     {
       title: t('pages.system.equipment.columnCreatedAt'),
@@ -611,78 +641,41 @@ const EquipmentListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('pages.system.equipment.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
+        detail={detailData}
+        detailColumns={detailColumns}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        plainBody={
-          <>
-            <ProDescriptions<Equipment>
-              dataSource={detailData || undefined}
-              column={2}
-              columns={[
-                { title: t('pages.system.equipment.columnCode'), dataIndex: 'code' },
-                { title: t('pages.system.equipment.columnName'), dataIndex: 'name' },
-                { title: t('pages.system.equipment.columnType'), dataIndex: 'type' },
-                { title: t('pages.system.equipment.columnCategory'), dataIndex: 'category' },
-                { title: t('pages.system.equipment.columnBrand'), dataIndex: 'brand' },
-                { title: t('pages.system.equipment.columnModel'), dataIndex: 'model' },
-                { title: t('pages.system.equipment.columnSerialNumber'), dataIndex: 'serial_number' },
-                { title: t('pages.system.equipment.labelManufacturer'), dataIndex: 'manufacturer' },
-                { title: t('pages.system.equipment.labelSupplier'), dataIndex: 'supplier' },
-                { title: t('pages.system.equipment.labelPurchaseDate'), dataIndex: 'purchase_date' },
-                { title: t('pages.system.equipment.labelInstallDate'), dataIndex: 'installation_date' },
-                { title: t('pages.system.equipment.labelWarranty'), dataIndex: 'warranty_period' },
-                { title: t('pages.system.equipment.columnWorkstation'), dataIndex: 'workstation_name' },
-                {
-                  title: t('pages.system.equipment.columnStatus'),
-                  dataIndex: 'status',
-                  render: (_: unknown, record: Equipment) => {
-                    const key = statusTextKey[record.status];
-                    const text = key ? t(`pages.system.equipment.${key}`) : record.status;
-                    const colorMap: Record<string, string> = {
-                      '正常': 'success',
-                      '维修中': 'warning',
-                      '停用': 'default',
-                      '报废': 'error',
-                    };
-                    return <Tag color={colorMap[record.status] || 'default'}>{text}</Tag>;
-                  },
-                },
-                {
-                  title: t('pages.system.equipment.columnActive'),
-                  dataIndex: 'is_active',
-                  render: (_: unknown, record: Equipment) => (
-                    <Tag color={record?.is_active ? 'success' : 'default'}>
-                      {record?.is_active ? t('pages.system.equipment.enabled') : t('pages.system.equipment.disabled')}
-                    </Tag>
-                  ),
-                },
-                { title: t('pages.system.equipment.labelDescription'), dataIndex: 'description', span: 2 },
-                { title: t('pages.system.equipment.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-                { title: t('pages.system.equipment.labelUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-              ]}
-            />
-            
-            {detailData && (
-              <div style={{ marginTop: 24 }}>
-                <Card title={t('pages.system.equipment.qrcodeCardTitle')}>
-                  <QRCodeGenerator
-                    qrcodeType="EQ"
-                    data={{
-                      equipment_uuid: detailData.uuid,
-                      equipment_code: detailData.code || '',
-                      equipment_name: detailData.name || '',
-                    }}
-                    autoGenerate={true}
-                    size={6}
-                  />
-                </Card>
-              </div>
-            )}
-          </>
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        basicExtra={
+          detailData ? (
+            <>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {t('pages.system.equipment.qrcodeCardTitle')}
+              </Typography.Text>
+              <QRCodeGenerator
+                qrcodeType="EQ"
+                data={{
+                  equipment_uuid: detailData.uuid,
+                  equipment_code: detailData.code || '',
+                  equipment_name: detailData.name || '',
+                }}
+                autoGenerate={true}
+                size={6}
+                noCard
+              />
+            </>
+          ) : undefined
         }
       />
     </>

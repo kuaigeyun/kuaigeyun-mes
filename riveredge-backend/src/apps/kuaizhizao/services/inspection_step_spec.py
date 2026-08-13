@@ -627,7 +627,6 @@ def validate_inspection_template_conduct(
     measurement = conduct_data.get("measurement_data") or {}
 
     missing: List[str] = []
-    critical_fails: List[str] = []
     for idx, item in enumerate(items):
         if not isinstance(item, dict):
             continue
@@ -661,8 +660,6 @@ def validate_inspection_template_conduct(
                 judgment = resolve_step_judgment(item, entry)
                 if judgment is None and vt != "text":
                     raise ValidationError(f"检验项「{name}」无法判定，请检查录入值")
-                if spec.get("critical") and judgment == "fail":
-                    critical_fails.append(str(name))
             continue
 
         # legacy boolean（无 value_type）
@@ -676,8 +673,68 @@ def validate_inspection_template_conduct(
 
     if missing:
         raise ValidationError(f"请完成检验项：{'、'.join(missing)}")
-    if critical_fails:
-        raise ValidationError(f"关键检验项不合格：{'、'.join(critical_fails)}")
+
+
+def summarize_conduct_step_fails(
+    template_json: Any,
+    conduct_data: Dict[str, Any],
+) -> Dict[str, Any]:
+    """方案项失败汇总：失败项数 / 关键失败。不把失败项数换算成不合格件数。"""
+    out: Dict[str, Any] = {
+        "fail_count": 0,
+        "critical_fail_count": 0,
+        "fail_labels": [],
+        "critical_fail_labels": [],
+    }
+    if not template_json or not isinstance(template_json, dict):
+        return out
+    items = template_json.get("items")
+    if not items or not isinstance(items, list):
+        return out
+    step_results = conduct_data.get("conduct_step_results") or {}
+    if not isinstance(step_results, dict):
+        step_results = {}
+    item_results = conduct_data.get("item_results") or {}
+    if not isinstance(item_results, dict):
+        item_results = {}
+
+    for idx, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("inspection_item") or f"项{idx + 1}")
+        key = _step_conduct_key(item, idx)
+        spec = item.get("value_spec") if isinstance(item.get("value_spec"), dict) else {}
+        entry = step_results.get(key) if isinstance(step_results.get(key), dict) else {}
+        judgment = resolve_step_judgment(item, entry) if item.get("value_type") else None
+        if judgment is None:
+            legacy = item_results.get(str(idx)) or item_results.get(key)
+            if legacy in ("pass", "fail", "na"):
+                judgment = str(legacy)
+        if judgment != "fail":
+            continue
+        out["fail_count"] += 1
+        out["fail_labels"].append(name)
+        if spec.get("critical"):
+            out["critical_fail_count"] += 1
+            out["critical_fail_labels"].append(name)
+    return out
+
+
+def assert_unqualified_qty_when_steps_fail(
+    template_json: Any,
+    conduct_data: Dict[str, Any],
+    unqualified_quantity: Any,
+) -> None:
+    """有方案项失败时，整单不合格数量必须 > 0（软挂钩，不按失败项数改写件数）。"""
+    summary = summarize_conduct_step_fails(template_json, conduct_data)
+    if summary["fail_count"] <= 0:
+        return
+    try:
+        qty = float(unqualified_quantity or 0)
+    except (TypeError, ValueError):
+        qty = 0
+    if qty <= 1e-9:
+        raise ValidationError("存在不合格检验项时，不合格数量必须大于 0")
 
 
 def merge_template_conduct_results(template_json: Any, conduct_data: Dict[str, Any]) -> Any:

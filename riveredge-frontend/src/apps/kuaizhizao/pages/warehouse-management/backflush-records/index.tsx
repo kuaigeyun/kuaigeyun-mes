@@ -14,12 +14,12 @@ import {
   MaterialStackedCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { DetailDrawerTemplate, ListPageTemplate, detailDrawerDescriptionItems, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { DetailDrawerTemplate, ListPageTemplate, detailDrawerDescriptionItems, detailDrawerBasicColumn, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
-import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { formatQuantity } from '../../../../../utils/format';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
   buildBackflushRecordStatusValueEnum,
@@ -193,8 +193,8 @@ const BackflushRecordsPage: React.FC = () => {
     [t, statusValueEnum]
   );
 
-  const detailColumns: ProDescriptionsItemProps<BackflushRecordItem>[] = useMemo(
-    () => [
+  const detailColumns = useMemo(
+    () => alignDescriptionColumns([
       { title: t('app.kuaizhizao.backflushRecords.colWorkOrderCode'), dataIndex: 'work_order_code' },
       { title: t('app.kuaizhizao.backflushRecords.colOperationCode'), dataIndex: 'operation_code', render: (_, r) => r.operation_code || '-' },
       {
@@ -218,11 +218,11 @@ const BackflushRecordsPage: React.FC = () => {
         render: (_, r) => `${formatQuantity(r.backflush_quantity)} ${r.material_unit || ''}`.trim(),
       },
       { title: t('app.kuaizhizao.backflushRecords.colOutboundWarehouse'), dataIndex: 'warehouse_name', render: (_, r) => r.warehouse_name || '-' },
-      { title: t('app.kuaizhizao.backflushRecords.colErrorMessage'), dataIndex: 'error_message', span: 2, render: (_, r) => r.error_message || '-' },
+      { title: t('app.kuaizhizao.backflushRecords.colErrorMessage'), dataIndex: 'error_message', span: 3, render: (_, r) => r.error_message || '-' },
       { title: t('app.kuaizhizao.warehouseCommon.colProcessedBy'), dataIndex: 'processed_by_name', render: (_, r) => r.processed_by_name || '-' },
-      { title: t('app.kuaizhizao.warehouseCommon.colCreatedAt'), dataIndex: 'created_at', render: (_, r) => formatDateTime(r.created_at) },
-      { title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'), dataIndex: 'updated_at', render: (_, r) => formatDateTime(r.updated_at) },
-    ],
+      { title: t('app.kuaizhizao.warehouseCommon.colCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    ]),
     [t, statusValueEnum]
   );
 
@@ -270,7 +270,7 @@ const BackflushRecordsPage: React.FC = () => {
         basic={
           detailRecord ? (
             <Descriptions
-              column={2}
+              column={detailDrawerBasicColumn(false)}
               size="small"
               items={detailDrawerDescriptionItems(detailColumns, detailRecord)}
             />

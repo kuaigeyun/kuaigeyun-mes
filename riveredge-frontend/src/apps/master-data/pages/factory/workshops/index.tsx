@@ -8,13 +8,16 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Typography } from 'antd';
+import { App, Button, List, Modal, Popconfirm, Space, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { MasterDataDetailDrawer } from '../../shared/masterDataDetailDrawer';
 
 const WorkshopFormModal = lazy(() =>
   import('../../../components/WorkshopFormModal').then((m) => ({ default: m.WorkshopFormModal })),
@@ -42,10 +45,6 @@ import type { Workshop, WorkshopCreate, Plant } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
-  CustomFieldsDetailSection,
-  hasCustomFieldsDetailContent,
-} from '../../../../../components/custom-fields';
-import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
@@ -69,6 +68,8 @@ const WorkshopsPage: React.FC = () => {
     const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
 
     const [drawerVisible, setDrawerVisible] = useState(false);
+    const [detailError, setDetailError] = useState<string | null>(null);
+    const detailRetryUuidRef = useRef<string | null>(null);
     const [workshopDetail, setWorkshopDetail] = useState<Workshop | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
 
@@ -153,18 +154,27 @@ const WorkshopsPage: React.FC = () => {
   /**
    * 处理打开详情
    */
-  const handleOpenDetail = async (record: Workshop) => {
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      setDrawerVisible(true);
-      setDetailLoading(true);
-      const detail = await workshopApi.get(record.uuid);
+      const detail = await workshopApi.get(uuid);
       setWorkshopDetail(detail);
       await loadFieldValuesForDetail(detail.id);
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.workshops.getDetailFailed'));
+    } catch (error) {
+      setWorkshopDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.master-data.workshops.getDetailFailed')));
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const handleOpenDetail = (record: Workshop) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setWorkshopDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -173,6 +183,7 @@ const WorkshopsPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setWorkshopDetail(null);
+    setDetailError(null);
     resetDetailFieldValues();
   };
 
@@ -656,7 +667,6 @@ const WorkshopsPage: React.FC = () => {
         title: t('common.actions'),
         key: 'action',
         valueType: 'option',
-        width: 150,
         fixed: 'right' as const,
         render: (_text, record) => (
           <Space>
@@ -707,6 +717,7 @@ const WorkshopsPage: React.FC = () => {
     {
       title: t('app.master-data.workshops.plantName'),
       dataIndex: 'plantId',
+      key: 'plantName',
       render: (_, record) => formatPlantDisplay(record),
     },
     {
@@ -818,23 +829,24 @@ const WorkshopsPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      <MasterDataDetailDrawer
         title={t('app.master-data.workshops.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
+        detail={workshopDetail}
+        detailColumns={detailColumns}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
-          workshopDetail ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, workshopDetail)} />
-          ) : null
-        }
-        linesTitle={t('app.master-data.customFields')}
-        lines={
-          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
-            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        customFields={customFields}
+        customFieldValues={customFieldValues}
+        extra={buildDetailDrawerEditExtra(t, Boolean(workshopDetail), () => {
+          if (!workshopDetail) return;
+          handleEdit(workshopDetail);
+        })}
       />
 
       {modalVisible ? (

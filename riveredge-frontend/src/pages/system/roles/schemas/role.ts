@@ -67,6 +67,7 @@ export const roleFormSchema: FieldConfig[] = [
     options: [
       { labelKey: 'field.role.externalPartnerCustomer', value: 'customer' },
       { labelKey: 'field.role.externalPartnerSupplier', value: 'supplier' },
+      { labelKey: 'field.role.externalPartnerManufacturer', value: 'manufacturer' },
     ],
     extraKey: 'field.role.externalPartnerTypeExtra',
     visibleWhen: { field: 'role_type', equals: 'external' },

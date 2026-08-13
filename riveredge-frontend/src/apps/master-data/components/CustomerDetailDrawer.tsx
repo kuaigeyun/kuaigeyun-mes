@@ -1,13 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Descriptions, Tag } from 'antd';
+import { Descriptions } from 'antd';
 import {
   DetailDrawerSection,
-  DRAWER_CONFIG,
-  flushDrawerOpen,
+  detailDrawerDescriptionItems,
 } from '../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
+import { getApiErrorMessage } from '../../../utils/errorHandler';
 import { getDictionaryLabelMapSync } from '../../../services/dataDictionaryCache';
 import { customerApi, getDictionaryOptions } from '../services/supply-chain';
 import type { Customer } from '../types/supply-chain';
@@ -19,6 +18,12 @@ import {
   partnerSettlementMethodLabel,
   partnerTaxpayerTypeLabel,
 } from '../utils/partner-static-labels';
+import { renderMasterActiveTag } from '../utils/masterListPresentation';
+import { PartnerMasterDetailDrawer } from '../pages/shared/PartnerMasterDetailDrawer';
+import {
+  alignDescriptionColumns,
+  MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
+} from '../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const DICT_CODES = [
   'INDUSTRY_SECTOR',
@@ -42,10 +47,9 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
   footer,
 }) => {
   const { t } = useTranslation();
-  const { message: messageApi } = App.useApp();
-  const detailReqRef = useRef(0);
   const [customerDetail, setCustomerDetail] = useState<Customer | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [dictLabelMaps, setDictLabelMaps] = useState<Record<string, Record<string, string>>>(() => {
     const seed: Record<string, Record<string, string>> = {};
     DICT_CODES.forEach((code) => {
@@ -81,38 +85,35 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
     [dictLabelMaps],
   );
 
-  useEffect(() => {
-    if (!open || !customerUuid) {
-      if (!open) {
+  const loadDetail = useCallback(
+    async (uuid: string) => {
+      setDetailLoading(true);
+      setDetailError(null);
+      try {
+        const detail = await customerApi.get(uuid);
+        setCustomerDetail(detail);
+      } catch (error) {
         setCustomerDetail(null);
+        setDetailError(getApiErrorMessage(error, t('app.master-data.customers.getDetailFailed')));
+      } finally {
         setDetailLoading(false);
       }
+    },
+    [t],
+  );
+
+  useEffect(() => {
+    if (!open) {
+      setCustomerDetail(null);
+      setDetailLoading(false);
+      setDetailError(null);
       return;
     }
-
-    const req = ++detailReqRef.current;
-    flushDrawerOpen(() => {
-      setCustomerDetail(null);
-      setDetailLoading(true);
-    });
-
-    customerApi
-      .get(customerUuid)
-      .then((detail) => {
-        if (detailReqRef.current !== req) return;
-        setCustomerDetail(detail);
-      })
-      .catch((error: { message?: string }) => {
-        if (detailReqRef.current === req) {
-          messageApi.error(error.message || t('app.master-data.customers.getDetailFailed'));
-        }
-      })
-      .finally(() => {
-        if (detailReqRef.current === req) {
-          setDetailLoading(false);
-        }
-      });
-  }, [customerUuid, messageApi, open, t]);
+    if (!customerUuid) return;
+    setCustomerDetail(null);
+    setDetailError(null);
+    void loadDetail(customerUuid);
+  }, [customerUuid, loadDetail, open]);
 
   const detailColumnsBasic: ProDescriptionsItemProps<Customer>[] = useMemo(
     () => [
@@ -161,16 +162,13 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
       {
         title: t('app.master-data.warehouses.status'),
         dataIndex: 'isActive',
-        render: (_, record) => (
-          <Tag
-            color={(record?.isActive ?? (record as Customer & { is_active?: boolean })?.is_active) ? 'success' : 'default'}
-            variant="solid"
-          >
-            {(record?.isActive ?? (record as Customer & { is_active?: boolean })?.is_active)
-              ? t('common.enabled')
-              : t('common.disabled')}
-          </Tag>
-        ),
+        render: (_, record) =>
+          renderMasterActiveTag(
+            t,
+            record?.isActive ?? (record as Customer & { is_active?: boolean })?.is_active,
+            'common.enabled',
+            'common.disabled',
+          ),
       },
     ],
     [dictLabel, t],
@@ -265,41 +263,55 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
   );
 
   return (
-    <UniDetail
+    <PartnerMasterDetailDrawer
       title={t('app.master-data.customers.detailTitle')}
       open={open}
       onClose={onClose}
       loading={detailLoading}
-      width={DRAWER_CONFIG.STANDARD_WIDTH}
-      plainBody={
-        customerDetail ? (
-          <>
-            <DetailDrawerSection title={t('field.partner.tabBasic')}>
-              <Descriptions
-                column={2}
-                items={detailDrawerDescriptionItems(detailColumnsBasic, customerDetail)}
-              />
+      error={detailError}
+      onRetry={() => {
+        if (customerUuid) void loadDetail(customerUuid);
+      }}
+    >
+      {customerDetail ? (
+        <>
+          <DetailDrawerSection title={t('field.partner.tabBasic')}>
+            <Descriptions
+              column={2}
+              size="small"
+              items={detailDrawerDescriptionItems(
+                alignDescriptionColumns(detailColumnsBasic, MASTER_DATA_DETAIL_BASIC_FIELD_RANK),
+                customerDetail,
+              )}
+            />
+          </DetailDrawerSection>
+          <DetailDrawerSection title={t('field.partner.tabInvoice')}>
+            <Descriptions
+              column={2}
+              size="small"
+              items={detailDrawerDescriptionItems(
+                alignDescriptionColumns(detailColumnsInvoice, MASTER_DATA_DETAIL_BASIC_FIELD_RANK),
+                customerDetail,
+              )}
+            />
+          </DetailDrawerSection>
+          <DetailDrawerSection title={t('field.partner.tabExtended')}>
+            <Descriptions
+              column={2}
+              size="small"
+              items={detailDrawerDescriptionItems(
+                alignDescriptionColumns(detailColumnsExtended, MASTER_DATA_DETAIL_BASIC_FIELD_RANK),
+                customerDetail,
+              )}
+            />
+          </DetailDrawerSection>
+          {footer ? (
+            <DetailDrawerSection title={t('app.kuaizhizao.customerFollowUp.new')} marginBottom={0}>
+              {footer(customerDetail)}
             </DetailDrawerSection>
-            <DetailDrawerSection title={t('field.partner.tabInvoice')}>
-              <Descriptions
-                column={2}
-                items={detailDrawerDescriptionItems(detailColumnsInvoice, customerDetail)}
-              />
-            </DetailDrawerSection>
-            <DetailDrawerSection title={t('field.partner.tabExtended')}>
-              <Descriptions
-                column={2}
-                items={detailDrawerDescriptionItems(detailColumnsExtended, customerDetail)}
-              />
-            </DetailDrawerSection>
-            {footer ? (
-              <DetailDrawerSection title={t('app.kuaizhizao.customerFollowUp.new')} marginBottom={0}>
-                {footer(customerDetail)}
-              </DetailDrawerSection>
-            ) : null}
-          </>
-        ) : null
-      }
-    />
+          ) : null}
+        </>
+      ) : null}
+    </PartnerMasterDetailDrawer>
   );
 };

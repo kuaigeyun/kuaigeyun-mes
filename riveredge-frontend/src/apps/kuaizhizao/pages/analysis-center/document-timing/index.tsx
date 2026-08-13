@@ -4,43 +4,23 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Table, Descriptions, Typography, Timeline, Button, Empty } from 'antd';
+import { App, Button, Empty } from 'antd';
 import { EyeOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  ListPageTemplate,
-  DetailDrawerTemplate,
-  DetailDrawerSection,
-  DRAWER_CONFIG,
-} from '../../../../../components/layout-templates';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { apiRequest } from '../../../../../services/api';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { getDocumentTimingLifecycle } from '../../../utils/documentTimingLifecycle';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { downloadFile } from '../../../../../utils/fileDownload';
 import { renderReportDocTypeMarker } from '../../../../kuaireport/utils/reportListPresentation';
-
-interface DocumentTiming {
-  document_type?: string;
-  document_id?: number;
-  document_code?: string;
-  total_duration_seconds?: number;
-  total_duration_hours?: number;
-  nodes?: DocumentNode[];
-}
-
-interface DocumentNode {
-  id?: number;
-  node_name?: string;
-  node_code?: string;
-  start_time?: string;
-  end_time?: string;
-  duration_seconds?: number;
-  duration_hours?: number;
-  operator_name?: string;
-}
+import {
+  DocumentTimingDetailDrawer,
+  type DocumentTiming,
+} from './DocumentTimingDetailDrawer';
 
 const TIMING_RESOURCE = 'kuaizhizao:document-timing';
 
@@ -51,6 +31,9 @@ const DocumentTimingPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentTiming, setCurrentTiming] = useState<DocumentTiming | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryRef = useRef<{ document_type?: string; document_id?: number } | null>(null);
   const [exporting, setExporting] = useState(false);
   const lastRowsRef = useRef<DocumentTiming[]>([]);
 
@@ -61,17 +44,32 @@ const DocumentTimingPage: React.FC = () => {
     return type || '-';
   };
 
-  const handleDetail = async (record: DocumentTiming) => {
+  const loadDetail = async (documentType?: string, documentId?: number) => {
+    if (!documentType || documentId == null) return;
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const result = await apiRequest(
-        `/apps/kuaizhizao/documents/${record.document_type}/${record.document_id}/timing`,
+      const result = await apiRequest<DocumentTiming>(
+        `/apps/kuaizhizao/documents/${documentType}/${documentId}/timing`,
         { method: 'GET' },
       );
       setCurrentTiming(result);
-      setDetailDrawerVisible(true);
-    } catch {
-      messageApi.error(t('app.kuaireport.analysis.timing.loadDetailFailed', { defaultValue: '获取耗时统计失败' }));
+    } catch (error) {
+      setCurrentTiming(null);
+      setDetailError(
+        getApiErrorMessage(error, t('app.kuaireport.analysis.timing.loadDetailFailed', { defaultValue: '获取耗时统计失败' })),
+      );
+    } finally {
+      setDetailLoading(false);
     }
+  };
+
+  const handleDetail = (record: DocumentTiming) => {
+    detailRetryRef.current = { document_type: record.document_type, document_id: record.document_id };
+    setDetailDrawerVisible(true);
+    setCurrentTiming(null);
+    setDetailError(null);
+    void loadDetail(record.document_type, record.document_id);
   };
 
   const handleExport = () => {
@@ -174,7 +172,6 @@ const DocumentTimingPage: React.FC = () => {
     {
       title: t('common.actions', { defaultValue: '操作' }),
       key: 'action',
-      width: 100,
       fixed: 'right',
       search: false,
       render: (_, record) => (
@@ -183,21 +180,6 @@ const DocumentTimingPage: React.FC = () => {
         </a>
       ),
     },
-  ];
-
-  const nodeColumns = [
-    { title: t('app.kuaireport.analysis.col.nodeName', { defaultValue: '节点名称' }), dataIndex: 'node_name', key: 'node_name', width: 120 },
-    { title: t('app.kuaireport.analysis.col.startTime', { defaultValue: '开始时间' }), dataIndex: 'start_time', key: 'start_time', width: 160 },
-    { title: t('app.kuaireport.analysis.col.endTime', { defaultValue: '结束时间' }), dataIndex: 'end_time', key: 'end_time', width: 160 },
-    {
-      title: t('app.kuaireport.analysis.col.durationHours', { defaultValue: '耗时（小时）' }),
-      dataIndex: 'duration_hours',
-      key: 'duration_hours',
-      width: 120,
-      align: 'right' as const,
-      render: (value: number) => value?.toFixed(2) || '-',
-    },
-    { title: t('app.kuaireport.analysis.col.operator', { defaultValue: '操作人' }), dataIndex: 'operator_name', key: 'operator_name', width: 100 },
   ];
 
   return (
@@ -266,86 +248,20 @@ const DocumentTimingPage: React.FC = () => {
         showAdvancedSearch
       />
 
-      <DetailDrawerTemplate
-        title={`${t('app.kuaireport.analysis.timing.detailTitle', { defaultValue: '耗时统计' })} - ${currentTiming?.document_code || ''}`}
+      <DocumentTimingDetailDrawer
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentTiming(null);
+          setDetailError(null);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        customContent={
-          currentTiming ? (
-            <>
-              <DetailDrawerSection title={t('common.basicInfo', { defaultValue: '基本信息' })}>
-                <Descriptions column={2} size="small" bordered>
-                  <Descriptions.Item label={t('app.kuaireport.analysis.col.documentType', { defaultValue: '单据类型' })}>
-                    {renderReportDocTypeMarker(
-                      docTypeLabel(currentTiming.document_type),
-                      currentTiming.document_type === 'work_order'
-                        ? 'processing'
-                        : currentTiming.document_type === 'purchase_order'
-                          ? 'default'
-                          : 'success',
-                    )}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('app.kuaireport.analysis.col.documentCode', { defaultValue: '单据编号' })}>
-                    <Typography.Text copyable={{ text: String(currentTiming.document_code ?? '') }}>
-                      {currentTiming.document_code ?? '-'}
-                    </Typography.Text>
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('app.kuaireport.analysis.col.totalHours', { defaultValue: '总耗时（小时）' })}>
-                    {currentTiming.total_duration_hours?.toFixed(2) ?? '-'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('app.kuaireport.analysis.col.totalSeconds', { defaultValue: '总耗时（秒）' })}>
-                    {currentTiming.total_duration_seconds ?? '-'}
-                  </Descriptions.Item>
-                </Descriptions>
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t('app.kuaireport.analysis.col.lifecycle', { defaultValue: '生命周期' })}>
-                <UniLifecycle {...getDocumentTimingLifecycle(currentTiming)} showCircleTooltip={false} />
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t('app.kuaireport.analysis.timing.nodeDetail', { defaultValue: '节点明细' })}>
-                {(currentTiming.nodes || []).length ? (
-                  <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
-                    <Table
-                      columns={nodeColumns}
-                      dataSource={currentTiming.nodes || []}
-                      rowKey={(r) => String(r.id ?? r.node_code ?? Math.random())}
-                      pagination={false}
-                      size="small"
-                    />
-                  </div>
-                ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaireport.analysis.timing.noNodes', { defaultValue: '暂无节点明细' })} />
-                )}
-              </DetailDrawerSection>
-              <DetailDrawerSection title={t('app.kuaireport.analysis.timing.timeline', { defaultValue: '节点时间线' })} marginBottom={0}>
-                {(currentTiming.nodes || []).length ? (
-                  <Timeline
-                    items={(currentTiming.nodes || []).slice(0, 12).map((n, i) => ({
-                      key: String(n.id ?? i),
-                      color: 'blue',
-                      children: (
-                        <>
-                          {n.node_name || n.node_code || t('app.kuaireport.analysis.col.node', { defaultValue: '节点' })}
-                          {' '}
-                          {n.end_time || n.start_time ? `${n.start_time ?? ''} → ${n.end_time ?? ''}` : '-'}
-                          {n.operator_name ? ` - ${n.operator_name}` : ''}
-                        </>
-                      ),
-                    }))}
-                  />
-                ) : (
-                  <Typography.Text type="secondary">
-                    {t('app.kuaireport.analysis.timing.noTimeline', { defaultValue: '暂无节点级时间线' })}
-                  </Typography.Text>
-                )}
-              </DetailDrawerSection>
-            </>
-          ) : null
-        }
+        record={currentTiming}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const key = detailRetryRef.current;
+          if (key) void loadDetail(key.document_type, key.document_id);
+        }}
       />
     </ListPageTemplate>
   );

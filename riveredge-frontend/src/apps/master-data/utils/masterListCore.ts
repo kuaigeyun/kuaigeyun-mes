@@ -18,6 +18,7 @@ export {
   GLOBAL_DOC_LIST_FIELD_RANK,
   GLOBAL_DOC_LIST_FIELD_RANK as MASTER_DATA_LIST_FIELD_RANK,
   GLOBAL_DOC_LIST_FIELD_RANK as SALES_DOC_LIST_FIELD_RANK,
+  MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
 } from '../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 export function normalizeMasterListResponse<T>(

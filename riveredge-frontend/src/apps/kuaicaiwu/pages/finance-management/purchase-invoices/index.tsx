@@ -4,7 +4,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Alert, Spin, Table, Empty, Form } from 'antd';
+import { App, Button, Col, Modal, Typography, Alert, Spin, Table, Empty, Form } from 'antd';
 import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { apiRequest, formatApiErrorDetail } from '../../../../../services/api';
@@ -21,6 +21,8 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { financeColFull, financeColHalf, financeFormGridProps } from '../../../utils/financeFormLayout';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
@@ -37,9 +39,9 @@ import {
   ProFormDatePicker,
   ProFormDigit,
   ProFormMoney,
-  ProFormRadio,
   ProFormSelect,
   ProFormSwitch,
+  ProFormItem,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
@@ -1070,32 +1072,37 @@ const PurchaseInvoiceList: React.FC = () => {
                 submitter={false}
                 onFinish={handlePullCreateSubmit}
                 layout="vertical"
+                {...financeFormGridProps}
               >
-                <ProFormText name="source_code" label={t('app.kuaicaiwu.common.sourceDoc')} readonly />
-                <ProFormText name="supplier_name" label={t('app.kuaicaiwu.common.supplier')} readonly />
+                <ProFormText name="source_code" label={t('app.kuaicaiwu.common.sourceDoc')} readonly colProps={financeColHalf} />
+                <ProFormText name="supplier_name" label={t('app.kuaicaiwu.common.supplier')} readonly colProps={financeColHalf} />
                 <ProFormText
                   name="invoice_number"
                   label={t(`${P}.col.invoiceNumber`)}
                   rules={[{ required: true, message: t(`${P}.form.invoiceNumberRequired`) }]}
                   placeholder={t(`${P}.form.invoiceNumberPlaceholder`)}
+                  colProps={financeColHalf}
                 />
                 <ProFormSelect
                   name="invoice_type"
                   label={t(`${P}.col.invoiceType`)}
                   options={invoiceTypeOptions}
                   rules={[{ required: true, message: t(`${P}.form.invoiceTypeRequired`) }]}
+                  colProps={financeColHalf}
                 />
                 <ProFormDatePicker
                   name="invoice_date"
                   label={t('app.kuaicaiwu.common.invoiceDate')}
                   rules={[{ required: true, message: t(`${P}.form.invoiceDateRequired`) }]}
                   fieldProps={{ style: { width: '100%' } }}
+                  colProps={financeColHalf}
                 />
                 <ProFormSelect
                   name="tax_rate"
                   label={t(`${P}.col.taxRate`)}
                   options={TAX_RATE_OPTIONS}
                   rules={[{ required: true, message: t(`${P}.form.taxRateRequired`) }]}
+                  colProps={financeColHalf}
                   fieldProps={{
                     onChange: (nextRate: number) => {
                       const prevRate = pullTaxRateRef.current;
@@ -1113,16 +1120,18 @@ const PurchaseInvoiceList: React.FC = () => {
                     },
                   }}
                 />
-                <ProFormRadio.Group
+                <ProFormItem
                   name="amount_input_mode"
                   label={t(`${P}.form.amountInputMode`)}
-                  options={[
-                    { label: t(`${P}.form.amountModeExcl`), value: 'tax_exclusive' },
-                    { label: t(`${P}.form.amountModeIncl`), value: 'tax_inclusive' },
-                  ]}
-                  fieldProps={{
-                    onChange: (e) => {
-                      const nextMode = e.target.value as InvoiceAmountInputMode;
+                  colProps={financeColHalf}
+                >
+                  <ThemedSegmented
+                    options={[
+                      { label: t(`${P}.form.amountModeExcl`), value: 'tax_exclusive' },
+                      { label: t(`${P}.form.amountModeIncl`), value: 'tax_inclusive' },
+                    ]}
+                    onChange={(next) => {
+                      const nextMode = next as InvoiceAmountInputMode;
                       const prevMode = pullAmountModeRef.current;
                       const taxRate = Number(pullForm.getFieldValue('tax_rate')) || 13;
                       const current = Number(pullForm.getFieldValue('invoice_amount')) || 0;
@@ -1133,9 +1142,9 @@ const PurchaseInvoiceList: React.FC = () => {
                         );
                       }
                       pullAmountModeRef.current = nextMode;
-                    },
-                  }}
-                />
+                    }}
+                  />
+                </ProFormItem>
                 <ProFormDigit
                   name="invoice_amount"
                   label={
@@ -1146,9 +1155,10 @@ const PurchaseInvoiceList: React.FC = () => {
                   min={0}
                   rules={[{ required: true, message: t(`${P}.amountRequired`) }]}
                   extra={pullAmountCounterpartHint || undefined}
+                  colProps={financeColHalf}
                   fieldProps={{ precision: 2, style: { width: '100%' } }}
                 />
-                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} />
+                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 2 }} colProps={financeColFull} />
                 {canConcurrentPayment ? (
                   <>
                     <ProFormSwitch
@@ -1157,6 +1167,7 @@ const PurchaseInvoiceList: React.FC = () => {
                       extra={t(`${P}.concurrentPaymentHint`, {
                         max: Number(pullPreviewData.remaining_settle_amount || 0).toFixed(2),
                       })}
+                      colProps={financeColFull}
                     />
                     {concurrentPaymentEnabled ? (
                       <>
@@ -1165,18 +1176,21 @@ const PurchaseInvoiceList: React.FC = () => {
                           label={t(`${P}.concurrentPaymentAmount`)}
                           min={0.01}
                           rules={[{ required: true, message: t(`${P}.concurrentPaymentAmountRequired`) }]}
+                          colProps={financeColHalf}
                         />
                         <ProFormDatePicker
                           name="settle_date"
                           label={t('app.kuaicaiwu.payment.col.paymentDate')}
                           rules={[{ required: true }]}
                           fieldProps={{ style: { width: '100%' } }}
+                          colProps={financeColHalf}
                         />
                         <ProFormSelect
                           name="payment_method"
                           label={t('app.kuaicaiwu.payment.col.paymentMethod')}
                           options={paymentMethodOptions}
                           rules={[{ required: true, message: t('app.kuaicaiwu.payment.selectPaymentMethod') }]}
+                          colProps={financeColHalf}
                         />
                         <LedgerAccountFormFields
                           accounts={bankAccounts}
@@ -1187,6 +1201,7 @@ const PurchaseInvoiceList: React.FC = () => {
                           name="settle_notes"
                           label={t(`${P}.concurrentPaymentNotes`)}
                           fieldProps={{ rows: 2 }}
+                          colProps={financeColFull}
                         />
                       </>
                     ) : null}
@@ -1204,11 +1219,12 @@ const PurchaseInvoiceList: React.FC = () => {
         open={createModalVisible}
         onOpenChange={setCreateModalVisible}
         onFinish={handleRegister}
-        width={520}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        {...financeFormGridProps}
       >
-        <div style={{ marginBottom: 16 }}>
-          <p style={{ color: '#8c8c8c', fontSize: '13px' }}>{t(`${P}.createHint`)}</p>
-        </div>
+        <Col span={24}>
+          <p style={{ color: '#8c8c8c', fontSize: 13, marginBottom: 8 }}>{t(`${P}.createHint`)}</p>
+        </Col>
         <ProFormSelect
           name="supplier_id"
           label={t('app.kuaicaiwu.common.supplier')}
@@ -1216,12 +1232,14 @@ const PurchaseInvoiceList: React.FC = () => {
           rules={[{ required: true, message: t('app.kuaicaiwu.common.selectSupplier') }]}
           placeholder={t('app.kuaicaiwu.common.selectSupplier')}
           showSearch
+          colProps={financeColHalf}
         />
         <ProFormText
           name="invoice_number"
           label={t(`${P}.col.invoiceNumber`)}
           rules={[{ required: true, message: t(`${P}.form.invoiceNumberRequired`) }]}
           placeholder={t(`${P}.form.invoiceNumberPlaceholder`)}
+          colProps={financeColHalf}
         />
         <ProFormSelect
           name="invoice_type"
@@ -1229,6 +1247,7 @@ const PurchaseInvoiceList: React.FC = () => {
           options={invoiceTypeOptions}
           initialValue="增值税专用发票"
           rules={[{ required: true }]}
+          colProps={financeColHalf}
         />
         <ProFormDatePicker
           name="invoice_date"
@@ -1236,6 +1255,7 @@ const PurchaseInvoiceList: React.FC = () => {
           rules={[{ required: true }]}
           initialValue={dayjs()}
           fieldProps={{ style: { width: '100%' } }}
+          colProps={financeColHalf}
         />
         <ProFormDigit
           name="tax_rate"
@@ -1245,6 +1265,7 @@ const PurchaseInvoiceList: React.FC = () => {
           max={100}
           rules={[{ required: true }]}
           fieldProps={{ style: { width: '100%' } }}
+          colProps={financeColHalf}
         />
         <ProFormDigit
           name="invoice_amount"
@@ -1252,8 +1273,9 @@ const PurchaseInvoiceList: React.FC = () => {
           min={0}
           rules={[{ required: true, message: t(`${P}.form.exTaxAmountRequired`) }]}
           fieldProps={{ precision: 2, style: { width: '100%' } }}
+          colProps={financeColHalf}
         />
-        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
+        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} colProps={financeColFull} />
         <DocumentAttachmentsField category="purchase_invoice_attachments" />
       </ModalForm>
     </ListPageTemplate>

@@ -11,13 +11,12 @@ import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormSwitch, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Table, Input, Descriptions, theme } from 'antd';
+import { App, Popconfirm, Button, Space, Drawer, Modal, Table, Input, theme } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemYesNoTag } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, TranslationOutlined, SettingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import {
-  flushDrawerOpen,
   ListPageTemplate,
   FormModalTemplate,
   MODAL_CONFIG,
@@ -26,7 +25,9 @@ import {
   getViewportHeightExpr,
   getDrawerFloatingWrapperStyle,
 } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import {
   getLanguageList,
   getLanguageByUuid,
@@ -58,7 +59,7 @@ const LanguageListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
-  const languageDetailReqRef = useRef(0);
+  const detailRetryUuidRef = useRef<string | null>(null);
 
   const languageDetailDescColumns = useMemo<ProDescriptionsItemProps<Language>[]>(
     () => [
@@ -86,11 +87,7 @@ const LanguageListPage: React.FC = () => {
       {
         title: t('field.language.isDefault'),
         dataIndex: 'is_default',
-        render: (_: unknown, entity: Language) => (
-          <Tag color={entity?.is_default ? 'processing' : 'default'}>
-            {entity?.is_default ? t('field.role.yes') : t('field.role.no')}
-          </Tag>
-        ),
+        render: (_: unknown, entity: Language) => renderSystemYesNoTag(t, entity?.is_default),
       },
       {
         title: t('field.language.sortOrder'),
@@ -99,11 +96,8 @@ const LanguageListPage: React.FC = () => {
       {
         title: t('field.role.status'),
         dataIndex: 'is_active',
-        render: (_: unknown, entity: Language) => (
-          <Tag color={entity?.is_active ? 'success' : 'default'}>
-            {entity?.is_active ? t('field.role.enabled') : t('field.role.disabled')}
-          </Tag>
-        ),
+        render: (_: unknown, entity: Language) =>
+          renderSystemActiveTag(t, entity?.is_active, 'field.role.enabled', 'field.role.disabled'),
       },
       {
         title: t('common.createdAt'),
@@ -132,6 +126,7 @@ const LanguageListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<Language | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   
   // 翻译管理 Drawer 状态
   const [translationDrawerVisible, setTranslationDrawerVisible] = useState(false);
@@ -205,26 +200,26 @@ const LanguageListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: Language) => {
-    const req = ++languageDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getLanguageByUuid(record.uuid);
-      if (languageDetailReqRef.current !== req) return;
+      const detail = await getLanguageByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (languageDetailReqRef.current === req) {
-        messageApi.error(error.message || t('common.loadFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('common.loadFailed')));
     } finally {
-      if (languageDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = (record: Language) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -771,20 +766,26 @@ const LanguageListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('field.language.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
-          detailData ? (
-            <Descriptions
-              column={1}
-              items={detailDrawerDescriptionItems(languageDetailDescColumns, detailData)}
-            />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryUuidRef.current;
+          if (id) void loadDetail(id);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detailData), () => {
+          if (!detailData) return;
+          void handleEdit(detailData);
+        })}
+        detail={detailData}
+        detailColumns={languageDetailDescColumns}
       />
 
       {/* 翻译管理 Drawer */}

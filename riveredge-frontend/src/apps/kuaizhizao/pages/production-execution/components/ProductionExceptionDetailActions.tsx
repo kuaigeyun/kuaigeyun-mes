@@ -1,8 +1,10 @@
 import React from 'react';
 import { Button, Space } from 'antd';
 import type { TFunction } from 'i18next';
+import type { NavigateFunction } from 'react-router-dom';
 import { SwapOutlined } from '@ant-design/icons';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { buildInspectionDetailPath } from '../../quality-management/components/inspectionTemplateUtils';
 import type {
   DeliveryDelayExceptionDetailRecord,
   MaterialShortageExceptionDetailRecord,
@@ -146,19 +148,15 @@ export function renderDeliveryDelayExceptionActionGroup(props: {
   return wrapActionButtons(buildDeliveryDelayExceptionActionButtons(props));
 }
 
-export function buildQualityExceptionActionButtons({
+export function buildQualityExceptionHandleButtons({
   record,
   t,
   onAction,
-  onStart8D,
-  canCreate8D,
   keyPrefix,
 }: {
   record: QualityExceptionDetailRecord;
   t: TFunction;
   onAction: ActionHandler;
-  onStart8D: () => void;
-  canCreate8D: boolean;
   keyPrefix: string;
 }): React.ReactNode[] {
   const buttons: React.ReactNode[] = [];
@@ -214,20 +212,126 @@ export function buildQualityExceptionActionButtons({
     );
   }
 
-  if (canCreate8D) {
-    buttons.push(
-      <Button
-        key={`${keyPrefix}-start8d`}
-        {...rowActionKind('create')}
-        {...rowActionLabelKeep()}
-        onClick={onStart8D}
-      >
-        {t(`${Q}.action.start8D`)}
-      </Button>,
-    );
-  }
-
   return buttons;
+}
+
+export function buildQualityException8DButton({
+  t,
+  onStart8D,
+  canCreate8D,
+  keyPrefix,
+}: {
+  t: TFunction;
+  onStart8D: () => void;
+  canCreate8D: boolean;
+  keyPrefix: string;
+}): React.ReactNode[] {
+  if (!canCreate8D) return [];
+  return [
+    <Button
+      key={`${keyPrefix}-start8d`}
+      {...rowActionKind('create')}
+      {...rowActionLabelKeep()}
+      onClick={onStart8D}
+    >
+      {t(`${Q}.action.start8D`)}
+    </Button>,
+  ];
+}
+
+export function buildQualityExceptionInspectButtons({
+  record,
+  t,
+  navigate,
+  onCloseDrawer,
+  keyPrefix,
+}: {
+  record: QualityExceptionDetailRecord;
+  t: TFunction;
+  navigate: NavigateFunction;
+  onCloseDrawer: () => void;
+  keyPrefix: string;
+}): React.ReactNode[] {
+  if (!record.inspection_record_id) return [];
+  return [
+    <Button
+      key={`${keyPrefix}-source-inspection`}
+      onClick={() => {
+        const path = buildInspectionDetailPath(
+          record.inspection_source_type,
+          record.inspection_record_id,
+        );
+        if (path) {
+          onCloseDrawer();
+          navigate(path);
+        }
+      }}
+    >
+      {t(`${Q}.action.viewSourceInspection`)}
+    </Button>,
+    <Button
+      key={`${keyPrefix}-nonconforming-ledger`}
+      onClick={() => {
+        onCloseDrawer();
+        const q = new URLSearchParams();
+        if (record.inspection_source_type === 'incoming_inspection') {
+          q.set('incoming_inspection_id', String(record.inspection_record_id));
+        } else if (record.inspection_source_type === 'process_inspection') {
+          q.set('process_inspection_id', String(record.inspection_record_id));
+        } else if (record.inspection_source_type === 'finished_goods_inspection') {
+          q.set('finished_goods_inspection_id', String(record.inspection_record_id));
+        }
+        navigate(`/apps/kuaizhizao/quality-management/nonconforming-ledger?${q.toString()}`);
+      }}
+    >
+      {t(`${Q}.action.viewNonconformingLedger`)}
+    </Button>,
+  ];
+}
+
+export function buildQualityExceptionActionButtons({
+  record,
+  t,
+  onAction,
+  onStart8D,
+  canCreate8D,
+  keyPrefix,
+}: {
+  record: QualityExceptionDetailRecord;
+  t: TFunction;
+  onAction: ActionHandler;
+  onStart8D: () => void;
+  canCreate8D: boolean;
+  keyPrefix: string;
+}): React.ReactNode[] {
+  return [
+    ...buildQualityExceptionHandleButtons({ record, t, onAction, keyPrefix }),
+    ...buildQualityException8DButton({ t, onStart8D, canCreate8D, keyPrefix }),
+  ];
+}
+
+export function renderQualityExceptionHandleGroup(props: {
+  record: QualityExceptionDetailRecord;
+  t: TFunction;
+  onAction: ActionHandler;
+  keyPrefix: string;
+}): React.ReactNode | null {
+  return wrapActionButtons(buildQualityExceptionHandleButtons(props));
+}
+
+export function renderQualityExceptionWorkbenchExtra(props: {
+  record: QualityExceptionDetailRecord;
+  t: TFunction;
+  navigate: NavigateFunction;
+  onCloseDrawer: () => void;
+  onStart8D: () => void;
+  canCreate8D: boolean;
+  keyPrefix: string;
+}): React.ReactNode | null {
+  return wrapActionButtons([
+    ...buildQualityExceptionInspectButtons(props),
+    ...buildQualityException8DButton(props),
+  ]);
 }
 
 export function renderQualityExceptionActionGroup(props: {
@@ -249,14 +353,17 @@ export function hasDeliveryDelayExceptionActions(record: DeliveryDelayExceptionD
   return record.status === 'pending';
 }
 
-export function hasQualityExceptionActions(
-  record: QualityExceptionDetailRecord,
-  canCreate8D: boolean,
-): boolean {
+export function hasQualityExceptionHandleActions(record: QualityExceptionDetailRecord): boolean {
   return (
     record.status === 'pending'
     || record.status === 'investigating'
     || record.status === 'correcting'
-    || canCreate8D
   );
+}
+
+export function hasQualityExceptionActions(
+  record: QualityExceptionDetailRecord,
+  canCreate8D: boolean,
+): boolean {
+  return hasQualityExceptionHandleActions(record) || canCreate8D;
 }

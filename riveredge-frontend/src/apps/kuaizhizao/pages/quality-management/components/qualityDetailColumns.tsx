@@ -1,15 +1,13 @@
 /**
- * 检验四单据详情抽屉：与来料检验一致的字段顺序片段
+ * 检验四单据详情抽屉：与来料检验一致的字段顺序片段。
+ * 本单号 / 关联单号不要 dummy render，交给 detailDrawerDescriptionItems 挂链。
+ * 单据 status 由协作区生命周期展示，基本信息只保留质量结果类徽章。
  */
 
-import React from 'react';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import type { TFunction } from 'i18next';
-import { Typography } from 'antd';
-import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
 import {
-  renderQualityDocStatusTag,
   renderQualityQualityStatusTag,
   renderQualityResultTag,
 } from './qualityMeta';
@@ -20,11 +18,6 @@ export function buildQualityInspectionDetailCodeColumn<T extends Record<string, 
   return {
     title: t('app.kuaizhizao.quality.common.columns.inspectionCode'),
     dataIndex: 'inspection_code',
-    render: (_, r) => (
-      <Typography.Text copyable={{ text: String(r.inspection_code ?? '') }}>
-        {String(r.inspection_code ?? '-') }
-      </Typography.Text>
-    ),
   };
 }
 
@@ -32,15 +25,7 @@ export function buildQualityInspectionDetailMaterialColumns<T extends Record<str
   t: TFunction,
 ): ProDescriptionsItemProps<T>[] {
   return [
-    {
-      title: t('app.kuaizhizao.quality.common.columns.materialCode'),
-      dataIndex: 'material_code',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.material_code ?? '') }}>
-          {String(r.material_code ?? '-')}
-        </Typography.Text>
-      ),
-    },
+    { title: t('app.kuaizhizao.quality.common.columns.materialCode'), dataIndex: 'material_code' },
     { title: t('app.kuaizhizao.quality.common.columns.materialName'), dataIndex: 'material_name' },
   ];
 }
@@ -68,11 +53,6 @@ export function buildQualityInspectionDetailQuantityStatusColumns<T extends Reco
       render: (_, r) => renderQtyWithUnit(r.unqualified_quantity, r),
     },
     {
-      title: t('app.kuaizhizao.quality.common.columns.inspectionStatus'),
-      dataIndex: 'status',
-      render: (_, r) => renderQualityDocStatusTag(t, String(r.status ?? '')),
-    },
-    {
       title: t('app.kuaizhizao.quality.common.columns.qualityStatus'),
       dataIndex: 'quality_status',
       render: (_, r) => renderQualityQualityStatusTag(t, String(r.quality_status ?? '')),
@@ -95,16 +75,21 @@ export function buildQualityInspectionDetailPeopleColumns<T extends Record<strin
       dataIndex: 'inspection_time',
       valueType: 'dateTime',
     },
-    {
-      title: t('app.kuaizhizao.quality.common.columns.reviewer'),
-      dataIndex: 'reviewer_name',
-      render: (val) => val || '-',
-    },
+    { title: t('app.kuaizhizao.quality.common.columns.reviewer'), dataIndex: 'reviewer_name' },
     {
       title: t('app.kuaizhizao.quality.common.columns.reviewTime'),
       dataIndex: 'review_time',
       valueType: 'dateTime',
-      render: (val) => formatDateTimeBySiteSetting(val),
     },
   ];
+}
+
+export function buildQualityInspectionDetailNotesColumn<T extends Record<string, unknown>>(
+  t: TFunction,
+): ProDescriptionsItemProps<T> {
+  return {
+    title: t('app.kuaizhizao.quality.common.columns.inspectionNotes'),
+    dataIndex: 'notes',
+    span: 2,
+  };
 }

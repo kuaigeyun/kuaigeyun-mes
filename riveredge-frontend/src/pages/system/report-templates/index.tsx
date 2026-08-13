@@ -19,12 +19,14 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Descriptions } from 'antd';
+import { App, Button, Space } from 'antd';
 import { PlusOutlined, HighlightOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../components/uni-table';
-import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
+import { SystemMasterDetailDrawer } from '../shared/systemMasterDetailDrawer';
+import { getApiErrorMessage } from '../../../utils/errorHandler';
+import { renderSystemStatusTag, renderSystemYesNoTag } from '../utils/systemListPresentation';
 import { rowActionKind } from '../../../components/uni-action';
 import { apiRequest } from '../../../services/api';
 import { fetchAllListItems } from '../../../utils/fetchAllListPages';
@@ -57,13 +59,13 @@ const ReportTemplatesPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
-  const reportTemplateDetailReqRef = useRef(0);
   const [modalVisible, setModalVisible] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentId, setCurrentId] = useState<number | null>(null);
   const [detailData, setDetailData] = useState<ReportTemplate | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const formRef = useRef<ProFormInstance>(null);
 
   const reportDetailDescColumns = useMemo<ProDescriptionsItemProps<ReportTemplate>[]>(
@@ -109,18 +111,13 @@ const ReportTemplatesPage: React.FC = () => {
           const v = record.status;
           if (!v) return '—';
           const item = map[v] ?? { text: v, color: 'default' };
-          return <Tag color={item.color}>{item.text}</Tag>;
+          return renderSystemStatusTag(item.text, item.color);
         },
       },
       {
         title: t('pages.system.reportTemplates.columnIsDefault'),
         dataIndex: 'is_default',
-        render: (_: unknown, record: ReportTemplate) =>
-          record.is_default ? (
-            <Tag color="green">{t('pages.system.reportTemplates.yes')}</Tag>
-          ) : (
-            <Tag>{t('pages.system.reportTemplates.no')}</Tag>
-          ),
+        render: (_: unknown, record: ReportTemplate) => renderSystemYesNoTag(t, record.is_default),
       },
       { title: t('pages.system.reportTemplates.labelDescription'), dataIndex: 'description' },
       { title: t('pages.system.reportTemplates.columnCreatedBy'), dataIndex: 'created_by_name' },
@@ -164,31 +161,30 @@ const ReportTemplatesPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleDetail = async (keys: React.Key[]) => {
-    if (keys.length !== 1) return;
-    const id = Number(keys[0]);
-    const req = ++reportTemplateDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setCurrentId(id);
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (id: number) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
       const data = await apiRequest(`/core/reports/templates/${id}`, {
         method: 'GET',
       });
-      if (reportTemplateDetailReqRef.current !== req) return;
       setDetailData(data as ReportTemplate);
-    } catch {
-      if (reportTemplateDetailReqRef.current === req) {
-        messageApi.error(t('pages.system.reportTemplates.loadFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.reportTemplates.loadFailed')));
     } finally {
-      if (reportTemplateDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleDetail = async (keys: React.Key[]) => {
+    if (keys.length !== 1) return;
+    const id = Number(keys[0]);
+    setCurrentId(id);
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(id);
   };
 
   /**
@@ -292,9 +288,7 @@ const ReportTemplatesPage: React.FC = () => {
       title: t('pages.system.reportTemplates.columnIsDefault'),
       dataIndex: 'is_default',
       width: 100,
-      render: (_, record) => (
-        record.is_default ? <Tag color="green">{t('pages.system.reportTemplates.yes')}</Tag> : <Tag>{t('pages.system.reportTemplates.no')}</Tag>
-      ),
+      render: (_, record) => renderSystemYesNoTag(t, record.is_default),
     },
     {
       title: t('pages.system.reportTemplates.columnCreatedBy'),
@@ -473,24 +467,22 @@ const ReportTemplatesPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 详情Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={`${t('pages.system.reportTemplates.detailTitle')} - ${currentId || ''}`}
         open={drawerVisible}
         onClose={() => {
           setDrawerVisible(false);
           setDetailData(null);
           setCurrentId(null);
+          setDetailError(null);
         }}
+        detail={detailData}
+        detailColumns={reportDetailDescColumns}
         loading={detailLoading}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
-        basic={
-          detailData ? (
-            <Descriptions
-              column={1}
-              items={detailDrawerDescriptionItems(reportDetailDescColumns, detailData)}
-            />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          if (currentId != null) void loadDetail(currentId);
+        }}
       />
     </ListPageTemplate>
   );

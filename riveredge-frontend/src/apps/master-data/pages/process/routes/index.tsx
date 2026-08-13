@@ -8,20 +8,21 @@ import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Descriptions } from 'antd';
+import { App, Popconfirm, Button, Tag, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { downloadFile } from '../../../../../utils';
 import { batchImport } from '../../../../../utils/batchOperations';
-import { ListPageTemplate, flushDrawerOpen } from '../../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { ProcessMasterDetailDrawer } from '../shared/processMasterDetailDrawer';
 import { RouteFormModal } from '../../../components/RouteFormModal';
 
 import { processRouteApi } from '../../../services/process';
 import type { ProcessRoute } from '../../../types/process';
-import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import {
   MASTER_DATA_LIST_FIELD_RANK,
   buildMasterCrudActiveValueEnum,
@@ -42,10 +43,7 @@ import {
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
-import {
-  CustomFieldsDetailSection,
-  hasCustomFieldsDetailContent,
-} from '../../../../../components/custom-fields';
+import { renderMasterActiveTag } from '../../../utils/masterListPresentation';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 
 /**
@@ -66,11 +64,11 @@ const ProcessRoutesPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [processRouteDetail, setProcessRouteDetail] = useState<ProcessRoute | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
-
-  const routeDetailReqRef = useRef(0);
 
   const {
     customFields,
@@ -121,14 +119,13 @@ const ProcessRoutesPage: React.FC = () => {
       {
         title: t('field.route.isActive'),
         dataIndex: 'is_active',
-        render: (_: unknown, record: ProcessRoute) => {
-          const isActive = record?.is_active ?? (record as any)?.isActive;
-          return (
-            <Tag color={isActive ? 'success' : 'default'} variant="solid">
-              {isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
-            </Tag>
-          );
-        },
+        render: (_: unknown, record: ProcessRoute) =>
+          renderMasterActiveTag(
+            t,
+            record?.is_active ?? (record as any)?.isActive,
+            'app.master-data.plants.enabled',
+            'app.master-data.plants.disabled',
+          ),
       },
       { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
       { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
@@ -439,37 +436,35 @@ const ProcessRoutesPage: React.FC = () => {
   /**
    * 处理打开详情
    */
-  const handleOpenDetail = async (record: ProcessRoute) => {
-    const req = ++routeDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setProcessRouteDetail(record);
-      setDrawerVisible(true);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await processRouteApi.get(record.uuid);
-      if (routeDetailReqRef.current !== req) return;
+      const detail = await processRouteApi.get(uuid);
       setProcessRouteDetail(detail);
       if (detail.id != null) {
         await loadFieldValuesForDetail(detail.id);
       }
-    } catch (error: any) {
-      if (routeDetailReqRef.current === req) {
-        messageApi.error(error.message || t('app.master-data.routes.getDetailFailed'));
-      }
+    } catch (error) {
+      setProcessRouteDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.master-data.routes.getDetailFailed')));
     } finally {
-      if (routeDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
   };
 
-  /**
-   * 处理关闭详情
-   */
+  const handleOpenDetail = (record: ProcessRoute) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setProcessRouteDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
+  };
+
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setProcessRouteDetail(null);
+    setDetailError(null);
     resetDetailFieldValues();
   };
 
@@ -526,7 +521,6 @@ const ProcessRoutesPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 200,
       fixed: 'right',
       render: (_: any, record: ProcessRoute) => (
         <Space>
@@ -644,26 +638,25 @@ const ProcessRoutesPage: React.FC = () => {
         onExport={handleExport}
       />
 
-      <UniDetail
+      <ProcessMasterDetailDrawer
         title={t('app.master-data.routes.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
-          processRouteDetail ? (
-            <Descriptions
-              column={1}
-              items={detailDrawerDescriptionItems(processRouteDetailColumns, processRouteDetail)}
-            />
-          ) : null
-        }
-        linesTitle={t('app.master-data.customFields')}
-        lines={
-          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
-            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        detail={processRouteDetail}
+        detailColumns={processRouteDetailColumns}
+        customFields={customFields}
+        customFieldValues={customFieldValues}
+        extra={buildDetailDrawerEditExtra(t, Boolean(processRouteDetail), () => {
+          if (!processRouteDetail) return;
+          setEditUuid(processRouteDetail.uuid);
+          setModalVisible(true);
+        })}
       />
 
       <RouteFormModal

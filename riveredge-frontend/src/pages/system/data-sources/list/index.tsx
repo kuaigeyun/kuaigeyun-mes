@@ -9,14 +9,15 @@ import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDependency, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Tag, Space, Badge, Typography, Alert, Tooltip, Card, Button, theme, Descriptions } from 'antd';
+import { App, Popconfirm, Tag, Space, Badge, Typography, Alert, Tooltip, Card, Button, theme } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { DeleteOutlined, EyeOutlined, DatabaseOutlined, ThunderboltOutlined, EditOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { rowActionKind } from '../../../../components/uni-action';
-import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { DetailDrawerActions, ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import DataSourceConnectorMarket from '../DataSourceConnectorMarket';
 import DatabaseBrandIcon from '../DatabaseBrandIcon';
 import type { ConnectorDefinition } from '../connectors';
@@ -161,7 +162,6 @@ const DataSourceListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
-  const dataSourceDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
@@ -173,6 +173,8 @@ const DataSourceListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<DataSourceDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   
   const [testingConnection, setTestingConnection] = useState(false);
   const [ensuringDefault, setEnsuringDefault] = useState(false);
@@ -251,29 +253,29 @@ const DataSourceListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: DataSource) => {
-    const req = ++dataSourceDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
       const [detail, dsList] = await Promise.all([
-        getDataSourceByUuid(record.uuid),
-        getDatasetList({ data_source_uuid: record.uuid, page_size: 50 }),
+        getDataSourceByUuid(uuid),
+        getDatasetList({ data_source_uuid: uuid, page_size: 50 }),
       ]);
-      if (dataSourceDetailReqRef.current !== req) return;
       setDetailData({ ...detail, related_datasets: dsList.items } as DataSourceDetail);
-    } catch (error: any) {
-      if (dataSourceDetailReqRef.current === req) {
-        messageApi.error(error.message || t('pages.system.dataSources.getDetailFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.dataSources.getDetailFailed')));
     } finally {
-      if (dataSourceDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = async (record: DataSource) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -879,11 +881,8 @@ const DataSourceListPage: React.FC = () => {
     {
       title: t('pages.system.dataSources.detailColumnActive'),
       dataIndex: 'is_active',
-      render: (value: boolean) => (
-        <Tag color={value ? 'success' : 'default'}>
-          {value ? t('pages.system.dataSources.enabled') : t('pages.system.dataSources.disabled')}
-        </Tag>
-      ),
+      render: (value: boolean) =>
+        renderSystemActiveTag(t, value, 'pages.system.dataSources.enabled', 'pages.system.dataSources.disabled'),
     },
     { title: t('pages.system.dataSources.detailColumnLastConnected'), dataIndex: 'last_connected_at', valueType: 'dateTime' },
     {
@@ -1449,40 +1448,47 @@ const DataSourceListPage: React.FC = () => {
       />
 
       {/* 查看详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('pages.system.dataSources.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
+        detail={detailData}
+        detailColumns={detailColumns}
         loading={detailLoading}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
-        basic={
-          detailData ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns as any, detailData)} />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
         extra={
-          detailData && (
-            <Space>
-              {detailData.is_editable !== false && (
-                <Button type="primary" icon={<EditOutlined />} onClick={() => { setDrawerVisible(false); handleEdit(detailData); }}>
-                  {t('pages.system.dataSources.edit')}
-                </Button>
-              )}
-              <Button icon={<ThunderboltOutlined />} onClick={() => handleTestConnection(detailData)}>
-                {t('pages.system.dataSources.testConnection')}
-              </Button>
-              {detailData.is_editable !== false && (
-                <Popconfirm
-                  title={t('pages.system.dataSources.deleteConfirmTitle')}
-                  onConfirm={() => { handleDelete(detailData); setDrawerVisible(false); }}
-                  okText={t('common.confirm')}
-                  cancelText={t('common.cancel')}
-                >
-                  <Button danger icon={<DeleteOutlined />}>{t('pages.system.dataSources.delete')}</Button>
-                </Popconfirm>
-              )}
-            </Space>
-          )
+          detailData ? (
+            <DetailDrawerActions
+              items={[
+                {
+                  key: 'test',
+                  visible: true,
+                  render: (
+                    <Button icon={<ThunderboltOutlined />} onClick={() => handleTestConnection(detailData)}>
+                      {t('pages.system.dataSources.testConnection')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'edit',
+                  visible: detailData.is_editable !== false,
+                  render: (
+                    <Button {...rowActionKind('update')} icon={<EditOutlined />} onClick={() => handleEdit(detailData)}>
+                      {t('pages.system.dataSources.edit')}
+                    </Button>
+                  ),
+                },
+              ]}
+            />
+          ) : null
         }
       />
     </>

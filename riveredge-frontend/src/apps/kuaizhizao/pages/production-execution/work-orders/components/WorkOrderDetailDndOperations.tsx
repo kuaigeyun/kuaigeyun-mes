@@ -29,6 +29,7 @@ export interface WorkOrderOperationsListProps {
   workOrderId?: number
   operations: any[]
   workOrderStatus?: string
+  readOnly?: boolean
   onUpdate: () => Promise<void>
   onEdit: (operation: any) => void
 }
@@ -146,6 +147,7 @@ const WorkOrderOperationsList: React.FC<WorkOrderOperationsListProps> = ({
   workOrderId,
   operations,
   workOrderStatus,
+  readOnly = false,
   onUpdate,
   onEdit,
 }) => {
@@ -250,7 +252,7 @@ const WorkOrderOperationsList: React.FC<WorkOrderOperationsListProps> = ({
     })
   }
 
-  const canEdit = workOrderStatus && ['draft', 'released'].includes(workOrderStatus)
+  const canEdit = !readOnly && workOrderStatus && ['draft', 'released'].includes(workOrderStatus)
 
   if (localOperations.length === 0) {
     return (

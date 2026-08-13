@@ -21,6 +21,8 @@ import {
   FormModalTemplate,
   MODAL_CONFIG,
 } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import { PerformanceConfigDetailDrawer } from '../shared/performanceConfigDetailDrawer';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { employeePerformanceApi } from '../../../services/performance';
@@ -37,6 +39,7 @@ import {
   getPieceRateModeOptions,
   getPieceRateModeText,
   renderActiveTag,
+  renderPerformanceTypeMarker,
 } from '../components/performanceMeta';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
@@ -59,6 +62,8 @@ const EmployeeConfigsPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detail, setDetail] = useState<EmployeePerformanceConfig | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryIdRef = useRef<number | null>(null);
 
   const calcModeOptions = useMemo(() => getCalcModeOptions(t), [t]);
   const pieceRateModeOptions = useMemo(() => getPieceRateModeOptions(t), [t]);
@@ -97,12 +102,12 @@ const EmployeeConfigsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.performance.common.columns.calcMode'),
         dataIndex: 'calc_mode',
-        render: (_, r) => getCalcModeText(t, r?.calc_mode),
+        render: (_, r) => renderPerformanceTypeMarker(getCalcModeText(t, r?.calc_mode)),
       },
       {
         title: t('app.kuaizhizao.performance.employeeConfigs.form.pieceRateMode'),
         dataIndex: 'piece_rate_mode',
-        render: (_, r) => getPieceRateModeText(t, r?.piece_rate_mode),
+        render: (_, r) => renderPerformanceTypeMarker(getPieceRateModeText(t, r?.piece_rate_mode)),
       },
       { title: t('app.kuaizhizao.performance.employeeConfigs.columns.hourlyRate'), dataIndex: 'hourly_rate' },
       { title: t('app.kuaizhizao.performance.employeeConfigs.columns.defaultPieceRate'), dataIndex: 'default_piece_rate' },
@@ -145,18 +150,31 @@ const EmployeeConfigsPage: React.FC = () => {
       messageApi.error(error?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
     }
   };
-  const handleOpenDetail = async (record: EmployeePerformanceConfig) => {
+  const loadDetail = async (id: number) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      setDrawerVisible(true);
+      setDetail(await employeePerformanceApi.getConfig(id));
+    } catch (error) {
       setDetail(null);
-      setDetailLoading(true);
-      setDetail(await employeePerformanceApi.getConfig(record.id));
-    } catch (e: any) {
-      messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
-      setDrawerVisible(false);
+      setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.performance.common.messages.loadFailed')));
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const handleOpenDetail = (record: EmployeePerformanceConfig) => {
+    detailRetryIdRef.current = record.id;
+    setDrawerVisible(true);
+    setDetail(null);
+    setDetailError(null);
+    void loadDetail(record.id);
+  };
+
+  const handleCloseDetail = () => {
+    setDrawerVisible(false);
+    setDetail(null);
+    setDetailError(null);
   };
 
   const handleModalSuccess = () => {
@@ -247,7 +265,6 @@ const EmployeeConfigsPage: React.FC = () => {
         title: t('app.kuaizhizao.performance.common.columns.actions'),
         key: 'action',
         valueType: 'option',
-        width: 160,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => (
@@ -399,14 +416,20 @@ const EmployeeConfigsPage: React.FC = () => {
         title={t('app.kuaizhizao.performance.employeeConfigs.detailTitle')}
         open={drawerVisible}
         zIndex={detailDrawerZIndex}
-        onClose={() => {
-          setDrawerVisible(false);
-          setDetail(null);
-        }}
+        onClose={handleCloseDetail}
         loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryIdRef.current;
+          if (id != null) void loadDetail(id);
+        }}
         detail={detail}
         detailColumns={detailColumns}
-        t={t}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detail), () => {
+          if (!detail) return;
+          setEditId(detail.id);
+          setModalVisible(true);
+        })}
       />
     </>
   );

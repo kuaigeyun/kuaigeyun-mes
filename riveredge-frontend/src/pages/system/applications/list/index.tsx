@@ -9,20 +9,21 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Card, Descriptions, Dropdown, Modal, Popconfirm, Space, Switch, Tag, Typography, Alert, Divider, Menu, Breadcrumb, Tooltip, message, Row, Col, Tree, Select, Table } from 'antd';
+import { App, Button, Card, Dropdown, Modal, Popconfirm, Space, Switch, Tag, Typography, Alert, Divider, Menu, Breadcrumb, Tooltip, message, Row, Col, Tree, Select, Table } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag } from '../../utils/systemListPresentation';
 import { ThemedSegmented } from '../../../../components/themed-segmented';
 import { useCurrentUser } from '../../../../hooks/useCurrentUser';
 const { Title, Paragraph, Text } = Typography;
-import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, TwoColumnLayout } from '../../../../components/layout-templates';
+import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG, TwoColumnLayout } from '../../../../components/layout-templates';
 import { ApplicationClientReleasesPanel } from './ApplicationClientReleasesPanel';
 import {
   PRO_APP_CODES,
   buildProPlaceholders,
   isPlaceholderApplication,
 } from '../proAppCatalog';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { UniTable } from '../../../../components/uni-table';
 import { UniWiki, WikiItem, WikiTreeData } from '../../../../components';
 import { theme } from 'antd';
@@ -496,12 +497,12 @@ const ApplicationListPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const editFormRef = useRef<ProFormInstance>(null);
   const proKeyFormRef = useRef<ProFormInstance>(null);
-  const applicationDetailReqRef = useRef(0);
-
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<Application | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   // 编辑状态
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingApp, setEditingApp] = useState<Application | null>(null);
@@ -699,26 +700,26 @@ const ApplicationListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: Application) => {
-    const req = ++applicationDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getApplicationByUuid(record.uuid);
-      if (applicationDetailReqRef.current !== req) return;
+      const detail = await getApplicationByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (applicationDetailReqRef.current === req) {
-        messageApi.error(error.message || t('pages.system.applications.getDetailFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.applications.getDetailFailed')));
     } finally {
-      if (applicationDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = async (record: Application) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
 
@@ -1755,40 +1756,27 @@ const ApplicationListPage: React.FC = () => {
     {
       title: t('pages.system.applications.isSystem'),
       dataIndex: 'is_system',
-      render: (dom: any) =>
-        dom ? (
-          <Tag color="purple">{t('field.customField.yes')}</Tag>
-        ) : (
-          <Tag>{t('field.customField.no')}</Tag>
-        ),
+      render: (dom: any) => renderSystemYesNoTag(t, Boolean(dom)),
     },
     {
       title: t('pages.system.applications.isDedicatedLabel'),
       dataIndex: 'is_dedicated',
-      render: (dom: any) =>
-        dom ? (
-          <Tag color="geekblue">{t('field.customField.yes')}</Tag>
-        ) : (
-          <Tag>{t('field.customField.no')}</Tag>
-        ),
+      render: (dom: any) => renderSystemYesNoTag(t, Boolean(dom)),
     },
     {
       title: t('pages.system.applications.installStatus'),
       dataIndex: 'is_installed',
-      render: (dom: any) => (
-        <Tag color={dom ? 'success' : 'default'}>
-          {dom ? t('pages.system.applications.installed') : t('pages.system.applications.notInstalled')}
-        </Tag>
-      ),
+      render: (dom: any) =>
+        renderSystemTypeMarker(
+          dom ? t('pages.system.applications.installed') : t('pages.system.applications.notInstalled'),
+          dom ? 'success' : 'default',
+        ),
     },
     {
       title: t('pages.system.applications.activeStatus'),
       dataIndex: 'is_active',
-      render: (dom: any) => (
-        <Tag color={dom ? 'success' : 'default'}>
-          {dom ? t('pages.system.applications.enabled') : t('pages.system.applications.disabled')}
-        </Tag>
-      ),
+      render: (dom: any) =>
+        renderSystemActiveTag(t, Boolean(dom), 'pages.system.applications.enabled', 'pages.system.applications.disabled'),
     },
     { title: t('pages.system.applications.sortOrder'), dataIndex: 'sort_order' },
     { title: t('pages.system.applications.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
@@ -2156,18 +2144,24 @@ const ApplicationListPage: React.FC = () => {
       </Modal>
 
       {/* 查看详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('pages.system.applications.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
+        detail={detailData}
+        detailColumns={detailColumns}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={detailData ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
-          ) : null}
-        lines={detailData?.code ? <ApplicationClientReleasesPanel appCode={detailData.code} /> : null}
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        lines={detailData?.code ? <ApplicationClientReleasesPanel appCode={detailData.code} /> : undefined}
         linesTitle={t('pages.system.applications.clientReleasesSectionTitle')}
-        linesVisible={Boolean(detailData?.code)}
       />
 
       {/* 应用设置 Modal - 使用 FormModalTemplate */}

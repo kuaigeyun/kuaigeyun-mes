@@ -8,12 +8,15 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { Alert, App, Button, Descriptions, List, Modal, Popconfirm, Space, Typography } from 'antd';
+import { Alert, App, Button, List, Modal, Popconfirm, Space, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { MasterDataDetailDrawer } from '../../shared/masterDataDetailDrawer';
 
 import {
   workCenterApi,
@@ -36,10 +39,6 @@ import { WorkCenterFormModal } from '../../../components/WorkCenterFormModal';
 import type { WorkCenter, WorkCenterCreate, Workstation } from '../../../types/factory';
 import { downloadFile } from '../../../../../utils';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
-import {
-  CustomFieldsDetailSection,
-  hasCustomFieldsDetailContent,
-} from '../../../../../components/custom-fields';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
@@ -67,6 +66,8 @@ const WorkCentersPage: React.FC = () => {
   const [editUuid, setEditUuid] = useState<string | null>(null);
 
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [workCenterDetail, setWorkCenterDetail] = useState<WorkCenter | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [workstationMap, setWorkstationMap] = useState<Record<number, Workstation>>({});
@@ -138,18 +139,27 @@ const WorkCentersPage: React.FC = () => {
     setModalVisible(true);
   };
 
-  const handleOpenDetail = async (record: WorkCenter) => {
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      setDrawerVisible(true);
-      setDetailLoading(true);
-      const detail = await workCenterApi.get(record.uuid);
+      const detail = await workCenterApi.get(uuid);
       setWorkCenterDetail(detail);
       await loadFieldValuesForDetail(detail.id);
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.workCenters.getDetailFailed'));
+    } catch (error) {
+      setWorkCenterDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.master-data.workCenters.getDetailFailed')));
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const handleOpenDetail = (record: WorkCenter) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setWorkCenterDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -158,6 +168,7 @@ const WorkCentersPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setWorkCenterDetail(null);
+    setDetailError(null);
     resetDetailFieldValues();
   };
 
@@ -513,7 +524,6 @@ const WorkCentersPage: React.FC = () => {
       title: t('common.actions'),
       key: 'action',
       valueType: 'option',
-      width: 150,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -664,21 +674,24 @@ const WorkCentersPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      <DetailDrawerTemplate
+      <MasterDataDetailDrawer
         title={t('field.workCenter.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
+        detail={workCenterDetail}
+        detailColumns={detailColumns}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={workCenterDetail ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, workCenterDetail)} />
-          ) : undefined}
-        linesTitle={t('app.master-data.customFields')}
-        lines={
-          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
-            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        customFields={customFields}
+        customFieldValues={customFieldValues}
+        extra={buildDetailDrawerEditExtra(t, Boolean(workCenterDetail), () => {
+          if (!workCenterDetail) return;
+          handleEdit(workCenterDetail);
+        })}
       />
 
       <WorkCenterFormModal

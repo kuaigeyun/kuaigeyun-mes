@@ -10,7 +10,6 @@ import {
   App,
   Button,
   DatePicker,
-  Descriptions,
   Form,
   Input,
   InputNumber,
@@ -33,9 +32,10 @@ import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
-import { ListPageTemplate, flushDrawerOpen } from '../../../../../components/layout-templates';
-import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { MasterDataDetailDrawer } from '../../shared/masterDataDetailDrawer';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { PartnerPriceVariantPricesEditor } from '../../../components/PartnerPriceVariantPricesEditor';
@@ -143,6 +143,8 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detail, setDetail] = useState<PartnerPriceBook | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -154,7 +156,6 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
   const { options: unitOptions, isLoading: unitOptionsLoading } = useMaterialUnitOptions();
   const [materialAllowedUnits, setMaterialAllowedUnits] = useState<string[]>([]);
   const watchedUnit = Form.useWatch('unit', form);
-  const detailReqRef = useRef(0);
 
   const unitSelectOptions = useMemo(() => {
     const filtered =
@@ -396,32 +397,41 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
     }
   };
 
-  const openDetail = async (record: PartnerPriceBook) => {
-    const reqId = ++detailReqRef.current;
-    setDrawerVisible(true);
+  const loadDetail = async (uuid: string) => {
     setDetailLoading(true);
-    setDetail(null);
-    flushDrawerOpen();
+    setDetailError(null);
     try {
-      const data = await priceBookApi.get(record.uuid);
-      if (reqId === detailReqRef.current) setDetail(data);
-    } catch (error: any) {
-      messageApi.error(error?.message || t('common.loadFailed'));
-      if (reqId === detailReqRef.current) setDrawerVisible(false);
+      const data = await priceBookApi.get(uuid);
+      setDetail(data);
+    } catch (error) {
+      setDetail(null);
+      setDetailError(getApiErrorMessage(error, t('common.loadFailed')));
     } finally {
-      if (reqId === detailReqRef.current) setDetailLoading(false);
+      setDetailLoading(false);
     }
+  };
+
+  const openDetail = (record: PartnerPriceBook) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   const detailColumns: ProDescriptionsItemProps<PartnerPriceBook>[] = useMemo(
     () => [
       {
         title: isCustomer ? t('field.customer.code', '客户') : t('field.supplier.code', '供应商'),
-        render: () => (detail ? `${detail.partnerCode ?? ''} - ${detail.partnerName ?? ''}`.trim() || '—' : '—'),
+        dataIndex: 'partnerName',
+        key: 'name',
+        render: (_, r) => `${r.partnerCode ?? ''} - ${r.partnerName ?? ''}`.trim() || '—',
       },
       {
         title: t('app.master-data.materialForm.mainCode', '物料'),
-        render: () => (detail ? `${detail.materialCode ?? ''} - ${detail.materialName ?? ''}`.trim() || '—' : '—'),
+        dataIndex: 'materialCode',
+        key: 'materialCode',
+        render: (_, r) => `${r.materialCode ?? ''} - ${r.materialName ?? ''}`.trim() || '—',
       },
       { title: isCustomer ? t('app.master-data.priceBook.customerMaterialCode') : t('app.master-data.priceBook.supplierMaterialCode'), dataIndex: 'partnerMaterialCode' },
       { title: isCustomer ? t('app.master-data.priceBook.customerMaterialName') : t('app.master-data.priceBook.supplierMaterialName'), dataIndex: 'partnerMaterialName' },
@@ -436,8 +446,8 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
       },
       { title: t('app.master-data.defaults.defaultTaxRate', '税率'), dataIndex: 'taxRate' },
       { title: t('app.master-data.materialForm.baseUnit', '单位'), dataIndex: 'unit' },
-      { title: t('app.master-data.priceBook.effectiveFrom', '生效起始'), dataIndex: 'effectiveFrom' },
-      { title: t('app.master-data.priceBook.effectiveTo', '生效截止'), dataIndex: 'effectiveTo' },
+      { title: t('app.master-data.priceBook.effectiveFrom', '生效起始'), dataIndex: 'effectiveFrom', valueType: 'date' },
+      { title: t('app.master-data.priceBook.effectiveTo', '生效截止'), dataIndex: 'effectiveTo', valueType: 'date' },
       { title: t('app.master-data.materialForm.description', '备注'), dataIndex: 'remark' },
       {
         title: t('field.defectType.isActive', '状态'),
@@ -445,7 +455,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         render: (_, r) => renderMasterActiveTag(t, r?.isActive, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
       },
     ],
-    [detail, isCustomer, t],
+    [isCustomer, t],
   );
 
   const columns: ProColumns<PartnerPriceBook>[] = useMemo(
@@ -572,7 +582,6 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         title: t('common.actions', '操作'),
         key: 'action',
         valueType: 'option',
-        width: 220,
         fixed: 'right',
         render: (_, record) => [
           <Button
@@ -686,29 +695,35 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         />
       </ListPageTemplate>
 
-      <UniDetail
-        open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+      <MasterDataDetailDrawer
         title={pageTitle}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        open={drawerVisible}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetail(null);
+          setDetailError(null);
+        }}
         loading={detailLoading}
-        basic={
-          detail ? (
-            <Descriptions
-              column={1}
-              bordered
-              size="small"
-              items={detailDrawerDescriptionItems(detailColumns, detail)}
-            />
-          ) : null
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        extra={
+          detail
+            ? buildDetailDrawerEditExtra(t, true, () => {
+                void handleEdit(detail);
+              })
+            : null
         }
+        detail={detail}
+        detailColumns={detailColumns}
         lines={
           detail?.variantPrices?.length ? (
             <PartnerPriceVariantPricesTable rows={detail.variantPrices} />
-          ) : null
+          ) : undefined
         }
         linesTitle={t('app.master-data.priceBook.variantPricesSection', '属性 SKU 单价')}
-        linesVisible={!!detail?.variantPrices?.length}
       />
 
       <Modal

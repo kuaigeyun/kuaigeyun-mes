@@ -21,18 +21,18 @@ import {
   ProFormInstance,
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Drawer, Modal, Table, Tooltip, Descriptions, theme, Space } from 'antd';
+import { App, Popconfirm, Button, Tag, Drawer, Modal, Table, Tooltip, theme, Space } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag } from '../../utils/systemListPresentation';
 import { SettingOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import {
-  flushDrawerOpen,
   ListPageTemplate,
-  DRAWER_CONFIG,
   getDrawerFloatingWrapperStyle,
 } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import { DataDictionaryFormModal } from '../components/DataDictionaryFormModal';
 import {
   getDataDictionaryList,
@@ -64,7 +64,7 @@ const DataDictionaryListPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const actionRef = useRef<ActionType>(null);
   const itemFormRef = useRef<ProFormInstance>();
-  const dataDictionaryDetailReqRef = useRef(0);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const searchParamsRef = useRef<Record<string, unknown> | undefined>(undefined);
   const urlKeyword = String(searchParams.get('keyword') || searchParams.get('code') || '').trim();
   if (urlKeyword && searchParamsRef.current === undefined) {
@@ -97,11 +97,8 @@ const DataDictionaryListPage: React.FC = () => {
       {
         title: t('field.role.status'),
         dataIndex: 'is_active',
-        render: (_: unknown, entity: DataDictionary) => (
-          <Tag color={entity?.is_active ? 'success' : 'default'}>
-            {entity?.is_active ? t('field.role.enabled') : t('field.role.disabled')}
-          </Tag>
-        ),
+        render: (_: unknown, entity: DataDictionary) =>
+          renderSystemActiveTag(t, entity?.is_active, 'field.role.enabled', 'field.role.disabled'),
       },
       { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
       { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
@@ -118,6 +115,7 @@ const DataDictionaryListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<DataDictionary | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   const [itemDrawerVisible, setItemDrawerVisible] = useState(false);
   const [currentDictionaryForItems, setCurrentDictionaryForItems] = useState<DataDictionary | null>(null);
@@ -142,26 +140,26 @@ const DataDictionaryListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: DataDictionary) => {
-    const req = ++dataDictionaryDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getDataDictionaryByUuid(record.uuid);
-      if (dataDictionaryDetailReqRef.current !== req) return;
+      const detail = await getDataDictionaryByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (dataDictionaryDetailReqRef.current === req) {
-        messageApi.error(error.message || t('common.loadFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('common.loadFailed')));
     } finally {
-      if (dataDictionaryDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = (record: DataDictionary) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   const handleDelete = async (record: DataDictionary) => {
@@ -520,7 +518,6 @@ const DataDictionaryListPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      width: 120,
       fixed: 'right' as const,
       hideInSearch: true,
       render: (_: any, record: DictionaryItem) => {
@@ -672,20 +669,26 @@ const DataDictionaryListPage: React.FC = () => {
         onSuccess={() => actionRef.current?.reload()}
       />
 
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('field.dataDictionary.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
-          detailData ? (
-            <Descriptions
-              column={1}
-              items={detailDrawerDescriptionItems(dataDictionaryDetailDescColumns, detailData)}
-            />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryUuidRef.current;
+          if (id) void loadDetail(id);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detailData), () => {
+          if (!detailData) return;
+          handleEdit(detailData);
+        })}
+        detail={detailData}
+        detailColumns={dataDictionaryDetailDescColumns}
       />
 
       {/* 字典项管理 Drawer */}

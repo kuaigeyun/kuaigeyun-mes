@@ -11,7 +11,6 @@ import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import type { DescriptionsProps } from 'antd';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   ActionType,
@@ -35,6 +34,7 @@ import {
   Spin,
   Modal,
   Table,
+  Space,
   theme as AntdTheme,
   Tag,
 } from 'antd';
@@ -47,9 +47,9 @@ import {
   ListPageTemplate,
   FormModalTemplate,
   DetailDrawerTemplate,
-  DetailDrawerSection,
   MODAL_CONFIG,
   DRAWER_CONFIG,
+  detailDrawerDescriptionItems,
   type StatCard,
 } from '../../../../../components/layout-templates';
 import { SimpleSparkline } from '../../../../../components';
@@ -65,11 +65,11 @@ import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/Wa
 import { getPackingBindingLifecycle, buildPackingBindingMethodValueEnum, resolvePackingBindingListMethodParams, buildPackingBindingSourceValueEnum, resolvePackingBindingListSourceParams } from '../../../utils/packingBindingLifecycle';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   MaterialStackedCell,
@@ -197,35 +197,6 @@ function buildPackingSourceItemOptions(detail: Record<string, unknown> | undefin
       } satisfies PackingBindingSourceItemOption;
     })
     .filter((option): option is PackingBindingSourceItemOption => option != null);
-}
-
-function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
-  dataSource: T,
-  cols: ProDescriptionsItemProps<T>[]
-): NonNullable<DescriptionsProps['items']> {
-  return cols.map((col, index) => {
-    const dataIndex = col.dataIndex as keyof T | undefined;
-    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
-    let content: React.ReactNode = value as React.ReactNode;
-    if (col.valueType === 'dateTime' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
-    } else if (col.valueType === 'date' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD');
-    }
-    if (col.render && dataSource != null) {
-            content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
-        content,
-        dataSource,
-        index,
-      );
-    }
-    return {
-      key: String(col.key ?? col.dataIndex ?? index),
-      label: col.title as React.ReactNode,
-      children: content !== undefined && content !== null ? content : '-',
-      span: col.span ?? 1,
-    };
-  });
 }
 
 function renderPbRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
@@ -477,6 +448,12 @@ const PackingBindingPage: React.FC = () => {
     currentBinding?.id,
     pbTrackingRefreshKey,
   );
+  const packingDetailLifecycle = useMemo(
+    () => (currentBinding ? getPackingBindingLifecycle(currentBinding as Record<string, unknown>) : null),
+    [currentBinding],
+  );
+  const packingNextSteps = packingDetailLifecycle?.nextStepSuggestions;
+  const packingShowNextInTitle = Boolean(packingNextSteps?.length);
 
   const [currentBindingId, setCurrentBindingId] = useState<number | null>(null);
 
@@ -743,7 +720,8 @@ const PackingBindingPage: React.FC = () => {
   };
 
   const detailBaseColumns: ProDescriptionsItemProps<PackingBinding>[] = useMemo(
-    () => [
+    () =>
+      alignDescriptionColumns([
       {
         title: t('app.kuaizhizao.packingBinding.colBoxNo'),
         dataIndex: 'box_no',
@@ -802,9 +780,8 @@ const PackingBindingPage: React.FC = () => {
         title: t('app.kuaizhizao.common.fieldNotes'),
         dataIndex: 'remarks',
         span: 3,
-        render: (text) => text || '-',
       },
-    ],
+    ] as ProDescriptionsItemProps<PackingBinding>[]),
     [bindingMethodTag, t],
   );
 
@@ -1353,124 +1330,71 @@ const PackingBindingPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setCurrentBinding(null);
         }}
-        columns={[]}
-        column={3}
-        dataSource={currentBinding || undefined}
-        customContent={
-          currentBinding && (
-            <>
-              <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
-                <Row gutter={16}>
-                  <Col xs={24} lg={24}>
-                    <Descriptions
-                      column={3}
-                      size="small"
-                      items={buildDescriptionItemsFromColumns(currentBinding, detailBaseColumns)}
-                    />
-                  </Col>
-                </Row>
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lifecycle = getPackingBindingLifecycle(currentBinding as Record<string, unknown>);
-                    const mainStages = lifecycle.mainStages ?? [];
-                    if (mainStages.length === 0) return null;
-                    return (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        status={lifecycle.status}
-                        showLabels
-                        nextStepSuggestions={lifecycle.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
-                    );
-                  })()}
-                  
-                </div>
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
-                <Descriptions
-                  size="small"
-                  column={2}
-                  items={[
-                    {
-                      key: 'sourceDoc',
-                      label: t('app.kuaizhizao.packingBinding.detailSourceDoc'),
-                      children: currentBinding.sales_delivery_id
-                        ? t('app.kuaizhizao.packingBinding.salesDeliveryDoc', { id: currentBinding.sales_delivery_id })
-                        : currentBinding.finished_goods_receipt_id
-                          ? t('app.kuaizhizao.packingBinding.finishedGoodsReceiptDoc', { id: currentBinding.finished_goods_receipt_id })
-                          : '-',
-                    },
-                    {
-                      key: 'sourceType',
-                      label: t('app.kuaizhizao.packingBinding.detailCreateSource'),
-                      children: getBindingSourceLabel(currentBinding),
-                    },
-                    {
-                      key: 'status',
-                      label: t('app.kuaizhizao.packingBinding.colStatus'),
-                      children: <Tag color="processing">{t('app.kuaizhizao.packingBinding.statusBound')}</Tag>,
-                    },
-                    {
-                      key: 'bindingMethod',
-                      label: t('app.kuaizhizao.packingBinding.colBindingMethod'),
-                      children: bindingMethodTag(currentBinding.binding_method),
-                    },
-                    {
-                      key: 'boxNo',
-                      label: t('app.kuaizhizao.packingBinding.colBoxNo'),
-                      children: currentBinding.box_no || '-',
-                    },
-                    {
-                      key: 'qty',
-                      label: t('app.kuaizhizao.packingBinding.detailQty'),
-                      children: currentBinding.packing_quantity != null ? String(currentBinding.packing_quantity) : '-',
-                    },
-                    {
-                      key: 'operator',
-                      label: t('app.kuaizhizao.packingBinding.detailOperator'),
-                      children: currentBinding.bound_by_name || '-',
-                    },
-                    {
-                      key: 'opTime',
-                      label: t('app.kuaizhizao.packingBinding.detailOpTime'),
-                      children: currentBinding.bound_at ? formatDateTime(currentBinding.bound_at, 'YYYY-MM-DD HH:mm:ss') : '-',
-                    },
-                  ]}
-                />
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
-                {packingTracking.loading && (
-                  <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Spin />
-                  </div>
-                )}
-                {packingTracking.error && !packingTracking.loading && (
-                  <Typography.Text type="danger">{packingTracking.error}</Typography.Text>
-                )}
-                {packingTracking.data && !packingTracking.loading && (
-                  <DocumentTrackingTimelineBody data={packingTracking.data} />
-                )}
-                {!packingTracking.loading && !packingTracking.data && !packingTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('components.documentTrackingPanel.noOperations')} />
-                )}
-              </DetailDrawerSection>
-            </>
-          )
+        extra={
+          currentBinding ? (
+            <Space>
+              <Button icon={<EditOutlined />} onClick={() => void handleEdit(currentBinding)}>
+                {t('common.edit')}
+              </Button>
+              <Popconfirm
+                title={t('app.kuaizhizao.packingBinding.confirmDeleteOne')}
+                onConfirm={() => void handleDeleteOne(currentBinding)}
+                okText={t('common.confirm')}
+                cancelText={t('common.cancel')}
+              >
+                <Button danger icon={<DeleteOutlined />}>
+                  {t('common.delete')}
+                </Button>
+              </Popconfirm>
+            </Space>
+          ) : null
         }
-      
-                    traceDocument={
-                      currentBinding?.id != null
-                        ? {
-                            documentType: 'packing_binding',
-                            documentId: currentBinding.id,
-                            selfDocumentId: currentBinding.id,
-                          renderBriefActions: (doc) => (
+        collaborationTitleSuffix={
+          currentBinding && packingShowNextInTitle ? (
+            <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
+              {t('components.uniLifecycle.nextStep')}：
+              {packingNextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
+            </Typography.Text>
+          ) : undefined
+        }
+        basic={
+          currentBinding ? (
+            <Descriptions
+              column={3}
+              size="small"
+              items={detailDrawerDescriptionItems(detailBaseColumns, currentBinding)}
+            />
+          ) : undefined
+        }
+        collaboration={
+          currentBinding && (packingDetailLifecycle?.mainStages ?? []).length > 0 ? (
+            <UniLifecycleStepper
+              steps={packingDetailLifecycle!.mainStages ?? []}
+              status={packingDetailLifecycle!.status}
+              showLabels
+              nextStepSuggestions={packingDetailLifecycle!.nextStepSuggestions}
+              hideNextStepSuggestions={packingShowNextInTitle}
+            />
+          ) : null
+        }
+        timeline={
+          currentBinding ? (
+            packingTracking.data && !packingTracking.loading ? (
+              <DocumentTrackingTimelineBody data={packingTracking.data} />
+            ) : packingTracking.error ? (
+              <Typography.Text type="danger">{packingTracking.error}</Typography.Text>
+            ) : !packingTracking.loading ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('components.documentTrackingPanel.noOperations')} />
+            ) : null
+          ) : undefined
+        }
+        traceDocument={
+          currentBinding?.id != null
+            ? {
+                documentType: 'packing_binding',
+                documentId: currentBinding.id,
+                selfDocumentId: currentBinding.id,
+                renderBriefActions: (doc) => (
                   <WarehouseTraceBriefPrimaryActions
                     doc={doc}
                     t={t}
@@ -1480,10 +1404,10 @@ const PackingBindingPage: React.FC = () => {
                       setCurrentBinding(null);
                     }}
                   />
-                )
-                          }
-                        : undefined
-                    }
+                ),
+              }
+            : undefined
+        }
       />
 
       <Modal

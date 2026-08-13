@@ -3,8 +3,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * 技能管理页面
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Space, theme as AntdTheme } from 'antd';
@@ -14,13 +13,13 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
   UniTableStackedPrimaryCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import { PerformanceConfigDetailDrawer } from '../shared/performanceConfigDetailDrawer';
 import { skillApi } from '../../../services/performance';
 import { SkillFormModal } from '../../../components/SkillFormModal';
 import type { Skill } from '../../../types/performance';
-import { getPerformanceConfigActiveLifecycle } from '../../../utils/performanceLifecycle';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
@@ -37,7 +36,6 @@ import {
 
 const SkillsPage: React.FC = () => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { token } = AntdTheme.useToken();
   const skillDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
@@ -46,7 +44,8 @@ const SkillsPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [skillDetail, setSkillDetail] = useState<Skill | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [skillTrackingRefreshKey, setSkillTrackingRefreshKey] = useState(0);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
 
@@ -58,18 +57,16 @@ const SkillsPage: React.FC = () => {
     loadFieldValuesForDetail,
     resetDetailFieldValues,
   } = useCustomFieldsForList<Skill>({ tableName: 'master_data_skills' });
-  const skillTracking = useDocumentTracking(
-    drawerVisible && skillDetail?.id != null ? 'performance_skill' : undefined,
-    skillDetail?.id,
-    skillTrackingRefreshKey,
-  );
-
   const skillDetailColumns: ProDescriptionsItemProps<Skill>[] = useMemo(
     () => [
       { title: t('app.kuaizhizao.performance.skills.columns.skillCode'), dataIndex: 'code' },
       { title: t('app.kuaizhizao.performance.skills.columns.skillName'), dataIndex: 'name' },
-      { title: t('app.kuaizhizao.performance.skills.columns.category'), dataIndex: 'category' },
-      { title: t('app.kuaizhizao.performance.common.columns.description'), dataIndex: 'description', span: 3 },
+      {
+        title: t('app.kuaizhizao.performance.skills.columns.category'),
+        dataIndex: 'category',
+        render: (_, record) => renderPerformanceTypeMarker(record?.category),
+      },
+      { title: t('app.kuaizhizao.performance.common.columns.description'), dataIndex: 'description', span: 2 },
       {
         title: t('app.kuaizhizao.performance.holidays.columns.activeStatus'),
         dataIndex: 'isActive',
@@ -108,28 +105,36 @@ const SkillsPage: React.FC = () => {
     } catch (error: any) { messageApi.error(error.message || t('common.batchDeleteFailed')); }
   };
 
-  const handleOpenDetail = async (record: Skill) => {
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      setDrawerVisible(true);
-      setSkillDetail(null);
-      setDetailLoading(true);
-      const detail = await skillApi.get(record.uuid);
+      const detail = await skillApi.get(uuid);
       setSkillDetail(detail);
       if (detail.id != null) {
         await loadFieldValuesForDetail(detail.id);
       }
-      setSkillTrackingRefreshKey((k) => k + 1);
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.skills.getDetailFailed'));
-      setDrawerVisible(false);
+    } catch (error) {
       setSkillDetail(null);
-    } finally { setDetailLoading(false); }
+      setDetailError(getApiErrorMessage(error, t('app.master-data.skills.getDetailFailed')));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleOpenDetail = (record: Skill) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setSkillDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   const handleModalSuccess = () => { setModalVisible(false); setEditUuid(null); actionRef.current?.reload(); };
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setSkillDetail(null);
+    setDetailError(null);
     resetDetailFieldValues();
   };
 
@@ -199,7 +204,6 @@ const SkillsPage: React.FC = () => {
       title: t('app.kuaizhizao.performance.common.columns.actions'),
       key: 'action',
       valueType: 'option',
-      width: 150,
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => (
@@ -268,18 +272,20 @@ const SkillsPage: React.FC = () => {
         zIndex={skillDetailDrawerZIndex}
         onClose={handleCloseDetail}
         loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
         detail={skillDetail}
         detailColumns={skillDetailColumns}
-        basicColumn={3}
-        documentType="performance_skill"
-        detailId={skillDetail?.id ?? null}
-        lifecycleResolver={(row, tr) => getPerformanceConfigActiveLifecycle(row as Record<string, unknown>, tr)}
-        tracking={skillTracking}
         customFields={customFields}
         customFieldValues={customFieldValues}
-        showEmptyDetailPlaceholder
-        t={t}
-        navigate={navigate}
+        extra={buildDetailDrawerEditExtra(t, Boolean(skillDetail), () => {
+          if (!skillDetail) return;
+          setEditUuid(skillDetail.uuid);
+          setModalVisible(true);
+        })}
       />
       <SkillFormModal open={modalVisible} onClose={() => { setModalVisible(false); setEditUuid(null); }} editUuid={editUuid} onSuccess={handleModalSuccess} />
     </>

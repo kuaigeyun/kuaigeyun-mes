@@ -11,11 +11,13 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormDigit, ProFormDateTimePicker, ProFormInstance, ProFormGroup } from '@ant-design/pro-components';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Modal, Progress, List, Typography, Divider, Descriptions, Spin, Alert } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, Progress, List, Typography, Divider, Spin, Alert } from 'antd';
 import { CheckOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined, EditOutlined, DeleteOutlined, SyncOutlined, StarOutlined, StarFilled } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { SystemMasterDetailDrawer } from '../../../system/shared/systemMasterDetailDrawer';
+import { MarkerTag } from '../../../../constants/statusBadges';
 import { isReservedTenantDomain } from '../../../../utils/reservedTenantDomain';
 import {
   getTenantList,
@@ -61,6 +63,8 @@ const SuperAdminTenantList: React.FC = () => {
   const [currentTenantId, setCurrentTenantId] = useState<number | null>(null);
   const [tenantDetail, setTenantDetail] = useState<Tenant | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryIdRef = useRef<number | null>(null);
   
   // Modal 相关状态
   const [modalVisible, setModalVisible] = useState(false);
@@ -185,9 +189,9 @@ const SuperAdminTenantList: React.FC = () => {
         title: '组织类型',
         dataIndex: 'is_subtenant',
         render: (_, record) => (
-          <Tag color={record.is_subtenant ? 'purple' : 'blue'}>
+          <MarkerTag color={record.is_subtenant ? 'purple' : 'processing'}>
             {record.is_subtenant ? '子组织' : '主组织'}
-          </Tag>
+          </MarkerTag>
         ),
       },
       {
@@ -201,9 +205,9 @@ const SuperAdminTenantList: React.FC = () => {
         render: (_, record) => {
           const statusInfo = statusTagMap[record.status] ?? { color: 'default', textKey: '' };
           return (
-            <Tag color={statusInfo.color}>
+            <MarkerTag color={statusInfo.color}>
               {statusInfo.textKey ? t(statusInfo.textKey) : (record.status ?? '-')}
-            </Tag>
+            </MarkerTag>
           );
         },
       },
@@ -211,7 +215,7 @@ const SuperAdminTenantList: React.FC = () => {
         title: t('pages.infra.tenant.plan'),
         dataIndex: 'plan',
         render: (_, record) => (
-          <Tag color={getPlanTagColor(String(record.plan))}>{getPlanName(String(record.plan))}</Tag>
+          <MarkerTag color={getPlanTagColor(String(record.plan))}>{getPlanName(String(record.plan))}</MarkerTag>
         ),
       },
       {
@@ -258,7 +262,7 @@ const SuperAdminTenantList: React.FC = () => {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {sharedQuota.over_quota ? (
-          <Alert type="warning" showIcon message={t('pages.infra.tenant.sharedQuotaOverQuotaHint')} />
+          <Alert type="warning" showIcon title={t('pages.infra.tenant.sharedQuotaOverQuotaHint')} />
         ) : null}
         <Typography.Text>
           主组织：{sharedQuota.root_tenant_name}（ID: {sharedQuota.root_tenant_id}）
@@ -685,14 +689,15 @@ const SuperAdminTenantList: React.FC = () => {
    */
   const loadTenantDetail = async (tenantId: number) => {
     setDetailLoading(true);
+    setDetailError(null);
     try {
-      // 使用平台超级管理员接口获取组织详情
       const data = await apiRequest<Tenant>(`/infra/tenants/${tenantId}`, {
         method: 'GET',
       });
       setTenantDetail(data);
-    } catch (error: any) {
-      message.error(error.message || t('pages.infra.tenant.loadDetailFailed'));
+    } catch (error) {
+      setTenantDetail(null);
+      setDetailError(getApiErrorMessage(error, t('pages.infra.tenant.loadDetailFailed')));
     } finally {
       setDetailLoading(false);
     }
@@ -712,10 +717,14 @@ const SuperAdminTenantList: React.FC = () => {
   };
 
   const handleOpenDetail = (tenantId: number) => {
+    detailRetryIdRef.current = tenantId;
     setCurrentTenantId(tenantId);
     setDrawerVisible(true);
-    loadTenantDetail(tenantId);
-    loadSharedQuota(tenantId);
+    setTenantDetail(null);
+    setSharedQuota(null);
+    setDetailError(null);
+    void loadTenantDetail(tenantId);
+    void loadSharedQuota(tenantId);
   };
 
   /**
@@ -726,6 +735,7 @@ const SuperAdminTenantList: React.FC = () => {
     setCurrentTenantId(null);
     setTenantDetail(null);
     setSharedQuota(null);
+    setDetailError(null);
   };
 
   /**
@@ -1125,7 +1135,6 @@ const SuperAdminTenantList: React.FC = () => {
     {
       title: t('pages.infra.tenant.actions'),
       valueType: 'option',
-      width: 440,
       fixed: 'right',
       // 保证「设为/取消默认」留在主行，使用 Popconfirm 气泡而非折叠进「更多」后的 Modal
       uniActionRenderOptions: { directMax: 6 },
@@ -1387,12 +1396,19 @@ const SuperAdminTenantList: React.FC = () => {
       </ListPageTemplate>
     
     {/* 组织详情 Drawer */}
-    <UniDetail
+    <SystemMasterDetailDrawer
       title={t('pages.infra.tenant.detailTitle')}
-      width={DRAWER_CONFIG.STANDARD_WIDTH}
       open={drawerVisible}
       onClose={handleCloseDetail}
       loading={detailLoading}
+      error={detailError}
+      onRetry={() => {
+        const id = detailRetryIdRef.current;
+        if (id != null) {
+          void loadTenantDetail(id);
+          void loadSharedQuota(id);
+        }
+      }}
       extra={
         tenantDetail && !tenantDetail.is_subtenant ? (
           <Button
@@ -1404,18 +1420,10 @@ const SuperAdminTenantList: React.FC = () => {
           </Button>
         ) : null
       }
-      basic={
-        tenantDetail ? (
-          <Descriptions
-            column={1}
-            size="small"
-            items={detailDrawerDescriptionItems(tenantDetailDescColumns, tenantDetail)}
-          />
-        ) : null
-      }
-      collaborationTitle="共享用户池看板"
-      collaboration={sharedQuotaPanel}
-      collaborationVisible={sharedQuotaLoading || sharedQuota != null}
+      detail={tenantDetail}
+      detailColumns={tenantDetailDescColumns}
+      supplementaryTitle="共享用户池看板"
+      supplementary={sharedQuotaLoading || sharedQuota != null ? sharedQuotaPanel : undefined}
     />
 
     {/* 新建/编辑组织 Modal */}

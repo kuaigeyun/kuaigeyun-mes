@@ -10,16 +10,17 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Modal, Space, Tag, Typography } from 'antd';
+import { ActionType, ProColumns, type ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Button, Modal, Space, Tag, Typography } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemTypeMarker } from '../utils/systemListPresentation';
 import { EyeOutlined, BarChartOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea';
-import { DRAWER_CONFIG, ListPageTemplate } from '../../../components/layout-templates';
+import { ListPageTemplate } from '../../../components/layout-templates';
+import { SystemMasterDetailDrawer } from '../shared/systemMasterDetailDrawer';
+import { getApiErrorMessage } from '../../../utils/errorHandler';
 import { useListPageStatCardsVisible } from '../../../components/layout-templates/listPageStatCardsContext';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import {
   getOperationLogs,
@@ -47,6 +48,9 @@ const OperationLogsPage: React.FC = () => {
   const [stats, setStats] = useState<OperationLogStats | null>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentLog, setCurrentLog] = useState<OperationLog | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
 
   /**
    * 加载统计信息
@@ -78,15 +82,26 @@ const OperationLogsPage: React.FC = () => {
   /**
    * 查看日志详情
    */
-  const handleViewDetail = async (record: OperationLog) => {
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      // 从 API 获取最新的日志详情
-      const logDetail = await getOperationLogByUuid(record.uuid);
+      const logDetail = await getOperationLogByUuid(uuid);
       setCurrentLog(logDetail);
-      setDetailDrawerVisible(true);
-    } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.operationLogs.loadDetailFailed'));
+    } catch (error) {
+      setCurrentLog(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.operationLogs.loadDetailFailed')));
+    } finally {
+      setDetailLoading(false);
     }
+  };
+
+  const handleViewDetail = async (record: OperationLog) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDetailDrawerVisible(true);
+    setCurrentLog(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -147,8 +162,8 @@ const OperationLogsPage: React.FC = () => {
   /**
    * 详情列定义（优化：突出有用信息，技术性字段放在后面）
    */
-  const detailColumns = [
-    { title: t('pages.system.operationLogs.createdAt'), dataIndex: 'created_at', render: (_: React.ReactNode, record: OperationLog) => formatDateTimeBySiteSetting(record.created_at) },
+  const detailColumns: ProDescriptionsItemProps<OperationLog>[] = [
+    { title: t('pages.system.operationLogs.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
     { title: t('pages.system.operationLogs.operationType'), dataIndex: 'operation_type', render: (_: React.ReactNode, record: OperationLog) => getOperationTypeTag(record.operation_type) },
     { title: t('pages.system.operationLogs.operationModule'), dataIndex: 'operation_module', render: (_: React.ReactNode, record: OperationLog) => formatModuleName(record.operation_module) },
     { title: t('pages.system.operationLogs.operationObjectType'), dataIndex: 'operation_object_type', render: (_: React.ReactNode, record: OperationLog) => record.operation_object_type || '-' },
@@ -424,29 +439,32 @@ const OperationLogsPage: React.FC = () => {
           onDetail={async (keys: React.Key[]) => {
             if (keys.length === 1) {
               const uuid = String(keys[0]);
-              try {
-                const logDetail = await getOperationLogByUuid(uuid);
-                setCurrentLog(logDetail);
-                setDetailDrawerVisible(true);
-              } catch (error: any) {
-                messageApi.error(error.message || t('pages.system.operationLogs.loadDetailFailed'));
-              }
+              detailRetryUuidRef.current = uuid;
+              setDetailDrawerVisible(true);
+              setCurrentLog(null);
+              setDetailError(null);
+              void loadDetail(uuid);
             }
           }}
         />
       </ListPageTemplate>
 
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('pages.system.operationLogs.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentLog(null);
+          setDetailError(null);
         }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
-        basic={currentLog ? (
-            <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, currentLog)} />
-          ) : null}
+        detail={currentLog}
+        detailColumns={detailColumns}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
       />
     </>
   );

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDataPolicySavePayload } from './dataPolicySave';
+import { buildDataPolicySavePayload, defaultCustomPayloadForResource } from './dataPolicySave';
 import type { DataPermissionPolicy } from '../../../../services/role';
 
 const granted = new Set(['app:a', 'app:b', 'app:c']);
@@ -51,5 +51,18 @@ describe('buildDataPolicySavePayload', () => {
       grantedKeys: granted,
     });
     expect(payload).toEqual([{ resource: 'app:a', scope_type: 'scope_self', scope_payload: undefined }]);
+  });
+
+  it('defaults acceptance custom payload to manufacturer partner scope', () => {
+    expect(defaultCustomPayloadForResource('haoligo:equipment-documents-acceptance')).toEqual({
+      resolver: 'partner',
+      dimension: 'manufacturer',
+      code_field: 'manufacturer_code',
+    });
+    expect(defaultCustomPayloadForResource('haoligo:injection-documents-acceptance')).toEqual({
+      resolver: 'partner',
+      dimension: 'manufacturer',
+      code_field: 'manufacturer_code',
+    });
   });
 });

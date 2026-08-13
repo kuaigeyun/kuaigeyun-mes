@@ -92,6 +92,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   const [roleMetaByUuid, setRoleMetaByUuid] = useState<Record<string, UserFormRoleMeta>>({});
   const [customerOptions, setCustomerOptions] = useState<UserFormSelectOption[]>([]);
   const [supplierOptions, setSupplierOptions] = useState<UserFormSelectOption[]>([]);
+  const [manufacturerOptions, setManufacturerOptions] = useState<UserFormSelectOption[]>([]);
 
   const isEdit = Boolean(editUuid);
 
@@ -132,6 +133,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       setDetailLoading(false);
       setCustomerOptions([]);
       setSupplierOptions([]);
+      setManufacturerOptions([]);
       return;
     }
 
@@ -150,6 +152,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
             is_tenant_admin: false,
             supplier_scope_codes: [],
             customer_scope_codes: [],
+            manufacturer_scope_codes: [],
           };
           setRoleUuidsDraft([]);
           setFormInitialValues(defaults);
@@ -178,6 +181,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
           is_tenant_admin: detail.is_tenant_admin,
           supplier_scope_codes: [] as string[],
           customer_scope_codes: [] as string[],
+          manufacturer_scope_codes: [] as string[],
         };
         setRoleUuidsDraft(editRoleUuids);
         setFormInitialValues(baseValues);
@@ -187,13 +191,23 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         const userUuid = detail.uuid || editUuid;
         const needsSupplier = roleUuidsNeedPartnerDimension(editRoleUuids, core.roleMetaByUuid, 'supplier');
         const needsCustomer = roleUuidsNeedPartnerDimension(editRoleUuids, core.roleMetaByUuid, 'customer');
-        if (!needsSupplier && !needsCustomer) return;
+        const needsManufacturer = roleUuidsNeedPartnerDimension(editRoleUuids, core.roleMetaByUuid, 'manufacturer');
+        if (!needsSupplier && !needsCustomer && !needsManufacturer) return;
 
-        const [supplierBindings, customerBindings, supplierOpts, customerOpts] = await Promise.all([
+        const [
+          supplierBindings,
+          customerBindings,
+          manufacturerBindings,
+          supplierOpts,
+          customerOpts,
+          manufacturerOpts,
+        ] = await Promise.all([
           needsSupplier ? getUserDataScopeBindings(userUuid, 'supplier') : Promise.resolve([]),
           needsCustomer ? getUserDataScopeBindings(userUuid, 'customer') : Promise.resolve([]),
+          needsManufacturer ? getUserDataScopeBindings(userUuid, 'manufacturer') : Promise.resolve([]),
           needsSupplier ? getUserFormPartnerOptions('supplier') : Promise.resolve([]),
           needsCustomer ? getUserFormPartnerOptions('customer') : Promise.resolve([]),
+          needsManufacturer ? getUserFormPartnerOptions('manufacturer') : Promise.resolve([]),
         ]);
         if (cancelled) return;
 
@@ -203,9 +217,13 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         if (needsCustomer) {
           setCustomerOptions(customerOpts);
         }
+        if (needsManufacturer) {
+          setManufacturerOptions(manufacturerOpts);
+        }
         const scopePatch = {
           supplier_scope_codes: supplierBindings.map((x) => x.scope_code).filter(Boolean),
           customer_scope_codes: customerBindings.map((x) => x.scope_code).filter(Boolean),
+          manufacturer_scope_codes: manufacturerBindings.map((x) => x.scope_code).filter(Boolean),
         };
         setFormInitialValues((prev) => ({ ...(prev || {}), ...scopePatch }));
         applyFormValues(formRef, scopePatch);
@@ -237,7 +255,12 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         .then(setCustomerOptions)
         .catch(() => {});
     }
-  }, [open, selectedExternalPartnerTypes, supplierOptions.length, customerOptions.length]);
+    if (selectedExternalPartnerTypes.has('manufacturer') && manufacturerOptions.length === 0) {
+      void getUserFormPartnerOptions('manufacturer')
+        .then(setManufacturerOptions)
+        .catch(() => {});
+    }
+  }, [open, selectedExternalPartnerTypes, supplierOptions.length, customerOptions.length, manufacturerOptions.length]);
 
   const handleClose = () => {
     onClose();
@@ -257,8 +280,14 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       const customerCodes = (Array.isArray(submitData.customer_scope_codes) ? submitData.customer_scope_codes : [])
         .map((v: any) => String(v || '').trim())
         .filter(Boolean);
+      const manufacturerCodes = (Array.isArray(submitData.manufacturer_scope_codes)
+        ? submitData.manufacturer_scope_codes
+        : [])
+        .map((v: any) => String(v || '').trim())
+        .filter(Boolean);
       delete submitData.supplier_scope_codes;
       delete submitData.customer_scope_codes;
+      delete submitData.manufacturer_scope_codes;
       if (!submitData.password) {
         delete submitData.password;
       }
@@ -288,6 +317,10 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
             dimension: 'customer',
             items: customerCodes.map((code: string) => ({ dimension: 'customer', scope_code: code })),
           }),
+          replaceUserDataScopeBindings(updated.uuid, {
+            dimension: 'manufacturer',
+            items: manufacturerCodes.map((code: string) => ({ dimension: 'manufacturer', scope_code: code })),
+          }),
         ]);
         messageApi.success(t('pages.system.updateSuccess'));
       } else {
@@ -304,6 +337,10 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
           replaceUserDataScopeBindings(created.uuid, {
             dimension: 'customer',
             items: customerCodes.map((code: string) => ({ dimension: 'customer', scope_code: code })),
+          }),
+          replaceUserDataScopeBindings(created.uuid, {
+            dimension: 'manufacturer',
+            items: manufacturerCodes.map((code: string) => ({ dimension: 'manufacturer', scope_code: code })),
           }),
         ]);
         messageApi.success(t('pages.system.createSuccess'));
@@ -503,6 +540,21 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
             optionFilterProp: 'label',
           }}
           extra="根据所选外部角色自动显示；用于客户数据隔离"
+          colProps={{ span: 24 }}
+        />
+      )}
+      {selectedExternalPartnerTypes.has('manufacturer') && (
+        <ProFormSelect
+          name="manufacturer_scope_codes"
+          label="外部角色-设备制造商绑定"
+          placeholder="请选择该账号可访问的设备制造商（按编码）"
+          options={manufacturerOptions}
+          fieldProps={{
+            mode: 'multiple',
+            showSearch: true,
+            optionFilterProp: 'label',
+          }}
+          extra="根据所选外部角色自动显示；用于设备验收单数据隔离"
           colProps={{ span: 24 }}
         />
       )}

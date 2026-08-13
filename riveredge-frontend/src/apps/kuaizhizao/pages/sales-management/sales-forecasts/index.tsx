@@ -10,7 +10,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
-import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Descriptions, Tooltip, Alert, Empty, Spin, Switch, Tag } from 'antd'
+import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Tooltip, Alert, Empty, Spin, Switch, Tag } from 'antd'
 import { PlusOutlined, DeleteOutlined, EditOutlined, AppstoreAddOutlined, ImportOutlined, ArrowLeftOutlined, PrinterOutlined, ArrowDownOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab'
@@ -29,9 +29,7 @@ import {
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal'
 import {
   ListPageTemplate,
-  DetailDrawerTemplate,
   DetailDrawerSection,
-  DRAWER_CONFIG,
   DocumentFormPageLayout,
   DocumentFormPageHeaderActions,
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
@@ -111,13 +109,12 @@ import {
 } from '../../../../../services/codeRule'
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage'
 import { getSalesForecastLifecycle } from '../../../utils/salesForecastLifecycle'
-import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage'
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell'
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn'
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions'
-import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel'
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter'
+import { SalesForecastDetailDrawer } from './components/SalesForecastDetailDrawer'
 import { downloadFile } from '../../../services/common'
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField'
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments'
@@ -339,11 +336,6 @@ export default function SalesForecastsPage() {
     sales_forecast: true,
     demand_computation: true,
   }
-  const forecastTracking = useDocumentTracking(
-    drawerVisible && currentForecast ? 'sales_forecast' : undefined,
-    currentForecast?.id,
-    trackingRefreshKey,
-  );
 
   type SalesForecastItemRow = SalesForecastItem & {
     _rowKey: string;
@@ -372,6 +364,7 @@ export default function SalesForecastsPage() {
       auditNodeKey: 'sales_forecast',
       resourcePrefix: 'kuaizhizao:sales-forecast',
       unifiedAudit: true,
+      theme: 'default' as const,
       statusField: 'status' as const,
       reviewStatusField: 'review_status' as const,
       draftStatuses: ['草稿', 'DRAFT'],
@@ -1062,22 +1055,6 @@ export default function SalesForecastsPage() {
     return items.reduce((sum, item) => sum + Number(item.forecast_quantity ?? 0), 0);
   };
 
-  const formatForecastStatus = (status?: string, reviewStatus?: string) => {
-    const lifecycle = getSalesForecastLifecycle({ status, review_status: reviewStatus } as any, auditEnabled, t);
-    if (lifecycle?.stageName) return lifecycle.stageName;
-    if (!status) return '-';
-    const statusMap: Record<string, string> = {
-      DRAFT: t('app.kuaizhizao.salesForecast.statusDraft'),
-      PENDING_REVIEW: t('app.kuaizhizao.salesForecast.statusPending'),
-      AUDITED: t('app.kuaizhizao.salesForecast.statusApproved'),
-      APPROVED: t('app.kuaizhizao.salesForecast.statusApproved'),
-      REJECTED: t('app.kuaizhizao.salesForecast.statusRejected'),
-      PUSHED: t('app.kuaizhizao.salesForecast.statusPushed'),
-      CANCELLED: t('documentStatus.cancelled'),
-    };
-    return statusMap[status] || status;
-  };
-
   const columns: ProColumns<SalesForecast>[] = [
     {
       title: t('app.kuaizhizao.salesForecast.colForecastPrimary'),
@@ -1243,7 +1220,6 @@ export default function SalesForecastsPage() {
     {
       title: t('common.actions'),
       valueType: 'option',
-      minWidth: 120,
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
@@ -1408,7 +1384,6 @@ export default function SalesForecastsPage() {
       {
         title: t('common.actions'),
         valueType: 'option',
-        minWidth: 120,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => {
@@ -2240,17 +2215,15 @@ export default function SalesForecastsPage() {
 
       {forecastFormSecondaryModals}
 
-      <DetailDrawerTemplate
-        title={`${t('app.kuaizhizao.salesForecast.detailTitle')}${currentForecast?.forecast_code ? ` - ${currentForecast.forecast_code}` : ''}`}
+      <SalesForecastDetailDrawer
         open={drawerVisible}
         zIndex={forecastDetailDrawerZIndex}
         onClose={() => {
           setDrawerVisible(false)
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        dataSource={currentForecast || {}}
-        footer={undefined}
+        forecast={currentForecast}
+        auditRequired={auditEnabled}
+        trackingRefreshKey={trackingRefreshKey}
         extra={
           currentForecast && (
             <Space size="small">
@@ -2312,96 +2285,17 @@ export default function SalesForecastsPage() {
             </Space>
           )
         }
-        traceDocument={
-          currentForecast?.id != null
-            ? {
-                documentType: 'sales_forecast',
-                documentId: currentForecast.id,
-                selfDocumentId: currentForecast.id,
-                renderBriefActions: (doc) => (
-                  <WarehouseTraceBriefPrimaryActions
-                    doc={doc}
-                    t={t}
-                    navigate={navigate}
-                    closeDrawer={() => {
-                      setDrawerVisible(false);
-                    }}
-                  />
-                ),
-              }
-            : undefined
-        }
-      >
-        {currentForecast && (
-          <>
-            <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
-              <Descriptions
-                column={3}
-                size="small"
-                items={[
-                  { key: 'forecast_code', label: t('app.kuaizhizao.salesForecast.forecastCode'), children: currentForecast.forecast_code || '-' },
-                  { key: 'forecast_name', label: t('app.kuaizhizao.salesForecast.forecastName'), children: currentForecast.forecast_name || '-' },
-                  { key: 'forecast_period', label: t('app.kuaizhizao.salesForecast.forecastPeriod'), children: formatForecastPeriod(currentForecast.forecast_period) },
-                  { key: 'start_date', label: t('app.kuaizhizao.salesForecast.startDate'), children: currentForecast.start_date || '-' },
-                  { key: 'end_date', label: t('app.kuaizhizao.salesForecast.endDate'), children: currentForecast.end_date || '-' },
-                  { key: 'status', label: t('app.kuaizhizao.salesForecast.status'), children: formatForecastStatus(currentForecast.status, currentForecast.review_status) },
-                  { key: 'notes', label: t('app.kuaizhizao.salesForecast.notes'), children: currentForecast.notes || '-', span: 3 },
-                ]}
-              />
-            </DetailDrawerSection>
-
-            <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {(() => {
-                  const lifecycle = getSalesForecastLifecycle(currentForecast, auditEnabled, t);
-                  const mainStages = lifecycle.mainStages ?? [];
-                  if (mainStages.length === 0) return null;
-                  return (
-                    <UniLifecycleStepper
-                      steps={mainStages}
-                      status={lifecycle.status}
-                      showLabels
-                      nextStepSuggestions={lifecycle.nextStepSuggestions}
-                      hideNextStepSuggestions
-                    />
-                  );
-                })()}
-              </div>
-            </DetailDrawerSection>
-
-            <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
-              {(currentForecast.items || []).length > 0 ? (
-                <div style={{ width: '100%', overflowX: 'auto', overflowY: 'hidden' }}>
-                  <Table
-                    size="small"
-                    rowKey="id"
-                    tableLayout="fixed"
-                    style={{ minWidth: 760 }}
-                    dataSource={currentForecast.items || []}
-                    pagination={false}
-                    columns={[
-                      { title: t('app.kuaizhizao.salesForecast.materialCode'), dataIndex: 'material_code', width: 140 },
-                      { title: t('app.kuaizhizao.salesForecast.materialName'), dataIndex: 'material_name', width: 180, ellipsis: true },
-                      { title: t('app.kuaizhizao.salesForecast.forecastQuantity'), dataIndex: 'forecast_quantity', width: 120, align: 'right' },
-                      { title: t('app.kuaizhizao.salesForecast.forecastDate'), dataIndex: 'forecast_date', width: 120 },
-                    ]}
-                  />
-                </div>
-              ) : (
-                <Typography.Text type="secondary">{t('app.kuaizhizao.salesForecast.emptyItems')}</Typography.Text>
-              )}
-            </DetailDrawerSection>
-
-            <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
-              {forecastTracking.data ? (
-                <DocumentTrackingTimelineBody data={forecastTracking.data} />
-              ) : (
-                <Typography.Text type="secondary">{t('app.kuaizhizao.salesForecast.emptyTimeline')}</Typography.Text>
-              )}
-            </DetailDrawerSection>
-          </>
+        renderBriefActions={(doc) => (
+          <WarehouseTraceBriefPrimaryActions
+            doc={doc}
+            t={t}
+            navigate={navigate}
+            closeDrawer={() => {
+              setDrawerVisible(false);
+            }}
+          />
         )}
-      </DetailDrawerTemplate>
+      />
 
       <Modal
         title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}

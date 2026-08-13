@@ -291,7 +291,6 @@ const ToolBorrowsPage: React.FC = () => {
         key: 'lifecycle',
         dataIndex: 'status',
         width: 90,
-        sorter: true,
         hideInSearch: true,
         fixed: 'right',
         render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status),
@@ -299,7 +298,6 @@ const ToolBorrowsPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        width: 180,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => (

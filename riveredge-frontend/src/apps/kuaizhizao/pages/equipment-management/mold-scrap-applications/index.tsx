@@ -253,7 +253,6 @@ const MoldScrapApplicationsPage: React.FC = () => {
         key: 'lifecycle',
         dataIndex: 'status',
         width: 90,
-        sorter: true,
         hideInSearch: true,
         fixed: 'right',
         render: (_, r) => (
@@ -263,7 +262,6 @@ const MoldScrapApplicationsPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        width: 260,
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => (

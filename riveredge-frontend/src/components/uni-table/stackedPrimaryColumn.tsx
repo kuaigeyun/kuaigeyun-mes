@@ -12,6 +12,8 @@
 import React from 'react';
 import { CopyOutlined } from '@ant-design/icons';
 import { Typography, theme } from 'antd';
+import { LinkedDocumentCode } from '../linked-document-code/LinkedDocumentCode';
+import { resolveStackedSecondaryLinkedDocument } from '../../apps/kuaizhizao/utils/linkedDocumentAutoLink';
 
 /** 文档文件夹风格复制图标色（固定淡黄，不随主题色漂移） */
 const DOC_FOLDER_COPY_ICON_COLOR = '#d48806';
@@ -121,9 +123,15 @@ export interface UniTableStackedPrimaryCellProps {
   primary: string;
   /** 下行次文案（如单号、编码） */
   secondary: string;
-  /** 次行是否显示复制按钮，默认 true */
+  /** 传入后次行按全局 *_code + *_id 约定自动挂关联抽屉，无需页面写 onSecondaryClick */
+  record?: Record<string, unknown>;
+  /** 次行对应字段（如 purchase_receipt_code）；缺省则用次行文案匹配 record 上的 *_code */
+  secondaryKeys?: string[];
+  /** 退出叠列次行自动挂链 */
+  skipLinkedDocumentLink?: boolean;
+  /** 次行是否显示复制按钮，默认 true；自动挂链时由 LinkedDocumentCode 自带复制 */
   secondaryCopyable?: boolean;
-  /** 次行可点（如关联单据单号）；传入后次行以链接样式渲染 */
+  /** 次行可点（仅本行跳转等非关联单据；关联单号走 record 自动挂链） */
   onSecondaryClick?: () => void;
   /** @deprecated 请用 secondaryExtra；复制按钮前的插槽（历史兼容） */
   secondaryLeadingExtra?: React.ReactNode;
@@ -144,6 +152,9 @@ export interface UniTableStackedPrimaryCellProps {
 export function UniTableStackedPrimaryCell({
   primary,
   secondary,
+  record,
+  secondaryKeys,
+  skipLinkedDocumentLink = false,
   secondaryCopyable = true,
   onSecondaryClick,
   secondaryLeadingExtra,
@@ -157,6 +168,10 @@ export function UniTableStackedPrimaryCell({
   const { token } = theme.useToken();
   const primaryText = primary?.trim() ? primary.trim() : '-';
   const secondaryText = secondary?.trim() ? secondary.trim() : '-';
+  const linkedDoc =
+    skipLinkedDocumentLink || !record
+      ? null
+      : resolveStackedSecondaryLinkedDocument(record, secondaryText, secondaryKeys);
   const rowGap = 6;
   const copyIconStyle: React.CSSProperties = { color: DOC_FOLDER_COPY_ICON_COLOR, fontSize: 11 };
   const primaryLineStyle: React.CSSProperties = uniformText
@@ -211,7 +226,16 @@ export function UniTableStackedPrimaryCell({
         }}
       >
         {secondaryBadge ? <UniTableStackedLineBadge>{secondaryBadge}</UniTableStackedLineBadge> : null}
-        {onSecondaryClick && secondaryText !== '-' ? (
+        {linkedDoc ? (
+          <LinkedDocumentCode
+            documentType={linkedDoc.documentType}
+            documentId={linkedDoc.documentId}
+            code={linkedDoc.code}
+            copyable={secondaryCopyable}
+            ellipsis={false}
+            style={secondaryLineStyle}
+          />
+        ) : onSecondaryClick && secondaryText !== '-' ? (
           <Typography.Link
             onClick={(e) => {
               e.stopPropagation();
@@ -230,7 +254,7 @@ export function UniTableStackedPrimaryCell({
           </Typography.Text>
         )}
         {secondaryLeadingExtra}
-        {secondaryCopyable && secondaryText !== '-' ? (
+        {!linkedDoc && secondaryCopyable && secondaryText !== '-' ? (
           <Typography.Text
             copyable={{
               text: secondaryText,

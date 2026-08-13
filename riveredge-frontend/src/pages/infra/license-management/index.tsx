@@ -127,7 +127,6 @@ export default function LicenseManagementPage() {
     {
       title: t('common.actions', { defaultValue: '操作' }),
       valueType: 'option',
-      width: 140,
       render: (_, record) => (
         <Space>
           <Button

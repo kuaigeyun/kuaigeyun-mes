@@ -116,6 +116,40 @@ export function renderLogisticsCarrierTypeTag(t: TFunction, carrierType?: string
   return <MarkerTag color="processing">{label === key ? code : label}</MarkerTag>;
 }
 
+export function logisticsVehicleTypeLabel(t: TFunction, vehicleType?: string | null): string {
+  const code = String(vehicleType ?? '').trim();
+  if (!code) return '-';
+  const key = `app.kuaizhizao.logistics.option.vehicleType.${code}`;
+  const label = t(key);
+  return label === key ? code : label;
+}
+
+export function logisticsTransportModeLabel(t: TFunction, mode?: string | null): string {
+  const code = String(mode ?? '').trim();
+  if (!code) return '-';
+  const camel =
+    code === 'own_vehicle' ? 'ownVehicle' : code === 'external_carrier' ? 'externalCarrier' : code;
+  const key = `app.kuaizhizao.logistics.option.transportMode.${camel}`;
+  const label = t(key);
+  return label === key ? code : label;
+}
+
+export function logisticsTrackingEventLabel(t: TFunction, eventType?: string | null): string {
+  const code = String(eventType ?? '').trim();
+  if (!code) return '-';
+  const key = `app.kuaizhizao.logistics.option.trackingEvent.${code}`;
+  const label = t(key);
+  return label === key ? code : label;
+}
+
+export function logisticsReceiptResultLabel(t: TFunction, result?: string | null): string {
+  const code = String(result ?? '').trim();
+  if (!code) return '-';
+  const key = `app.kuaizhizao.logistics.option.receiptResult.${code}`;
+  const label = t(key);
+  return label === key ? code : label;
+}
+
 export function renderLogisticsBusinessDirectionTag(t: TFunction, direction?: string | null) {
   const code = String(direction ?? '').trim();
   if (!code) return '-';

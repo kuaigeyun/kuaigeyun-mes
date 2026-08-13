@@ -19,19 +19,18 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { downloadFile } from '../../../../../utils';
 import { batchImport } from '../../../../../utils/batchOperations';
-import { ListPageTemplate, FormModalTemplate, flushDrawerOpen, DetailDrawerSection } from '../../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
+import { ListPageTemplate, FormModalTemplate, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { ProcessMasterDetailDrawer } from '../shared/processMasterDetailDrawer';
+import { renderMasterActiveTag } from '../../../utils/masterListPresentation';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
   MasterDataBatchActiveMenuButton,
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
-import {
-  CustomFieldsFormSection,
-  CustomFieldsDetailSection,
-  hasCustomFieldsDetailContent,
-} from '../../../../../components/custom-fields';
+import { CustomFieldsFormSection } from '../../../../../components/custom-fields';
 
 const SOP_CUSTOM_FIELD_TABLE = 'master_data_sops';
 
@@ -47,7 +46,6 @@ import {
 import { materialApi, materialGroupApi } from '../../../services/material';
 import type { MaterialListResponse } from '../../../types/material';
 import type { SOP, SOPCreate, SOPUpdate, Operation } from '../../../types/process';
-import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import {
   MATERIAL_SELECT_OPTION_ITEM_HEIGHT,
   MaterialSelectOptionContent,
@@ -58,7 +56,6 @@ import {
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
 import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
-import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import {
@@ -94,6 +91,8 @@ const SOPPage: React.FC = () => {
   const [currentSOPUuid, setCurrentSOPUuid] = useState<string | null>(null);
   const [sopDetail, setSopDetail] = useState<SOP | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   
   // Modal 相关状态（创建/编辑SOP；作业指导与报工采集在图形化设计页管理）
   const [modalVisible, setModalVisible] = useState(false);
@@ -122,7 +121,6 @@ const SOPPage: React.FC = () => {
   const [routes, setRoutes] = useState<{ uuid: string; code: string; name: string }[]>([]);
   const [existingSopsForCheck, setExistingSopsForCheck] = useState<SOP[]>([]);
   const [sopPreviewCode, setSopPreviewCode] = useState<string | null>(null);
-  const sopDetailReqRef = useRef(0);
 
   const {
     customFields: sopFormCustomFields,
@@ -375,39 +373,38 @@ const SOPPage: React.FC = () => {
   /**
    * 处理打开详情
    */
-  const handleOpenDetail = async (record: SOP) => {
-    const req = ++sopDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setCurrentSOPUuid(record.uuid);
-      setSopDetail(record);
-      setDrawerVisible(true);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await sopApi.get(record.uuid);
-      if (sopDetailReqRef.current !== req) return;
+      const detail = await sopApi.get(uuid);
       setSopDetail(detail);
+      setCurrentSOPUuid(detail.uuid);
       if (detail.id != null) {
         await loadSopFieldValuesForDetail(detail.id);
       }
-    } catch (error: any) {
-      if (sopDetailReqRef.current === req) {
-        messageApi.error(error.message || t('app.master-data.sop.getDetailFailed'));
-      }
+    } catch (error) {
+      setSopDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.master-data.sop.getDetailFailed')));
     } finally {
-      if (sopDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
   };
 
-  /**
-   * 处理关闭详情
-   */
+  const handleOpenDetail = (record: SOP) => {
+    detailRetryUuidRef.current = record.uuid;
+    setCurrentSOPUuid(record.uuid);
+    setDrawerVisible(true);
+    setSopDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
+  };
+
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setCurrentSOPUuid(null);
     setSopDetail(null);
+    setDetailError(null);
     resetSopDetailFieldValues();
   };
 
@@ -863,31 +860,16 @@ const SOPPage: React.FC = () => {
       {
         title: t('field.route.isActive'),
         dataIndex: 'isActive',
-        render: (_: unknown, record: SOP) => {
-          const isActive = record?.isActive ?? (record as any)?.is_active;
-          return (
-            <Tag color={isActive ? 'success' : 'default'} variant="solid">
-              {isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
-            </Tag>
-          );
-        },
+        render: (_: unknown, record: SOP) =>
+          renderMasterActiveTag(
+            t,
+            record?.isActive ?? (record as any)?.is_active,
+            'app.master-data.plants.enabled',
+            'app.master-data.plants.disabled',
+          ),
       },
-      {
-        title: t('common.createdAt'),
-        dataIndex: 'createdAt',
-        render: (_: unknown, record: SOP) => {
-          const v = (record as any)?.createdAt ?? (record as any)?.created_at;
-          return v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-';
-        },
-      },
-      {
-        title: t('common.updatedAt'),
-        dataIndex: 'updatedAt',
-        render: (_: unknown, record: SOP) => {
-          const v = (record as any)?.updatedAt ?? (record as any)?.updated_at;
-          return v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-';
-        },
-      },
+      { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
     ],
     [t, operations]
   );
@@ -1173,7 +1155,6 @@ const SOPPage: React.FC = () => {
       title: t('common.actions'),
       key: 'action',
       valueType: 'option',
-      width: 280,
       fixed: 'right',
       render: (_, record) => {
         const goDesigner = () => {
@@ -1322,51 +1303,44 @@ const SOPPage: React.FC = () => {
         onExport={handleExport}
       />
 
-      <UniDetail
+      <ProcessMasterDetailDrawer
         title={t('app.master-data.sop.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        detail={sopDetail}
+        detailColumns={sopDetailBasicColumns}
+        customFields={sopListCustomFields}
+        customFieldValues={sopDetailCustomFieldValues}
+        supplementaryTitle={t('app.master-data.sop.detailSectionBinding')}
+        supplementary={
           sopDetail ? (
             <Descriptions
-              column={1}
-              size="small"
-              items={detailDrawerDescriptionItems(sopDetailBasicColumns, sopDetail)}
-            />
-          ) : null
-        }
-        collaboration={
-          sopDetail ? (
-            <Descriptions
-              column={1}
+              column={2}
               size="small"
               items={detailDrawerDescriptionItems(sopDetailBindingColumns, sopDetail)}
             />
-          ) : null
+          ) : undefined
         }
-        collaborationTitle={t('app.master-data.sop.detailSectionBinding')}
         linesTitle={t('app.master-data.sop.detailSectionDigital')}
         lines={
           sopDetail ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {hasCustomFieldsDetailContent(sopListCustomFields, sopDetailCustomFieldValues) ? (
-                <DetailDrawerSection title={t('app.master-data.customFields')}>
-                  <CustomFieldsDetailSection
-                    customFields={sopListCustomFields}
-                    customFieldValues={sopDetailCustomFieldValues}
-                  />
-                </DetailDrawerSection>
-              ) : null}
-              <Descriptions
-                column={1}
-                size="small"
-                items={detailDrawerDescriptionItems(sopDetailDigitalColumns, sopDetail)}
-              />
-            </div>
-          ) : null
+            <Descriptions
+              column={2}
+              size="small"
+              items={detailDrawerDescriptionItems(sopDetailDigitalColumns, sopDetail)}
+            />
+          ) : undefined
         }
+        extra={buildDetailDrawerEditExtra(t, Boolean(sopDetail), () => {
+          if (!sopDetail) return;
+          void handleEdit(sopDetail);
+        })}
       />
 
       {/* 新建 SOP Modal：按工艺路线批量创建 */}

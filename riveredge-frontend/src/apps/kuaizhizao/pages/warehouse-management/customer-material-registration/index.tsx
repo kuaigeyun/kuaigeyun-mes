@@ -21,7 +21,7 @@ import {
 import { App, Button, Space, Popconfirm, Row, Col, Typography, Segmented, Input, InputNumber, Form as AntForm, Table, Descriptions, Tag } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, CloseCircleOutlined, ScanOutlined, RollbackOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, detailDrawerDescriptionItems, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, detailDrawerDescriptionItems, detailDrawerBasicColumn, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -41,7 +41,7 @@ import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-sele
 import dayjs from 'dayjs';
 import { coerceFormDate, formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import {formatDateTime, formatQuantity} from '../../../../../utils/format';
-import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
@@ -741,16 +741,16 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     },
   ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, resourcePerms, registrationStatusValueEnum]);
 
-  const detailBasicColumns = useMemo<ProDescriptionsItemProps<CustomerMaterialRegistration>[]>(() => [
+  const detailBasicColumns = useMemo(() => alignDescriptionColumns([
     { title: t('app.kuaizhizao.warehouseCommon.colCode'), dataIndex: 'registration_code' },
     { title: t('app.kuaizhizao.warehouseCommon.colCustomer'), dataIndex: 'customer_name' },
-    { title: t('app.kuaizhizao.warehouseCommon.colWorkOrder'), dataIndex: 'work_order_code' },
+    { title: t('app.kuaizhizao.warehouseCommon.colWorkOrder'), dataIndex: 'work_order_code', key: 'linked_work_order_code' },
     { title: t('app.kuaizhizao.warehouseCommon.colSalesOrder'), dataIndex: 'sales_order_code' },
     { title: t('app.kuaizhizao.warehouseCommon.colWarehouse'), dataIndex: 'warehouse_name' },
     {
       title: t('app.kuaizhizao.warehouseCommon.colRegistrationDate'),
       dataIndex: 'registration_date',
-      render: (_, record) => (record.registration_date ? formatDateTime(record.registration_date) : '-'),
+      valueType: 'dateTime',
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colTotalQuantity'),
@@ -779,10 +779,10 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.warehouseCommon.colExecutedAt'),
       dataIndex: 'processed_at',
-      render: (_, record) => (record.processed_at ? formatDateTime(record.processed_at) : '-'),
+      valueType: 'dateTime',
     },
-    { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 2 },
-  ], [t]);
+    { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 3 },
+  ]), [t]);
 
   const detailItemColumns = useMemo(() => [
     { title: t('app.kuaizhizao.warehouseCommon.colMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
@@ -1221,7 +1221,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         basic={
           currentRegistration ? (
             <Descriptions
-              column={2}
+              column={detailDrawerBasicColumn(false)}
               size="small"
               items={detailDrawerDescriptionItems(detailBasicColumns, currentRegistration)}
             />

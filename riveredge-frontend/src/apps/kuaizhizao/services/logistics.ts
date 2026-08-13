@@ -84,9 +84,16 @@ export type FreightOrder = {
   actual_arrive_at?: string;
   status: string;
   remark?: string;
+  created_at?: string;
+  updated_at?: string;
   sources?: FreightOrderSource[];
   tracking_events?: FreightTrackingEvent[];
-  receipt?: Record<string, unknown>;
+  receipt?: {
+    signed_by?: string;
+    signed_at?: string;
+    receipt_result?: string;
+    remark?: string;
+  } | null;
 };
 
 export type FreightPullCandidate = {
@@ -206,6 +213,10 @@ export async function dispatchFreightOrder(id: number) {
 
 export async function shipFreightOrder(id: number) {
   return apiRequest<FreightOrder>(`${BASE}/freight-orders/${id}/ship`, { method: 'POST' });
+}
+
+export async function markFreightOrderInTransit(id: number) {
+  return apiRequest<FreightOrder>(`${BASE}/freight-orders/${id}/in-transit`, { method: 'POST' });
 }
 
 export async function arriveFreightOrder(id: number) {

@@ -156,6 +156,194 @@ for path in ROOT.rglob("*.tsx"):
                 f"{path}:{line}: UniTable scroll.x ignored by engine; remove or set allowCustomScrollX"
             )
 
+def _skip_string(text: str, i: int) -> int:
+    q = text[i]
+    i += 1
+    n = len(text)
+    if q == "`":
+        while i < n:
+            if text[i] == "\\":
+                i += 2
+                continue
+            if text[i] == "`":
+                return i + 1
+            i += 1
+        return n
+    while i < n:
+        if text[i] == "\\":
+            i += 2
+            continue
+        if text[i] == q:
+            return i + 1
+        i += 1
+    return n
+
+
+def _match_brace(text: str, start: int) -> int | None:
+    if start >= len(text) or text[start] != "{":
+        return None
+    depth = 0
+    i = start
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if ch in "'\"`":
+            i = _skip_string(text, i)
+            continue
+        if ch == "/" and i + 1 < n:
+            nxt = text[i + 1]
+            if nxt == "/":
+                nl = text.find("\n", i)
+                i = n if nl < 0 else nl + 1
+                continue
+            if nxt == "*":
+                end = text.find("*/", i + 2)
+                i = n if end < 0 else end + 2
+                continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    return None
+
+
+def _enclosing_object(text: str, pos: int) -> tuple[int, int] | None:
+    depth = 0
+    i = pos
+    while i >= 0:
+        ch = text[i]
+        if ch == "}":
+            depth += 1
+        elif ch == "{":
+            if depth == 0:
+                end = _match_brace(text, i)
+                if end is None:
+                    return None
+                return i, end
+            depth -= 1
+        i -= 1
+    return None
+
+
+def _object_top_level_props(obj: str) -> list[tuple[str, int, int]]:
+    """Return (name, start, end) of top-level `name: value` spans inside `{...}`."""
+    if len(obj) < 2 or obj[0] != "{":
+        return []
+    body = obj[1:-1]
+    props: list[tuple[str, int, int]] = []
+    i = 0
+    n = len(body)
+    depth = 0
+    while i < n:
+        ch = body[i]
+        if ch in "'\"`":
+            i = _skip_string(body, i)
+            continue
+        if ch == "/" and i + 1 < n:
+            nxt = body[i + 1]
+            if nxt == "/":
+                nl = body.find("\n", i)
+                i = n if nl < 0 else nl + 1
+                continue
+            if nxt == "*":
+                end = body.find("*/", i + 2)
+                i = n if end < 0 else end + 2
+                continue
+        if ch in "{[(":
+            depth += 1
+            i += 1
+            continue
+        if ch in "}])":
+            depth = max(0, depth - 1)
+            i += 1
+            continue
+        if depth == 0:
+            m = re.match(r"(width|minWidth)\s*:", body[i:])
+            if m:
+                start = i
+                i += m.end()
+                while i < n:
+                    c = body[i]
+                    if c in "'\"`":
+                        i = _skip_string(body, i)
+                        continue
+                    if c in "{[(":
+                        depth += 1
+                    elif c in "}])":
+                        depth = max(0, depth - 1)
+                    elif c == "," and depth == 0:
+                        i += 1
+                        break
+                    elif c == "\n" and depth == 0:
+                        break
+                    i += 1
+                props.append((m.group(1), start, i))
+                continue
+        i += 1
+    return props
+
+
+def _is_unitable_operation_column(obj: str) -> bool:
+    has_option_type = re.search(r"\bvalueType\s*:\s*['\"]option['\"]", obj) is not None
+    has_op_key = re.search(r"\bkey\s*:\s*['\"](?:action|option|operation)['\"]", obj) is not None
+    has_fixed_right = re.search(r"\bfixed\s*:\s*(?:['\"]right['\"]|'right'\s+as\s+const)", obj) is not None
+    if has_option_type:
+        return True
+    return has_op_key and has_fixed_right
+
+
+def iter_unitable_operation_column_width_hits(path: Path, raw: str) -> list[str]:
+    if re.search(r"<UniTable\b", raw) is None:
+        return []
+    hits: list[str] = []
+    seen: set[int] = set()
+    for m in re.finditer(
+        r"\b(?:valueType\s*:\s*['\"]option['\"]|key\s*:\s*['\"](?:action|option|operation)['\"])",
+        raw,
+    ):
+        span = _enclosing_object(raw, m.start())
+        if span is None or span[0] in seen:
+            continue
+        seen.add(span[0])
+        obj = raw[span[0] : span[1] + 1]
+        if not _is_unitable_operation_column(obj):
+            continue
+        props = _object_top_level_props(obj)
+        width_props = [p for p in props if p[0] in {"width", "minWidth"}]
+        if not width_props:
+            continue
+        line = raw.count("\n", 0, span[0]) + 1
+        names = ", ".join(p[0] for p in width_props)
+        hits.append(
+            f"{path}:{line}: UniTable operation column declares {names}; "
+            "width is injected by uniTableLayoutColumns / measured action strip"
+        )
+    return hits
+
+
+# UniTable 操作列禁止页面 width/minWidth（第二真源）
+for path in ROOT.rglob("*.tsx"):
+    raw = path.read_text(encoding="utf-8")
+    HIGH.extend(iter_unitable_operation_column_width_hits(path, raw))
+
+constants_ts = ROOT / "components/layout-templates/constants.ts"
+if constants_ts.exists() and "ACTION_COLUMN_WIDTH" in constants_ts.read_text(encoding="utf-8"):
+    HIGH.append(
+        f"{constants_ts}: ACTION_COLUMN_WIDTH is a second operation-column width source; "
+        "remove it (UniTable injects width from uniTableLayoutColumns + measured action strip)"
+    )
+
+plm_action = ROOT / "apps/kuaiplm/utils/plmListCore.ts"
+if plm_action.exists():
+    plm_text = plm_action.read_text(encoding="utf-8")
+    if re.search(r"function\s+plmListActionColumn[\s\S]{0,400}\bwidth\b", plm_text):
+        HIGH.append(
+            f"{plm_action}: plmListActionColumn must not declare width; UniTable injects operation column width"
+        )
+
 # 明细表格进度列：detailTableColumns 内须 spread DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS
 for path in ROOT.rglob("*.tsx"):
     raw = path.read_text(encoding="utf-8")

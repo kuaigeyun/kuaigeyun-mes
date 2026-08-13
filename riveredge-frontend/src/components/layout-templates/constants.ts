@@ -48,11 +48,24 @@ export const DRAWER_CONFIG = {
   SMALL_WIDTH: 500,
   /** 50% 宽度（统一详情抽屉） */
   HALF_WIDTH: '50%',
+  /** 基本信息右侧附加栏（二维码）宽度，与 Descriptions 并排形成末栏 */
+  BASIC_SIDE_EXTRA_WIDTH: 168,
+  /** 无二维码时基本信息 Descriptions 列数 */
+  BASIC_DESCRIPTIONS_COLUMN: 3,
+  /** 有 basicExtra（二维码）时字段列数：字段 2 列 + 码 1 列，避免挤成 4 栏 */
+  BASIC_DESCRIPTIONS_COLUMN_WITH_QR: 2,
   /**
    * 抽屉与视口边缘的外间距（悬浮卡片效果，与全链路等左侧浮层一致）
    */
   FLOAT_MARGIN: 16,
 } as const;
+
+/** 详情抽屉基本信息列数：有二维码（basicExtra）时字段 2 列，否则 3 列。独立 Tab 详情页勿用。 */
+export function detailDrawerBasicColumn(hasQr: boolean): number {
+  return hasQr
+    ? DRAWER_CONFIG.BASIC_DESCRIPTIONS_COLUMN_WITH_QR
+    : DRAWER_CONFIG.BASIC_DESCRIPTIONS_COLUMN;
+}
 
 /**
  * 与详情 Drawer（通常为 theme.zIndexPopupBase）、左侧全链路浮层（常见 base+1）、
@@ -416,8 +429,6 @@ export const TABLE_CONFIG = {
   DEFAULT_PAGE_SIZE: 20,
   /** 分页大小选项 */
   PAGE_SIZE_OPTIONS: ['10', '20', '50', '100'],
-  /** 操作列宽度 */
-  ACTION_COLUMN_WIDTH: 150,
   /** 固定列宽度 */
   FIXED_COLUMN_WIDTH: 120,
 } as const;

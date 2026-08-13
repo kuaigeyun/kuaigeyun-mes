@@ -10,10 +10,14 @@ import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Row, Col, Select } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, message, Input, Badge, Row, Col, Select } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PlayCircleOutlined, PauseCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { SystemMasterDetailDrawer } from '../../../system/shared/systemMasterDetailDrawer';
+import { MarkerTag } from '../../../../constants/statusBadges';
 import {
   getScheduledTaskList,
   getScheduledTaskByUuid,
@@ -60,6 +64,8 @@ const ScheduledTaskListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<ScheduledTask | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
 
   /**
    * 处理新建定时任务
@@ -118,17 +124,26 @@ const ScheduledTaskListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: ScheduledTask) => {
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      setDetailLoading(true);
-      setDrawerVisible(true);
-      const detail = await getScheduledTaskByUuid(record.uuid);
+      const detail = await getScheduledTaskByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      messageApi.error(error.message || t('field.scheduledTask.fetchDetailFailed'));
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('field.scheduledTask.fetchDetailFailed')));
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const handleView = (record: ScheduledTask) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -387,7 +402,6 @@ const ScheduledTaskListPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 300,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -678,14 +692,25 @@ const ScheduledTaskListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <DetailDrawerTemplate
+      <SystemMasterDetailDrawer
         title={t('field.scheduledTask.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
         loading={detailLoading}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
-        dataSource={detailData}
-        columns={[
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detailData), () => {
+          if (detailData) void handleEdit(detailData);
+        })}
+        detail={detailData}
+        detailColumns={[
           {
             title: t('field.scheduledTask.name'),
             dataIndex: 'name',
@@ -784,9 +809,9 @@ const ScheduledTaskListPage: React.FC = () => {
             render: (_, record) => {
               const value = !!record.is_active;
               return (
-              <Tag color={value ? 'success' : 'default'}>
+              <MarkerTag color={value ? 'success' : 'default'}>
                 {value ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')}
-              </Tag>
+              </MarkerTag>
             );
             },
           },
@@ -806,7 +831,7 @@ const ScheduledTaskListPage: React.FC = () => {
                 failed: { color: 'error', textKey: 'field.scheduledTask.failed' },
               };
               const statusInfo = statusMap[value] || { color: 'default', textKey: value };
-              return <Tag color={statusInfo.color}>{t(statusInfo.textKey)}</Tag>;
+              return <MarkerTag color={statusInfo.color}>{t(statusInfo.textKey)}</MarkerTag>;
             },
           },
           {

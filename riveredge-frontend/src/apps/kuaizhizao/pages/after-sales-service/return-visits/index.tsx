@@ -1,6 +1,6 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Drawer, Form, Input, InputNumber, Modal, Select } from 'antd';
+import { App, Button, Form, Input, InputNumber, Modal, Select } from 'antd';
 import { DatePicker } from 'antd';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +16,8 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { formDateFormItemProps } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
 import { formatApiErrorDetail } from '../../../../../services/api';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 import type { Customer } from '../../../../master-data/types/supply-chain';
@@ -27,6 +29,7 @@ import {
   type CustomerReturnVisit,
   type CustomerReturnVisitPayload,
 } from '../../../services/after-sales-service';
+import { CustomerReturnVisitDetailDrawer } from './components/CustomerReturnVisitDetailDrawer';
 
 function customerDisplayName(c: Customer | null | undefined): string {
   if (!c) return '';
@@ -47,6 +50,9 @@ const ReturnVisitsPage: React.FC = () => {
   const [editing, setEditing] = useState<CustomerReturnVisit | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<CustomerReturnVisit | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryIdRef = useRef<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm<CustomerReturnVisitPayload & { visited_at_picker?: dayjs.Dayjs }>();
   const customerId = Form.useWatch('customer_id', form);
@@ -56,6 +62,27 @@ const ReturnVisitsPage: React.FC = () => {
     form.resetFields();
     form.setFieldsValue({ visit_method: '电话', visited_at_picker: dayjs() });
     setModalOpen(true);
+  };
+
+  const loadDetail = useCallback(async (id: number) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      setDetail(await customerReturnVisitApi.get(id));
+    } catch (error) {
+      setDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.detail.loadFailed')));
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [t]);
+
+  const openDetail = (row: CustomerReturnVisit) => {
+    detailRetryIdRef.current = row.id;
+    setDetailOpen(true);
+    setDetail(null);
+    setDetailError(null);
+    void loadDetail(row.id);
   };
 
   const openEdit = async (row: CustomerReturnVisit) => {
@@ -148,10 +175,7 @@ const ReturnVisitsPage: React.FC = () => {
               <Button
                 {...rowActionKind('read')}
                 key="read"
-                onClick={async () => {
-                  setDetail(await customerReturnVisitApi.get(row.id));
-                  setDetailOpen(true);
-                }}
+                onClick={() => openDetail(row)}
               />,
               perms.canUpdate ? (
                 <Button {...rowActionKind('update')} key="edit" onClick={() => void openEdit(row)} />
@@ -228,7 +252,7 @@ const ReturnVisitsPage: React.FC = () => {
             setSubmitting(false);
           }
         }}
-        destroyOnClose
+        destroyOnHidden
         width={720}
       >
         <Form form={form} layout="vertical">
@@ -285,15 +309,25 @@ const ReturnVisitsPage: React.FC = () => {
         </Form>
       </Modal>
 
-      <Drawer open={detailOpen} width={640} title={detail?.visit_code} onClose={() => setDetailOpen(false)}>
-        {detail ? (
-          <>
-            <p>{t('app.kuaizhizao.afterSalesService.returnVisit.field.customerName')}: {detail.customer_name}</p>
-            <p>{t('app.kuaizhizao.afterSalesService.returnVisit.field.feedback')}: {detail.feedback || '-'}</p>
-            <p>{t('app.kuaizhizao.afterSalesService.returnVisit.field.notes')}: {detail.notes || '-'}</p>
-          </>
-        ) : null}
-      </Drawer>
+      <CustomerReturnVisitDetailDrawer
+        open={detailOpen}
+        onClose={() => {
+          setDetailOpen(false);
+          setDetail(null);
+          setDetailError(null);
+        }}
+        record={detail}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryIdRef.current;
+          if (id != null) void loadDetail(id);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detail && perms.canUpdate), () => {
+          if (!detail) return;
+          void openEdit(detail);
+        })}
+      />
     </ListPageTemplate>
   );
 };

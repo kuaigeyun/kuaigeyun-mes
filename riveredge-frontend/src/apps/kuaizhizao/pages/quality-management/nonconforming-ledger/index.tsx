@@ -245,7 +245,6 @@ const NonconformingLedgerPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.quality.common.columns.actions'),
         valueType: 'option',
-        width: 180,
         hideInSearch: true,
         render: (_, row) => {
           const gates = nonconformingLedgerRowGates(row, ncPerms, canStart8d, t);

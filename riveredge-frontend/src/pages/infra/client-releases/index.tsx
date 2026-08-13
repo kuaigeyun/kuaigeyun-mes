@@ -196,7 +196,6 @@ const ClientReleasesPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 300,
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {

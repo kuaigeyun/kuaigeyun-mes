@@ -24,7 +24,6 @@ import {
   Typography,
   Alert,
   Button,
-  Descriptions,
 } from 'antd';
 import { MarkerTag } from '../../../../constants/statusBadges';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
@@ -45,13 +44,13 @@ import {
 } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import {
-  flushDrawerOpen,
+  DetailDrawerActions,
   ListPageTemplate,
   FormModalTemplate,
   MODAL_CONFIG,
-  DRAWER_CONFIG,
 } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import AppConnectorMarket from '../AppConnectorMarket';
 import type { AppConnectorDefinition } from '../connectors';
 import { isLlmConnectionType } from '../connectors';
@@ -185,7 +184,6 @@ const ApplicationConnectionsListPage: React.FC = () => {
   };
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const applicationConnectionDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
@@ -195,6 +193,8 @@ const ApplicationConnectionsListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<ApplicationConnection | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [testingConnection, setTestingConnection] = useState(false);
   const [syncingContactsUuid, setSyncingContactsUuid] = useState<string | null>(null);
   const [allConnections, setAllConnections] = useState<ApplicationConnection[]>([]);
@@ -294,26 +294,26 @@ const ApplicationConnectionsListPage: React.FC = () => {
     }
   };
 
-  const handleView = async (record: ApplicationConnection) => {
-    const req = ++applicationConnectionDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getApplicationConnectionByUuid(record.uuid);
-      if (applicationConnectionDetailReqRef.current !== req) return;
+      const detail = await getApplicationConnectionByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (applicationConnectionDetailReqRef.current === req) {
-        messageApi.error(error.message || t('pages.system.applicationConnections.getDetailFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.applicationConnections.getDetailFailed')));
     } finally {
-      if (applicationConnectionDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = async (record: ApplicationConnection) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   const handleBatchStatus = async (enable: boolean) => {
@@ -1361,52 +1361,67 @@ const ApplicationConnectionsListPage: React.FC = () => {
         initialCategory={connectorMarketInitialCategory}
       />
 
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('pages.system.applicationConnections.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
+        detail={detailData}
+        detailColumns={detailColumns}
         loading={detailLoading}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
-        basic={
-          detailData ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns as any, detailData)} />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
         extra={
-          detailData && (
-            <Space>
-              <Button type="primary" icon={<EditOutlined />} onClick={() => { setDrawerVisible(false); handleEdit(detailData); }}>
-                {t('pages.system.applicationConnections.edit')}
-              </Button>
-              <Button icon={<ApiOutlined />} onClick={() => handleTestConnection(detailData)}>
-                {t('pages.system.applicationConnections.testConnection')}
-              </Button>
-              {detailData.type === 'wecom' && canSyncContacts ? (
-                <Popconfirm
-                  title={t('pages.system.applicationConnections.syncContactsConfirmTitle')}
-                  description={t('pages.system.applicationConnections.syncContactsConfirmContent')}
-                  onConfirm={() => handleSyncContacts(detailData)}
-                  okText={t('common.confirm')}
-                  cancelText={t('common.cancel')}
-                >
-                  <Button
-                    icon={<SyncOutlined />}
-                    loading={syncingContactsUuid === detailData.uuid}
-                  >
-                    {t('pages.system.applicationConnections.syncContacts')}
-                  </Button>
-                </Popconfirm>
-              ) : null}
-              <Popconfirm
-                title={t('pages.system.applicationConnections.deleteConfirmTitle')}
-                onConfirm={() => { handleDelete(detailData); setDrawerVisible(false); }}
-                okText={t('common.confirm')}
-                cancelText={t('common.cancel')}
-              >
-                <Button danger icon={<DeleteOutlined />}>{t('pages.system.applicationConnections.delete')}</Button>
-              </Popconfirm>
-            </Space>
-          )
+          detailData ? (
+            <DetailDrawerActions
+              items={[
+                {
+                  key: 'test',
+                  visible: true,
+                  render: (
+                    <Button icon={<ApiOutlined />} onClick={() => handleTestConnection(detailData)}>
+                      {t('pages.system.applicationConnections.testConnection')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'wecom-sync',
+                  visible: detailData.type === 'wecom' && canSyncContacts,
+                  render: (
+                    <Popconfirm
+                      title={t('pages.system.applicationConnections.syncContactsConfirmTitle')}
+                      description={t('pages.system.applicationConnections.syncContactsConfirmContent')}
+                      onConfirm={() => handleSyncContacts(detailData)}
+                      okText={t('common.confirm')}
+                      cancelText={t('common.cancel')}
+                    >
+                      <Button
+                        icon={<SyncOutlined />}
+                        loading={syncingContactsUuid === detailData.uuid}
+                      >
+                        {t('pages.system.applicationConnections.syncContacts')}
+                      </Button>
+                    </Popconfirm>
+                  ),
+                },
+                {
+                  key: 'edit',
+                  visible: true,
+                  render: (
+                    <Button {...rowActionKind('update')} icon={<EditOutlined />} onClick={() => handleEdit(detailData)}>
+                      {t('pages.system.applicationConnections.edit')}
+                    </Button>
+                  ),
+                },
+              ]}
+            />
+          ) : null
         }
       />
     </>

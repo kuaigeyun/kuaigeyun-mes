@@ -2,7 +2,7 @@
  * 详情 Drawer：优先使用结构化插槽（basic / collaboration / supplementary / lines / timeline）。
  * 未使用插槽时兼容原有 columns + dataSource、customContent / plainBody、children。
  *
- * 传入 traceDocument 时：全链路（含节点简易明细）独立为「全链路跟踪」Tab，
+ * 传入 traceDocument / historyTab 时：全链路、重算/下推历史独立为 Tab，
  * 默认不挂载；用户切到该 Tab 后才开始加载，以加快抽屉首屏。
  */
 
@@ -57,6 +57,11 @@ export interface DetailDrawerTemplateProps<T extends Record<string, any> = Recor
   basic?: ReactNode;
   basicTitle?: ReactNode;
   basicVisible?: boolean;
+  /**
+   * 基本信息右侧附加栏（二维码等）。与 Descriptions 并排，形成末栏。
+   * 请勿再在 basic 内绝对定位或把二维码堆在字段下方。
+   */
+  basicExtra?: ReactNode;
 
   collaboration?: ReactNode;
   collaborationMetrics?: ReactNode;
@@ -113,6 +118,17 @@ export interface DetailDrawerTemplateProps<T extends Record<string, any> = Recor
     height?: number;
     renderBriefActions?: (doc: TraceBriefDocument) => ReactNode;
   } | null;
+
+  /**
+   * 重算 / 下推历史：独立 Tab，默认不加载，切到该 Tab 后才挂载。
+   * 请勿再塞进 supplementary 或详情区内嵌 Tabs。
+   */
+  historyTab?: {
+    label?: ReactNode;
+    children: ReactNode;
+    /** 换单时重置 Tab 与懒挂载（与 traceDocument.documentId 同职责） */
+    documentId?: number;
+  } | null;
 }
 
 function stackCollaborationParts(...nodes: (ReactNode | undefined)[]): ReactNode {
@@ -127,7 +143,30 @@ function stackCollaborationParts(...nodes: (ReactNode | undefined)[]): ReactNode
   );
 }
 
+function withBasicSideExtra(basic: ReactNode, extra: ReactNode | undefined): ReactNode {
+  if (extra == null || extra === false) return basic;
+  const width = DRAWER_CONFIG.BASIC_SIDE_EXTRA_WIDTH;
+  return (
+    <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>{basic}</div>
+      <div
+        style={{
+          flex: `0 0 ${width}px`,
+          width,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        {extra}
+      </div>
+    </div>
+  );
+}
+
 const DETAIL_TAB_KEY = 'detail';
+const HISTORY_TAB_KEY = 'history';
 const FULL_CHAIN_TAB_KEY = 'fullChain';
 
 export const DetailDrawerTemplate = <T extends Record<string, any> = Record<string, unknown>,>({
@@ -148,6 +187,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   basic,
   basicTitle,
   basicVisible,
+  basicExtra,
   collaboration,
   collaborationMetrics,
   collaborationLifecycle,
@@ -175,6 +215,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   disableFloatingChrome = false,
   afterOpenChange,
   traceDocument,
+  historyTab,
 }: DetailDrawerTemplateProps<T>) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
@@ -221,25 +262,32 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
 
   const isOpen = open ?? visible ?? false;
   const hasTraceDocument = Boolean(traceDocument?.documentId);
+  const hasHistoryTab = historyTab != null && historyTab.children != null && historyTab.children !== false;
 
   const [activeTab, setActiveTab] = useState<string>(DETAIL_TAB_KEY);
-  /** 仅在用户首次切到全链路 Tab 后挂载，避免抽屉打开即拉图 */
+  /** 仅在用户首次切到对应 Tab 后挂载，避免抽屉打开即拉历史/全链路 */
+  const [historyMounted, setHistoryMounted] = useState(false);
   const [fullChainMounted, setFullChainMounted] = useState(false);
 
   useEffect(() => {
     if (!isOpen) {
       setActiveTab(DETAIL_TAB_KEY);
+      setHistoryMounted(false);
       setFullChainMounted(false);
     }
   }, [isOpen]);
 
   useEffect(() => {
     setActiveTab(DETAIL_TAB_KEY);
+    setHistoryMounted(false);
     setFullChainMounted(false);
-  }, [traceDocument?.documentType, traceDocument?.documentId]);
+  }, [traceDocument?.documentType, traceDocument?.documentId, historyTab?.documentId]);
 
   const handleTabChange = (key: string) => {
     setActiveTab(key);
+    if (key === HISTORY_TAB_KEY) {
+      setHistoryMounted(true);
+    }
     if (key === FULL_CHAIN_TAB_KEY) {
       setFullChainMounted(true);
     }
@@ -300,10 +348,13 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   const sectionedBody = (
     <>
       {showBasic ? (
-        <DetailDrawerSection title={resolvedBasicTitle}>{basic}</DetailDrawerSection>
+        <DetailDrawerSection titleAccent title={resolvedBasicTitle}>
+          {withBasicSideExtra(basic, basicExtra)}
+        </DetailDrawerSection>
       ) : null}
       {showCollaboration ? (
         <DetailDrawerSection
+          titleAccent
           title={collaborationSectionTitle}
           titleExtra={resolvedCollaborationTitleExtra}
         >
@@ -311,15 +362,19 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
         </DetailDrawerSection>
       ) : null}
       {showSupplementary ? (
-        <DetailDrawerSection title={supplementaryTitle}>{supplementary}</DetailDrawerSection>
+        <DetailDrawerSection titleAccent title={supplementaryTitle}>
+          {supplementary}
+        </DetailDrawerSection>
       ) : null}
       {showLines ? (
-        <DetailDrawerSection title={resolvedLinesTitle}>
+        <DetailDrawerSection titleAccent title={resolvedLinesTitle}>
           <DetailDrawerLinesScroll>{lines}</DetailDrawerLinesScroll>
         </DetailDrawerSection>
       ) : null}
       {showTimeline ? (
-        <DetailDrawerSection title={resolvedTimelineTitle}>{timeline}</DetailDrawerSection>
+        <DetailDrawerSection titleAccent title={resolvedTimelineTitle}>
+          {timeline}
+        </DetailDrawerSection>
       ) : null}
       {/* 兼容：已使用分区插槽但仍传入 plainBody/customContent/children 时，叠在分区之后 */}
       {plainBody ?? customContent}
@@ -341,26 +396,40 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
       />
     ) : null;
 
-  const drawerBody = hasTraceDocument ? (
+  const showTabs = hasTraceDocument || hasHistoryTab;
+  const tabItems = [
+    {
+      key: DETAIL_TAB_KEY,
+      label: t('app.uniDetail.tabDetail'),
+      children: detailBody,
+    },
+    ...(hasHistoryTab && historyTab
+      ? [
+          {
+            key: HISTORY_TAB_KEY,
+            label: historyTab.label ?? t('app.uniDetail.tabHistory'),
+            children: historyMounted ? historyTab.children : <div style={{ minHeight: 120 }} />,
+          },
+        ]
+      : []),
+    ...(hasTraceDocument
+      ? [
+          {
+            key: FULL_CHAIN_TAB_KEY,
+            label: t('app.uniDetail.sectionFullChain'),
+            children: fullChainPane ?? <div style={{ minHeight: 120 }} />,
+          },
+        ]
+      : []),
+  ];
+
+  const drawerBody = showTabs ? (
     <Tabs
       activeKey={activeTab}
       onChange={handleTabChange}
       size="small"
       style={{ marginTop: -4 }}
-      items={[
-        {
-          key: DETAIL_TAB_KEY,
-          label: t('app.uniDetail.tabDetail'),
-          children: detailBody,
-        },
-        {
-          key: FULL_CHAIN_TAB_KEY,
-          label: t('app.uniDetail.sectionFullChain'),
-          children: fullChainPane ?? (
-            <div style={{ minHeight: 120 }} />
-          ),
-        },
-      ]}
+      items={tabItems}
     />
   ) : (
     detailBody

@@ -678,7 +678,6 @@ const UnitsPage: React.FC = () => {
         key: 'action',
         valueType: 'option',
         fixed: 'right',
-        width: 160,
         render: (_, record) => (
           <Space>
             {perms.canUpdate ? (
@@ -785,7 +784,6 @@ const UnitsPage: React.FC = () => {
         key: 'action',
         valueType: 'option',
         fixed: 'right',
-        width: 160,
         render: (_, record) => (
           <Space>
             {perms.canUpdate ? (

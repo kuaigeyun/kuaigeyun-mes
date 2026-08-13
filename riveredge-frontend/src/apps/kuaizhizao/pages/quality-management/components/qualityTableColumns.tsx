@@ -1,9 +1,9 @@
 /**
  * 质量管理列表页：堆叠列与合格/不合格数量展示（Ant Design 语义色）
  *
- * 检验四单据列表列序：与 GLOBAL_DOC_LIST_FIELD_RANK 中 quality_inspection_* /
- * inspection_code / downstream_push_progress / inspector_name 对齐；本文件挂载 key，
- * 页面不得另起 key 或浅覆盖 rank。
+ * 检验四单据列表列序：与 GLOBAL_DOC_LIST_FIELD_RANK 中 inspection_code /
+ * quality_inspection_kind / quality_inspection_* / downstream_push_progress / inspector_name 对齐；
+ * 本文件挂载 key，页面不得另起 key 或浅覆盖 rank。
  */
 
 import React from 'react';
@@ -13,12 +13,21 @@ import type { TFunction } from 'i18next';
 import {
   MaterialStackedCell,
   UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_IDENTITY_CLASS,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { formatQuantity } from '../../../../../utils/format';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import {
+  getInspectionTemplateSource,
+  hasInspectionPlanSteps,
+} from './inspectionTemplateUtils';
+
+/** 检验类型列统一 key → rank 10.5（单号后、第二业务叠列前） */
+export const QUALITY_INSPECTION_KIND_KEY = 'quality_inspection_kind';
 
 /** 第二业务列（伙伴/来源叠列）统一 key → rank 11 */
 export const QUALITY_INSPECTION_PARTNER_STACKED_KEY = 'quality_inspection_partner_stacked';
@@ -69,6 +78,8 @@ export function stackedPrimarySecondaryColumn<T extends object>(
     ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
     render: (_, record) => (
       <UniTableStackedPrimaryCell
+        record={record as Record<string, unknown>}
+        secondaryKeys={secondaryKeys}
         primary={pickRecordText(record as Record<string, unknown>, ...primaryKeys) || '-'}
         secondary={pickRecordText(record as Record<string, unknown>, ...secondaryKeys) || '-'}
       />
@@ -201,23 +212,69 @@ export function buildQualityInspectionListSearchColumns<T extends object>(
   ];
 }
 
+/** 检验类型定宽：简易检验 / 方案检验 */
+const QUALITY_INSPECTION_KIND_COLUMN_WIDTH = 96;
+
+/** 检验四单据类型列：有方案步骤为方案检验，否则简易检验 */
+export function buildQualityInspectionListKindColumn<T extends object>(t: TFunction): ProColumns<T> {
+  return {
+    title: t('app.kuaizhizao.quality.common.columns.inspectionKind'),
+    key: QUALITY_INSPECTION_KIND_KEY,
+    dataIndex: QUALITY_INSPECTION_KIND_KEY,
+    width: QUALITY_INSPECTION_KIND_COLUMN_WIDTH,
+    minWidth: QUALITY_INSPECTION_KIND_COLUMN_WIDTH,
+    uniTableKeepWidth: true,
+    resizable: false,
+    fixed: 'left',
+    hideInSearch: true,
+    ellipsis: true,
+    render: (_, record) => {
+      const isPlan = hasInspectionPlanSteps(
+        getInspectionTemplateSource(record as Record<string, unknown>),
+      );
+      return (
+        <MarkerTag color={isPlan ? 'processing' : 'default'}>
+          {isPlan
+            ? t('app.kuaizhizao.quality.common.inspectionKind.plan')
+            : t('app.kuaizhizao.quality.common.inspectionKind.simple')}
+        </MarkerTag>
+      );
+    },
+  };
+}
+
+/** 检验单号定宽：LLJY+日期+流水约 16 位 + 复制图标；单号不得省略号截断 */
+const QUALITY_INSPECTION_CODE_COLUMN_WIDTH = 196;
+
 export function buildQualityInspectionListCodeColumn<T extends object>(t: TFunction): ProColumns<T> {
   return {
     title: t('app.kuaizhizao.quality.common.columns.inspectionCode'),
+    key: 'inspection_code',
     dataIndex: 'inspection_code',
-    width: 140,
-    ellipsis: true,
+    width: QUALITY_INSPECTION_CODE_COLUMN_WIDTH,
+    minWidth: QUALITY_INSPECTION_CODE_COLUMN_WIDTH,
+    uniTableKeepWidth: true,
+    resizable: false,
+    ellipsis: false,
     fixed: 'left',
     sorter: true,
     search: { order: 30 } as ProColumns['search'],
-    render: (_, r) => (
-      <Typography.Text
-        copyable={{ text: String((r as Record<string, unknown>).inspection_code ?? '') }}
-        ellipsis
-      >
-        {String((r as Record<string, unknown>).inspection_code ?? '-')}
-      </Typography.Text>
-    ),
+    render: (_, r) => {
+      const code = String((r as Record<string, unknown>).inspection_code ?? '').trim() || '-';
+      return (
+        <span
+          className={UNI_TABLE_STACKED_IDENTITY_CLASS}
+          style={{ display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}
+        >
+          <Typography.Text
+            copyable={code === '-' ? undefined : { text: code }}
+            style={{ margin: 0, whiteSpace: 'nowrap' }}
+          >
+            {code}
+          </Typography.Text>
+        </span>
+      );
+    },
   };
 }
 

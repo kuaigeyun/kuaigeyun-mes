@@ -35,7 +35,7 @@ import { buildRestoredUserFromStorage, seedCurrentUserFromAuthStorage } from './
 import { isEquivalentCurrentUser } from './utils/currentUserSnapshot';
 import { NAVIGATION_MENU_TREE_QUERY_KEY } from './hooks/useNavigationMenuTreeQuery';
 import { queryClient } from './queryClient';
-import { refreshAccessTokenSilently } from './utils/tokenRefresh';
+import { refreshAccessTokenDetailed } from './utils/tokenRefresh';
 import { prefetchAvatarUrl } from './utils/avatar';
 import { FORM_LAYOUT } from './components/layout-templates/constants';
 import { ENGLISH_UI_FONT_FAMILY } from './constants/fonts';
@@ -233,18 +233,35 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
 
     /** 捕获阶段：避免表格/画布 stopPropagation 导致操作不刷新活动时间 */
     const onActivity = () => updateLastActivity();
-    let hiddenSince: number | null = document.visibilityState === 'hidden' ? Date.now() : null;
+    /** 标签隐藏或窗口失焦期间暂停空闲计时（切到 Excel/微信查数不应累计超时） */
+    let pausedSince: number | null =
+      document.visibilityState === 'hidden' ||
+      (typeof document.hasFocus === 'function' && !document.hasFocus())
+        ? Date.now()
+        : null;
+
+    const resumeFromPause = () => {
+      if (pausedSince != null) {
+        bumpLastActivityBy(Date.now() - pausedSince);
+        pausedSince = null;
+      }
+    };
 
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
-        hiddenSince = Date.now();
+        if (pausedSince == null) pausedSince = Date.now();
         return;
       }
-      // 回到前台：隐藏时长不计入无操作超时（暂停计时，而非清零重算）
-      if (hiddenSince != null) {
-        bumpLastActivityBy(Date.now() - hiddenSince);
-        hiddenSince = null;
-      }
+      resumeFromPause();
+    };
+
+    const onWindowBlur = () => {
+      if (pausedSince == null) pausedSince = Date.now();
+    };
+
+    const onWindowFocus = () => {
+      resumeFromPause();
+      updateLastActivity(true);
     };
 
     const onStorage = (e: StorageEvent) => {
@@ -264,6 +281,8 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     window.addEventListener('input', onActivity, activityOpts);
     window.addEventListener('focusin', onActivity, activityOpts);
     document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('blur', onWindowBlur);
+    window.addEventListener('focus', onWindowFocus);
     window.addEventListener('storage', onStorage);
 
     return () => {
@@ -277,6 +296,8 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       window.removeEventListener('input', onActivity, true);
       window.removeEventListener('focusin', onActivity, true);
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('blur', onWindowBlur);
+      window.removeEventListener('focus', onWindowFocus);
       window.removeEventListener('storage', onStorage);
     };
   }, [isPublicPath]);
@@ -301,7 +322,8 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     const parseInactivityMs = (raw: unknown): number => {
       const n = Number(raw);
       if (raw === 0 || n === 0) return 0;
-      if (!Number.isFinite(n) || n < 0) return 1800 * 1000;
+      // 非法配置按「禁用」处理，避免回落到 1800s 误踢操作中用户
+      if (!Number.isFinite(n) || n < 0) return 0;
       return n * 1000;
     };
 
@@ -309,7 +331,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       tokenCheckIntervalSec !== undefined ? tokenCheckIntervalSec : getConfig('security.token_check_interval', 60),
     );
     const inactivityTimeout = parseInactivityMs(
-      inactivityTimeoutSec !== undefined ? inactivityTimeoutSec : getConfig('security.inactivity_timeout', 1800),
+      inactivityTimeoutSec !== undefined ? inactivityTimeoutSec : getConfig('security.inactivity_timeout', 0),
     );
 
     const proactiveRefreshMs = 5 * 60 * 1000;
@@ -332,7 +354,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       redirectAfterLogout(navigate);
     };
 
-    // 检查 TOKEN：先主动续期（临近过期），已过期则尝试静默刷新（与后端 grace 对齐），失败再登出
+    // 检查 TOKEN：先主动续期（临近过期），已过期则尝试静默刷新；仅服务端明确拒绝时登出
     const checkAuthStatus = async (): Promise<boolean> => {
       if (cancelled) return false;
 
@@ -343,25 +365,41 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
 
       const remaining = getTokenRemainingTime(currentToken);
       if (remaining > 0 && remaining < proactiveRefreshMs) {
-        await refreshAccessTokenSilently();
+        const proactive = await refreshAccessTokenDetailed();
         if (cancelled) return false;
+        // 临近过期时的网络失败：保留会话，下个周期再试
+        if (!proactive.ok && proactive.reason === 'rejected') {
+          console.warn('⚠️ TOKEN 临近过期且续期被拒绝，清除认证信息并跳转到登录页');
+          handleLogout();
+          return false;
+        }
       }
 
       const tokenAfterProactive = getToken() || currentToken;
       if (isTokenExpired(tokenAfterProactive)) {
-        const ok = await refreshAccessTokenSilently();
+        const refreshResult = await refreshAccessTokenDetailed();
         if (cancelled) return false;
-        if (!ok) {
-          console.warn('⚠️ TOKEN 已过期且无法续期，清除认证信息并跳转到登录页');
+        if (!refreshResult.ok) {
+          if (refreshResult.reason === 'network') {
+            // 操作中网络抖动：不清会话，待下次检查或业务请求再续期
+            console.warn('⚠️ TOKEN 已过期但续期网络失败，暂保留会话');
+            return true;
+          }
+          console.warn('⚠️ TOKEN 已过期且续期被拒绝，清除认证信息并跳转到登录页');
           handleLogout();
           return false;
         }
       }
 
       if (inactivityTimeout > 0) {
-        // 后台标签不累计、不踢出；切回前台由 bumpLastActivityBy 暂停补偿
-        if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
-          return true;
+        // 后台标签 / 窗口失焦不累计、不踢出；切回时由 bumpLastActivityBy 暂停补偿
+        if (typeof document !== 'undefined') {
+          if (document.visibilityState !== 'visible') {
+            return true;
+          }
+          if (typeof document.hasFocus === 'function' && !document.hasFocus()) {
+            return true;
+          }
         }
         // 有进行中请求 = 操作中，刷新活动并跳过空闲判定
         if (hasPendingRequests()) {
@@ -382,10 +420,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       return true;
     };
 
-    const onTokenVisibility = () => {
-      if (document.visibilityState !== 'visible') {
-        return;
-      }
+    const tryProactiveRefreshOnResume = () => {
       void (async () => {
         if (cancelled) {
           return;
@@ -395,13 +430,24 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
           return;
         }
         const r = getTokenRemainingTime(tok);
-        // 回到前台：剩余不足或已过期都尝试静默续期，避免「正在用却被过期踢出」
+        // 回到前台/聚焦：剩余不足或已过期都尝试静默续期，避免「正在用却被过期踢出」
         if (r < proactiveRefreshMs) {
-          await refreshAccessTokenSilently();
+          await refreshAccessTokenDetailed();
         }
       })();
     };
+
+    const onTokenVisibility = () => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+      tryProactiveRefreshOnResume();
+    };
+    const onTokenWindowFocus = () => {
+      tryProactiveRefreshOnResume();
+    };
     document.addEventListener('visibilitychange', onTokenVisibility);
+    window.addEventListener('focus', onTokenWindowFocus);
 
     void (async () => {
       const ok = await checkAuthStatus();
@@ -424,6 +470,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     return () => {
       cancelled = true;
       document.removeEventListener('visibilitychange', onTokenVisibility);
+      window.removeEventListener('focus', onTokenWindowFocus);
       if (checkTimerRef.current) {
         window.clearInterval(checkTimerRef.current);
         checkTimerRef.current = null;

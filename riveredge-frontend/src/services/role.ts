@@ -37,7 +37,7 @@ export interface Role {
   code: string;
   description?: string;
   role_type: 'internal' | 'external' | 'station';
-  external_partner_type?: 'customer' | 'supplier';
+  external_partner_type?: 'customer' | 'supplier' | 'manufacturer';
   functional_domain?: string | null;
   is_system: boolean;
   is_active: boolean;
@@ -83,7 +83,7 @@ export interface CreateRoleData {
   code: string;
   description?: string;
   role_type?: 'internal' | 'external' | 'station';
-  external_partner_type?: 'customer' | 'supplier';
+  external_partner_type?: 'customer' | 'supplier' | 'manufacturer';
   functional_domain?: string | null;
   is_active?: boolean;
   home_path?: string | null;
@@ -99,7 +99,7 @@ export interface UpdateRoleData {
   code?: string;
   description?: string;
   role_type?: 'internal' | 'external' | 'station';
-  external_partner_type?: 'customer' | 'supplier';
+  external_partner_type?: 'customer' | 'supplier' | 'manufacturer';
   functional_domain?: string | null;
   is_active?: boolean;
   home_path?: string | null;

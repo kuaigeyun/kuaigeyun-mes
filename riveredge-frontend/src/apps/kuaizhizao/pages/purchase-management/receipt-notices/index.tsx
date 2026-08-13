@@ -13,9 +13,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
-import { useOptionalLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
-import type { DescriptionsProps } from 'antd';
 import {
   App,
   Button,
@@ -54,11 +52,11 @@ import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
-  DetailDrawerSection,
   DetailDrawerActions,
   FormModalTemplate,
   DRAWER_CONFIG,
   MODAL_CONFIG,
+  detailDrawerDescriptionItems,
   type StatCard,
 } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -87,7 +85,7 @@ import {
   resolveReceiptNoticeListLifecycleParams,
 } from '../../../utils/receiptNoticeLifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS, DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar';
 import {
   collectReceiptInboundPushDocuments,
@@ -169,41 +167,11 @@ const RN_STAT_SPARK_4 = [18, 20, 22, 24, 26, 28, 30];
 
 const RN_DETAIL_ITEMS_MIN_WIDTH = 960;
 
-function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
-  dataSource: T,
-  cols: ProDescriptionsItemProps<T>[]
-): NonNullable<DescriptionsProps['items']> {
-  return cols.map((col, index) => {
-    const dataIndex = col.dataIndex as keyof T | undefined;
-    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
-    let content: React.ReactNode = value as React.ReactNode;
-    if (col.valueType === 'dateTime' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD HH:mm:ss');
-    } else if (col.valueType === 'date' && value) {
-      content = formatDateTime(value as string, 'YYYY-MM-DD');
-    }
-    if (col.render && dataSource != null) {
-            content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
-        content,
-        dataSource,
-        index,
-      );
-    }
-    return {
-      key: String(col.key ?? col.dataIndex ?? index),
-      label: col.title as React.ReactNode,
-      children: content !== undefined && content !== null ? content : '-',
-      span: col.span ?? 1,
-    };
-  });
-}
-
 const RECEIPT_NOTICE_RESOURCE = 'kuaizhizao:receipt-notice';
 
 const ReceiptNoticesPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const linkedDetail = useOptionalLinkedDocumentDetail();
   const { token } = theme.useToken();
   const receiptNoticeDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
@@ -282,6 +250,10 @@ const ReceiptNoticesPage: React.FC = () => {
   }, [statsVersion, refreshLocalStats]);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [noticeDetail, setNoticeDetail] = useState<ReceiptNoticeDetail | null>(null);
+  const receiptNoticeLifecycle = useMemo(
+    () => (noticeDetail ? getReceiptNoticeLifecycle(noticeDetail as unknown as Record<string, unknown>, t) : null),
+    [noticeDetail, t],
+  );
 
   const pullQueryCloseRef = useRef<(() => void) | null>(null);
   const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
@@ -753,14 +725,10 @@ const ReceiptNoticesPage: React.FC = () => {
           if (r.purchase_receipt_id) {
             return (
               <UniTableStackedPrimaryCell
+                record={r as Record<string, unknown>}
+                secondaryKeys={['purchase_receipt_code']}
                 primary={t('app.kuaizhizao.receiptNotice.pulledToInbound')}
                 secondary={String(r.purchase_receipt_code || `#${r.purchase_receipt_id}`)}
-                onSecondaryClick={() => {
-                  linkedDetail?.openLinkedDocumentDetail(
-                    'purchase_receipt',
-                    Number(r.purchase_receipt_id),
-                  );
-                }}
               />
             );
           }
@@ -935,7 +903,7 @@ const ReceiptNoticesPage: React.FC = () => {
         },
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [handleDelete, handleDetail, handleEdit, handleNotify, handleWithdraw, linkedDetail, navigate, receiptNoticeLifecycleValueEnum, receiptNoticeSupplierSearchOptions, t, i18n.language],
+    [handleDelete, handleDetail, handleEdit, handleNotify, handleWithdraw, navigate, receiptNoticeLifecycleValueEnum, receiptNoticeSupplierSearchOptions, t, i18n.language],
   );
 
   const detailTableColumns: ProColumns<ReceiptNoticeItemRow>[] = useMemo(
@@ -1383,43 +1351,32 @@ const ReceiptNoticesPage: React.FC = () => {
   };
 
   const detailColumns: ProDescriptionsItemProps<ReceiptNoticeDetail>[] = useMemo(
-    () => [
-      {
-        title: t('app.kuaizhizao.shipmentNotice.noticeCode'),
-        dataIndex: 'notice_code',
-        render: (_, entity) => (
-          <Typography.Text copyable={{ text: String(entity.notice_code ?? '') }}>{entity.notice_code ?? '-'}</Typography.Text>
-        ),
-      },
-      {
-        title: t('app.kuaizhizao.receiptNotice.purchaseOrderCode'),
-        dataIndex: 'purchase_order_code',
-        render: (_, entity) => (
-          <Typography.Text copyable={{ text: String(entity.purchase_order_code ?? '') }}>{entity.purchase_order_code ?? '-'}</Typography.Text>
-        ),
-      },
-      { title: t('app.kuaizhizao.receiptNotice.supplier'), dataIndex: 'supplier_name' },
-      { title: t('field.supplier.contactPerson'), dataIndex: 'supplier_contact' },
-      { title: t('field.supplier.phone'), dataIndex: 'supplier_phone' },
-      { title: t('app.kuaizhizao.receiptNotice.inboundWarehouse'), dataIndex: 'warehouse_name' },
-      { title: t('app.kuaizhizao.receiptNotice.plannedReceiptDate'), dataIndex: 'planned_receipt_date', valueType: 'date' },
-      {
-        title: t('common.status'),
-        dataIndex: 'status',
-        render: (s) => {
-          const c = statusMap[(s as string) || ''] || { text: (s as string) || '-', color: 'default' };
-          return <Tag color={c.color}>{c.text}</Tag>;
+    () =>
+      alignDescriptionColumns([
+        {
+          title: t('app.kuaizhizao.shipmentNotice.noticeCode'),
+          dataIndex: 'notice_code',
+          render: (_, entity) => (
+            <Typography.Text copyable={{ text: String(entity.notice_code ?? '') }}>{entity.notice_code ?? '-'}</Typography.Text>
+          ),
         },
-      },
-      { title: t('app.kuaizhizao.shipmentNotice.notifiedAt'), dataIndex: 'notified_at', valueType: 'dateTime' },
-      {
-        title: t('app.kuaizhizao.receiptNotice.linkedInboundReceipt'),
-        dataIndex: 'purchase_receipt_code',
-        render: (v) => v || '-',
-      },
-      { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes', span: 3, render: (text) => text || '-' },
-    ],
-    [statusMap, t, i18n.language],
+        {
+          title: t('app.kuaizhizao.receiptNotice.purchaseOrderCode'),
+          dataIndex: 'purchase_order_code',
+        },
+        { title: t('app.kuaizhizao.receiptNotice.supplier'), dataIndex: 'supplier_name' },
+        { title: t('field.supplier.contactPerson'), dataIndex: 'supplier_contact' },
+        { title: t('field.supplier.phone'), dataIndex: 'supplier_phone' },
+        { title: t('app.kuaizhizao.receiptNotice.inboundWarehouse'), dataIndex: 'warehouse_name' },
+        { title: t('app.kuaizhizao.receiptNotice.plannedReceiptDate'), dataIndex: 'planned_receipt_date', valueType: 'date' },
+        { title: t('app.kuaizhizao.shipmentNotice.notifiedAt'), dataIndex: 'notified_at', valueType: 'dateTime' },
+        {
+          title: t('app.kuaizhizao.receiptNotice.linkedInboundReceipt'),
+          dataIndex: 'purchase_receipt_code',
+        },
+        { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes', span: 3 },
+      ] as ProDescriptionsItemProps<ReceiptNoticeDetail>[]),
+    [t, i18n.language],
   );
 
   const renderCreateForm = () => (
@@ -1868,20 +1825,34 @@ const ReceiptNoticesPage: React.FC = () => {
           setNoticeDetail(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        column={3}
-        dataSource={noticeDetail || undefined}
         extra={
-          noticeDetail && (
+          noticeDetail ? (
             <DetailDrawerActions
               items={[
+                {
+                  key: 'notify',
+                  visible: noticeDetail.capabilities?.notify?.allowed === true,
+                  render: () => (
+                    <Button {...rowActionKind('submit')} onClick={() => handleNotify(noticeDetail)}>
+                      {t('app.kuaizhizao.shipmentNotice.notifyWarehouse')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'withdraw',
+                  visible: noticeDetail.capabilities?.withdraw?.allowed === true,
+                  render: () => (
+                    <Button {...rowActionKind('revoke')} onClick={() => handleWithdraw(noticeDetail)}>
+                      {t('app.kuaizhizao.shipmentNotice.withdrawNotify')}
+                    </Button>
+                  ),
+                },
                 {
                   key: 'edit',
                   visible: noticeDetail.capabilities?.update?.allowed === true,
                   render: () => (
                     <Button
                       {...rowActionKind('update')}
-                      size="small"
                       onClick={() => {
                         setDetailDrawerVisible(false);
                         handleEdit(noticeDetail);
@@ -1892,126 +1863,83 @@ const ReceiptNoticesPage: React.FC = () => {
                   ),
                 },
                 {
-                  key: 'notify',
-                  visible: noticeDetail.capabilities?.notify?.allowed === true,
-                  render: () => (
-                    <Button
-                      {...rowActionKind('submit')}
-                      size="small"
-                      onClick={() => handleNotify(noticeDetail)}
-                    >
-                      {t('app.kuaizhizao.shipmentNotice.notifyWarehouse')}
-                    </Button>
-                  ),
-                },
-                {
-                  key: 'withdraw',
-                  visible: noticeDetail.capabilities?.withdraw?.allowed === true,
-                  render: () => (
-                    <Button {...rowActionKind('revoke')} size="small" onClick={() => handleWithdraw(noticeDetail)}>
-                      {t('app.kuaizhizao.shipmentNotice.withdrawNotify')}
-                    </Button>
-                  ),
-                },
-                {
                   key: 'delete',
                   visible: noticeDetail.capabilities?.delete?.allowed === true,
                   render: () => (
-                    <Button {...rowActionKind('delete')} size="small" onClick={() => handleDelete(noticeDetail)}>
+                    <Button {...rowActionKind('delete')} onClick={() => handleDelete(noticeDetail)}>
                       {t('common.delete')}
                     </Button>
                   ),
                 },
               ]}
             />
-          )
+          ) : null
         }
-        customContent={
-          noticeDetail && (
-            <>
-              <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
-                <Descriptions
-                  column={3}
-                  size="small"
-                  items={buildDescriptionItemsFromColumns(noticeDetail, detailColumns)}
-                />
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lifecycle = getReceiptNoticeLifecycle(noticeDetail as unknown as Record<string, unknown>, t);
-                    const mainStages = lifecycle.mainStages ?? [];
-                    if (mainStages.length === 0) return null;
-                    return (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        status={lifecycle.status}
-                        showLabels
-                        nextStepSuggestions={lifecycle.nextStepSuggestions}
-                        hideNextStepSuggestions
-                      />
-                    );
-                  })()}
-                  
-                </div>
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
-                <style>{`
-                  .receipt-notice-detail-items .ant-table-wrapper .ant-table-body,
-                  .receipt-notice-detail-items .ant-table-wrapper .ant-table-content {
-                    overflow: visible !important;
-                  }
-                `}</style>
-                {noticeDetail.items && noticeDetail.items.length > 0 ? (
-                  <div
-                    className="receipt-notice-detail-items"
-                    style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
-                  >
-                      <Table
-                        size="small"
-                        tableLayout="fixed"
-                        style={{ minWidth: RN_DETAIL_ITEMS_MIN_WIDTH }}
-                        rowKey={(record: any, idx?: number) => record?.id ?? idx}
-                      columns={detailItemColumns}
-                      dataSource={noticeDetail.items}
-                      pagination={false}
-                      bordered
-                    />
-                  </div>
-                ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.shipmentNotice.noDetailItems')} />
-                )}
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
-                {receiptNoticeTracking.loading && (
-                  <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Spin />
-                  </div>
-                )}
-                {receiptNoticeTracking.error && !receiptNoticeTracking.loading && (
-                  <Typography.Text type="danger">{receiptNoticeTracking.error}</Typography.Text>
-                )}
-                {receiptNoticeTracking.data && !receiptNoticeTracking.loading && (
-                  <DocumentTrackingTimelineBody data={receiptNoticeTracking.data} />
-                )}
-                {!receiptNoticeTracking.loading && !receiptNoticeTracking.data && !receiptNoticeTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.shipmentNotice.noOperationRecords')} />
-                )}
-              </DetailDrawerSection>
-            </>
-          )
+        collaborationTitleSuffix={
+          receiptNoticeLifecycle?.nextStepSuggestions?.length ? (
+            <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
+              {t('components.uniLifecycle.nextStep')}：
+              {receiptNoticeLifecycle.nextStepSuggestions.join(t('components.uniLifecycle.nextStepSeparator'))}
+            </Typography.Text>
+          ) : undefined
         }
-      
-                      traceDocument={
-                        noticeDetail?.id != null
-                          ? {
-                              documentType: 'receipt_notice',
-                              documentId: noticeDetail.id,
-                              selfDocumentId: noticeDetail.id,
-                            renderBriefActions: (doc) => (
+        collaborationAuditRecord={noticeDetail}
+        basic={
+          noticeDetail ? (
+            <Descriptions
+              column={3}
+              size="small"
+              items={detailDrawerDescriptionItems(detailColumns, noticeDetail as unknown as Record<string, unknown>)}
+            />
+          ) : null
+        }
+        collaboration={
+          receiptNoticeLifecycle && (receiptNoticeLifecycle.mainStages ?? []).length > 0 ? (
+            <UniLifecycleStepper
+              steps={receiptNoticeLifecycle.mainStages ?? []}
+              status={receiptNoticeLifecycle.status}
+              showLabels
+              nextStepSuggestions={receiptNoticeLifecycle.nextStepSuggestions}
+              hideNextStepSuggestions={Boolean(receiptNoticeLifecycle.nextStepSuggestions?.length)}
+            />
+          ) : null
+        }
+        lines={
+          noticeDetail ? (
+            noticeDetail.items && noticeDetail.items.length > 0 ? (
+              <Table
+                size="small"
+                tableLayout="fixed"
+                style={{ minWidth: RN_DETAIL_ITEMS_MIN_WIDTH }}
+                rowKey={(record: any, idx?: number) => record?.id ?? idx}
+                columns={detailItemColumns}
+                dataSource={noticeDetail.items}
+                pagination={false}
+                bordered
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.shipmentNotice.noDetailItems')} />
+            )
+          ) : null
+        }
+        timeline={
+          noticeDetail ? (
+            receiptNoticeTracking.data && !receiptNoticeTracking.loading ? (
+              <DocumentTrackingTimelineBody data={receiptNoticeTracking.data} />
+            ) : receiptNoticeTracking.error ? (
+              <Typography.Text type="danger">{receiptNoticeTracking.error}</Typography.Text>
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.shipmentNotice.noOperationRecords')} />
+            )
+          ) : null
+        }
+        traceDocument={
+          noticeDetail?.id != null
+            ? {
+                documentType: 'receipt_notice',
+                documentId: noticeDetail.id,
+                selfDocumentId: noticeDetail.id,
+                renderBriefActions: (doc) => (
                   <WarehouseTraceBriefPrimaryActions
                     doc={doc}
                     t={t}
@@ -2021,10 +1949,10 @@ const ReceiptNoticesPage: React.FC = () => {
                       setNoticeDetail(null);
                     }}
                   />
-                )
-                            }
-                          : undefined
-                      }
+                ),
+              }
+            : undefined
+        }
       />
 
       <FormModalTemplate

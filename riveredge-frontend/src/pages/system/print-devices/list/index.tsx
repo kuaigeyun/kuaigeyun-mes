@@ -10,13 +10,15 @@ import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Badge, Button, Card, Descriptions, Form, Modal, Popconfirm, Space, Tag, Tooltip, Typography, theme } from 'antd';
+import { App, Badge, Button, Card, Form, Modal, Popconfirm, Space, Tag, Tooltip, Typography, theme } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PrinterOutlined, CheckCircleOutlined, PrinterFilled } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import {
   getPrintDeviceList,
   getPrintDeviceByUuid,
@@ -91,7 +93,7 @@ const PrintDeviceListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
-  const printDeviceDetailReqRef = useRef(0);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑打印设备）
@@ -118,6 +120,7 @@ const PrintDeviceListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<PrintDevice | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   /**
    * 处理新建打印设备
@@ -165,26 +168,26 @@ const PrintDeviceListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: PrintDevice) => {
-    const req = ++printDeviceDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getPrintDeviceByUuid(record.uuid);
-      if (printDeviceDetailReqRef.current !== req) return;
+      const detail = await getPrintDeviceByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (printDeviceDetailReqRef.current === req) {
-        messageApi.error(error.message || t('pages.system.printDevices.getDetailFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.printDevices.getDetailFailed')));
     } finally {
-      if (printDeviceDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = (record: PrintDevice) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -701,11 +704,8 @@ const PrintDeviceListPage: React.FC = () => {
     {
       title: t('pages.system.printDevices.columnActive'),
       dataIndex: 'is_active',
-      render: (value: boolean) => (
-        <Tag color={value ? 'success' : 'default'}>
-          {value ? t('pages.system.printDevices.enabled') : t('pages.system.printDevices.disabled')}
-        </Tag>
-      ),
+      render: (_: unknown, record: PrintDevice) =>
+        renderSystemActiveTag(t, record.is_active, 'pages.system.printDevices.enabled', 'pages.system.printDevices.disabled'),
     },
     {
       title: t('pages.system.printDevices.columnOnline'),
@@ -1001,15 +1001,26 @@ const PrintDeviceListPage: React.FC = () => {
       </Modal>
 
       {/* 详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('pages.system.printDevices.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={detailData ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
-          ) : null}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryUuidRef.current;
+          if (id) void loadDetail(id);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detailData), () => {
+          if (!detailData) return;
+          void handleEdit(detailData);
+        })}
+        detail={detailData}
+        detailColumns={detailColumns}
       />
     </>
   );

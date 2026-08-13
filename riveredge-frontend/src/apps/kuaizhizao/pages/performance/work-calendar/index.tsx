@@ -262,7 +262,6 @@ const WorkCalendarPage: React.FC = () => {
             title: t('app.kuaizhizao.performance.common.columns.actions'),
             key: 'action',
             valueType: 'option',
-            width: 160,
             fixed: 'right',
             hideInSearch: true,
             render: (_, row) => (
@@ -360,7 +359,6 @@ const WorkCalendarPage: React.FC = () => {
             title: t('app.kuaizhizao.performance.common.columns.actions'),
             key: 'action',
             valueType: 'option',
-            width: 140,
             fixed: 'right',
             hideInSearch: true,
             render: (_, row) => (

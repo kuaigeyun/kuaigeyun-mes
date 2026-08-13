@@ -8,7 +8,7 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Space, Modal, Table, theme, Descriptions, Select, Typography } from 'antd';
+import { App, Popconfirm, Button, Space, Modal, Table, Select, Typography } from 'antd';
 import { useSearchParams } from 'react-router-dom';
 import { EditOutlined, DeleteOutlined, PlusOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
@@ -16,8 +16,10 @@ import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useTrialRunMode } from '../../../../../hooks/useTrialRunMode';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { ListPageTemplate, flushDrawerOpen } from '../../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { ProcessMasterDetailDrawer } from '../shared/processMasterDetailDrawer';
 import { OperationFormModal } from '../../../components/OperationFormModal';
 import {
   operationApi,
@@ -30,7 +32,6 @@ import { QRCodeGenerator } from '../../../../../components/qrcode';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { qrcodeApi } from '../../../../../services/qrcode';
 import type { Operation, DefectTypeMinimal } from '../../../types/process';
-import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import {
   buildMasterCrudActiveValueEnum,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
@@ -57,10 +58,6 @@ import {
 } from '../../../../../utils/presetEntityI18n';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
-  CustomFieldsDetailSection,
-  hasCustomFieldsDetailContent,
-} from '../../../../../components/custom-fields';
-import {
   buildOperationReportingTypeValueEnum,
   renderOperationActiveStatusTag,
   renderOperationDefectTypeMarkers,
@@ -76,7 +73,6 @@ const OperationsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const trialRunMode = useTrialRunMode();
   const { message: messageApi } = App.useApp();
-  const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -95,6 +91,8 @@ const OperationsPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [operationDetail, setOperationDetail] = useState<Operation | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
   
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
@@ -104,7 +102,6 @@ const OperationsPage: React.FC = () => {
   const [presetIndustryId, setPresetIndustryId] = useState<string>('');
   const [selectedPresetKeys, setSelectedPresetKeys] = useState<string[]>([]);
   const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
-  const operationDetailReqRef = useRef(0);
 
   const {
     customFields,
@@ -239,29 +236,29 @@ const OperationsPage: React.FC = () => {
   /**
    * 处理打开详情
    */
-  const handleOpenDetail = async (record: Operation) => {
-    const req = ++operationDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setOperationDetail({ ...record, uuid: record.uuid } as Operation);
-      setDrawerVisible(true);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await operationApi.get(record.uuid);
-      if (operationDetailReqRef.current !== req) return;
+      const detail = await operationApi.get(uuid);
       setOperationDetail(detail);
       if (detail.id != null) {
         await loadFieldValuesForDetail(detail.id);
       }
-    } catch (error: any) {
-      if (operationDetailReqRef.current === req) {
-        messageApi.error(error.message || t('app.master-data.operations.getDetailFailed'));
-      }
+    } catch (error) {
+      setOperationDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.master-data.operations.getDetailFailed')));
     } finally {
-      if (operationDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleOpenDetail = (record: Operation) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setOperationDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   useEffect(() => {
@@ -571,6 +568,7 @@ const OperationsPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setOperationDetail(null);
+    setDetailError(null);
     resetDetailFieldValues();
   };
 
@@ -676,7 +674,6 @@ const OperationsPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 150,
       fixed: 'right',
       render: (_: any, record: Operation) => (
         <Space>
@@ -828,58 +825,41 @@ const OperationsPage: React.FC = () => {
         onExport={handleExport}
       />
 
-      <UniDetail
+      <ProcessMasterDetailDrawer
         title={t('app.master-data.operations.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        detail={operationDetail}
+        detailColumns={operationDetailColumns}
+        customFields={customFields}
+        customFieldValues={customFieldValues}
+        basicExtra={
           operationDetail ? (
-            <div style={{ position: 'relative', paddingRight: 168 }}>
-              <Descriptions
-                column={1}
-                items={detailDrawerDescriptionItems(operationDetailColumns, operationDetail)}
-              />
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  right: 0,
-                  width: 152,
-                  zIndex: 1,
-                  background: token.colorBgContainer,
-                  padding: 12,
-                  borderRadius: token.borderRadiusLG,
-                  border: `1px solid ${token.colorBorderSecondary}`,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <QRCodeGenerator
-                  qrcodeType="OP"
-                  data={{
-                    operation_uuid: operationDetail.uuid,
-                    operation_code: operationDetail.code || '',
-                    operation_name: operationDetail.name || '',
-                  }}
-                  autoGenerate={true}
-                  showCardTitle={false}
-                  size={6}
-                  noCard={true}
-                />
-              </div>
-            </div>
-          ) : null
+            <QRCodeGenerator
+              qrcodeType="OP"
+              data={{
+                operation_uuid: operationDetail.uuid,
+                operation_code: operationDetail.code || '',
+                operation_name: operationDetail.name || '',
+              }}
+              autoGenerate={true}
+              showCardTitle={false}
+              size={6}
+              noCard={true}
+            />
+          ) : undefined
         }
-        linesTitle={t('app.master-data.customFields')}
-        lines={
-          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
-            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
-          ) : null
-        }
+        extra={buildDetailDrawerEditExtra(t, Boolean(operationDetail), () => {
+          if (!operationDetail) return;
+          setEditUuid(operationDetail.uuid);
+          setModalVisible(true);
+        })}
       />
 
       <OperationFormModal

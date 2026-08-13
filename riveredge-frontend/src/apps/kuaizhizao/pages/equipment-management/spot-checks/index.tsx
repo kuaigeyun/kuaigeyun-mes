@@ -572,7 +572,6 @@ const SpotChecksPage: React.FC = () => {
         title: t(`${P}.col.status`),
         key: 'lifecycle',
         dataIndex: 'status',
-        sorter: true,
         hideInSearch: true,
         fixed: 'right',
         render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status),

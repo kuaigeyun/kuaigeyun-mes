@@ -1,1 +1,0 @@
-import{ap as s,t as p}from"./main-DfnTO4BH.js";function m(a,d){return d.map((e,i)=>{const r=e.dataIndex,n=r!=null?a[r]:void 0;let t=n;return e.valueType==="date"&&n&&(t=s(n)),e.valueType==="dateTime"&&n&&(t=p(n)),e.render&&a!=null&&(t=e.render(t,a,i)),{key:String(e.key??e.dataIndex??i),label:e.title,children:t??"-",span:e.span??1}})}export{m as b};

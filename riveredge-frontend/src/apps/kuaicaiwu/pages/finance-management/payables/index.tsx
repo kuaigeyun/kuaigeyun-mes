@@ -29,6 +29,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { financeColFull, financeColHalf, financeFormGridProps } from '../../../utils/financeFormLayout';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
@@ -1156,20 +1157,29 @@ const PayableList: React.FC = () => {
                                 submitter={false}
                                 onFinish={handlePullCreateSubmit}
                                 layout="vertical"
+                                {...financeFormGridProps}
                             >
-                                <ProFormText name="source_code" label={t(`${P}.pullCol.sourceCode`)} readonly />
-                                <ProFormText name="supplier_name" label={t('app.kuaicaiwu.common.supplier')} readonly />
+                                <ProFormText name="source_code" label={t(`${P}.pullCol.sourceCode`)} readonly colProps={financeColHalf} />
+                                <ProFormText name="supplier_name" label={t('app.kuaicaiwu.common.supplier')} readonly colProps={financeColHalf} />
                                 <ProFormMoney
                                     name="total_amount"
                                     label={t(`${P}.col.amount`)}
                                     min={0.01}
                                     max={pullPreviewMaxPush}
                                     rules={[{ required: true, message: t(`${P}.amountRequired`) }]}
+                                    colProps={financeColFull}
+                                />
+                                <ProFormDatePicker
+                                    name="business_date"
+                                    label={t('app.kuaicaiwu.common.businessDate')}
+                                    fieldProps={{ style: { width: '100%' } }}
+                                    colProps={financeColHalf}
                                 />
                                 <ProFormDatePicker
                                     name="due_date"
                                     label={t('app.kuaicaiwu.common.dueDate')}
                                     rules={[{ required: true }]}
+                                    colProps={financeColHalf}
                                     fieldProps={buildFutureDateShortcutFieldProps({
                                         getForm: () => pullForm,
                                         fieldName: 'due_date',
@@ -1177,8 +1187,7 @@ const PayableList: React.FC = () => {
                                         t,
                                     })}
                                 />
-                                <ProFormDatePicker name="business_date" label={t('app.kuaicaiwu.common.businessDate')} />
-                                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
+                                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} colProps={financeColFull} />
                                 <DocumentAttachmentsField category="payable_attachments" />
                             </ProForm>
                         ) : null}
@@ -1192,7 +1201,8 @@ const PayableList: React.FC = () => {
                 onOpenChange={setCreateModalVisible}
                 onFinish={handleCreate}
                 formRef={createFormRef}
-                width={480}
+                width={MODAL_CONFIG.STANDARD_WIDTH}
+                {...financeFormGridProps}
             >
                 <ProFormSelect
                     name="supplier_id"
@@ -1200,12 +1210,26 @@ const PayableList: React.FC = () => {
                     options={supplierOptions}
                     rules={[{ required: true, message: t('app.kuaicaiwu.common.selectSupplier') }]}
                     placeholder={t('app.kuaicaiwu.common.selectSupplier')}
+                    colProps={financeColHalf}
                 />
-                <ProFormMoney name="total_amount" label={t(`${P}.col.amount`)} min={0.01} rules={[{ required: true }]} />
+                <ProFormMoney
+                    name="total_amount"
+                    label={t(`${P}.col.amount`)}
+                    min={0.01}
+                    rules={[{ required: true }]}
+                    colProps={financeColHalf}
+                />
+                <ProFormDatePicker
+                    name="business_date"
+                    label={t('app.kuaicaiwu.common.businessDate')}
+                    fieldProps={{ style: { width: '100%' } }}
+                    colProps={financeColHalf}
+                />
                 <ProFormDatePicker
                     name="due_date"
                     label={t('app.kuaicaiwu.common.dueDate')}
                     rules={[{ required: true }]}
+                    colProps={financeColHalf}
                     fieldProps={buildFutureDateShortcutFieldProps({
                         getForm: () => createFormRef.current,
                         fieldName: 'due_date',
@@ -1213,8 +1237,7 @@ const PayableList: React.FC = () => {
                         t,
                     })}
                 />
-                <ProFormDatePicker name="business_date" label={t('app.kuaicaiwu.common.businessDate')} />
-                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
+                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} colProps={financeColFull} />
                 <DocumentAttachmentsField category="payable_attachments" />
             </ModalForm>
 

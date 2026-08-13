@@ -15,7 +15,6 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
-import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import { useOptionalLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import {
   ListPageTemplate,
@@ -46,7 +45,7 @@ import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { customerApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
+import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 
 const DICT_CODE = 'SALES_FOLLOW_UP_TYPE';
@@ -173,8 +172,9 @@ const CustomerFollowUpsPage: React.FC = () => {
   );
 
   const detailBasicColumns: ProDescriptionsItemProps<CustomerFollowUp>[] = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.customerFollowUp.colCustomer'), dataIndex: 'customer_name', span: 1 },
+    () =>
+      alignDescriptionColumns([
+      { title: t('app.kuaizhizao.customerFollowUp.colCustomer'), dataIndex: 'customer_name' },
       {
         title: t('app.kuaizhizao.customerFollowUp.colActivityType'),
         dataIndex: 'activity_type_code',
@@ -188,37 +188,20 @@ const CustomerFollowUpsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.customerFollowUp.colNextFollowUp'),
         dataIndex: 'next_follow_up_at',
-        render: (_, row) =>
-          row.next_follow_up_at ? formatDateTime(row.next_follow_up_at, 'YYYY-MM-DD HH:mm') : '—',
+        valueType: 'dateTime',
       },
       {
         title: t('app.kuaizhizao.customerFollowUp.colQuotation'),
         dataIndex: 'quotation_code',
-        render: (_, row) => (
-          <LinkedDocumentCode
-            documentType="quotation"
-            documentId={row.quotation_id}
-            code={row.quotation_code}
-            emptyText="—"
-          />
-        ),
       },
       {
         title: t('app.kuaizhizao.customerFollowUp.colSalesOrder'),
         dataIndex: 'sales_order_code',
-        render: (_, row) => (
-          <LinkedDocumentCode
-            documentType="sales_order"
-            documentId={row.sales_order_id}
-            code={row.sales_order_code}
-            emptyText="—"
-          />
-        ),
       },
-      { title: t('app.kuaizhizao.customerFollowUp.colCreator'), dataIndex: 'created_by_name', ellipsis: true },
-      { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime', span: 2 },
-    ],
-    [t, activityLabelMap, renderActivityTypeTag],
+      { title: t('app.kuaizhizao.customerFollowUp.colCreator'), dataIndex: 'created_by_name' },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    ] as ProDescriptionsItemProps<CustomerFollowUp>[]),
+    [t, renderActivityTypeTag],
   );
 
   useEffect(() => {
@@ -700,10 +683,7 @@ const CustomerFollowUpsPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           detailRecord ? (
-            <Space wrap>
-              <Button icon={<EditOutlined />} onClick={() => openEdit(detailRecord)}>
-                {t('common.edit')}
-              </Button>
+            <Space size="small">
               {detailRecord.next_follow_up_at ? (
                 <Button onClick={() => void handleClearRevisitReminder()}>
                   {t('app.kuaizhizao.customerFollowUp.clearRevisitReminder')}
@@ -711,6 +691,9 @@ const CustomerFollowUpsPage: React.FC = () => {
               ) : null}
               <Button type="primary" icon={<PlusOutlined />} onClick={openNewFollowUpFromDetail}>
                 {t('app.kuaizhizao.customerFollowUp.new')}
+              </Button>
+              <Button icon={<EditOutlined />} onClick={() => openEdit(detailRecord)}>
+                {t('common.edit')}
               </Button>
               <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(detailRecord, { closeDrawer: true })}>
                 {t('common.delete')}

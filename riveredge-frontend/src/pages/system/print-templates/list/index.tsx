@@ -10,15 +10,17 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Modal, Form, Space, Typography, Tooltip, Card, theme, Descriptions } from 'antd';
+import { App, Popconfirm, Button, Tag, Modal, Form, Space, Typography, Tooltip, Card, theme } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { DeleteOutlined, EyeOutlined, PrinterOutlined, FileTextOutlined, EditOutlined, HighlightOutlined } from '@ant-design/icons';
 import { useCompanySealSettings } from '../CompanySealSettingsPanel';
 import { UniTable } from '../../../../components/uni-table';
 import { rowActionKind } from '../../../../components/uni-action';
-import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
-import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import {
   getPrintTemplateList,
   getPrintTemplateByUuid,
@@ -102,7 +104,7 @@ const PrintTemplateListPage: React.FC = () => {
   const { token } = useToken();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
-  const printTemplateDetailReqRef = useRef(0);
+  const detailRetryUuidRef = useRef<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [allTemplates, setAllTemplates] = useState<PrintTemplate[]>([]); // 用于统计
   
@@ -127,6 +129,7 @@ const PrintTemplateListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<PrintTemplate | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   // 加载预设（点击后全部加载）
   const [presetLoading, setPresetLoading] = useState(false);
@@ -187,26 +190,26 @@ const PrintTemplateListPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleView = async (record: PrintTemplate) => {
-    const req = ++printTemplateDetailReqRef.current;
-    flushDrawerOpen(() => {
-      setDrawerVisible(true);
-      setDetailData(null);
-      setDetailLoading(true);
-    });
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
-      const detail = await getPrintTemplateByUuid(record.uuid);
-      if (printTemplateDetailReqRef.current !== req) return;
+      const detail = await getPrintTemplateByUuid(uuid);
       setDetailData(detail);
-    } catch (error: any) {
-      if (printTemplateDetailReqRef.current === req) {
-        messageApi.error(error.message || t('pages.system.printTemplates.getDetailFailed'));
-      }
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.printTemplates.getDetailFailed')));
     } finally {
-      if (printTemplateDetailReqRef.current === req) {
-        setDetailLoading(false);
-      }
+      setDetailLoading(false);
     }
+  };
+
+  const handleView = (record: PrintTemplate) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
   };
 
   /**
@@ -643,11 +646,8 @@ const PrintTemplateListPage: React.FC = () => {
     {
       title: t('pages.system.printTemplates.columnActive'),
       dataIndex: 'is_active',
-      render: (value: boolean) => (
-        <Tag color={value ? 'success' : 'default'}>
-          {value ? t('pages.system.printTemplates.enabled') : t('pages.system.printTemplates.disabled')}
-        </Tag>
-      ),
+      render: (_: unknown, record: PrintTemplate) =>
+        renderSystemActiveTag(t, record.is_active, 'pages.system.printTemplates.enabled', 'pages.system.printTemplates.disabled'),
     },
     {
       title: t('pages.system.printTemplates.columnDefault'),
@@ -919,17 +919,26 @@ const PrintTemplateListPage: React.FC = () => {
       </Modal>
 
       {/* 详情 Drawer */}
-      <UniDetail
+      <SystemMasterDetailDrawer
         title={t('pages.system.printTemplates.detailTitle')}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
-          detailData ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns as any, detailData)} />
-          ) : null
-        }
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryUuidRef.current;
+          if (id) void loadDetail(id);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detailData), () => {
+          if (!detailData) return;
+          void handleEdit(detailData);
+        })}
+        detail={detailData}
+        detailColumns={detailColumns as any}
       />
       {companySeal.cropModal}
     </>
