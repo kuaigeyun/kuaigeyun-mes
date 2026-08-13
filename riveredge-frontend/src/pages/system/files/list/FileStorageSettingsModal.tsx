@@ -33,6 +33,8 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ ope
     migrated: number;
     failed: number;
     totalHint: number;
+    targetBucket?: string;
+    failureSamples: Array<{ uuid: string; reason: string }>;
   } | null>(null);
 
   const backend = Form.useWatch('backend', form);
@@ -94,7 +96,13 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ ope
 
   const runMigrate = async (dryRun: boolean) => {
     setMigrating(true);
-    setMigrateProgress({ percent: 0, migrated: 0, failed: 0, totalHint: 0 });
+    setMigrateProgress({
+      percent: 0,
+      migrated: 0,
+      failed: 0,
+      totalHint: 0,
+      failureSamples: [],
+    });
     try {
       // 迁移前先落库当前表单，确保 key_prefix / 连接与 UI 一致
       const values = await form.validateFields();
@@ -110,6 +118,7 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ ope
       let totalMigrated = 0;
       let totalFailed = 0;
       let initialTotal = 0;
+      let targetBucket = '';
       const allFailures: Array<{ uuid: string; reason: string }> = [];
 
       while (!done) {
@@ -120,6 +129,9 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ ope
           connection_uuid: values.connection_uuid || undefined,
         });
         if (initialTotal === 0) initialTotal = result.total;
+        if (!targetBucket && result.target_bucket) {
+          targetBucket = result.target_bucket;
+        }
         totalMigrated += result.migrated;
         totalFailed += result.failed;
         allFailures.push(...(result.failures || []));
@@ -132,6 +144,8 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ ope
           migrated: totalMigrated,
           failed: totalFailed,
           totalHint: initialTotal,
+          targetBucket: targetBucket || undefined,
+          failureSamples: allFailures.slice(0, 8),
         });
         cursor = result.next_cursor;
         done = result.done;
@@ -144,19 +158,29 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ ope
             failed: totalFailed,
           }),
         );
+      } else if (totalMigrated === 0 && totalFailed === 0) {
+        messageApi.warning(t('pages.system.files.storageMigrateNothing'));
+      } else if (totalMigrated === 0 && totalFailed > 0) {
+        messageApi.error(
+          t('pages.system.files.storageMigrateAllFailed', {
+            failed: totalFailed,
+            bucket: targetBucket || '-',
+          }),
+        );
       } else if (totalFailed > 0) {
         messageApi.warning(
           t('pages.system.files.storageMigratePartial', {
             migrated: totalMigrated,
             failed: totalFailed,
+            bucket: targetBucket || '-',
           }),
         );
-        if (allFailures.length > 0) {
-          console.warn('file storage migrate failures', allFailures.slice(0, 20));
-        }
       } else {
         messageApi.success(
-          t('pages.system.files.storageMigrateSuccess', { count: totalMigrated }),
+          t('pages.system.files.storageMigrateSuccess', {
+            count: totalMigrated,
+            bucket: targetBucket || '-',
+          }),
         );
       }
     } catch (error: unknown) {
@@ -279,6 +303,32 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ ope
                 total: migrateProgress.totalHint,
               })}
             </Typography.Text>
+            {migrateProgress.targetBucket ? (
+              <div>
+                <Typography.Text type="secondary">
+                  {t('pages.system.files.storageMigrateTargetBucket', {
+                    bucket: migrateProgress.targetBucket,
+                  })}
+                </Typography.Text>
+              </div>
+            ) : null}
+            {migrateProgress.failureSamples.length > 0 ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginTop: 8 }}
+                message={t('pages.system.files.storageMigrateFailureHint')}
+                description={
+                  <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    {migrateProgress.failureSamples.map((f) => (
+                      <li key={f.uuid}>
+                        <Typography.Text code>{f.uuid.slice(0, 8)}</Typography.Text> {f.reason}
+                      </li>
+                    ))}
+                  </ul>
+                }
+              />
+            ) : null}
           </div>
         )}
       </Form>

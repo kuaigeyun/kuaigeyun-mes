@@ -1,1 +1,0 @@
-import{l as e}from"./LinkedDocumentDetailContext-DtWQbmYT.js";const t=e({stageDefs:[{key:"pending_calculation",label:"待计算"},{key:"calculated",label:"已计算"},{key:"confirmed",label:"已确认"}],nextStepSuggestionKeys:{}}),c=e({stageDefs:[{key:"active",label:"启用"},{key:"inactive",label:"停用"}],nextStepSuggestionKeys:{}});export{c as a,t as g};

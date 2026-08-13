@@ -704,7 +704,7 @@ class FileService:
             if not await cos.exists(probe_key):
                 raise ValidationError(
                     f"已写入 COS 但无法通过 HEAD 读回（桶={target_bucket or '未知'}）。"
-                    "请核对应用连接器中的 Bucket/Region 是否与控制台一致，以及账号是否有写权限。"
+                    "请核对 Bucket、SecretId/SecretKey 与桶写权限。"
                 )
             await cos.delete(probe_key)
 

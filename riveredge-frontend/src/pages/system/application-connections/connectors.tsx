@@ -593,7 +593,7 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
       secret_id: '',
       secret_key: '',
       bucket: '',
-      region: 'ap-guangzhou',
+      region: '',
     },
   },
   {

@@ -27,6 +27,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "pypinyin>=0.51.0",
     "aiofiles>=23.2.1",  # 异步文件操作库,用于文件上传、下载等操作
+    "cos-python-sdk-v5>=1.9.30,<2",  # 腾讯云 COS 官方签名与上传（避免手写签名不一致）
     "openpyxl>=3.1.0",  # Excel文件生成（MIT许可证，商业友好）
     "qrcode[pil]>=7.4.0",  # 二维码生成库（支持PIL图片生成）
     "pyzbar>=0.1.9",  # 二维码解析库（可选，用于从图片解析二维码）

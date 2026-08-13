@@ -1,1 +1,0 @@
-import{b as t}from"./clearSessionQueries-Cse8l8yS.js";import{r}from"./vendor-DO8EbQ_1.js";const u=["menuBadgeCounts"];function o(){const e=t();return r.useCallback(()=>{e.invalidateQueries({queryKey:u})},[e])}export{o as u};

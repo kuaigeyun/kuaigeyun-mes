@@ -6,9 +6,6 @@
 """
 
 import asyncio
-import hashlib
-import hmac
-import time
 from typing import Optional, List, Dict, Any, Tuple  # noqa: F401
 from urllib.parse import urlparse
 from uuid import UUID
@@ -1709,38 +1706,8 @@ class IntegrationConfigService:
         raise ValueError("请填写 Endpoint（或 Bucket + Region）")
 
     @staticmethod
-    def _tencent_cos_authorization(
-        secret_id: str,
-        secret_key: str,
-        method: str,
-        host: str,
-        path: str = "/",
-    ) -> str:
-        """腾讯云 COS 请求签名（q-sign-algorithm=sha1）。"""
-        now = int(time.time())
-        key_time = f"{now};{now + 600}"
-        sign_key = hmac.new(
-            secret_key.encode("utf-8"),
-            key_time.encode("utf-8"),
-            hashlib.sha1,
-        ).hexdigest()
-        http_string = f"{method.lower()}\n{path}\n\nhost={host.lower()}\n"
-        sha1_http = hashlib.sha1(http_string.encode("utf-8")).hexdigest()
-        string_to_sign = f"sha1\n{key_time}\n{sha1_http}\n"
-        signature = hmac.new(
-            sign_key.encode("utf-8"),
-            string_to_sign.encode("utf-8"),
-            hashlib.sha1,
-        ).hexdigest()
-        return (
-            f"q-sign-algorithm=sha1&q-ak={secret_id}"
-            f"&q-sign-time={key_time}&q-key-time={key_time}"
-            f"&q-header-list=host&q-url-param-list=&q-signature={signature}"
-        )
-
-    @staticmethod
     async def _test_object_storage_connection(integration: Any) -> Dict[str, Any]:
-        """对象存储连接测试：校验必填项，并对腾讯云 COS 做签名 HEAD 桶探测。"""
+        """对象存储连接测试：校验必填项；腾讯云 COS 走官方 SDK HEAD 桶。"""
         storage_type = getattr(integration, "type", "") or ""
         config = integration.get_config() if hasattr(integration, "get_config") else (integration.config or {})
         bucket = str(config.get("bucket") or "").strip()
@@ -1748,47 +1715,47 @@ class IntegrationConfigService:
             raise ValueError("请填写 Bucket")
 
         if storage_type == "tencent_cos":
+            from qcloud_cos import CosConfig, CosS3Client
+            from qcloud_cos.cos_exception import CosServiceError
+
             secret_id = str(config.get("secret_id") or "").strip()
             secret_key = str(config.get("secret_key") or "").strip()
             if not secret_id or not secret_key or secret_key == "****":
                 raise ValueError("请填写 SecretId 与 SecretKey")
+            region = str(config.get("region") or "").strip()
+            if not region:
+                raise ValueError("请填写 Region（与控制台桶地域一致，如 ap-shanghai）")
             probe_url = IntegrationConfigService._build_object_storage_probe_url(storage_type, config)
-            host = urlparse(probe_url).netloc
-            if not host:
-                raise ValueError("无法解析 Endpoint / Bucket 域名")
-            auth = IntegrationConfigService._tencent_cos_authorization(
-                secret_id, secret_key, "HEAD", host, "/"
-            )
-            resp = await get_http_client().request(
-                "HEAD",
-                probe_url if probe_url.endswith("/") else f"{probe_url}/",
-                headers={"Authorization": auth},
-                timeout=15.0,
-                follow_redirects=False,
-            )
-            # 200/204：桶存在且有权限；301/302：Region/域名与桶真实地域不一致
-            if resp.status_code in (200, 204):
-                return {
-                    "message": "腾讯云 COS 连接成功",
-                    "status_code": resp.status_code,
-                    "endpoint": probe_url,
-                    "bucket": bucket,
-                }
-            if resp.status_code in (301, 302, 307, 308):
-                loc = (resp.headers.get("Location") or "").strip()
-                raise ValueError(
-                    "桶域名/Region 与真实地域不一致（收到重定向）。"
-                    f"请将 Region 改为桶所在地域，或 Endpoint 填完整桶域名。Location={loc or '无'}"
+            client = CosS3Client(
+                CosConfig(
+                    Region=region,
+                    SecretId=secret_id,
+                    SecretKey=secret_key,
+                    Scheme="https",
                 )
-            if resp.status_code == 404:
-                raise ValueError("桶不存在或 Region 不正确，请核对 Bucket 与 Region")
-            if resp.status_code in (401, 403):
-                raise ValueError(
-                    "鉴权失败，请核对 SecretId / SecretKey、桶权限，以及 Region 是否与桶一致"
-                )
-            detail = (resp.text or "")[:200]
-            raise ValueError(f"COS 探测失败 HTTP {resp.status_code}: {detail or '未知错误'}")
-
+            )
+            try:
+                await asyncio.to_thread(client.head_bucket, Bucket=bucket)
+            except CosServiceError as e:
+                status = e.get_status_code()
+                code = e.get_error_code() or ""
+                msg = e.get_error_msg() or ""
+                if code == "SignatureDoesNotMatch" or status in (401, 403):
+                    raise ValueError(
+                        f"鉴权失败：{code} {msg}。请核对 SecretId / SecretKey 与桶权限。"
+                    ) from e
+                if status == 404 or code in ("NoSuchBucket", "NoSuchResource"):
+                    raise ValueError(f"桶不存在或无权访问：{bucket}") from e
+                raise ValueError(f"COS 探测失败 HTTP {status}: {code} {msg}") from e
+            except Exception as e:
+                raise ValueError(f"COS 探测失败: {e}") from e
+            return {
+                "message": "腾讯云 COS 连接成功",
+                "status_code": 200,
+                "endpoint": probe_url,
+                "bucket": bucket,
+                "region": region,
+            }
         # 其它对象存储：校验密钥 + 探测 endpoint 可达（不伪造成功）
         if storage_type == "alicloud_oss":
             if not str(config.get("access_key_id") or "").strip():

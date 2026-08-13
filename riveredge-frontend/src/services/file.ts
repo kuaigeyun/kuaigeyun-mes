@@ -55,6 +55,9 @@ export interface FileStorageMigrateResult {
   failures: Array<{ uuid: string; reason: string }>;
   dry_run: boolean;
   connection_uuid: string;
+  /** 实际写入的桶名，用于与控制台核对 */
+  target_bucket?: string | null;
+  target_endpoint?: string | null;
 }
 
 export interface FileListParams {
