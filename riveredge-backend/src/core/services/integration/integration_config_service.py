@@ -1762,10 +1762,11 @@ class IntegrationConfigService:
             resp = await get_http_client().request(
                 "HEAD",
                 probe_url if probe_url.endswith("/") else f"{probe_url}/",
-                headers={"Host": host, "Authorization": auth},
+                headers={"Authorization": auth},
                 timeout=15.0,
+                follow_redirects=False,
             )
-            # 200/204：桶存在且有权限；403：鉴权或权限问题；404：桶不存在/地域错误
+            # 200/204：桶存在且有权限；301/302：Region/域名与桶真实地域不一致
             if resp.status_code in (200, 204):
                 return {
                     "message": "腾讯云 COS 连接成功",
@@ -1773,10 +1774,18 @@ class IntegrationConfigService:
                     "endpoint": probe_url,
                     "bucket": bucket,
                 }
+            if resp.status_code in (301, 302, 307, 308):
+                loc = (resp.headers.get("Location") or "").strip()
+                raise ValueError(
+                    "桶域名/Region 与真实地域不一致（收到重定向）。"
+                    f"请将 Region 改为桶所在地域，或 Endpoint 填完整桶域名。Location={loc or '无'}"
+                )
             if resp.status_code == 404:
                 raise ValueError("桶不存在或 Region 不正确，请核对 Bucket 与 Region")
             if resp.status_code in (401, 403):
-                raise ValueError("鉴权失败，请核对 SecretId / SecretKey 及桶权限")
+                raise ValueError(
+                    "鉴权失败，请核对 SecretId / SecretKey、桶权限，以及 Region 是否与桶一致"
+                )
             detail = (resp.text or "")[:200]
             raise ValueError(f"COS 探测失败 HTTP {resp.status_code}: {detail or '未知错误'}")
 
