@@ -866,31 +866,21 @@ const BOMDesignerPage: React.FC = () => {
   }, [materialId, t]);
 
   /**
-   * 加载 BOM 数据
+   * 按 URL materialId/version 加载 BOM。
+   * 物料明细由 loadBOMData 内按 ids 拉取，禁止再等待全局 materials 预加载（已移除）。
    */
   useEffect(() => {
-    if (materialId && materials.length > 0) {
-      loadBOMData();
-    } else if (materialId) {
-      // 等待物料列表加载完成
-      const timer = setTimeout(() => {
-        if (materials.length > 0) {
-          loadBOMData();
-        }
-      }, 500);
-      return () => clearTimeout(timer);
-    } else {
+    if (!materialId) {
       messageApi.warning(t('app.master-data.bom.missingMaterialId'));
-      navigate('/apps/master-data/process/engineering-bom', { state: { closeTab: location.pathname + (location.search || '') } });
+      navigate('/apps/master-data/process/engineering-bom', {
+        state: { closeTab: location.pathname + (location.search || '') },
+      });
+      return;
     }
-  }, [materialId, version, materials, convertToMindMapData]);
-
-  /** 当物料加载完成后拉取版本列表 */
-  useEffect(() => {
-    if (materialId && materials.length > 0 && !loading) {
-      loadVersionList();
-    }
-  }, [materialId, materials.length, loading, loadVersionList]);
+    void loadBOMData();
+    // loadBOMData 会 setMaterials；不可把 materials 放进依赖，否则会死循环重载
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅随 URL 参数重载
+  }, [materialId, version]);
 
   /**
    * Wrapper for updating BOM data with History support.
