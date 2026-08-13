@@ -1,5 +1,5 @@
 /**
- * DWG/DXF 预览容器：拉取文件 + 解析 + SVG 渲染
+ * DWG/DXF 预览：拉取文件 + MLightCAD WebGL 渲染
  */
 
 import React, { startTransition, useEffect, useMemo, useState } from 'react';
@@ -7,9 +7,11 @@ import { useTranslation } from 'react-i18next';
 import { Alert } from 'antd';
 import { CadPreviewLoading } from '../cad-preview/CadPreviewLoading';
 import { getFileExt, isDwgFile, isDxfFile, type FilePreviewSource } from '../../utils/filePreviewKind';
-import { parseCad2dFromUuid, parseCad2dFromUrl } from '../../utils/cad2dFileLoader';
+import { fetchCoreFileBytes } from '../../utils/fetchCoreFileBytes';
 import { yieldToMain } from '../../utils/yieldToMain';
-import { DwgSvgViewer, type DwgSvgViewerRef } from './DwgSvgViewer';
+import { DwgCadViewer, type DwgSvgViewerRef } from './DwgCadViewer';
+
+export type { DwgSvgViewerRef };
 
 export interface DwgPreviewPaneProps {
   fileUuid?: string;
@@ -22,6 +24,12 @@ export interface DwgPreviewPaneProps {
   darkChrome?: boolean;
 }
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 export const DwgPreviewPane: React.FC<DwgPreviewPaneProps> = ({
   fileUuid,
   fileUrl,
@@ -32,8 +40,7 @@ export const DwgPreviewPane: React.FC<DwgPreviewPaneProps> = ({
   darkChrome = false,
 }) => {
   const { t } = useTranslation();
-  const [svg, setSvg] = useState('');
-  const [imageDataUrl, setImageDataUrl] = useState('');
+  const [fileBytes, setFileBytes] = useState<ArrayBuffer | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -48,8 +55,7 @@ export const DwgPreviewPane: React.FC<DwgPreviewPaneProps> = ({
 
   useEffect(() => {
     if ((!fileUuid && !fileUrl) || !cadExt) {
-      setSvg('');
-      setImageDataUrl('');
+      setFileBytes(null);
       setError('');
       return;
     }
@@ -59,18 +65,18 @@ export const DwgPreviewPane: React.FC<DwgPreviewPaneProps> = ({
     const run = async () => {
       setLoading(true);
       setError('');
-      setSvg('');
-      setImageDataUrl('');
+      setFileBytes(null);
       await yieldToMain();
       try {
-        const result = fileUuid
-          ? await parseCad2dFromUuid(fileUuid, cadExt)
-          : await parseCad2dFromUrl(fileUrl!, cadExt);
+        const bytes = await fetchCoreFileBytes({
+          fileUrl,
+          fileUuid,
+          errorLabel: 'CAD load failed',
+        });
         if (cancelled) return;
         startTransition(() => {
           if (cancelled) return;
-          setSvg(result.svg ?? '');
-          setImageDataUrl(result.imageDataUrl ?? '');
+          setFileBytes(toArrayBuffer(bytes));
         });
       } catch (e: unknown) {
         if (!cancelled) {
@@ -87,6 +93,13 @@ export const DwgPreviewPane: React.FC<DwgPreviewPaneProps> = ({
       cancelled = true;
     };
   }, [fileUuid, fileUrl, cadExt, t]);
+
+  const openName = useMemo(() => {
+    const fallbackExt = cadExt ?? 'dwg';
+    const raw = fileName?.trim() || `drawing.${fallbackExt}`;
+    if (/\.(dwg|dxf)$/i.test(raw)) return raw;
+    return `${raw}.${fallbackExt}`;
+  }, [cadExt, fileName]);
 
   const paneStyle: React.CSSProperties = {
     flex: 1,
@@ -116,7 +129,7 @@ export const DwgPreviewPane: React.FC<DwgPreviewPaneProps> = ({
     );
   }
 
-  if (!svg && !imageDataUrl) {
+  if (!fileBytes) {
     return (
       <div style={{ ...paneStyle, minHeight: 280, padding: 16, boxSizing: 'border-box' }}>
         <Alert type="warning" showIcon title={t('app.master-data.drawings.dwgPreviewEmpty')} />
@@ -126,7 +139,7 @@ export const DwgPreviewPane: React.FC<DwgPreviewPaneProps> = ({
 
   return (
     <div style={paneStyle}>
-      <DwgSvgViewer ref={viewerRef} svg={svg} imageDataUrl={imageDataUrl} height={height} />
+      <DwgCadViewer ref={viewerRef} fileName={openName} fileBytes={fileBytes} height={height} />
     </div>
   );
 };

@@ -1,0 +1,37 @@
+/**
+ * CAD 预览布局：SVG 铺满容器，由 viewBox 映射图纸坐标。
+ * 线宽由几何节点上的 vector-effect + stroke-width=1 决定；禁止在此写 px 线宽。
+ */
+.cad2d-svg-host {
+  display: block;
+  width: 100%;
+  height: 100%;
+  line-height: 0;
+}
+
+.cad2d-svg-host svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.cad2d-svg-host svg line,
+.cad2d-svg-host svg polyline,
+.cad2d-svg-host svg polygon,
+.cad2d-svg-host svg path,
+.cad2d-svg-host svg circle,
+.cad2d-svg-host svg ellipse {
+  fill: none !important;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cad2d-svg-host svg text,
+.cad2d-svg-host svg tspan {
+  stroke: none !important;
+}
+
+.cad2d-svg-host svg .cad2d-paper {
+  fill: #fffef5 !important;
+  stroke: none !important;
+}

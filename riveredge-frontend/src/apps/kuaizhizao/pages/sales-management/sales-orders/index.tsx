@@ -219,6 +219,7 @@ import {
 import { useConfigStore } from '../../../../../stores/configStore';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';
@@ -549,9 +550,7 @@ const SalesOrdersPage: React.FC = () => {
   const tableSearchFormRef = useRef<any>(null);
   const rowKeyToOrderIdRef = useRef<Map<string, number>>(new Map());
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const leaveSalesOrderFormPage = useCallback(() => {
-    navigate(SALES_ORDER_LIST_PATH);
-  }, [navigate]);
+  const leaveSalesOrderFormPage = useLeaveFormTab(SALES_ORDER_LIST_PATH);
 
   /** 视图切换缓存：明细视图含 items；订单视图可复用含 items 的缓存，避免重复请求 */
   const lastOrdersCacheRef = useRef<{
@@ -1039,7 +1038,7 @@ const SalesOrdersPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(t('app.kuaizhizao.salesOrder.detailFailed'));
       console.error('编辑销售订单错误:', error);
-      navigate(SALES_ORDER_LIST_PATH);
+      leaveSalesOrderFormPage();
     }
   }
 
@@ -1049,7 +1048,7 @@ const SalesOrdersPage: React.FC = () => {
     if (isCreatePage) {
       if (!salesNodeEnabled.sales_order) {
         messageApi.warning(t('app.kuaizhizao.salesOrder.nodeCreateDisabled'));
-        navigate(SALES_ORDER_LIST_PATH);
+        leaveSalesOrderFormPage();
         return;
       }
       const raw = searchParams.get('customerId');
@@ -1434,7 +1433,7 @@ const SalesOrdersPage: React.FC = () => {
       invalidateStatistics();
 
       if (isFormPage) {
-        navigate(SALES_ORDER_LIST_PATH);
+        leaveSalesOrderFormPage();
       }
       actionRef.current?.reload();
       if (orderId && drawerVisible && currentSalesOrder?.id === orderId) {

@@ -9,7 +9,7 @@ import React, { useState, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col, InputNumber, Card, ColorPicker, Modal, Table, Tag, Typography, theme } from 'antd';
 import dayjs from 'dayjs';
-import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined, InfoCircleOutlined, SettingOutlined, CloudDownloadOutlined, ApartmentOutlined, GlobalOutlined } from '@ant-design/icons';
+import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined, InfoCircleOutlined, SettingOutlined, CloudDownloadOutlined, ApartmentOutlined, GlobalOutlined, FolderOpenOutlined, BgColorsOutlined } from '@ant-design/icons';
 import { ThemedSegmented } from '../../../components/themed-segmented';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 import type { UploadFile, UploadProps } from 'antd';
@@ -26,7 +26,13 @@ import {
 import { TenantPlan, TenantStatus } from '../../../services/tenant';
 import { useConfigStore, getPersistedConfigs } from '../../../stores/configStore';
 import { useThemeStore } from '../../../stores/themeStore';
-import { uploadFile, getSiteLogoPreview, invalidateSiteLogoPreviewCache, FileUploadResponse } from '../../../services/file';
+import {
+  uploadFile,
+  getSiteLogoPreview,
+  invalidateSiteLogoPreviewCache,
+  FileUploadResponse,
+  type File as CoreFile,
+} from '../../../services/file';
 import { toRelativeIfLocalhost } from '../../../utils/avatar';
 import { 
   getDataDictionaryByCode, 
@@ -35,6 +41,8 @@ import {
 } from '../../../services/dataDictionary';
 import { getLanguageList } from '../../../services/language';
 import ImageCropper from '../../../components/image-cropper';
+import { SiteLogoPickerModal } from '../../../components/site-logo-picker/SiteLogoPickerModal';
+import { LogoThemeColorModal } from '../../../components/logo-theme-color/LogoThemeColorModal';
 import { getSiteSettingsDictCache, setSiteSettingsDictCache } from '../../../utils/siteSettingsDictCache';
 import { cacheTenantDefaultLanguage } from '../../../utils/localeBootstrap';
 import {
@@ -213,6 +221,8 @@ const SiteSettingsPage: React.FC = () => {
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | undefined>(undefined);
   const [cropModalVisible, setCropModalVisible] = useState(false);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [logoPickerOpen, setLogoPickerOpen] = useState(false);
+  const [logoThemeColorOpen, setLogoThemeColorOpen] = useState(false);
   const [activeTabKey, setActiveTabKey] = useState('basic');
   const [currencyOptions, setCurrencyOptions] = useState<DictionaryItem[]>(
     () => (getSiteSettingsDictCache()?.currency ?? []) as DictionaryItem[]
@@ -245,6 +255,8 @@ const SiteSettingsPage: React.FC = () => {
   const [branchOrgForm] = Form.useForm();
   const [useNewBranchAdmin, setUseNewBranchAdmin] = useState(false);
   const tenantDomainValue = Form.useWatch('tenant_domain', form);
+  const siteLogoValue = Form.useWatch('site_logo', form);
+  const themeColorPrimaryValue = Form.useWatch('theme_config.colorPrimary', form);
   const loginLogoValue = Form.useWatch('login_logo', form);
   const loginDecorationValue = Form.useWatch('login_decoration_image', form);
   const loginBackgroundValue = Form.useWatch('login_background_image', form);
@@ -844,6 +856,48 @@ const SiteSettingsPage: React.FC = () => {
     setSelectedImageFile(null);
   };
 
+  const handleSelectExistingLogo = async (file: CoreFile) => {
+    try {
+      invalidateSiteLogoPreviewCache(file.uuid);
+      form.setFieldsValue({ site_logo: file.uuid });
+      await updateSiteSetting({ settings: { site_logo: file.uuid } });
+      await fetchConfigs(true);
+      await loadLogoPreview(file.uuid);
+      useThemeStore.getState().initFromApi();
+      setLogoPickerOpen(false);
+      messageApi.success(t('pages.system.siteSettings.selectLogoSuccess'));
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.siteSettings.selectLogoFailed'));
+    }
+  };
+
+  const handleApplyLogoThemeColor = async (hex: string) => {
+    const color = (hex || '').trim();
+    if (!color) return;
+    try {
+      form.setFieldsValue({
+        'theme_config.colorPrimary': color,
+        theme_color: color,
+      });
+      systemSettingsRef.current = {
+        ...systemSettingsRef.current,
+        'theme_config.colorPrimary': color,
+      };
+      await updateSiteSetting({
+        settings: {
+          theme_color: color,
+          theme_config: { colorPrimary: color },
+        },
+      });
+      await fetchConfigs(true);
+      useThemeStore.getState().initFromApi();
+      setLogoThemeColorOpen(false);
+      messageApi.success(t('pages.system.siteSettings.logoThemeColorApplySuccess'));
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.siteSettings.logoThemeColorApplyFailed'));
+    }
+  };
+
   /**
    * 处理清除LOGO
    */
@@ -1268,7 +1322,7 @@ const SiteSettingsPage: React.FC = () => {
                 />
               </div>
             )}
-            <Space>
+            <Space wrap>
               <Upload
                 beforeUpload={handleLogoFileSelect}
                 fileList={logoFileList}
@@ -1278,6 +1332,14 @@ const SiteSettingsPage: React.FC = () => {
               >
                 <Button icon={<UploadOutlined />}>{t('pages.system.siteSettings.uploadLogo')}</Button>
               </Upload>
+              <Button icon={<FolderOpenOutlined />} onClick={() => setLogoPickerOpen(true)}>
+                {t('pages.system.siteSettings.selectFromLogoFolder')}
+              </Button>
+              {logoUrl && (
+                <Button icon={<BgColorsOutlined />} onClick={() => setLogoThemeColorOpen(true)}>
+                  {t('pages.system.siteSettings.logoThemeColorFromLogo')}
+                </Button>
+              )}
               {logoUrl && (
                 <Button icon={<DeleteOutlined />} danger onClick={handleClearLogo}>
                   {t('pages.system.siteSettings.clearLogo')}
@@ -1810,6 +1872,23 @@ const SiteSettingsPage: React.FC = () => {
         defaultShape="rect"
         onCancel={handleCropCancel}
         onConfirm={handleCropConfirm}
+      />
+      <SiteLogoPickerModal
+        open={logoPickerOpen}
+        onCancel={() => setLogoPickerOpen(false)}
+        onSelect={handleSelectExistingLogo}
+        currentUuid={typeof siteLogoValue === 'string' ? siteLogoValue : undefined}
+      />
+      <LogoThemeColorModal
+        open={logoThemeColorOpen}
+        logoUrl={logoUrl}
+        currentThemeHex={
+          typeof themeColorPrimaryValue === 'string'
+            ? themeColorPrimaryValue
+            : normalizeColorValue(themeColorPrimaryValue, '#1890ff')
+        }
+        onCancel={() => setLogoThemeColorOpen(false)}
+        onApply={handleApplyLogoThemeColor}
       />
       <Modal
         title={

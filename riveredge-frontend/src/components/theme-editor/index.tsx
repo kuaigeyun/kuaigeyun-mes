@@ -12,7 +12,13 @@ import { useTranslation } from 'react-i18next';
 import { getSiteSetting } from '../../services/siteSetting';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import { getToken } from '../../utils/auth';
-import { useThemeStore, resolveThemeFromCloud, normalizeThemeConfig, type ThemeStyle } from '../../stores/themeStore';
+import {
+  useThemeStore,
+  resolveThemeFromCloud,
+  normalizeThemeConfig,
+  resolveSiteBrandColorPrimary,
+  type ThemeStyle,
+} from '../../stores/themeStore';
 import { clearTabsData } from '../../stores/tabsStorage';
 import { getDrawerFloatingWrapperStyle } from '../layout-templates/drawerFloatingChrome';
 import { clampBorderRadius, readBorderRadius } from '../../utils/themeBorderRadius';
@@ -34,6 +40,11 @@ function colorFieldToHex(raw: unknown, fallback: string): string {
     return (raw as { toHexString: () => string }).toHexString();
   }
   return fallback;
+}
+
+function sameHexColor(a: unknown, b: unknown): boolean {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
 function normalizeBgColorField(raw: unknown, fallback = ''): string {
@@ -303,6 +314,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
   const [headerBgColorValue, setHeaderBgColorValue] = useState<string>('');
   const [tabsBgColorValue, setTabsBgColorValue] = useState<string>('');
   const [themeStyleValue, setThemeStyleValue] = useState<ThemeStyle>('vivid');
+  const [brandThemeColor, setBrandThemeColor] = useState<string | null>(null);
 
   const activePresetColors = themeStyleValue === 'plain' ? presetPlainColors : presetColors;
   const isPlainStyle = themeStyleValue === 'plain';
@@ -350,6 +362,10 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
     // 确保返回值是有效的字符串，避免传递 undefined 或 null
     return normalized || token.colorPrimary || '#1890ff';
   }, [colorPrimaryValue, token.colorPrimary]);
+
+  const brandColorSelected = Boolean(
+    brandThemeColor && sameHexColor(normalizedColorPrimary, brandThemeColor),
+  );
 
   const normalizedSiderBgColor = useMemo(() => {
     const normalized = normalizeColorValue(siderBgColorValue, '');
@@ -409,6 +425,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       if (siteSettings) {
         useThemeStore.setState({ siteThemeSettings: siteSettings });
       }
+      setBrandThemeColor(resolveSiteBrandColorPrimary(siteSettings));
       useThemeStore.getState().applyTheme(userThemeMode, applied);
 
       setColorMode(userThemeMode);
@@ -1007,6 +1024,55 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               style={{ marginBottom: 16 }}
               styles={{ body: { padding: '16px' } }}
             >
+              {brandThemeColor && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>
+                    {t('components.themeEditor.common.brandThemeColor')}
+                  </div>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
+                    {t('components.themeEditor.common.brandThemeColorHint')}
+                  </Text>
+                  <Space size={12} align="center">
+                    <Tooltip title={t('components.themeEditor.common.brandThemeColor')} placement="top">
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: '50%',
+                          backgroundColor: brandThemeColor,
+                          border: brandColorSelected
+                            ? `2px solid ${brandThemeColor}`
+                            : '2px solid transparent',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          boxShadow: brandColorSelected
+                            ? `0 0 0 2px ${brandThemeColor}40`
+                            : '0 0 0 1px rgba(0,0,0,0.12)',
+                        }}
+                        onClick={() => applyColorPrimaryChange(brandThemeColor)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            applyColorPrimaryChange(brandThemeColor);
+                          }
+                        }}
+                      />
+                    </Tooltip>
+                    <Text style={{ fontSize: 13 }}>{brandThemeColor.toUpperCase()}</Text>
+                    <Button
+                      type={brandColorSelected ? 'primary' : 'default'}
+                      onClick={() => applyColorPrimaryChange(brandThemeColor)}
+                    >
+                      {brandColorSelected
+                        ? t('components.themeEditor.common.brandThemeColorInUse')
+                        : t('components.themeEditor.common.useBrandThemeColor')}
+                    </Button>
+                  </Space>
+                </div>
+              )}
+
               {/* 快速选择 + 自定义颜色：并排展示，减少面板高度与滚动 */}
               <div
                 style={{
@@ -1019,7 +1085,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 <div>
                   <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>{t('components.themeEditor.common.quickSelect')}</div>
                   <Space wrap size={10}>
-                    {activePresetColors.map((preset, index) => (
+                    {activePresetColors.map((preset, index) => {
+                      const selected = sameHexColor(normalizedColorPrimary, preset.color);
+                      return (
                       <Tooltip key={index} title={preset.labelKey ? t(preset.labelKey, { defaultValue: preset.label || preset.color }) : (preset.label || preset.color)} placement="top">
                         <div
                           style={{
@@ -1027,12 +1095,12 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                             height: 32,
                             borderRadius: '50%',
                             backgroundColor: preset.color,
-                            border: form.getFieldValue('colorPrimary') === preset.color
+                            border: selected
                               ? `2px solid ${preset.color}`
                               : '2px solid transparent',
                             cursor: 'pointer',
                             transition: 'all 0.2s',
-                            boxShadow: form.getFieldValue('colorPrimary') === preset.color
+                            boxShadow: selected
                               ? `0 0 0 2px ${preset.color}40`
                               : 'none',
                           }}
@@ -1040,20 +1108,21 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                             applyColorPrimaryChange(preset.color);
                           }}
                           onMouseEnter={(e) => {
-                            if (form.getFieldValue('colorPrimary') !== preset.color) {
+                            if (!selected) {
                               e.currentTarget.style.transform = 'scale(1.1)';
                               e.currentTarget.style.boxShadow = `0 0 0 2px ${preset.color}40`;
                             }
                           }}
                           onMouseLeave={(e) => {
-                            if (form.getFieldValue('colorPrimary') !== preset.color) {
+                            if (!selected) {
                               e.currentTarget.style.transform = 'scale(1)';
                               e.currentTarget.style.boxShadow = 'none';
                             }
                           }}
                         />
                       </Tooltip>
-                    ))}
+                      );
+                    })}
                   </Space>
                 </div>
 

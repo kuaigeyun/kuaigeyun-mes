@@ -255,7 +255,7 @@ export default defineConfig({
             if (id.includes('monaco-editor') || id.includes('@monaco-editor')) return 'vendor-monaco';
             if (id.includes('three') && !id.includes('react-three')) return 'vendor-three';
             if (id.includes('occt-import-js')) return 'vendor-occt';
-            if (id.includes('@mlightcad/libredwg-web')) return 'vendor-libredwg';
+            if (id.includes('@mlightcad/libredwg-web') || id.includes('@mlightcad/cad-simple-viewer') || id.includes('@mlightcad/libredwg-converter')) return 'vendor-libredwg';
             if (id.includes('altium-toolkit') || id.includes('circuitjson-toolkit')) return 'vendor-altium';
             if (id.includes('echarts')) return 'vendor-echarts';
             // 仅匹配 sheetjs / exceljs 包路径；禁止 id.includes('xlsx') 宽匹配。
@@ -440,6 +440,10 @@ export default defineConfig({
       // Univer 依赖注入 token 须在同一预构建图内（dev 下 exclude 会导致多份 @univerjs/core / engine-render）
       '@univerjs/presets',
       '@univerjs/presets/preset-sheets-core',
+      // CAD：@mlightcad/common 是 ESM，却 `import loglevel from 'loglevel'`。
+      // cad-simple-viewer 在 exclude 时 Vite 会 /@fs/ 直出 CJS，没有 export default。
+      'loglevel',
+      '@mlightcad/common > loglevel',
     ],
     // 首屏不直接引用的大块头显式排除，让 Vite 在页面访问时再按需构建
     exclude: [
@@ -451,6 +455,7 @@ export default defineConfig({
       'jspdf',
       'occt-import-js',
       '@mlightcad/libredwg-web',
+      '@mlightcad/cad-simple-viewer',
     ],
     force: false,
     esbuildOptions: {

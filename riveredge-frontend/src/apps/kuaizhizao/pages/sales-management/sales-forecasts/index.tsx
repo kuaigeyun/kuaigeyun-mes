@@ -13,6 +13,7 @@ import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFor
 import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Descriptions, Tooltip, Alert, Empty, Spin, Switch, Tag } from 'antd'
 import { PlusOutlined, DeleteOutlined, EditOutlined, AppstoreAddOutlined, ImportOutlined, ArrowLeftOutlined, PrinterOutlined, ArrowDownOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts'
@@ -203,9 +204,7 @@ export default function SalesForecastsPage() {
   const [pushPreviewForecastId, setPushPreviewForecastId] = useState<number | null>(null)
   const [pushSelectedItemIds, setPushSelectedItemIds] = useState<number[]>([])
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
-  const leaveSalesForecastFormPage = useCallback(() => {
-    navigate(SALES_FORECAST_LIST_PATH);
-  }, [navigate]);
+  const leaveSalesForecastFormPage = useLeaveFormTab(SALES_FORECAST_LIST_PATH);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false)
   const [productScope, setProductScope] = useState<'make' | 'all'>('make')
   const [importModalVisible, setImportModalVisible] = useState(false)
@@ -558,7 +557,7 @@ export default function SalesForecastsPage() {
     if (!isFormPage || formPageInitializedRef.current) return;
     if (isCreatePage && !salesNodesEnabled.sales_forecast) {
       messageApi.warning(t('app.kuaizhizao.salesForecast.nodeDisabledCreate'));
-      navigate(SALES_FORECAST_LIST_PATH);
+      leaveSalesForecastFormPage();
       return;
     }
     formPageInitializedRef.current = true;
@@ -673,7 +672,7 @@ export default function SalesForecastsPage() {
       }, 100);
     } catch (e: any) {
       messageApi.error(t('common.loadFailed') + ': ' + (e.message || ''));
-      navigate(SALES_FORECAST_LIST_PATH);
+      leaveSalesForecastFormPage();
     }
   }
 
@@ -935,7 +934,7 @@ export default function SalesForecastsPage() {
       invalidateMenuBadge();
       setTrackingRefreshKey((k) => k + 1);
       if (isFormPage) {
-        navigate(SALES_FORECAST_LIST_PATH)
+        leaveSalesForecastFormPage()
       } else {
         actionRef.current?.reload()
       }

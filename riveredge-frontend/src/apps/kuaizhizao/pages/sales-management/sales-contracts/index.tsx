@@ -10,6 +10,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 
 import { useTranslation } from 'react-i18next';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
@@ -592,9 +593,7 @@ const SalesContractsPage: React.FC = () => {
         .filter((row): row is SalesContract => row != null),
     [selectedRowKeys],
   );
-  const leaveSalesContractFormPage = useCallback(() => {
-    navigate(SALES_CONTRACT_LIST_PATH);
-  }, [navigate]);
+  const leaveSalesContractFormPage = useLeaveFormTab(SALES_CONTRACT_LIST_PATH);
 
   const termPlaceholderKeys = useMemo(
     () => extractPlaceholdersFromTerms(termTemplateTerms),
@@ -1322,7 +1321,7 @@ const SalesContractsPage: React.FC = () => {
       }, 100);
     } catch (e: any) {
       messageApi.error(e?.message || t('app.kuaizhizao.salesContract.loadContractFailed'));
-      navigate(SALES_CONTRACT_LIST_PATH);
+      leaveSalesContractFormPage();
     }
   }
 
@@ -1615,7 +1614,7 @@ const SalesContractsPage: React.FC = () => {
       }
 
       if (isFormPage) {
-        navigate(SALES_CONTRACT_LIST_PATH);
+        leaveSalesContractFormPage();
       } else {
         setEditingId(null);
         reload();

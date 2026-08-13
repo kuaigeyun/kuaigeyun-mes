@@ -57,6 +57,7 @@ import {
   type EquipmentTraceData,
 } from '../equipmentTraceTabs';
 import { KUAIZHIZAO_EQUIPMENT_LIST_PATH } from '../equipmentPaths';
+import { useLeaveFormTab, navigateClosingTab, uniTabKey } from '../../../../../../components/uni-tabs/navigateClosingTab';
 
 const EQUIPMENT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_equipment';
 
@@ -438,7 +439,7 @@ const EquipmentDetailPage: React.FC = () => {
     setSearchParams(key === 'info' ? {} : { tab: key }, { replace: true });
   };
 
-  const leavePage = () => navigate(KUAIZHIZAO_EQUIPMENT_LIST_PATH);
+  const leavePage = useLeaveFormTab(KUAIZHIZAO_EQUIPMENT_LIST_PATH);
 
   const pageTitle = equipment
     ? `${equipment.code ?? ''} ${equipment.name ?? ''}`.trim() || t('app.kuaizhizao.equipment.detail')
@@ -531,7 +532,12 @@ const EquipmentDetailPage: React.FC = () => {
                   type="primary"
                   icon={<EditOutlined />}
                   onClick={() =>
-                    navigate(KUAIZHIZAO_EQUIPMENT_LIST_PATH, { state: { openEditUuid: equipment.uuid } })
+                    navigateClosingTab(
+                      navigate,
+                      KUAIZHIZAO_EQUIPMENT_LIST_PATH,
+                      uniTabKey(location.pathname, location.search),
+                      { openEditUuid: equipment.uuid },
+                    )
                   }
                 >
                   {t('common.edit')}

@@ -4,8 +4,11 @@
 
 import { createModule, Dwg_File_Type, LibreDwg } from '@mlightcad/libredwg-web';
 import DxfParser from 'dxf-parser';
+import { hasValidSvgViewBox, normalizeCadSvg } from './cad2dPreviewSvg';
 import { fetchCoreFileBytes } from './fetchCoreFileBytes';
 import { yieldToMain } from './yieldToMain';
+
+export { normalizeCadSvg } from './cad2dPreviewSvg';
 
 export type Cad2dParseResult = {
   svg?: string;
@@ -20,103 +23,6 @@ function uint8ToBase64(bytes: Uint8Array): string {
     binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
   }
   return btoa(binary);
-}
-
-function parseSvgViewBox(svg: string): { x: number; y: number; width: number; height: number } | null {
-  const match = svg.match(/viewBox=["']([^"']+)["']/i);
-  if (!match) return null;
-  const parts = match[1].trim().split(/[\s,]+/).map(Number);
-  if (parts.length < 4 || parts[2] <= 0 || parts[3] <= 0) return null;
-  return { x: parts[0], y: parts[1], width: parts[2], height: parts[3] };
-}
-
-/** libredwg SVG 与 DXF 回退路径共用的相对线宽（与 @mlightcad/libredwg-web 一致） */
-const CAD2D_NATIVE_STROKE_WIDTH = '0.1%';
-
-/** 浏览器预览：保留 libredwg 原生线宽，仅修正颜色/viewBox/背景 */
-function enhanceCadSvgForPreview(svg: string): string {
-  const vb = parseSvgViewBox(svg);
-
-  let out = svg
-    .replace(/stroke=["']rgb\(\s*undefined\s*,\s*undefined\s*,\s*undefined\s*\)["']/gi, 'stroke="#222222"')
-    .replace(/stroke=["']rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)["']/gi, (match, r, g, b) => {
-      const ri = Number(r);
-      const gi = Number(g);
-      const bi = Number(b);
-      if (ri > 210 && gi > 210 && bi > 210) return 'stroke="#333333"';
-      return match;
-    })
-    .replace(/stroke=["']#fff(?:fff)?["']/gi, 'stroke="#333333"')
-    .replace(/fill=["']rgb\(\s*255\s*,\s*255\s*,\s*255\s*\)["']/gi, 'fill="none"');
-
-  const paperBg = vb
-    ? `<rect x="${vb.x}" y="${vb.y}" width="${vb.width}" height="${vb.height}" fill="#fffef5"/>`
-    : '';
-  const style = `<style><![CDATA[
-polyline,path[fill="none"]{stroke-linejoin:round;stroke-miterlimit:2.5}
-path:not([fill="none"]){stroke:none}
-text,tspan{fill:#1a1a1a!important;stroke:none;font-family:sans-serif}
-]]></style>`;
-
-  if (!out.includes('fill="#fffef5"') && paperBg) {
-    out = out.replace(/(<svg\b[^>]*>)/i, `$1${style}${paperBg}`);
-  }
-
-  if (vb) {
-    out = out.replace(/<svg\b[^>]*>/i, (tag) => {
-      const cleaned = tag.replace(/\s(width|height)=["'][^"']*["']/gi, '');
-      const withSize = cleaned.replace(/>$/, ` width="${vb.width}" height="${vb.height}">`);
-      if (/preserveAspectRatio=/i.test(withSize)) return withSize;
-      return withSize.replace(/>$/, ' preserveAspectRatio="xMidYMid meet">');
-    });
-  } else {
-    out = out.replace(/<svg\b[^>]*>/i, (tag) => {
-      if (/preserveAspectRatio=/i.test(tag)) return tag;
-      return tag.replace(/>$/, ' preserveAspectRatio="xMidYMid meet">');
-    });
-  }
-
-  return out;
-}
-
-export function normalizeCadSvg(svg: string): string {
-  let out = svg;
-  if (!/<svg[\s>]/i.test(out)) {
-    out = `<svg xmlns="http://www.w3.org/2000/svg">${out}</svg>`;
-  }
-  out = repairSvgViewBox(out);
-  return enhanceCadSvgForPreview(out);
-}
-
-function hasValidSvgViewBox(svg: string): boolean {
-  const match = svg.match(/viewBox=["']([^"']+)["']/i);
-  if (!match) return true;
-  const parts = match[1].trim().split(/[\s,]+/).map(Number);
-  if (parts.length < 4) return false;
-  return parts[2] > 0 && parts[3] > 0;
-}
-
-function repairSvgViewBox(svg: string): string {
-  if (hasValidSvgViewBox(svg)) return svg;
-  const nums = svg.match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/gi)?.map(Number) ?? [];
-  const finite = nums.filter((n) => Number.isFinite(n));
-  if (finite.length < 2) return svg;
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const n of finite) {
-    minX = Math.min(minX, n);
-    maxX = Math.max(maxX, n);
-    minY = Math.min(minY, n);
-    maxY = Math.max(maxY, n);
-  }
-  const pad = Math.max(maxX - minX, maxY - minY) * 0.05 || 10;
-  const vb = `${minX - pad} ${minY - pad} ${maxX - minX + pad * 2} ${maxY - minY + pad * 2}`;
-  if (/viewBox=/i.test(svg)) {
-    return svg.replace(/viewBox=["'][^"']*["']/i, `viewBox="${vb}"`);
-  }
-  return svg.replace(/<svg\b/i, `<svg viewBox="${vb}"`);
 }
 
 function thumbnailToDataUrl(thumbnail: { data: Uint8Array; type: number }): string | null {
@@ -287,7 +193,7 @@ function parseDxfText(text: string): string {
   const vbW = maxX - minX + pad * 2;
   const vbH = maxY - minY + pad * 2;
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vbX} ${vbY} ${vbW} ${vbH}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet"><g stroke="#000000" stroke-width="${CAD2D_NATIVE_STROKE_WIDTH}" fill="none" stroke-linecap="butt" stroke-linejoin="round" stroke-miterlimit="2.5" transform="matrix(1,0,0,-1,0,0)">${shapes.join('')}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vbX} ${vbY} ${vbW} ${vbH}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet"><g stroke="#000000" fill="none" transform="matrix(1,0,0,-1,0,0)">${shapes.join('')}</g></svg>`;
 }
 
 export async function parseCad2dFromBuffer(buffer: ArrayBuffer, ext: 'dwg' | 'dxf'): Promise<Cad2dParseResult> {

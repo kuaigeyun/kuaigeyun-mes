@@ -121,6 +121,21 @@ def _build_scope_key(scope_fields: List[str], context: Optional[Dict[str, Any]])
     return ":".join(scope_values)
 
 
+def _rule_has_date_component(components: Optional[List[Dict[str, Any]]]) -> bool:
+    return any((comp or {}).get("type") == "date" for comp in (components or []))
+
+
+def _digit_str_is_legacy_dated_serial(digit_str: str) -> bool:
+    """旧预设「YYYYMMDD + 短流水」拼成的数字，不能当作当前无日期规则的长流水。"""
+    if len(digit_str) < 9 or not digit_str.isdigit():
+        return False
+    try:
+        datetime.strptime(digit_str[:8], "%Y%m%d")
+    except ValueError:
+        return False
+    return bool(digit_str[8:])
+
+
 def _resolve_scan_prefix_for_sequence(
     components: Optional[List[Dict[str, Any]]],
     context: Optional[Dict[str, Any]],
@@ -700,6 +715,7 @@ class CodeGenerationService:
         code: Optional[str],
         prefix: str,
         digits: Optional[int] = None,
+        components: Optional[List[Dict[str, Any]]] = None,
     ) -> Optional[int]:
         """
         从完整编码中解析流水号：必须先剥掉「序号前完整前缀」（含日期/分组），
@@ -707,6 +723,9 @@ class CodeGenerationService:
 
         规则配置了 digits 时，剩余数字长度不得超过该位数；更长说明前缀不完整
         （例如只剥了 CG，把 20260812 连进流水），该编码不参与校准，而不是截尾或丢弃。
+
+        当前规则不含日期组件时，跳过旧预设「前缀+YYYYMMDD+短流水」拼出的编号，
+        避免被读成 12 位流水（例如 CG202608070007）。
         """
         s = (code or "").strip()
         if not s:
@@ -728,6 +747,9 @@ class CodeGenerationService:
             digit_str = m.group(1)
         if digits and digits > 0 and len(digit_str) > digits:
             return None
+        if components is not None and not _rule_has_date_component(components):
+            if _digit_str_is_legacy_dated_serial(digit_str):
+                return None
         try:
             n = int(digit_str)
         except ValueError:
@@ -788,6 +810,7 @@ class CodeGenerationService:
         *,
         rule_code: str = "",
         digits: Optional[int] = None,
+        components: Optional[List[Dict[str, Any]]] = None,
     ) -> Optional[int]:
         """
         从库中查询该规则对应实体的编码字段，解析流水号数字，返回当前最大序号。
@@ -823,6 +846,7 @@ class CodeGenerationService:
                     str(code) if code is not None else None,
                     prefix,
                     digits=digits,
+                    components=components,
                 )
                 if n is None:
                     continue
@@ -887,6 +911,7 @@ class CodeGenerationService:
             prefix=scan_prefix,
             rule_code=request_rule_code or getattr(rule, "code", "") or "",
             digits=digits,
+            components=components,
         )
 
     @staticmethod
@@ -918,6 +943,21 @@ class CodeGenerationService:
             scope_key=scope_key,
         )
         if max_from_db is None:
+            # 规则已改为无日期长流水时，序号表里可能仍残留旧预设拼出的「日期+短序号」
+            if (
+                not _rule_has_date_component(components)
+                and _digit_str_is_legacy_dated_serial(str(sequence.current_seq))
+            ):
+                reset_to = (rule.seq_start or 1) - seq_step
+                logger.info(
+                    "code_sequence_discard_legacy_dated_mash rule_code={} current_seq_before={} reset_to={}",
+                    request_rule_code,
+                    sequence.current_seq,
+                    reset_to,
+                )
+                sequence.current_seq = reset_to
+                await sequence.save()
+                return
             logger.info(
                 "code_sequence_recalibrate_skip rule_code={} prefix={} scope_key={} reason=max_from_db_is_none",
                 request_rule_code,

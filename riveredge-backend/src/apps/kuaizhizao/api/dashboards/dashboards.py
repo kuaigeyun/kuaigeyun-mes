@@ -16,7 +16,8 @@ from datetime import date, datetime, timedelta
 
 from core.api.deps import get_current_user, get_current_tenant
 from core.utils.api_cache import cache_by_kwargs
-from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
+from tortoise.expressions import Q
+from core.utils.timezone_utils import resolve_business_datetime, site_day_bounds_utc, to_api_isoformat
 from infra.models.user import User
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.menu_badge_counts_service import fetch_menu_badge_counts
@@ -157,6 +158,30 @@ class DashboardResponse(BaseModel):
     """工作台数据响应"""
     todos: TodoListResponse = Field(..., description="待办事项")
     statistics: StatisticsResponse = Field(..., description="统计数据")
+
+
+_DASHBOARD_WO_EXCLUDED_STATUSES = (
+    "cancelled",
+    "已取消",
+    "CANCELLED",
+    "split",
+    "已拆分",
+    "SPLIT",
+)
+
+
+def _parse_dashboard_period_utc(
+    date_start: Optional[str],
+    date_end: Optional[str],
+) -> tuple[Optional[datetime], Optional[datetime]]:
+    """YYYY-MM-DD 站点日历日 → UTC 半开区间 [start, end)。"""
+    start_utc: Optional[datetime] = None
+    end_utc: Optional[datetime] = None
+    if date_start:
+        start_utc, _ = site_day_bounds_utc(date.fromisoformat(date_start.strip()))
+    if date_end:
+        _, end_utc = site_day_bounds_utc(date.fromisoformat(date_end.strip()))
+    return start_utc, end_utc
 
 
 @router.get("/todos", response_model=TodoListResponse, summary="List todos")
@@ -1276,118 +1301,95 @@ async def get_statistics(
     - 库存统计（库存总量、库存周转率、预警数量等）
     - 质量统计（合格率、不良品数量、质量异常数量等）
     """
-    from datetime import datetime, timedelta
-    
-    # 解析时间范围
-    date_start_dt = None
-    date_end_dt = None
-    if date_start:
-        try:
-            date_start_dt = datetime.strptime(date_start, "%Y-%m-%d")
-        except ValueError:
-            pass
-    if date_end:
-        try:
-            date_end_dt = datetime.strptime(date_end, "%Y-%m-%d")
-            # 结束日期包含整天，所以设置为当天的23:59:59
-            date_end_dt = date_end_dt.replace(hour=23, minute=59, second=59)
-        except ValueError:
-            pass
-    
+    from tortoise.functions import Sum
+    from apps.kuaizhizao.models.sales_order import SalesOrder
+    from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+    from apps.kuaizhizao.services.reporting_service import ReportingService
+    from apps.kuaizhizao.services.work_order_service import WORK_ORDER_IN_PROGRESS_STATUS
+
+    start_utc, end_utc = _parse_dashboard_period_utc(date_start, date_end)
+    reporting_end = (end_utc - timedelta(microseconds=1)) if end_utc else None
+
     statistics = StatisticsResponse()
-    
-    try:
-        # 生产统计
-        from apps.kuaizhizao.services.reporting_service import ReportingService
-        from apps.kuaizhizao.services.defect_record_service import DefectRecordService
-        from apps.kuaizhizao.models.sales_order import SalesOrder
-        from apps.kuaizhizao.models.work_order import WorkOrder
-        from decimal import Decimal
-        
-        # 获取工单统计（SQL COUNT/SUM，不拉全表行）
-        from tortoise.functions import Sum
-        from apps.kuaizhizao.models.sales_order import SalesOrderItem
 
-        work_order_query = WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if date_start_dt:
-            work_order_query = work_order_query.filter(created_at__gte=date_start_dt)
-        if date_end_dt:
-            work_order_query = work_order_query.filter(created_at__lte=date_end_dt)
+    reporting_stats = await ReportingService().get_reporting_statistics(
+        tenant_id=tenant_id,
+        date_start=start_utc,
+        date_end=reporting_end,
+    )
 
-        total_work_orders = await work_order_query.count()
-        completed_work_orders = await work_order_query.filter(status="completed").count()
-        in_progress_work_orders = await work_order_query.filter(status="in_progress").count()
-
-        completed_agg = await work_order_query.filter(status="completed").annotate(
-            qty=Sum("quantity")
-        ).first()
-        completed_quantity = float(getattr(completed_agg, "qty", None) or 0)
-
-        plan_agg = await work_order_query.annotate(qty=Sum("quantity")).first()
-        plan_quantity = float(getattr(plan_agg, "qty", None) or 0)
-
-        # 获取订单统计
-        sales_order_query = SalesOrder.filter(tenant_id=tenant_id)
-        if date_start_dt:
-            sales_order_query = sales_order_query.filter(created_at__gte=date_start_dt)
-        if date_end_dt:
-            sales_order_query = sales_order_query.filter(created_at__lte=date_end_dt)
-
-        order_count = await sales_order_query.count()
-
-        # 商品数：日期范围内销售订单明细 distinct material_id（SQL，不拉订单行）
-        item_query = SalesOrderItem.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if date_start_dt:
-            item_query = item_query.filter(sales_order__created_at__gte=date_start_dt)
-        if date_end_dt:
-            item_query = item_query.filter(sales_order__created_at__lte=date_end_dt)
-        product_ids = await item_query.distinct().values_list("material_id", flat=True)
-        product_count = len([pid for pid in product_ids if pid is not None])
-        
-        # 获取报工统计，计算不良品率
-        reporting_service = ReportingService()
-        reporting_stats = await reporting_service.get_reporting_statistics(
-            tenant_id=tenant_id,
-            date_start=date_start_dt,
-            date_end=date_end_dt,
+    # 工单总数：区间内仍在册（创建于结束前，且未在开始前完工）。进行中：当前在制快照，不含时间窗。
+    work_order_query = WorkOrder.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+    ).exclude(status__in=list(_DASHBOARD_WO_EXCLUDED_STATUSES))
+    if end_utc:
+        work_order_query = work_order_query.filter(created_at__lt=end_utc)
+    if start_utc:
+        work_order_query = work_order_query.filter(
+            Q(actual_end_date__isnull=True) | Q(actual_end_date__gte=start_utc)
         )
-        
-        total_reported_quantity = float(reporting_stats.get("total_reported_quantity", 0)) if reporting_stats else 0
-        total_unqualified_quantity = float(reporting_stats.get("total_unqualified_quantity", 0)) if reporting_stats else 0
-        first_pass_yield_rate = float(reporting_stats.get("first_pass_yield_rate", 0)) if reporting_stats else 0
-        defect_rate = (total_unqualified_quantity / total_reported_quantity * 100) if total_reported_quantity > 0 else 0
-        
-        # 计算产能达成率（实际完工数量 / 计划数量 * 100）
-        capacity_achievement_rate = (completed_quantity / plan_quantity * 100) if plan_quantity > 0 else 0
-        
-        statistics.production = {
-            "total": total_work_orders,
-            "completed": completed_work_orders,
-            "in_progress": in_progress_work_orders,
-            "completion_rate": round(completed_work_orders / total_work_orders * 100, 2) if total_work_orders > 0 else 0,
-            "order_count": order_count,
-            "product_count": product_count,
-            "plan_quantity": round(plan_quantity, 2),
-            "completed_quantity": round(completed_quantity, 2),
-            "defect_rate": round(defect_rate, 2),
-            "first_pass_yield_rate": round(first_pass_yield_rate, 2),
-            "capacity_achievement_rate": round(capacity_achievement_rate, 2),
-        }
-    except Exception as e:
-        logger.error(f"获取生产统计失败: {e}")
-        statistics.production = {
-            "total": 0,
-            "completed": 0,
-            "in_progress": 0,
-            "completion_rate": 0,
-            "order_count": 0,
-            "product_count": 0,
-            "plan_quantity": 0,
-            "completed_quantity": 0,
-            "defect_rate": 0,
-            "first_pass_yield_rate": 0,
-            "capacity_achievement_rate": 0,
-        }
+
+    total_work_orders = await work_order_query.count()
+    completed_work_orders = await work_order_query.filter(status="completed").count()
+    in_progress_work_orders = await WorkOrder.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        status__in=WORK_ORDER_IN_PROGRESS_STATUS,
+    ).count()
+
+    plan_rows = await work_order_query.annotate(qty=Sum("quantity")).values("qty")
+    plan_quantity = float((plan_rows[0].get("qty") if plan_rows else None) or 0)
+
+    sales_order_query = SalesOrder.filter(tenant_id=tenant_id)
+    if start_utc:
+        sales_order_query = sales_order_query.filter(created_at__gte=start_utc)
+    if end_utc:
+        sales_order_query = sales_order_query.filter(created_at__lt=end_utc)
+    order_count = await sales_order_query.count()
+
+    # SalesOrderItem 仅有 sales_order_id（无 ORM FK），先取区间内订单 ID 再计商品数
+    order_ids = await sales_order_query.values_list("id", flat=True)
+    if order_ids:
+        product_ids = await SalesOrderItem.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            sales_order_id__in=list(order_ids),
+        ).values_list("material_id", flat=True)
+        product_count = len({pid for pid in product_ids if pid is not None})
+    else:
+        product_count = 0
+
+    total_reported_quantity = float(reporting_stats.get("total_reported_quantity", 0) or 0)
+    total_unqualified_quantity = float(reporting_stats.get("total_unqualified_quantity", 0) or 0)
+    completed_quantity = float(reporting_stats.get("total_qualified_quantity", 0) or 0)
+    first_pass_yield_rate = float(reporting_stats.get("first_pass_yield_rate", 0) or 0)
+    defect_rate = (
+        total_unqualified_quantity / total_reported_quantity * 100
+        if total_reported_quantity > 0
+        else 0
+    )
+    capacity_achievement_rate = (
+        completed_quantity / plan_quantity * 100 if plan_quantity > 0 else 0
+    )
+
+    statistics.production = {
+        "total": total_work_orders,
+        "completed": completed_work_orders,
+        "in_progress": in_progress_work_orders,
+        "completion_rate": (
+            round(completed_work_orders / total_work_orders * 100, 2)
+            if total_work_orders > 0
+            else 0
+        ),
+        "order_count": order_count,
+        "product_count": product_count,
+        "plan_quantity": round(plan_quantity, 2),
+        "completed_quantity": round(completed_quantity, 2),
+        "defect_rate": round(defect_rate, 2),
+        "first_pass_yield_rate": round(first_pass_yield_rate, 2),
+        "capacity_achievement_rate": round(capacity_achievement_rate, 2),
+    }
     
     try:
         # 库存统计
@@ -1414,48 +1416,22 @@ async def get_statistics(
             "alert_count": 0,
         }
     
-    try:
-        # 质量统计
-        from apps.kuaizhizao.services.reporting_service import ReportingService
-        
-        # 质量异常统计：COUNT，不拉全表行
-        total_quality_exceptions = await QualityException.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-        ).count()
+    total_quality_exceptions = await QualityException.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+    ).count()
+    open_quality_exceptions = await QualityException.filter(
+        tenant_id=tenant_id,
+        status__in=ACTIVE_QUALITY_EXCEPTION_STATUSES,
+        deleted_at__isnull=True,
+    ).count()
+    statistics.quality = {
+        "total_exceptions": total_quality_exceptions,
+        "open_exceptions": open_quality_exceptions,
+        "quality_rate": round(float(reporting_stats.get("qualification_rate", 0) or 0), 2),
+        "first_pass_yield_rate": round(float(reporting_stats.get("first_pass_yield_rate", 0) or 0), 2),
+    }
 
-        open_quality_exceptions = await QualityException.filter(
-            tenant_id=tenant_id,
-            status__in=ACTIVE_QUALITY_EXCEPTION_STATUSES,
-            deleted_at__isnull=True,
-        ).count()
-
-        # 获取报工统计，计算合格率
-        reporting_service = ReportingService()
-        reporting_stats = await reporting_service.get_reporting_statistics(
-            tenant_id=tenant_id,
-            date_start=date_start_dt,
-            date_end=date_end_dt,
-        )
-
-        quality_rate = reporting_stats.get("qualification_rate", 0) if reporting_stats else 0
-        first_pass_yield_rate = reporting_stats.get("first_pass_yield_rate", 0) if reporting_stats else 0
-
-        statistics.quality = {
-            "total_exceptions": total_quality_exceptions,
-            "open_exceptions": open_quality_exceptions,
-            "quality_rate": round(quality_rate, 2),
-            "first_pass_yield_rate": round(first_pass_yield_rate, 2),
-        }
-    except Exception as e:
-        logger.error(f"获取质量统计失败: {e}")
-        statistics.quality = {
-            "total_exceptions": 0,
-            "open_exceptions": 0,
-            "quality_rate": 0,
-            "first_pass_yield_rate": 0,
-        }
-    
     return statistics
 
 

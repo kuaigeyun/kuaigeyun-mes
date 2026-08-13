@@ -22,6 +22,7 @@ import {
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Tooltip, Switch, Alert } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, BranchesOutlined, ReloadOutlined, FileTextOutlined, FormOutlined, ArrowLeftOutlined } from '@ant-design/icons';
@@ -923,9 +924,7 @@ const QuotationsPage: React.FC = () => {
   const [pushPreviewTarget, setPushPreviewTarget] = useState<QuotationPushTarget | null>(null);
   const [pushPreviewRecord, setPushPreviewRecord] = useState<Quotation | null>(null);
   const [pushSelectedItemIds, setPushSelectedItemIds] = useState<number[]>([]);
-  const leaveQuotationFormPage = useCallback(() => {
-    navigate(QUOTATION_LIST_PATH);
-  }, [navigate]);
+  const leaveQuotationFormPage = useLeaveFormTab(QUOTATION_LIST_PATH);
 
   const handleListScopeFilterChange = useCallback((v: QuotationListScope) => {
     if (v === listScopeFilterRef.current) return;
@@ -2680,7 +2679,7 @@ const QuotationsPage: React.FC = () => {
       }, 100);
     } catch {
       messageApi.error(t('app.kuaizhizao.quotation.detailFailed'));
-      navigate(QUOTATION_LIST_PATH);
+      leaveQuotationFormPage();
     }
   }
 
@@ -2761,7 +2760,7 @@ const QuotationsPage: React.FC = () => {
 
     if (isFormPage) {
       scheduleQuotationListReload();
-      navigate(QUOTATION_LIST_PATH);
+      leaveQuotationFormPage();
       return;
     }
     reloadQuotationList();
@@ -2864,7 +2863,7 @@ const QuotationsPage: React.FC = () => {
 
     if (isFormPage) {
       scheduleQuotationListReload();
-      navigate(QUOTATION_LIST_PATH);
+      leaveQuotationFormPage();
       return;
     }
     reloadQuotationList();

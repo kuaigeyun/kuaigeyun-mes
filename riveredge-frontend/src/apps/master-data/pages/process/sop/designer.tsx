@@ -9,7 +9,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { Button, Space, Form, Input, theme, Typography as AntdTypography, Upload } from 'antd';
 import { SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, ReloadOutlined, InboxOutlined } from '@ant-design/icons';
 import { App } from 'antd';
@@ -69,7 +70,7 @@ const { Dragger } = Upload;
 
 const SOPDesignerPage: React.FC = () => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const leaveSopDesigner = useLeaveFormTab('/apps/master-data/process/sop');
   const [searchParams] = useSearchParams();
   const sopUuid = searchParams.get('uuid');
   const { message } = App.useApp();
@@ -396,7 +397,7 @@ const SOPDesignerPage: React.FC = () => {
         </Button>
       </Space>
       <Space>
-        <Button icon={<CloseOutlined />} onClick={() => navigate('/apps/master-data/process/sop')}>{t('common.close')}</Button>
+        <Button icon={<CloseOutlined />} onClick={leaveSopDesigner}>{t('common.close')}</Button>
         <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleSave}>{t('common.save')}</Button>
       </Space>
     </div>

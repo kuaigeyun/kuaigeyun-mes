@@ -1,0 +1,1 @@
+import{j as a}from"./vendor-DurrBLAY.js";import{N as t}from"./clearSessionQueries-DO5p7n_h.js";const e=()=>a.jsx(t,{to:"/apps/kuaicaiwu/cost-management/cost-calculations?cat=compare",replace:!0});export{e as default};

@@ -11,6 +11,7 @@ from tortoise.expressions import Q
 
 from core.config.code_rule_pages import get_canonical_rule_code
 from core.models.code_rule import CodeRule
+from core.models.code_sequence import CodeSequence
 from core.schemas.code_rule import CodeRuleCreate, CodeRuleUpdate
 from core.utils.timezone_utils import now_utc
 from core.services.code_rule.code_rule_component_service import CodeRuleComponentService
@@ -265,6 +266,9 @@ class CodeRuleService:
             setattr(rule, key, value)
         
         await rule.save()
+
+        if isinstance(rule_components, list) and rule_components:
+            await CodeRuleService._reset_sequences_for_rule(tenant_id, rule)
         
         # 如果规则代码或状态变更，通知业务模块（异步，不阻塞主流程）
         code_changed = old_code != rule.code
@@ -284,7 +288,19 @@ class CodeRuleService:
             )
         
         return rule
-    
+
+    @staticmethod
+    async def _reset_sequences_for_rule(tenant_id: int, rule: CodeRule) -> None:
+        """规则组件变更后新开流水，避免旧「日期+短序号」被读成新规则的长流水。"""
+        components = rule.get_rule_components() or []
+        counter = CodeRuleComponentService.get_counter_component_config(components)
+        initial = int((counter or {}).get("initial_value", 1) or 1)
+        await CodeSequence.filter(
+            code_rule_id=rule.id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).update(current_seq=max(initial - 1, 0))
+
     @staticmethod
     async def delete_rule(
         tenant_id: int,

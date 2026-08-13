@@ -2257,20 +2257,20 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           align-items: center !important;
           vertical-align: middle !important;
         }
-        /* 面包屑文字颜色 - 根据显示模式统一 */
+        /* 面包屑文字颜色：浅色顶栏用深字；深色顶栏一律纯白（含分隔符/箭头） */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb,
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb span,
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item,
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item span {
-          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : '#ffffff'} !important;
         }
-        /* 末级面包屑（激活项）：主题色覆盖全局颜色强制 */
+        /* 末级：浅色顶栏用主题色；深色顶栏与其它级同为纯白 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .riveredge-breadcrumb-active,
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item .riveredge-breadcrumb-active {
-          color: ${token.colorPrimary} !important;
+          color: ${isLightModeLightBg ? token.colorPrimary : '#ffffff'} !important;
         }
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb a {
-          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : '#ffffff'} !important;
         }
         /* 完全禁用面包屑项本身的 hover 背景（包括 Ant Design 默认样式） */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item:hover {
@@ -2280,7 +2280,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         /* 面包屑链接 hover 样式 - 根据显示模式统一，浅色模式浅色背景无hover */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item a:hover,
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item .ant-breadcrumb-link:hover {
-          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 1)'} !important;
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : '#ffffff'} !important;
           background-color: ${isLightModeLightBg ? 'transparent' : 'rgba(255, 255, 255, 0.1)'} !important;
           border-radius: 4px !important;
         }
@@ -2295,13 +2295,13 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           padding-left: 8px !important;
           background-color: ${isLightModeLightBg ? 'transparent' : 'rgba(255, 255, 255, 0.1)'} !important;
         }
-        /* 面包屑分隔符颜色 - 根据显示模式统一 */
+        /* 面包屑分隔符颜色 - 深色顶栏纯白 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-separator {
-          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.45)' : 'rgba(255, 255, 255, 0.45)'} !important;
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.45)' : '#ffffff'} !important;
         }
-        /* 面包屑图标颜色 - 根据显示模式统一 */
+        /* 面包屑图标（含下拉箭头）- 深色顶栏纯白 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .anticon {
-          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : '#ffffff'} !important;
         }
         /* 面包屑下拉菜单样式优化 - 确保完整显示 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-dropdown {

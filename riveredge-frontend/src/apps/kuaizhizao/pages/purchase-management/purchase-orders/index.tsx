@@ -11,6 +11,7 @@ import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspens
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
 import type { DescriptionsProps } from 'antd';
@@ -524,9 +525,7 @@ const PurchaseOrdersPage: React.FC = () => {
     actionRef.current?.reload();
   }, [invalidateMenuBadgeCounts]);
 
-  const leavePurchaseOrderFormPage = useCallback(() => {
-    navigate(PURCHASE_ORDER_LIST_PATH);
-  }, [navigate]);
+  const leavePurchaseOrderFormPage = useLeaveFormTab(PURCHASE_ORDER_LIST_PATH);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
 
@@ -2114,7 +2113,7 @@ const PurchaseOrdersPage: React.FC = () => {
       }, 100);
     } catch {
       messageApi.error(t('app.kuaizhizao.purchaseOrder.detailFailed'));
-      navigate(PURCHASE_ORDER_LIST_PATH);
+      leavePurchaseOrderFormPage();
     }
   }
 
@@ -2580,7 +2579,7 @@ const PurchaseOrdersPage: React.FC = () => {
       }
 
       if (isFormPage) {
-        navigate(PURCHASE_ORDER_LIST_PATH);
+        leavePurchaseOrderFormPage();
       } else {
         setModalVisible(false);
       }

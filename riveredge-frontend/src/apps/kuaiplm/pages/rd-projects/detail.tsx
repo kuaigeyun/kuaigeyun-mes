@@ -44,6 +44,7 @@ import dayjs from 'dayjs';
 import { buildFutureDateShortcutFieldProps } from '../../../../utils/futureDatePickerShortcuts';
 import { formatDateTime } from '../../../../utils/format';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useLeaveFormTab } from '../../../../components/uni-tabs/navigateClosingTab';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, FormModalTemplate } from '../../../../components/layout-templates';
 import {
@@ -137,6 +138,7 @@ const RdProjectDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const leaveRdProjectDetail = useLeaveFormTab('/apps/kuaiplm/rd-projects');
   const { token } = theme.useToken();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const [loading, setLoading] = useState(true);
@@ -627,7 +629,7 @@ const RdProjectDetailPage: React.FC = () => {
     return (
       <ListPageTemplate>
         <Empty description={t('app.kuaiplm.rdProjects.detail.notFound')}>
-          <Button onClick={() => navigate('/apps/kuaiplm/rd-projects')}>
+          <Button onClick={leaveRdProjectDetail}>
             {t('app.kuaiplm.common.actions.allProjects')}
           </Button>
         </Empty>
@@ -669,7 +671,7 @@ const RdProjectDetailPage: React.FC = () => {
     <ListPageTemplate>
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
         <Space wrap>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/apps/kuaiplm/rd-projects')}>
+          <Button icon={<ArrowLeftOutlined />} onClick={leaveRdProjectDetail}>
             {t('app.kuaiplm.common.actions.allProjects')}
           </Button>
           <Typography.Title level={4} style={{ margin: 0 }}>

@@ -11,7 +11,7 @@ import { getFileByUuid, getFilePreview, getFileDownloadUrlWithToken, FILE_IMAGE_
 import { PreviewOverlayToolButton, UniPdfPreview, UniPreviewOverlay } from '../uni-preview';
 import { getFileExt, isCad2dFile, isImageFile, isInlineDocumentPreview, isAltiumEdaFile, isPcbDocFile, isSchDocFile, isPdfFile, isStepFile, type FilePreviewSource } from '../../utils/filePreviewKind';
 import { FilePreviewHeaderTitle } from './FilePreviewHeaderTitle';
-import type { DwgSvgViewerRef } from '../dwg-preview/DwgSvgViewer';
+import type { DwgSvgViewerRef } from '../dwg-preview/DwgCadViewer';
 import type { PcbSvgViewerRef } from '../pcb-preview/PcbSvgViewer';
 import type { StepModelViewerRef } from '../step-preview/StepModelViewer';
 import { PreviewMarkupProvider } from '../preview-markup/PreviewMarkupContext';
@@ -159,8 +159,16 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         if (!fileUuid) {
           throw new Error(t('app.master-data.drawings.previewFailed'));
         }
-        const preview = await getFilePreview(fileUuid, { size: FILE_IMAGE_SIZE_MEDIUM });
-        if (!preview?.preview_url || preview.supported === false) {
+        const preview = await getFilePreview(
+          fileUuid,
+          isImage ? { size: FILE_IMAGE_SIZE_MEDIUM } : undefined,
+        );
+        // 文档类（txt/xlsx 等）由前端按扩展名渲染，不依赖后端 supported；
+        // 缩略图 size 仅图片有效，表格/文本必须拉原文件。
+        if (!preview?.preview_url) {
+          throw new Error(t('app.master-data.drawings.previewUnsupported'));
+        }
+        if (!isDocument && preview.supported === false) {
           throw new Error(t('app.master-data.drawings.previewUnsupported'));
         }
         if (!cancelled) {
@@ -182,7 +190,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [open, fileUuid, url, isStep, isCad2d, isAltiumEda, t]);
+  }, [open, fileUuid, url, isStep, isCad2d, isAltiumEda, isImage, isDocument, t]);
 
   useEffect(() => {
     if (!open || !previewUrl || !isPdf) {
@@ -580,6 +588,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
       {!isImage && !isPdf ? (
         <Modal
+          open={open}
           title={previewHeaderTitleLight}
           onCancel={onClose}
           footer={null}
@@ -587,6 +596,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           style={{ top: 16 }}
           destroyOnHidden
           zIndex={overlayZIndex}
+          mask={{ closable: true }}
           styles={{ body: { minHeight: typeof height === 'number' ? `${height}px` : height, padding: 0 } }}
         >
           {loading || pdfLoading ? (
@@ -614,7 +624,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                     justifyContent: 'center',
                   }}
                 >
-                  <Spin tip={t('pages.system.files.previewLoading')}>
+                  <Spin description={t('pages.system.files.previewLoading')}>
                     <div style={{ minHeight: 24 }} />
                   </Spin>
                 </div>
@@ -622,6 +632,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             >
               <DocumentPreviewPane
                 fileUrl={previewUrl}
+                fileUuid={fileUuid}
                 fileSource={fileSource}
                 height={height}
               />
@@ -635,7 +646,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             <Alert
               type="warning"
               showIcon
-              message={t('app.master-data.drawings.previewUnsupported')}
+              title={t('app.master-data.drawings.previewUnsupported')}
             />
           )}
         </Modal>

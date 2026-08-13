@@ -6,7 +6,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { App, Card, Steps, Button, Space, message, Spin, Typography, Tag, Divider, InputNumber } from 'antd';
 import { CheckOutlined, PlayCircleOutlined, PauseOutlined, CloseOutlined } from '@ant-design/icons';
 import { createForm } from '@formily/core';
@@ -44,7 +45,7 @@ const SOPExecutionPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
+  const leaveSopExecution = useLeaveFormTab('/apps/master-data/process/sop');
   
   const executionUuid = searchParams.get('uuid');
   
@@ -64,7 +65,7 @@ const SOPExecutionPage: React.FC = () => {
       loadExecutionData();
     } else {
       messageApi.warning(t('app.master-data.sop.missingExecutionUuid'));
-      navigate('/apps/master-data/process/sop');
+      leaveSopExecution();
     }
   }, [executionUuid]);
   
@@ -106,7 +107,7 @@ const SOPExecutionPage: React.FC = () => {
       }
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.sop.loadExecutionFailed'));
-      navigate('/apps/master-data/process/sop');
+      leaveSopExecution();
     } finally {
       setLoading(false);
     }
@@ -223,7 +224,7 @@ const SOPExecutionPage: React.FC = () => {
    * 处理返回
    */
   const handleBack = () => {
-    navigate('/apps/master-data/process/sop');
+    leaveSopExecution();
   };
   
   if (loading) {

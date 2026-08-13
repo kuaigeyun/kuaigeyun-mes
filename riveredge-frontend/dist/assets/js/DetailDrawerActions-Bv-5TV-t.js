@@ -1,1 +1,0 @@
-import{j as n,a0 as a}from"./vendor-BpC5dbqE.js";const l=({items:s,size:t=8})=>{const r=s.filter(e=>e.visible!==!1);return r.length===0?null:n.jsx(a,{size:t,children:r.map(e=>n.jsx("span",{children:typeof e.render=="function"?e.render():e.render},e.key))})};export{l as D};

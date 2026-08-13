@@ -93,7 +93,7 @@ function classifyFileTypeFilter(file: File): Exclude<FileTypeFilter, 'all'> {
   if (isImageFile(file)) return 'image';
   const ext = (file.file_extension || file.original_name?.split('.').pop() || '').toLowerCase();
   const mime = (file.file_type || '').toLowerCase();
-  if (['dwg', 'dxf', 'step', 'stp'].includes(ext)) return 'drawing';
+  if (['dwg', 'dxf', 'step', 'stp', 'pcbdoc', 'schdoc'].includes(ext)) return 'drawing';
   if (
     ext === 'pdf' ||
     ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'json'].includes(ext) ||

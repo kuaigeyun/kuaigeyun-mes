@@ -9,6 +9,7 @@ import {
   isVideoFile,
   type FilePreviewSource,
 } from '../../utils/filePreviewKind';
+import { fetchCoreFileBytes } from '../../utils/fetchCoreFileBytes';
 
 const TEXT_PREVIEW_MAX_BYTES = 512 * 1024;
 const SPREADSHEET_MAX_ROWS = 500;
@@ -19,9 +20,16 @@ type SheetData = {
 };
 
 export interface DocumentPreviewPaneProps {
-  fileUrl: string;
+  fileUrl?: string;
+  fileUuid?: string;
   fileSource: FilePreviewSource;
   height?: string | number;
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
 }
 
 function normalizeRow(row: unknown, columnCount: number): string[] {
@@ -89,6 +97,7 @@ async function parseSpreadsheet(buffer: ArrayBuffer): Promise<SheetData[]> {
 
 export const DocumentPreviewPane: React.FC<DocumentPreviewPaneProps> = ({
   fileUrl,
+  fileUuid,
   fileSource,
   height = '72vh',
 }) => {
@@ -109,8 +118,13 @@ export const DocumentPreviewPane: React.FC<DocumentPreviewPaneProps> = ({
   const resolvedHeight = typeof height === 'number' ? `${height}px` : height;
 
   useEffect(() => {
-    if (!fileUrl || isVideo || isAudio) {
+    if (isVideo || isAudio) {
       setLoading(false);
+      return;
+    }
+    if (!fileUrl && !fileUuid) {
+      setLoading(false);
+      setError(t('pages.system.files.previewLoadFailed'));
       return;
     }
 
@@ -125,11 +139,12 @@ export const DocumentPreviewPane: React.FC<DocumentPreviewPaneProps> = ({
       setRowsTruncated(false);
 
       try {
-        const response = await fetch(fileUrl, { method: 'GET' });
-        if (!response.ok) {
-          throw new Error(`${response.status}`);
-        }
-        const buffer = await response.arrayBuffer();
+        const bytes = await fetchCoreFileBytes({
+          fileUrl,
+          fileUuid,
+          errorLabel: t('pages.system.files.previewLoadFailed'),
+        });
+        const buffer = toArrayBuffer(bytes);
 
         if (cancelled) return;
 
@@ -173,7 +188,7 @@ export const DocumentPreviewPane: React.FC<DocumentPreviewPaneProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [fileUrl, fileSource, isSpreadsheet, isText, isVideo, isAudio, t]);
+  }, [fileUrl, fileUuid, fileSource, isSpreadsheet, isText, isVideo, isAudio, t]);
 
   const sheetTabs = useMemo(
     () =>
@@ -265,7 +280,7 @@ export const DocumentPreviewPane: React.FC<DocumentPreviewPaneProps> = ({
           justifyContent: 'center',
         }}
       >
-        <Spin tip={t('pages.system.files.previewLoading')}>
+        <Spin description={t('pages.system.files.previewLoading')}>
           <div style={{ minHeight: 24 }} />
         </Spin>
       </div>
@@ -283,7 +298,7 @@ export const DocumentPreviewPane: React.FC<DocumentPreviewPaneProps> = ({
           <Alert
             type="info"
             showIcon
-            message={t('pages.system.files.previewRowsTruncated', { count: SPREADSHEET_MAX_ROWS })}
+            title={t('pages.system.files.previewRowsTruncated', { count: SPREADSHEET_MAX_ROWS })}
             style={{ marginBottom: 8 }}
           />
         ) : null}
@@ -303,7 +318,7 @@ export const DocumentPreviewPane: React.FC<DocumentPreviewPaneProps> = ({
           <Alert
             type="info"
             showIcon
-            message={t('pages.system.files.previewTextTruncated')}
+            title={t('pages.system.files.previewTextTruncated')}
             style={{ marginBottom: 8 }}
           />
         ) : null}
@@ -331,7 +346,7 @@ export const DocumentPreviewPane: React.FC<DocumentPreviewPaneProps> = ({
     <Alert
       type="warning"
       showIcon
-      message={t('app.master-data.drawings.previewUnsupported')}
+      title={t('app.master-data.drawings.previewUnsupported')}
       style={{ margin: 16 }}
     />
   );

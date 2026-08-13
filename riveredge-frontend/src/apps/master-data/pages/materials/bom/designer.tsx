@@ -11,6 +11,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { Button, Space, Form, Select, InputNumber, Input, Switch, Tag, Modal, theme, Row, Col, List, Descriptions, Spin, App, Alert } from 'antd';
 import { EditOutlined, LeftOutlined, SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, DragOutlined, CloseCircleOutlined, SettingOutlined, ClusterOutlined, ReloadOutlined, CopyOutlined, DiffOutlined } from '@ant-design/icons';
 import { MindMap, RCNode, getNodeSide } from '@ant-design/graphs';
@@ -356,6 +357,7 @@ const BOMDesignerPage: React.FC = () => {
   const { token } = useToken();
   const navigate = useNavigate();
   const location = useLocation();
+  const leaveBomDesigner = useLeaveFormTab('/apps/master-data/process/engineering-bom');
   const [searchParams, setSearchParams] = useSearchParams();
   const materialId = searchParams.get('materialId');
   const version = searchParams.get('version');
@@ -738,7 +740,7 @@ const BOMDesignerPage: React.FC = () => {
 
       if (!material) {
         messageApi.error(t('app.master-data.bom.materialNotFound'));
-        navigate('/apps/master-data/process/engineering-bom', { state: { closeTab: location.pathname + (location.search || '') } });
+        leaveBomDesigner();
         return;
       }
 
@@ -812,7 +814,7 @@ const BOMDesignerPage: React.FC = () => {
         };
         setMindMapData(data);
       } else {
-        navigate('/apps/master-data/process/engineering-bom', { state: { closeTab: location.pathname + (location.search || '') } });
+        leaveBomDesigner();
       }
     } finally {
       setLoading(false);
@@ -872,9 +874,7 @@ const BOMDesignerPage: React.FC = () => {
   useEffect(() => {
     if (!materialId) {
       messageApi.warning(t('app.master-data.bom.missingMaterialId'));
-      navigate('/apps/master-data/process/engineering-bom', {
-        state: { closeTab: location.pathname + (location.search || '') },
-      });
+      leaveBomDesigner();
       return;
     }
     void loadBOMData();
@@ -1928,7 +1928,7 @@ const BOMDesignerPage: React.FC = () => {
    * 返回列表
    */
   const handleCancel = () => {
-    navigate('/apps/master-data/process/engineering-bom', { state: { closeTab: location.pathname + (location.search || '') } });
+    leaveBomDesigner();
   };
 
   /**
@@ -2858,7 +2858,7 @@ const BOMDesignerPage: React.FC = () => {
     return (
       <div style={{ padding: PAGE_SPACING.PADDING, textAlign: 'center' }}>
         <p>{t('app.master-data.bom.missingMaterialId')}</p>
-        <Button onClick={() => navigate('/apps/master-data/process/engineering-bom', { state: { closeTab: location.pathname + (location.search || '') } })}>
+        <Button onClick={leaveBomDesigner}>
           {t('app.master-data.bom.backToList')}
         </Button>
       </div>
@@ -2869,7 +2869,7 @@ const BOMDesignerPage: React.FC = () => {
     return (
       <div style={{ padding: PAGE_SPACING.PADDING, textAlign: 'center' }}>
         <p>{t('app.master-data.bom.materialDataLoading')}</p>
-        <Button onClick={() => navigate('/apps/master-data/process/engineering-bom', { state: { closeTab: location.pathname + (location.search || '') } })}>
+        <Button onClick={leaveBomDesigner}>
           {t('app.master-data.bom.backToList')}
         </Button>
       </div>

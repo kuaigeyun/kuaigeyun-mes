@@ -4,9 +4,12 @@
  * - 生成表格列：默认隐藏（defaultShow: false），可在列设置中打开
  * - 列表数据批量 enrich 自定义字段值
  * - 详情 Drawer 单条加载字段值
+ *
+ * 列表 request 常与字段定义并行。enrich 必须 await 同一份字段定义 Promise，
+ * 禁止在 customFields 仍为空时直接跳过（否则首屏自定义列全是「-」，手动刷新才有值）。
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import {
   getCustomFieldsByTable,
@@ -52,27 +55,35 @@ export function useCustomFieldsForList<T extends Record<string, any>>({
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [customFieldsLoaded, setCustomFieldsLoaded] = useState(false);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({});
+  const fieldsPromiseRef = useRef<Promise<CustomField[]> | null>(null);
+
+  const fieldsKeyRef = useRef<string>('');
+
+  const ensureCustomFields = useCallback((): Promise<CustomField[]> => {
+    const key = `${tableName}:${hostResource ?? ''}`;
+    if (!fieldsPromiseRef.current || fieldsKeyRef.current !== key) {
+      fieldsKeyRef.current = key;
+      fieldsPromiseRef.current = getCustomFieldsByTable(tableName, true, hostResource).catch((err) => {
+        if (err?.response?.status === 401) return [] as CustomField[];
+        console.error('加载自定义字段失败:', err);
+        return [] as CustomField[];
+      });
+    }
+    return fieldsPromiseRef.current;
+  }, [tableName, hostResource]);
 
   useEffect(() => {
     let cancelled = false;
-    const load = async () => {
-      try {
-        const fields = await getCustomFieldsByTable(tableName, true, hostResource).catch((err) => {
-          if (err?.response?.status === 401) return [];
-          throw err;
-        });
-        if (!cancelled) setCustomFields(fields);
-      } catch (e) {
-        console.error('加载自定义字段失败:', e);
-      } finally {
-        if (!cancelled) setCustomFieldsLoaded(true);
-      }
-    };
-    load();
+    setCustomFieldsLoaded(false);
+    void ensureCustomFields().then((fields) => {
+      if (cancelled) return;
+      setCustomFields(fields);
+      setCustomFieldsLoaded(true);
+    });
     return () => {
       cancelled = true;
     };
-  }, [tableName, hostResource]);
+  }, [ensureCustomFields]);
 
   const loadFieldValuesForDetail = useCallback(async (recordId: number) => {
     try {
@@ -110,7 +121,11 @@ export function useCustomFieldsForList<T extends Record<string, any>>({
 
   const enrichRecordsWithCustomFields = useCallback(
     async (records: T[]): Promise<T[]> => {
-      if (customFields.length === 0 || records.length === 0) return records;
+      if (records.length === 0) return records;
+      const fields = await ensureCustomFields();
+      setCustomFields(fields);
+      setCustomFieldsLoaded(true);
+      if (!fields.some((field) => field.is_active)) return records;
       const ids = records
         .map((record) => Number(record[recordIdField]))
         .filter((id) => Number.isFinite(id) && id > 0);
@@ -133,7 +148,7 @@ export function useCustomFieldsForList<T extends Record<string, any>>({
         return records;
       }
     },
-    [tableName, customFields, recordIdField],
+    [tableName, recordIdField, ensureCustomFields],
   );
 
   return {

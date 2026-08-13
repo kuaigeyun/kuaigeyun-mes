@@ -68,7 +68,8 @@ import {
   SPLIT_SIDEBAR_WIDTH,
 } from './basicLayout/sidebarMenuLayout';
 import dayjs from 'dayjs';
-import { DEFAULT_SITE_LOGO_URL, SITE_LOGO_FALLBACK_SVG_URL, nextSiteLogoUrlAfterImageError } from '../constants/siteAssets';
+import { nextSiteLogoUrlAfterImageError } from '../constants/siteAssets';
+import { useSiteLogoUrl } from '../hooks/useSiteLogoUrl';
 import { getUserMessageStats, getUserMessages, markMessagesRead, type UserMessage } from '../services/userMessage';
 import { formatDateTime } from '../utils/format';
 
@@ -136,44 +137,10 @@ import { getInstalledApplicationList } from '../services/application';
 import { getChatIntegrationStatus } from '../services/deepseekChat';
 import { buildChatIntegrationStatusQueryKey } from '../hooks/useChatIntegrationStatus';
 import { hasPermission, resolveUserForMenuPermission } from '../utils/permission';
-import { getSiteLogoPreview, normalizeFilePreviewUrl } from '../services/file';
 import { AiAssistantHeaderButton } from './AiAssistantHeaderButton';
 import OnboardingGuide from '../components/onboarding-guide';
 import { OnboardingWizardEntry } from '../components/onboarding-guide/OnboardingWizardEntry';
 import { HeaderQuickEntryPopover } from '../components/quick-entry';
-
-/** LOGO 缓存 TTL：25 分钟（token 1 小时过期，提前刷新避免 403） */
-const SITE_LOGO_CACHE_TTL_MS = 25 * 60 * 1000;
-
-function getCachedSiteLogoUrl(logoUuid: string): string | undefined {
-  try {
-    const raw = localStorage.getItem(`siteLogoUrlCache_${logoUuid}`);
-    if (!raw) return undefined;
-    const parsed = JSON.parse(raw);
-    const { url, ts } = typeof parsed === 'object' ? parsed : { url: raw, ts: 0 };
-    if (!url || typeof url !== 'string') return undefined;
-    if (typeof ts === 'number' && Date.now() - ts > SITE_LOGO_CACHE_TTL_MS) return undefined;
-    return normalizeFilePreviewUrl(toRelativeIfLocalhost(url));
-  } catch {
-    return undefined;
-  }
-}
-
-function setCachedSiteLogoUrl(logoUuid: string, url: string): void {
-  try {
-    localStorage.setItem(`siteLogoUrlCache_${logoUuid}`, JSON.stringify({ url, ts: Date.now() }));
-  } catch {
-    /* ignore */
-  }
-}
-
-function clearCachedSiteLogoUrl(logoUuid: string): void {
-  try {
-    localStorage.removeItem(`siteLogoUrlCache_${logoUuid}`);
-  } catch {
-    /* ignore */
-  }
-}
 import { useUserPreferenceStore } from '../stores/userPreferenceStore';
 import { useConfigStore, resolveEffectiveHomePath, getDefaultTenantHomePath } from '../stores/configStore';
 import { useThemeStore } from '../stores/themeStore';
@@ -1078,7 +1045,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   // 站点设置：统一从 configStore 获取（app.tsx 初始化时已 fetchConfigs，site-settings 保存时会 refresh）
   const siteName = (useConfigStore((s) => (s.getConfig('site_name', '') as string)?.trim()) || '') || 'RiverEdge SaaS';
-  const siteLogoValue = (useConfigStore((s) => (s.getConfig('site_logo', '') as string)?.trim()) || '') || '';
   const launchWizardEnabled = useConfigStore((s) => s.configs.enable_launch_wizard !== false);
   const enableSystemDashboard = useConfigStore((s) => s.configs.enable_system_dashboard !== false);
   const documentVisible = useDocumentVisible();
@@ -1137,74 +1103,44 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   // 未读消息数量
   const unreadCount = messageStats?.unread || 0;
 
-  // 判断字符串是否是UUID格式
+  // 判断字符串是否是UUID格式（菜单 name 过滤，与站点 Logo 无关）
   const isUUID = (str: string): boolean => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     return uuidRegex.test(str);
   };
 
-  // 获取站点LOGO（支持UUID和URL格式），同步从 configStore 读取（有 persist 缓存）
-  const [siteLogoUrl, setSiteLogoUrl] = useState<string>(() => {
-    const logoValue = (useConfigStore.getState().getConfig('site_logo', '') as string)?.trim() || '';
-
-    if (logoValue) {
-      if (isUUID(logoValue)) {
-        // 预览 URL 未就绪时先用极小 SVG，避免先拉 34KB 默认 PNG 再切换
-        return SITE_LOGO_FALLBACK_SVG_URL;
-      } else {
-        return logoValue;
-      }
-    }
-
-    return DEFAULT_SITE_LOGO_URL;
-  });
-
-  // 处理LOGO URL（UUID 需通过 getFilePreview 获取，带 TTL 缓存并转为相对路径）
+  const resolvedSiteLogoUrl = useSiteLogoUrl();
+  const [siteLogoDisplayUrl, setSiteLogoDisplayUrl] = useState(resolvedSiteLogoUrl);
   useEffect(() => {
-    const loadSiteLogo = async () => {
-      try {
-        if (!siteLogoValue) {
-          setSiteLogoUrl(DEFAULT_SITE_LOGO_URL);
-          return;
-        }
-
-        if (isUUID(siteLogoValue)) {
-          const previewInfo = await getSiteLogoPreview(siteLogoValue, { forAvatar: true });
-          if (!previewInfo?.preview_url) {
-            clearCachedSiteLogoUrl(siteLogoValue);
-            setSiteLogoUrl(DEFAULT_SITE_LOGO_URL);
-            return;
-          }
-          const newUrl = normalizeFilePreviewUrl(toRelativeIfLocalhost(previewInfo.preview_url));
-          setSiteLogoUrl(newUrl);
-          setCachedSiteLogoUrl(siteLogoValue, newUrl);
-        } else {
-          setSiteLogoUrl(siteLogoValue);
-        }
-      } catch {
-        setSiteLogoUrl(DEFAULT_SITE_LOGO_URL);
-      }
-    };
-
-    loadSiteLogo();
-  }, [siteLogoValue]);
+    setSiteLogoDisplayUrl(resolvedSiteLogoUrl);
+  }, [resolvedSiteLogoUrl]);
 
   // 传入 ReactNode，避免 ProLayout 对 string 固定渲染 alt="logo"；加载失败：自定义 → /img/logo.png → /favicon.svg → 内置 data URI
   const siteLogo = useMemo(
-    () => (
-      <img
-        src={siteLogoUrl}
-        alt=""
-        width="auto"
-        height={22}
-        fetchpriority="high"
-        decoding="async"
-        onError={() => {
-          setSiteLogoUrl((prev) => nextSiteLogoUrlAfterImageError(prev));
-        }}
-      />
-    ),
-    [siteLogoUrl],
+    () =>
+      siteLogoDisplayUrl ? (
+        <img
+          src={siteLogoDisplayUrl}
+          alt=""
+          height={22}
+          fetchpriority="high"
+          decoding="async"
+          style={{
+            height: 22,
+            width: 'auto',
+            maxWidth: 180,
+            objectFit: 'contain',
+            display: 'block',
+            imageRendering: 'auto',
+          }}
+          onError={() => {
+            setSiteLogoDisplayUrl((prev) => nextSiteLogoUrlAfterImageError(prev));
+          }}
+        />
+      ) : (
+        <span style={{ height: 22, width: 22, display: 'block' }} />
+      ),
+    [siteLogoDisplayUrl],
   );
 
   // 站点设置更新由 site-settings 等页面保存时直接 invalidateQueries，不再依赖 siteThemeUpdated
@@ -2877,7 +2813,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   title: (
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4, lineHeight: '1.5', verticalAlign: 'middle' }}>
                       {index === generateBreadcrumb.length - 1 || index === 0 ? (
-                        <span className={index === generateBreadcrumb.length - 1 ? 'riveredge-breadcrumb-active' : undefined} style={{ color: index === 0 ? 'var(--ant-colorTextSecondary)' : 'var(--ant-colorText)', fontWeight: 400, lineHeight: '1.5', verticalAlign: 'middle' }}>{item.title}</span>
+                        <span className={index === generateBreadcrumb.length - 1 ? 'riveredge-breadcrumb-active' : undefined} style={{ fontWeight: 400, lineHeight: '1.5', verticalAlign: 'middle' }}>{item.title}</span>
                       ) : (
                         <a
                           onClick={() => {

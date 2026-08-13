@@ -149,7 +149,10 @@ export async function uploadFile(
 ): Promise<FileUploadResponse> {
   const formData = new FormData();
 
-  const payload = await compressImageForUpload(file);
+  const category = (options?.category || '').trim().toLowerCase();
+  const payload = BRANDING_UPLOAD_CATEGORIES.has(category)
+    ? file
+    : await compressImageForUpload(file);
 
   // 处理文件
   if (payload instanceof File) {
@@ -278,10 +281,19 @@ export async function batchDeleteFiles(fileUuids: string[]): Promise<{ deleted_c
 export const FILE_IMAGE_SIZE_THUMB = 64;
 /** 预览弹层中等图边长（后端当前上限 512） */
 export const FILE_IMAGE_SIZE_MEDIUM = 512;
+/** 站点/平台 Logo 展示边长（顶栏约 22px，需 ≥2–3x 以免发糊；勿用头像 128） */
+export const FILE_IMAGE_SIZE_LOGO = 512;
 /** 头像场景缩略图边长 */
 export const FILE_IMAGE_SIZE_AVATAR = 128;
 /** Upload 卡片缩略图边长 */
 export const FILE_IMAGE_SIZE_UPLOAD_THUMB = 128;
+
+/** 品牌图上传：禁止二次有损压缩，避免文字 Logo 发糊 */
+const BRANDING_UPLOAD_CATEGORIES = new Set([
+  'site-logo',
+  'platform-logo',
+  'platform-favicon',
+]);
 
 export type FilePreviewOptions = {
   /** @deprecated 请使用 size=FILE_IMAGE_SIZE_AVATAR */

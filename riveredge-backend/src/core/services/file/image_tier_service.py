@@ -179,7 +179,9 @@ class ImageTierService:
             img = img.convert("RGB")
         img.thumbnail((size, size), Image.Resampling.LANCZOS)
         buf = BytesIO()
-        img.save(buf, format="JPEG", quality=85, optimize=True)
+        # 预览档(≥256)提高质量，减轻文字 Logo / 顶栏缩放发糊
+        jpeg_quality = 92 if size >= 256 else 85
+        img.save(buf, format="JPEG", quality=jpeg_quality, optimize=True)
         return buf.getvalue(), "image/jpeg"
 
     @staticmethod

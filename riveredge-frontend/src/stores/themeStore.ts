@@ -113,7 +113,7 @@ export function hasCloudThemeConfig(cfg: Partial<ThemeConfig> | null | undefined
   });
 }
 
-function buildSiteThemeConfig(site: Record<string, unknown>): Partial<ThemeConfig> {
+export function buildSiteThemeConfig(site: Record<string, unknown>): Partial<ThemeConfig> {
   const raw = (site.theme_config || {}) as Record<string, unknown>;
   // 站点 theme_config 可能含历史误写入的 theme（颜色模式），不得进入配色合并
   const { theme: _ignoredMode, layoutMode: _ignoredLayout, ...siteThemeConfig } = raw;
@@ -126,6 +126,21 @@ function buildSiteThemeConfig(site: Record<string, unknown>): Partial<ThemeConfi
     return { ...siteThemeConfig, colorPrimary: legacyThemeColor.trim() };
   }
   return siteThemeConfig;
+}
+
+/** 站点品牌主题色（通常来自站点设置 / Logo 生成），无有效值时返回 null */
+export function resolveSiteBrandColorPrimary(
+  site?: Record<string, unknown> | null,
+): string | null {
+  if (!site || typeof site !== 'object') return null;
+  const cfg = buildSiteThemeConfig(site);
+  const primary = typeof cfg.colorPrimary === 'string' ? cfg.colorPrimary.trim() : '';
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(primary)) {
+    return primary.length === 4
+      ? `#${primary[1]}${primary[1]}${primary[2]}${primary[2]}${primary[3]}${primary[3]}`
+      : primary.slice(0, 7);
+  }
+  return null;
 }
 
 /** 从云端解析主题：颜色模式仅 preferences.theme；配色 theme_config 用户优先于站点 */

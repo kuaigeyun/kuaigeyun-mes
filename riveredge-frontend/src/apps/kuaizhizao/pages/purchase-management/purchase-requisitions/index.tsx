@@ -6,6 +6,7 @@ import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspens
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Row, Col, Checkbox, Descriptions, Empty, Spin, Typography, DatePicker, Modal, theme, Tooltip, Alert, Switch } from 'antd';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
@@ -264,9 +265,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     invalidateMenuBadgeCounts();
     actionRef.current?.reload();
   }, [invalidateMenuBadgeCounts]);
-  const leavePurchaseRequisitionFormPage = useCallback(() => {
-    navigate(PURCHASE_REQUISITION_LIST_PATH);
-  }, [navigate]);
+  const leavePurchaseRequisitionFormPage = useLeaveFormTab(PURCHASE_REQUISITION_LIST_PATH);
   const [detailVisible, setDetailVisible] = useState(false);
   const [currentReq, setCurrentReq] = useState<PurchaseRequisition | null>(null);
   const [supplierList, setSupplierList] = useState<Array<{ id: number; code?: string; name: string }>>([]);
@@ -452,7 +451,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         const status = (detail.status ?? '').toString().trim();
         if (!['草稿', 'draft', 'DRAFT'].includes(status)) {
           messageApi.error(t('app.kuaizhizao.purchaseRequisition.onlyDraftEditable'));
-          navigate(PURCHASE_REQUISITION_LIST_PATH);
+          leavePurchaseRequisitionFormPage();
           return;
         }
         const applicantUuid = await resolveUserUuidById(detail.applicant_id);
@@ -489,12 +488,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
         }
       } catch {
         messageApi.error(t('app.kuaizhizao.purchaseRequisition.loadFailed'));
-        navigate(PURCHASE_REQUISITION_LIST_PATH);
+        leavePurchaseRequisitionFormPage();
       } finally {
         prFormHydratingRef.current = false;
       }
     },
-    [messageApi, ensureSupplierList, navigate, t, prFormDraftKey],
+    [messageApi, ensureSupplierList, leavePurchaseRequisitionFormPage, t, prFormDraftKey],
   );
 
   const handleEdit = useCallback(
@@ -894,7 +893,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         createFormRef.current?.resetFields();
         invalidateMenuBadgeCounts();
         if (isFormPage) {
-          navigate(PURCHASE_REQUISITION_LIST_PATH);
+          leavePurchaseRequisitionFormPage();
         }
         actionRef.current?.reload();
       } catch (e: any) {
@@ -934,7 +933,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       createFormRef.current?.resetFields();
       invalidateMenuBadgeCounts();
       if (isFormPage) {
-        navigate(PURCHASE_REQUISITION_LIST_PATH);
+        leavePurchaseRequisitionFormPage();
       }
       actionRef.current?.reload();
     } catch (e: any) {

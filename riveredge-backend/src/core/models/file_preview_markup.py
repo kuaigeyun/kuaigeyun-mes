@@ -27,4 +27,4 @@ class FilePreviewMarkup(BaseModel):
         description="批注视图范围：default / top / bottom（PCB 双面）",
     )
     payload = fields.JSONField(description="批注形状 JSON")
-    updated_by = fields.IntField(null=True, description="最后更新人")
+    # updated_by / created_by* / updated_by_name 继承自 BaseModel

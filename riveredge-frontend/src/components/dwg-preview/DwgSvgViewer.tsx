@@ -1,11 +1,24 @@
 /**
  * CAD 2D SVG / 缩略图预览（平移 / 缩放）
+ *
+ * SVG 铺满容器，由 viewBox 映射图纸坐标；禁止把 viewBox 当 CSS 像素再 scale，
+ * 否则 libredwg 的百分线宽/用户单位线宽会变成实心图框。
  */
 
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { parseSvgViewBox } from '../../utils/previewMarkupTypes';
+import { mountCadPreviewSvg } from '../../utils/cad2dPreviewSvg';
 import { usePreviewMarkup } from '../preview-markup/PreviewMarkupContext';
 import { PreviewMarkupLayer } from '../preview-markup/PreviewMarkupLayer';
+import './cad2dPreview.css';
 
 export type DwgSvgViewerRef = {
   zoomIn: () => void;
@@ -22,49 +35,48 @@ export interface DwgSvgViewerProps {
 const MIN_SCALE = 0.05;
 const MAX_SCALE = 40;
 const ZOOM_FACTOR = 1.2;
-
-function getSvgIntrinsicSize(svg: string): { width: number; height: number; viewBox: string } | null {
-  const parsed = parseSvgViewBox(svg);
-  if (!parsed) return null;
-  return { width: parsed.width, height: parsed.height, viewBox: parsed.viewBox };
-}
+const IMAGE_FIT_PADDING = 24;
 
 export const DwgSvgViewer = forwardRef<DwgSvgViewerRef, DwgSvgViewerProps>(function DwgSvgViewer(
   { svg, imageDataUrl, height = '100%' },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
+  const svgHostRef = useRef<HTMLDivElement>(null);
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const markup = usePreviewMarkup();
   const panMode = !markup || markup.tool === 'pan';
   const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [imageNatural, setImageNatural] = useState({ width: 0, height: 0 });
 
-  const fitToView = useCallback(() => {
+  const fitImageToView = useCallback(() => {
     const container = containerRef.current;
-    const content = contentRef.current;
-    if (!container || !content) return;
-
+    if (!container) return;
     const cRect = container.getBoundingClientRect();
     if (cRect.width <= 0 || cRect.height <= 0) return;
+    if (!imageNatural.width || !imageNatural.height) return;
 
-    const contentRect = content.getBoundingClientRect();
-    const contentWidth = content.scrollWidth || contentRect.width;
-    const contentHeight = content.scrollHeight || contentRect.height;
-    if (!contentWidth || !contentHeight) return;
-
-    const padding = 24;
-    const sx = (cRect.width - padding * 2) / contentWidth;
-    const sy = (cRect.height - padding * 2) / contentHeight;
+    const sx = (cRect.width - IMAGE_FIT_PADDING * 2) / imageNatural.width;
+    const sy = (cRect.height - IMAGE_FIT_PADDING * 2) / imageNatural.height;
     const nextScale = Math.min(sx, sy, MAX_SCALE);
     setScale(nextScale);
     setOffset({
-      x: (cRect.width - contentWidth * nextScale) / 2,
-      y: (cRect.height - contentHeight * nextScale) / 2,
+      x: (cRect.width - imageNatural.width * nextScale) / 2,
+      y: (cRect.height - imageNatural.height * nextScale) / 2,
     });
-  }, []);
+  }, [imageNatural.height, imageNatural.width]);
+
+  const fitToView = useCallback(() => {
+    if (imageDataUrl) {
+      fitImageToView();
+      return;
+    }
+    setScale(1);
+    setOffset({ x: 0, y: 0 });
+  }, [fitImageToView, imageDataUrl]);
 
   const zoomBy = useCallback((factor: number) => {
     const container = containerRef.current;
@@ -92,21 +104,43 @@ export const DwgSvgViewer = forwardRef<DwgSvgViewerRef, DwgSvgViewerProps>(funct
     [fitToView, zoomBy],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const runFit = () => {
-      requestAnimationFrame(() => {
-        fitToView();
-      });
+    const update = () => {
+      const r = container.getBoundingClientRect();
+      setViewport({ width: r.width, height: r.height });
     };
-
-    runFit();
-    const observer = new ResizeObserver(runFit);
+    update();
+    const observer = new ResizeObserver(update);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [svg, imageDataUrl, fitToView]);
+  }, [svg, imageDataUrl]);
+
+  useLayoutEffect(() => {
+    if (imageDataUrl) return;
+    setScale(1);
+    setOffset({ x: 0, y: 0 });
+  }, [svg, imageDataUrl]);
+
+  useLayoutEffect(() => {
+    const host = svgHostRef.current;
+    if (!host) return;
+    if (!svg || imageDataUrl) {
+      host.replaceChildren();
+      return;
+    }
+    mountCadPreviewSvg(host, svg);
+    return () => {
+      host.replaceChildren();
+    };
+  }, [svg, imageDataUrl]);
+
+  useLayoutEffect(() => {
+    if (!imageDataUrl) return;
+    fitImageToView();
+  }, [fitImageToView, imageDataUrl, viewport.height, viewport.width]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -157,7 +191,7 @@ export const DwgSvgViewer = forwardRef<DwgSvgViewerRef, DwgSvgViewerProps>(funct
     setDragging(false);
   };
 
-  const svgSize = svg ? getSvgIntrinsicSize(svg) : null;
+  const parsedSvg = svg && !imageDataUrl ? parseSvgViewBox(svg) : null;
 
   return (
     <div
@@ -180,11 +214,12 @@ export const DwgSvgViewer = forwardRef<DwgSvgViewerRef, DwgSvgViewerProps>(funct
       onDoubleClick={fitToView}
     >
       <div
-        ref={contentRef}
         style={{
           position: 'absolute',
           left: 0,
           top: 0,
+          width: imageDataUrl ? undefined : '100%',
+          height: imageDataUrl ? undefined : '100%',
           transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
           transformOrigin: '0 0',
         }}
@@ -194,26 +229,22 @@ export const DwgSvgViewer = forwardRef<DwgSvgViewerRef, DwgSvgViewerProps>(funct
             src={imageDataUrl}
             alt="cad preview"
             draggable={false}
+            onLoad={(e) => {
+              setImageNatural({
+                width: e.currentTarget.naturalWidth,
+                height: e.currentTarget.naturalHeight,
+              });
+            }}
             style={{ display: 'block', maxWidth: 'none' }}
           />
         ) : (
-          <div style={{ position: 'relative', width: svgSize?.width, height: svgSize?.height }}>
-            <div
-              className="cad2d-svg-host"
-              style={{
-                display: 'block',
-                lineHeight: 0,
-                width: svgSize?.width,
-                height: svgSize?.height,
-              }}
-              // eslint-disable-next-line react/no-danger
-              dangerouslySetInnerHTML={{ __html: svg ?? '' }}
-            />
-            {svgSize ? (
+          <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+            <div ref={svgHostRef} className="cad2d-svg-host" />
+            {parsedSvg && viewport.width > 0 && viewport.height > 0 ? (
               <PreviewMarkupLayer
-                viewBox={svgSize.viewBox}
-                width={svgSize.width}
-                height={svgSize.height}
+                viewBox={parsedSvg.viewBox}
+                width={viewport.width}
+                height={viewport.height}
               />
             ) : null}
           </div>

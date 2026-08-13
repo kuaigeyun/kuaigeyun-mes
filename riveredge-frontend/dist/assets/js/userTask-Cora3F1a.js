@@ -1,1 +1,0 @@
-import{t as e}from"./clearSessionQueries-BDV2NWs_.js";async function t(s){return e("/personal/user-tasks",{params:s})}async function n(){return e("/personal/user-tasks/stats")}async function o(s,a){return e(`/personal/user-tasks/${s}/process`,{method:"POST",data:a})}async function u(s){return e(`/personal/user-tasks/${s}`,{method:"DELETE"})}export{t as a,u as d,n as g,o as p};

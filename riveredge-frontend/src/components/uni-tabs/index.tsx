@@ -787,7 +787,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
   /**
    * 返回时关闭当前标签：state.closeTab 指定要关闭的标签；剥离 closeTab 后保留其余 state
-   *（如入库/出库加载页的 *DirectConfirm，避免一并清空导致确认弹窗无法打开）
+   *（如入库/出库加载页的 *DirectConfirm，避免一并清空导致确认弹窗无法打开）。
+   * 写入方唯一入口：navigateClosingTab / useLeaveFormTab。
    */
   useEffect(() => {
     const state = location.state as ({ closeTab?: string } & Record<string, unknown>) | null;
