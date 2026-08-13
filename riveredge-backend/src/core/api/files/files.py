@@ -320,7 +320,7 @@ async def put_storage_settings(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """保存文件存储位置设置；connection 时须为本租户启用中的腾讯 COS 连接。"""
+    """保存文件存储位置设置；connection 时须为本租户启用中的对象存储连接（COS / MinIO）。"""
     try:
         cfg = await save_file_storage_settings(tenant_id, data.model_dump())
         return FileStorageSettings(**cfg)
@@ -329,18 +329,18 @@ async def put_storage_settings(
 
 
 @router.post("/storage-migrate", response_model=FileStorageMigrateResponse)
-async def migrate_storage_to_cos(
+async def migrate_storage_to_object_storage(
     data: FileStorageMigrateRequest,
     _auth: object = Depends(require_access("system.file", "update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
-    将本环境本地文件分页迁移到腾讯 COS（不论格式、不论大小，含图片档位）。
+    将本环境本地文件分页迁移到所选对象存储（腾讯 COS / MinIO，含图片档位）。
     前端循环调用直至 done=true；不跨环境代迁。
     """
     try:
-        result = await FileService.migrate_local_files_to_cos(
+        result = await FileService.migrate_local_files_to_object_storage(
             tenant_id,
             connection_uuid=data.connection_uuid,
             dry_run=data.dry_run,

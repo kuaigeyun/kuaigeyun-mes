@@ -61,7 +61,10 @@ class FileResponse(FileBase):
     """
     uuid: UUID = Field(..., description="文件UUID（对外暴露，业务标识）")
     tenant_id: int = Field(..., description="组织ID")
-    storage_backend: Optional[str] = Field(default="local", description="存储后端：local / tencent_cos")
+    storage_backend: Optional[str] = Field(
+        default="local",
+        description="存储后端：local / tencent_cos / minio",
+    )
     storage_connection_uuid: Optional[str] = Field(None, description="对象存储连接 UUID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
@@ -140,9 +143,9 @@ class FileStorageSettings(BaseModel):
 
 
 class FileStorageMigrateRequest(BaseModel):
-    """本地文件迁移到 COS 的分页请求"""
+    """本地文件迁移到对象存储的分页请求"""
 
-    connection_uuid: Optional[str] = Field(None, description="目标 COS 连接；缺省用当前存储设置")
+    connection_uuid: Optional[str] = Field(None, description="目标对象存储连接；缺省用当前存储设置")
     dry_run: bool = Field(default=False, description="仅统计不写数据")
     cursor: int = Field(default=0, ge=0, description="上一批最大文件 id；首批传 0")
     limit: int = Field(default=50, ge=1, le=100, description="每批条数")
@@ -154,7 +157,7 @@ class FileStorageMigrateFailure(BaseModel):
 
 
 class FileStorageMigrateResponse(BaseModel):
-    """本地→COS 迁移批次结果（前端循环直至 done）"""
+    """本地→对象存储迁移批次结果（前端循环直至 done）"""
 
     total: int = Field(..., description="当前仍为本地存储的文件总数（本环境）")
     cursor: int = Field(..., description="本批起始游标")

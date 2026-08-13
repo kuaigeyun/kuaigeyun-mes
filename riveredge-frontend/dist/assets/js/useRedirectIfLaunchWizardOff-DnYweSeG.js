@@ -1,0 +1,1 @@
+import{r as f}from"./vendor-CY-66l_Y.js";import{t as s,f as o,x as r}from"./clearSessionQueries-DW7yKf1k.js";function l(i=s()){const n=o(),e=r(a=>a.initialized),t=r(a=>a.configs.enable_launch_wizard!==!1);return f.useEffect(()=>{e&&(t||n(i,{replace:!0}))},[e,t,n,i]),{initialized:e,enabled:t}}export{l as u};

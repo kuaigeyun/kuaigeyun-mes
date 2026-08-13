@@ -57,7 +57,7 @@ class File(BaseModel):
     storage_backend = fields.CharField(
         max_length=32,
         default="local",
-        description="存储后端：local / tencent_cos 等",
+        description="存储后端：local / tencent_cos / minio 等",
     )
     storage_connection_uuid = fields.CharField(
         max_length=36,

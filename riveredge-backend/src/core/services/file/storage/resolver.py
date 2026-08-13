@@ -7,11 +7,17 @@ from core.models.file import File
 from core.models.integration_config import IntegrationConfig
 from core.services.file.storage.base import FileStorageBackend
 from core.services.file.storage.local import LocalFileStorage
+from core.services.file.storage.minio_storage import MinioStorage
 from core.services.file.storage.tencent_cos import TencentCosStorage
 from core.services.system.site_setting_service import SiteSettingService
 from infra.exceptions.exceptions import ValidationError
 
-SUPPORTED_OBJECT_STORAGE_TYPES = ("tencent_cos",)
+SUPPORTED_OBJECT_STORAGE_TYPES = ("tencent_cos", "minio")
+
+OBJECT_STORAGE_TYPE_LABELS = {
+    "tencent_cos": "腾讯云 COS",
+    "minio": "MinIO",
+}
 
 DEFAULT_FILE_STORAGE: Dict[str, Any] = {
     "backend": "local",
@@ -68,7 +74,12 @@ async def save_file_storage_settings(tenant_id: int, incoming: Dict[str, Any]) -
         if not ic or not ic.is_active:
             raise ValidationError("对象存储连接不存在或未启用")
         if ic.type not in SUPPORTED_OBJECT_STORAGE_TYPES:
-            raise ValidationError(f"暂不支持该存储类型：{ic.type}（当前仅支持腾讯云 COS）")
+            supported = "、".join(
+                OBJECT_STORAGE_TYPE_LABELS.get(t, t) for t in SUPPORTED_OBJECT_STORAGE_TYPES
+            )
+            raise ValidationError(
+                f"暂不支持该存储类型：{ic.type}（当前支持：{supported}）"
+            )
 
     site = await SiteSettingService.get_settings(tenant_id)
     settings = dict(site.settings or {})
@@ -78,7 +89,18 @@ async def save_file_storage_settings(tenant_id: int, incoming: Dict[str, Any]) -
     return normalized
 
 
-async def load_cos_storage(tenant_id: int, connection_uuid: str) -> TencentCosStorage:
+def _build_storage_from_integration(ic: IntegrationConfig) -> FileStorageBackend:
+    cfg = ic.get_config() if hasattr(ic, "get_config") else (ic.config or {})
+    conn_uuid = str(ic.uuid)
+    if ic.type == "tencent_cos":
+        return TencentCosStorage(cfg, connection_uuid=conn_uuid)
+    if ic.type == "minio":
+        return MinioStorage(cfg, connection_uuid=conn_uuid)
+    raise ValidationError(f"暂不支持该存储类型：{ic.type}")
+
+
+async def load_object_storage(tenant_id: int, connection_uuid: str) -> FileStorageBackend:
+    """按应用连接 UUID 加载对象存储适配器（腾讯 COS / MinIO）。"""
     ic = await IntegrationConfig.filter(
         tenant_id=tenant_id,
         uuid=connection_uuid,
@@ -86,11 +108,22 @@ async def load_cos_storage(tenant_id: int, connection_uuid: str) -> TencentCosSt
     ).first()
     if not ic:
         raise ValidationError("对象存储连接不存在")
-    if ic.type != "tencent_cos":
-        raise ValidationError(f"暂不支持该存储类型：{ic.type}")
+    if ic.type not in SUPPORTED_OBJECT_STORAGE_TYPES:
+        supported = "、".join(
+            OBJECT_STORAGE_TYPE_LABELS.get(t, t) for t in SUPPORTED_OBJECT_STORAGE_TYPES
+        )
+        raise ValidationError(f"暂不支持该存储类型：{ic.type}（当前支持：{supported}）")
     if not ic.is_active:
         raise ValidationError("对象存储连接未启用")
-    return TencentCosStorage(ic.get_config(), connection_uuid=str(ic.uuid))
+    return _build_storage_from_integration(ic)
+
+
+async def load_cos_storage(tenant_id: int, connection_uuid: str) -> TencentCosStorage:
+    """兼容旧调用：仅加载腾讯 COS 连接。"""
+    storage = await load_object_storage(tenant_id, connection_uuid)
+    if not isinstance(storage, TencentCosStorage):
+        raise ValidationError(f"连接不是腾讯云 COS：{getattr(storage, 'backend_name', '?')}")
+    return storage
 
 
 async def resolve_storage_for_upload(
@@ -104,9 +137,9 @@ async def resolve_storage_for_upload(
             "storage_connection_uuid": None,
             "key_prefix": cfg.get("key_prefix") or "",
         }
-    storage = await load_cos_storage(tenant_id, cfg["connection_uuid"])
+    storage = await load_object_storage(tenant_id, cfg["connection_uuid"])
     return storage, {
-        "storage_backend": "tencent_cos",
+        "storage_backend": storage.backend_name,
         "storage_connection_uuid": cfg["connection_uuid"],
         "key_prefix": cfg.get("key_prefix") or "",
     }
@@ -116,9 +149,9 @@ async def resolve_storage_for_file(tenant_id: int, file_row: File) -> FileStorag
     backend = str(getattr(file_row, "storage_backend", None) or "local").strip().lower()
     if backend in ("", "local"):
         return LocalFileStorage()
-    if backend == "tencent_cos":
+    if backend in SUPPORTED_OBJECT_STORAGE_TYPES:
         conn_uuid = str(getattr(file_row, "storage_connection_uuid", None) or "").strip()
         if not conn_uuid:
-            raise ValidationError("文件标记为 COS 存储，但未关联连接 UUID")
-        return await load_cos_storage(tenant_id, conn_uuid)
+            raise ValidationError(f"文件标记为 {backend} 存储，但未关联连接 UUID")
+        return await load_object_storage(tenant_id, conn_uuid)
     raise ValidationError(f"不支持的存储后端：{backend}")

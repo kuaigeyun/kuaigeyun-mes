@@ -1,1 +1,0 @@
-import{v as i}from"./clearSessionQueries-BpeMRrUl.js";import"./vendor-CY-66l_Y.js";function e(){return i("/apps/kuaiiot/config/notification-rules/load-presets",{method:"POST"})}export{e as loadKuaiiotNotificationRulePresets};

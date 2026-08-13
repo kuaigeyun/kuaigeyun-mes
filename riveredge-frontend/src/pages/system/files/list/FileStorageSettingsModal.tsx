@@ -1,10 +1,10 @@
 /**
- * 文件存储位置设置：本地 / 腾讯 COS，以及本环境历史文件迁移。
+ * 文件存储位置设置：本地 / 对象存储连接（腾讯 COS、MinIO），以及本环境历史文件迁移。
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Alert, Button, Form, Input, Modal, Progress, Radio, Select, Space, Switch, Typography } from 'antd';
+import { App, Alert, Button, Form, Input, Modal, Progress, Select, Space, Switch, Typography } from 'antd';
 import { Link } from 'react-router-dom';
 import {
   getFileStorageSettings,
@@ -20,14 +20,25 @@ export interface FileStorageSettingsModalProps {
   onClose: () => void;
 }
 
+/** 本轮前端可选的对象存储连接类型（与后端 SUPPORTED_OBJECT_STORAGE_TYPES 对齐） */
+const SUPPORTED_STORAGE_CONNECTION_TYPES = ['tencent_cos', 'minio'] as const;
+
+const LOCAL_LOCATION_VALUE = '__local__';
+
+type StorageLocationOption = {
+  label: string;
+  value: string;
+  type?: string;
+};
+
 const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ open, onClose }) => {
   const { t } = useTranslation();
   const { message: messageApi, modal } = App.useApp();
-  const [form] = Form.useForm<FileStorageSettings>();
+  const [form] = Form.useForm<FileStorageSettings & { storage_location?: string }>();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [migrating, setMigrating] = useState(false);
-  const [cosOptions, setCosOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [connectionOptions, setConnectionOptions] = useState<StorageLocationOption[]>([]);
   const [migrateProgress, setMigrateProgress] = useState<{
     percent: number;
     migrated: number;
@@ -37,34 +48,65 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ ope
     failureSamples: Array<{ uuid: string; reason: string }>;
   } | null>(null);
 
-  const backend = Form.useWatch('backend', form);
+  const storageLocation = Form.useWatch('storage_location', form);
+  const isObjectStorage = !!storageLocation && storageLocation !== LOCAL_LOCATION_VALUE;
+
+  const locationOptions = useMemo<StorageLocationOption[]>(
+    () => [
+      { label: t('pages.system.files.storageBackendLocal'), value: LOCAL_LOCATION_VALUE },
+      ...connectionOptions,
+    ],
+    [connectionOptions, t],
+  );
+
+  const typeLabel = useCallback(
+    (type: string) => {
+      if (type === 'tencent_cos') return t('pages.system.files.storageTypeTencentCos');
+      if (type === 'minio') return t('pages.system.files.storageTypeMinio');
+      return type;
+    },
+    [t],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [settings, cosList] = await Promise.all([
+      const [settings, cosList, minioList] = await Promise.all([
         getFileStorageSettings(),
         getApplicationConnectionListAll({ type: 'tencent_cos', is_active: true }),
+        getApplicationConnectionListAll({ type: 'minio', is_active: true }),
       ]);
+      const connections = [...cosList, ...minioList].filter((c) =>
+        SUPPORTED_STORAGE_CONNECTION_TYPES.includes(
+          c.type as (typeof SUPPORTED_STORAGE_CONNECTION_TYPES)[number],
+        ),
+      );
+      const opts: StorageLocationOption[] = connections.map((c) => ({
+        value: c.uuid,
+        type: c.type,
+        label: `${typeLabel(c.type)} ${c.name || c.code || c.uuid}`,
+      }));
+      setConnectionOptions(opts);
+
+      const locationValue =
+        settings.backend === 'connection' && settings.connection_uuid
+          ? settings.connection_uuid
+          : LOCAL_LOCATION_VALUE;
+
       form.setFieldsValue({
+        storage_location: locationValue,
         backend: settings.backend || 'local',
         connection_uuid: settings.connection_uuid || undefined,
         key_prefix: settings.key_prefix || '',
         delete_local_after_migrate: settings.delete_local_after_migrate !== false,
       });
-      setCosOptions(
-        cosList.map((c) => ({
-          value: c.uuid,
-          label: c.name || c.code || c.uuid,
-        })),
-      );
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : t('pages.system.files.storageSettingsLoadFailed');
       messageApi.error(msg);
     } finally {
       setLoading(false);
     }
-  }, [form, messageApi, t]);
+  }, [form, messageApi, t, typeLabel]);
 
   useEffect(() => {
     if (open) {
@@ -73,17 +115,22 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ ope
     }
   }, [open, load]);
 
+  const resolvePayload = (values: FileStorageSettings & { storage_location?: string }): FileStorageSettings => {
+    const loc = values.storage_location || LOCAL_LOCATION_VALUE;
+    const isConn = loc !== LOCAL_LOCATION_VALUE;
+    return {
+      backend: isConn ? 'connection' : 'local',
+      connection_uuid: isConn ? loc : null,
+      key_prefix: (values.key_prefix || '').trim(),
+      delete_local_after_migrate: values.delete_local_after_migrate !== false,
+    };
+  };
+
   const handleSave = async () => {
     try {
       const values = await form.validateFields();
       setSaving(true);
-      const payload: FileStorageSettings = {
-        backend: values.backend,
-        connection_uuid: values.backend === 'connection' ? values.connection_uuid || null : null,
-        key_prefix: (values.key_prefix || '').trim(),
-        delete_local_after_migrate: values.delete_local_after_migrate !== false,
-      };
-      await saveFileStorageSettings(payload);
+      await saveFileStorageSettings(resolvePayload(values));
       messageApi.success(t('pages.system.files.storageSettingsSaveSuccess'));
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'errorFields' in error) return;
@@ -104,14 +151,13 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ ope
       failureSamples: [],
     });
     try {
-      // 迁移前先落库当前表单，确保 key_prefix / 连接与 UI 一致
       const values = await form.validateFields();
-      await saveFileStorageSettings({
-        backend: values.backend,
-        connection_uuid: values.backend === 'connection' ? values.connection_uuid || null : null,
-        key_prefix: (values.key_prefix || '').trim(),
-        delete_local_after_migrate: values.delete_local_after_migrate !== false,
-      });
+      const payload = resolvePayload(values);
+      if (payload.backend !== 'connection' || !payload.connection_uuid) {
+        messageApi.warning(t('pages.system.files.storageConnectionRequired'));
+        return;
+      }
+      await saveFileStorageSettings(payload);
 
       let cursor = 0;
       let done = false;
@@ -126,7 +172,7 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ ope
           dry_run: dryRun,
           cursor,
           limit: 50,
-          connection_uuid: values.connection_uuid || undefined,
+          connection_uuid: payload.connection_uuid || undefined,
         });
         if (initialTotal === 0) initialTotal = result.total;
         if (!targetBucket && result.target_bucket) {
@@ -220,43 +266,31 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ ope
         form={form}
         layout="vertical"
         initialValues={{
+          storage_location: LOCAL_LOCATION_VALUE,
           backend: 'local',
           delete_local_after_migrate: true,
           key_prefix: '',
         }}
       >
         <Form.Item
-          name="backend"
+          name="storage_location"
           label={t('pages.system.files.storageBackendLabel')}
           rules={[{ required: true }]}
+          extra={
+            <Typography.Text type="secondary">
+              {t('pages.system.files.storageConnectionHint')}{' '}
+              <Link to="/system/application-connections">{t('pages.system.files.storageConnectionLink')}</Link>
+            </Typography.Text>
+          }
         >
-          <Radio.Group>
-            <Radio value="local">{t('pages.system.files.storageBackendLocal')}</Radio>
-            <Radio value="connection">{t('pages.system.files.storageBackendCos')}</Radio>
-          </Radio.Group>
+          <Select
+            showSearch
+            optionFilterProp="label"
+            options={locationOptions}
+            placeholder={t('pages.system.files.storageLocationPlaceholder')}
+            disabled={loading}
+          />
         </Form.Item>
-
-        {backend === 'connection' && (
-          <Form.Item
-            name="connection_uuid"
-            label={t('pages.system.files.storageConnectionLabel')}
-            rules={[{ required: true, message: t('pages.system.files.storageConnectionRequired') }]}
-            extra={
-              <Typography.Text type="secondary">
-                {t('pages.system.files.storageConnectionHint')}{' '}
-                <Link to="/system/application-connections">{t('pages.system.files.storageConnectionLink')}</Link>
-              </Typography.Text>
-            }
-          >
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              options={cosOptions}
-              placeholder={t('pages.system.files.storageConnectionPlaceholder')}
-            />
-          </Form.Item>
-        )}
 
         <Form.Item
           name="key_prefix"
@@ -279,14 +313,14 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ ope
             {t('pages.system.files.storageSettingsSave')}
           </Button>
           <Button
-            disabled={backend !== 'connection' || migrating}
+            disabled={!isObjectStorage || migrating}
             loading={migrating}
             onClick={handleMigrate}
           >
             {t('pages.system.files.storageMigrateButton')}
           </Button>
           <Button
-            disabled={backend !== 'connection' || migrating}
+            disabled={!isObjectStorage || migrating}
             onClick={() => void runMigrate(true)}
           >
             {t('pages.system.files.storageMigrateDryRun')}

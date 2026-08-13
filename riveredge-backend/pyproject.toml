@@ -41,6 +41,7 @@ dependencies = [
     "pymssql>=2.3.0,<3",
     "pyodbc>=5.0.0,<6",
     "pyaxmlparser>=0.3.31",
+    "minio>=7.2.0,<8",
 ]
 
 # Playwright：HTML→PDF。fast-deploy 在 PLAYWRIGHT_POSTINSTALL_ENABLE=1 时 uv sync --extra pdf 并安装 Chromium。
