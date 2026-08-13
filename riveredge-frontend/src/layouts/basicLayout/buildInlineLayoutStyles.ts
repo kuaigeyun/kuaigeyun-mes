@@ -340,6 +340,13 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
     isDarkMode || siderTextColor === '#ffffff'
       ? 'rgba(255, 255, 255, 0.15)'
       : 'rgba(0, 0, 0, 0.12)';
+  /** 顶栏右侧圆形/胶囊按钮底：深色顶栏略提亮，避免与海军蓝底糊成一片 */
+  const headerActionChipBg = isLightModeLightBg
+    ? 'rgba(0, 0, 0, 0.10)'
+    : 'rgba(255, 255, 255, 0.20)';
+  const headerActionChipBgHover = isLightModeLightBg
+    ? 'rgba(0, 0, 0, 0.16)'
+    : 'rgba(255, 255, 255, 0.28)';
   return `
         /* 动态注入主题色到 CSS 变量 */
         :root {
@@ -1262,7 +1269,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         /* 顶栏按钮 hover 状态 - 浅色模式浅色背景无hover */
         .ant-pro-layout .ant-pro-layout-header .ant-btn:hover,
         .ant-pro-layout .ant-layout-header .ant-btn:hover {
-          background-color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.16)' : 'rgba(255, 255, 255, 0.1)'} !important;
+          background-color: ${headerActionChipBgHover} !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
         .ant-pro-layout .ant-pro-layout-header .ant-btn:hover .anticon,
@@ -1280,7 +1287,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         /* 顶栏按钮 active 状态 - 浅色模式浅色背景无active效果 */
         .ant-pro-layout .ant-pro-layout-header .ant-btn:active,
         .ant-pro-layout .ant-layout-header .ant-btn:active {
-          background-color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.16)' : 'rgba(255, 255, 255, 0.1)'} !important;
+          background-color: ${headerActionChipBgHover} !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
         .ant-pro-layout .ant-pro-layout-header .ant-btn:active .anticon,
@@ -1598,7 +1605,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           align-items: center !important;
           justify-content: center !important;
           border-radius: 50% !important;
-          background-color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.10)' : 'rgba(255, 255, 255, 0.1)'} !important;
+          background-color: ${headerActionChipBg} !important;
           border: none !important;
           transition: none !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
@@ -1619,7 +1626,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           align-items: center !important;
           justify-content: center !important;
           border-radius: 50% !important;
-          background-color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.10)' : 'rgba(255, 255, 255, 0.1)'} !important;
+          background-color: ${headerActionChipBg} !important;
           transition: none !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
@@ -1640,7 +1647,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         .ant-pro-layout .ant-pro-layout-header .ant-badge:hover .ant-btn,
         .ant-pro-layout .ant-layout-header .ant-badge .ant-btn:hover,
         .ant-pro-layout .ant-layout-header .ant-badge:hover .ant-btn {
-          background-color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.16)' : 'rgba(255, 255, 255, 0.1)'} !important;
+          background-color: ${headerActionChipBgHover} !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
           border-color: transparent !important;
           box-shadow: none !important;
@@ -1701,7 +1708,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           gap: 6px !important;
           padding: 4px 12px !important;
           border-radius: 16px !important;
-          background-color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.10)' : 'rgba(255, 255, 255, 0.1)'} !important;
+          background-color: ${headerActionChipBg} !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
           font-size: ${token.fontSize}px !important;
           font-weight: 500 !important;
@@ -1744,8 +1751,8 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           border-radius: 16px !important; /* 胶囊型圆角 */
           border: none !important;
           box-shadow: none !important;
-          background-color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.10)' : 'rgba(255, 255, 255, 0.1)'} !important;
-          background: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.10)' : 'rgba(255, 255, 255, 0.1)'} !important;
+          background-color: ${headerActionChipBg} !important;
+          background: ${headerActionChipBg} !important;
           height: 32px !important;
         }
         /* 租户选择器文字颜色与字号 - 根据显示模式统一，深色背景时强制浅色，文字跟随系统 */
@@ -1829,7 +1836,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select:not(.ant-select-disabled):hover .ant-select-selector {
           border: none !important;
           box-shadow: none !important;
-          background: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.16)' : 'rgba(255, 255, 255, 0.1)'} !important;
+          background: ${headerActionChipBgHover} !important;
         }
         /* 租户选择器 hover 和 focused 状态下的文字颜色 - 根据显示模式统一 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select:hover .ant-select-selection-item,
@@ -1867,7 +1874,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper {
           border: none !important;
           box-shadow: none !important;
-          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
+          background-color: ${isLightModeLightBg ? token.colorFillTertiary : headerActionChipBg} !important;
         }
         /* 搜索框文字颜色和占位符颜色 - 根据显示模式统一 */
         .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper .ant-input {
@@ -1891,13 +1898,13 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper:hover {
           border: none !important;
           box-shadow: none !important;
-          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
+          background-color: ${isLightModeLightBg ? token.colorFillTertiary : headerActionChipBgHover} !important;
         }
         /* 搜索框聚焦时外侧框线强调，使用户意识到处于搜索状态 */
         .ant-pro-layout .ant-pro-layout-header .header-search-wrapper .ant-input-affix-wrapper-focused {
           border: none !important;
           box-shadow: 0 0 0 2px ${isLightModeLightBg ? token.colorPrimaryBorder : 'rgba(255, 255, 255, 0.5)'} !important;
-          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.15)'} !important;
+          background-color: ${isLightModeLightBg ? token.colorFillTertiary : headerActionChipBgHover} !important;
         }
         .ant-pro-layout .ant-pro-layout-header .ant-input {
           background-color: transparent !important;
@@ -2160,7 +2167,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         }
         /* 顶栏快捷入口触发按钮 hover */
         .riveredge-header-quick-entry-trigger:hover {
-          background: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.12)'} !important;
+          background: ${isLightModeLightBg ? token.colorFillTertiary : headerActionChipBgHover} !important;
         }
         /* ==================== 面包屑样式 ==================== */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb,

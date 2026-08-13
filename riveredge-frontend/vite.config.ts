@@ -253,9 +253,18 @@ export default defineConfig({
             // 巨型/按需栈单独拆出，避免进首屏
             if (id.includes('@univerjs')) return 'vendor-univerjs';
             if (id.includes('monaco-editor') || id.includes('@monaco-editor')) return 'vendor-monaco';
-            if (id.includes('three') && !id.includes('react-three')) return 'vendor-three';
+            // CAD 全家桶必须同 chunk：宽匹配 id.includes('three') 会误伤
+            // @mlightcad/three-renderer，与 vendor-libredwg 交叉引用 →
+            // ReferenceError: Cannot access '_w' before initialization。
+            if (id.includes('@mlightcad/')) return 'vendor-libredwg';
+            // 仅官方 three 包；禁止用 includes('three') 误匹配 three-renderer 等
+            if (
+              /\/node_modules\/three\//.test(norm) ||
+              /\/node_modules\/three\/package\.json$/.test(norm)
+            ) {
+              return 'vendor-three';
+            }
             if (id.includes('occt-import-js')) return 'vendor-occt';
-            if (id.includes('@mlightcad/libredwg-web') || id.includes('@mlightcad/cad-simple-viewer') || id.includes('@mlightcad/libredwg-converter')) return 'vendor-libredwg';
             if (id.includes('altium-toolkit') || id.includes('circuitjson-toolkit')) return 'vendor-altium';
             if (id.includes('echarts')) return 'vendor-echarts';
             // 仅匹配 sheetjs / exceljs 包路径；禁止 id.includes('xlsx') 宽匹配。

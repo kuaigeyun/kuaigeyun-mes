@@ -2031,10 +2031,15 @@ code {
   opacity: 0.42;
 }
 .dashboard-cwc-cell--today {
-  background: var(--ant-color-primary-bg, rgba(22, 119, 255, 0.08));
+  /* 与系统配置/使用小提示一致：主色掺容器底，避免深品牌色下 primary-bg 脏灰 */
+  background: color-mix(
+    in srgb,
+    var(--ant-color-primary, #1677ff) 12%,
+    var(--ant-color-bg-container, #fff)
+  );
   color: var(--ant-color-primary);
   font-weight: 600;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ant-color-primary) 28%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ant-color-primary) 20%, transparent);
 }
 .dashboard-cwc-lunar {
   font-size: 11px;
@@ -2372,10 +2377,14 @@ code {
   align-items: center;
   padding: 26px 24px;
   overflow: hidden;
-  /* 弱化视觉：改为淡色背景，避免高饱和抢焦点 */
-  background: var(--ant-color-primary-bg, #e6f4ff);
+  /* 主色掺容器底：深品牌色时不用 --ant-color-primary-bg（会脏灰） */
+  background: color-mix(
+    in srgb,
+    var(--ant-color-primary, #1677ff) 9%,
+    var(--ant-color-bg-container, #fff)
+  );
   border-bottom: 1px solid
-    color-mix(in srgb, var(--ant-color-primary, #1677ff) 24%, transparent);
+    color-mix(in srgb, var(--ant-color-primary, #1677ff) 14%, transparent);
 }
 .dashboard-usage-tips__decor {
   position: absolute;
@@ -2386,7 +2395,7 @@ code {
 .dashboard-usage-tips__decor-circle {
   position: absolute;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--ant-color-primary, #1677ff) 12%, transparent);
+  background: color-mix(in srgb, var(--ant-color-primary, #1677ff) 8%, transparent);
 }
 .dashboard-usage-tips__decor-circle--lg {
   right: -36px;
@@ -2399,7 +2408,7 @@ code {
   bottom: -24px;
   width: 72px;
   height: 72px;
-  background: color-mix(in srgb, var(--ant-color-primary, #1677ff) 8%, transparent);
+  background: color-mix(in srgb, var(--ant-color-primary, #1677ff) 5%, transparent);
 }
 .dashboard-usage-tips__inner {
   position: relative;

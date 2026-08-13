@@ -1,1 +1,0 @@
-import{j as t}from"./vendor-DurrBLAY.js";import{N as a}from"./clearSessionQueries-DO5p7n_h.js";const s=()=>t.jsx(a,{to:"/apps/kuaicaiwu/cost-management/cost-calculations?cat=optimization",replace:!0});export{s as default};

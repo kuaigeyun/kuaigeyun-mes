@@ -1779,11 +1779,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         panelItemHoverBorder: 'rgba(255, 255, 255, 0.14)',
       };
     }
+    // 浅色侧栏：不用 antd colorPrimaryBg。深品牌色（如海军蓝）时 primaryBg 会偏脏灰，
+    // 改为主色掺白的淡底，始终保持浅 tint。
     return {
-      settingsBtnBg: String(siderFooterToken.colorPrimaryBg),
-      settingsBtnBgHover: String(siderFooterToken.colorPrimaryBgHover),
-      settingsBtnBgActive: String(siderFooterToken.colorPrimaryBorder),
-      settingsBtnBorder: String(siderFooterToken.colorPrimaryBorder),
+      settingsBtnBg: `color-mix(in srgb, ${primary} 10%, #ffffff)`,
+      settingsBtnBgHover: `color-mix(in srgb, ${primary} 16%, #ffffff)`,
+      settingsBtnBgActive: `color-mix(in srgb, ${primary} 22%, #ffffff)`,
+      settingsBtnBorder: `color-mix(in srgb, ${primary} 18%, #ffffff)`,
       settingsBtnColor: primary,
       /** L1 托盘（与 L2 配色对调试验） */
       panelBg: `color-mix(in srgb, ${primary} 6%, rgba(255, 255, 255, 0.48))`,
@@ -3149,7 +3151,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderRadius: '16px',
-                    background: isLightModeLightBg ? 'rgba(0, 0, 0, 0.10)' : 'rgba(255, 255, 255, 0.1)',
+                    background: isLightModeLightBg ? 'rgba(0, 0, 0, 0.10)' : 'rgba(255, 255, 255, 0.20)',
                   }}
                 >
                   <Avatar
