@@ -268,18 +268,13 @@ const ReceiptNoticesPage: React.FC = () => {
   const [localStats, setLocalStats] = useState({ total: 0, pending: 0, notified: 0, received: 0 });
 
   const refreshLocalStats = useCallback(async () => {
-    try {
-      const response = await receiptNoticeApi.list({ skip: 0, limit: 5000 });
-      const arr = response?.data ?? [];
-      setLocalStats({
-        total: response?.total ?? arr.length,
-        pending: arr.filter((x: ReceiptNotice) => (x.status || '').trim() === '待收货').length,
-        notified: arr.filter((x: ReceiptNotice) => (x.status || '').trim() === '已通知').length,
-        received: arr.filter((x: ReceiptNotice) => (x.status || '').trim() === '已入库').length,
-      });
-    } catch {
-      setLocalStats({ total: 0, pending: 0, notified: 0, received: 0 });
-    }
+    const stats = await receiptNoticeApi.statistics();
+    setLocalStats({
+      total: stats.total,
+      pending: stats.pending,
+      notified: stats.notified,
+      received: stats.received,
+    });
   }, []);
 
   useEffect(() => {

@@ -588,14 +588,35 @@ export const bomApi = {
   },
 
   /**
-   * 获取 BOM 分组摘要（不拉子件明细，用于列表树首屏）
+   * 获取 BOM 分组摘要（不拉子件明细）。传 skip/limit 时按主物料分页。
    */
-  getGroups: async (includeObsolete?: boolean): Promise<BOMGroupSummary[]> => {
-    const raw = await api.get<unknown[]>('/apps/master-data/materials/bom/groups', {
-      params: { include_obsolete: includeObsolete },
-    });
-    const arr = Array.isArray(raw) ? raw : [];
-    return arr.map((item: any) => ({
+  getGroups: async (params?: {
+    includeObsolete?: boolean;
+    skip?: number;
+    limit?: number;
+    view?: 'productBom' | 'semiProductBom' | 'allBom';
+    materialId?: number;
+    materialIds?: number[];
+    approvalStatus?: string;
+    keyword?: string;
+  }): Promise<{ data: BOMGroupSummary[]; total: number; success: boolean }> => {
+    const raw = await api.get<{ data: unknown[]; total: number; success: boolean }>(
+      '/apps/master-data/materials/bom/groups',
+      {
+        params: {
+          include_obsolete: params?.includeObsolete,
+          skip: params?.skip,
+          limit: params?.limit,
+          view: params?.view,
+          material_id: params?.materialId,
+          material_ids: params?.materialIds,
+          approval_status: params?.approvalStatus,
+          keyword: params?.keyword,
+        },
+      },
+    );
+    const arr = Array.isArray(raw.data) ? raw.data : [];
+    const data = arr.map((item: any) => ({
       material_id: item.material_id ?? item.materialId,
       version: item.version ?? '1.0',
       bom_code: item.bom_code ?? item.bomCode,
@@ -605,6 +626,11 @@ export const bomApi = {
       is_obsolete: !!(item.is_obsolete ?? item.isObsolete),
       item_count: item.item_count ?? item.itemCount ?? 0,
     }));
+    return {
+      data,
+      total: raw.total,
+      success: raw.success !== false,
+    };
   },
 
   /**

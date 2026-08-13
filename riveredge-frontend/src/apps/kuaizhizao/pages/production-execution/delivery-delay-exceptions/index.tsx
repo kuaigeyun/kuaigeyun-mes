@@ -132,9 +132,6 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
     setCurrentRecord(record);
     setCurrentAction(action);
     setHandleModalVisible(true);
-    setTimeout(() => {
-      handleFormRef.current?.resetFields();
-    }, 100);
   };
 
   const handleException = async (values: any) => {
@@ -407,6 +404,11 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
           setCurrentRecord(null);
           setCurrentAction('');
           handleFormRef.current?.resetFields();
+        }}
+        afterOpenChange={(open) => {
+          if (open) {
+            handleFormRef.current?.resetFields();
+          }
         }}
         onFinish={handleException}
         width={MODAL_CONFIG.STANDARD_WIDTH}

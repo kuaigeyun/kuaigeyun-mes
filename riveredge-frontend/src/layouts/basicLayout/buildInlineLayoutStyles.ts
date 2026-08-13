@@ -760,6 +760,11 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           flex-shrink: 0;
           margin-right: 4px;
         }
+        .menu-item-badge-count-wrap {
+          display: inline-flex;
+          flex-shrink: 0;
+          line-height: 0;
+        }
         /* 菜单项含数字徽标时：增加右侧留白，避免徽标右边被遮挡 */
         .ant-pro-sider-menu .ant-menu-item:has(.menu-item-badge-count) {
           padding-right: 22px !important;

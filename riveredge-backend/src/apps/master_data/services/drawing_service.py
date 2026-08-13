@@ -388,11 +388,19 @@ class DrawingService:
         descending = (sort_order or "desc").lower() == "desc"
 
         if (view or "current").lower() == "current":
-            all_rows = await query.all()
-            rows = pick_current_effective_rows(all_rows)
-            rows.sort(key=lambda r: _row_sort_key(r, order_field), reverse=descending)
-            total = len(rows)
-            page_rows = rows[skip : skip + limit]
+            page_rows, total = await DrawingService._list_current_effective_page(
+                tenant_id=tenant_id,
+                skip=skip,
+                limit=limit,
+                status=status,
+                drawing_type=drawing_type,
+                keyword=keyword,
+                material_uuid=material_uuid,
+                process_route_uuid=process_route_uuid,
+                operation_uuid=operation_uuid,
+                order_field=order_field,
+                descending=descending,
+            )
             items = await _to_responses(tenant_id, page_rows)
             return items, total
 
@@ -401,6 +409,128 @@ class DrawingService:
         rows = await query.order_by(order_expr).offset(skip).limit(limit)
         items = await _to_responses(tenant_id, rows)
         return items, total
+
+    @staticmethod
+    async def _list_current_effective_page(
+        *,
+        tenant_id: int,
+        skip: int,
+        limit: int,
+        status: Optional[str],
+        drawing_type: Optional[str],
+        keyword: Optional[str],
+        material_uuid: Optional[str],
+        process_route_uuid: Optional[str],
+        operation_uuid: Optional[str],
+        order_field: str,
+        descending: bool,
+    ) -> Tuple[List[EngineeringDrawing], int]:
+        """
+        view=current：ROW_NUMBER() PARTITION BY code 后 OFFSET/LIMIT，
+        不把全部修订版拉进应用内存再切片。
+        """
+        from tortoise import Tortoise
+
+        where = ["tenant_id = $1", "deleted_at IS NULL", "status IN ('Released', 'Draft')"]
+        params: List[Any] = [tenant_id]
+        p = 2
+
+        if status:
+            where.append(f"status = ${p}")
+            params.append(status)
+            p += 1
+        if drawing_type:
+            where.append(f"drawing_type = ${p}")
+            params.append(drawing_type)
+            p += 1
+        if keyword:
+            kw = keyword.strip()
+            if kw:
+                where.append(
+                    f"(code ILIKE ${p} OR name ILIKE ${p} OR COALESCE(description, '') ILIKE ${p})"
+                )
+                params.append(f"%{kw}%")
+                p += 1
+        if material_uuid:
+            where.append(f"material_uuids::jsonb @> ${p}::jsonb")
+            params.append(f'["{material_uuid}"]')
+            p += 1
+        if process_route_uuid:
+            where.append(f"process_route_uuids::jsonb @> ${p}::jsonb")
+            params.append(f'["{process_route_uuid}"]')
+            p += 1
+        if operation_uuid:
+            where.append(f"operation_uuids::jsonb @> ${p}::jsonb")
+            params.append(f'["{operation_uuid}"]')
+            p += 1
+
+        order_col = {
+            "code": "code",
+            "name": "name",
+            "revision": "revision",
+            "status": "status",
+            "created_at": "created_at",
+            "released_at": "COALESCE(released_at, created_at)",
+        }.get(order_field, "created_at")
+        direction = "DESC" if descending else "ASC"
+
+        cte = f"""
+        WITH filtered AS (
+          SELECT *
+          FROM apps_master_data_engineering_drawings
+          WHERE {" AND ".join(where)}
+        ),
+        ranked AS (
+          SELECT
+            id,
+            code,
+            name,
+            revision,
+            status,
+            created_at,
+            released_at,
+            ROW_NUMBER() OVER (
+              PARTITION BY code
+              ORDER BY
+                CASE WHEN status = 'Released' THEN 0 ELSE 1 END,
+                CASE
+                  WHEN status = 'Released' THEN COALESCE(released_at, created_at)
+                  ELSE created_at
+                END DESC NULLS LAST,
+                id DESC
+            ) AS rn
+          FROM filtered
+        )
+        """
+        conn = Tortoise.get_connection("default")
+        count_rows = await conn.execute_query_dict(
+            cte + " SELECT COUNT(*)::int AS c FROM ranked WHERE rn = 1",
+            params,
+        )
+        total = int(count_rows[0]["c"]) if count_rows else 0
+        if total == 0 or limit <= 0:
+            return [], total
+
+        page_params = list(params)
+        page_params.extend([skip, limit])
+        id_rows = await conn.execute_query_dict(
+            cte
+            + f"""
+            SELECT id FROM ranked
+            WHERE rn = 1
+            ORDER BY {order_col} {direction}, id {direction}
+            OFFSET ${p} LIMIT ${p + 1}
+            """,
+            page_params,
+        )
+        ids = [int(r["id"]) for r in id_rows]
+        if not ids:
+            return [], total
+
+        fetched = await EngineeringDrawing.filter(id__in=ids)
+        by_id = {row.id: row for row in fetched}
+        page_rows = [by_id[i] for i in ids if i in by_id]
+        return page_rows, total
 
     @staticmethod
     async def get_drawing(tenant_id: int, drawing_uuid: str) -> EngineeringDrawingResponse:

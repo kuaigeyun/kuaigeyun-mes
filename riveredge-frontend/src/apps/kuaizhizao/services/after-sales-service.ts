@@ -278,7 +278,7 @@ function buildQuery(params?: ListParams): string {
 }
 
 export async function getAfterSalesDashboardSummary(): Promise<AfterSalesDashboardSummary> {
-  return apiRequest(`${BASE}/dashboard/summary`);
+  return apiRequest(`${BASE}/dashboard`);
 }
 
 export const serviceAssetApi = {

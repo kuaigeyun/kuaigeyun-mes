@@ -8,7 +8,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * @date 2026-01-16
  */
 
-import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import {
@@ -158,7 +158,6 @@ const ExceptionProcessPage: React.FC = () => {
   const [stepTransitionModalVisible, setStepTransitionModalVisible] = useState(false);
   const [resolveModalVisible, setResolveModalVisible] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [exceptionList, setExceptionList] = useState<any[]>([]);
 
   const selectedRecordsForBatch = useMemo(
     () =>
@@ -250,49 +249,6 @@ const ExceptionProcessPage: React.FC = () => {
       messageApi.error(error?.message || t(`${P}.message.fetchDetailFailed`));
     }
   };
-
-  useEffect(() => {
-    const loadExceptions = async () => {
-      try {
-        const [materialShortage, deliveryDelay, quality] = await Promise.all([
-          exceptionApi.materialShortage.list({ limit: 1000, statuses: ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES }),
-          exceptionApi.deliveryDelay.list({ limit: 1000, statuses: ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES }),
-          exceptionApi.quality.list({ limit: 1000, statuses: ACTIVE_QUALITY_EXCEPTION_STATUSES }),
-        ]);
-
-        const exceptions: any[] = [];
-        materialShortage.items.forEach((item: any) => {
-          exceptions.push({
-            ...item,
-            exception_type: 'material_shortage',
-            display_name: t(`${PROC}.displayName.materialShortage`, { code: item.work_order_code }),
-          });
-        });
-        deliveryDelay.items.forEach((item: any) => {
-          exceptions.push({
-            ...item,
-            exception_type: 'delivery_delay',
-            display_name: t(`${PROC}.displayName.deliveryDelay`, { code: item.work_order_code }),
-          });
-        });
-        quality.items.forEach((item: any) => {
-          exceptions.push({
-            ...item,
-            exception_type: 'quality',
-            display_name: t(`${PROC}.displayName.quality`, {
-              code: item.work_order_code || item.material_code,
-            }),
-          });
-        });
-
-        setExceptionList(exceptions);
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : t(`${P}.message.fetchListFailed`);
-        messageApi.error(message);
-      }
-    };
-    loadExceptions();
-  }, [t]);
 
   const openStartModal = (record?: ExceptionProcessRecord) => {
     if (record) {
@@ -840,23 +796,53 @@ const ExceptionProcessPage: React.FC = () => {
           }}
         />
         <ProFormDependency name={['exception_type']}>
-          {({ exception_type: exceptionType }) => {
-            const options = exceptionList
-              .filter((item) => item.exception_type === exceptionType)
-              .map((item) => ({
-                label: item.display_name || String(item.id),
-                value: item.id,
-              }));
-            return (
-              <ProFormSelect
-                name="exception_id"
-                label={t(`${PROC}.field.exceptionRecord`)}
-                rules={[{ required: true, message: t(`${PROC}.validation.exceptionRecordRequired`) }]}
-                options={options}
-                disabled={!exceptionType}
-              />
-            );
-          }}
+          {({ exception_type: exceptionType }) => (
+            <ProFormSelect
+              name="exception_id"
+              label={t(`${PROC}.field.exceptionRecord`)}
+              rules={[{ required: true, message: t(`${PROC}.validation.exceptionRecordRequired`) }]}
+              disabled={!exceptionType}
+              showSearch
+              debounceTime={300}
+              request={async ({ keyWords }) => {
+                if (!exceptionType) return [];
+                const keyword = typeof keyWords === 'string' ? keyWords.trim() : '';
+                if (exceptionType === 'material_shortage') {
+                  const res = await exceptionApi.materialShortage.list({
+                    limit: 50,
+                    keyword: keyword || undefined,
+                    statuses: ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES,
+                  });
+                  return (res.items ?? []).map((item: { id: number; work_order_code?: string }) => ({
+                    label: t(`${PROC}.displayName.materialShortage`, { code: item.work_order_code }),
+                    value: item.id,
+                  }));
+                }
+                if (exceptionType === 'delivery_delay') {
+                  const res = await exceptionApi.deliveryDelay.list({
+                    limit: 50,
+                    keyword: keyword || undefined,
+                    statuses: ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES,
+                  });
+                  return (res.items ?? []).map((item: { id: number; work_order_code?: string }) => ({
+                    label: t(`${PROC}.displayName.deliveryDelay`, { code: item.work_order_code }),
+                    value: item.id,
+                  }));
+                }
+                const res = await exceptionApi.quality.list({
+                  limit: 50,
+                  keyword: keyword || undefined,
+                  statuses: ACTIVE_QUALITY_EXCEPTION_STATUSES,
+                });
+                return (res.items ?? []).map((item: { id: number; work_order_code?: string; material_code?: string }) => ({
+                  label: t(`${PROC}.displayName.quality`, {
+                    code: item.work_order_code || item.material_code,
+                  }),
+                  value: item.id,
+                }));
+              }}
+            />
+          )}
         </ProFormDependency>
         <UniUserSelect
           name="assigned_to_uuid"

@@ -33,6 +33,7 @@ import {
 import {
   buildTraceabilityNodePath,
   formatTraceEventRemark,
+  formatTraceGraphNodeLabel,
   getTraceabilityNodeStyle,
   getTraceabilityNodeTypeLabel,
 } from '../components/inspectionTemplateUtils';
@@ -151,7 +152,7 @@ const TraceabilityPage: React.FC<TraceabilityPageProps> = ({
 
     const nodes = data.nodes.map((n) => {
       const style = getTraceabilityNodeStyle(n.type);
-      const label = n.label || n.id;
+      const label = formatTraceGraphNodeLabel(n, t);
       const width = estimateTraceNodeWidth(label);
       return {
         id: n.id,
@@ -244,7 +245,7 @@ const TraceabilityPage: React.FC<TraceabilityPageProps> = ({
     };
 
     return { flowKey, config };
-  }, [data, direction, searchCode, handleNodeClick]);
+  }, [data, direction, searchCode, handleNodeClick, t]);
 
   const timelineEvents = useMemo(() => {
     if (!data?.events) return [];

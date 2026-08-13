@@ -11,7 +11,7 @@ import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pr
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Typography, theme } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
@@ -110,14 +110,6 @@ const WorkstationsPage: React.FC = () => {
   /**
    * 当自定义字段加载完成后，刷新表格以显示自定义字段列
    */
-  useEffect(() => {
-    if (customFields.length > 0 && actionRef.current) {
-      setTimeout(() => {
-        actionRef.current?.reload();
-      }, 200);
-    }
-  }, [customFields.length]);
-
   const workstationImportTemplate = useMemo(
     () =>
       buildFactoryImportTemplate(
@@ -750,7 +742,7 @@ const WorkstationsPage: React.FC = () => {
         columnPersistenceId="apps.master-data.pages.factory.workstations.list-v1"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           const pageSize = params.pageSize || 20;
           const skip = ((params.current || 1) - 1) * pageSize;
           const listParams = resolveMasterCrudListParams(searchFormValues, sort, {
@@ -768,7 +760,9 @@ const WorkstationsPage: React.FC = () => {
               ...listParams,
             });
             const { data, total } = normalizeMasterListResponse(result);
-            const enrichedData = await enrichRecordsWithCustomFields(data);
+            const enrichedData = meta?.purpose === 'prefetch'
+              ? data
+              : await enrichRecordsWithCustomFields(data);
             return {
               data: enrichedData,
               success: true,

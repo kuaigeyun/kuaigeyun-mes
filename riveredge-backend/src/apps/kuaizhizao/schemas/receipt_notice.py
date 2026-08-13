@@ -97,6 +97,14 @@ class ReceiptNoticeListPaginatedResponse(BaseSchema):
     success: bool = True
 
 
+class ReceiptNoticeStatisticsResponse(BaseSchema):
+    """收货通知单 KPI：按 status GROUP BY COUNT"""
+    total: int = 0
+    pending: int = 0
+    notified: int = 0
+    received: int = 0
+
+
 # === 收货通知单明细 ===
 
 class ReceiptNoticeItemBase(BaseSchema):

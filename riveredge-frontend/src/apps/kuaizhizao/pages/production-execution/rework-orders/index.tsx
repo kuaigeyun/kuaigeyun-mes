@@ -17,7 +17,7 @@ import { App, Alert, Button, Card, Col, Descriptions, Empty, InputNumber, Modal,
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { EditOutlined, DeleteOutlined, FormOutlined, PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
@@ -242,13 +242,6 @@ const ReworkOrdersPage: React.FC = () => {
     loadFieldValuesForDetail: loadReworkFieldValuesForDetail,
     resetDetailFieldValues: resetReworkDetailFieldValues,
   } = useCustomFieldsForList<ReworkOrder>({ tableName: REWORK_ORDER_CUSTOM_FIELD_TABLE });
-
-  useEffect(() => {
-    if (reworkListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [reworkListCustomFields.length]);
-
   /**
    * 详情抽屉基本信息列
    */
@@ -1045,6 +1038,7 @@ const ReworkOrdersPage: React.FC = () => {
     sort: Record<string, 'ascend' | 'descend' | null>,
     _filter: Record<string, React.ReactText[] | null>,
     searchFormValues?: Record<string, unknown>,
+    meta?: UniTableRequestMeta,
   ) => {
     try {
       const s = searchFormValues ?? {};
@@ -1094,7 +1088,9 @@ const ReworkOrdersPage: React.FC = () => {
 
       const response = await reworkOrderApi.list(apiParams);
       const list = response.data ?? [];
-      const enriched = await enrichReworkRecordsWithCustomFields(list);
+      const enriched = meta?.purpose === 'prefetch'
+        ? list
+        : await enrichReworkRecordsWithCustomFields(list);
       return {
         data: enriched,
         success: response.success,

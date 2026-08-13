@@ -522,11 +522,7 @@ const AfterSalesTicketsPage: React.FC = () => {
           limit: 200,
           keyword: keyword.trim() || undefined,
         });
-        const list = Array.isArray((res as any)?.data)
-          ? (res as any).data
-          : Array.isArray((res as any)?.items)
-            ? (res as any).items
-            : [];
+        const list = (res as { items?: unknown[] })?.items ?? [];
         const candidates: PullSalesDeliveryCandidate[] = list
           .map((row: any) => ({
             id: Number(row.id),

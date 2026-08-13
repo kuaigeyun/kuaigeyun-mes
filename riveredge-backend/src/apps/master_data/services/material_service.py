@@ -4071,51 +4071,117 @@ class MaterialService:
     @staticmethod
     async def list_bom_groups(
         tenant_id: int,
-        include_obsolete: bool = False
-    ) -> List[BOMGroupSummary]:
-        """
-        按 material_id + version 分组返回 BOM 摘要（不拉取明细），用于列表树首屏与按需加载子件。
-        """
+        include_obsolete: bool = False,
+        skip: Optional[int] = None,
+        limit: Optional[int] = None,
+        view: Optional[str] = None,
+        material_id: Optional[int] = None,
+        material_ids: Optional[List[int]] = None,
+        approval_status: Optional[str] = None,
+        keyword: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """按主物料分页返回 BOM 分组摘要（不拉明细）。"""
         from tortoise import Tortoise
+
         conn = Tortoise.get_connection("default")
+        if not hasattr(conn, "execute_query_dict"):
+            raise RuntimeError("list_bom_groups requires execute_query_dict")
         table = BOM._meta.db_table
-        obsolete_filter = "" if include_obsolete else " AND is_obsolete = FALSE"
-        sql = f"""
-            SELECT material_id, version,
-                   MAX(bom_code) AS bom_code,
-                   MAX(bom_name) AS bom_name,
-                   MAX(base_quantity) AS base_quantity,
-                   MAX(approval_status) AS approval_status,
-                   BOOL_OR(is_default) AS is_default,
-                   BOOL_OR(is_obsolete) AS is_obsolete,
+        mat_table = Material._meta.db_table
+        obsolete_sql = "" if include_obsolete else " AND b.is_obsolete = FALSE"
+        component_obsolete = "" if include_obsolete else " AND is_obsolete = FALSE"
+        view_sql = ""
+        if view == "productBom":
+            view_sql = f''' AND b.material_id NOT IN (
+                SELECT DISTINCT component_id FROM "{table}"
+                WHERE tenant_id = $1 AND deleted_at IS NULL{component_obsolete}
+            )'''
+        elif view == "semiProductBom":
+            view_sql = f''' AND b.material_id IN (
+                SELECT DISTINCT component_id FROM "{table}"
+                WHERE tenant_id = $1 AND deleted_at IS NULL{component_obsolete}
+            )'''
+
+        params: List[Any] = [tenant_id]
+        extra: List[str] = []
+        if material_id is not None:
+            params.append(int(material_id))
+            extra.append(f" AND b.material_id = ${len(params)}")
+        if material_ids:
+            params.append([int(x) for x in material_ids if x is not None])
+            extra.append(f" AND b.material_id = ANY(${len(params)}::int[])")
+        if approval_status:
+            params.append(str(approval_status).strip())
+            extra.append(f" AND b.approval_status = ${len(params)}")
+        kw = (keyword or "").strip()
+        if kw:
+            params.append(f"%{kw}%")
+            kw_idx = len(params)
+            extra.append(
+                f''' AND (
+                    COALESCE(b.bom_code, '') ILIKE ${kw_idx}
+                    OR CAST(b.material_id AS TEXT) ILIKE ${kw_idx}
+                    OR EXISTS (
+                        SELECT 1 FROM "{mat_table}" m
+                        WHERE m.id = b.material_id AND m.tenant_id = $1 AND m.deleted_at IS NULL
+                          AND (
+                            COALESCE(m.main_code, '') ILIKE ${kw_idx}
+                            OR COALESCE(m.code, '') ILIKE ${kw_idx}
+                            OR COALESCE(m.name, '') ILIKE ${kw_idx}
+                          )
+                    )
+                )'''
+            )
+        filter_sql = "".join(extra)
+        grouped_sql = f'''
+            SELECT b.material_id, b.version,
+                   MAX(b.bom_code) AS bom_code,
+                   MAX(b.bom_name) AS bom_name,
+                   MAX(b.base_quantity) AS base_quantity,
+                   MAX(b.approval_status) AS approval_status,
+                   BOOL_OR(b.is_default) AS is_default,
+                   BOOL_OR(b.is_obsolete) AS is_obsolete,
                    COUNT(*)::int AS item_count
-            FROM "{table}"
-            WHERE tenant_id = $1 AND deleted_at IS NULL{obsolete_filter}
-            GROUP BY material_id, version
-            ORDER BY material_id, version
-        """
-        if hasattr(conn, "execute_query_dict"):
-            rows = await conn.execute_query_dict(sql, [tenant_id])
+            FROM "{table}" b
+            WHERE b.tenant_id = $1 AND b.deleted_at IS NULL{obsolete_sql}{view_sql}{filter_sql}
+            GROUP BY b.material_id, b.version
+        '''
+        count_rows = await conn.execute_query_dict(
+            f"SELECT COUNT(DISTINCT material_id)::int AS total FROM ({grouped_sql}) g",
+            params,
+        )
+        total = int(count_rows[0]["total"]) if count_rows else 0
+
+        if skip is not None and limit is not None:
+            page_params = list(params)
+            page_params.append(int(limit))
+            limit_idx = len(page_params)
+            page_params.append(int(skip))
+            skip_idx = len(page_params)
+            rows = await conn.execute_query_dict(
+                f'''
+                WITH grouped AS ({grouped_sql}),
+                page_mids AS (
+                    SELECT DISTINCT material_id FROM grouped
+                    ORDER BY material_id
+                    LIMIT ${limit_idx} OFFSET ${skip_idx}
+                )
+                SELECT g.* FROM grouped g
+                INNER JOIN page_mids p ON p.material_id = g.material_id
+                ORDER BY g.material_id, g.version
+                ''',
+                page_params,
+            )
         else:
-            result = await conn.execute_query(sql, [tenant_id])
-            raw = result[1] if isinstance(result, tuple) and len(result) > 1 else result
-            if not raw:
-                return []
-            rows = [
-                {
-                    "material_id": r[0],
-                    "version": r[1] or "1.0",
-                    "bom_code": r[2],
-                    "bom_name": r[3],
-                    "base_quantity": r[4],
-                    "approval_status": (r[5] or "draft").lower(),
-                    "is_default": bool(r[6]) if r[6] is not None else False,
-                    "is_obsolete": bool(r[7]) if r[7] is not None else False,
-                    "item_count": int(r[8]) if r[8] is not None else 0,
-                }
-                for r in raw
-            ]
-        return [BOMGroupSummary.model_validate(r) for r in rows]
+            rows = await conn.execute_query_dict(
+                grouped_sql + " ORDER BY material_id, version",
+                params,
+            )
+        return {
+            "data": [BOMGroupSummary.model_validate(r) for r in rows],
+            "total": total,
+            "success": True,
+        }
 
     @staticmethod
     async def list_bom_component_ids(tenant_id: int, include_obsolete: bool = False) -> List[int]:
@@ -4843,12 +4909,9 @@ class MaterialService:
             List[MaterialGroupTreeResponse]: 物料分组树形列表，每个分组包含子分组列表和物料列表
         """
         # 延迟导入避免循环依赖
-        from apps.master_data.schemas.material_schemas import (
-            MaterialGroupTreeResponse,
-            MaterialTreeResponse
-        )
+        from apps.master_data.schemas.material_schemas import MaterialGroupTreeResponse
         
-        # 查询所有物料分组（预加载关联关系，修复500错误）
+        # 仅拉分组树；物料走列表分页/按分组过滤，禁止一次灌入全部物料
         group_query = MaterialGroup.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True
@@ -4858,32 +4921,6 @@ class MaterialService:
         
         groups = await group_query.prefetch_related("process_route").order_by("code").all()
         
-        # 查询所有物料
-        material_query = Material.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True
-        )
-        if is_active is not None:
-            material_query = material_query.filter(is_active=is_active)
-        
-        # 预加载关联关系（优化，修复500错误）
-        materials = await material_query.prefetch_related("group", "process_route").order_by("code").all()
-        
-        # 构建物料映射（按分组ID分组）
-        material_map: dict[Optional[int], List[MaterialTreeResponse]] = {}
-        for material in materials:
-            group_id = material.group_id
-            if group_id not in material_map:
-                material_map[group_id] = []
-            # 构建物料响应数据（用 _material_to_response_data 避免 ReverseRelation；树形接口不加载 code_aliases）
-            try:
-                resp_data = _material_to_response_data(material)
-                resp_data["code_aliases"] = []
-                material_map[group_id].append(MaterialTreeResponse.model_validate(resp_data))
-            except Exception as e:
-                logger.warning(f"序列化物料 {material.id if hasattr(material, 'id') else 'unknown'} 失败: {str(e)}")
-                continue
-        
         # 构建分组映射（按父分组ID分组）
         group_map: dict[Optional[int], List[MaterialGroupTreeResponse]] = {}
         for group in groups:
@@ -4891,11 +4928,6 @@ class MaterialService:
             if parent_id not in group_map:
                 group_map[parent_id] = []
             
-            # 获取该分组的物料列表
-            group_materials = material_map.get(group.id, [])
-            
-            # 创建分组响应对象（包含物料列表，子分组稍后添加）
-            # 使用 model_validate 创建响应对象，然后手动设置 children 和 materials
             group_dict = {
                 "id": group.id,
                 "uuid": group.uuid,
@@ -4910,10 +4942,8 @@ class MaterialService:
                 "updated_at": group.updated_at,
                 **audit_response_fields(group),
                 "deleted_at": group.deleted_at,
-                "children": [],  # 先初始化为空，稍后递归填充
-                "materials": group_materials,
-                # 添加process_route_id和process_route_name（修复500错误）
-                # 注意：使用getattr安全访问，避免字段不存在时出错
+                "children": [],
+                "materials": [],
                 "process_route_id": getattr(group, 'process_route_id', None) if hasattr(group, 'process_route_id') else (getattr(group.process_route, 'id', None) if hasattr(group, 'process_route') and group.process_route else None),
                 "process_route_name": getattr(group.process_route, 'name', None) if hasattr(group, 'process_route') and group.process_route else None,
                 "inspection_stages": getattr(group, "inspection_stages", None),

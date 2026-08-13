@@ -50,7 +50,7 @@ from apps.master_data.schemas.material_schemas import (
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
     BOMBatchImport, BOMVersionCreate, BOMVersionCompare,
     BOMRelationImportRequest, BOMRelationImportResponse,
-    BOMGroupSummary, BOMBatchItemsRequest,
+    BOMGroupSummary, BOMGroupListResponse, BOMBatchItemsRequest,
     MaterialGroupTreeResponse,
     MaterialCodeMappingCreate, MaterialCodeMappingUpdate, MaterialCodeMappingResponse,
     MaterialCodeMappingListResponse, MaterialCodeConvertRequest, MaterialCodeConvertResponse,
@@ -290,17 +290,31 @@ async def create_bom(
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/bom/groups", response_model=List[BOMGroupSummary], summary="List BOM group summaries")
+@router.get("/bom/groups", response_model=BOMGroupListResponse, summary="List BOM group summaries")
 async def list_bom_groups(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     include_obsolete: bool = Query(False, description="是否包含已失效版本"),
+    skip: Optional[int] = Query(None, ge=0, description="按主物料分页偏移"),
+    limit: Optional[int] = Query(None, ge=1, le=500, description="按主物料分页大小"),
+    view: Optional[str] = Query(None, description="productBom / semiProductBom / allBom"),
+    material_id: Optional[int] = Query(None, description="主物料 ID"),
+    material_ids: Optional[List[int]] = Query(None, description="主物料 ID 列表（嵌套半成品补齐）"),
+    approval_status: Optional[str] = Query(None, description="审核状态"),
+    keyword: Optional[str] = Query(None, description="BOM 编码 / 物料编码 / 名称"),
 ):
-    """
-    按 material_id + version 返回 BOM 分组摘要，不拉取子件明细。
-    列表页首屏用此接口；展开某行时再调 getByMaterial(materialId, version) 拉取子件。
-    """
-    return await MaterialService.list_bom_groups(tenant_id=tenant_id, include_obsolete=include_obsolete)
+    """按主物料分页返回 BOM 分组摘要，不拉取子件明细。"""
+    return await MaterialService.list_bom_groups(
+        tenant_id=tenant_id,
+        include_obsolete=include_obsolete,
+        skip=skip,
+        limit=limit,
+        view=view,
+        material_id=material_id,
+        material_ids=material_ids,
+        approval_status=approval_status,
+        keyword=keyword,
+    )
 
 
 @router.get("/bom/component-ids", summary="List component material IDs")

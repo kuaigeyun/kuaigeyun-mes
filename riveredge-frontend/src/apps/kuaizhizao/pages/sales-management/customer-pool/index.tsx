@@ -1215,7 +1215,6 @@ const CustomerPoolPage: React.FC = () => {
               return { data: res.items || [], total: res.total || 0, success: true };
             } catch {
               message.error(t('app.kuaizhizao.customerPool.loadFailed'));
-              tableRowsRef.current = [];
               return { data: [], total: 0, success: false };
             }
           }}

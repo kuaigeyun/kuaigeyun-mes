@@ -1254,6 +1254,11 @@ class ReportingService(AppBaseService[ReportingRecord]):
                         operation_code=op_code or None,
                         operation_name=op_name or None,
                         operation_sequence=int(op.sequence) if op.sequence is not None else None,
+                        reporting_type=(
+                            "status"
+                            if str(op.reporting_type or "").strip().lower() == "status"
+                            else "quantity"
+                        ),
                         reportable_quantity_cap=plan_side_cap,
                         reportable_quantity_pushed=completed,
                         reportable_quantity_max=effective,
@@ -1754,10 +1759,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
         Returns:
             dict: 统计信息
         """
-        query = ReportingRecord.filter(
-            tenant_id=tenant_id
-        )
+        from tortoise.functions import Count, Sum
+        from apps.kuaizhizao.services.first_pass_yield_service import compute_first_pass_yield_rate
 
+        query = ReportingRecord.filter(tenant_id=tenant_id)
         if date_start:
             query = query.filter(reported_at__gte=date_start)
         if date_end:
@@ -1765,146 +1770,176 @@ class ReportingService(AppBaseService[ReportingRecord]):
         if worker_id is not None:
             query = query.filter(worker_id=worker_id)
 
-        records = await query.all()
+        total_count = await query.count()
+        status_rows = (
+            await query.group_by("status")
+            .annotate(c=Count("id"))
+            .values("status", "c")
+        )
+        status_map = {str(r["status"] or ""): int(r["c"] or 0) for r in status_rows}
+        pending_count = status_map.get("pending", 0)
+        approved_count = status_map.get("approved", 0)
+        rejected_count = status_map.get("rejected", 0)
 
-        total_count = len(records)
-        pending_count = sum(1 for r in records if r.status == 'pending')
-        approved_count = sum(1 for r in records if r.status == 'approved')
-        rejected_count = sum(1 for r in records if r.status == 'rejected')
-
-        total_reported_quantity = sum(r.reported_quantity for r in records) or Decimal("0")
-        total_qualified_quantity = sum(r.qualified_quantity for r in records) or Decimal("0")
-        total_unqualified_quantity = sum(r.unqualified_quantity for r in records) or Decimal("0")
-        total_work_hours = sum(r.work_hours for r in records) or Decimal("0")
+        totals_rows = await query.annotate(
+            reported_q=Sum("reported_quantity"),
+            qualified_q=Sum("qualified_quantity"),
+            unqualified_q=Sum("unqualified_quantity"),
+            hours_q=Sum("work_hours"),
+        ).values("reported_q", "qualified_q", "unqualified_q", "hours_q")
+        totals = totals_rows[0] if totals_rows else {}
+        total_reported_quantity = Decimal(str(totals.get("reported_q") or 0))
+        total_qualified_quantity = Decimal(str(totals.get("qualified_q") or 0))
+        total_unqualified_quantity = Decimal(str(totals.get("unqualified_q") or 0))
+        total_work_hours = Decimal(str(totals.get("hours_q") or 0))
 
         wage_rate = await self._get_reporting_estimated_wage_rate(tenant_id)
+        qualification_rate = (
+            float(total_qualified_quantity / total_reported_quantity * 100)
+            if total_reported_quantity > 0
+            else 0
+        )
 
-        from apps.kuaizhizao.services.first_pass_yield_service import compute_first_pass_yield_rate
-
-        # 计算合格率
-        qualification_rate = float((total_qualified_quantity / total_reported_quantity * 100)) if total_reported_quantity > 0 else 0
-
-        first_pass_reported_quantity = Decimal("0")
-        first_pass_qualified_quantity = Decimal("0")
-        for r in records:
-            if r.rework_order_id is not None:
-                continue
-            first_pass_reported_quantity += r.reported_quantity or Decimal("0")
-            first_pass_qualified_quantity += r.qualified_quantity or Decimal("0")
+        fp_totals_rows = await query.filter(rework_order_id__isnull=True).annotate(
+            reported_q=Sum("reported_quantity"),
+            qualified_q=Sum("qualified_quantity"),
+        ).values("reported_q", "qualified_q")
+        fp_totals = fp_totals_rows[0] if fp_totals_rows else {}
+        first_pass_reported_quantity = Decimal(str(fp_totals.get("reported_q") or 0))
+        first_pass_qualified_quantity = Decimal(str(fp_totals.get("qualified_q") or 0))
         first_pass_yield_rate = compute_first_pass_yield_rate(
             float(first_pass_qualified_quantity),
             float(first_pass_reported_quantity),
         )
 
-        # 效率分析：平均每小时报工数量
-        avg_quantity_per_hour = float(total_reported_quantity / total_work_hours) if total_work_hours > 0 else 0
+        avg_quantity_per_hour = (
+            float(total_reported_quantity / total_work_hours) if total_work_hours > 0 else 0
+        )
+        unqualified_rate = (
+            float(total_unqualified_quantity / total_reported_quantity * 100)
+            if total_reported_quantity > 0
+            else 0
+        )
 
-        # 异常分析：统计不合格率
-        unqualified_rate = float((total_unqualified_quantity / total_reported_quantity * 100)) if total_reported_quantity > 0 else 0
-
-        # 按工序统计（前10个）
-        operation_stats = {}
-        for r in records:
-            op_name = r.operation_name
-            if op_name not in operation_stats:
-                operation_stats[op_name] = {
-                    'count': 0,
-                    'reported_quantity': Decimal("0"),
-                    'qualified_quantity': Decimal("0"),
-                    'first_pass_reported_quantity': Decimal("0"),
-                    'first_pass_qualified_quantity': Decimal("0"),
-                    'work_hours': Decimal("0"),
-                }
-            operation_stats[op_name]['count'] += 1
-            operation_stats[op_name]['reported_quantity'] += r.reported_quantity
-            operation_stats[op_name]['qualified_quantity'] += r.qualified_quantity
-            operation_stats[op_name]['work_hours'] += r.work_hours
-            if r.rework_order_id is None:
-                operation_stats[op_name]['first_pass_reported_quantity'] += r.reported_quantity or Decimal("0")
-                operation_stats[op_name]['first_pass_qualified_quantity'] += r.qualified_quantity or Decimal("0")
-
-        # 转换为列表并计算合格率
-        operation_stats_list = []
-        for op_name, stats in sorted(operation_stats.items(), key=lambda x: x[1]['count'], reverse=True)[:10]:
-            op_rate = float((stats['qualified_quantity'] / stats['reported_quantity'] * 100)) if stats['reported_quantity'] > 0 else 0
-            fp_rate = compute_first_pass_yield_rate(
-                float(stats['first_pass_qualified_quantity']),
-                float(stats['first_pass_reported_quantity']),
+        op_rows = (
+            await query.group_by("operation_name")
+            .annotate(
+                c=Count("id"),
+                reported_q=Sum("reported_quantity"),
+                qualified_q=Sum("qualified_quantity"),
+                hours_q=Sum("work_hours"),
             )
+            .order_by("-c")
+            .limit(10)
+            .values("operation_name", "c", "reported_q", "qualified_q", "hours_q")
+        )
+        op_fp_rows = (
+            await query.filter(rework_order_id__isnull=True)
+            .group_by("operation_name")
+            .annotate(
+                reported_q=Sum("reported_quantity"),
+                qualified_q=Sum("qualified_quantity"),
+            )
+            .values("operation_name", "reported_q", "qualified_q")
+        )
+        op_fp_map = {
+            r["operation_name"]: (
+                Decimal(str(r["reported_q"] or 0)),
+                Decimal(str(r["qualified_q"] or 0)),
+            )
+            for r in op_fp_rows
+        }
+        operation_stats_list = []
+        for row in op_rows:
+            op_name = row["operation_name"]
+            reported_q = Decimal(str(row["reported_q"] or 0))
+            qualified_q = Decimal(str(row["qualified_q"] or 0))
+            hours_q = Decimal(str(row["hours_q"] or 0))
+            fp_reported, fp_qualified = op_fp_map.get(op_name, (Decimal("0"), Decimal("0")))
             operation_stats_list.append({
-                'operation_name': op_name,
-                'count': stats['count'],
-                'reported_quantity': float(stats['reported_quantity']),
-                'qualified_quantity': float(stats['qualified_quantity']),
-                'work_hours': float(stats['work_hours']),
-                'qualification_rate': op_rate,
-                'first_pass_yield_rate': fp_rate,
+                "operation_name": op_name,
+                "count": int(row["c"] or 0),
+                "reported_quantity": float(reported_q),
+                "qualified_quantity": float(qualified_q),
+                "work_hours": float(hours_q),
+                "qualification_rate": float(qualified_q / reported_q * 100) if reported_q > 0 else 0,
+                "first_pass_yield_rate": compute_first_pass_yield_rate(
+                    float(fp_qualified), float(fp_reported)
+                ),
             })
 
-        # 按操作工统计（前10个）
-        worker_stats = {}
-        for r in records:
-            worker_name = r.worker_name or getattr(r, "team_name", None) or "—"
-            if worker_name not in worker_stats:
-                worker_stats[worker_name] = {
-                    'count': 0,
-                    'reported_quantity': Decimal("0"),
-                    'qualified_quantity': Decimal("0"),
-                    'first_pass_reported_quantity': Decimal("0"),
-                    'first_pass_qualified_quantity': Decimal("0"),
-                    'work_hours': Decimal("0"),
-                }
-            worker_stats[worker_name]['count'] += 1
-            worker_stats[worker_name]['reported_quantity'] += r.reported_quantity
-            worker_stats[worker_name]['qualified_quantity'] += r.qualified_quantity
-            worker_stats[worker_name]['work_hours'] += r.work_hours
-            if r.rework_order_id is None:
-                worker_stats[worker_name]['first_pass_reported_quantity'] += r.reported_quantity or Decimal("0")
-                worker_stats[worker_name]['first_pass_qualified_quantity'] += r.qualified_quantity or Decimal("0")
-
-        worker_stats_list = []
-        for worker_name, stats in sorted(worker_stats.items(), key=lambda x: x[1]['count'], reverse=True)[:10]:
-            worker_rate = float((stats['qualified_quantity'] / stats['reported_quantity'] * 100)) if stats['reported_quantity'] > 0 else 0
-            fp_rate = compute_first_pass_yield_rate(
-                float(stats['first_pass_qualified_quantity']),
-                float(stats['first_pass_reported_quantity']),
+        worker_rows = (
+            await query.group_by("worker_name")
+            .annotate(
+                c=Count("id"),
+                reported_q=Sum("reported_quantity"),
+                qualified_q=Sum("qualified_quantity"),
+                hours_q=Sum("work_hours"),
             )
+            .order_by("-c")
+            .limit(10)
+            .values("worker_name", "c", "reported_q", "qualified_q", "hours_q")
+        )
+        worker_fp_rows = (
+            await query.filter(rework_order_id__isnull=True)
+            .group_by("worker_name")
+            .annotate(
+                reported_q=Sum("reported_quantity"),
+                qualified_q=Sum("qualified_quantity"),
+            )
+            .values("worker_name", "reported_q", "qualified_q")
+        )
+        worker_fp_map = {
+            r["worker_name"]: (
+                Decimal(str(r["reported_q"] or 0)),
+                Decimal(str(r["qualified_q"] or 0)),
+            )
+            for r in worker_fp_rows
+        }
+        worker_stats_list = []
+        for row in worker_rows:
+            worker_name = row["worker_name"] or "—"
+            reported_q = Decimal(str(row["reported_q"] or 0))
+            qualified_q = Decimal(str(row["qualified_q"] or 0))
+            hours_q = Decimal(str(row["hours_q"] or 0))
+            fp_reported, fp_qualified = worker_fp_map.get(row["worker_name"], (Decimal("0"), Decimal("0")))
             worker_stats_list.append({
-                'worker_name': worker_name,
-                'count': stats['count'],
-                'reported_quantity': float(stats['reported_quantity']),
-                'qualified_quantity': float(stats['qualified_quantity']),
-                'work_hours': float(stats['work_hours']),
-                'qualification_rate': worker_rate,
-                'first_pass_yield_rate': fp_rate,
+                "worker_name": worker_name,
+                "count": int(row["c"] or 0),
+                "reported_quantity": float(reported_q),
+                "qualified_quantity": float(qualified_q),
+                "work_hours": float(hours_q),
+                "qualification_rate": float(qualified_q / reported_q * 100) if reported_q > 0 else 0,
+                "first_pass_yield_rate": compute_first_pass_yield_rate(
+                    float(fp_qualified), float(fp_reported)
+                ),
             })
 
         return {
-            'total_count': total_count,
-            'pending_count': pending_count,
-            'approved_count': approved_count,
-            'rejected_count': rejected_count,
-            'total_reported_quantity': float(total_reported_quantity),
-            'total_qualified_quantity': float(total_qualified_quantity),
-            'total_unqualified_quantity': float(total_unqualified_quantity),
-            'total_work_hours': float(total_work_hours),
-            'cumulative_hours': float(total_work_hours),  # 映射为前端需要的字段
-            'estimated_wages': float(total_work_hours * wage_rate),
-            'qualification_rate': qualification_rate,
-            'first_pass_yield_rate': first_pass_yield_rate,
-            'first_pass_reported_quantity': float(first_pass_reported_quantity),
-            'first_pass_qualified_quantity': float(first_pass_qualified_quantity),
-            'unqualified_rate': unqualified_rate,
-            'avg_quantity_per_hour': avg_quantity_per_hour,
-            # 与 overview 统计口径保持关键字段对齐，减少前端分支判断
-            'efficiency': qualification_rate,
-            'operation_stats': operation_stats_list,
-            'worker_stats': worker_stats_list,
-            'trends': {
-                'hours': [120, 145, 138, 160, 155, 175, float(total_work_hours)],
-                'wages': [1200, 1500, 1800, 1600, 2100, 1900, float(total_work_hours * wage_rate)],
-                'efficiency': [qualification_rate] * 7,
-            }
+            "total_count": total_count,
+            "pending_count": pending_count,
+            "approved_count": approved_count,
+            "rejected_count": rejected_count,
+            "total_reported_quantity": float(total_reported_quantity),
+            "total_qualified_quantity": float(total_qualified_quantity),
+            "total_unqualified_quantity": float(total_unqualified_quantity),
+            "total_work_hours": float(total_work_hours),
+            "cumulative_hours": float(total_work_hours),
+            "estimated_wages": float(total_work_hours * wage_rate),
+            "qualification_rate": qualification_rate,
+            "first_pass_yield_rate": first_pass_yield_rate,
+            "first_pass_reported_quantity": float(first_pass_reported_quantity),
+            "first_pass_qualified_quantity": float(first_pass_qualified_quantity),
+            "unqualified_rate": unqualified_rate,
+            "avg_quantity_per_hour": avg_quantity_per_hour,
+            "efficiency": qualification_rate,
+            "operation_stats": operation_stats_list,
+            "worker_stats": worker_stats_list,
+            "trends": {
+                "hours": [120, 145, 138, 160, 155, 175, float(total_work_hours)],
+                "wages": [1200, 1500, 1800, 1600, 2100, 1900, float(total_work_hours * wage_rate)],
+                "efficiency": [qualification_rate] * 7,
+            },
         }
 
     async def _create_mold_usage_from_reporting(

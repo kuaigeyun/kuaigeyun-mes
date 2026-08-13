@@ -984,7 +984,7 @@ class MaterialStockMovementService:
                         material_name=getattr(it, "material_name", None),
                         batch_no=getattr(it, "batch_number", None),
                         quantity=qty,
-                        to_warehouse_id=it.warehouse_id or receipt.warehouse_id,
+                        to_warehouse_id=receipt.warehouse_id,
                         source_doc_type="finished_goods_receipt",
                         source_doc_id=receipt.id,
                         source_doc_code=receipt.receipt_code,
@@ -1021,8 +1021,7 @@ class MaterialStockMovementService:
                         material_name=getattr(it, "material_name", None),
                         batch_no=getattr(it, "batch_number", None),
                         quantity=qty,
-                        to_warehouse_id=getattr(it, "warehouse_id", None)
-                        or receipt.warehouse_id,
+                        to_warehouse_id=receipt.warehouse_id,
                         source_doc_type="semi_finished_goods_receipt",
                         source_doc_id=receipt.id,
                         source_doc_code=receipt.receipt_code,

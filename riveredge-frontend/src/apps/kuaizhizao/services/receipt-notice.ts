@@ -114,6 +114,11 @@ export const receiptNoticeApi = {
     }),
   notify: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/receipt-notices/${id}/notify`, { method: 'POST' }),
+  statistics: async () =>
+    apiRequest<{ total: number; pending: number; notified: number; received: number }>(
+      '/apps/kuaizhizao/receipt-notices/statistics',
+      { method: 'GET' },
+    ),
   withdraw: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/receipt-notices/${id}/withdraw`, { method: 'POST' }),
 };

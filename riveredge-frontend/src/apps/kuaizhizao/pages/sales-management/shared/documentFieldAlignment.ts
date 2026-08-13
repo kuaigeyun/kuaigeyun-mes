@@ -96,6 +96,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   document_type: 21,
   demand_code: 10,
   computation_code: 10,
+  /** 需求变更（重排任务）编码 */
+  task_code: 10,
   ticket_code: 10,
   batchNo: 10,
   serialNo: 10,
@@ -293,6 +295,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   period: 20,
   forecast_type: 20.2,
   business_mode: 20.2,
+  /** 需求变更：重排模式（净变更/全量/what-if） */
+  mode: 20.2,
   source_type: 20.3,
   version_no: 20.5,
   version: 20.5,
@@ -424,6 +428,10 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   review_date: 65,
   computation_start_time: 65.1,
   computation_end_time: 65.2,
+  started_at: 65.1,
+  finished_at: 65.2,
+  /** 需求变更：创建时间（非固定列末位，列用 key 避开全局 created_at=93） */
+  task_created_at: 88,
   timeRange: 66,
   occurred_at: 67,
   registered_at: 67,
@@ -481,11 +489,14 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   source_order_code: 81.2,
   sales_delivery_code: 81.3,
   change_reason: 82,
+  failure_reason: 82.1,
 
   // —— 88 审核 / 生命周期 / 系统 ——
   audit_phase: 89,
   phase: 89,
-  lifecycle_stage: 90,
+  /** 需求变更：审批态（右固定，紧挨 lifecycle 之前） */
+  approval_status: 90,
+  lifecycle_stage: 90.5,
   status: 91,
   is_active: 91.6,
   isActive: 91.6,

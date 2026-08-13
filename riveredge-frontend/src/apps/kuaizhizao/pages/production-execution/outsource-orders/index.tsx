@@ -1,7 +1,7 @@
 /**
  * 工序委外管理页面
  *
- * 提供工序委外的 CRUD 功能；新建须经加载选源 → 数量预览 → 录入表单。
+ * 提供工序委外的 CRUD 功能；新建须经加载选源后进入录入表单。
  *
  * Author: Luigi Lu
  * Date: 2025-01-04
@@ -36,13 +36,12 @@ import {
   Dropdown,
   Empty,
   Spin,
-  Table,
   Alert,
   Card,
   theme as AntdTheme,
 } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
@@ -66,8 +65,6 @@ import {
 import { SimpleSparkline } from '../../../../../components';
 import CodeField from '../../../../../components/code-field';
 import { outsourceOrderApi, workOrderApi } from '../../../services/production';
-import { mapOutsourceOptionsToPullPreview } from '../../../utils/outsourceOrderPullPreview';
-import type { PushPreviewResponse } from '../../../services/sales-order';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { getOutsourceOrderLifecycle, buildOutsourceOrderLifecycleValueEnum, resolveOutsourceOrderListLifecycleParams } from '../../../utils/outsourceOrderLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -75,7 +72,7 @@ import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../.
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { searchReferenceDisplayAll } from '../../../../../utils/referenceDisplay';
 import dayjs from 'dayjs';
-import {formatDateTime, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format';
+import {formatDateTime, formatDateTimeBySiteSetting} from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateFormItemProps, formDateRangeFormItemProps, toApiDateTimeString } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
@@ -233,13 +230,6 @@ export const OutsourceOrdersTable: React.FC = () => {
     tableName: OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE,
     hostResource: OUTSOURCE_ORDER_HOST_RESOURCE,
   });
-
-  useEffect(() => {
-    if (outsourceListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [outsourceListCustomFields.length]);
-
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [outsourceOrderDetail, setOutsourceOrderDetail] = useState<OutsourceOrder | null>(null);
@@ -266,21 +256,6 @@ export const OutsourceOrdersTable: React.FC = () => {
   const [createLockedOperation, setCreateLockedOperation] = useState<PullOutsourceOperationCandidate | null>(null);
   const [createMaxOutsourceQty, setCreateMaxOutsourceQty] = useState(0);
 
-  const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
-  const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
-  const [pullPreviewData, setPullPreviewData] = useState<PushPreviewResponse | null>(null);
-  const [pullPreviewContext, setPullPreviewContext] = useState<{
-    workOrder: any;
-    operation: PullOutsourceOperationCandidate;
-  } | null>(null);
-
-  const resetPullPreview = useCallback(() => {
-    setPullPreviewOpen(false);
-    setPullPreviewLoading(false);
-    setPullPreviewData(null);
-    setPullPreviewContext(null);
-  }, []);
-
   const openCreateModalFromPullContext = useCallback(
     (workOrder: any, operation: PullOutsourceOperationCandidate) => {
       setCreateWorkOrder({
@@ -300,12 +275,8 @@ export const OutsourceOrdersTable: React.FC = () => {
     [],
   );
 
-  const openOutsourcePullPreview = useCallback(
+  const openOutsourceCreateFromSource = useCallback(
     async (workOrderId: number, workOrderOperationId: number) => {
-      setPullPreviewOpen(true);
-      setPullPreviewLoading(true);
-      setPullPreviewData(null);
-      setPullPreviewContext(null);
       try {
         const [workOrder, optionsRes] = await Promise.all([
           workOrderApi.get(String(workOrderId)),
@@ -317,7 +288,6 @@ export const OutsourceOrdersTable: React.FC = () => {
         );
         if (!matched || Number(matched.outsourceable_quantity ?? 0) <= 0) {
           messageApi.warning(t('app.kuaizhizao.outsourceOrder.pullPreviewBlocked'));
-          resetPullPreview();
           return;
         }
         const operationRow: PullOutsourceOperationCandidate = {
@@ -337,29 +307,13 @@ export const OutsourceOrdersTable: React.FC = () => {
           occupied_quantity:
             Number(matched.completed_quantity ?? 0) + Number(matched.already_outsourced_quantity ?? 0),
         };
-        const preview = mapOutsourceOptionsToPullPreview(
-          String(workOrder.code ?? ''),
-          [matched],
-          t,
-        );
-        setPullPreviewData(preview);
-        setPullPreviewContext({ workOrder, operation: operationRow });
+        openCreateModalFromPullContext(workOrder, operationRow);
       } catch (error: unknown) {
         messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.outsourceOrder.pullPreviewFailed')));
-        resetPullPreview();
-      } finally {
-        setPullPreviewLoading(false);
       }
     },
-    [messageApi, resetPullPreview, t],
+    [messageApi, openCreateModalFromPullContext, t],
   );
-
-  const handlePullPreviewConfirm = useCallback(() => {
-    if (!pullPreviewContext || !pullPreviewData || pullPreviewData.has_blocking_issues) return;
-    const { workOrder, operation } = pullPreviewContext;
-    resetPullPreview();
-    openCreateModalFromPullContext(workOrder, operation);
-  }, [openCreateModalFromPullContext, pullPreviewContext, pullPreviewData, resetPullPreview]);
 
   const isPullOutsourceOperationSelectable = useCallback(
     (record: PullOutsourceOperationCandidate) => Number(record.outsourceable_quantity ?? 0) > 0,
@@ -453,7 +407,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         return;
       }
       pullFromWorkOrderQuery.closeModal();
-      await openOutsourcePullPreview(selected.work_order_id, selected.work_order_operation_id);
+      await openOutsourceCreateFromSource(selected.work_order_id, selected.work_order_operation_id);
     },
   });
 
@@ -1084,6 +1038,7 @@ export const OutsourceOrdersTable: React.FC = () => {
     sort: Record<string, 'ascend' | 'descend' | null>,
     _filter: Record<string, React.ReactText[] | null>,
     searchFormValues?: Record<string, unknown>,
+    meta?: UniTableRequestMeta,
   ) => {
     try {
       const s = searchFormValues ?? {};
@@ -1137,7 +1092,9 @@ export const OutsourceOrdersTable: React.FC = () => {
 
       const response = await outsourceOrderApi.list(apiParams);
       const list = response.data ?? [];
-      const enriched = await enrichOutsourceRecordsWithCustomFields(list);
+      const enriched = meta?.purpose === 'prefetch'
+        ? list
+        : await enrichOutsourceRecordsWithCustomFields(list);
       return {
         data: enriched,
         success: response.success,
@@ -1250,61 +1207,6 @@ export const OutsourceOrdersTable: React.FC = () => {
         okText={t('common.next')}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />
-
-      <Modal
-        title={t('app.kuaizhizao.outsourceOrder.pullPreviewTitle')}
-        open={pullPreviewOpen}
-        destroyOnClose
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
-        onCancel={resetPullPreview}
-        okText={t('common.next')}
-        cancelText={t('common.cancel')}
-        onOk={() => handlePullPreviewConfirm()}
-        okButtonProps={{
-          disabled:
-            pullPreviewLoading ||
-            !pullPreviewData ||
-            !!pullPreviewData?.has_blocking_issues ||
-            !(pullPreviewData?.items || []).some((row) => Number(row.max_push_quantity ?? 0) > 0),
-        }}
-      >
-        {pullPreviewLoading ? (
-          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-            <Spin />
-            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
-          </div>
-        ) : pullPreviewData ? (
-          <div>
-            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
-            {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
-              <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={pullPreviewData.blocking_reason} />
-            ) : null}
-            {pullPreviewData.items?.length > 0 ? (
-              <Table
-                size="small"
-                dataSource={pullPreviewData.items}
-                rowKey={(row) => String(row.item_id)}
-                pagination={false}
-                scroll={{ x: 860 }}
-                columns={[
-                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' , render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' , render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' , render: formatQuantity },
-                ]}
-              />
-            ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.outsourceOrder.pullPreviewNoLines')} />
-            )}
-            {pullPreviewData.tip ? (
-              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-                {pullPreviewData.tip}
-              </Typography.Paragraph>
-            ) : null}
-          </div>
-        ) : null}
-      </Modal>
 
       <FormModalTemplate
         title={t('app.kuaizhizao.outsourceOrder.createModalTitle')}

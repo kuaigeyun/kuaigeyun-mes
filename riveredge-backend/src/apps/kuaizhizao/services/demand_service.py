@@ -394,6 +394,16 @@ class DemandService(AppBaseService[Demand]):
         if forecast_ids:
             forecasts = await SalesForecast.filter(tenant_id=tenant_id, id__in=forecast_ids, deleted_at__isnull=True).all()
             forecast_map = {f.id: f for f in forecasts}
+
+        include_items = bool(filters.get("include_items"))
+        items_by_demand: Dict[int, List[DemandItem]] = {}
+        if include_items and demands:
+            all_items = await DemandItem.filter(
+                tenant_id=tenant_id,
+                demand_id__in=[d.id for d in demands],
+            ).all()
+            for it in all_items:
+                items_by_demand.setdefault(it.demand_id, []).append(it)
         
         from apps.kuaizhizao.services.document_lifecycle_service import get_demand_lifecycle
         from apps.kuaizhizao.services.document_action_policy.enricher import enrich_demand_capabilities_on_response
@@ -419,7 +429,13 @@ class DemandService(AppBaseService[Demand]):
             })()
             item.lifecycle = get_demand_lifecycle(demand_view, items=None)
             item = enrich_demand_capabilities_on_response(demand_view, item)
-            data.append(item.model_dump())
+            payload = item.model_dump()
+            if include_items:
+                payload["items"] = [
+                    DemandItemResponse.model_validate(it).model_dump()
+                    for it in items_by_demand.get(demand.id, [])
+                ]
+            data.append(payload)
 
         from core.services.approval.audit_record_enricher import enrich_data_payload
 

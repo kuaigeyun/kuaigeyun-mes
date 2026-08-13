@@ -175,7 +175,7 @@ function clearCachedSiteLogoUrl(logoUuid: string): void {
 import { useUserPreferenceStore } from '../stores/userPreferenceStore';
 import { useConfigStore, resolveEffectiveHomePath, getDefaultTenantHomePath } from '../stores/configStore';
 import { useThemeStore } from '../stores/themeStore';
-import { getMenuBadgeCounts } from '../services/dashboard';
+import { getMenuBadgeCounts, type MenuBadgeEntry } from '../services/dashboard';
 import { verifyCopyright } from '../utils/copyrightIntegrity';
 import { getBuildProvenance, getPlatformSettingsPublic, registerInstallInstance } from '../services/platformSettings';
 import { useTouchScreen } from '../hooks/useTouchScreen';
@@ -343,6 +343,45 @@ function getMenuBadgeKey(path: string | undefined): string | undefined {
   if (!path || typeof path !== 'string') return undefined;
   const normalized = path.replace(/\/$/, '').split('?')[0];
   return MENU_BADGE_PATH_KEY[path] ?? MENU_BADGE_PATH_KEY[normalized];
+}
+
+const MENU_BADGE_OVERDUE_COLOR = '#f5222d';
+const MENU_BADGE_IN_PROGRESS_COLOR = '#1677ff';
+
+type MenuBadgeTranslate = (key: string, options?: Record<string, unknown>) => string;
+
+function formatMenuBadgeTitle(t: MenuBadgeTranslate, overdue: number, inProgress: number): string {
+  const parts: string[] = [];
+  if (overdue > 0) {
+    parts.push(t('ui.menu.badgeOverdue', { count: overdue }));
+  }
+  if (inProgress > 0) {
+    parts.push(t('ui.menu.badgeInProgress', { count: inProgress }));
+  }
+  return parts.join(t('ui.menu.badgeTitleSeparator'));
+}
+
+function resolveMenuBadge(
+  badgeData: MenuBadgeEntry | null | undefined,
+  t: MenuBadgeTranslate,
+): { count: number; color: string; title: string } | null {
+  if (badgeData == null) return null;
+  if (typeof badgeData === 'number') {
+    if (badgeData <= 0) return null;
+    return {
+      count: badgeData,
+      color: MENU_BADGE_IN_PROGRESS_COLOR,
+      title: t('ui.menu.badgeInProgress', { count: badgeData }),
+    };
+  }
+  const overdue = Number(badgeData.overdue) || 0;
+  const inProgress = (Number(badgeData.in_progress) || 0) + (Number(badgeData.pending) || 0);
+  if (overdue <= 0 && inProgress <= 0) return null;
+  const title = formatMenuBadgeTitle(t, overdue, inProgress);
+  if (overdue > 0) {
+    return { count: overdue, color: MENU_BADGE_OVERDUE_COLOR, title };
+  }
+  return { count: inProgress, color: MENU_BADGE_IN_PROGRESS_COLOR, title };
 }
 
 // 权限守卫组件
@@ -3446,31 +3485,22 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               }
             };
 
-            // 左侧菜单小徽标：仅业务单据显示未完成数量
+            // 左侧菜单小徽标：仅业务单据显示未完成数量；hover 说明数字含义（延期 / 进行中）
             const badgeKey = getMenuBadgeKey(path);
-            const badgeData = (badgeKey ? menuBadgeCounts[badgeKey] : null) as any;
-
-            let badgeEl: React.ReactNode = null;
-            if (badgeData) {
-              if (typeof badgeData === 'number' && badgeData > 0) {
-                badgeEl = (
-                  <Badge count={badgeData} size="small" color="#1677ff" className="menu-item-badge-count" />
-                );
-              } else if (typeof badgeData === 'object') {
-                const overdue = Number(badgeData.overdue) || 0;
-                const inProgress =
-                  (Number(badgeData.in_progress) || 0) + (Number(badgeData.pending) || 0);
-                if (overdue > 0) {
-                  badgeEl = (
-                    <Badge count={overdue} size="small" color="#f5222d" className="menu-item-badge-count" />
-                  );
-                } else if (inProgress > 0) {
-                  badgeEl = (
-                    <Badge count={inProgress} size="small" color="#1677ff" className="menu-item-badge-count" />
-                  );
-                }
-              }
-            }
+            const badgeView = resolveMenuBadge(badgeKey ? menuBadgeCounts[badgeKey] : null, t);
+            const badgeEl = badgeView ? (
+              <Tooltip title={badgeView.title} placement="right">
+                <span className="menu-item-badge-count-wrap">
+                  <Badge
+                    count={badgeView.count}
+                    size="small"
+                    color={badgeView.color}
+                    className="menu-item-badge-count"
+                    title=""
+                  />
+                </span>
+              </Tooltip>
+            ) : null;
 
             return (
               <div

@@ -89,7 +89,7 @@ import {
   MoreOutlined,
   QuestionCircleOutlined,
 } from '@ant-design/icons'
-import { UniTable } from '../../../../../components/uni-table'
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table'
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code'
 import { UniBatchButton, UniBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch'
 import {
@@ -176,12 +176,8 @@ import {
   pushSalesOrderToWorkOrder,
   type SalesOrder as PullSalesOrder,
 } from '../../../services/sales-order'
-import {
-  listSalesForecasts,
-  getSalesForecast,
-  getSalesForecastItems,
-} from '../../../services/sales-forecast'
-import { listDemands, getDemand } from '../../../services/demand'
+import { listSalesForecasts } from '../../../services/sales-forecast'
+import { listDemands } from '../../../services/demand'
 import {
   listDemandComputations,
   getPushOptions,
@@ -1665,25 +1661,33 @@ const WorkOrdersPage: React.FC = () => {
   } = useCustomFieldsForList<WorkOrder>({ tableName: WORK_ORDER_CUSTOM_FIELD_TABLE })
 
   const handleWorkOrderTableRequest = useCallback(
-    async (params: any, sort: any, _filter: any, searchFormValues: any) => {
+    async (params: any, sort: any, _filter: any, searchFormValues: any, meta?: UniTableRequestMeta) => {
       try {
+        const isPrefetch = meta?.purpose === 'prefetch'
         const heavyMetrics = workOrderListHeavyMetricsRef.current
-        workOrderListHeavyMetricsRef.current = false
+        if (!isPrefetch) {
+          workOrderListHeavyMetricsRef.current = false
+        }
         const result = await fetchWorkOrderListForTable(
           { current: params.current!, pageSize: params.pageSize! },
           sort,
           _filter,
           searchFormValues,
-          heavyMetrics
-            ? { include_readiness: true, include_downstream_push_progress: true }
-            : undefined,
+          {
+            include_readiness: !isPrefetch && heavyMetrics,
+            include_downstream_push_progress: !isPrefetch && heavyMetrics,
+            // 工序列是展示列；prefetch 结果在 staleTime 内会直接当展示页，不能关
+            include_operation_steps: true,
+          },
         )
         if (result.success && Array.isArray(result.data)) {
           // 行索引不得在此同步：UniTable prefetchNextPage 也走本 request，
           // 若此处重建 map 会用下一页数据覆盖当前页，导致下推误报「不在当前列表」。
           // 唯一真源：onTableDataChange（仅当前展示页）。
-          const enriched = await enrichWorkOrderRecordsWithCustomFields(result.data)
-          return { ...result, data: enriched }
+          const data = isPrefetch
+            ? result.data
+            : await enrichWorkOrderRecordsWithCustomFields(result.data)
+          return { ...result, data }
         }
         return result
       } catch (error) {
@@ -1924,11 +1928,15 @@ const WorkOrdersPage: React.FC = () => {
           })
           setProductSourceDocList(flat)
         } else if (productSourceModalType === 'sales_forecast') {
-          const res: any = await listSalesForecasts({ limit: 50, ...(keyword ? { keyword } : {}) })
+          const res: any = await listSalesForecasts({
+            limit: 50,
+            include_items: true,
+            ...(keyword ? { keyword } : {}),
+          })
           const forecasts = res?.data ?? []
           const flat: any[] = []
           for (const f of forecasts) {
-            const items = (await getSalesForecastItems(f.id as number)) ?? []
+            const items = f.items ?? []
             items.forEach((it: any, idx: number) => {
               flat.push({
                 ...it,
@@ -1941,11 +1949,10 @@ const WorkOrdersPage: React.FC = () => {
           }
           setProductSourceDocList(flat)
         } else if (productSourceModalType === 'demand') {
-          const res = await listDemands({ limit: 50 })
+          const res = await listDemands({ limit: 50, include_items: true })
           const demands = res?.data ?? []
-          const demandsWithItems = await Promise.all(demands.map((d: any) => getDemand(d.id, true)))
           const flat: any[] = []
-          demandsWithItems.forEach((d: any) => {
+          demands.forEach((d: any) => {
             ;(d?.items ?? []).forEach((it: any, idx: number) => {
               flat.push({
                 ...it,
@@ -5536,6 +5543,7 @@ const WorkOrdersPage: React.FC = () => {
   const openToolbarPushPreview = useCallback(
     async (kind: WorkOrderToolbarPushKind, record: WorkOrder) => {
       if (!record.id) return
+      if (kind === 'production_picking') return
       setToolbarPushPreviewOpen(true)
       setToolbarPushPreviewLoading(true)
       setToolbarPushPreviewKind(kind)
@@ -5544,10 +5552,7 @@ const WorkOrdersPage: React.FC = () => {
       toolbarPushReturnRawRef.current = null
       setToolbarPushReturnPickingId(null)
       try {
-        if (kind === 'production_picking') {
-          const res = await workOrderApi.previewPushProductionPicking(record.id)
-          setToolbarPushPreviewData(res as PushPreviewResponse)
-        } else if (kind === 'finished_goods_inspection') {
+        if (kind === 'finished_goods_inspection') {
           const res = await qualityApi.finishedGoodsInspection.previewPullFromWorkOrder(String(record.id))
           setToolbarPushPreviewData(res as PushPreviewResponse)
         } else if (kind === 'finished_goods_inbound') {
@@ -5622,21 +5627,6 @@ const WorkOrdersPage: React.FC = () => {
 
   const handleToolbarPushPreviewConfirm = useCallback(async () => {
     if (!toolbarPushPreviewWorkOrderId || !toolbarPushPreviewData || toolbarPushPreviewData.has_blocking_issues) return
-    if (toolbarPushPreviewKind === 'production_picking') {
-      const issueQuantities: Record<number, number> = {}
-      const maxQuantities: Record<number, number> = {}
-      ;(toolbarPushPreviewData.items || []).forEach((row) => {
-        const materialId = Number(row.item_id)
-        maxQuantities[materialId] = Number(row.max_push_quantity ?? 0)
-        issueQuantities[materialId] = 0
-      })
-      const entryPath = outboundWorkOrderEntryPath(toolbarPushPreviewWorkOrderId)
-      const draftKey = buildDocumentCreateDraftKey('kuaizhizao:outbound-work-order-pull', entryPath, '')
-      setDocumentFormDraft(draftKey, { issueQuantities, maxQuantities })
-      resetToolbarPushPreview()
-      navigate(entryPath)
-      return
-    }
     if (toolbarPushPreviewKind === 'finished_goods_inspection') {
       setToolbarPushConfirming(true)
       try {
@@ -5740,7 +5730,37 @@ const WorkOrdersPage: React.FC = () => {
   }
 
   const handlePushToProductionPickingOutbound = (record: WorkOrder) => {
-    void openToolbarPushPreview('production_picking', record)
+    void (async () => {
+      if (!record.id) return
+      try {
+        const res = await workOrderApi.previewPushProductionPicking(record.id)
+        const data = res as PushPreviewResponse
+        if (
+          data.has_blocking_issues ||
+          !(data.items || []).some((row) => Number(row.max_push_quantity ?? 0) > 0)
+        ) {
+          messageApi.warning(
+            workOrderCapabilityReasonMessage(data.blocking_reason, t) ||
+              data.blocking_reason ||
+              t('app.kuaizhizao.workOrder.push.outboundStatusBlocked'),
+          )
+          return
+        }
+        const issueQuantities: Record<number, number> = {}
+        const maxQuantities: Record<number, number> = {}
+        ;(data.items || []).forEach((row) => {
+          const materialId = Number(row.item_id)
+          maxQuantities[materialId] = Number(row.max_push_quantity ?? 0)
+          issueQuantities[materialId] = 0
+        })
+        const entryPath = outboundWorkOrderEntryPath(record.id)
+        const draftKey = buildDocumentCreateDraftKey('kuaizhizao:outbound-work-order-pull', entryPath, '')
+        setDocumentFormDraft(draftKey, { issueQuantities, maxQuantities })
+        navigate(entryPath)
+      } catch (e: any) {
+        messageApi.error(e?.message || t('app.kuaizhizao.salesOrder.loadingPreview'))
+      }
+    })()
   }
 
   const selectedWorkOrderForToolbarPush = useMemo(() => {

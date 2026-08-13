@@ -115,6 +115,7 @@ export interface ReportingPullCandidate {
   operation_code?: string | null;
   operation_name?: string | null;
   operation_sequence?: number | null;
+  reporting_type?: string | null;
   reportable_quantity_cap?: number;
   reportable_quantity_pushed?: number;
   reportable_quantity_max?: number;

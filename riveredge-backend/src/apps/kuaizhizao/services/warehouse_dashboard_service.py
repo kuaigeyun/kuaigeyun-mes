@@ -51,6 +51,26 @@ def _unit_price_from_defaults(defaults: Any) -> Decimal:
     return Decimal("0")
 
 
+async def _in_stock_qty_by_material(tenant_id: int) -> dict[int, Decimal]:
+    """在库批次按物料 SQL 汇总，不把批次行拉进应用内存。"""
+    rows = (
+        await MaterialBatch.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            quantity__gt=0,
+            status="in_stock",
+        )
+        .group_by("material_id")
+        .annotate(qty=Sum("quantity"))
+        .values("material_id", "qty")
+    )
+    out: dict[int, Decimal] = {}
+    for row in rows:
+        mid = int(row["material_id"])
+        out[mid] = Decimal(str(row["qty"] or 0))
+    return out
+
+
 async def _inventory_statistics_core(
     tenant_id: int, warehouse_id: Optional[int] = None
 ) -> Tuple[int, float, int, int, int, int]:
@@ -66,14 +86,9 @@ async def _inventory_statistics_core(
     high_stock_count = 0
 
     try:
-        batch_query = MaterialBatch.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, quantity__gt=0, status="in_stock"
-        )
-        material_ids = await batch_query.values_list("material_id", flat=True)
-        total_materials = len(set(material_ids)) if material_ids else 0
-
-        quantities = await batch_query.values_list("quantity", flat=True)
-        total_quantity = sum(float(q or 0) for q in quantities)
+        qty_by_material = await _in_stock_qty_by_material(tenant_id)
+        total_materials = len(qty_by_material)
+        total_quantity = float(sum(qty_by_material.values(), Decimal("0")))
     except Exception as e:
         logger.warning(f"warehouse-dashboard batch stats: {e}")
 
@@ -104,30 +119,20 @@ async def _inventory_statistics_core(
 
 
 async def _total_inventory_value(tenant_id: int) -> float:
-    """在库批次按物料汇总数量 × defaults 单价。"""
+    """在库批次按物料 SQL 汇总数量 × defaults 单价。"""
     try:
-        batches = await MaterialBatch.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            quantity__gt=0,
-            status="in_stock",
-        ).all()
+        qty_by_material = await _in_stock_qty_by_material(tenant_id)
     except Exception as e:
         logger.warning(f"warehouse-dashboard value batches: {e}")
         return 0.0
 
-    if not batches:
+    if not qty_by_material:
         return 0.0
-
-    qty_by_material: dict[int, Decimal] = {}
-    for batch in batches:
-        mid = int(batch.material_id)
-        qty_by_material[mid] = qty_by_material.get(mid, Decimal("0")) + Decimal(str(batch.quantity or 0))
 
     material_ids = list(qty_by_material.keys())
     materials = await Material.filter(
         tenant_id=tenant_id, id__in=material_ids, deleted_at__isnull=True
-    ).all()
+    ).only("id", "defaults")
     mid_defaults = {m.id: m.defaults for m in materials}
 
     total = Decimal("0")
@@ -269,9 +274,41 @@ class WarehouseDashboardService:
                 created_at__lt=resolve_business_datetime() - timedelta(days=3),
             ).count()
 
+        async def _sku_qty_and_value() -> Tuple[int, float, float]:
+            qty_by_material = await _in_stock_qty_by_material(tenant_id)
+            total_sku = len(qty_by_material)
+            total_qty = float(sum(qty_by_material.values(), Decimal("0")))
+            if not qty_by_material:
+                return total_sku, round(total_qty, 2), 0.0
+            materials = await Material.filter(
+                tenant_id=tenant_id,
+                id__in=list(qty_by_material.keys()),
+                deleted_at__isnull=True,
+            ).only("id", "defaults")
+            mid_defaults = {m.id: m.defaults for m in materials}
+            total_value = Decimal("0")
+            for mid, qty in qty_by_material.items():
+                total_value += qty * _unit_price_from_defaults(mid_defaults.get(mid))
+            return total_sku, round(total_qty, 2), float(round(total_value, 2))
+
+        async def _alert_stock_counts() -> Tuple[int, int, int]:
+            """pending 预警：低库存 / 缺货 / 高库存。"""
+            try:
+                alert_base = InventoryAlert.filter(
+                    tenant_id=tenant_id, deleted_at__isnull=True, status="pending"
+                )
+                low_stock_alerts = alert_base.filter(alert_type="low_stock")
+                out_of_stock_count = await low_stock_alerts.filter(current_quantity=0).count()
+                low_stock_count = await low_stock_alerts.filter(current_quantity__gt=0).count()
+                high_stock_count = await alert_base.filter(alert_type="high_stock").count()
+                return low_stock_count, out_of_stock_count, high_stock_count
+            except Exception as e:
+                logger.warning(f"warehouse-dashboard alert stats: {e}")
+                return 0, 0, 0
+
         tasks = [
-            _inventory_statistics_core(tenant_id),
-            _total_inventory_value(tenant_id),
+            _sku_qty_and_value(),
+            _alert_stock_counts(),
             _count_pending_inbounds(),
             _count_overdue_purchase_receipts(),
             SalesDelivery.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待出库").count(),
@@ -280,14 +317,18 @@ class WarehouseDashboardService:
 
         try:
             (
-                (total_sku, total_qty, low_stock, out_of_stock, high_stock, normal_stock),
-                total_inventory_value,
+                (total_sku, total_qty, total_inventory_value),
+                (low_stock, out_of_stock, high_stock),
                 pending_inbound,
                 overdue_inbound,
                 p_sd,
                 p_oo
             ) = await asyncio.gather(*tasks)
             pending_outbound = p_sd + p_oo
+            normal_stock = max(
+                0,
+                total_sku - low_stock - out_of_stock - high_stock,
+            )
         except Exception as e:
             logger.warning(f"warehouse-dashboard summary parallel tasks failed: {e}")
             return safe_empty

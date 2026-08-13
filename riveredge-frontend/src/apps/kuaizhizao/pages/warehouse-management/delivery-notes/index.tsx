@@ -902,7 +902,7 @@ const DeliveryNotesPage: React.FC = () => {
             request={async () => {
               try {
                 const res = await warehouseApi.salesDelivery.list({ limit: 200, skip: 0 });
-                const list = Array.isArray(res) ? res : ((res as any)?.data ?? []);
+                const list = (res as { items?: unknown[] })?.items ?? [];
                 return (list as any[]).map((d: any) => ({
                   label: `${d.delivery_code || d.code || '#' + d.id}${d.customer_name ? ' - ' + d.customer_name : ''}`,
                   value: d.id,

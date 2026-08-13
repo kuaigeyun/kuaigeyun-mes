@@ -19,7 +19,7 @@ import { PlusOutlined, UploadOutlined, QrcodeOutlined } from '@ant-design/icons'
 import { uploadMultipleFiles } from '../../../../../services/file';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerSection, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -254,13 +254,6 @@ const MoldsPage: React.FC = () => {
     loadFieldValuesForDetail: loadMoldFieldValuesForDetail,
     resetDetailFieldValues: resetMoldDetailFieldValues,
   } = useCustomFieldsForList<Mold>({ tableName: MOLD_CUSTOM_FIELD_TABLE });
-
-  useEffect(() => {
-    if (moldListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [moldListCustomFields.length]);
-
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
     setIsEdit(false);
@@ -951,7 +944,7 @@ const MoldsPage: React.FC = () => {
             onClick: () => void handleDetail(record),
             style: { cursor: 'pointer' },
           })}
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
               const listParams = resolveLedgerListParams(searchFormValues, sort);
               const response = await moldApi.list({
@@ -960,7 +953,9 @@ const MoldsPage: React.FC = () => {
                 ...listParams,
               });
               const { data, total } = normalizeEquipmentListResponse(response);
-              const enriched = await enrichMoldRecordsWithCustomFields(data as Mold[]);
+              const enriched = meta?.purpose === 'prefetch'
+                ? data as Mold[]
+                : await enrichMoldRecordsWithCustomFields(data as Mold[]);
               return {
                 data: enriched,
                 success: true,

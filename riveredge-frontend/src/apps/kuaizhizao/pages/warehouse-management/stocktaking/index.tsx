@@ -23,11 +23,11 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, detailDrawerDescriptionItems, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { stocktakingApi, inventoryReportApi } from '../../../services/stocktaking';
 import { getStocktakingLifecycle } from '../../../utils/stocktakingLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -119,27 +119,10 @@ const StocktakingPage: React.FC = () => {
   const [savingItemId, setSavingItemId] = useState<number | null>(null);
   const [editingActualQty, setEditingActualQty] = useState<Record<number, number>>({});
 
-  const [materialList, setMaterialList] = useState<any[]>([]);
   const [currentStocktakingForItem, setCurrentStocktakingForItem] = useState<Stocktaking | null>(null);
   const [inventoryRows, setInventoryRows] = useState<any[]>([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [selectedInventoryKeys, setSelectedInventoryKeys] = useState<React.Key[]>([]);
-
-  /**
-   * 加载物料列表
-   */
-  React.useEffect(() => {
-    const loadMaterials = async () => {
-      try {
-        const { items } = await materialApi.list({ isActive: true, limit: 10000 });
-        setMaterialList(items);
-      } catch (error) {
-        console.error('加载物料列表失败:', error);
-        setMaterialList([]);
-      }
-    };
-    loadMaterials();
-  }, []);
 
   /**
    * 处理创建盘点单
@@ -326,8 +309,9 @@ const StocktakingPage: React.FC = () => {
         return;
       }
 
-      const material = materialList.find((m: any) => m.id === values.material_id);
-      if (!material) {
+      const materialCode = String(values.material_code || '').trim();
+      const materialName = String(values.material_name || '').trim();
+      if (!values.material_id || !materialCode) {
         messageApi.error(t('app.kuaizhizao.warehouseCommon.materialNotFound'));
         return;
       }
@@ -335,9 +319,9 @@ const StocktakingPage: React.FC = () => {
       await stocktakingApi.createItem(currentStocktakingForItem.id.toString(), {
         stocktaking_id: currentStocktakingForItem.id,
         material_id: values.material_id,
-        material_code: material.mainCode ?? material.code ?? '',
-        material_name: material.name,
-        material_unit: material.baseUnit ?? material.base_unit ?? '',
+        material_code: materialCode,
+        material_name: materialName,
+        material_unit: String(values.material_unit || '').trim(),
         warehouse_id: currentStocktakingForItem.warehouse_id,
         location_code: values.location_code,
         batch_no: values.batch_no,
@@ -954,20 +938,18 @@ const StocktakingPage: React.FC = () => {
         formRef={itemFormRef}
         {...MODAL_CONFIG}
       >
-        <ProFormSelect
+        <UniMaterialSelect
           name="material_id"
           label={t('app.kuaizhizao.warehouseCommon.colMaterial')}
           placeholder={t('app.kuaizhizao.warehouseCommon.selectMaterial')}
-          rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.selectMaterial') }]}
-          options={materialList.map((m: any) => ({
-            label: `${m.mainCode ?? m.code ?? ''} - ${m.name}`,
-            value: m.id,
-          }))}
-          fieldProps={{
-            showSearch: true,
-            filterOption: (input: string, option: any) =>
-              option?.label?.toLowerCase().includes(input.toLowerCase()),
+          required
+          fillMapping={{
+            material_code: 'mainCode',
+            material_name: 'name',
+            material_unit: 'baseUnit',
           }}
+          showQuickCreate
+          showAdvancedSearch
         />
         <ProFormDigit
           name="unit_price"

@@ -15,7 +15,7 @@ import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
 import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, HighlightOutlined, MoreOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined, CopyOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   UniTableStackedPrimaryCell,
@@ -416,13 +416,6 @@ const BOMPage: React.FC = () => {
     loadFieldValuesForDetail: loadBomFieldValuesForDetail,
     resetDetailFieldValues: resetBomDetailFieldValues,
   } = useCustomFieldsForList<MaterialBOMRow>({ tableName: BOM_CUSTOM_FIELD_TABLE });
-
-  useEffect(() => {
-    if (bomListCustomFields.length > 0 && actionRef.current) {
-      actionRef.current?.reload();
-    }
-  }, [bomListCustomFields.length]);
-
   useEffect(() => {
     if (!modalVisible || !isEdit || editFormHeaderId == null) return;
     loadBomFormFieldValues(editFormHeaderId).then((fieldFormValues) => {
@@ -670,9 +663,10 @@ const BOMPage: React.FC = () => {
   }, [currentUser]);
 
   /**
-   * 加载物料列表（表单下拉初始范围；列表名称展示另按 BOM 引用 ID 精确补齐）
+   * 加载物料列表（仅创建/编辑弹窗需要；列表名称按当前页 ID 精确补齐）
    */
   useEffect(() => {
+    if (!modalVisible) return;
     const loadMaterials = async () => {
       try {
         setMaterialsLoading(true);
@@ -685,7 +679,7 @@ const BOMPage: React.FC = () => {
       }
     };
     loadMaterials();
-  }, []);
+  }, [modalVisible]);
 
   const ensureMaterialsByIds = async (ids: Iterable<number>): Promise<Material[]> => {
     const uniqueIds = Array.from(
@@ -1367,8 +1361,12 @@ const BOMPage: React.FC = () => {
     resetBomDetailFieldValues();
   };
 
-  const enrichBomListPage = async (result: { data: MaterialBOMRow[]; success: boolean; total: number }) => {
+  const enrichBomListPage = async (
+    result: { data: MaterialBOMRow[]; success: boolean; total: number },
+    options?: { skipEnrich?: boolean },
+  ) => {
     if (!result.success || result.data.length === 0) return result;
+    if (options?.skipEnrich) return result;
     const data = await enrichBomRecordsWithCustomFields(
       result.data.map((r) => ({ ...r, id: r.selectedVersion?.firstItem?.id }))
     );
@@ -1663,7 +1661,7 @@ const BOMPage: React.FC = () => {
   const handleOpenCopySourceModal = async () => {
     try {
       setCopySourceLoading(true);
-      const groups = await bomApi.getGroups(false);
+      const groups = (await bomApi.getGroups({ includeObsolete: false })).data;
       const currentMaterialId = Number(formRef.current?.getFieldValue('materialId'));
       const currentVersion = String(formRef.current?.getFieldValue('version') || '1.0');
       const options: BomCopySourceOption[] = groups
@@ -3172,45 +3170,45 @@ const BOMPage: React.FC = () => {
             actionRef.current?.reload();
           }
         }}
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           const includeObsolete = searchFormValues?.includeObsolete === true;
           try {
-            const [groups, componentIds] = await Promise.all([
-              bomApi.getGroups(includeObsolete),
-              bomApi.getComponentIds(includeObsolete),
-            ]);
-            const componentIdSet = new Set(componentIds);
-            // 按视图过滤：成品 = material_id 不在 componentIdSet；半成品 = 在
-            let filteredGroups = groups;
-            if (bomViewTypeRef.current === 'productBom') {
-              filteredGroups = groups.filter((g) => !componentIdSet.has(g.material_id));
-            } else if (bomViewTypeRef.current === 'semiProductBom') {
-              filteredGroups = groups.filter((g) => componentIdSet.has(g.material_id));
-            }
-            // 主物料筛选
-            if (searchFormValues?.materialId !== undefined && searchFormValues.materialId !== '' && searchFormValues.materialId != null) {
-              const mid = Number(searchFormValues.materialId);
-              if (!Number.isNaN(mid)) filteredGroups = filteredGroups.filter((g) => g.material_id === mid);
-            }
-            // 审核状态筛选
-            if (searchFormValues?.approvalStatus !== undefined && searchFormValues.approvalStatus !== '' && searchFormValues.approvalStatus != null) {
-              filteredGroups = filteredGroups.filter((g) => g.approval_status === searchFormValues.approvalStatus);
-            }
-            if (filteredGroups.length === 0) {
+            const pageSize = params.pageSize || 20;
+            const current = params.current || 1;
+            const skip = (current - 1) * pageSize;
+            const materialIdRaw = searchFormValues?.materialId;
+            const materialId =
+              materialIdRaw !== undefined && materialIdRaw !== '' && materialIdRaw != null
+                ? Number(materialIdRaw)
+                : undefined;
+            const approvalStatus =
+              searchFormValues?.approvalStatus !== undefined &&
+              searchFormValues?.approvalStatus !== '' &&
+              searchFormValues?.approvalStatus != null
+                ? String(searchFormValues.approvalStatus)
+                : undefined;
+            const keyword = normalizeBomKeyword(searchFormValues as Record<string, unknown>);
+            const { data: groups, total } = await bomApi.getGroups({
+              includeObsolete,
+              skip,
+              limit: pageSize,
+              view: bomViewTypeRef.current,
+              materialId: materialId != null && !Number.isNaN(materialId) ? materialId : undefined,
+              approvalStatus,
+              keyword: keyword || undefined,
+            });
+            if (groups.length === 0) {
               groupKeyToUuidsRef.current = new Map();
-              const pageSize = params.pageSize || 20;
-              const current = params.current || 1;
-              return { data: [], success: true, total: 0 };
+              return { data: [], success: true, total: total ?? 0 };
             }
-            // 2) 批量拉取所有分组对应的 BOM 子件明细，一次请求构建完整树
             const batchItems = await bomApi.getBatchItems(
-              filteredGroups.map((g) => ({ material_id: g.material_id, version: g.version })),
+              groups.map((g) => ({ material_id: g.material_id, version: g.version })),
               includeObsolete
             );
             // 3) 将摘要 + 明细组装成 BOMGroupRow[]（与 groupBomsByCode 产出结构一致）
             const keyToUuids = new Map<string, string[]>();
             const buildGroupRow = (
-              g: typeof filteredGroups[0],
+              g: (typeof groups)[0],
               items: BOM[]
             ): BOMGroupRow => {
               const firstItem = items[0];
@@ -3248,69 +3246,73 @@ const BOMPage: React.FC = () => {
                 children: children.length > 0 ? children : undefined,
               };
             };
-            const displayGroupRows: BOMGroupRow[] = filteredGroups.map((g) => {
+            const displayGroupRows: BOMGroupRow[] = groups.map((g) => {
               const k = `${g.material_id}|${g.version}`;
               const items: BOM[] = batchItems[k] ?? [];
               return buildGroupRow(g, items);
             });
-            // 成品视图下：递归补拉半成品 BOM（如 010001→020001→020002），否则嵌套半成品无法展开
             let allGroupRowsForNesting: BOMGroupRow[] = displayGroupRows;
             const mergedBatchItems: Record<string, BOM[]> = { ...batchItems };
             const existingGroupKeys = new Set(
-              filteredGroups.map((g) => `${g.material_id}|${g.version}`)
+              groups.map((g) => `${g.material_id}|${g.version}`)
             );
             let frontierSemiIds = new Set<number>();
-            for (const g of filteredGroups) {
+            for (const g of groups) {
               const items = mergedBatchItems[`${g.material_id}|${g.version}`] ?? [];
               for (const it of items) {
-                if (componentIdSet.has(it.componentId)) frontierSemiIds.add(it.componentId);
+                if (it.componentId) frontierSemiIds.add(it.componentId);
               }
             }
             const processedSemiIds = new Set<number>();
             while (frontierSemiIds.size > 0) {
-              const nextFrontier = new Set<number>();
-              const semiFinishedGroupSummaries = groups.filter((x) => frontierSemiIds.has(x.material_id));
-              const byMid = new Map<number, typeof groups[0]>();
-              for (const x of semiFinishedGroupSummaries) {
+              const ids = Array.from(frontierSemiIds).filter((id) => !processedSemiIds.has(id));
+              ids.forEach((id) => processedSemiIds.add(id));
+              frontierSemiIds = new Set();
+              if (ids.length === 0) break;
+              const { data: semiGroups } = await bomApi.getGroups({
+                includeObsolete,
+                materialIds: ids,
+              });
+              const byMid = new Map<number, (typeof groups)[0]>();
+              for (const x of semiGroups) {
                 const cur = byMid.get(x.material_id);
-                if (!cur) byMid.set(x.material_id, x);
-                else if (x.is_default) byMid.set(x.material_id, x);
+                if (!cur || x.is_default) byMid.set(x.material_id, x);
               }
               const needFetch = Array.from(byMid.values()).filter(
                 (g) => !existingGroupKeys.has(`${g.material_id}|${g.version}`)
               );
-              if (needFetch.length > 0) {
-                const semiBatch = await bomApi.getBatchItems(
-                  needFetch.map((g) => ({ material_id: g.material_id, version: g.version })),
-                  includeObsolete
-                );
-                Object.assign(mergedBatchItems, semiBatch);
-                const semiRows: BOMGroupRow[] = needFetch.map((g) => {
-                  const key = `${g.material_id}|${g.version}`;
-                  existingGroupKeys.add(key);
-                  const items = semiBatch[key] ?? [];
-                  return buildGroupRow(g, items);
-                });
-                allGroupRowsForNesting = [...allGroupRowsForNesting, ...semiRows];
-                for (const g of needFetch) {
-                  const items = semiBatch[`${g.material_id}|${g.version}`] ?? [];
-                  for (const it of items) {
-                    if (componentIdSet.has(it.componentId) && !processedSemiIds.has(it.componentId)) {
-                      nextFrontier.add(it.componentId);
-                    }
+              if (needFetch.length === 0) continue;
+              const semiBatch = await bomApi.getBatchItems(
+                needFetch.map((g) => ({ material_id: g.material_id, version: g.version })),
+                includeObsolete
+              );
+              Object.assign(mergedBatchItems, semiBatch);
+              const semiRows: BOMGroupRow[] = needFetch.map((g) => {
+                const key = `${g.material_id}|${g.version}`;
+                existingGroupKeys.add(key);
+                const items = semiBatch[key] ?? [];
+                return buildGroupRow(g, items);
+              });
+              allGroupRowsForNesting = [...allGroupRowsForNesting, ...semiRows];
+              for (const g of needFetch) {
+                const items = semiBatch[`${g.material_id}|${g.version}`] ?? [];
+                for (const it of items) {
+                  if (it.componentId && !processedSemiIds.has(it.componentId)) {
+                    frontierSemiIds.add(it.componentId);
                   }
                 }
               }
-              frontierSemiIds.forEach((id) => processedSemiIds.add(id));
-              frontierSemiIds = nextFrontier;
             }
             groupKeyToUuidsRef.current = keyToUuids;
             const resolvedMaterials = await ensureMaterialsByIds(
               collectBomMaterialIds([...displayGroupRows, ...allGroupRowsForNesting]),
             );
             const materialRows = groupBomsByMaterial(displayGroupRows, selectedVersionByMaterial, allGroupRowsForNesting);
+            const { sortBy, sortOrder } = extractProTableSort(sort);
+            const sortedRows = sortMaterialBomRows(materialRows, sortBy, sortOrder, resolvedMaterials);
             return enrichBomListPage(
-              pageMaterialBomRows(materialRows, params, searchFormValues as Record<string, unknown>, sort, resolvedMaterials)
+              { data: sortedRows, success: true, total: total ?? 0 },
+              { skipEnrich: meta?.purpose === 'prefetch' },
             );
           } catch (error: any) {
             console.error('获取BOM列表失败:', error);

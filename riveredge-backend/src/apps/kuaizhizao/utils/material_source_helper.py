@@ -843,6 +843,54 @@ def resolve_computation_item_source_config(
     return merged
 
 
+def build_material_source_config(material: Material) -> Dict[str, Any]:
+    """
+    从已加载 Material 构建来源配置（与 get_material_source_config 同口径）。
+    供 MRP LLC 层批量预取后复用，避免按物料再查库。
+    """
+    source_type = material.source_type
+    source_config = normalize_source_config_payload(material.source_config or {})
+
+    config: Dict[str, Any] = {
+        "source_type": source_type,
+        "source_config": source_config,
+    }
+
+    if source_type == SOURCE_TYPE_MAKE:
+        config.update({
+            "manufacturing_mode": source_config.get("manufacturing_mode"),
+            "process_route_id": material.process_route_id,
+            "production_lead_time": source_config.get("production_lead_time"),
+            "min_production_batch": source_config.get("min_production_batch"),
+            "production_waste_rate": source_config.get("production_waste_rate"),
+        })
+    elif source_type == SOURCE_TYPE_BUY:
+        config.update({
+            "default_supplier_id": source_config.get("default_supplier_id"),
+            "default_supplier_name": source_config.get("default_supplier_name"),
+            "purchase_lead_time": source_config.get("purchase_lead_time"),
+            "min_purchase_batch": source_config.get("min_purchase_batch"),
+            "purchase_price": source_config.get("purchase_price"),
+        })
+    elif source_type == SOURCE_TYPE_OUTSOURCE:
+        config.update({
+            "outsource_supplier_id": source_config.get("outsource_supplier_id"),
+            "outsource_supplier_name": source_config.get("outsource_supplier_name"),
+            "outsource_operation": source_config.get("outsource_operation"),
+            "outsource_lead_time": source_config.get("outsource_lead_time"),
+            "outsource_price": source_config.get("outsource_price"),
+            "material_provided_by": source_config.get("material_provided_by", "enterprise"),
+        })
+    elif source_type == SOURCE_TYPE_CONFIGURE:
+        config.update({
+            "variant_attributes": material.variant_attributes,
+            "bom_variants": source_config.get("bom_variants"),
+            "default_variant": source_config.get("default_variant"),
+        })
+
+    return config
+
+
 async def get_material_source_config(
     tenant_id: int,
     material_id: int
@@ -860,49 +908,4 @@ async def get_material_source_config(
     material = await Material.get_or_none(tenant_id=tenant_id, id=material_id)
     if not material:
         return None
-    
-    source_type = material.source_type
-    source_config = normalize_source_config_payload(material.source_config or {})
-    
-    config = {
-        "source_type": source_type,
-        "source_config": source_config,
-    }
-    
-    if source_type == SOURCE_TYPE_MAKE:
-        # 自制件配置（含制造模式：fabrication 工艺型 / assembly 组合型）
-        config.update({
-            "manufacturing_mode": source_config.get("manufacturing_mode"),
-            "process_route_id": material.process_route_id,
-            "production_lead_time": source_config.get("production_lead_time"),
-            "min_production_batch": source_config.get("min_production_batch"),
-            "production_waste_rate": source_config.get("production_waste_rate"),
-        })
-    elif source_type == SOURCE_TYPE_BUY:
-        # 采购件配置
-        config.update({
-            "default_supplier_id": source_config.get("default_supplier_id"),
-            "default_supplier_name": source_config.get("default_supplier_name"),
-            "purchase_lead_time": source_config.get("purchase_lead_time"),
-            "min_purchase_batch": source_config.get("min_purchase_batch"),
-            "purchase_price": source_config.get("purchase_price"),
-        })
-    elif source_type == SOURCE_TYPE_OUTSOURCE:
-        # 委外件配置
-        config.update({
-            "outsource_supplier_id": source_config.get("outsource_supplier_id"),
-            "outsource_supplier_name": source_config.get("outsource_supplier_name"),
-            "outsource_operation": source_config.get("outsource_operation"),
-            "outsource_lead_time": source_config.get("outsource_lead_time"),
-            "outsource_price": source_config.get("outsource_price"),
-            "material_provided_by": source_config.get("material_provided_by", "enterprise"),  # enterprise/supplier
-        })
-    elif source_type == SOURCE_TYPE_CONFIGURE:
-        # 配置件配置
-        config.update({
-            "variant_attributes": material.variant_attributes,
-            "bom_variants": source_config.get("bom_variants"),
-            "default_variant": source_config.get("default_variant"),
-        })
-    
-    return config
+    return build_material_source_config(material)

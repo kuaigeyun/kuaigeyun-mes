@@ -47,7 +47,7 @@ import {
 } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, EditOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
+import { UniTable, readPersistedUniTableViewType, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
@@ -419,13 +419,6 @@ const PurchaseReturnsPage: React.FC = () => {
     loadFieldValuesForDetail: loadPurchaseReturnFieldValuesForDetail,
     resetDetailFieldValues: resetPurchaseReturnDetailFieldValues,
   } = useCustomFieldsForList<PurchaseReturn>({ tableName: PURCHASE_RETURN_CUSTOM_FIELD_TABLE });
-
-  useEffect(() => {
-    if (purchaseReturnListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [purchaseReturnListCustomFields.length]);
-
   const {
     selectedWarehouseId,
     locationOptions,
@@ -1914,7 +1907,7 @@ const PurchaseReturnsPage: React.FC = () => {
               ])}
             />,
           ]}
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
               const sf = searchFormValues ?? {};
               const lifecycleParams = resolvePurchaseReturnListLifecycleParams(sf, params);
@@ -1959,7 +1952,9 @@ const PurchaseReturnsPage: React.FC = () => {
               }
               const response = await warehouseApi.purchaseReturn.list(apiParams);
               const list = response?.data ?? [];
-              const enriched = await enrichPurchaseReturnRecordsWithCustomFields(list);
+              const enriched = meta?.purpose === 'prefetch'
+                ? list
+                : await enrichPurchaseReturnRecordsWithCustomFields(list);
               // 行缓存唯一真源：onTableDataChange（prefetch 会走本 request，禁止在此覆盖）
               if (dataViewModeRef.current === 'order') {
                 return {

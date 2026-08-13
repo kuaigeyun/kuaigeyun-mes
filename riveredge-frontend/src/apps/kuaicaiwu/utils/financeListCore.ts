@@ -99,8 +99,41 @@ export function financeDocCodePartnerSearchColumns(options: {
   partnerLabel: string;
   partnerIdField: string;
   partnerNameField: string;
-  partnerOptions: { label: string; value: number }[];
+  partnerOptions?: { label: string; value: number }[];
+  /** 远程搜伙伴；与 partnerOptions 二选一，优先 request */
+  partnerRequest?: (params: { keyWords?: string }) => Promise<{ label: string; value: number }[]>;
 }): ProColumns[] {
+  const partnerSelect: ProColumns = options.partnerRequest
+    ? {
+        title: options.partnerLabel,
+        dataIndex: options.partnerIdField,
+        hideInTable: true,
+        order: 11,
+        valueType: 'select',
+        fieldProps: {
+          showSearch: true,
+          filterOption: false,
+          allowClear: true,
+        },
+        debounceTime: 300,
+        request: async ({ keyWords }) =>
+          options.partnerRequest!({
+            keyWords: typeof keyWords === 'string' ? keyWords : undefined,
+          }),
+      }
+    : {
+        title: options.partnerLabel,
+        dataIndex: options.partnerIdField,
+        hideInTable: true,
+        order: 11,
+        valueType: 'select',
+        fieldProps: {
+          options: options.partnerOptions ?? [],
+          showSearch: true,
+          optionFilterProp: 'label',
+          allowClear: true,
+        },
+      };
   return [
     {
       title: options.docCodeLabel,
@@ -109,19 +142,7 @@ export function financeDocCodePartnerSearchColumns(options: {
       order: 10,
       fieldProps: { allowClear: true },
     },
-    {
-      title: options.partnerLabel,
-      dataIndex: options.partnerIdField,
-      hideInTable: true,
-      order: 11,
-      valueType: 'select',
-      fieldProps: {
-        options: options.partnerOptions,
-        showSearch: true,
-        optionFilterProp: 'label',
-        allowClear: true,
-      },
-    },
+    partnerSelect,
     {
       title: options.partnerLabel,
       dataIndex: options.partnerNameField,

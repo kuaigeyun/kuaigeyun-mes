@@ -41,7 +41,7 @@ import {
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, EyeOutlined, RollbackOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import {
   UniPullQueryModal,
   filterByPullScope,
@@ -371,13 +371,6 @@ const IncomingInspectionPage: React.FC = () => {
     loadFieldValuesForDetail: loadInspectionFieldValuesForDetail,
     resetDetailFieldValues: resetInspectionDetailFieldValues,
   } = useCustomFieldsForList<IncomingInspection>({ tableName: INCOMING_INSPECTION_CUSTOM_FIELD_TABLE });
-
-  useEffect(() => {
-    if (inspectionListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [inspectionListCustomFields.length]);
-
   // 详情Drawer状态
   const [detailVisible, setDetailVisible] = useState(false);
   const [inspectionDetail, setInspectionDetail] = useState<IncomingInspection | null>(null);
@@ -1255,7 +1248,7 @@ const IncomingInspectionPage: React.FC = () => {
         showAdvancedSearch={true}
         pinnedTabsField={QUALITY_INSPECTION_PINNED_STATUS_FIELD}
         skipFuzzyPinyinClientFilter
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           try {
             const listParams = resolveQualityInspectionListParams(searchFormValues, sort);
             const response = await qualityApi.incomingInspection.list({
@@ -1265,7 +1258,9 @@ const IncomingInspectionPage: React.FC = () => {
               ...urlListFiltersRef.current,
             });
             const { data: raw, total } = normalizeQualityInspectionListResponse(response);
-            const data = await enrichInspectionRecordsWithCustomFields(raw as IncomingInspection[]);
+            const data = meta?.purpose === 'prefetch'
+              ? raw as IncomingInspection[]
+              : await enrichInspectionRecordsWithCustomFields(raw as IncomingInspection[]);
             return {
               data,
               success: true,

@@ -4275,6 +4275,30 @@
             "allow_manual_edit": true
         },
         {
+            "page_code": "kuaizhizao-logistics-carrier",
+            "page_name": "承运商",
+            "page_path": "/apps/kuaizhizao/logistics-management/carriers",
+            "code_field": "code",
+            "code_field_label": "承运商编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "LOGISTICS_CARRIER_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-logistics-driver",
+            "page_name": "驾驶员",
+            "page_path": "/apps/kuaizhizao/logistics-management/drivers",
+            "code_field": "code",
+            "code_field_label": "驾驶员编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "DRIVER_CODE",
+            "allow_manual_edit": true
+        },
+        {
             "page_code": "kuaizhizao-shipment-notice",
             "page_name": "发货通知单",
             "page_path": "/apps/kuaizhizao/sales-management/shipment-notices",

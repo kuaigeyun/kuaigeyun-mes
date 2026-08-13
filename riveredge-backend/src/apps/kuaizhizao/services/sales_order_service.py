@@ -241,13 +241,16 @@ class SalesOrderService:
         for did, oid in shipped:
             order_for.setdefault(int(oid), []).append(int(did))
 
+        from tortoise.functions import Sum
+
         item_rows = await SalesDeliveryItem.filter(
             tenant_id=tenant_id,
             delivery_id__in=ship_ids,
-        ).values_list("delivery_id", "delivery_quantity")
-        qty_by_did: Dict[int, Decimal] = {}
-        for did, q in item_rows:
-            qty_by_did[int(did)] = qty_by_did.get(int(did), Decimal("0")) + Decimal(str(q or 0))
+        ).group_by("delivery_id").annotate(qty=Sum("delivery_quantity")).values("delivery_id", "qty")
+        qty_by_did: Dict[int, Decimal] = {
+            int(row["delivery_id"]): Decimal(str(row.get("qty") or 0))
+            for row in item_rows
+        }
 
         out: Dict[int, Decimal] = {}
         for oid, dids in order_for.items():
@@ -515,7 +518,11 @@ class SalesOrderService:
                 if owe <= 0:
                     continue
                 mid = int(it["material_id"])
-                avail = inventory_map.get(mid, Decimal("0")) - reserved_by_material.get(mid, Decimal("0"))
+                inv_row = inventory_map.get(mid) or {}
+                avail = (
+                    Decimal(str(inv_row.get("available_quantity") or 0))
+                    - reserved_by_material.get(mid, Decimal("0"))
+                )
                 avail = max(Decimal("0"), avail)
                 shippable = min(owe, avail)
                 if shippable > 0:
@@ -1596,40 +1603,68 @@ class SalesOrderService:
             **self._sales_order_capability_context(order, items, demand),
         )
 
-    async def _filter_orders_by_lifecycle_stage(
+    async def _sales_order_ids_matching_lifecycle(
         self,
         tenant_id: int,
-        orders: List[SalesOrder],
+        query,
         lifecycle_stage: str,
-    ) -> List[SalesOrder]:
-        """按后端 lifecycle 计算结果筛选订单（与列表展示阶段一致）。"""
+        order_clause: str,
+    ) -> List[int]:
+        """按 get_sales_order_lifecycle 同一套谓词筛 id：表头 values + 明细/出库/账款 GROUP BY，不物化全部明细行。"""
+        from types import SimpleNamespace
+        from tortoise.functions import Sum
         from apps.kuaizhizao.services.document_lifecycle_service import (
             get_sales_order_lifecycle,
             normalize_sales_order_lifecycle_filter,
         )
 
-        if not orders:
+        target = normalize_sales_order_lifecycle_filter(lifecycle_stage)
+        headers = await query.order_by(order_clause).values(
+            "id",
+            "status",
+            "review_status",
+            "total_quantity",
+            "total_amount",
+            "order_code",
+            "planning_pushed_to_computation",
+        )
+        if not headers:
             return []
 
-        target = normalize_sales_order_lifecycle_filter(lifecycle_stage)
-        order_ids = [o.id for o in orders]
-
-        demands = await Demand.filter(
+        order_ids = [int(h["id"]) for h in headers]
+        item_rows = await SalesOrderItem.filter(
+            tenant_id=tenant_id,
+            sales_order_id__in=order_ids,
+        ).group_by("sales_order_id").annotate(
+            order_qty=Sum("order_quantity"),
+            delivered_qty=Sum("delivered_quantity"),
+        ).values("sales_order_id", "order_qty", "delivered_qty")
+        qty_by_order = {
+            int(row["sales_order_id"]): (
+                Decimal(str(row.get("order_qty") or 0)),
+                Decimal(str(row.get("delivered_qty") or 0)),
+            )
+            for row in item_rows
+        }
+        wo_order_ids = set(
+            int(oid)
+            for oid in await SalesOrderItem.filter(
+                tenant_id=tenant_id,
+                sales_order_id__in=order_ids,
+                work_order_id__isnull=False,
+            ).distinct().values_list("sales_order_id", flat=True)
+            if oid
+        )
+        demand_rows = await Demand.filter(
             tenant_id=tenant_id,
             source_type="sales_order",
             source_id__in=order_ids,
             deleted_at__isnull=True,
-        ).all()
-        demand_by_order: Dict[int, Demand] = {d.source_id: d for d in demands}
-
-        all_items = await SalesOrderItem.filter(
-            tenant_id=tenant_id,
-            sales_order_id__in=order_ids,
-        ).all()
-        items_by_order: Dict[int, List[SalesOrderItem]] = {}
-        for it in all_items:
-            items_by_order.setdefault(it.sales_order_id, []).append(it)
-
+        ).values("source_id", "pushed_to_computation")
+        pushed_by_order = {
+            int(row["source_id"]): bool(row.get("pushed_to_computation"))
+            for row in demand_rows
+        }
         deliveries = await SalesDelivery.filter(
             tenant_id=tenant_id,
             sales_order_id__in=order_ids,
@@ -1637,24 +1672,34 @@ class SalesOrderService:
         ).values_list("id", "sales_order_id")
         order_to_deliveries: Dict[int, List[int]] = {}
         for did, oid in deliveries:
-            order_to_deliveries.setdefault(oid, []).append(did)
+            order_to_deliveries.setdefault(int(oid), []).append(int(did))
 
+        lite_orders = [SimpleNamespace(**h) for h in headers]
         finance_progress_by_order = await self._batch_finance_progress_by_order(
-            tenant_id, orders, order_to_deliveries
+            tenant_id, lite_orders, order_to_deliveries
         )
         shipped_by_order = await self._shipped_qty_by_sales_order(tenant_id, order_ids)
-        matched: List[SalesOrder] = []
-        for order in orders:
-            items = items_by_order.get(order.id) or []
-            demand = demand_by_order.get(order.id)
-            ship_q = shipped_by_order.get(order.id, Decimal("0"))
-            dp = self._merged_delivery_progress(order, items, ship_q)
-            finance = finance_progress_by_order.get(order.id, {})
-            pushed = bool(demand and getattr(demand, "pushed_to_computation", False)) or bool(
-                getattr(order, "planning_pushed_to_computation", False)
+
+        matched_ids: List[int] = []
+        for header in lite_orders:
+            oid = int(header.id)
+            order_qty, delivered_qty = qty_by_order.get(oid, (Decimal("0"), Decimal("0")))
+            has_wo = oid in wo_order_ids
+            items = [
+                SimpleNamespace(
+                    order_quantity=order_qty,
+                    delivered_quantity=delivered_qty,
+                    work_order_id=1 if has_wo else None,
+                )
+            ]
+            ship_q = shipped_by_order.get(oid, Decimal("0"))
+            dp = self._merged_delivery_progress(header, items, ship_q)
+            finance = finance_progress_by_order.get(oid, {})
+            pushed = pushed_by_order.get(oid, False) or bool(
+                getattr(header, "planning_pushed_to_computation", False)
             )
             lifecycle = get_sales_order_lifecycle(
-                order,
+                header,
                 items=items,
                 delivery_progress=dp,
                 invoice_progress=finance.get("invoice_progress", 0.0),
@@ -1666,8 +1711,8 @@ class SalesOrderService:
                 lifecycle.get("current_stage_name"),
             )
             if stage_name == target:
-                matched.append(order)
-        return matched
+                matched_ids.append(oid)
+        return matched_ids
 
     async def list_sales_orders(
         self,
@@ -1811,14 +1856,33 @@ class SalesOrderService:
         order_clause = order_by if order_by else "-created_at"
 
         if lifecycle_filter:
-            candidate_orders = await query.order_by(order_clause).all()
-            matched_orders = await self._filter_orders_by_lifecycle_stage(
-                tenant_id,
-                candidate_orders,
-                lifecycle_filter,
+            from apps.kuaizhizao.services.document_lifecycle_service import (
+                normalize_sales_order_lifecycle_filter,
             )
-            total = len(matched_orders)
-            orders = matched_orders[skip : skip + limit]
+
+            target = normalize_sales_order_lifecycle_filter(lifecycle_filter)
+            if target == "已取消":
+                query = query.filter(status__in=["CANCELLED", "已取消"])
+                total = await query.count()
+                orders = await query.offset(skip).limit(limit).order_by(order_clause)
+            elif target == "已关闭":
+                query = query.filter(status__in=["CLOSED", "已关闭", "closed"])
+                total = await query.count()
+                orders = await query.offset(skip).limit(limit).order_by(order_clause)
+            else:
+                matched_ids = await self._sales_order_ids_matching_lifecycle(
+                    tenant_id, query, lifecycle_filter, order_clause
+                )
+                total = len(matched_ids)
+                page_ids = matched_ids[skip : skip + limit]
+                if page_ids:
+                    fetched = await SalesOrder.filter(
+                        tenant_id=tenant_id, id__in=page_ids
+                    ).order_by(order_clause)
+                    by_id = {int(o.id): o for o in fetched}
+                    orders = [by_id[oid] for oid in page_ids if oid in by_id]
+                else:
+                    orders = []
         else:
             total = await query.count()
             orders = await query.offset(skip).limit(limit).order_by(order_clause)

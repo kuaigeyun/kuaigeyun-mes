@@ -59,6 +59,18 @@ import { processRouteApi, unwrapProcessPagedList } from '../../../services/proce
 import { getMaterialUnitDisplayMapShared } from '../../../../../utils/materialUnitDisplay';
 import type { Material, MaterialCreate, MaterialUpdate, BOMHierarchyItem, MaterialUnits, BOMVersionCompareResult } from '../../../types/material';
 import type { ProcessRoute } from '../../../types/process';
+
+function collectBomHierarchyMaterialIds(items: BOMHierarchyItem[]): number[] {
+  const ids: number[] = [];
+  const walk = (nodes: BOMHierarchyItem[]) => {
+    for (const n of nodes) {
+      if (n.componentId) ids.push(n.componentId);
+      if (n.children?.length) walk(n.children);
+    }
+  };
+  walk(items);
+  return [...new Set(ids)];
+}
 import {
   CANVAS_GRID_STYLE,
   PAGE_SPACING,
@@ -361,7 +373,6 @@ const BOMDesignerPage: React.FC = () => {
   const isReadOnly = useMemo(() => bomStatus === 'approved', [bomStatus]);
 
   const [materials, setMaterials] = useState<Material[]>([]);
-  const [materialsLoading, setMaterialsLoading] = useState(false);
   /** 单位字典：value(code) -> label(显示名)，用于节点配置中单位下拉显示标签 */
   const [unitValueToLabel, setUnitValueToLabel] = useState<Record<string, string>>({});
 
@@ -573,10 +584,11 @@ const BOMDesignerPage: React.FC = () => {
    */
   const convertToMindMapData = useCallback((
     rootMaterial: Material,
-    items: BOMHierarchyItem[]
+    items: BOMHierarchyItem[],
+    materialList: Material[] = materials,
   ): any => {
     const convertItem = (item: BOMHierarchyItem, path: number[]): MindMapNode => {
-      const material = materials.find(m => m.id === item.componentId) || {
+      const material = materialList.find(m => m.id === item.componentId) || {
         id: item.componentId,
         code: item.componentCode,
         name: item.componentName,
@@ -680,24 +692,6 @@ const BOMDesignerPage: React.FC = () => {
   }, [materials]);
 
   /**
-   * 加载物料列表
-   */
-  useEffect(() => {
-    const loadMaterials = async () => {
-      try {
-        setMaterialsLoading(true);
-        const result = await materialApi.list({ limit: 1000, isActive: true });
-        setMaterials(result.items ?? []);
-      } catch (error: any) {
-        console.error('加载物料列表失败:', error);
-      } finally {
-        setMaterialsLoading(false);
-      }
-    };
-    loadMaterials();
-  }, []);
-
-  /**
    * 加载单位主数据，用于节点配置中单位下拉显示标签
    */
   useEffect(() => {
@@ -738,15 +732,9 @@ const BOMDesignerPage: React.FC = () => {
     try {
       setLoading(true);
 
-      // 通过物料列表查找主物料（materialId是数字ID）
       const materialIdNum = parseInt(materialId);
-      let material = materials.find(m => m.id === materialIdNum);
-
-      // 如果物料列表中找不到，尝试通过API获取
-      if (!material) {
-        const allMaterialsRes = await materialApi.list({ limit: 10000, isActive: true });
-        material = (allMaterialsRes.items ?? []).find((m: Material) => m.id === materialIdNum);
-      }
+      const rootRes = await materialApi.list({ ids: [materialIdNum], isActive: true });
+      const material = (rootRes.items ?? []).find((m: Material) => m.id === materialIdNum);
 
       if (!material) {
         messageApi.error(t('app.master-data.bom.materialNotFound'));
@@ -758,6 +746,12 @@ const BOMDesignerPage: React.FC = () => {
 
       // 获取BOM层级结构
       const hierarchy = await bomApi.getHierarchy(materialIdNum, version || undefined);
+      const componentIds = collectBomHierarchyMaterialIds(hierarchy.items || []);
+      const componentRes = componentIds.length
+        ? await materialApi.list({ ids: componentIds, isActive: true })
+        : { items: [] as Material[] };
+      const loadedMaterials = [material, ...(componentRes.items ?? []).filter((m) => m.id !== material.id)];
+      setMaterials(loadedMaterials);
       const actualVersion = hierarchy.version || '1.0';
 
       // 同步实际版本：用于保存时决策
@@ -785,7 +779,7 @@ const BOMDesignerPage: React.FC = () => {
       }
 
       // 转换为 MindMap 数据
-      const data = convertToMindMapData(material, hierarchy.items || []);
+      const data = convertToMindMapData(material, hierarchy.items || [], loadedMaterials);
       // 根节点（成品）记录当前 BOM 版本，供节点上显示
       (data as any).version = actualVersion;
 
@@ -1999,13 +1993,13 @@ const BOMDesignerPage: React.FC = () => {
         messageApi.success(t('common.updateSuccess'));
         setMaterialEditModalVisible(false);
         setMaterialToEdit(null);
-        // 刷新物料列表和主物料，以便节点显示最新来源等信息
-        const result = await materialApi.list({ limit: 1000, isActive: true });
-        const materialItems = result.items ?? [];
-        setMaterials(materialItems);
+        const updated = await materialApi.get(materialToEdit.uuid);
+        setMaterials((prev) => {
+          const rest = prev.filter((m) => m.id !== updated.id && m.uuid !== updated.uuid);
+          return [...rest, updated];
+        });
         if (rootMaterial && materialToEdit.uuid === (rootMaterial.uuid || (rootMaterial as any).uuid)) {
-          const updated = materialItems.find((m) => m.uuid === materialToEdit.uuid || (m as any).uuid === materialToEdit.uuid);
-          if (updated) setRootMaterial(updated);
+          setRootMaterial(updated);
         }
       } catch (error: any) {
         messageApi.error(error.message || t('common.updateFailed'));
@@ -2864,7 +2858,7 @@ const BOMDesignerPage: React.FC = () => {
     };
   }, [mindMapDataSafe, selectedNodeId, handleUpdateBOM]); // 增加依赖确保重算配置
 
-  if (loading || materialsLoading) {
+  if (loading) {
     return (
       <div style={{ padding: PAGE_SPACING.PADDING, textAlign: 'center' }}>{t('app.master-data.bom.loadingPage')}</div>
     );

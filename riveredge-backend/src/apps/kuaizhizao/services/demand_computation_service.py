@@ -32,6 +32,7 @@ from apps.kuaizhizao.utils.material_source_helper import (
     get_material_source_type,
     validate_material_source_config,
     get_material_source_config,
+    build_material_source_config,
     expand_bom_with_source_control,
     explode_bom_one_level_for_mrp,
     resolve_computation_item_source_config,
@@ -64,8 +65,7 @@ from apps.common.audit_actor import (
 )
 from infra.models.user import User
 from apps.kuaizhizao.utils.inventory_helper import (
-    get_material_inventory_info,
-    batch_sum_open_supply_quantities,
+    batch_get_material_inventory,
     batch_list_open_supply_receipts_by_date,
 )
 from core.services.business.code_generation_service import CodeGenerationService
@@ -1237,15 +1237,24 @@ class DemandComputationService(AppBaseService):
         total = await query.count()
         order_clause = order_by if order_by else "-computation_start_time"
         computations = await query.offset(skip).limit(limit).order_by(order_clause)
-        
+
+        page_ids = [int(c.id) for c in computations]
+        items_by_computation: Dict[int, List[DemandComputationItem]] = {
+            cid: [] for cid in page_ids
+        }
+        if page_ids:
+            page_items = await DemandComputationItem.filter(
+                tenant_id=tenant_id,
+                computation_id__in=page_ids,
+            ).all()
+            for item in page_items:
+                items_by_computation.setdefault(int(item.computation_id), []).append(item)
+
         result = []
         for computation in computations:
-            items = await DemandComputationItem.filter(
-                tenant_id=tenant_id,
-                computation_id=computation.id
-            ).all()
+            items = items_by_computation.get(int(computation.id), [])
             result.append(await self._build_computation_response(computation, items))
-        
+
         return {
             "data": [r.model_dump() for r in result],
             "total": total,
@@ -2152,7 +2161,6 @@ class DemandComputationService(AppBaseService):
         from apps.kuaizhizao.models.demand_item import DemandItem
         from apps.master_data.models.material import Material
         from apps.kuaizhizao.utils.inventory_helper import (
-            get_material_inventory_info,
             batch_list_open_supply_receipts_by_date,
         )
         from apps.kuaizhizao.utils.material_source_helper import explode_bom_one_level_for_mrp
@@ -2461,14 +2469,26 @@ class DemandComputationService(AppBaseService):
                 extra = await batch_list_open_supply_receipts_by_date(tenant_id, missing_supply)
                 supply_receipts.update(extra)
 
+            # 本层物料 / 来源 / 库存一次批量加载（禁止层内 per-material 库存查询）
+            level_materials = await Material.filter(
+                tenant_id=tenant_id,
+                id__in=level_mids,
+                deleted_at__isnull=True,
+            ).all()
+            material_by_id = {int(m.id): m for m in level_materials}
+            inventory_by_id = await batch_get_material_inventory(
+                tenant_id,
+                level_mids,
+                warehouse_id=None,
+                warehouse_ids=wh_ids,
+            )
+
             for material_id in level_mids:
-                material = await Material.get_or_none(
-                    tenant_id=tenant_id, id=material_id, deleted_at__isnull=True
-                )
+                material = material_by_id.get(int(material_id))
                 if not material:
                     continue
-                source_type = await get_material_source_type(tenant_id, material_id)
-                source_config = await get_material_source_config(tenant_id, material_id) or {}
+                source_type = material.source_type
+                source_config = build_material_source_config(material)
                 validation_passed, validation_errors = await validate_material_source_config(
                     tenant_id=tenant_id,
                     material_id=material_id,
@@ -2476,14 +2496,14 @@ class DemandComputationService(AppBaseService):
                 )
                 resolved_source_config = resolve_computation_item_source_config(source_config)
 
-                inventory_info = await get_material_inventory_info(
-                    tenant_id=tenant_id,
-                    material_id=material_id,
-                    warehouse_id=None,
-                    warehouse_ids=wh_ids,
-                    in_transit_quantity=0.0,
-                    with_breakdown=True,
-                )
+                inv_row = inventory_by_id.get(int(material_id)) or {}
+                inventory_info = {
+                    "on_hand": _safe_float(inv_row.get("on_hand")),
+                    "reserved_quantity": _safe_float(inv_row.get("reserved_quantity")),
+                    "available_quantity": _safe_float(inv_row.get("available_quantity")),
+                    "in_transit_quantity": 0.0,
+                    "total_quantity": _safe_float(inv_row.get("on_hand")),
+                }
                 if netting_params_for_supply.get("include_reserved", False):
                     beginning = _safe_float(inventory_info.get("available_quantity"))
                 else:

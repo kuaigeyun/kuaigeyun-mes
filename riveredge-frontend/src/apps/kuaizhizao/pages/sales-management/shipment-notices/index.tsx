@@ -96,6 +96,10 @@ import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import {
+  referenceDisplayToIdOptions,
+  searchReferenceDisplay,
+} from '../../../../../utils/referenceDisplay';
 
 const SHIPMENT_NOTICE_RESOURCE = 'kuaizhizao:shipment-notice';
 
@@ -233,15 +237,6 @@ const ShipmentNoticesPage: React.FC = () => {
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [productScope, setProductScope] = useState<'make' | 'all'>('make');
   const [customerList, setCustomerList] = useState<any[]>([]);
-  const [customersLoading, setCustomersLoading] = useState(false);
-  const shipmentNoticeCustomerSearchOptions = useMemo(
-    () =>
-      customerList.map((c: { id?: number; customer_id?: number; name?: string; customer_name?: string; code?: string }) => ({
-        value: Number(c.id ?? c.customer_id),
-        label: String(c.name ?? c.customer_name ?? c.code ?? ''),
-      })),
-    [customerList],
-  );
   const shipmentNoticeLifecycleValueEnum = useMemo(
     () => buildShipmentNoticeLifecycleValueEnum(t),
     [t],
@@ -307,28 +302,35 @@ const ShipmentNoticesPage: React.FC = () => {
     actionRef.current?.reload();
   }, [invalidateMenuBadgeCounts]);
 
+  const isFormPage = createModalVisible || editModalVisible;
+
   useEffect(() => {
+    if (!isFormPage) return;
+    let cancelled = false;
     const load = async () => {
-      setCustomersLoading(true);
       try {
         const [cust, ordersRes] = await Promise.all([
-          customerApi.list({ limit: 1000, isActive: true }),
-          listSalesOrders({ limit: 500, view: 'options' }).catch(() => ({
+          customerApi.list({ limit: 200, isActive: true }),
+          listSalesOrders({ limit: 200, view: 'options' }).catch(() => ({
             data: [],
             total: 0,
             success: false,
           })),
         ]);
+        if (cancelled) return;
         setCustomerList(Array.isArray(cust) ? cust : (cust as any)?.data || (cust as any)?.items || []);
         setSalesOrderList(ordersRes?.data || []);
       } catch (e) {
-        console.error(t('app.kuaizhizao.shipmentNotice.loadCustomersFailed'), e);
-      } finally {
-        setCustomersLoading(false);
+        if (!cancelled) {
+          console.error(t('app.kuaizhizao.shipmentNotice.loadCustomersFailed'), e);
+        }
       }
     };
-    load();
-  }, []);
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [isFormPage, t]);
 
   const appendShipmentNoticeItemsFromMaterials = useCallback(
     (selected: Material[]) => {
@@ -384,10 +386,18 @@ const ShipmentNoticesPage: React.FC = () => {
       valueType: 'select',
       fieldProps: {
         showSearch: true,
-        optionFilterProp: 'label',
-        loading: customersLoading,
-        options: shipmentNoticeCustomerSearchOptions,
+        filterOption: false,
         placeholder: t('app.kuaizhizao.quotation.form.customer'),
+      },
+      debounceTime: 300,
+      request: async ({ keyWords }) => {
+        const res = await searchReferenceDisplay({
+          resource: 'master-data:supply-chain:customer',
+          hostResource: 'kuaizhizao:shipment-notice',
+          keyword: typeof keyWords === 'string' ? keyWords.trim() : undefined,
+          pageSize: 20,
+        });
+        return referenceDisplayToIdOptions(res.items);
       },
     },
     {
@@ -553,9 +563,7 @@ const ShipmentNoticesPage: React.FC = () => {
     [
       t,
       linkedDetail,
-      customersLoading,
       shipmentNoticeAuditColumn,
-      shipmentNoticeCustomerSearchOptions,
       shipmentNoticeLifecycleValueEnum,
       shipmentNoticePerms.canDelete,
       shipmentNoticePerms.canUpdate,

@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Descriptions } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, flushDrawerOpen } from '../../../../../components/layout-templates';
@@ -120,13 +120,6 @@ const DefectTypesPage: React.FC = () => {
     selectedRowKeys,
     setSelectedRowKeys,
   });
-
-  useEffect(() => {
-    if (customFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [customFields.length]);
-
   const defectTypeDetailColumns: ProDescriptionsItemProps<DefectType>[] = useMemo(
     () => [
       { title: t('app.master-data.defectTypes.code'), dataIndex: 'code' },
@@ -556,7 +549,7 @@ const DefectTypesPage: React.FC = () => {
         columnPersistenceId="apps.master-data.pages.process.defect-types.status-v2"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           const listParams = resolveProcessListParams(searchFormValues, sort);
           lastListParamsRef.current = listParams;
           const apiParams = {
@@ -579,7 +572,9 @@ const DefectTypesPage: React.FC = () => {
             const list = result?.data ?? result;
             const data = Array.isArray(list) ? list : [];
             const total = typeof result?.total === 'number' ? result.total : data.length;
-            const enrichedData = await enrichRecordsWithCustomFields(data);
+            const enrichedData = meta?.purpose === 'prefetch'
+              ? data
+              : await enrichRecordsWithCustomFields(data);
             return {
               data: enrichedData,
               success: true,

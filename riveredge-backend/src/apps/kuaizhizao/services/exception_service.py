@@ -545,30 +545,30 @@ class ExceptionService:
         exceptions = await query.order_by(order_clause).offset(skip).limit(limit)
         rows = [MaterialShortageExceptionListResponse.model_validate(e) for e in exceptions]
 
+        # 列表仅附着已缓存领料分；禁止 include_kitting 重算（齐套分析会拖垮首屏，且列表未展示该列）
         if rows:
             from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
 
             score_svc = WorkOrderScoreService()
             if await score_svc.is_score_enabled(tenant_id):
                 wo_ids = list({r.work_order_id for r in rows if r.work_order_id})
-                score_map = await score_svc.batch_ensure_scores(
-                    tenant_id, wo_ids, "picking", include_kitting=True
-                )
-                enriched: List[MaterialShortageExceptionListResponse] = []
-                for row in rows:
-                    cached = score_map.get(row.work_order_id)
-                    if cached:
-                        enriched.append(
-                            row.model_copy(
-                                update={
-                                    "picking_score": cached.composite_score,
-                                    "picking_rank_band": cached.rank_band,
-                                }
+                score_map = await score_svc.batch_get_scores(tenant_id, wo_ids, "picking")
+                if score_map:
+                    enriched: List[MaterialShortageExceptionListResponse] = []
+                    for row in rows:
+                        cached = score_map.get(row.work_order_id)
+                        if cached:
+                            enriched.append(
+                                row.model_copy(
+                                    update={
+                                        "picking_score": cached.composite_score,
+                                        "picking_rank_band": cached.rank_band,
+                                    }
+                                )
                             )
-                        )
-                    else:
-                        enriched.append(row)
-                return enriched, total
+                        else:
+                            enriched.append(row)
+                    return enriched, total
 
         return rows, total
 
@@ -754,24 +754,10 @@ class ExceptionService:
         order_by: Optional[str] = None,
     ) -> tuple[List[DeliveryDelayExceptionListResponse], int]:
         """
-        获取延期异常列表
+        获取延期异常列表（只读已持久化记录，不在列表请求中触发全量延期检测）。
 
-        Args:
-            tenant_id: 租户ID
-            work_order_id: 工单ID筛选（可选）
-            status: 状态筛选（可选）
-            alert_level: 预警级别筛选（可选）
-            skip: 跳过数量
-            limit: 限制数量
-
-        Returns:
-            (列表, 总数)
+        延期检测由定时任务 / 显式 detect API 写入；列表接口仅查询数据库（与缺料列表一致）。
         """
-        await self.detect_delivery_delay(
-            tenant_id=tenant_id,
-            work_order_id=work_order_id,
-        )
-
         query = DeliveryDelayException.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         if work_order_id:

@@ -1,5 +1,5 @@
 /**
- * 需求变更（重排任务）列表徽章：模式/风险为 MarkerTag（filled），状态为 StatusTag（solid）。
+ * 需求变更（重排任务）列表徽章：模式/风险为 MarkerTag（filled）；审批与任务执行为 StatusTag（solid，右固定）。
  */
 
 import React from 'react';

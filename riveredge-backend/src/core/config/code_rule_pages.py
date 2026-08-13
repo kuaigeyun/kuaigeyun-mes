@@ -50,6 +50,10 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-sales-contract-change": "XSHTBG",  # 销售合同变更
     "kuaizhizao-sales-delivery": "XSFH",        # 销售发货
     "kuaizhizao-delivery-notice": "SHD",        # 送货单
+    "kuaizhizao-freight-order": "HYD",          # 货运单
+    "kuaizhizao-freight-bill": "YFD",           # 运费单
+    "kuaizhizao-logistics-carrier": "CYS",      # 承运商
+    "kuaizhizao-logistics-driver": "JSY",       # 驾驶员
     "kuaizhizao-shipment-notice": "FHTZ",       # 发货通知单
     "kuaizhizao-receipt-notice": "SHTZ",        # 收货通知单
     "kuaizhizao-sales-forecast": "XSYC",        # 销售预测
@@ -608,6 +612,56 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "auto_generate": True,
         "rule_code": "DELIVERY_NOTICE_CODE",
         "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-freight-order",
+        "page_name": "货运单",
+        "page_path": "/apps/kuaizhizao/logistics-management/freight-orders",
+        "code_field": "order_code",
+        "code_field_label": "货运单号",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "FREIGHT_ORDER_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-freight-bill",
+        "page_name": "运费单",
+        "page_path": "/apps/kuaizhizao/logistics-management/freight-bills",
+        "code_field": "bill_code",
+        "code_field_label": "运费单号",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "FREIGHT_BILL_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-logistics-carrier",
+        "page_name": "承运商",
+        "page_path": "/apps/kuaizhizao/logistics-management/carriers",
+        "code_field": "code",
+        "code_field_label": "承运商编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "LOGISTICS_CARRIER_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,
+    },
+    {
+        "page_code": "kuaizhizao-logistics-driver",
+        "page_name": "驾驶员",
+        "page_path": "/apps/kuaizhizao/logistics-management/drivers",
+        "code_field": "code",
+        "code_field_label": "驾驶员编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "DRIVER_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,
     },
     {
         "page_code": "kuaizhizao-shipment-notice",

@@ -614,27 +614,35 @@ class CoordinationBoardService:
             tenant_id, po_ids
         )
 
+        po_list = []
+        items_by_po: Dict[int, List[PurchaseOrderItem]] = {}
+        if po_ids:
+            po_list = await PurchaseOrder.filter(tenant_id=tenant_id, id__in=list(po_ids)).all()
+            all_po_items = await PurchaseOrderItem.filter(
+                tenant_id=tenant_id, order_id__in=list(po_ids)
+            ).all()
+            for it in all_po_items:
+                items_by_po.setdefault(it.order_id, []).append(it)
+
         purchase_orders: List[Dict[str, Any]] = []
-        for po_id in po_ids:
-            po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=po_id)
-            if po:
-                items = await PurchaseOrderItem.filter(order_id=po_id).all()
-                ordered, recv, receipt_done = self._calc_po_receipt_status(
-                    items, confirmed_receipt_qty
-                )
-                purchase_orders.append(
-                    {
-                        "id": po.id,
-                        "code": po.order_code,
-                        "status": po.status,
-                        "extra": {
-                            "supplier_name": po.supplier_name,
-                            "total_quantity": ordered,
-                            "received_quantity": recv,
-                            "receipt_done": receipt_done,
-                        },
-                    }
-                )
+        for po in po_list:
+            items = items_by_po.get(po.id, [])
+            ordered, recv, receipt_done = self._calc_po_receipt_status(
+                items, confirmed_receipt_qty
+            )
+            purchase_orders.append(
+                {
+                    "id": po.id,
+                    "code": po.order_code,
+                    "status": po.status,
+                    "extra": {
+                        "supplier_name": po.supplier_name,
+                        "total_quantity": ordered,
+                        "received_quantity": recv,
+                        "receipt_done": receipt_done,
+                    },
+                }
+            )
 
         purchase_requisitions: List[Dict[str, Any]] = []
         for rel in rels:
@@ -1377,11 +1385,11 @@ class CoordinationBoardService:
     ) -> Dict[str, Any]:
         """将已加载采购单（含 PR 转单）的物料并入已下推集合。"""
         po_material_ids: Set[int] = set(exclusions.get("po_material_ids") or set())
-        for po in docs.get("purchase_orders") or []:
-            po_id = po.get("id")
-            if not po_id:
-                continue
-            items = await PurchaseOrderItem.filter(order_id=po_id).all()
+        po_ids = [po.get("id") for po in (docs.get("purchase_orders") or []) if po.get("id")]
+        if po_ids:
+            items = await PurchaseOrderItem.filter(
+                tenant_id=tenant_id, order_id__in=po_ids
+            ).all()
             for poi in items:
                 if poi.material_id:
                     po_material_ids.add(poi.material_id)
@@ -1449,9 +1457,8 @@ class CoordinationBoardService:
         material_ids = [line["material_id"] for line in lines]
         inventory_map = await batch_get_material_inventory(tenant_id, material_ids)
         for line in lines:
-            line["available_quantity"] = float(
-                inventory_map.get(line["material_id"], 0)
-            )
+            inv_row = inventory_map.get(line["material_id"]) or {}
+            line["available_quantity"] = float(inv_row.get("available_quantity") or 0)
         return lines
 
     async def _resolve_sales_order_code(

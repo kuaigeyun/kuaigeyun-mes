@@ -733,7 +733,7 @@ async def create_production_picking(
     )
 
 
-@router.get("/production-pickings", response_model=List[ProductionPickingListResponse], summary="List production pickings")
+@router.get("/production-pickings", summary="List production pickings")
 async def list_production_pickings(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -750,13 +750,13 @@ async def list_production_pickings(
     updated_end_date: Optional[str] = Query(None, description="更新日止"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[ProductionPickingListResponse]:
+):
     """
     获取生产领料单列表
 
     支持状态、工单、仓库与关键词筛选。
     """
-    return await ProductionPickingService().list_production_pickings(
+    items, total = await ProductionPickingService().list_production_pickings(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -772,6 +772,7 @@ async def list_production_pickings(
         updated_start_date=updated_start_date,
         updated_end_date=updated_end_date,
     )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
 
 
 @router.get("/production-pickings/{picking_id}", response_model=ProductionPickingWithItemsResponse, summary="Get production picking")
@@ -3382,7 +3383,7 @@ async def create_sales_delivery(
     )
 
 
-@router.get("/sales-deliveries", response_model=List[SalesDeliveryResponse], summary="List sales deliveries")
+@router.get("/sales-deliveries", summary="List sales deliveries")
 async def list_sales_deliveries(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -3402,13 +3403,13 @@ async def list_sales_deliveries(
     updated_end_date: Optional[str] = Query(None, description="更新日止"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[SalesDeliveryResponse]:
+):
     """
     获取销售出库单列表
 
     支持状态、客户、仓库、数量与关键词筛选。
     """
-    return await SalesDeliveryService().list_sales_deliveries(
+    items, total = await SalesDeliveryService().list_sales_deliveries(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -3427,6 +3428,7 @@ async def list_sales_deliveries(
         updated_start_date=updated_start_date,
         updated_end_date=updated_end_date,
     )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
 
 
 @router.get("/sales-deliveries/{delivery_id}", response_model=SalesDeliveryWithItemsResponse, summary="Get sales delivery")

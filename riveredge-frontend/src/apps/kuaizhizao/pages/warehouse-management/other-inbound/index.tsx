@@ -21,7 +21,7 @@ import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col, Select, Typography, Descriptions } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ThunderboltOutlined, ShoppingOutlined, PrinterOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
@@ -191,13 +191,6 @@ const OtherInboundPage: React.FC = () => {
     loadFieldValuesForDetail: loadOtherInboundFieldValuesForDetail,
     resetDetailFieldValues: resetOtherInboundDetailFieldValues,
   } = useCustomFieldsForList<OtherInbound>({ tableName: OTHER_INBOUND_CUSTOM_FIELD_TABLE });
-
-  useEffect(() => {
-    if (otherInboundListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [otherInboundListCustomFields.length]);
-
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
   const [reasonTypeOptions, setReasonTypeOptions] = useState<Array<{ label: string; value: string }>>([]);
@@ -880,7 +873,7 @@ const OtherInboundPage: React.FC = () => {
               noun: t('app.kuaizhizao.warehouseOtherInbound.title'),
             })
           }
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
               const listParams = resolveWarehouseDocListParams(searchFormValues, sort, {
                 docDateParamPrefix: 'receipt',
@@ -891,7 +884,9 @@ const OtherInboundPage: React.FC = () => {
                 ...listParams,
               });
               const { data: raw, total } = normalizeWarehouseListResponse(response);
-              const data = await enrichOtherInboundRecordsWithCustomFields(raw);
+              const data = meta?.purpose === 'prefetch'
+                ? raw
+                : await enrichOtherInboundRecordsWithCustomFields(raw);
               return { data, success: true, total };
             } catch {
               messageApi.error(t('app.kuaizhizao.warehouseOtherInbound.msg.loadListFailed'));

@@ -13,7 +13,7 @@ import dayjs from 'dayjs';
 import { EditOutlined, DeleteOutlined, PlusOutlined, HighlightOutlined } from '@ant-design/icons';
 import SOPBatchCreateSteps from './SOPBatchCreateSteps';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { ROW_ACTIONS_INLINE_GAP, rowActionKind } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
@@ -149,13 +149,6 @@ const SOPPage: React.FC = () => {
     selectedRowKeys,
     setSelectedRowKeys,
   });
-
-  useEffect(() => {
-    if (sopListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [sopListCustomFields.length]);
-
   const sopOperationCodeOptions = useMemo(
     () =>
       operations
@@ -1240,7 +1233,7 @@ const SOPPage: React.FC = () => {
         columnPersistenceId="apps.master-data.pages.process.sop.content-before-active-v4"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           const listParams = resolveSopListParams(searchFormValues, sort);
           lastListParamsRef.current = listParams;
           const apiParams = {
@@ -1271,7 +1264,9 @@ const SOPPage: React.FC = () => {
               operationId: row.operationId ?? row.operation_id,
               isActive: row.isActive ?? row.is_active ?? true,
             }));
-            const enrichedData = await enrichSopRecordsWithCustomFields(normalized);
+            const enrichedData = meta?.purpose === 'prefetch'
+              ? normalized
+              : await enrichSopRecordsWithCustomFields(normalized);
             return {
               data: enrichedData,
               success: true,

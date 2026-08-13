@@ -41,7 +41,7 @@ import {
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, EyeOutlined, PrinterOutlined, RollbackOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import {
   UniPullQueryModal,
   filterByPullScope,
@@ -382,13 +382,6 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     loadFieldValuesForDetail: loadInspectionFieldValuesForDetail,
     resetDetailFieldValues: resetInspectionDetailFieldValues,
   } = useCustomFieldsForList<FinishedGoodsInspection>({ tableName: FINISHED_GOODS_INSPECTION_CUSTOM_FIELD_TABLE });
-
-  useEffect(() => {
-    if (inspectionListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [inspectionListCustomFields.length]);
-
   // 详情Drawer状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [certificatePrintOpen, setCertificatePrintOpen] = useState(false);
@@ -1193,7 +1186,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         showAdvancedSearch={true}
         pinnedTabsField={QUALITY_INSPECTION_PINNED_STATUS_FIELD}
         skipFuzzyPinyinClientFilter
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           try {
             const listParams = resolveQualityInspectionListParams(searchFormValues, sort);
             const listRequest = async () => {
@@ -1225,7 +1218,9 @@ const FinishedGoodsInspectionPage: React.FC = () => {
               }
             }
 
-            const data = await enrichInspectionRecordsWithCustomFields(raw as FinishedGoodsInspection[]);
+            const data = meta?.purpose === 'prefetch'
+              ? raw as FinishedGoodsInspection[]
+              : await enrichInspectionRecordsWithCustomFields(raw as FinishedGoodsInspection[]);
             return {
               data,
               success: true,

@@ -465,6 +465,8 @@ export type WorkOrderListFetchOptions = {
   include_readiness?: boolean
   /** 计算完工下推进度（较重；定时刷新时开启） */
   include_downstream_push_progress?: boolean
+  /** 工序列步骤摘要；prefetch 下一页时应关闭 */
+  include_operation_steps?: boolean
 }
 
 /**
@@ -483,7 +485,7 @@ export async function fetchWorkOrderListForTable(
     /** 列表首屏关闭；避免 batch_ensure_scores 触发大量快照计算 */
     include_scores: false,
     /** 工序列：与运营看板同口径的步骤摘要（只读，不在列表内回写完成态） */
-    include_operation_steps: true,
+    include_operation_steps: options?.include_operation_steps ?? true,
     /** 完工进度列：首屏跳过方案质检口径重算，定时刷新再补 */
     include_downstream_push_progress: options?.include_downstream_push_progress ?? false,
   })

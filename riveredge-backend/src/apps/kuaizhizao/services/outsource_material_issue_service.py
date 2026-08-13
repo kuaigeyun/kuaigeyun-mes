@@ -249,7 +249,8 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
             required = Decimal(str(r.net_requirement or r.gross_requirement or 0))
             issued = Decimal(str(issued_map.get(mid, 0)))
             pending = max(Decimal("0"), required - issued)
-            available = Decimal(str(inv_map.get(mid, 0)))
+            inv_row = inv_map.get(mid) or {}
+            available = Decimal(str(inv_row.get("available_quantity") or 0))
             lines.append(
                 OutsourceMaterialIssuePreviewLine(
                     material_id=mid,

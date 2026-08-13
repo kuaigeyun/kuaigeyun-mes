@@ -11,7 +11,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { ActionType, ProColumns, type ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Tooltip, Typography, Spin, Empty, Select, Descriptions, theme as AntdTheme } from 'antd';
 import { CheckCircleOutlined, PlayCircleOutlined, RollbackOutlined, PrinterOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   UniTableStackedPrimaryCell,
@@ -180,18 +180,6 @@ const OutboundPage: React.FC = () => {
     loadFieldValuesForDetail: loadProductionPickingFieldValuesForDetail,
     resetDetailFieldValues: resetProductionPickingDetailFieldValues,
   } = useCustomFieldsForList<OutboundOrder>({ tableName: PRODUCTION_PICKING_CUSTOM_FIELD_TABLE });
-
-  useEffect(() => {
-    if (salesDeliveryListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [salesDeliveryListCustomFields.length]);
-
-  useEffect(() => {
-    if (productionPickingListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [productionPickingListCustomFields.length]);
 
   // Drawer 相关状态（详情查看）
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -1043,7 +1031,7 @@ const OutboundPage: React.FC = () => {
             noun: t('app.kuaizhizao.warehouseOutbound.title'),
           })
         }
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           try {
             const typeFilter = outboundTypeFilterRef.current;
             const listParams = resolveOutboundHubListParams(
@@ -1053,15 +1041,21 @@ const OutboundPage: React.FC = () => {
               },
               sort,
             );
+            const skipEnrich = meta?.purpose === 'prefetch';
+            const passthrough = async <T,>(rows: T[]) => rows;
             const result = await fetchOutboundHubList(
               {
                 ...(params as Record<string, unknown>),
                 ...listParams,
               },
               {
-              enrichProductionPickingRecordsWithCustomFields,
-              enrichSalesDeliveryRecordsWithCustomFields,
-            },
+                enrichProductionPickingRecordsWithCustomFields: skipEnrich
+                  ? passthrough
+                  : enrichProductionPickingRecordsWithCustomFields,
+                enrichSalesDeliveryRecordsWithCustomFields: skipEnrich
+                  ? passthrough
+                  : enrichSalesDeliveryRecordsWithCustomFields,
+              },
               currentUser,
             );
             return result;

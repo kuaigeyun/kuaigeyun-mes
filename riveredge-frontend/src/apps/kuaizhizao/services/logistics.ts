@@ -183,7 +183,9 @@ export async function getFreightOrder(id: number) {
   return apiRequest<FreightOrder>(`${BASE}/freight-orders/${id}`, { method: 'GET' });
 }
 
-export async function listFreightPullCandidates(params: { business_direction?: string; keyword?: string } = {}) {
+export async function listFreightPullCandidates(
+  params: { business_direction?: string; keyword?: string; skip?: number; limit?: number } = {},
+) {
   return apiRequest<{ items: FreightPullCandidate[]; total: number }>(`${BASE}/freight-orders/pull-candidates`, {
     method: 'GET',
     params,

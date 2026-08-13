@@ -280,7 +280,6 @@ const ComputationHistoryPage: React.FC = () => {
                 total: normalized.total,
               };
             } catch {
-              tableRowsRef.current = [];
               return {
                 data: [],
                 success: false,

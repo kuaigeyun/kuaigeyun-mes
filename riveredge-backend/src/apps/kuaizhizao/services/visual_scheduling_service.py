@@ -18,6 +18,8 @@ from decimal import Decimal
 
 from typing import Any, Dict, List, Optional, Tuple
 
+from tortoise.expressions import Q
+
 
 
 from apps.kuaizhizao.models.work_order import WorkOrder
@@ -276,6 +278,17 @@ class VisualSchedulingService(BaseService):
             query = query.filter(
                 planned_start_date__gte=day_start,
                 planned_start_date__lte=day_end,
+            )
+        elif not work_order_ids:
+            now = resolve_business_datetime()
+            horizon_start = now - timedelta(days=horizon_days)
+            horizon_end = now + timedelta(days=horizon_days)
+            query = query.filter(
+                Q(planned_start_date__isnull=True)
+                | (
+                    Q(planned_start_date__gte=horizon_start)
+                    & Q(planned_start_date__lte=horizon_end)
+                )
             )
 
         work_orders = await query.all()

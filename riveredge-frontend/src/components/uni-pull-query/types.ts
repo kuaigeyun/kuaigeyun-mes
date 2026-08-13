@@ -70,6 +70,8 @@ export interface UniPullQueryModalProps<T extends object> {
   width?: number;
   zIndex?: number;
   destroyOnHidden?: boolean;
+  /** 关闭动画结束后再开下一层弹窗，避免取单弹窗 focus trap 吞掉下一层「确定」 */
+  afterOpenChange?: (open: boolean) => void;
 
   /** 表格下方提示（如重复下推警告） */
   alert?: ReactNode;

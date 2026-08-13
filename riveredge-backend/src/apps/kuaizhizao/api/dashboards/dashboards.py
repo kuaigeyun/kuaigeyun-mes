@@ -1304,49 +1304,45 @@ async def get_statistics(
         from apps.kuaizhizao.models.work_order import WorkOrder
         from decimal import Decimal
         
-        # 获取工单统计
+        # 获取工单统计（SQL COUNT/SUM，不拉全表行）
+        from tortoise.functions import Sum
+        from apps.kuaizhizao.models.sales_order import SalesOrderItem
+
         work_order_query = WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if date_start_dt:
             work_order_query = work_order_query.filter(created_at__gte=date_start_dt)
         if date_end_dt:
             work_order_query = work_order_query.filter(created_at__lte=date_end_dt)
-        
-        work_orders = await work_order_query.all()
-        
-        total_work_orders = len(work_orders)
-        completed_work_orders = len([wo for wo in work_orders if wo.status == "completed"])
-        in_progress_work_orders = len([wo for wo in work_orders if wo.status == "in_progress"])
-        
-        # 计算完工数量（已完成工单的计划数量总和，WorkOrder 使用 quantity 表示计划数量）
-        completed_quantity = sum(
-            float(wo.quantity) for wo in work_orders 
-            if wo.status == "completed" and wo.quantity
-        )
-        
+
+        total_work_orders = await work_order_query.count()
+        completed_work_orders = await work_order_query.filter(status="completed").count()
+        in_progress_work_orders = await work_order_query.filter(status="in_progress").count()
+
+        completed_agg = await work_order_query.filter(status="completed").annotate(
+            qty=Sum("quantity")
+        ).first()
+        completed_quantity = float(getattr(completed_agg, "qty", None) or 0)
+
+        plan_agg = await work_order_query.annotate(qty=Sum("quantity")).first()
+        plan_quantity = float(getattr(plan_agg, "qty", None) or 0)
+
         # 获取订单统计
         sales_order_query = SalesOrder.filter(tenant_id=tenant_id)
         if date_start_dt:
             sales_order_query = sales_order_query.filter(created_at__gte=date_start_dt)
         if date_end_dt:
             sales_order_query = sales_order_query.filter(created_at__lte=date_end_dt)
-        
-        sales_orders = await sales_order_query.all()
-        order_count = len(sales_orders)
-        
-        # 计算商品数（订单中不同商品的数量）
-        product_codes = set()
-        for so in sales_orders:
-            if hasattr(so, 'items') and so.items:
-                for item in so.items:
-                    if hasattr(item, 'product_code'):
-                        product_codes.add(item.product_code)
-        product_count = len(product_codes)
-        
-        # 计算生产计划数（所有工单的计划数量总和，WorkOrder 使用 quantity 表示计划数量）
-        plan_quantity = sum(
-            float(wo.quantity) for wo in work_orders 
-            if wo.quantity
-        )
+
+        order_count = await sales_order_query.count()
+
+        # 商品数：日期范围内销售订单明细 distinct material_id（SQL，不拉订单行）
+        item_query = SalesOrderItem.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if date_start_dt:
+            item_query = item_query.filter(sales_order__created_at__gte=date_start_dt)
+        if date_end_dt:
+            item_query = item_query.filter(sales_order__created_at__lte=date_end_dt)
+        product_ids = await item_query.distinct().values_list("material_id", flat=True)
+        product_count = len([pid for pid in product_ids if pid is not None])
         
         # 获取报工统计，计算不良品率
         reporting_service = ReportingService()
@@ -1422,17 +1418,18 @@ async def get_statistics(
         # 质量统计
         from apps.kuaizhizao.services.reporting_service import ReportingService
         
-        # 获取质量异常统计
-        quality_exceptions = await QualityException.filter(
+        # 质量异常统计：COUNT，不拉全表行
+        total_quality_exceptions = await QualityException.filter(
             tenant_id=tenant_id,
-        ).all()
-        
+            deleted_at__isnull=True,
+        ).count()
+
         open_quality_exceptions = await QualityException.filter(
             tenant_id=tenant_id,
             status__in=ACTIVE_QUALITY_EXCEPTION_STATUSES,
             deleted_at__isnull=True,
-        ).all()
-        
+        ).count()
+
         # 获取报工统计，计算合格率
         reporting_service = ReportingService()
         reporting_stats = await reporting_service.get_reporting_statistics(
@@ -1440,13 +1437,13 @@ async def get_statistics(
             date_start=date_start_dt,
             date_end=date_end_dt,
         )
-        
+
         quality_rate = reporting_stats.get("qualification_rate", 0) if reporting_stats else 0
         first_pass_yield_rate = reporting_stats.get("first_pass_yield_rate", 0) if reporting_stats else 0
-        
+
         statistics.quality = {
-            "total_exceptions": len(quality_exceptions),
-            "open_exceptions": len(open_quality_exceptions),
+            "total_exceptions": total_quality_exceptions,
+            "open_exceptions": open_quality_exceptions,
             "quality_rate": round(quality_rate, 2),
             "first_pass_yield_rate": round(first_pass_yield_rate, 2),
         }

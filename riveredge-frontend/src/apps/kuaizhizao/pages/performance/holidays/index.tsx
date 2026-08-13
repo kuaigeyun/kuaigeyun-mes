@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Space, theme as AntdTheme } from 'antd';
 import { DeleteOutlined, CalendarOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
   UniTableStackedPrimaryCell,
@@ -66,13 +66,6 @@ const HolidaysPage: React.FC = () => {
     loadFieldValuesForDetail,
     resetDetailFieldValues,
   } = useCustomFieldsForList<Holiday>({ tableName: 'master_data_holidays' });
-
-  useEffect(() => {
-    if (customFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [customFields.length]);
-
   const holidayTracking = useDocumentTracking(
     drawerVisible && holidayDetail?.id != null ? 'performance_holiday' : undefined,
     holidayDetail?.id,
@@ -264,14 +257,16 @@ const HolidaysPage: React.FC = () => {
           actionRef={actionRef}
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.performance.holidays.v1"
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;
             const listParams = resolveHolidayListParams(searchFormValues, sort);
             try {
               const result = await holidayApi.list({ skip, limit: pageSize, ...listParams });
               const { data: raw, total } = normalizePerformanceListResponse(result);
-              const enrichedRows = await enrichRecordsWithCustomFields(raw as Holiday[]);
+              const enrichedRows = meta?.purpose === 'prefetch'
+                ? raw as Holiday[]
+                : await enrichRecordsWithCustomFields(raw as Holiday[]);
               return { data: enrichedRows, success: true, total };
             } catch (error: any) {
               messageApi.error(error?.message || t('app.kuaizhizao.performance.holidays.messages.loadListFailed'));

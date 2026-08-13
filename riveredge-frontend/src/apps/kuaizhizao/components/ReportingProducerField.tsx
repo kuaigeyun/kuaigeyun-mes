@@ -1,11 +1,12 @@
 /**
  * 报工「生产人员」字段：标题行右侧重叠分段切换 生产人员 / 工作小组，小组支持快速新建。
  * 分段器须在 Form.Item label 之外，避免 label 关联焦点 / mousedown 拦截导致无法切换。
- * 外层只输出一列 Col，内部控件不再带 colProps，避免 ProForm grid 双重嵌套错位。
+ * 外层只输出一列 Col；内部关闭 ProForm grid，避免 Select 再套 Col 导致左右双重 gutter。
  */
 import React, { useCallback } from 'react';
 import { Col, Form, theme } from 'antd';
 import { ProFormItem } from '@ant-design/pro-components';
+import { GridContext } from '@ant-design/pro-form';
 import { useTranslation } from 'react-i18next';
 import { ThemedSegmented } from '../../../components/themed-segmented';
 import { UniUserSelect } from '../../../components/uni-user-select';
@@ -73,14 +74,14 @@ export const ReportingProducerField: React.FC<ReportingProducerFieldProps> = ({
   );
 
   return (
-    <>
-      <ProFormItem name={modeFieldName} initialValue="worker" hidden>
-        <input type="hidden" />
-      </ProFormItem>
-      <ProFormItem name={teamNameFieldName} hidden>
-        <input type="hidden" />
-      </ProFormItem>
-      <Col {...colProps}>
+    <Col {...colProps}>
+      <GridContext.Provider value={{ grid: false }}>
+        <ProFormItem name={modeFieldName} initialValue="worker" hidden>
+          <input type="hidden" />
+        </ProFormItem>
+        <ProFormItem name={teamNameFieldName} hidden>
+          <input type="hidden" />
+        </ProFormItem>
         <div
           style={{
             display: 'flex',
@@ -124,7 +125,8 @@ export const ReportingProducerField: React.FC<ReportingProducerFieldProps> = ({
             label={false}
             placeholder={t('app.kuaizhizao.workReporting.formProxyWorkerPlaceholder')}
             defaultBadgeUserIds={defaultBadgeUserIds}
-            formItemProps={{ style: { marginBottom: token.marginLG } }}
+            style={{ width: '100%' }}
+            formItemProps={{ style: { marginBottom: token.marginLG, width: '100%' } }}
             onChange={(_uuid, u) => {
               onWorkerChange?.(
                 u && !Array.isArray(u)
@@ -136,7 +138,7 @@ export const ReportingProducerField: React.FC<ReportingProducerFieldProps> = ({
         ) : (
           <ProFormItem
             name={teamFieldName}
-            style={{ marginBottom: token.marginLG }}
+            style={{ marginBottom: token.marginLG, width: '100%' }}
             rules={[
               {
                 required: true,
@@ -147,6 +149,7 @@ export const ReportingProducerField: React.FC<ReportingProducerFieldProps> = ({
             <WorkGroupSelectDropdown
               placeholder={t('app.kuaizhizao.workReporting.formWorkGroupPlaceholder')}
               modalZIndex={modalZIndex}
+              style={{ width: '100%' }}
               onWorkGroupPick={(wg: WorkGroup | null) => {
                 if (!wg) {
                   form?.setFieldsValue({ [teamNameFieldName]: undefined });
@@ -163,7 +166,7 @@ export const ReportingProducerField: React.FC<ReportingProducerFieldProps> = ({
             />
           </ProFormItem>
         )}
-      </Col>
-    </>
+      </GridContext.Provider>
+    </Col>
   );
 };

@@ -243,6 +243,7 @@ async def list_demands(
     created_start_date: Optional[date] = Query(None, description="创建日期起"),
     created_end_date: Optional[date] = Query(None, description="创建日期止"),
     order_by: Optional[str] = Query(None, description="排序字段，如 demand_code、-created_at"),
+    include_items: bool = Query(False, description="是否包含明细"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -287,6 +288,8 @@ async def list_demands(
             filters['created_end_date'] = created_end_date
         if safe_order_by:
             filters['order_by'] = safe_order_by
+        if include_items:
+            filters['include_items'] = True
         
         result = await demand_service.list_demands(
             tenant_id=tenant_id,

@@ -1102,6 +1102,13 @@ class BOMGroupSummary(BaseModel):
     base_quantity: Optional[Decimal] = Field(None, description="基准数量")
 
 
+class BOMGroupListResponse(BaseModel):
+    """BOM 分组列表（按主物料分页，data 含该页物料的全部版本）"""
+    data: List[BOMGroupSummary]
+    total: int
+    success: bool = True
+
+
 class BOMMaterialVersionItem(BaseModel):
     """批量拉取 BOM 子件时的 (material_id, version) 项"""
     material_id: int = Field(..., description="主物料ID")

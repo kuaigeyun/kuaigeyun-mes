@@ -19,7 +19,7 @@ import {
   PartitionOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
   TwoColumnLayout,
@@ -246,13 +246,6 @@ const DrawingsPage: React.FC = () => {
     loadFieldValuesForDetail,
     resetDetailFieldValues,
   } = useCustomFieldsForList<EngineeringDrawing>({ tableName: 'apps_master_data_engineering_drawings' });
-
-  useEffect(() => {
-    if (customFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [customFields.length]);
-
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState<FileBrief | null>(null);
   const [largePreviewOpen, setLargePreviewOpen] = useState(false);
@@ -932,7 +925,7 @@ const DrawingsPage: React.FC = () => {
           showCreateButton
           createButtonText={t('app.master-data.drawings.createTitle')}
           onCreate={handleCreate}
-          request={async (params) => {
+          request={async (params, meta?: UniTableRequestMeta) => {
             try {
               const tf = treeFilterRef.current;
               const res = await drawingApi.list({
@@ -945,7 +938,9 @@ const DrawingsPage: React.FC = () => {
                 processRouteUuid: tf.processRouteUuid,
                 view: listView,
               });
-              const enriched = await enrichRecordsWithCustomFields(res.data ?? []);
+              const enriched = meta?.purpose === 'prefetch'
+                ? res.data ?? []
+                : await enrichRecordsWithCustomFields(res.data ?? []);
               return { data: enriched, success: true, total: res.total ?? 0 };
             } catch (err: any) {
               messageApi.error(err?.message || t('app.master-data.drawings.listFailed'));

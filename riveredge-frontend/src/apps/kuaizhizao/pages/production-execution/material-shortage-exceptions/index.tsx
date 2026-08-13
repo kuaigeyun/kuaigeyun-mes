@@ -10,7 +10,7 @@
 import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
@@ -18,6 +18,7 @@ import {
   MaterialStackedCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { MaterialShortageExceptionDetailContent } from '../components/ProductionExceptionDetailContent';
 import {
@@ -28,7 +29,6 @@ import {
 import { apiRequest } from '../../../../../services/api';
 import { ExceptionListPage } from '../../../services/production';
 import { ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES } from '../../../constants/exceptionStatuses';
-import { materialApi } from '../../../../master-data/services/material';
 import { formatDateTime } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -81,7 +81,6 @@ const MaterialShortageExceptionsPage: React.FC = () => {
   const [currentRecord, setCurrentRecord] = useState<MaterialShortageException | null>(null);
   const [handleModalVisible, setHandleModalVisible] = useState(false);
   const [currentAction, setCurrentAction] = useState<string>('');
-  const [materialList, setMaterialList] = useState<any[]>([]);
   const handleFormRef = useRef<any>(null);
 
   const alertLevelLabel = useCallback(
@@ -140,21 +139,10 @@ const MaterialShortageExceptionsPage: React.FC = () => {
     setDetailDrawerVisible(true);
   };
 
-  const openHandleModal = async (record: MaterialShortageException, action: string) => {
+  const openHandleModal = (record: MaterialShortageException, action: string) => {
     setCurrentRecord(record);
     setCurrentAction(action);
     setHandleModalVisible(true);
-    if (action === 'substitute' && materialList.length === 0) {
-      try {
-        const materials = await materialApi.list({ isActive: true });
-        setMaterialList(materials);
-      } catch (error) {
-        console.error('获取物料列表失败:', error);
-      }
-    }
-    setTimeout(() => {
-      handleFormRef.current?.resetFields();
-    }, 100);
   };
 
   const handleException = async (values: any) => {
@@ -450,6 +438,11 @@ const MaterialShortageExceptionsPage: React.FC = () => {
           setCurrentAction('');
           handleFormRef.current?.resetFields();
         }}
+        afterOpenChange={(open) => {
+          if (open) {
+            handleFormRef.current?.resetFields();
+          }
+        }}
         onFinish={handleException}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={handleFormRef}
@@ -466,22 +459,11 @@ const MaterialShortageExceptionsPage: React.FC = () => {
               </p>
             </div>
             {currentAction === 'substitute' && (
-              <ProFormSelect
+              <UniMaterialSelect
                 name="alternativeMaterialId"
                 label={t(`${P}.field.alternativeMaterial`)}
                 placeholder={t(`${P}.materialShortage.placeholder.alternativeMaterial`)}
-                options={materialList
-                  .filter(m => m.id !== currentRecord.material_id)
-                  .map(material => ({
-                    label: `${material.code || material.mainCode} - ${material.name}`,
-                    value: material.id,
-                  }))}
-                rules={[{ required: true, message: t(`${P}.materialShortage.validation.alternativeMaterialRequired`) }]}
-                fieldProps={{
-                  showSearch: true,
-                  filterOption: (input: string, option: any) =>
-                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-                }}
+                required
               />
             )}
             <ProFormTextArea

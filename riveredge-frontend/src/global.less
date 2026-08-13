@@ -1602,6 +1602,32 @@ code {
   background: transparent !important;
 }
 
+/* 分页省略号是三个 •，窄宽度会按字折行（第三点掉到下一行）。全站禁止折行。 */
+.ant-pagination,
+.ant-table-wrapper .ant-table-pagination.ant-pagination {
+  flex-wrap: nowrap;
+}
+
+.ant-pagination-jump-prev,
+.ant-pagination-jump-next {
+  flex: none;
+  flex-shrink: 0;
+  overflow: hidden;
+
+  .ant-pagination-item-container {
+    width: 100%;
+    height: 100%;
+  }
+
+  .ant-pagination-item-ellipsis {
+    display: block;
+    overflow: hidden;
+    white-space: nowrap;
+    word-break: keep-all;
+    overflow-wrap: normal;
+  }
+}
+
 /* 已移除可能导致树组件错位的 top 偏移 hack */
 
 /* 强制所有滚动条轨道透明（覆盖浏览器默认，用于甘特图等） */

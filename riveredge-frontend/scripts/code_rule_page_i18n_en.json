@@ -337,6 +337,22 @@
       "pageName": "Delivery Notes",
       "codeFieldLabel": "Delivery note code"
     },
+    "kuaizhizao-freight-order": {
+      "pageName": "Freight Orders",
+      "codeFieldLabel": "Freight order code"
+    },
+    "kuaizhizao-freight-bill": {
+      "pageName": "Freight Bills",
+      "codeFieldLabel": "Freight bill code"
+    },
+    "kuaizhizao-logistics-carrier": {
+      "pageName": "Carriers",
+      "codeFieldLabel": "Carrier code"
+    },
+    "kuaizhizao-logistics-driver": {
+      "pageName": "Drivers",
+      "codeFieldLabel": "Driver code"
+    },
     "kuaizhizao-shipment-notice": {
       "pageName": "Shipment Notices",
       "codeFieldLabel": "Shipment notice code"

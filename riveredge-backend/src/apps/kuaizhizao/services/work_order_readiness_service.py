@@ -148,22 +148,44 @@ class WorkOrderReadinessService:
         if not material_id_set:
             return 0
 
+        # SQL 按 readiness_component_ids 与变动物料求交；空/NULL 组件缓存仍需刷新（未计算过）
+        from tortoise import Tortoise
+
+        mid_list = sorted(material_id_set)
+        status_list = list(READINESS_ACTIVE_STATUSES)
+        conn = Tortoise.get_connection("default")
+        rows = await conn.execute_query_dict(
+            """
+            SELECT id
+            FROM apps_kuaizhizao_work_orders
+            WHERE tenant_id = $1
+              AND deleted_at IS NULL
+              AND status = ANY($2::text[])
+              AND (
+                readiness_component_ids IS NULL
+                OR readiness_component_ids = '[]'::jsonb
+                OR EXISTS (
+                    SELECT 1
+                    FROM unnest($3::int[]) AS mid(id)
+                    WHERE readiness_component_ids @> to_jsonb(mid.id)
+                )
+            )
+            """,
+            [tenant_id, status_list, mid_list],
+        )
+        affected_ids = [int(r["id"]) for r in rows if r.get("id") is not None]
+        if not affected_ids:
+            return 0
+
         work_orders = await WorkOrder.filter(
             tenant_id=tenant_id,
+            id__in=affected_ids,
             deleted_at__isnull=True,
-            status__in=list(READINESS_ACTIVE_STATUSES),
         ).all()
-
-        affected: List[WorkOrder] = []
-        for wo in work_orders:
-            comp_ids = wo.readiness_component_ids or []
-            if not comp_ids or material_id_set.intersection(comp_ids):
-                affected.append(wo)
-
-        if not affected:
+        if not work_orders:
             return 0
-        await self.compute_and_persist(tenant_id, affected)
-        return len(affected)
+        await self.compute_and_persist(tenant_id, work_orders)
+        return len(work_orders)
 
     async def schedule_refresh_for_materials(self, tenant_id: int, material_id: int) -> None:
         if material_id is None:

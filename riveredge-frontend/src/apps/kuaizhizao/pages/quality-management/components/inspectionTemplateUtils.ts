@@ -168,6 +168,29 @@ export function getTraceabilityNodeTypeLabel(type: string | undefined, t: TFunct
   return key ? t(key) : type;
 }
 
+/** 图谱节点 id 为 `{documentType}:{documentCode}` */
+export function parseTraceNodeId(id: string): { documentType: string; documentCode: string } {
+  const idx = id.indexOf(':');
+  if (idx <= 0) return { documentType: '', documentCode: id };
+  return { documentType: id.slice(0, idx), documentCode: id.slice(idx + 1) };
+}
+
+export function formatTraceGraphNodeLabel(
+  node: { id: string; type?: string; data?: Record<string, unknown> },
+  t: TFunction,
+): string {
+  const parsed = parseTraceNodeId(node.id);
+  const documentType = String(
+    node.data?.document_type || parsed.documentType || node.type || '',
+  );
+  const documentCode = String(
+    node.data?.document_code || node.data?.batch_no || parsed.documentCode || node.id,
+  ).trim();
+  const typeLabel = getTraceabilityNodeTypeLabel(documentType, t);
+  if (!documentCode || documentCode === documentType) return typeLabel;
+  return `${typeLabel}: ${documentCode}`;
+}
+
 export function buildTraceabilityNodePath(node: TraceabilityNodeLike): string | null {
   if (!node?.type) return null;
   const data = node.data || {};

@@ -29,6 +29,7 @@ import {
   renderDemandReplanRiskMarker,
   renderDemandReplanTaskStatusTag,
 } from '../../../utils/demandReplanTags';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 
 const isActionableTaskStatus = (status?: string) => status === 'pending' || status === 'failed';
 
@@ -352,161 +353,196 @@ const DemandReplanDashboardPage: React.FC = () => {
   );
 
   const taskColumns: ProColumns<DemandReplanTaskItem>[] = useMemo(
-    () => [
-      {
-        title: t('common.createdAt'),
-        dataIndex: 'created_at_range',
-        valueType: 'dateRange',
-        hideInTable: true,
-        hideInSearch: false,
-        fieldProps: {
-          placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')],
-        },
-        formItemProps: formDateRangeFormItemProps,
-      },
-      {
-        title: t('app.kuaizhizao.demandReplan.col.taskCode'),
-        dataIndex: 'task_code',
-        // 与系统左固定单号列一致（付款单/运算历史等）：168 + ellipsis
-        width: 168,
-        fixed: 'left',
-        sorter: true,
-        hideInSearch: false,
-        ellipsis: true,
-      },
-      {
-        title: t('app.kuaizhizao.demandReplan.col.mode'),
-        dataIndex: 'mode',
-        width: 120,
-        sorter: true,
-        hideInSearch: false,
-        valueType: 'select',
-        valueEnum: taskModeValueEnum,
-        render: (_, row) =>
-          renderDemandReplanModeMarker(
-            modeText[row.mode as keyof typeof modeText] || row.mode || '-',
-            row.mode,
-          ),
-      },
-      {
-        title: t('app.kuaizhizao.demandReplan.col.riskLevel'),
-        dataIndex: 'risk_level',
-        width: 110,
-        sorter: true,
-        hideInSearch: false,
-        valueType: 'select',
-        valueEnum: taskRiskValueEnum,
-        render: (_, row) =>
-          renderDemandReplanRiskMarker(labelFromMap(riskLevelText, row.risk_level), row.risk_level),
-      },
-      {
-        title: t('app.kuaizhizao.demandReplan.col.approvalStatus'),
-        dataIndex: 'approval_status',
-        width: 130,
-        sorter: true,
-        hideInSearch: false,
-        valueType: 'select',
-        valueEnum: taskApprovalValueEnum,
-        render: (_, row) =>
-          renderDemandReplanApprovalStatusTag(
-            labelFromMap(approvalStatusText, row.approval_status),
-            row.approval_status,
-          ),
-      },
-      {
-        title: t('app.kuaizhizao.demandReplan.col.taskStatus'),
-        dataIndex: 'status',
-        width: 110,
-        sorter: true,
-        hideInSearch: false,
-        valueType: 'select',
-        valueEnum: taskStatusValueEnum,
-        render: (_, row) =>
-          renderDemandReplanTaskStatusTag(labelFromMap(taskStatusText, row.status), row.status),
-      },
-      {
-        title: t('app.kuaizhizao.demandReplan.col.createdAt'),
-        dataIndex: 'created_at',
-        width: 132,
-        uniTableKeepWidth: true,
-        sorter: true,
-        defaultSortOrder: 'descend',
-        hideInSearch: true,
-        render: (_, row) => (row.created_at ? formatDateTime(row.created_at, 'YYYY-MM-DD HH:mm') : '-'),
-      },
-      {
-        title: t('app.kuaizhizao.demandReplan.col.startedAt'),
-        dataIndex: 'started_at',
-        width: 132,
-        uniTableKeepWidth: true,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, row) => (row.started_at ? formatDateTime(row.started_at, 'YYYY-MM-DD HH:mm') : '-'),
-      },
-      {
-        title: t('app.kuaizhizao.demandReplan.col.finishedAt'),
-        dataIndex: 'finished_at',
-        width: 132,
-        uniTableKeepWidth: true,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, row) => (row.finished_at ? formatDateTime(row.finished_at, 'YYYY-MM-DD HH:mm') : '-'),
-      },
-      {
-        title: t('app.kuaizhizao.demandReplan.col.failureReason'),
-        key: 'failure_reason',
-        width: 200,
-        ellipsis: true,
-        render: (_, row) => {
-          const err = formatReplanTaskError(row, t);
-          if (!err) return '-';
-          return (
-            <Button type="link" size="small" style={{ padding: 0, maxWidth: '100%' }} onClick={() => setFailureTask(row)}>
-              <Typography.Text type="danger" ellipsis style={{ maxWidth: 180 }}>
-                {err.split('\n')[0]}
-              </Typography.Text>
-            </Button>
-          );
-        },
-      },
-      {
-        title: t('app.kuaizhizao.demandReplan.col.actions'),
-        key: 'option',
-        valueType: 'option',
-        fixed: 'right',
-        hideInSearch: true,
-        // 宽度由 UniTable 操作列契约注入（禁止页面硬编码 width）
-        render: (_, row) => {
-          const parts: React.ReactNode[] = [];
-          if (formatReplanTaskError(row, t)) {
-            parts.push(
-              <Button
-                {...rowActionKind('read')}
-                key="fail"
-                size="small"
-                onClick={() => setFailureTask(row)}
-              >
-                {t('app.kuaizhizao.demandReplan.action.viewFailure')}
-              </Button>,
-            );
-          }
-          parts.push(
-            <Button
-              {...rowActionKind('execute')}
-              key="exec"
-              size="small"
-              loading={executingTaskId === row.id}
-              disabled={!isActionableTaskStatus(row.status)}
-              onClick={() => executeTask(row)}
-            >
-              {t('app.kuaizhizao.demandReplan.action.execute')}
-            </Button>,
-          );
-          return parts;
-        },
-      },
+    () =>
+      alignProColumns<DemandReplanTaskItem>(
+        [
+          {
+            title: t('common.createdAt'),
+            dataIndex: 'created_at_range',
+            valueType: 'dateRange',
+            hideInTable: true,
+            hideInSearch: false,
+            fieldProps: {
+              placeholder: [
+                t('app.kuaizhizao.quotation.dateRangeStart'),
+                t('app.kuaizhizao.quotation.dateRangeEnd'),
+              ],
+            },
+            formItemProps: formDateRangeFormItemProps,
+          },
+          {
+            title: t('app.kuaizhizao.demandReplan.col.taskCode'),
+            dataIndex: 'task_code',
+            width: 168,
+            fixed: 'left',
+            sorter: true,
+            hideInSearch: false,
+            ellipsis: true,
+          },
+          {
+            title: t('app.kuaizhizao.demandReplan.col.mode'),
+            dataIndex: 'mode',
+            width: 120,
+            uniTableKeepWidth: true,
+            sorter: true,
+            hideInSearch: false,
+            valueType: 'select',
+            valueEnum: taskModeValueEnum,
+            render: (_, row) =>
+              renderDemandReplanModeMarker(
+                modeText[row.mode as keyof typeof modeText] || row.mode || '-',
+                row.mode,
+              ),
+          },
+          {
+            title: t('app.kuaizhizao.demandReplan.col.riskLevel'),
+            dataIndex: 'risk_level',
+            width: 110,
+            uniTableKeepWidth: true,
+            sorter: true,
+            hideInSearch: false,
+            valueType: 'select',
+            valueEnum: taskRiskValueEnum,
+            render: (_, row) =>
+              renderDemandReplanRiskMarker(
+                labelFromMap(riskLevelText, row.risk_level),
+                row.risk_level,
+              ),
+          },
+          {
+            title: t('app.kuaizhizao.demandReplan.col.startedAt'),
+            dataIndex: 'started_at',
+            width: 132,
+            uniTableKeepWidth: true,
+            sorter: true,
+            hideInSearch: true,
+            render: (_, row) =>
+              row.started_at ? formatDateTime(row.started_at, 'YYYY-MM-DD HH:mm') : '-',
+          },
+          {
+            title: t('app.kuaizhizao.demandReplan.col.finishedAt'),
+            dataIndex: 'finished_at',
+            width: 132,
+            uniTableKeepWidth: true,
+            sorter: true,
+            hideInSearch: true,
+            render: (_, row) =>
+              row.finished_at ? formatDateTime(row.finished_at, 'YYYY-MM-DD HH:mm') : '-',
+          },
+          {
+            title: t('app.kuaizhizao.demandReplan.col.failureReason'),
+            key: 'failure_reason',
+            width: 200,
+            ellipsis: true,
+            render: (_, row) => {
+              const err = formatReplanTaskError(row, t);
+              if (!err) return '-';
+              return (
+                <Button
+                  type="link"
+                  size="small"
+                  style={{ padding: 0, maxWidth: '100%' }}
+                  onClick={() => setFailureTask(row)}
+                >
+                  <Typography.Text type="danger" ellipsis style={{ maxWidth: 180 }}>
+                    {err.split('\n')[0]}
+                  </Typography.Text>
+                </Button>
+              );
+            },
+          },
+          {
+            title: t('app.kuaizhizao.demandReplan.col.createdAt'),
+            key: 'task_created_at',
+            dataIndex: 'created_at',
+            width: 132,
+            uniTableKeepWidth: true,
+            sorter: true,
+            defaultSortOrder: 'descend',
+            hideInSearch: true,
+            render: (_, row) =>
+              row.created_at ? formatDateTime(row.created_at, 'YYYY-MM-DD HH:mm') : '-',
+          },
+          {
+            title: t('app.kuaizhizao.demandReplan.col.approvalStatus'),
+            dataIndex: 'approval_status',
+            fixed: 'right',
+            width: 130,
+            uniTableKeepWidth: true,
+            sorter: true,
+            hideInSearch: false,
+            valueType: 'select',
+            valueEnum: taskApprovalValueEnum,
+            render: (_, row) =>
+              renderDemandReplanApprovalStatusTag(
+                labelFromMap(approvalStatusText, row.approval_status),
+                row.approval_status,
+              ),
+          },
+          {
+            title: t('app.kuaizhizao.demandReplan.col.taskStatus'),
+            key: 'lifecycle',
+            dataIndex: 'status',
+            fixed: 'right',
+            width: 110,
+            uniTableKeepWidth: true,
+            sorter: true,
+            hideInSearch: false,
+            valueType: 'select',
+            valueEnum: taskStatusValueEnum,
+            render: (_, row) =>
+              renderDemandReplanTaskStatusTag(labelFromMap(taskStatusText, row.status), row.status),
+          },
+          {
+            title: t('app.kuaizhizao.demandReplan.col.actions'),
+            key: 'action',
+            valueType: 'option',
+            fixed: 'right',
+            hideInSearch: true,
+            render: (_, row) => {
+              const parts: React.ReactNode[] = [];
+              if (formatReplanTaskError(row, t)) {
+                parts.push(
+                  <Button
+                    {...rowActionKind('read')}
+                    key="fail"
+                    size="small"
+                    onClick={() => setFailureTask(row)}
+                  >
+                    {t('app.kuaizhizao.demandReplan.action.viewFailure')}
+                  </Button>,
+                );
+              }
+              parts.push(
+                <Button
+                  {...rowActionKind('execute')}
+                  key="exec"
+                  size="small"
+                  loading={executingTaskId === row.id}
+                  disabled={!isActionableTaskStatus(row.status)}
+                  onClick={() => executeTask(row)}
+                >
+                  {t('app.kuaizhizao.demandReplan.action.execute')}
+                </Button>,
+              );
+              return parts;
+            },
+          },
+        ],
+        GLOBAL_DOC_LIST_FIELD_RANK,
+      ),
+    [
+      executingTaskId,
+      modeText,
+      riskLevelText,
+      taskStatusText,
+      approvalStatusText,
+      taskApprovalValueEnum,
+      taskModeValueEnum,
+      taskRiskValueEnum,
+      taskStatusValueEnum,
+      t,
     ],
-    [executingTaskId, modeText, riskLevelText, taskStatusText, approvalStatusText, taskApprovalValueEnum, taskModeValueEnum, taskRiskValueEnum, taskStatusValueEnum, t]
   );
 
   const impactTaskColumns = useMemo(
@@ -682,7 +718,7 @@ const DemandReplanDashboardPage: React.FC = () => {
             },
             content: (
               <UniTable<DemandReplanTaskItem>
-                columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-replan-dashboard.tasks"
+                columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-replan-dashboard.tasks.rank-v2"
                 actionRef={taskTableActionRef}
                 columns={taskColumns}
                 rowKey="id"

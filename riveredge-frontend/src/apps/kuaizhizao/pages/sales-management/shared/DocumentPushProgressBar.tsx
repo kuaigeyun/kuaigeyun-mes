@@ -1,5 +1,5 @@
 import React from 'react';
-import { Progress, Tooltip } from 'antd';
+import { Popover, Progress } from 'antd';
 import type { ProgressProps } from 'antd';
 import { UNI_TABLE_PROGRESS_COLUMN_WIDTH } from '../../../../../utils/uniTableLayoutColumns';
 
@@ -24,14 +24,56 @@ export type PushProgressDocument = {
 
 const DEFAULT_MAX_CODES_PER_TYPE = 8;
 
+const POPOVER_BODY_STYLE: React.CSSProperties = {
+  padding: '8px 10px',
+};
+
+const SUMMARY_STYLE: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 500,
+  lineHeight: '18px',
+  color: 'var(--ant-color-text)',
+};
+
+const DOC_LIST_STYLE: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'auto minmax(0, 1fr)',
+  columnGap: 10,
+  rowGap: 2,
+  marginTop: 6,
+  maxWidth: 360,
+};
+
+const DOC_LABEL_STYLE: React.CSSProperties = {
+  fontSize: 12,
+  lineHeight: '20px',
+  color: 'var(--ant-color-text-secondary)',
+  whiteSpace: 'nowrap',
+};
+
+const DOC_CODE_STYLE: React.CSSProperties = {
+  fontSize: 12,
+  lineHeight: '20px',
+  fontVariantNumeric: 'tabular-nums',
+  wordBreak: 'break-all',
+  color: 'var(--ant-color-text)',
+};
+
+const DOC_MORE_STYLE: React.CSSProperties = {
+  gridColumn: '1 / -1',
+  fontSize: 12,
+  lineHeight: '20px',
+  color: 'var(--ant-color-text-secondary)',
+};
+
 /**
- * 组装下推进度 Tooltip：首行进度摘要 + 按单据类型分组的单号列表。
+ * 下推进度 Popover：首行摘要，下游单据一行一张。
  */
-export function buildPushProgressTooltip(options: {
+export function buildPushProgressPopoverContent(options: {
   percentLine: string;
   documents?: PushProgressDocument[];
   maxCodesPerType?: number;
-  /** 超出上限时的后缀，如「等 3 单」 */
+  /** 超出上限时单独一行，如「等 3 单」 */
   formatMore?: (hidden: number) => string;
 }): React.ReactNode {
   const { percentLine, documents, maxCodesPerType = DEFAULT_MAX_CODES_PER_TYPE, formatMore } = options;
@@ -46,35 +88,52 @@ export function buildPushProgressTooltip(options: {
   }
 
   if (groups.size === 0) {
-    return percentLine;
+    return <div style={SUMMARY_STYLE}>{percentLine}</div>;
+  }
+
+  const rows: Array<{ key: string; label: string; code: string } | { key: string; more: string }> = [];
+  for (const [label, codes] of groups.entries()) {
+    const shown = codes.slice(0, maxCodesPerType);
+    const hidden = codes.length - shown.length;
+    for (const code of shown) {
+      rows.push({ key: `${label}:${code}`, label, code });
+    }
+    if (hidden > 0) {
+      rows.push({
+        key: `${label}:more`,
+        more: formatMore ? formatMore(hidden) : `…+${hidden}`,
+      });
+    }
   }
 
   return (
-    <div style={{ maxWidth: 320 }}>
-      <div>{percentLine}</div>
-      {Array.from(groups.entries()).map(([label, codes]) => {
-        const shown = codes.slice(0, maxCodesPerType);
-        const hidden = codes.length - shown.length;
-        const codesText =
-          hidden > 0 && formatMore
-            ? `${shown.join('、')}${formatMore(hidden)}`
-            : hidden > 0
-              ? `${shown.join('、')}…+${hidden}`
-              : shown.join('、');
-        return (
-          <div key={label} style={{ marginTop: 4 }}>
-            {label}：{codesText}
-          </div>
-        );
-      })}
+    <div>
+      <div style={SUMMARY_STYLE}>{percentLine}</div>
+      <div style={DOC_LIST_STYLE}>
+        {rows.map((row) =>
+          'more' in row ? (
+            <div key={row.key} style={DOC_MORE_STYLE}>
+              {row.more}
+            </div>
+          ) : (
+            <React.Fragment key={row.key}>
+              <span style={DOC_LABEL_STYLE}>{row.label}</span>
+              <span style={DOC_CODE_STYLE}>{row.code}</span>
+            </React.Fragment>
+          ),
+        )}
+      </div>
     </div>
   );
 }
 
+/** @deprecated 使用 buildPushProgressPopoverContent */
+export const buildPushProgressTooltip = buildPushProgressPopoverContent;
+
 export type DocumentPushProgressBarProps = {
   percent: number;
   /**
-   * 完整 Tooltip（兼容旧用法）。
+   * 完整浮层内容（兼容旧用法）。
    * 若同时传 documents，则作为首行摘要并拼接下推单据列表。
    */
   tooltip?: React.ReactNode;
@@ -133,7 +192,7 @@ export const DocumentPushProgressBar: React.FC<DocumentPushProgressBarProps> = (
 }) => {
   const displayPercent = clampPushProgressPercent(percent);
   const bar = (
-    <div style={{ position: 'relative', width, minWidth: 56, height: BAR_HEIGHT }}>
+    <div style={{ position: 'relative', width, minWidth: 56, height: BAR_HEIGHT, cursor: 'default' }}>
       <Progress
         percent={displayPercent}
         showInfo={false}
@@ -164,25 +223,36 @@ export const DocumentPushProgressBar: React.FC<DocumentPushProgressBarProps> = (
   );
 
   const hasDocuments = Array.isArray(documents) && documents.length > 0;
-  let title: React.ReactNode = null;
+  let content: React.ReactNode = null;
   if (hasDocuments) {
     const percentLine =
       typeof tooltip === 'string' && tooltip
         ? tooltip
         : tooltipSummary || `${displayPercent}%`;
-    title = buildPushProgressTooltip({
+    content = buildPushProgressPopoverContent({
       percentLine,
       documents,
       formatMore: formatMoreDocs,
     });
   } else if (tooltip != null && tooltip !== '') {
-    title = tooltip;
+    content =
+      typeof tooltip === 'string' ? <div style={SUMMARY_STYLE}>{tooltip}</div> : tooltip;
   } else if (tooltipSummary) {
-    title = tooltipSummary;
+    content = <div style={SUMMARY_STYLE}>{tooltipSummary}</div>;
   }
 
-  if (title != null && title !== '') {
-    return <Tooltip title={title}>{bar}</Tooltip>;
+  if (content != null && content !== '') {
+    return (
+      <Popover
+        trigger="hover"
+        placement="top"
+        mouseEnterDelay={0.15}
+        styles={{ body: POPOVER_BODY_STYLE }}
+        content={content}
+      >
+        {bar}
+      </Popover>
+    );
   }
   return bar;
 };

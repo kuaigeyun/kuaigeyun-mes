@@ -36,7 +36,7 @@ import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } f
 import { mapSystemDictionaryItemOptions, resolveSystemDictionaryItemLabel } from '../../../../../utils/systemDictionaryI18n';
 import { getFileDownloadUrl } from '../../../../../services/file';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
-import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
+import { UniTable, readPersistedUniTableViewType, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
   UniTableStackedLineBadge,
@@ -152,6 +152,10 @@ const LazyUniImport = lazy(() =>
 );
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { searchUserDisplay, type User } from '../../../../../services/user';
+import {
+  referenceDisplayToIdOptions,
+  searchReferenceDisplay,
+} from '../../../../../utils/referenceDisplay';
 import { useGlobalStore } from '../../../../../stores';
 import { displayItemsToUsers } from '../../../../../utils/userDisplay';
 import {
@@ -549,13 +553,6 @@ const PurchaseOrdersPage: React.FC = () => {
     loadFieldValuesForDetail: loadPurchaseOrderFieldValuesForDetail,
     resetDetailFieldValues: resetPurchaseOrderDetailFieldValues,
   } = useCustomFieldsForList<PurchaseOrder>({ tableName: PURCHASE_ORDER_CUSTOM_FIELD_TABLE });
-
-  useEffect(() => {
-    if (purchaseOrderListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [purchaseOrderListCustomFields.length]);
-
   /** 标记是否在保存后自动提交（草稿转正式） */
   const submitAfterSaveRef = useRef(false);
 
@@ -628,10 +625,13 @@ const PurchaseOrdersPage: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!isFormPage) return;
     const loadSuppliers = async () => {
       setSuppliersLoading(true);
       try {
-        const res = await apiRequest<unknown>('/apps/master-data/supply-chain/suppliers', { params: { limit: 1000, is_active: true } });
+        const res = await apiRequest<unknown>('/apps/master-data/supply-chain/suppliers', {
+          params: { limit: 200, is_active: true },
+        });
         const list = Array.isArray(res) ? res : (res as any)?.data ?? (res as any)?.items ?? [];
         setSupplierList(Array.isArray(list) ? list : []);
       } catch {
@@ -643,7 +643,7 @@ const PurchaseOrdersPage: React.FC = () => {
     const loadUsers = async () => {
       setUsersLoading(true);
       try {
-        const res = await searchUserDisplay({ page_size: 200, is_active: true });
+        const res = await searchUserDisplay({ page_size: 100, is_active: true });
         setUsers(displayItemsToUsers(res.items || []));
       } catch {
         setUsers([]);
@@ -653,7 +653,7 @@ const PurchaseOrdersPage: React.FC = () => {
     };
     const loadBankAccounts = async () => {
       try {
-        const res = await bankAccountService.list({ limit: 500, is_active: true });
+        const res = await bankAccountService.list({ limit: 200, is_active: true });
         setBankAccounts(res.data || []);
       } catch (e: unknown) {
         setBankAccounts([]);
@@ -668,7 +668,7 @@ const PurchaseOrdersPage: React.FC = () => {
     loadSuppliers();
     loadUsers();
     loadBankAccounts();
-  }, [currentUser, messageApi, t]);
+  }, [currentUser, messageApi, t, isFormPage]);
 
   const purchaseOrderSupplierSearchOptions = useMemo(
     () =>
@@ -883,9 +883,18 @@ const PurchaseOrdersPage: React.FC = () => {
       valueType: 'select',
       fieldProps: {
         showSearch: true,
-        optionFilterProp: 'label',
-        options: purchaseOrderSupplierSearchOptions,
+        filterOption: false,
         placeholder: t('app.kuaizhizao.purchaseOrder.col.supplier'),
+      },
+      debounceTime: 300,
+      request: async ({ keyWords }) => {
+        const res = await searchReferenceDisplay({
+          resource: 'master-data:supply-chain:supplier',
+          hostResource: 'kuaizhizao:purchase-order',
+          keyword: typeof keyWords === 'string' ? keyWords.trim() : undefined,
+          pageSize: 20,
+        });
+        return referenceDisplayToIdOptions(res.items);
       },
     },
     {
@@ -901,10 +910,21 @@ const PurchaseOrdersPage: React.FC = () => {
       valueType: 'select',
       fieldProps: {
         showSearch: true,
-        optionFilterProp: 'label',
-        loading: usersLoading,
-        options: users.map(u => ({ label: u.full_name || u.username, value: u.id })),
+        filterOption: false,
         placeholder: t('app.kuaizhizao.purchaseOrder.col.buyer'),
+      },
+      debounceTime: 300,
+      request: async ({ keyWords }) => {
+        const res = await searchUserDisplay({
+          page: 1,
+          page_size: 20,
+          is_active: true,
+          keyword: typeof keyWords === 'string' ? keyWords.trim() || undefined : undefined,
+        });
+        return (res.items || []).map((u) => ({
+          label: u.label || u.full_name || u.username || String(u.id),
+          value: u.id,
+        }));
       },
     },
     {
@@ -1104,9 +1124,18 @@ const PurchaseOrdersPage: React.FC = () => {
         valueType: 'select',
         fieldProps: {
           showSearch: true,
-          optionFilterProp: 'label',
-          options: purchaseOrderSupplierSearchOptions,
+          filterOption: false,
           placeholder: t('app.kuaizhizao.purchaseOrder.col.supplier'),
+        },
+        debounceTime: 300,
+        request: async ({ keyWords }) => {
+          const res = await searchReferenceDisplay({
+            resource: 'master-data:supply-chain:supplier',
+            hostResource: 'kuaizhizao:purchase-order',
+            keyword: typeof keyWords === 'string' ? keyWords.trim() : undefined,
+            pageSize: 20,
+          });
+          return referenceDisplayToIdOptions(res.items);
         },
       },
       {
@@ -3610,7 +3639,7 @@ const PurchaseOrdersPage: React.FC = () => {
           showSyncButton={viewTypeState !== 'detailTable'}
           onSync={() => setSyncModalVisible(true)}
           toolbar={{ actions: [purchaseOrderHighlightOverdueToolbar] }}
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
               const sf = searchFormValues ?? {};
               const { sortBy, sortOrder } = extractProTableSort(sort);
@@ -3728,7 +3757,9 @@ const PurchaseOrdersPage: React.FC = () => {
 
               const formatListResponse = async (orders: PurchaseOrder[], total: number) => {
                 if (dataViewModeRef.current === 'order') {
-                  const enriched = await enrichPurchaseOrderRecordsWithCustomFields(orders);
+                  const enriched = meta?.purpose === 'prefetch'
+                    ? orders
+                    : await enrichPurchaseOrderRecordsWithCustomFields(orders);
                   return { data: enriched, success: true, total };
                 }
                 return { data: toFlatRows(orders), success: true, total };

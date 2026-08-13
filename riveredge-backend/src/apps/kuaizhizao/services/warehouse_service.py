@@ -1345,7 +1345,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             tenant_id, "production_picking", resp, audit_enabled=audit_required
         )
 
-    async def list_production_pickings(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[ProductionPickingListResponse]:
+    async def list_production_pickings(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters):
         """获取生产领料单列表"""
         from apps.kuaizhizao.services.warehouse_list_core import (
             PRODUCTION_PICKING_KEYWORD_FIELDS,
@@ -1390,6 +1390,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             updated_start_date=filters.get("updated_start_date"),
             updated_end_date=filters.get("updated_end_date"),
         )
+        total = await query.count()
         pickings = await query.offset(skip).limit(limit).order_by(order_clause)
         from tortoise.functions import Count, Sum
         from apps.kuaizhizao.services.document_action_policy.enricher import enrich_outbound_hub_list_capabilities
@@ -1493,7 +1494,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             rows = await enrich_items(
                 tenant_id, "production_picking", rows, audit_enabled=audit_required
             )
-        return rows
+        return rows, total
 
     async def update_production_picking(self, tenant_id: int, picking_id: int, picking_data: ProductionPickingUpdate, updated_by: int) -> ProductionPickingResponse:
         """更新生产领料单"""
@@ -1527,7 +1528,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         wo_svc = WorkOrderService()
         score_svc = WorkOrderScoreService()
 
-        # 1. 基础工单筛选
+        # 1. 基础工单筛选：SQL 排序+分页后，只对当前页做齐套/评分
         released_statuses = ["released", "dispatched", "confirmed", "已下达", "已确认"]
 
         query = WorkOrder.filter(
@@ -1537,31 +1538,29 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             deleted_at__isnull=True,
         )
 
-        work_orders = await query.all()
-        total_count = len(work_orders)
-
-        if not work_orders:
+        total_count = await query.count()
+        if total_count == 0:
             return MaterialPrepReminderResponse(items=[], total_count=0)
 
-        wo_ids = [wo.id for wo in work_orders]
+        page_orders = (
+            await query.order_by("planned_start_date", "id")
+            .offset(skip)
+            .limit(limit)
+        )
+        if not page_orders:
+            return MaterialPrepReminderResponse(items=[], total_count=total_count)
+
+        page_ids = [wo.id for wo in page_orders]
         score_map = await score_svc.batch_get_or_compute(
             tenant_id,
-            wo_ids,
+            page_ids,
             "picking",
             refresh_if_stale=True,
             include_kitting=False,
         )
-
-        def _sort_key(wo: WorkOrder) -> tuple:
-            score = score_map.get(wo.id, 0.0)
-            start = wo.planned_start_date or datetime.max
-            return (-score, start)
-
-        work_orders.sort(key=_sort_key)
-        page_orders = work_orders[skip : skip + limit]
+        cached_scores = await score_svc.batch_get_scores(tenant_id, page_ids, "picking")
 
         reminders = []
-        cached_scores = await score_svc.batch_get_scores(tenant_id, [wo.id for wo in page_orders], "picking")
         for wo in page_orders:
             kitting = await wo_svc.get_work_order_kitting_analysis(tenant_id, wo.id)
             cached = cached_scores.get(wo.id)
@@ -4734,7 +4733,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
 
         return await enrich_record(tenant_id, "sales_delivery", resp)
 
-    async def list_sales_deliveries(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[SalesDeliveryResponse]:
+    async def list_sales_deliveries(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters):
         """获取销售出库单列表"""
         from apps.kuaizhizao.services.warehouse_list_core import (
             SALES_DELIVERY_KEYWORD_FIELDS,
@@ -4783,6 +4782,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             updated_start_date=filters.get("updated_start_date"),
             updated_end_date=filters.get("updated_end_date"),
         )
+        total = await query.count()
         deliveries = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             batch_document_item_counts,
@@ -4801,9 +4801,10 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         )
         from core.services.approval.audit_record_enricher import enrich_items
 
-        return await enrich_items(tenant_id, "sales_delivery", enrich_outbound_hub_list_capabilities(
+        rows = await enrich_items(tenant_id, "sales_delivery", enrich_outbound_hub_list_capabilities(
             deliveries, out, "sales_delivery", item_counts=item_counts
         ))
+        return rows, total
 
     async def update_sales_delivery(
         self,
@@ -6259,7 +6260,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         from datetime import datetime
         
         # 查询所有符合条件的销售出库单（不分页）
-        deliveries = await self.list_sales_deliveries(tenant_id, skip=0, limit=10000, **filters)
+        deliveries, _total = await self.list_sales_deliveries(tenant_id, skip=0, limit=10000, **filters)
         
         # 创建导出目录
         export_dir = os.path.join(tempfile.gettempdir(), 'riveredge_exports')

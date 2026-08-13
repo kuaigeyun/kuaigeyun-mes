@@ -365,7 +365,6 @@ async def get_material_inventory_info(
     on_hand = Decimal("0")
     reserved = Decimal("0")
     batch_qty = Decimal("0")
-    line_items: List[Any] = []
 
     # 1. MaterialBatch：主仓批次库存（与报表「批次库存查询」口径对齐：quantity>0、未删除、未过期；
     #    排除明确已出库/报废/过期状态；避免仅 status=in_stock 时与即时库存页不一致）
@@ -388,14 +387,18 @@ async def get_material_inventory_info(
             Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
         )
 
-        # 使用 manual loop 替代 aggregate，绕过某些环境下 'QuerySet' object has no attribute 'aggregate' 的异常
-        batch_items = await batch_query.all()
-        batch_qty = sum((item.quantity or Decimal("0")) for item in batch_items)
+        batch_agg = (
+            await batch_query.group_by("material_id")
+            .annotate(qty=Sum("quantity"))
+            .values("material_id", "qty")
+        )
+        batch_qty = _decimal_or_zero(batch_agg[0]["qty"] if batch_agg else 0)
         on_hand += batch_qty
     except Exception as e:
         logger.warning(f"MaterialBatch 查询失败: {e}")
 
     # 2. LineSideInventory：线边仓库存（status=available）
+    line_side_rows_for_breakdown: List[Dict[str, Any]] = []
     try:
         from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
 
@@ -407,23 +410,44 @@ async def get_material_inventory_info(
         )
         if warehouse_id is not None:
             line_query = line_query.filter(warehouse_id=warehouse_id)
-            line_items = await line_query.all()
         elif warehouse_ids is not None:
             if len(warehouse_ids) == 0:
-                line_items = []
+                line_query = None
             else:
                 line_query = line_query.filter(warehouse_id__in=warehouse_ids)
-                line_items = await line_query.all()
-        else:
-            line_items = await line_query.all()
 
-        line_qty = sum(
-            (item.quantity or Decimal("0")) - (item.reserved_quantity or Decimal("0"))
-            for item in line_items
-        )
-        line_reserved = sum(item.reserved_quantity or Decimal("0") for item in line_items)
-        on_hand += (line_qty + line_reserved)  # on_hand 包含全部
-        reserved += line_reserved
+        if line_query is not None:
+            if with_breakdown:
+                line_rows_agg = (
+                    await line_query.group_by("warehouse_id")
+                    .annotate(qty=Sum("quantity"), reserved_qty=Sum("reserved_quantity"))
+                    .values("warehouse_id", "qty", "reserved_qty")
+                )
+                line_qty = Decimal("0")
+                line_reserved = Decimal("0")
+                for row in line_rows_agg:
+                    q = _decimal_or_zero(row.get("qty"))
+                    r = _decimal_or_zero(row.get("reserved_qty"))
+                    line_qty += q - r
+                    line_reserved += r
+                    line_side_rows_for_breakdown.append(
+                        {
+                            "warehouse_id": int(row["warehouse_id"]),
+                            "quantity": q,
+                            "reserved": r,
+                        }
+                    )
+            else:
+                line_agg = (
+                    await line_query.group_by("material_id")
+                    .annotate(qty=Sum("quantity"), reserved_qty=Sum("reserved_quantity"))
+                    .values("material_id", "qty", "reserved_qty")
+                )
+                line_qty_raw = _decimal_or_zero(line_agg[0]["qty"] if line_agg else 0)
+                line_reserved = _decimal_or_zero(line_agg[0]["reserved_qty"] if line_agg else 0)
+                line_qty = line_qty_raw - line_reserved
+            on_hand += line_qty + line_reserved  # on_hand 包含全部
+            reserved += line_reserved
     except Exception as e:
         logger.warning(f"LineSideInventory 查询失败: {e}")
 
@@ -443,27 +467,21 @@ async def get_material_inventory_info(
     }
 
     if with_breakdown:
-        line_by_wh: Dict[int, Dict[str, Decimal]] = {}
-        for item in line_items:
-            wid = int(item.warehouse_id)
-            if wid not in line_by_wh:
-                line_by_wh[wid] = {"quantity": Decimal("0"), "reserved": Decimal("0")}
-            line_by_wh[wid]["quantity"] += item.quantity or Decimal("0")
-            line_by_wh[wid]["reserved"] += item.reserved_quantity or Decimal("0")
-
         line_rows: List[Dict[str, Any]] = []
-        if line_by_wh:
+        if line_side_rows_for_breakdown:
             try:
                 from apps.master_data.models.warehouse import Warehouse
 
-                wh_list = await Warehouse.filter(id__in=list(line_by_wh.keys())).all()
+                wh_ids = [int(r["warehouse_id"]) for r in line_side_rows_for_breakdown]
+                wh_list = await Warehouse.filter(id__in=wh_ids).all()
                 wh_name = {w.id: w.name for w in wh_list}
             except Exception as e:
                 logger.warning(f"仓库名称加载失败: {e}")
                 wh_name = {}
-            for wid, agg in sorted(line_by_wh.items(), key=lambda x: x[0]):
-                q = agg["quantity"]
-                r = agg["reserved"]
+            for row in sorted(line_side_rows_for_breakdown, key=lambda x: int(x["warehouse_id"])):
+                wid = int(row["warehouse_id"])
+                q = _decimal_or_zero(row["quantity"])
+                r = _decimal_or_zero(row["reserved"])
                 av = q - r
                 if av < 0:
                     av = Decimal("0")
@@ -749,31 +767,38 @@ async def batch_get_material_inventory(
     warehouse_ids: Optional[List[int]] = None,
     ownership_type: Optional[str] = None,
     customer_id: Optional[int] = None,
-) -> Dict[int, Decimal]:
+) -> Dict[int, Dict[str, Decimal]]:
     """
-    批量获取物料的可用库存数量（性能优化版，减少数据库往返）
+    批量获取物料库存（SQL GROUP BY，减少数据库往返）。
 
-    Args:
-        tenant_id: 租户ID
-        material_ids: 物料ID列表
-        warehouse_id: 仓库ID（可选）
+    口径与 get_material_inventory_info（无 breakdown）一致：
+    - on_hand = 主仓批次 + 线边现存量
+    - reserved_quantity = 线边预留
+    - available_quantity = on_hand - reserved（下限 0）
 
     Returns:
-        Dict[int, Decimal]: material_id -> available_quantity
+        Dict[int, Dict[str, Decimal]]: material_id -> {
+            available_quantity, on_hand, reserved_quantity
+        }
     """
     if not material_ids:
         return {}
 
-    inventory_map: Dict[int, Decimal] = {mid: Decimal("0") for mid in material_ids}
-    
-    # 1. 批量查询 MaterialBatch
+    unique_ids = list({int(mid) for mid in material_ids if mid is not None})
+    if not unique_ids:
+        return {}
+
+    on_hand_map: Dict[int, Decimal] = {mid: Decimal("0") for mid in unique_ids}
+    reserved_map: Dict[int, Decimal] = {mid: Decimal("0") for mid in unique_ids}
+
+    # 1. 批量查询 MaterialBatch（SQL GROUP BY，不拉全表行）
     try:
         from apps.master_data.models.material_batch import MaterialBatch
 
         today = date.today()
         batch_q = MaterialBatch.filter(
             tenant_id=tenant_id,
-            material_id__in=material_ids,
+            material_id__in=unique_ids,
             deleted_at__isnull=True,
             quantity__gt=0,
         ).filter(~Q(status__in=["out_stock", "scrapped", "expired"])).filter(
@@ -783,48 +808,69 @@ async def batch_get_material_inventory(
             batch_q = batch_q.filter(ownership_type=ownership_type)
         if customer_id is not None:
             batch_q = batch_q.filter(customer_id=customer_id)
-        batch_items = await batch_q.all()
-
-        for item in batch_items:
-            mid = item.material_id
-            inventory_map[mid] += (item.quantity or Decimal("0"))
+        batch_rows = (
+            await batch_q.group_by("material_id")
+            .annotate(qty=Sum("quantity"))
+            .values("material_id", "qty")
+        )
+        for row in batch_rows:
+            mid = int(row["material_id"])
+            if mid in on_hand_map:
+                on_hand_map[mid] += _decimal_or_zero(row.get("qty"))
     except Exception as e:
         logger.warning(f"MaterialBatch 批量查询失败: {e}")
 
-    # 2. 批量查询 LineSideInventory
+    # 2. 批量查询 LineSideInventory（SQL GROUP BY）
     try:
         from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
 
         line_query = LineSideInventory.filter(
             tenant_id=tenant_id,
-            material_id__in=material_ids,
+            material_id__in=unique_ids,
             deleted_at__isnull=True,
             status="available",
         )
         if warehouse_id is not None:
             line_query = line_query.filter(warehouse_id=warehouse_id)
-            line_items = await line_query.all()
         elif warehouse_ids is not None:
             if len(warehouse_ids) == 0:
-                line_items = []
+                line_query = None
             else:
                 line_query = line_query.filter(warehouse_id__in=warehouse_ids)
-                line_items = await line_query.all()
-        else:
-            line_items = await line_query.all()
 
-        for item in line_items:
-            mid = item.material_id
-            available = (item.quantity or Decimal("0")) - (item.reserved_quantity or Decimal("0"))
-            if available > 0:
-                inventory_map[mid] += available
+        if line_query is not None:
+            line_rows = (
+                await line_query.group_by("material_id")
+                .annotate(qty=Sum("quantity"), reserved_qty=Sum("reserved_quantity"))
+                .values("material_id", "qty", "reserved_qty")
+            )
+            for row in line_rows:
+                mid = int(row["material_id"])
+                if mid not in on_hand_map:
+                    continue
+                line_qty = _decimal_or_zero(row.get("qty"))
+                line_reserved = _decimal_or_zero(row.get("reserved_qty"))
+                on_hand_map[mid] += line_qty
+                reserved_map[mid] += line_reserved
     except Exception as e:
         logger.warning(f"LineSideInventory 批量查询失败: {e}")
 
-    # 确保数值不小于 0
-    for mid in inventory_map:
-        if inventory_map[mid] < 0:
-            inventory_map[mid] = Decimal("0")
+    inventory_map: Dict[int, Dict[str, Decimal]] = {}
+    for mid in unique_ids:
+        on_hand = on_hand_map[mid]
+        reserved = reserved_map[mid]
+        if on_hand < 0:
+            on_hand = Decimal("0")
+        if reserved < 0:
+            reserved = Decimal("0")
+        available = on_hand - reserved
+        if available < 0:
+            available = Decimal("0")
+        inventory_map[mid] = {
+            "available_quantity": available,
+            "on_hand": on_hand,
+            "reserved_quantity": reserved,
+        }
 
     return inventory_map
 

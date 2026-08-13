@@ -7,7 +7,7 @@
  * Date: 2026-01-15
  */
 
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
@@ -21,7 +21,6 @@ import { UniTableDetailHeader } from '../../../../../components/uni-table-detail
 import { inventoryTransferApi } from '../../../services/inventory-transfer';
 import { getInventoryTransferLifecycle } from '../../../utils/inventoryTransferLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { materialApi } from '../../../../master-data/services/material';
 import { storageAreaApi, storageLocationApi } from '../../../../master-data/services/warehouse';
 import dayjs from 'dayjs';
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
@@ -128,8 +127,6 @@ const InventoryTransferPage: React.FC = () => {
   const [currentTransfer, setCurrentTransfer] = useState<InventoryTransfer | null>(null);
 
   // 仓库列表状态 (交由 UniWarehouseSelect 管理)
-  // 物料列表状态
-  const [materialList, setMaterialList] = useState<any[]>([]);
   const [storageAreaList, setStorageAreaList] = useState<any[]>([]);
   const [storageLocationList, setStorageLocationList] = useState<any[]>([]);
   // 当前调拨单ID（用于添加明细）
@@ -200,38 +197,18 @@ const InventoryTransferPage: React.FC = () => {
 
   // 加载仓库逻辑移除
 
-  /**
-   * 加载物料列表
-   */
-  React.useEffect(() => {
-    const loadMaterials = async () => {
-      try {
-        const { items } = await materialApi.list({ isActive: true, limit: 10000 });
-        setMaterialList(items);
-      } catch (error) {
-        console.error('加载物料列表失败:', error);
-        setMaterialList([]);
-      }
-    };
-    loadMaterials();
-  }, []);
-
-  React.useEffect(() => {
+  useEffect(() => {
+    if (!createModalVisible && !itemModalVisible) return;
     const loadStorageMetadata = async () => {
-      try {
-        const [areas, locations] = await Promise.all([
-          storageAreaApi.list({ limit: 10000, is_active: true }),
-          storageLocationApi.list({ limit: 10000, is_active: true }),
-        ]);
-        setStorageAreaList(areas?.items || []);
-        setStorageLocationList(locations?.items || []);
-      } catch {
-        setStorageAreaList([]);
-        setStorageLocationList([]);
-      }
+      const [areas, locations] = await Promise.all([
+        storageAreaApi.list({ limit: 1000, is_active: true }),
+        storageLocationApi.list({ limit: 1000, is_active: true }),
+      ]);
+      setStorageAreaList(areas?.items || []);
+      setStorageLocationList(locations?.items || []);
     };
     loadStorageMetadata();
-  }, []);
+  }, [createModalVisible, itemModalVisible]);
 
   /**
    * 处理创建调拨单
@@ -380,8 +357,9 @@ const InventoryTransferPage: React.FC = () => {
         return;
       }
 
-      const material = materialList.find((m: any) => m.id === values.material_id);
-      if (!material) {
+      const materialCode = String(values.material_code || '').trim();
+      const materialName = String(values.material_name || '').trim();
+      if (!values.material_id || !materialCode) {
         messageApi.error(t('app.kuaizhizao.warehouseCommon.materialNotFound'));
         return;
       }
@@ -405,8 +383,8 @@ const InventoryTransferPage: React.FC = () => {
       await inventoryTransferApi.createItem(currentTransferId.toString(), {
         transfer_id: currentTransferId,
         material_id: values.material_id,
-        material_code: material.mainCode ?? material.code ?? '',
-        material_name: material.name,
+        material_code: materialCode,
+        material_name: materialName,
         from_warehouse_id: values.from_warehouse_id,
         from_storage_area_id: fromArea.id,
         from_storage_area_code: fromArea.code,
@@ -1124,20 +1102,17 @@ const InventoryTransferPage: React.FC = () => {
         formRef={itemFormRef}
         {...MODAL_CONFIG}
       >
-        <ProFormSelect
+        <UniMaterialSelect
           name="material_id"
           label={t('app.kuaizhizao.warehouseCommon.colMaterial')}
           placeholder={t('app.kuaizhizao.warehouseCommon.selectMaterial')}
-          rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.selectMaterial') }]}
-          options={materialList.map((m: any) => ({
-            label: `${m.mainCode ?? m.code ?? ''} - ${m.name}`,
-            value: m.id,
-          }))}
-          fieldProps={{
-            showSearch: true,
-            filterOption: (input: string, option: any) =>
-              option?.label?.toLowerCase().includes(input.toLowerCase()),
+          required
+          fillMapping={{
+            material_code: 'mainCode',
+            material_name: 'name',
           }}
+          showQuickCreate
+          showAdvancedSearch
         />
         <ProFormDigit
           name="quantity"

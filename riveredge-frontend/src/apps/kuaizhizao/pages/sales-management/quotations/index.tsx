@@ -26,7 +26,7 @@ import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pr
 import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Tooltip, Switch, Alert } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, BranchesOutlined, ReloadOutlined, FileTextOutlined, FormOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
-import { UniTable, invalidateUniTableListCache, readPersistedUniTableViewType } from '../../../../../components/uni-table';
+import { UniTable, invalidateUniTableListCache, readPersistedUniTableViewType, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import {
   UniTableStackedPrimaryCell,
@@ -147,6 +147,10 @@ import {
 import { hasModulePermission, hasReviewPermission } from '../../../../../utils/permissionContract';
 import { searchUserDisplay, type User } from '../../../../../services/user';
 import { displayItemsToUsers, normalizeUserDisplayName } from '../../../../../utils/userDisplay';
+import {
+  referenceDisplayToIdOptions,
+  searchReferenceDisplay,
+} from '../../../../../utils/referenceDisplay';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -942,11 +946,12 @@ const QuotationsPage: React.FC = () => {
   const canReviewQuotation = hasReviewPermission(currentUser ?? undefined, QUOTATION_RESOURCE);
 
   useEffect(() => {
+    if (!isFormPage) return;
     let cancelled = false;
     const loadCustomers = async () => {
       setCustomersLoading(true);
       try {
-        const result = await customerApi.list({ limit: 1000, isActive: true });
+        const result = await customerApi.list({ limit: 200, isActive: true });
         if (!cancelled) {
           setCustomerList(unwrapSupplyPagedList(result));
         }
@@ -956,6 +961,29 @@ const QuotationsPage: React.FC = () => {
         if (!cancelled) setCustomersLoading(false);
       }
     };
+    const loadUsers = async () => {
+      setUsersLoading(true);
+      try {
+        const userRes = await searchUserDisplay({ page: 1, page_size: 100, is_active: true });
+        if (!cancelled) {
+          setUserList(displayItemsToUsers(userRes.items || []));
+        }
+      } catch {
+        if (!cancelled) setUserList([]);
+      } finally {
+        if (!cancelled) setUsersLoading(false);
+      }
+    };
+    void loadCustomers();
+    void loadUsers();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser, isFormPage]);
+
+  useEffect(() => {
+    if (!isFormPage) return;
+    let cancelled = false;
     const loadMaterials = async () => {
       try {
         const matRes = await apiRequest<unknown>('/apps/master-data/materials', {
@@ -970,26 +998,11 @@ const QuotationsPage: React.FC = () => {
         if (!cancelled) setMaterialList([]);
       }
     };
-    const loadUsers = async () => {
-      setUsersLoading(true);
-      try {
-        const userRes = await searchUserDisplay({ page: 1, page_size: 200, is_active: true });
-        if (!cancelled) {
-          setUserList(displayItemsToUsers(userRes.items || []));
-        }
-      } catch {
-        if (!cancelled) setUserList([]);
-      } finally {
-        if (!cancelled) setUsersLoading(false);
-      }
-    };
-    void loadCustomers();
     void loadMaterials();
-    void loadUsers();
     return () => {
       cancelled = true;
     };
-  }, [currentUser]);
+  }, [isFormPage]);
 
   useEffect(() => {
     if (materialList.length > 0) {
@@ -1135,10 +1148,18 @@ const QuotationsPage: React.FC = () => {
       valueType: 'select',
       fieldProps: {
         showSearch: true,
-        optionFilterProp: 'label',
-        loading: customersLoading,
-        options: quotationCustomerSearchOptions,
+        filterOption: false,
         placeholder: t('field.customer.name'),
+      },
+      debounceTime: 300,
+      request: async ({ keyWords }) => {
+        const res = await searchReferenceDisplay({
+          resource: 'master-data:supply-chain:customer',
+          hostResource: 'kuaizhizao:quotation',
+          keyword: typeof keyWords === 'string' ? keyWords.trim() : undefined,
+          pageSize: 20,
+        });
+        return referenceDisplayToIdOptions(res.items);
       },
     },
     {
@@ -1149,10 +1170,21 @@ const QuotationsPage: React.FC = () => {
       valueType: 'select',
       fieldProps: {
         showSearch: true,
-        optionFilterProp: 'label',
-        loading: usersLoading,
-        options: quotationSalesmanSearchOptions,
+        filterOption: false,
         placeholder: t('field.customer.salesmanPlaceholder'),
+      },
+      debounceTime: 300,
+      request: async ({ keyWords }) => {
+        const res = await searchUserDisplay({
+          page: 1,
+          page_size: 20,
+          is_active: true,
+          keyword: typeof keyWords === 'string' ? keyWords.trim() || undefined : undefined,
+        });
+        return (res.items || []).map((u) => ({
+          label: u.label || u.full_name || u.username || String(u.id),
+          value: u.id,
+        }));
       },
     },
     {
@@ -4003,7 +4035,8 @@ const QuotationsPage: React.FC = () => {
           }}
           showSyncButton
           onSync={() => setSyncModalVisible(true)}
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
+            const isPrefetch = meta?.purpose === 'prefetch';
             try {
               const dr = searchFormValues?.date_range as [unknown, unknown] | undefined;
               let startDate: string | undefined;
@@ -4037,10 +4070,17 @@ const QuotationsPage: React.FC = () => {
                 list_scope: listScopeFilterRef.current,
                 include_items: dataViewModeRef.current === 'detail',
               });
-              setListTotal(response.total ?? 0);
-              const flat = await enrichQuotationRecordsWithCustomFields(response.data || []);
-              lastQuotationsFlatCacheRef.current = flat;
-              setTableQuotationsFlat(flat);
+              if (!isPrefetch) {
+                setListTotal(response.total ?? 0);
+              }
+              const raw = response.data || [];
+              const flat = isPrefetch
+                ? raw
+                : await enrichQuotationRecordsWithCustomFields(raw);
+              if (!isPrefetch) {
+                lastQuotationsFlatCacheRef.current = flat;
+                setTableQuotationsFlat(flat);
+              }
               if (dataViewModeRef.current === 'order') {
                 return {
                   data: buildQuotationSeriesTree(flat),
@@ -4101,8 +4141,10 @@ const QuotationsPage: React.FC = () => {
                 total: response.total ?? 0,
               };
             } catch {
-              messageApi.error(t('app.kuaizhizao.quotation.listFailed'));
-              setListTotal(0);
+              if (!isPrefetch) {
+                messageApi.error(t('app.kuaizhizao.quotation.listFailed'));
+                setListTotal(0);
+              }
               return { data: [], success: false, total: 0 };
             }
           }}

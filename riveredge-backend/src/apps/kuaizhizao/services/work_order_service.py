@@ -3971,10 +3971,12 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         # 两侧必须同为站点墙钟 naive；不可把 UTC aware 的 resolve_business_datetime()
         # 直接与剥掉 tz 后的 planned_end 比较（会 TypeError → 500）。
         now = _normalize_naive_local_datetime(resolve_business_datetime())
+        # SQL 先收窄「计划结束已过」候选，禁止全表工单 .all() 再 Python 过滤
         query = WorkOrder.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             planned_end_date__isnull=False,
+            planned_end_date__lt=now,
         ).exclude(status__in=list(WORK_ORDER_DELAY_EXCLUDED_STATUSES))
 
         if status:

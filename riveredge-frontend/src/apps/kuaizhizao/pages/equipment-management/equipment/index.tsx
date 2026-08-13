@@ -40,7 +40,7 @@ import { SecureImage } from '../../../../../components/secure-image';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { EditOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined, QrcodeOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
   UniTableStackedPrimaryCell,
@@ -305,20 +305,18 @@ const EquipmentPage: React.FC = () => {
     generateCustomFieldColumns: generateEquipmentCustomFieldColumns,
     enrichRecordsWithCustomFields: enrichEquipmentRecordsWithCustomFields,
   } = useCustomFieldsForList<Equipment>({ tableName: EQUIPMENT_CUSTOM_FIELD_TABLE });
-
   useEffect(() => {
-    if (equipmentListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
+    if (ledgerGroupMode !== 'workshop' && ledgerGroupMode !== 'production_line') {
+      return;
     }
-  }, [equipmentListCustomFields.length]);
-
-  useEffect(() => {
+    let cancelled = false;
     void (async () => {
       try {
         const [workshopsRes, linesRes] = await Promise.all([
           workshopApi.list({ limit: 1000, is_active: true }),
           productionLineApi.list({ limit: 1000, is_active: true }),
         ]);
+        if (cancelled) return;
         setWorkshopGroupOptions(
           factoryListItems(workshopsRes).map((ws) => ({ id: ws.id, name: ws.name })),
         );
@@ -326,11 +324,16 @@ const EquipmentPage: React.FC = () => {
           factoryListItems(linesRes).map((line) => ({ id: line.id, name: line.name, code: line.code })),
         );
       } catch {
-        setWorkshopGroupOptions([]);
-        setProductionLineGroupOptions([]);
+        if (!cancelled) {
+          setWorkshopGroupOptions([]);
+          setProductionLineGroupOptions([]);
+        }
       }
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [ledgerGroupMode]);
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
@@ -905,7 +908,7 @@ const EquipmentPage: React.FC = () => {
           pinnedTabsField={ledgerPinnedTabsField}
           pinnedTabsValueEnum={ledgerPinnedTabsValueEnum}
           skipFuzzyPinyinClientFilter
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
               const listParams = resolveLedgerListParams(searchFormValues, sort);
               const response = await equipmentApi.list({
@@ -914,7 +917,9 @@ const EquipmentPage: React.FC = () => {
                 ...listParams,
               });
               const { data, total } = normalizeEquipmentListResponse(response);
-              const enriched = await enrichEquipmentRecordsWithCustomFields(data as Equipment[]);
+              const enriched = meta?.purpose === 'prefetch'
+                ? data as Equipment[]
+                : await enrichEquipmentRecordsWithCustomFields(data as Equipment[]);
               return {
                 data: enriched,
                 success: true,

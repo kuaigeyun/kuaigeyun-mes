@@ -1,1 +1,0 @@
-function i(o,n,t){const c=typeof o=="string"?new Blob([o],{type:t||"text/plain"}):o,d=window.URL.createObjectURL(c),e=document.createElement("a");e.href=d,e.download=n,document.body.appendChild(e),e.click(),document.body.removeChild(e),window.URL.revokeObjectURL(d)}export{i as d};

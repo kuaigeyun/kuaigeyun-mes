@@ -23,7 +23,7 @@ import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText,
 import { App, Button, Space, Table, Row, Col, Form as AntForm, InputNumber, Input, Select, Dropdown, Tag, Card, Typography, Spin, Empty, Modal, Switch, Alert, List, Descriptions } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, CopyOutlined, EditOutlined, PrinterOutlined } from '@ant-design/icons';
 import { theme as AntdTheme } from 'antd';
-import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
+import { UniTable, readPersistedUniTableViewType, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -103,6 +103,10 @@ import {
   buildDocumentReturnListImportTemplate,
   parseDocumentReturnListImport,
 } from '../../shared/documentReturnListImport';
+import {
+  referenceDisplayToIdOptions,
+  searchReferenceDisplay,
+} from '../../../../../utils/referenceDisplay';
 
 const SALES_RETURN_RESOURCE = 'kuaizhizao:sales-return';
 const SALES_RETURN_LIST_PERSISTENCE_ID =
@@ -391,15 +395,6 @@ const SalesReturnsPage: React.FC = () => {
     dataViewModeRef.current = dataViewMode;
   }, [dataViewMode]);
   const [customerList, setCustomerList] = useState<any[]>([]);
-  const [customersLoading, setCustomersLoading] = useState(false);
-  const salesReturnCustomerSearchOptions = useMemo(
-    () =>
-      customerList.map((c: { id?: number; customer_id?: number; name?: string; customer_name?: string; code?: string }) => ({
-        value: Number(c.id ?? c.customer_id),
-        label: String(c.name ?? c.customer_name ?? c.code ?? ''),
-      })),
-    [customerList],
-  );
   const salesReturnLifecycleValueEnum = useMemo(
     () => buildSalesReturnLifecycleValueEnum(t),
     [t],
@@ -430,15 +425,22 @@ const SalesReturnsPage: React.FC = () => {
   );
 
   useEffect(() => {
-    setCustomersLoading(true);
+    if (!modalVisible) return;
+    let cancelled = false;
     customerApi
-      .list({ limit: 1000, isActive: true })
+      .list({ limit: 200, isActive: true })
       .then((res) => {
-        setCustomerList(Array.isArray(res) ? res : (res as any)?.data || (res as any)?.items || []);
+        if (!cancelled) {
+          setCustomerList(Array.isArray(res) ? res : (res as any)?.data || (res as any)?.items || []);
+        }
       })
-      .catch(() => setCustomerList([]))
-      .finally(() => setCustomersLoading(false));
-  }, []);
+      .catch(() => {
+        if (!cancelled) setCustomerList([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [modalVisible]);
 
   const selectedReturnsForBatch = useMemo(
     () =>
@@ -497,13 +499,6 @@ const SalesReturnsPage: React.FC = () => {
     loadFieldValuesForDetail: loadSalesReturnFieldValuesForDetail,
     resetDetailFieldValues: resetSalesReturnDetailFieldValues,
   } = useCustomFieldsForList<SalesReturn>({ tableName: SALES_RETURN_CUSTOM_FIELD_TABLE });
-
-  useEffect(() => {
-    if (salesReturnListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [salesReturnListCustomFields.length]);
-
   const {
     selectedWarehouseId,
     locationOptions,
@@ -630,10 +625,18 @@ const SalesReturnsPage: React.FC = () => {
       valueType: 'select',
       fieldProps: {
         showSearch: true,
-        optionFilterProp: 'label',
-        loading: customersLoading,
-        options: salesReturnCustomerSearchOptions,
+        filterOption: false,
         placeholder: t('app.kuaizhizao.salesReturn.customer'),
+      },
+      debounceTime: 300,
+      request: async ({ keyWords }) => {
+        const res = await searchReferenceDisplay({
+          resource: 'master-data:supply-chain:customer',
+          hostResource: SALES_RETURN_RESOURCE,
+          keyword: typeof keyWords === 'string' ? keyWords.trim() : undefined,
+          pageSize: 20,
+        });
+        return referenceDisplayToIdOptions(res.items);
       },
     },
     {
@@ -789,8 +792,6 @@ const SalesReturnsPage: React.FC = () => {
   ], SALES_DOC_LIST_FIELD_RANK),
     [
       t,
-      customersLoading,
-      salesReturnCustomerSearchOptions,
       salesReturnCustomFieldColumns,
       salesReturnLifecycleValueEnum,
       salesReturnAuditColumn,
@@ -1093,11 +1094,7 @@ const SalesReturnsPage: React.FC = () => {
           limit: 200,
           status: '已出库',
         });
-        const list = Array.isArray((res as any)?.data)
-          ? (res as any).data
-          : Array.isArray((res as any)?.items)
-            ? (res as any).items
-            : [];
+        const list = (res as { items?: unknown[] })?.items ?? [];
         const kw = keyword.trim().toLowerCase();
         const candidates: PullSalesDeliveryCandidate[] = list
           .map((row: any) => ({
@@ -1596,10 +1593,18 @@ const SalesReturnsPage: React.FC = () => {
         valueType: 'select',
         fieldProps: {
           showSearch: true,
-          optionFilterProp: 'label',
-          loading: customersLoading,
-          options: salesReturnCustomerSearchOptions,
+          filterOption: false,
           placeholder: t('app.kuaizhizao.salesReturn.customer'),
+        },
+        debounceTime: 300,
+        request: async ({ keyWords }) => {
+          const res = await searchReferenceDisplay({
+            resource: 'master-data:supply-chain:customer',
+            hostResource: SALES_RETURN_RESOURCE,
+            keyword: typeof keyWords === 'string' ? keyWords.trim() : undefined,
+            pageSize: 20,
+          });
+          return referenceDisplayToIdOptions(res.items);
         },
       },
       {
@@ -1692,7 +1697,7 @@ const SalesReturnsPage: React.FC = () => {
         ),
       },
     ],
-    [customersLoading, salesReturnCustomerSearchOptions, salesReturnLifecycleValueEnum, t],
+    [salesReturnLifecycleValueEnum, t],
   );
 
   const salesReturnTraceDocument = useMemo(() => {
@@ -1787,7 +1792,7 @@ const SalesReturnsPage: React.FC = () => {
               ])}
             />,
           ]}
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
               const sf = searchFormValues ?? {};
               const lifecycleParams = resolveSalesReturnListLifecycleParams(sf, params);
@@ -1834,7 +1839,9 @@ const SalesReturnsPage: React.FC = () => {
               }
               const response = await warehouseApi.salesReturn.list(apiParams);
               const list = response?.data ?? [];
-              const enriched = await enrichSalesReturnRecordsWithCustomFields(list);
+              const enriched = meta?.purpose === 'prefetch'
+                ? list
+                : await enrichSalesReturnRecordsWithCustomFields(list);
               // 行缓存唯一真源：onTableDataChange（prefetch 会走本 request，禁止在此覆盖）
               if (dataViewModeRef.current === 'order') {
                 return {
@@ -2024,17 +2031,19 @@ const SalesReturnsPage: React.FC = () => {
               label={t('app.kuaizhizao.salesReturn.customer')}
               placeholder={t('app.kuaizhizao.salesReturn.selectCustomer')}
               required
-              request={async () => {
-                const res = await customerApi.list({ limit: 1000, isActive: true });
-                const list = Array.isArray(res) ? res : (res as any)?.data || (res as any)?.items || [];
-                return list.map((c: any) => ({
-                  label: c.name || c.customer_name || c.code || t('app.kuaizhizao.salesReturn.customerFallback', { id: c.id }),
-                  value: c.id ?? c.customer_id,
-                }));
+              request={async ({ keyWords }) => {
+                const res = await searchReferenceDisplay({
+                  resource: 'master-data:supply-chain:customer',
+                  hostResource: SALES_RETURN_RESOURCE,
+                  keyword: typeof keyWords === 'string' ? keyWords.trim() : undefined,
+                  pageSize: 20,
+                });
+                return referenceDisplayToIdOptions(res.items);
               }}
+              debounceTime={300}
               fieldProps={{
                 showSearch: true,
-                optionFilterProp: 'label',
+                filterOption: false,
                 onChange: (_, option) => {
                   formRef.current?.setFieldsValue({ customer_name: (option as any)?.label ?? '' });
                 },

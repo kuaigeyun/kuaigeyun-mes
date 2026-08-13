@@ -4,7 +4,7 @@ import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
  * 报工管理页面
  *
  * 提供报工记录的管理和查询功能；扫码报工见移动端 kiosk。
- * 新建报工须经加载选源 → 数量预览 → 录入表单，禁止手工选工单/工序。
+ * 新建报工须经加载选源后进入录入表单，禁止手工选工单/工序。
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
@@ -47,7 +47,7 @@ import {
   WarningOutlined,
   EyeOutlined,
 } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import {
@@ -67,6 +67,7 @@ import {
 import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates/constants';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { DefectTypeFormModal } from '../../../../master-data/components/DefectTypeFormModal';
+import { renderOperationReportingTypeMarker } from '../../../../master-data/utils/operationMeta';
 import {
   operationApi,
   unwrapProcessPagedList,
@@ -82,11 +83,10 @@ import { getSessionCurrentUser } from '../../../../../utils/sessionCurrentUser';
 import { hasModulePermission } from '../../../../../utils/permissionContract';
 import { useGlobalStore } from '../../../../../stores';
 import type { User } from '../../../../../services/user';
-import { getRemainingReportableQuantity, getStatusReportingCompleteQuantity, getReportableQuantityBreakdown, resolveDefaultReportingQuantityFields } from '../../../utils/workOrderReporting';
+import { getRemainingReportableQuantity, getStatusReportingCompleteQuantity, resolveDefaultReportingQuantityFields } from '../../../utils/workOrderReporting';
 import { coerceReportingCreateStrings } from '../../../utils/reportingPayload';
 import { resolveReportingWorkTimeForSubmit } from '../../../utils/reportingWorkTime';
 import ReportableQuantityPanel from '../../../components/ReportableQuantityPanel';
-import type { PushPreviewResponse } from '../../../services/sales-order';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import ReportingInboundWarehouseField from '../../../components/ReportingInboundWarehouseField';
 import { ReportingWorkTimeFields } from '../../../components/ReportingWorkTimeFields';
@@ -171,6 +171,7 @@ interface PullReportingOperationCandidate extends PullReportingWorkOrderCandidat
   operation_code?: string;
   operation_name?: string;
   operation_sequence?: number | string;
+  reporting_type?: string;
   reportable_quantity_cap?: number;
   reportable_quantity_pushed?: number;
   reportable_quantity_max?: number;
@@ -199,50 +200,6 @@ function getOperationDefectTypeOptions(operation: any): OperationDefectOption[] 
       };
     })
     .filter((o) => Boolean(o.value));
-}
-
-function buildReportingPullPreview(
-  workOrder: {
-    code?: string;
-    name?: string;
-    quantity?: number;
-    product_unit?: string;
-    unit_to_base_factor?: number;
-    base_unit?: string;
-  },
-  operation: { operation_id?: number; operation_code?: string; operation_name?: string; name?: string },
-  workOrderQuantity: number,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): PushPreviewResponse {
-  const breakdown = getReportableQuantityBreakdown(operation, workOrderQuantity);
-  const toDisplay = (baseQty: number) => convertBaseQtyToProductionDisplay(baseQty, workOrder);
-  const unitSuffix = workOrder.product_unit ? ` ${workOrder.product_unit}` : '';
-  const items = [
-    {
-      item_id: Number(operation.operation_id ?? 0),
-      material_code: String(operation.operation_code ?? ''),
-      material_name: String(operation.operation_name ?? operation.name ?? ''),
-      quantity: toDisplay(breakdown.planCap),
-      pushed_quantity: toDisplay(breakdown.operationCompleted),
-      max_push_quantity: toDisplay(breakdown.effectiveRemaining),
-    },
-  ];
-  let blockingReason: string | null = null;
-  if (breakdown.effectiveRemaining <= 0) {
-    blockingReason = t('app.kuaizhizao.workReporting.pullPreviewNoReportable');
-  }
-  return {
-    target_type: 'reporting_record',
-    summary: t('app.kuaizhizao.workReporting.pullPreviewSummary', {
-      workOrderCode: workOrder.code ?? '',
-      operationName: operation.operation_name ?? operation.name ?? '',
-      max: `${toDisplay(breakdown.effectiveRemaining)}${unitSuffix}`,
-    }),
-    items,
-    tip: t('app.kuaizhizao.workReporting.pullPreviewTip'),
-    has_blocking_issues: !!blockingReason,
-    blocking_reason: blockingReason,
-  };
 }
 
 function normalizeReportingStatus(status?: string): string {
@@ -543,22 +500,6 @@ const ReportingPage: React.FC = () => {
   const createModalProxyWorkerRef = useRef<Pick<User, 'id' | 'full_name' | 'username'> | null>(null);
   const createModalTeamRef = useRef<{ id: number; name: string } | null>(null);
 
-  const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
-  const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
-  const [pullPreviewData, setPullPreviewData] = useState<PushPreviewResponse | null>(null);
-  const [pullPreviewContext, setPullPreviewContext] = useState<{
-    workOrder: any;
-    operation: any;
-    operations: any[];
-  } | null>(null);
-
-  const resetPullPreview = useCallback(() => {
-    setPullPreviewOpen(false);
-    setPullPreviewLoading(false);
-    setPullPreviewData(null);
-    setPullPreviewContext(null);
-  }, []);
-
   const openReportingCreateFromPullContext = useCallback(
     (workOrder: any, operations: any[], operation: any) => {
       if (!workOrder?.id || !operation?.operation_id) return;
@@ -573,13 +514,9 @@ const ReportingPage: React.FC = () => {
     [],
   );
 
-  const openReportingPullPreview = useCallback(
+  const openReportingCreateFromSource = useCallback(
     async (workOrderId: number, operationId: number) => {
       if (!workOrderId || !operationId) return;
-      setPullPreviewOpen(true);
-      setPullPreviewLoading(true);
-      setPullPreviewData(null);
-      setPullPreviewContext(null);
       try {
         const [workOrder, operationsRes] = await Promise.all([
           workOrderApi.get(workOrderId.toString()),
@@ -590,36 +527,29 @@ const ReportingPage: React.FC = () => {
           : (operationsRes as any)?.data ?? (operationsRes as any)?.items ?? [];
         if (!Array.isArray(operations) || operations.length === 0) {
           messageApi.warning(t('app.kuaizhizao.workReporting.workOrderOrOperationMissing'));
-          resetPullPreview();
           return;
         }
         const operation =
           operations.find((op: any) => Number(op.operation_id) === Number(operationId)) ?? null;
         if (!operation) {
           messageApi.warning(t('app.kuaizhizao.workReporting.workOrderOrOperationMissing'));
-          resetPullPreview();
           return;
         }
-        const planQty = Number(workOrder.quantity ?? 0) || 0;
-        const preview = buildReportingPullPreview(workOrder, operation, planQty, t);
-        setPullPreviewData(preview);
-        setPullPreviewContext({ workOrder, operation, operations });
+        const remaining = getRemainingReportableQuantity(
+          operation,
+          Number(workOrder.quantity ?? 0) || 0,
+        );
+        if (!(Number(remaining) > 0)) {
+          messageApi.warning(t('app.kuaizhizao.workReporting.pullPreviewBlocked'));
+          return;
+        }
+        openReportingCreateFromPullContext(workOrder, operations, operation);
       } catch (error: unknown) {
         messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.workReporting.pullPreviewFailed')));
-        resetPullPreview();
-      } finally {
-        setPullPreviewLoading(false);
       }
     },
-    [messageApi, resetPullPreview, t],
+    [messageApi, openReportingCreateFromPullContext, t],
   );
-
-  const handlePullPreviewConfirm = useCallback(() => {
-    if (!pullPreviewContext || !pullPreviewData || pullPreviewData.has_blocking_issues) return;
-    const { workOrder, operation, operations } = pullPreviewContext;
-    resetPullPreview();
-    openReportingCreateFromPullContext(workOrder, operations, operation);
-  }, [openReportingCreateFromPullContext, pullPreviewContext, pullPreviewData, resetPullPreview]);
 
   const pullFromWorkOrderScopeOptions = useMemo(
     () => [
@@ -654,6 +584,7 @@ const ReportingPage: React.FC = () => {
         operation_code: row.operation_code ?? undefined,
         operation_name: row.operation_name ?? undefined,
         operation_sequence: row.operation_sequence ?? undefined,
+        reporting_type: row.reporting_type ?? undefined,
         reportable_quantity_cap: Number(row.reportable_quantity_cap ?? 0) || 0,
         reportable_quantity_pushed: Number(row.reportable_quantity_pushed ?? 0) || 0,
         reportable_quantity_max: Number(row.reportable_quantity_max ?? 0) || 0,
@@ -675,7 +606,7 @@ const ReportingPage: React.FC = () => {
         return;
       }
       pullFromWorkOrderQuery.closeModal();
-      await openReportingPullPreview(selected.work_order_id, selected.operation_id);
+      await openReportingCreateFromSource(selected.work_order_id, selected.operation_id);
     },
   });
 
@@ -1637,7 +1568,7 @@ const ReportingPage: React.FC = () => {
         skipFuzzyPinyinClientFilter
         pinnedTabsField="status"
         pinnedTabsValueEnum={reportingStatusValueEnum}
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           try {
             const s = (searchFormValues ?? {}) as Record<string, unknown>;
             const statusParams = resolveReportingListStatusParams(s);
@@ -1676,7 +1607,9 @@ const ReportingPage: React.FC = () => {
 
             const result = await reportingApi.list(apiParams);
             const raw = (result.data || []) as ReportingRecord[];
-            const data = await enrichReportingRecordsWithCustomFields(raw);
+            const data = meta?.purpose === 'prefetch'
+              ? raw
+              : await enrichReportingRecordsWithCustomFields(raw);
             return {
               data,
               success: result.success,
@@ -1989,6 +1922,12 @@ const ReportingPage: React.FC = () => {
             render: (_, row) => `${row.operation_name || '-'} (${row.operation_code || '-'})`,
           },
           {
+            title: t('field.operation.reportingType'),
+            dataIndex: 'reporting_type',
+            width: 120,
+            render: (value: string | undefined) => renderOperationReportingTypeMarker(t, value),
+          },
+          {
             title: t('app.kuaizhizao.workReporting.pullColPlanQty'),
             dataIndex: 'quantity',
             width: 100,
@@ -2055,63 +1994,8 @@ const ReportingPage: React.FC = () => {
         onPageChange={pullFromWorkOrderQuery.handlePageChange}
         okText={t('common.next')}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        tableScroll={{ x: 1480, y: 360 }}
       />
-
-      <Modal
-        title={t('app.kuaizhizao.workReporting.pullPreviewTitle')}
-        open={pullPreviewOpen}
-        destroyOnClose
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
-        onCancel={resetPullPreview}
-        okText={t('common.next')}
-        cancelText={t('common.cancel')}
-        onOk={() => handlePullPreviewConfirm()}
-        okButtonProps={{
-          disabled:
-            pullPreviewLoading ||
-            !pullPreviewData ||
-            !!pullPreviewData?.has_blocking_issues ||
-            !(pullPreviewData?.items || []).some((row) => Number(row.max_push_quantity ?? 0) > 0),
-        }}
-      >
-        {pullPreviewLoading ? (
-          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-            <Spin />
-            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
-          </div>
-        ) : pullPreviewData ? (
-          <div>
-            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
-            {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
-              <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={pullPreviewData.blocking_reason} />
-            ) : null}
-            {pullPreviewData.items?.length > 0 ? (
-              <Table
-                size="small"
-                dataSource={pullPreviewData.items}
-                rowKey={(row) => String(row.item_id)}
-                pagination={false}
-                scroll={{ x: 860 }}
-                columns={[
-                  { title: t('app.kuaizhizao.workReporting.formOperation'), dataIndex: 'material_code', width: 120, ellipsis: true },
-                  { title: t('app.kuaizhizao.workReporting.colOperation'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' , render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' , render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' , render: formatQuantity },
-                ]}
-              />
-            ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.workReporting.pullPreviewNoReportable')} />
-            )}
-            {pullPreviewData.tip ? (
-              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-                {pullPreviewData.tip}
-              </Typography.Paragraph>
-            ) : null}
-          </div>
-        ) : null}
-      </Modal>
-
 
       {/* 创建报废记录Modal */}
       <FormModalTemplate

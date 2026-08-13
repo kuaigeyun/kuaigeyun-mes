@@ -29,10 +29,13 @@ import {
   resolveReceiptListParams,
   resolveReceivableListParams,
 } from '../../../utils/financeListCore';
-import { apiRequest } from '../../../../../services/api';
 import { settlementCapabilityReasonMessage } from '../../../utils/settlementCapabilityMessages';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import {
+  referenceDisplayToIdOptions,
+  searchReferenceDisplay,
+} from '../../../../../utils/referenceDisplay';
 
 const P = 'app.kuaicaiwu.settlement';
 const SETTLEMENT_RESOURCE = 'kuaicaiwu:settlement';
@@ -83,8 +86,26 @@ const SettlementPage: React.FC = () => {
   const [apPreviewData, setApPreviewData] = useState<SettlementPreview | null>(null);
   const [settleSubmitting, setSettleSubmitting] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
-  const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
+
+  const searchCustomers = useCallback(async ({ keyWords }: { keyWords?: string }) => {
+    const res = await searchReferenceDisplay({
+      resource: 'master-data:supply-chain:customer',
+      hostResource: SETTLEMENT_RESOURCE,
+      keyword: keyWords?.trim() || undefined,
+      pageSize: 20,
+    });
+    return referenceDisplayToIdOptions(res.items);
+  }, []);
+
+  const searchSuppliers = useCallback(async ({ keyWords }: { keyWords?: string }) => {
+    const res = await searchReferenceDisplay({
+      resource: 'master-data:supply-chain:supplier',
+      hostResource: SETTLEMENT_RESOURCE,
+      keyword: keyWords?.trim() || undefined,
+      pageSize: 20,
+    });
+    return referenceDisplayToIdOptions(res.items);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -139,36 +160,6 @@ const SettlementPage: React.FC = () => {
     // 仅随入口单据 ID 解析一次上下文
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusPaymentId, focusReceiptId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [customerRes, supplierRes] = await Promise.all([
-          apiRequest<unknown>('/apps/master-data/supply-chain/customers', { params: { limit: 1000, is_active: true } }),
-          apiRequest<unknown>('/apps/master-data/supply-chain/suppliers', { params: { limit: 1000, is_active: true } }),
-        ]);
-        if (cancelled) return;
-        const mapOptions = (res: unknown) => {
-          const list = Array.isArray(res) ? res : (res as { data?: unknown[]; items?: unknown[] })?.data ?? (res as { items?: unknown[] })?.items ?? [];
-          return (Array.isArray(list) ? list : []).map((row: { id: number; name?: string; customer_name?: string; supplier_name?: string; code?: string }) => ({
-            label: row.name || row.customer_name || row.supplier_name || row.code || String(row.id),
-            value: row.id,
-          }));
-        };
-        setCustomerOptions(mapOptions(customerRes));
-        setSupplierOptions(mapOptions(supplierRes));
-      } catch {
-        if (!cancelled) {
-          setCustomerOptions([]);
-          setSupplierOptions([]);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const tableOnlyViewTypes = ['table'] as const;
 
@@ -500,7 +491,7 @@ const SettlementPage: React.FC = () => {
         partnerLabel: t('app.kuaicaiwu.common.customer'),
         partnerIdField: 'customer_id',
         partnerNameField: 'customer_name',
-        partnerOptions: customerOptions,
+        partnerRequest: searchCustomers,
       }),
       {
         title: t(`${C}.code`),
@@ -541,7 +532,7 @@ const SettlementPage: React.FC = () => {
         ],
       },
     ],
-    [t, customerOptions],
+    [t, searchCustomers],
   );
 
   const receiptColumns: ProColumns<Record<string, unknown>>[] = useMemo(
@@ -552,7 +543,7 @@ const SettlementPage: React.FC = () => {
         partnerLabel: t('app.kuaicaiwu.common.customer'),
         partnerIdField: 'customer_id',
         partnerNameField: 'customer_name',
-        partnerOptions: customerOptions,
+        partnerRequest: searchCustomers,
       }),
       {
         title: t(`${C}.code`),
@@ -596,7 +587,7 @@ const SettlementPage: React.FC = () => {
         ],
       },
     ],
-    [t, selectedReceivable, customerOptions, settlementPerms.canUpdate],
+    [t, selectedReceivable, searchCustomers, settlementPerms.canUpdate],
   );
 
   const payableColumns: ProColumns<Record<string, unknown>>[] = useMemo(
@@ -607,7 +598,7 @@ const SettlementPage: React.FC = () => {
         partnerLabel: t('app.kuaicaiwu.common.supplier'),
         partnerIdField: 'supplier_id',
         partnerNameField: 'supplier_name',
-        partnerOptions: supplierOptions,
+        partnerRequest: searchSuppliers,
       }),
       {
         title: t(`${C}.code`),
@@ -648,7 +639,7 @@ const SettlementPage: React.FC = () => {
         ],
       },
     ],
-    [t, supplierOptions],
+    [t, searchSuppliers],
   );
 
   const paymentColumns: ProColumns<Record<string, unknown>>[] = useMemo(
@@ -659,7 +650,7 @@ const SettlementPage: React.FC = () => {
         partnerLabel: t('app.kuaicaiwu.common.supplier'),
         partnerIdField: 'supplier_id',
         partnerNameField: 'supplier_name',
-        partnerOptions: supplierOptions,
+        partnerRequest: searchSuppliers,
       }),
       {
         title: t(`${C}.code`),
@@ -703,7 +694,7 @@ const SettlementPage: React.FC = () => {
         ],
       },
     ],
-    [t, selectedPayable, supplierOptions, settlementPerms.canUpdate],
+    [t, selectedPayable, searchSuppliers, settlementPerms.canUpdate],
   );
 
   useEffect(() => {

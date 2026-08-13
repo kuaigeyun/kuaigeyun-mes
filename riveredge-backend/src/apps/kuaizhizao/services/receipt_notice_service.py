@@ -390,6 +390,27 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             "success": True,
         }
 
+    async def get_receipt_notice_statistics(self, tenant_id: int) -> Dict[str, int]:
+        """按 status GROUP BY COUNT，供列表 KPI。"""
+        from tortoise.functions import Count
+
+        rows = await (
+            ReceiptNotice.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            .group_by("status")
+            .annotate(c=Count("id"))
+            .values("status", "c")
+        )
+        by_status = {str(row.get("status") or "").strip(): int(row.get("c") or 0) for row in rows}
+        pending = by_status.get("待收货", 0)
+        notified = by_status.get("已通知", 0)
+        received = by_status.get("已入库", 0)
+        return {
+            "total": sum(by_status.values()),
+            "pending": pending,
+            "notified": notified,
+            "received": received,
+        }
+
     async def update_receipt_notice(
         self,
         tenant_id: int,

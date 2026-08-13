@@ -95,7 +95,7 @@ function renderMaterialGroupFolderIcon(props: { expanded: boolean; isLeaf: boole
 
 // 导入现有组件
 import SafeProFormSelect from '../../../../components/safe-pro-form-select'
-import { UniTable } from '../../../../components/uni-table'
+import { UniTable, type UniTableRequestMeta} from '../../../../components/uni-table'
 import { UniImportMenuButton } from '../../../../components/uni-import/UniImportMenuButton'
 import type { ImportPrecheckResult } from '../../../../components/uni-import/uni-import-preview-modal'
 import { usePagePermissionResource } from '../../../../hooks/usePagePermissionResource'
@@ -654,14 +654,6 @@ const MaterialsManagementPage: React.FC = () => {
   /**
    * 当自定义字段加载完成后，刷新表格以显示自定义字段列
    */
-  useEffect(() => {
-    if (customFields.length > 0 && actionRef.current) {
-      setTimeout(() => {
-        actionRef.current?.reload();
-      }, 200);
-    }
-  }, [customFields.length]);
-
   /**
    * 当详情抽屉打开时，加载自定义字段值
    */
@@ -3988,7 +3980,7 @@ const MaterialsManagementPage: React.FC = () => {
                     />
                   </Space>
                 }
-                request={async (params, sort, _filter, searchFormValues) => {
+                request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
                 const treeGroupId = selectedGroupIdRef.current
                 const listParams = resolveMaterialListParams(searchFormValues, sort, {
                   noGroup: treeGroupId === -1,
@@ -4005,7 +3997,10 @@ const MaterialsManagementPage: React.FC = () => {
 
                 try {
                   const { items, total } = await materialApi.list(apiParams as any)
-                  const enriched = await enrichRecordsWithCustomFields(items || [])
+                  const listItems = items || []
+                  const enriched = meta?.purpose === 'prefetch'
+                    ? listItems
+                    : await enrichRecordsWithCustomFields(listItems)
                   return {
                     data: enriched,
                     success: true,

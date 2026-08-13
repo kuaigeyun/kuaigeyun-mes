@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import {
@@ -91,13 +91,6 @@ const PlantsPage: React.FC = () => {
     selectedRowKeys,
     setSelectedRowKeys,
   });
-
-  useEffect(() => {
-    if (customFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [customFields.length]);
-
   const plantImportTemplate = useMemo(
     () =>
       buildFactoryImportTemplate(
@@ -668,7 +661,7 @@ const PlantsPage: React.FC = () => {
           viewTypes={['table', 'help']}
           defaultViewType="table"
           loadingDelay={200}
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;
             const listParams = resolveMasterCrudListParams(searchFormValues, sort);
@@ -681,7 +674,9 @@ const PlantsPage: React.FC = () => {
                 ...listParams,
               });
               const { data, total } = normalizeMasterListResponse(result);
-              const enrichedData = await enrichRecordsWithCustomFields(data);
+              const enrichedData = meta?.purpose === 'prefetch'
+                ? data
+                : await enrichRecordsWithCustomFields(data);
               return {
                 data: enrichedData,
                 success: true,

@@ -28,6 +28,7 @@ from apps.kuaizhizao.schemas.receipt_notice import (
     ReceiptNoticeListResponse,
     ReceiptNoticeListPaginatedResponse,
     ReceiptNoticeWithItemsResponse,
+    ReceiptNoticeStatisticsResponse,
 )
 
 receipt_notice_service = ReceiptNoticeService()
@@ -126,6 +127,15 @@ async def list_receipt_notices(
         order_by=safe_order_by,
         include_items=include_items,
     )
+
+
+@router.get("/statistics", response_model=ReceiptNoticeStatisticsResponse, summary="Receipt notice statistics")
+async def get_receipt_notice_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """收货通知单 KPI：按 status GROUP BY COUNT。"""
+    return await receipt_notice_service.get_receipt_notice_statistics(tenant_id)
 
 
 # 固定子路径需注册在 /{notice_id} 之前，避免个别 ASGI/匹配顺序下误配

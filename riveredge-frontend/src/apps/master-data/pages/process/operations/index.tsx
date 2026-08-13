@@ -11,7 +11,7 @@ import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pr
 import { App, Popconfirm, Button, Space, Modal, Table, theme, Descriptions, Select, Typography } from 'antd';
 import { useSearchParams } from 'react-router-dom';
 import { EditOutlined, DeleteOutlined, PlusOutlined, QrcodeOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useTrialRunMode } from '../../../../../hooks/useTrialRunMode';
@@ -143,13 +143,6 @@ const OperationsPage: React.FC = () => {
       cancelled = true;
     };
   }, [i18n.language]);
-
-  useEffect(() => {
-    if (customFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [customFields.length]);
-
   const operationImportTemplate = useMemo(
     () =>
       buildFactoryImportTemplate(
@@ -725,7 +718,7 @@ const OperationsPage: React.FC = () => {
         columnPersistenceId="apps.master-data.pages.process.operations.status-v2"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           const listParams = resolveProcessListParams(searchFormValues, sort);
           lastListParamsRef.current = listParams;
           const apiParams = {
@@ -746,7 +739,9 @@ const OperationsPage: React.FC = () => {
           try {
             const result = await operationApi.list(apiParams);
             const listData = Array.isArray(result) ? result : result?.data ?? [];
-            const enrichedData = await enrichRecordsWithCustomFields(listData);
+            const enrichedData = meta?.purpose === 'prefetch'
+              ? listData
+              : await enrichRecordsWithCustomFields(listData);
             return {
               data: enrichedData,
               success: true,

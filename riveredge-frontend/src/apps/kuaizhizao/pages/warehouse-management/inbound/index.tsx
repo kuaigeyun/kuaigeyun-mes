@@ -18,7 +18,7 @@ import {
   RollbackOutlined,
   PrinterOutlined,
 } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -531,25 +531,6 @@ const InboundPage: React.FC = () => {
     loadFieldValuesForDetail: loadFinishedGoodsReceiptFieldValuesForDetail,
     resetDetailFieldValues: resetFinishedGoodsReceiptDetailFieldValues,
   } = useCustomFieldsForList<InboundOrder>({ tableName: FINISHED_GOODS_RECEIPT_CUSTOM_FIELD_TABLE });
-
-  useEffect(() => {
-    if (purchaseReceiptListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [purchaseReceiptListCustomFields.length]);
-
-  useEffect(() => {
-    if (productionReturnListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [productionReturnListCustomFields.length]);
-
-  useEffect(() => {
-    if (finishedGoodsReceiptListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [finishedGoodsReceiptListCustomFields.length]);
-
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<InboundOrder | null>(null);
@@ -2070,7 +2051,7 @@ const InboundPage: React.FC = () => {
             noun: t('app.kuaizhizao.warehouseInbound.title'),
           })
         }
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           try {
             const typeFilter = receiptTypeFilterRef.current;
             const listParams = resolveInboundHubListParams(
@@ -2080,16 +2061,24 @@ const InboundPage: React.FC = () => {
               },
               sort,
             );
+            const skipEnrich = meta?.purpose === 'prefetch';
+            const passthrough = async <T,>(rows: T[]) => rows;
             const result = await fetchInboundHubList(
               {
                 ...(params as Record<string, unknown>),
                 ...listParams,
               },
               {
-              enrichPurchaseReceiptRecordsWithCustomFields,
-              enrichFinishedGoodsReceiptRecordsWithCustomFields,
-              enrichProductionReturnRecordsWithCustomFields,
-            },
+                enrichPurchaseReceiptRecordsWithCustomFields: skipEnrich
+                  ? passthrough
+                  : enrichPurchaseReceiptRecordsWithCustomFields,
+                enrichFinishedGoodsReceiptRecordsWithCustomFields: skipEnrich
+                  ? passthrough
+                  : enrichFinishedGoodsReceiptRecordsWithCustomFields,
+                enrichProductionReturnRecordsWithCustomFields: skipEnrich
+                  ? passthrough
+                  : enrichProductionReturnRecordsWithCustomFields,
+              },
               currentUser,
             );
             return result;

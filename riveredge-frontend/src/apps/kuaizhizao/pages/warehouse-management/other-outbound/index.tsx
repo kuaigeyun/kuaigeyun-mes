@@ -20,7 +20,7 @@ import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col, Select, Typography, Descriptions } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ShoppingOutlined, PrinterOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
@@ -168,13 +168,6 @@ const OtherOutboundPage: React.FC = () => {
     loadFieldValuesForDetail: loadOtherOutboundFieldValuesForDetail,
     resetDetailFieldValues: resetOtherOutboundDetailFieldValues,
   } = useCustomFieldsForList<OtherOutbound>({ tableName: OTHER_OUTBOUND_CUSTOM_FIELD_TABLE });
-
-  useEffect(() => {
-    if (otherOutboundListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [otherOutboundListCustomFields.length]);
-
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
   const {
     selectedWarehouseId,
@@ -709,7 +702,7 @@ const OtherOutboundPage: React.FC = () => {
               noun: t('app.kuaizhizao.otherOutbound.title'),
             })
           }
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
               const listParams = resolveWarehouseDocListParams(searchFormValues, sort, {
                 docDateParamPrefix: 'delivery',
@@ -720,7 +713,9 @@ const OtherOutboundPage: React.FC = () => {
                 ...listParams,
               });
               const { data: raw, total } = normalizeWarehouseListResponse(response);
-              const data = await enrichOtherOutboundRecordsWithCustomFields(raw);
+              const data = meta?.purpose === 'prefetch'
+                ? raw
+                : await enrichOtherOutboundRecordsWithCustomFields(raw);
               return { data, success: true, total };
             } catch {
               messageApi.error(t('app.kuaizhizao.otherOutbound.msg.loadListFailed'));

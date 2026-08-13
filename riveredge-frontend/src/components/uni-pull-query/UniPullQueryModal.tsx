@@ -55,6 +55,7 @@ export function UniPullQueryModal<T extends object>({
   width = MODAL_CONFIG.EXTRA_LARGE_WIDTH,
   zIndex,
   destroyOnHidden = true,
+  afterOpenChange,
   alert,
   footerHint,
   tableScroll = { x: 1180, y: 360 },
@@ -113,6 +114,7 @@ export function UniPullQueryModal<T extends object>({
       okButtonProps={okButtonProps}
       confirmLoading={confirmLoading}
       destroyOnHidden={destroyOnHidden}
+      afterOpenChange={afterOpenChange}
     >
       <UniPullQueryFilterBar
         searchDraft={searchDraft}

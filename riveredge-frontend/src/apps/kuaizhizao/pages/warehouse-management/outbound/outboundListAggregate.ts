@@ -2,7 +2,6 @@ import type { CurrentUser } from '../../../../../types/api';
 import { warehouseApi } from '../../../services/warehouse-execution';
 import { outsourceMaterialIssueApi } from '../../../services/production';
 import {
-  filterOutboundHubRows,
   normalizeWarehouseListResponse,
   sortOutboundHubRows,
 } from '../../../utils/warehouseListCore';
@@ -33,6 +32,17 @@ const toList = (r: unknown) => {
   return { items: data, total };
 };
 
+function sourceStatus(
+  hubStatus: string | undefined,
+  pendingStatus: string,
+  postedStatus: string,
+): string | undefined {
+  if (hubStatus === 'pending') return pendingStatus;
+  if (hubStatus === 'posted') return postedStatus;
+  if (!hubStatus || hubStatus === 'all') return undefined;
+  return hubStatus;
+}
+
 export type OutboundListEnrichers = {
   enrichProductionPickingRecordsWithCustomFields: (rows: OutboundHubOrder[]) => Promise<OutboundHubOrder[]>;
   enrichSalesDeliveryRecordsWithCustomFields: (rows: OutboundHubOrder[]) => Promise<OutboundHubOrder[]>;
@@ -46,14 +56,10 @@ export async function fetchOutboundHubList(
   const skip = (((params.current as number) || 1) - 1) * ((params.pageSize as number) || 20);
   const limit = (params.pageSize as number) || 20;
   const typeFilter = params.outbound_type as string | undefined;
-  const hasFieldFilters = Boolean(
-    params.keyword ||
-      params.customer_name ||
-      params.warehouse_name ||
-      params.warehouse_id ||
-      params.total_quantity != null ||
-      params.total_items != null,
-  );
+  const hubStatus = params.status as string | undefined;
+  const typed = Boolean(typeFilter);
+  const fetchSkip = typed ? skip : 0;
+  const fetchLimit = typed ? limit : skip + limit;
 
   const fetchPicking = shouldFetchOutboundHubType(user, typeFilter, 'production_picking');
   const fetchDelivery = shouldFetchOutboundHubType(user, typeFilter, 'sales_delivery');
@@ -61,10 +67,8 @@ export async function fetchOutboundHubList(
   const fetchOther = shouldFetchOutboundHubType(user, typeFilter, 'other_outbound');
   const fetchBorrow = shouldFetchOutboundHubType(user, typeFilter, 'material_borrow');
 
-  // 有字段筛选时拉大窗口，避免只取首页后客户端过滤漏数；上限与后端 le=1000 对齐
-  const fetchLimit = hasFieldFilters ? 1000 : Math.max(limit * 3, 60);
-  const listParams = {
-    skip: 0,
+  const baseParams = {
+    skip: fetchSkip,
     limit: fetchLimit,
     keyword: params.keyword,
     order_by: params.order_by,
@@ -79,11 +83,36 @@ export async function fetchOutboundHubList(
   };
 
   const [pickingRes, deliveryRes, outsourceRes, otherRes, borrowRes] = await Promise.all([
-    fetchPicking ? warehouseApi.productionPicking.list(listParams) : Promise.resolve(emptyList),
-    fetchDelivery ? warehouseApi.salesDelivery.list(listParams) : Promise.resolve(emptyList),
-    fetchOutsource ? outsourceMaterialIssueApi.list(listParams) : Promise.resolve(emptyList),
-    fetchOther ? warehouseApi.otherOutbound.list(listParams) : Promise.resolve(emptyList),
-    fetchBorrow ? warehouseApi.materialBorrow.list(listParams) : Promise.resolve(emptyList),
+    fetchPicking
+      ? warehouseApi.productionPicking.list({
+          ...baseParams,
+          status: sourceStatus(hubStatus, '待领料', '已领料'),
+        })
+      : Promise.resolve(emptyList),
+    fetchDelivery
+      ? warehouseApi.salesDelivery.list({
+          ...baseParams,
+          status: sourceStatus(hubStatus, '待出库', '已出库'),
+        })
+      : Promise.resolve(emptyList),
+    fetchOutsource
+      ? outsourceMaterialIssueApi.list({
+          ...baseParams,
+          status: sourceStatus(hubStatus, 'draft', 'completed'),
+        })
+      : Promise.resolve(emptyList),
+    fetchOther
+      ? warehouseApi.otherOutbound.list({
+          ...baseParams,
+          status: sourceStatus(hubStatus, '待出库', '已出库'),
+        })
+      : Promise.resolve(emptyList),
+    fetchBorrow
+      ? warehouseApi.materialBorrow.list({
+          ...baseParams,
+          status: sourceStatus(hubStatus, '待借出', '已借出'),
+        })
+      : Promise.resolve(emptyList),
   ]);
 
   const pickingData = fetchPicking
@@ -143,7 +172,7 @@ export async function fetchOutboundHubList(
       )
     : [];
 
-  let combinedData: OutboundHubOrder[] = [
+  const combinedData: OutboundHubOrder[] = [
     ...pickingData,
     ...deliveryData,
     ...outsourceData,
@@ -151,29 +180,22 @@ export async function fetchOutboundHubList(
     ...borrowData,
   ].map(withOutboundHubDisplayFields);
 
-  const statusFilter = params.status as string | undefined;
-  if (statusFilter === 'pending') {
-    combinedData = combinedData.filter((r) =>
-      ['待出库', '待领料', '待借出', '草稿', 'draft', 'pending'].includes(String(r.status || '')),
-    );
-  } else if (statusFilter === 'posted') {
-    combinedData = combinedData.filter((r) =>
-      ['已出库', '已领料', '已借出', '已完成', 'completed', '已确认', 'confirmed'].includes(String(r.status || '')),
-    );
-  }
-
-  combinedData = filterOutboundHubRows(
-    combinedData as Record<string, unknown>[],
-    params,
-  ) as OutboundHubOrder[];
-
   const sorted = sortOutboundHubRows(
     combinedData as Record<string, unknown>[],
     typeof params.order_by === 'string' ? params.order_by : undefined,
   ) as OutboundHubOrder[];
 
-  const total = sorted.length;
-  const page = sorted.slice(skip, skip + limit);
+  const sourceTotal =
+    (fetchPicking ? toList(pickingRes).total : 0) +
+    (fetchDelivery ? toList(deliveryRes).total : 0) +
+    (fetchOutsource ? toList(outsourceRes).total : 0) +
+    (fetchOther ? toList(otherRes).total : 0) +
+    (fetchBorrow ? toList(borrowRes).total : 0);
 
-  return { data: page, success: true, total };
+  if (typed) {
+    return { data: sorted, success: true, total: sourceTotal };
+  }
+
+  const page = sorted.slice(skip, skip + limit);
+  return { data: page, success: true, total: sourceTotal };
 }

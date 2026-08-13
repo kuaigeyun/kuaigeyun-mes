@@ -14,7 +14,7 @@ import { LIST_PAGE_REFRESH_KEYS, useListPageRefreshStore } from '../../../../../
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Tooltip, Dropdown, Select, Segmented, Tag, Alert, Typography, theme as AntdTheme } from 'antd';
 import { EyeOutlined, EditOutlined, ArrowDownOutlined, ArrowLeftOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, StopOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
-import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
+import { UniTable, readPersistedUniTableViewType, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   UniTableStackedPrimaryCell,
@@ -212,6 +212,10 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { searchUserDisplay, type User } from '../../../../../services/user';
 import { useGlobalStore } from '../../../../../stores';
 import { displayItemsToUsers, normalizeUserDisplayName } from '../../../../../utils/userDisplay';
+import {
+  referenceDisplayToIdOptions,
+  searchReferenceDisplay,
+} from '../../../../../utils/referenceDisplay';
 import { useConfigStore } from '../../../../../stores/configStore';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
@@ -755,13 +759,14 @@ const SalesOrdersPage: React.FC = () => {
   }, [isFormPage]);
 
   /**
-   * 加载客户列表（无基础资料时使用空数组，不阻塞页面）
+   * 客户/用户仅表单页需要；列表筛选用远程搜索，避免首屏 limit=1000
    */
   React.useEffect(() => {
+    if (!isFormPage) return;
     const loadCustomers = async () => {
       try {
         setCustomersLoading(true);
-        const result = await customerApi.list({ limit: 1000, isActive: true });
+        const result = await customerApi.list({ limit: 200, isActive: true });
         setCustomers(Array.isArray(result) ? result : (result as any)?.data ?? (result as any)?.items ?? []);
       } catch {
         setCustomers([]);
@@ -770,15 +775,12 @@ const SalesOrdersPage: React.FC = () => {
       }
     };
     loadCustomers();
-  }, []);
+  }, [isFormPage]);
 
-  /**
-   * 加载用户列表（系统管理-用户管理-帐户管理 /core/users）
-   * 无用户数据时使用空数组，不阻塞页面
-   */
   const currentUser = useCurrentUser();
 
   React.useEffect(() => {
+    if (!isFormPage) return;
     const loadUsers = async () => {
       try {
         setUsersLoading(true);
@@ -791,7 +793,7 @@ const SalesOrdersPage: React.FC = () => {
       }
     };
     void loadUsers();
-  }, [currentUser]);
+  }, [currentUser, isFormPage]);
 
   React.useEffect(() => {
     if (!isFormPage) return;
@@ -2986,10 +2988,18 @@ const SalesOrdersPage: React.FC = () => {
       valueType: 'select',
       fieldProps: {
         showSearch: true,
-        optionFilterProp: 'label',
-        loading: customersLoading,
-        options: salesOrderCustomerSearchOptions,
+        filterOption: false,
         placeholder: t('app.kuaizhizao.salesOrder.customerName'),
+      },
+      debounceTime: 300,
+      request: async ({ keyWords }) => {
+        const res = await searchReferenceDisplay({
+          resource: 'master-data:supply-chain:customer',
+          hostResource: 'kuaizhizao:sales-order',
+          keyword: typeof keyWords === 'string' ? keyWords.trim() : undefined,
+          pageSize: 20,
+        });
+        return referenceDisplayToIdOptions(res.items);
       },
     },
     {
@@ -3046,10 +3056,21 @@ const SalesOrdersPage: React.FC = () => {
       valueType: 'select',
       fieldProps: {
         showSearch: true,
-        optionFilterProp: 'label',
-        loading: usersLoading,
-        options: users.map(u => ({ label: u.full_name || u.username, value: u.id })),
+        filterOption: false,
         placeholder: t('app.kuaizhizao.salesOrder.salesman'),
+      },
+      debounceTime: 300,
+      request: async ({ keyWords }) => {
+        const res = await searchUserDisplay({
+          page: 1,
+          page_size: 20,
+          is_active: true,
+          keyword: typeof keyWords === 'string' ? keyWords.trim() || undefined : undefined,
+        });
+        return (res.items || []).map((u) => ({
+          label: u.label || u.full_name || u.username || String(u.id),
+          value: u.id,
+        }));
       },
     },
     {
@@ -3217,10 +3238,18 @@ const SalesOrdersPage: React.FC = () => {
       valueType: 'select',
       fieldProps: {
         showSearch: true,
-        optionFilterProp: 'label',
-        loading: customersLoading,
-        options: salesOrderCustomerSearchOptions,
+        filterOption: false,
         placeholder: t('app.kuaizhizao.salesOrder.customerName'),
+      },
+      debounceTime: 300,
+      request: async ({ keyWords }) => {
+        const res = await searchReferenceDisplay({
+          resource: 'master-data:supply-chain:customer',
+          hostResource: 'kuaizhizao:sales-order',
+          keyword: typeof keyWords === 'string' ? keyWords.trim() : undefined,
+          pageSize: 20,
+        });
+        return referenceDisplayToIdOptions(res.items);
       },
     },
     {
@@ -4422,7 +4451,8 @@ const SalesOrdersPage: React.FC = () => {
               ? 'sales-order-row-overdue'
               : '';
           }}
-          request={async (params: any, sort: any, _filter: any, searchFormValues: any): Promise<any> => {
+          request={async (params: any, sort: any, _filter: any, searchFormValues: any, meta?: UniTableRequestMeta): Promise<any> => {
+            const isPrefetch = meta?.purpose === 'prefetch';
             const sf = searchFormValues ?? {};
             const { sortBy, sortOrder } = extractProTableSort(sort);
             const orderBy =
@@ -4474,7 +4504,7 @@ const SalesOrdersPage: React.FC = () => {
             });
             const needItems = apiParams.include_items === true;
 
-            const toFlatRows = (orders: SalesOrder[]): SalesOrderItemRow[] => {
+            const toFlatRows = (orders: SalesOrder[], writeRowKeyMap: boolean): SalesOrderItemRow[] => {
               const map = new Map<string, number>();
               const flatRows: SalesOrderItemRow[] = [];
               for (const order of orders) {
@@ -4553,22 +4583,28 @@ const SalesOrdersPage: React.FC = () => {
                   });
                 }
               }
-              rowKeyToOrderIdRef.current = map;
+              if (writeRowKeyMap) {
+                rowKeyToOrderIdRef.current = map;
+              }
               return flatRows;
             };
 
             const formatOrdersListResponse = async (orders: SalesOrder[], total: number) => {
               const mode = dataViewModeRef.current;
               if (mode === 'order') {
-                const map = new Map<string, number>();
-                orders.forEach(o => {
-                  if (o.id) map.set(String(o.id), o.id);
-                });
-                rowKeyToOrderIdRef.current = map;
-                const enriched = await enrichSalesOrderRecordsWithCustomFields(orders);
-                return { data: enriched, success: true, total };
+                if (!isPrefetch) {
+                  const map = new Map<string, number>();
+                  orders.forEach(o => {
+                    if (o.id) map.set(String(o.id), o.id);
+                  });
+                  rowKeyToOrderIdRef.current = map;
+                }
+                const data = isPrefetch
+                  ? orders
+                  : await enrichSalesOrderRecordsWithCustomFields(orders);
+                return { data, success: true, total };
               }
-              return { data: toFlatRows(orders), success: true, total };
+              return { data: toFlatRows(orders, !isPrefetch), success: true, total };
             };
 
             const cached = lastOrdersCacheRef.current;
@@ -4585,12 +4621,14 @@ const SalesOrdersPage: React.FC = () => {
                 ? response
                 : (response as any).data || [];
               const total: number = (response as any).total ?? orders.length;
-              lastOrdersCacheRef.current = {
-                orders,
-                total,
-                baseParamsKey,
-                includeItems: needItems,
-              };
+              if (!isPrefetch) {
+                lastOrdersCacheRef.current = {
+                  orders,
+                  total,
+                  baseParamsKey,
+                  includeItems: needItems,
+                };
+              }
               return formatOrdersListResponse(orders, total);
             } catch (error: any) {
               messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.getListFailed'));

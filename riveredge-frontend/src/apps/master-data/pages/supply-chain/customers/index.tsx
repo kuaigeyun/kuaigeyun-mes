@@ -11,7 +11,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import {
@@ -139,13 +139,6 @@ const CustomersPage: React.FC = () => {
     selectedRowKeys,
     setSelectedRowKeys,
   });
-
-  useEffect(() => {
-    if (customFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [customFields.length]);
-
   const openDetailByUuid = useCallback(
     async (uuid: string) => {
       const req = ++customerDetailReqRef.current;
@@ -1036,7 +1029,7 @@ const CustomersPage: React.FC = () => {
         columnPersistenceId="apps.master-data.pages.supply-chain.customers.list-v2"
         actionRef={actionRef}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        request={async (params, sort, __filter, searchFormValues) => {
+        request={async (params, sort, __filter, searchFormValues, meta?: UniTableRequestMeta) => {
           const listParams = resolveCustomerListParams(searchFormValues, sort);
           lastListParamsRef.current = listParams;
           const apiParams = {
@@ -1059,7 +1052,9 @@ const CustomersPage: React.FC = () => {
           try {
             const result = await customerApi.list(apiParams);
             const listData = Array.isArray(result) ? result : result?.data ?? [];
-            const enrichedData = await enrichRecordsWithCustomFields(listData);
+            const enrichedData = meta?.purpose === 'prefetch'
+              ? listData
+              : await enrichRecordsWithCustomFields(listData);
             return {
               data: enrichedData,
               success: true,

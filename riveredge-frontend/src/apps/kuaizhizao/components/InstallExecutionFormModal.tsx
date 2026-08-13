@@ -607,7 +607,7 @@ export const InstallExecutionFormModal: React.FC<Props> = ({
                   customer_id: customerId,
                   sales_order_id: sales_order_id ? Number(sales_order_id) : undefined,
                 });
-                const rows = res?.data ?? res?.items ?? [];
+                const rows = (res as { items?: Array<{ id: number; delivery_code?: string; customer_name?: string }> })?.items ?? [];
                 const options = rows.map(
                   (o: { id: number; delivery_code?: string; customer_name?: string }) => ({
                     label: `${o.delivery_code ?? o.id} ${o.customer_name ?? ''}`.trim(),

@@ -1269,42 +1269,118 @@ class QuotationService:
                 contract_missing_by_id[qid] = False
         return missing_by_id, contract_missing_by_id
 
-    async def _filter_quotations_by_lifecycle_stage(
+    async def _apply_quotation_lifecycle_query(
         self,
         tenant_id: int,
-        quotations: List[Quotation],
+        query,
         lifecycle_stage: str,
-        *,
-        audit_required: bool,
-    ) -> List[Quotation]:
-        """按后端 lifecycle 计算结果筛选（与列表「当前阶段」列一致）。"""
+    ):
+        """把 get_quotation_lifecycle 的阶段谓词落到 SQL，禁止全表 .all() 再切片。"""
+        from tortoise.expressions import Q
         from apps.kuaizhizao.services.document_lifecycle_service import (
-            get_quotation_lifecycle,
             normalize_quotation_lifecycle_filter,
         )
 
-        if not quotations:
-            return []
-
         target = normalize_quotation_lifecycle_filter(lifecycle_stage)
-        missing_by_id, contract_missing_by_id = await self._batch_quotation_downstream_missing(
-            tenant_id, quotations
-        )
-        matched: List[Quotation] = []
-        for q in quotations:
-            qid = int(q.id)
-            lifecycle = get_quotation_lifecycle(
-                q,
-                converted_sales_order_missing=missing_by_id.get(qid, False),
-                contract_downstream_missing=contract_missing_by_id.get(qid, False),
-                audit_required=audit_required,
+        rejected_review = ("REJECTED", "已驳回", "审核驳回")
+        if target == "草稿":
+            return query.filter(status__in=["草稿", "draft"])
+        if target == "已报价":
+            sent = query.filter(status="已发送").exclude(review_status__in=rejected_review)
+            contract_ids = [
+                int(cid)
+                for cid in await sent.filter(contract_id__isnull=False).values_list(
+                    "contract_id", flat=True
+                )
+                if cid
+            ]
+            alive_contract = set(
+                int(cid)
+                for cid in await SalesContract.filter(
+                    tenant_id=tenant_id, id__in=contract_ids, deleted_at__isnull=True
+                ).values_list("id", flat=True)
+            ) if contract_ids else set()
+            if alive_contract:
+                sent = sent.exclude(contract_id__in=list(alive_contract))
+            return sent
+        if target == "客户确认":
+            accepted = query.filter(status="已接受").exclude(review_status__in=rejected_review)
+            contract_ids = [
+                int(cid)
+                for cid in await accepted.filter(contract_id__isnull=False).values_list(
+                    "contract_id", flat=True
+                )
+                if cid
+            ]
+            alive_contract = set(
+                int(cid)
+                for cid in await SalesContract.filter(
+                    tenant_id=tenant_id, id__in=contract_ids, deleted_at__isnull=True
+                ).values_list("id", flat=True)
+            ) if contract_ids else set()
+            if alive_contract:
+                accepted = accepted.exclude(contract_id__in=list(alive_contract))
+            return accepted
+        if target == "已驳回":
+            return query.filter(
+                Q(status__in=["已拒绝", "rejected"]) | Q(review_status__in=rejected_review)
             )
-            stage_name = normalize_quotation_lifecycle_filter(
-                lifecycle.get("current_stage_name"),
-            )
-            if stage_name == target:
-                matched.append(q)
-        return matched
+        if target == "已转订单":
+            so_ids = [
+                int(oid)
+                for oid in await query.filter(sales_order_id__isnull=False).values_list(
+                    "sales_order_id", flat=True
+                )
+                if oid
+            ]
+            alive_so = set(
+                int(oid)
+                for oid in await SalesOrder.filter(
+                    tenant_id=tenant_id, id__in=so_ids, deleted_at__isnull=True
+                ).values_list("id", flat=True)
+            ) if so_ids else set()
+            contract_ids = [
+                int(cid)
+                for cid in await query.filter(contract_id__isnull=False).values_list(
+                    "contract_id", flat=True
+                )
+                if cid
+            ]
+            alive_contract = set(
+                int(cid)
+                for cid in await SalesContract.filter(
+                    tenant_id=tenant_id, id__in=contract_ids, deleted_at__isnull=True
+                ).values_list("id", flat=True)
+            ) if contract_ids else set()
+            converted = Q()
+            if alive_so:
+                converted |= Q(status="已转订单", sales_order_id__in=list(alive_so))
+            if alive_contract:
+                converted |= Q(contract_id__in=list(alive_contract))
+            if not alive_so and not alive_contract:
+                return query.filter(id__in=[])
+            return query.filter(converted).exclude(review_status__in=rejected_review)
+        if target == "下推单据已删除":
+            so_ids = [
+                int(oid)
+                for oid in await query.filter(
+                    status="已转订单", sales_order_id__isnull=False
+                ).values_list("sales_order_id", flat=True)
+                if oid
+            ]
+            alive_so = set(
+                int(oid)
+                for oid in await SalesOrder.filter(
+                    tenant_id=tenant_id, id__in=so_ids, deleted_at__isnull=True
+                ).values_list("id", flat=True)
+            ) if so_ids else set()
+            missing_so = [oid for oid in so_ids if oid not in alive_so]
+            if missing_so:
+                return query.filter(status="已转订单").filter(
+                    Q(sales_order_id__isnull=True) | Q(sales_order_id__in=missing_so)
+                )
+            return query.filter(status="已转订单", sales_order_id__isnull=True)
+        return query.filter(id__in=[])
 
     async def list_quotations(
         self,
@@ -1388,18 +1464,11 @@ class QuotationService:
         order_clause = order_by if order_by else "-updated_at"
 
         if lifecycle_filter:
-            candidate_quotations = await query.order_by(order_clause).all()
-            matched_quotations = await self._filter_quotations_by_lifecycle_stage(
-                tenant_id,
-                candidate_quotations,
-                lifecycle_filter,
-                audit_required=audit_required,
+            query = await self._apply_quotation_lifecycle_query(
+                tenant_id, query, lifecycle_filter
             )
-            total = len(matched_quotations)
-            quotations = matched_quotations[skip : skip + limit]
-        else:
-            total = await query.count()
-            quotations = await query.offset(skip).limit(limit).order_by(order_clause)
+        total = await query.count()
+        quotations = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_lifecycle_service import get_quotation_lifecycle
 
         missing_by_id, contract_missing_by_id = await self._batch_quotation_downstream_missing(

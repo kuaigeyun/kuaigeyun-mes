@@ -233,6 +233,10 @@ class ReportingPullCandidateItem(BaseSchema):
     operation_code: Optional[str] = Field(None, description="工序编码")
     operation_name: Optional[str] = Field(None, description="工序名称")
     operation_sequence: Optional[int] = Field(None, description="工序顺序")
+    reporting_type: str = Field(
+        "quantity",
+        description="报工类型 quantity:按数量报工 / status:按状态报工",
+    )
     reportable_quantity_cap: Decimal = Field(
         ...,
         description="计划侧可累计完成上限（规则超报与不合格补报取较大；已报+本次可报不超过该值，前序不足时本次可报更小）",

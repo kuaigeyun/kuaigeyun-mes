@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import {
@@ -132,13 +132,6 @@ const SuppliersPage: React.FC = () => {
     selectedRowKeys,
     setSelectedRowKeys,
   });
-
-  useEffect(() => {
-    if (customFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200);
-    }
-  }, [customFields.length]);
-
   const supplierImportTemplate = useMemo(
     () =>
       buildFactoryImportTemplate(
@@ -933,7 +926,7 @@ const SuppliersPage: React.FC = () => {
         columnPersistenceId="apps.master-data.pages.supply-chain.suppliers.list-v2"
         actionRef={actionRef}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        request={async (params, sort, __filter, searchFormValues) => {
+        request={async (params, sort, __filter, searchFormValues, meta?: UniTableRequestMeta) => {
           const listParams = resolveSupplierListParams(searchFormValues, sort);
           lastListParamsRef.current = listParams;
           const apiParams = {
@@ -956,7 +949,9 @@ const SuppliersPage: React.FC = () => {
           try {
             const result = await supplierApi.list(apiParams);
             const listData = Array.isArray(result) ? result : result?.data ?? [];
-            const enrichedData = await enrichRecordsWithCustomFields(listData);
+            const enrichedData = meta?.purpose === 'prefetch'
+              ? listData
+              : await enrichRecordsWithCustomFields(listData);
             return {
               data: enrichedData,
               success: true,

@@ -47,9 +47,26 @@ export async function fetchInboundHubList(
   const skip = (((params.current as number) || 1) - 1) * ((params.pageSize as number) || 20);
   const limit = (params.pageSize as number) || 20;
   const typeFilter = params.receipt_type as string | undefined;
-  const listParams = {
-    skip: 0,
-    limit: Math.max(limit * 3, 60),
+  const hubStatus = params.status as string | undefined;
+  const typed = Boolean(typeFilter);
+  const fetchSkip = typed ? skip : 0;
+  const fetchLimit = typed ? limit : skip + limit;
+
+  const fetchPurchase = shouldFetchInboundHubType(user, typeFilter, 'purchase');
+  const fetchFinished = shouldFetchInboundHubType(user, typeFilter, 'finished_goods');
+  const fetchSemi = shouldFetchInboundHubType(user, typeFilter, 'semi_finished_goods');
+  const fetchReturn = shouldFetchInboundHubType(user, typeFilter, 'production_return');
+  const fetchCustomerMaterial = shouldFetchInboundHubType(user, typeFilter, 'customer_material');
+  const fetchSalesReturn = shouldFetchInboundHubType(user, typeFilter, 'sales_return');
+  const fetchOutsourceReceipt = shouldFetchInboundHubType(user, typeFilter, 'outsource_receipt');
+  const fetchOutsourceMaterialReturn = shouldFetchInboundHubType(user, typeFilter, 'outsource_material_return');
+  const fetchOutsourceProductReturn = shouldFetchInboundHubType(user, typeFilter, 'outsource_product_return');
+  const fetchOtherInbound = shouldFetchInboundHubType(user, typeFilter, 'other_inbound');
+  const fetchMaterialReturn = shouldFetchInboundHubType(user, typeFilter, 'material_return');
+
+  const baseParams = {
+    skip: fetchSkip,
+    limit: fetchLimit,
     keyword: params.keyword,
     order_by: params.order_by,
     warehouse_id: params.warehouse_id,
@@ -58,6 +75,16 @@ export async function fetchInboundHubList(
     created_end_date: params.created_end_date,
     updated_start_date: params.updated_start_date,
     updated_end_date: params.updated_end_date,
+  };
+
+  const sourceStatus = (
+    pendingStatus: string,
+    postedStatus: string,
+  ): string | undefined => {
+    if (hubStatus === 'pending') return pendingStatus;
+    if (hubStatus === 'posted') return postedStatus;
+    if (!hubStatus || hubStatus === 'all') return undefined;
+    return hubStatus;
   };
 
   const [
@@ -73,38 +100,38 @@ export async function fetchInboundHubList(
     otherInboundRes,
     materialReturnRes,
   ] = await Promise.all([
-    shouldFetchInboundHubType(user, typeFilter, 'purchase')
-      ? warehouseApi.purchaseReceipt.list(listParams)
+    fetchPurchase
+      ? warehouseApi.purchaseReceipt.list({ ...baseParams, status: sourceStatus('待入库', '已入库') })
       : Promise.resolve(emptyList),
-    shouldFetchInboundHubType(user, typeFilter, 'finished_goods')
-      ? warehouseApi.finishedGoodsReceipt.list(listParams)
+    fetchFinished
+      ? warehouseApi.finishedGoodsReceipt.list({ ...baseParams, status: sourceStatus('待入库', '已入库') })
       : Promise.resolve(emptyList),
-    shouldFetchInboundHubType(user, typeFilter, 'semi_finished_goods')
-      ? warehouseApi.semiFinishedGoodsReceipt.list(listParams)
+    fetchSemi
+      ? warehouseApi.semiFinishedGoodsReceipt.list({ ...baseParams, status: sourceStatus('待入库', '已入库') })
       : Promise.resolve(emptyList),
-    shouldFetchInboundHubType(user, typeFilter, 'production_return')
-      ? warehouseApi.productionReturn.list(listParams)
+    fetchReturn
+      ? warehouseApi.productionReturn.list({ ...baseParams, status: sourceStatus('待退料', '已退料') })
       : Promise.resolve(emptyList),
-    shouldFetchInboundHubType(user, typeFilter, 'customer_material')
-      ? customerMaterialRegistrationApi.list(listParams)
+    fetchCustomerMaterial
+      ? customerMaterialRegistrationApi.list({ ...baseParams, status: sourceStatus('pending', 'processed') })
       : Promise.resolve(emptyList),
-    shouldFetchInboundHubType(user, typeFilter, 'sales_return')
-      ? warehouseApi.salesReturn.list(listParams)
+    fetchSalesReturn
+      ? warehouseApi.salesReturn.list({ ...baseParams, status: sourceStatus('待退货', '已退货') })
       : Promise.resolve(emptyList),
-    shouldFetchInboundHubType(user, typeFilter, 'outsource_receipt')
-      ? outsourceMaterialReceiptApi.list(listParams)
+    fetchOutsourceReceipt
+      ? outsourceMaterialReceiptApi.list({ ...baseParams, status: sourceStatus('draft', 'completed') })
       : Promise.resolve(emptyList),
-    shouldFetchInboundHubType(user, typeFilter, 'outsource_material_return')
-      ? outsourceMaterialReturnApi.list(listParams)
+    fetchOutsourceMaterialReturn
+      ? outsourceMaterialReturnApi.list({ ...baseParams, status: sourceStatus('draft', 'completed') })
       : Promise.resolve(emptyList),
-    shouldFetchInboundHubType(user, typeFilter, 'outsource_product_return')
-      ? outsourceProductReturnApi.list(listParams)
+    fetchOutsourceProductReturn
+      ? outsourceProductReturnApi.list({ ...baseParams, status: sourceStatus('draft', 'completed') })
       : Promise.resolve(emptyList),
-    shouldFetchInboundHubType(user, typeFilter, 'other_inbound')
-      ? warehouseApi.otherInbound.list(listParams)
+    fetchOtherInbound
+      ? warehouseApi.otherInbound.list({ ...baseParams, status: sourceStatus('待入库', '已入库') })
       : Promise.resolve(emptyList),
-    shouldFetchInboundHubType(user, typeFilter, 'material_return')
-      ? warehouseApi.materialReturn.list(listParams)
+    fetchMaterialReturn
+      ? warehouseApi.materialReturn.list({ ...baseParams, status: sourceStatus('待退料', '已退料') })
       : Promise.resolve(emptyList),
   ]);
 
@@ -272,7 +299,7 @@ export async function fetchInboundHubList(
       }) as InboundHubOrder,
   );
 
-  let combinedData: InboundHubOrder[] = [
+  const combinedData: InboundHubOrder[] = [
     ...purchaseData,
     ...finishedData,
     ...semiData,
@@ -286,24 +313,28 @@ export async function fetchInboundHubList(
     ...materialReturnData,
   ].map(withInboundHubDisplayFields);
 
-  const statusFilter = params.status as string | undefined;
-  if (statusFilter === 'pending') {
-    combinedData = combinedData.filter((r) =>
-      ['待入库', '草稿', '待退货', '待退料', '待归还', 'pending', 'draft'].includes(String(r.status || '')),
-    );
-  } else if (statusFilter === 'posted') {
-    combinedData = combinedData.filter((r) =>
-      ['已入库', '已退货', '已退料', '已归还', 'processed', 'completed', '已确认'].includes(String(r.status || '')),
-    );
-  }
-
   const sorted = sortInboundHubRows(
     combinedData as Record<string, unknown>[],
     typeof params.order_by === 'string' ? params.order_by : undefined,
   ) as InboundHubOrder[];
 
-  const total = sorted.length;
-  const page = sorted.slice(skip, skip + limit);
+  const sourceTotal =
+    (fetchPurchase ? toList(purchaseRes).total : 0) +
+    (fetchFinished ? toList(finishedRes).total : 0) +
+    (fetchSemi ? toList(semiRes).total : 0) +
+    (fetchReturn ? toList(returnRes).total : 0) +
+    (fetchCustomerMaterial ? toList(customerMaterialRes).total : 0) +
+    (fetchSalesReturn ? toList(salesReturnRes).total : 0) +
+    (fetchOutsourceReceipt ? toList(outsourceReceiptRes).total : 0) +
+    (fetchOutsourceMaterialReturn ? toList(outsourceMaterialReturnRes).total : 0) +
+    (fetchOutsourceProductReturn ? toList(outsourceProductReturnRes).total : 0) +
+    (fetchOtherInbound ? toList(otherInboundRes).total : 0) +
+    (fetchMaterialReturn ? toList(materialReturnRes).total : 0);
 
-  return { data: page, success: true, total };
+  if (typed) {
+    return { data: sorted, success: true, total: sourceTotal };
+  }
+
+  const page = sorted.slice(skip, skip + limit);
+  return { data: page, success: true, total: sourceTotal };
 }
