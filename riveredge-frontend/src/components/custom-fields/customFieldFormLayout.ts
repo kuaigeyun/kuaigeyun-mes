@@ -7,7 +7,7 @@
  * 渲染策略（CustomFieldsFormSection 内自动判断）：
  * - 父级 ProForm grid={true}：字段带 colProps，直接参与页面 Row（与标准字段同一栅格）
  * - embedInParentRow：仅 Col 片段，嵌在页面 Row 内
- * - 默认：独立 Row gutter={16}，与页面其它 Row 同级
+ * - 默认：独立 Row gutter={[16, 16]}（水平+换行垂直），与页面其它 Row 同级
  */
 
 import type { CustomField } from '../../services/customField';

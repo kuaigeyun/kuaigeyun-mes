@@ -20,7 +20,11 @@ from core.schemas.custom_field import (
 )
 from core.services.business.custom_field_service import CustomFieldService
 from core.api.deps.deps import get_current_tenant
-from core.api.deps.custom_field_access import require_custom_field_definitions_read
+from core.api.deps.access import AuthContext, get_auth_context
+from core.api.deps.custom_field_access import (
+    assert_custom_field_values_access,
+    require_custom_field_definitions_read,
+)
 from core.api.deps.system_module_access import (
     require_custom_field_create,
     require_custom_field_delete,
@@ -416,20 +420,17 @@ async def delete_field(
 async def batch_set_field_values(
     data: BatchSetFieldValuesRequest,
     tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_custom_field_update),
+    auth: AuthContext = Depends(get_auth_context),
 ):
     """
-    批量设置字段值
-    
-    批量设置多个自定义字段的值。
-    
-    Args:
-        data: 批量设置字段值请求数据
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        Dict[str, Any]: 设置结果
+    批量设置字段值。单据字段值按宿主模块 create/update 鉴权，不是字段定义管理权限。
     """
+    await assert_custom_field_values_access(
+        auth=auth,
+        tenant_id=tenant_id,
+        record_table=data.record_table,
+        write=True,
+    )
     values = [{"field_uuid": v.field_uuid, "value": v.value} for v in data.values]
     result = await CustomFieldService.batch_set_field_values(
         tenant_id=tenant_id,
@@ -444,9 +445,15 @@ async def batch_set_field_values(
 async def batch_get_field_values(
     data: BatchGetFieldValuesRequest,
     tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_custom_field_read),
+    auth: AuthContext = Depends(get_auth_context),
 ):
     """批量获取多条记录的自定义字段值（列表页列展示）。"""
+    await assert_custom_field_values_access(
+        auth=auth,
+        tenant_id=tenant_id,
+        record_table=data.record_table,
+        write=False,
+    )
     return await CustomFieldService.batch_get_field_values(
         tenant_id=tenant_id,
         record_table=data.record_table,
@@ -459,21 +466,15 @@ async def get_field_values(
     record_table: str,
     record_id: int,
     tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_custom_field_read),
+    auth: AuthContext = Depends(get_auth_context),
 ):
-    """
-    获取记录的所有自定义字段值
-    
-    获取指定记录的所有自定义字段值。
-    
-    Args:
-        record_table: 关联表名
-        record_id: 关联记录ID
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        Dict[str, Any]: 字段值字典（key 为字段代码，value 为字段值）
-    """
+    """获取指定记录的所有自定义字段值（宿主模块 read/create/update 即可）。"""
+    await assert_custom_field_values_access(
+        auth=auth,
+        tenant_id=tenant_id,
+        record_table=record_table,
+        write=False,
+    )
     values = await CustomFieldService.get_field_values(
         tenant_id=tenant_id,
         record_table=record_table,

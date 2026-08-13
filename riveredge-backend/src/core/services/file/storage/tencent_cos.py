@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
@@ -45,6 +46,29 @@ def _resolve_region(config: Dict[str, Any], host: str) -> str:
         mid = h.split(marker, 1)[1]
         return mid.split(".myqcloud.com", 1)[0].replace("-internal", "")
     raise ValidationError("COS 配置缺少 Region")
+
+
+def _read_cos_object_body(body: Any) -> bytes:
+    """
+    读完 COS get_object 的 Body。
+
+    qcloud_cos StreamBody.read() 默认 chunk_size=1024，只返回第一块，不是整文件。
+    必须用 get_stream 迭代，否则 STEP/图片/PDF 都会被截成 1KB。
+    """
+    if body is None or not hasattr(body, "get_stream"):
+        raise ValidationError("COS 下载失败：响应 Body 不是可流式读取的对象")
+    chunks = []
+    for chunk in body.get_stream(1024 * 1024):
+        if not isinstance(chunk, (bytes, bytearray)):
+            raise ValidationError("COS 下载失败：对象流返回了非字节内容")
+        chunks.append(bytes(chunk))
+    data = b"".join(chunks)
+    expected = int(len(body))
+    if expected > 0 and len(data) != expected:
+        raise ValidationError(
+            f"COS 下载不完整：期望 {expected} 字节，实际 {len(data)} 字节"
+        )
+    return data
 
 
 class TencentCosStorage(FileStorageBackend):
@@ -103,6 +127,30 @@ class TencentCosStorage(FileStorageBackend):
         except Exception as e:
             raise ValidationError(f"COS 上传失败: {e}") from e
 
+    async def put_file(self, key: str, local_path: str, content_type: Optional[str] = None) -> None:
+        """分片上传本地文件，不按大小截断，也不整文件读入内存。"""
+        object_key = self._object_key(key)
+        if not os.path.isfile(local_path):
+            raise ValidationError(f"本地文件不存在: {local_path}")
+        kwargs: Dict[str, Any] = {
+            "Bucket": self.bucket,
+            "LocalFilePath": local_path,
+            "Key": object_key,
+            "PartSize": 8,
+            "MAXThread": 4,
+        }
+        ct = (content_type or "").strip()
+        if ct:
+            kwargs["ContentType"] = ct
+        try:
+            await asyncio.to_thread(self._client.upload_file, **kwargs)
+        except CosServiceError as e:
+            raise ValidationError(
+                f"COS 上传失败 HTTP {e.get_status_code()}: {e.get_error_code()} {e.get_error_msg()}"
+            ) from e
+        except Exception as e:
+            raise ValidationError(f"COS 上传失败: {e}") from e
+
     async def get(self, key: str) -> bytes:
         object_key = self._object_key(key)
         try:
@@ -112,7 +160,7 @@ class TencentCosStorage(FileStorageBackend):
                 Key=object_key,
             )
             body = resp["Body"]
-            return await asyncio.to_thread(body.read)
+            return await asyncio.to_thread(_read_cos_object_body, body)
         except CosServiceError as e:
             if e.get_status_code() == 404 or e.get_error_code() in ("NoSuchKey", "NoSuchResource"):
                 raise NotFoundError("文件") from e
@@ -136,16 +184,22 @@ class TencentCosStorage(FileStorageBackend):
         except Exception:
             return False
 
-    async def exists(self, key: str) -> bool:
+    async def head_content_length(self, key: str) -> Optional[int]:
+        """HEAD 对象大小；不存在返回 None。"""
         object_key = self._object_key(key)
         try:
-            await asyncio.to_thread(
+            resp = await asyncio.to_thread(
                 self._client.head_object,
                 Bucket=self.bucket,
                 Key=object_key,
             )
-            return True
-        except CosServiceError:
-            return False
-        except Exception:
-            return False
+            return int(resp.get("Content-Length") or 0)
+        except CosServiceError as e:
+            if e.get_status_code() == 404 or e.get_error_code() in ("NoSuchKey", "NoSuchResource"):
+                return None
+            raise ValidationError(
+                f"COS HEAD 失败 HTTP {e.get_status_code()}: {e.get_error_code()} {e.get_error_msg()}"
+            ) from e
+
+    async def exists(self, key: str) -> bool:
+        return (await self.head_content_length(key)) is not None

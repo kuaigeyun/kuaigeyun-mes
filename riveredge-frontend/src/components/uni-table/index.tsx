@@ -60,7 +60,10 @@ import {
   ProjectOutlined,
 } from '@ant-design/icons'
 import { isPinyinKeyword, matchPinyinInitialsAsync } from '../../utils/pinyin'
-import { resolveLinkedDocumentColumn } from '../../apps/kuaizhizao/utils/linkedDocumentAutoLink'
+import {
+  resolveLinkedDocumentColumn,
+  shouldInjectLinkedDocumentRender,
+} from '../../apps/kuaizhizao/utils/linkedDocumentAutoLink'
 import { LinkedDocumentAutoCell } from '../linked-document-code/LinkedDocumentAutoCell'
 import UniSearch from '../uni-search'
 import UniView from '../uni-view'
@@ -1409,14 +1412,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const processedColumns = React.useMemo(() => {
     const mapped = effectiveColumns.map((col: any) => {
       /**
-       * 关联单号全局自动挂链：dataIndex 命中约定（如 original_work_order_code / source_code）
-       * 即渲染嵌套抽屉链接；页面设 skipLinkedDocumentLink 可退出。
+       * 关联单号全局自动挂链：dataIndex 命中约定且列尚未自定义 render 时挂嵌套抽屉链接。
+       * 已有叠列/自定义 render 不得覆盖（否则报价单客户名会被单号顶掉）。
+       * 页面设 skipLinkedDocumentLink 可退出。
        */
-      if (
-        !col.skipLinkedDocumentLink &&
-        typeof col.dataIndex === 'string' &&
-        !col.hideInTable
-      ) {
+      if (shouldInjectLinkedDocumentRender(col)) {
         const linkedBinding = resolveLinkedDocumentColumn(col.dataIndex)
         if (linkedBinding) {
           return {

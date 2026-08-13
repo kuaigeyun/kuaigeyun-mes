@@ -1,7 +1,7 @@
 /**
  * 关联单号列全局约定（UniTable / 详情 Descriptions 唯一自动挂链路径）。
- * 列 dataIndex 命中约定且行上有对应 id 时，自动渲染可点链接打开嵌套抽屉。
- * 页面勿再逐列手写；特殊 UI 可设 skipLinkedDocumentLink: true 退出。
+ * 列 dataIndex 命中约定、且列没有自定义 render 时，自动渲染可点链接打开嵌套抽屉。
+ * 已有叠列 render 不得覆盖。页面特殊 UI 可设 skipLinkedDocumentLink: true 退出。
  */
 
 import type { LinkedDocumentType } from './linkedDocumentDetail';
@@ -61,6 +61,18 @@ const EXPLICIT_BINDINGS: Record<string, Omit<LinkedCodeBinding, 'codeField'>> = 
   sales_delivery_code: { documentType: 'sales_delivery', idField: 'sales_delivery_id' },
   purchase_receipt_code: { documentType: 'purchase_receipt', idField: 'purchase_receipt_id' },
 };
+
+/** 列已有自定义 render 时不得覆盖（报价单等主从叠列用 quotation_code 作 dataIndex）。 */
+export function shouldInjectLinkedDocumentRender(col: {
+  skipLinkedDocumentLink?: boolean;
+  render?: unknown;
+  dataIndex?: unknown;
+  hideInTable?: boolean;
+}): boolean {
+  if (col.skipLinkedDocumentLink || col.hideInTable) return false;
+  if (typeof col.render === 'function') return false;
+  return typeof col.dataIndex === 'string' && resolveLinkedDocumentColumn(col.dataIndex) != null;
+}
 
 export function resolveLinkedDocumentColumn(dataIndex: string | null | undefined): LinkedCodeBinding | null {
   const key = String(dataIndex ?? '').trim();

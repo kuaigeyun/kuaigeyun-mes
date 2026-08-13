@@ -17,6 +17,11 @@ import { normalizeJsonFieldValue } from '../components/custom-fields/customField
 
 const CUSTOM_PREFIX = 'custom_';
 
+/** 从表单实例按字段名读取值（ProForm / antd Form 均具备） */
+export type CustomFieldFormReader = {
+  getFieldValue: (name: string) => unknown;
+};
+
 export interface UseCustomFieldsOptions {
   /** 关联表名（如 master_data_factory_plants） */
   tableName: string;
@@ -35,8 +40,11 @@ export interface UseCustomFieldsResult {
   customFieldValues: Record<string, any>;
   /** 加载指定记录的字段值，返回 { custom_xxx: value } 格式，可直接 setFieldsValue */
   loadFieldValues: (recordId: number) => Promise<Record<string, any>>;
-  /** 从表单 values 中提取 custom_* 与标准字段，返回分离后的数据 */
-  extractFormValues: (formValues: Record<string, any>) => { customData: Record<string, any>; standardValues: Record<string, any> };
+  /** 从表单 values 中提取 custom_* 与标准字段；有字段定义时须再传入 form 按 name 读取 */
+  extractFormValues: (
+    formValues: Record<string, any>,
+    form?: CustomFieldFormReader,
+  ) => { customData: Record<string, any>; standardValues: Record<string, any> };
   /** 将 customData 保存到后端 */
   saveCustomFieldValues: (recordId: number, customData: Record<string, any>) => Promise<void>;
   /** 重置字段值（关闭 Modal 时调用） */
@@ -104,58 +112,96 @@ export function useCustomFields({
     [tableName, hostResource, customFields]
   );
 
-  const extractFormValues = useCallback((formValues: Record<string, any>) => {
-    const customData: Record<string, any> = {};
-    const standardValues: Record<string, any> = {};
-    Object.keys(formValues).forEach((key) => {
-      if (key.startsWith(CUSTOM_PREFIX)) {
-        customData[key.replace(CUSTOM_PREFIX, '')] = formValues[key];
-      } else {
-        standardValues[key] = formValues[key];
+  const extractFormValues = useCallback(
+    (formValues: Record<string, any> = {}, form?: CustomFieldFormReader) => {
+      const customData: Record<string, any> = {};
+      const standardValues: Record<string, any> = {};
+      const knownCodes = new Set(customFields.map((field) => field.code));
+
+      for (const field of customFields) {
+        const key = `${CUSTOM_PREFIX}${field.code}`;
+        if (form) {
+          customData[field.code] = form.getFieldValue(key);
+        } else if (Object.prototype.hasOwnProperty.call(formValues, key)) {
+          customData[field.code] = formValues[key];
+        }
       }
-    });
-    return { customData, standardValues };
-  }, []);
+
+      Object.keys(formValues).forEach((key) => {
+        if (key.startsWith(CUSTOM_PREFIX)) {
+          const code = key.slice(CUSTOM_PREFIX.length);
+          if (!knownCodes.has(code)) {
+            customData[code] = formValues[key];
+          }
+        } else {
+          standardValues[key] = formValues[key];
+        }
+      });
+      return { customData, standardValues };
+    },
+    [customFields],
+  );
 
   const saveCustomFieldValues = useCallback(
     async (recordId: number, customData: Record<string, any>) => {
-      if (Object.keys(customData).length === 0) return;
-      const fieldValues = Object.keys(customData)
-        .map((fieldCode) => {
-          const field = customFields.find((f) => f.code === fieldCode);
-          if (!field) return null;
-          let value = customData[fieldCode];
-          if (field.field_type === 'image' || field.field_type === 'file') {
-            value = uploadFileListToCustomFieldValue(value, field.field_type);
-          } else if (field.field_type === 'json') {
-            value = normalizeJsonFieldValue(value);
-          } else if (field.field_type === 'time' || field.field_type === 'datetime') {
-            if (value != null && value !== '') {
-              const format = field.config?.format
-                || (field.field_type === 'time' ? 'HH:mm:ss' : 'YYYY-MM-DD HH:mm:ss');
-              if (dayjs.isDayjs(value)) {
-                value = value.format(format);
-              }
-            }
-          } else if (field.field_type === 'formula') {
-            if (value == null || value === '') {
-              return null;
-            }
-            const num = Number(value);
-            value = Number.isFinite(num) ? num : null;
-          }
-          return { field_uuid: field.uuid, value };
-        })
-        .filter(Boolean);
-      if (fieldValues.length > 0) {
-        await batchSetFieldValues({
-          record_id: recordId,
-          record_table: tableName,
-          values: fieldValues as any[],
-        });
+      const incomingCodes = Object.keys(customData);
+      if (incomingCodes.length === 0) return;
+
+      let fields = customFields;
+      if (fields.length === 0) {
+        fields = await getCustomFieldsByTable(tableName, true, hostResource);
+        if (fields.length > 0) {
+          setCustomFields(fields);
+        }
       }
+      if (fields.length === 0) {
+        throw new Error('自定义字段定义未加载，无法保存字段值');
+      }
+
+      const unmatched = incomingCodes.filter((code) => !fields.some((f) => f.code === code));
+      if (unmatched.length > 0) {
+        throw new Error(`自定义字段未匹配到定义: ${unmatched.join(', ')}`);
+      }
+
+      const fieldValues: Array<{ field_uuid: string; value: unknown }> = [];
+      for (const fieldCode of incomingCodes) {
+        const field = fields.find((f) => f.code === fieldCode);
+        if (!field) {
+          throw new Error(`自定义字段未匹配到定义: ${fieldCode}`);
+        }
+        let value = customData[fieldCode];
+        if (field.field_type === 'image' || field.field_type === 'file') {
+          value = uploadFileListToCustomFieldValue(value, field.field_type);
+        } else if (field.field_type === 'json') {
+          value = normalizeJsonFieldValue(value);
+        } else if (field.field_type === 'time' || field.field_type === 'datetime') {
+          if (value != null && value !== '') {
+            const format = field.config?.format
+              || (field.field_type === 'time' ? 'HH:mm:ss' : 'YYYY-MM-DD HH:mm:ss');
+            if (dayjs.isDayjs(value)) {
+              value = value.format(format);
+            }
+          }
+        } else if (field.field_type === 'formula') {
+          if (value == null || value === '') {
+            continue;
+          }
+          const num = Number(value);
+          value = Number.isFinite(num) ? num : null;
+        }
+        if (value === undefined) {
+          value = null;
+        }
+        fieldValues.push({ field_uuid: field.uuid, value });
+      }
+      if (fieldValues.length === 0) return;
+      await batchSetFieldValues({
+        record_id: recordId,
+        record_table: tableName,
+        values: fieldValues as any[],
+      });
     },
-    [tableName, customFields]
+    [tableName, hostResource, customFields],
   );
 
   const resetFieldValues = useCallback(() => {

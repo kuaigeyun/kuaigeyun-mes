@@ -6,7 +6,7 @@
  *
  * ProForm grid={true}：字段带 colProps，直接参与父级 Row（与页面其它字段同一栅格）。
  * embedInParentRow：仅输出 Col，嵌在页面已有 Row 内。
- * 默认（独立一行）：与页面其它 Row 同级，输出单个 Row gutter={16}。
+ * 默认（独立一行）：与页面其它 Row 同级，输出单个 Row gutter={[16, 16]}。
  */
 
 import React, { useContext } from 'react';
@@ -365,7 +365,10 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
   }
 
   return (
-    <Row gutter={FORM_LAYOUT.GRID_GUTTER} className={CUSTOM_FIELD_FORM_CLASS_NAMES.sectionRow}>
+    <Row
+      gutter={[FORM_LAYOUT.GRID_GUTTER, FORM_LAYOUT.GRID_GUTTER]}
+      className={CUSTOM_FIELD_FORM_CLASS_NAMES.sectionRow}
+    >
       {fieldCols}
     </Row>
   );

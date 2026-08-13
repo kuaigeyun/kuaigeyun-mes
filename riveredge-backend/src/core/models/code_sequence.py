@@ -22,7 +22,7 @@ class CodeSequence(BaseModel):
         id: 序号ID（主键，自增ID，内部使用）
         code_rule_id: 关联编码规则ID（内部使用自增ID）
         tenant_id: 组织ID（用于多组织数据隔离）
-        current_seq: 当前序号
+        current_seq: 当前序号（BIGINT，可容纳最多 18 位流水）
         reset_date: 重置日期（用于按日/月/年重置）
         updated_at: 更新时间
     """
@@ -32,7 +32,7 @@ class CodeSequence(BaseModel):
     # tenant_id 字段由 BaseModel 提供，无需重复定义
     
     code_rule_id = fields.IntField(description="关联编码规则ID（内部使用自增ID）")
-    current_seq = fields.IntField(default=0, description="当前序号")
+    current_seq = fields.BigIntField(default=0, description="当前序号")
     reset_date = fields.DateField(null=True, description="重置日期（用于按日/月/年重置）")
     scope_key = fields.CharField(max_length=100, default="", description="作用域Key（用于按字段隔离计数）")
 

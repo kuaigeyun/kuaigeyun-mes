@@ -6,7 +6,7 @@
 
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File as FastAPIFile, Request, Header, Form
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 
 from core.schemas.file import (
     FileCreate,
@@ -289,7 +289,7 @@ async def backfill_image_tiers(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
-    存量图片三档压缩：为已有图片生成缩略图(64)与预览图(512)持久化缓存。
+    存量图片三档压缩：为已有图片在其所属存储（本地或 COS）生成缩略图(64)与预览图(512)。
     前端可循环调用直至 done=true。
     """
     result = await ImageTierService.backfill_image_tiers(
@@ -336,7 +336,7 @@ async def migrate_storage_to_cos(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
-    将本环境本地文件分页迁移到腾讯 COS。
+    将本环境本地文件分页迁移到腾讯 COS（不论格式、不论大小，含图片档位）。
     前端循环调用直至 done=true；不跨环境代迁。
     """
     try:
@@ -487,33 +487,28 @@ async def download_file(
         
         # 获取文件
         file = await FileService.get_file_by_uuid(tenant_id, uuid)
-        
-        # 获取文件内容
-        file_content = await FileService.get_file_content(tenant_id, uuid)
-        
-        # 缩略图：仅图片且指定 size 时，返回缩放后的图片
-        # PNG 透明图保留透明通道输出 PNG，避免白底；其他输出 JPEG
-        file_type = FileService.resolve_download_media_type(file, file_content)
-        # 缩略图：仅图片且指定 size 时，通过持久化档位或实时生成返回缩放后的图片
-        if size and file_type.startswith("image/"):
-            tier_response = ImageTierService.streaming_response_for_tier(
-                uuid, size, file_type, file_content,
+
+        # 图片档位与原文件同一存储后端（本地或 COS），禁止本机 sidecar 旁路 COS。
+        if size and ImageTierService.is_tier_eligible_image(file.file_type, file.file_extension):
+            tier_response = await ImageTierService.streaming_response_for_tier(
+                tenant_id, file, size,
             )
             if tier_response is not None:
                 return tier_response
-        
-        # 构建完整路径（用于获取文件类型）
-        import os
-        from core.services.file.file_service import FileService as FS
-        full_path = os.path.join(FS.UPLOAD_DIR, file.file_path)
-        
+
+        file_content = await FileService.get_file_content(tenant_id, uuid)
+        file_type = FileService.resolve_download_media_type(file, file_content)
+
         # 处理文件名编码（支持中文文件名）
         # 使用 RFC 5987 格式编码文件名，避免 latin-1 编码错误
         from urllib.parse import quote
         
-        # 根据文件类型决定是预览（inline）还是下载（attachment）
-        # 图片文件使用 inline，让浏览器直接预览；其他文件使用 attachment，触发下载
-        disposition_type = "inline" if file_type.startswith("image/") else "attachment"
+        # 浏览器可预览的类型用 inline（PDF/文本/音视频/CAD/图片）；其余才 attachment。
+        # 同一条 download 也被预览 iframe/fetch 使用，一律 attachment 会导致 PDF/视频无法内嵌。
+        previewable = FilePreviewService._is_simple_preview_supported(
+            file.file_type, file.file_extension
+        )
+        disposition_type = "inline" if previewable or file_type.startswith("image/") else "attachment"
         
         # 检查文件名是否包含非 ASCII 字符
         try:
@@ -533,7 +528,7 @@ async def download_file(
             media_type=file_type,
             headers={
                 "Content-Disposition": content_disposition,
-                "Content-Length": str(file.file_size),
+                "Content-Length": str(len(file_content)),
             }
         )
     except NotFoundError as e:

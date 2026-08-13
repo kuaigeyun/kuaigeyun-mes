@@ -7,7 +7,10 @@ import type { Key, ReactNode } from 'react';
 import type { DescriptionsProps } from 'antd';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../utils/format';
-import { resolveLinkedDocumentColumn } from '../../apps/kuaizhizao/utils/linkedDocumentAutoLink';
+import {
+  resolveLinkedDocumentColumn,
+  shouldInjectLinkedDocumentRender,
+} from '../../apps/kuaizhizao/utils/linkedDocumentAutoLink';
 import { LinkedDocumentAutoCell } from '../linked-document-code/LinkedDocumentAutoCell';
 
 export function detailDrawerDescriptionItems<T extends Record<string, any>>(
@@ -25,9 +28,13 @@ export function detailDrawerDescriptionItems<T extends Record<string, any>>(
       col.key ??
       (typeof di === 'string' || typeof di === 'number' ? di : Array.isArray(di) ? di.join('.') : index);
 
-    const skipLinked = Boolean((col as { skipLinkedDocumentLink?: boolean }).skipLinkedDocumentLink);
-    const linkedBinding =
-      !skipLinked && typeof lookupKey === 'string' ? resolveLinkedDocumentColumn(lookupKey) : null;
+    const linkedBinding = shouldInjectLinkedDocumentRender({
+      skipLinkedDocumentLink: Boolean((col as { skipLinkedDocumentLink?: boolean }).skipLinkedDocumentLink),
+      render: col.render,
+      dataIndex: lookupKey,
+    })
+      ? resolveLinkedDocumentColumn(lookupKey)
+      : null;
     if (linkedBinding && dataSource) {
       return {
         key: itemKey as Key,

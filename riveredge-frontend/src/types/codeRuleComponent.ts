@@ -16,7 +16,7 @@ export type CodeRuleComponentType = 'auto_counter' | 'date' | 'fixed_text' | 'fo
 export interface AutoCounterComponent {
   type: 'auto_counter';
   order: number;
-  digits: number; // 计数位数（2-12）
+  digits: number; // 计数位数（界面 2-12，存储最大 18）
   fixed_width: boolean; // 是否固定位数
   reset_cycle: 'never' | 'daily' | 'monthly' | 'yearly'; // 重置周期
   initial_value: number; // 初始值

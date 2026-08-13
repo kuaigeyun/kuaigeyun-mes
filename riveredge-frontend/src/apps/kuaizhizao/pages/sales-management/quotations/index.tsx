@@ -659,6 +659,7 @@ const QuotationsPage: React.FC = () => {
     resetFieldValues: resetQuotationFormFieldValues,
   } = useCustomFields({
     tableName: QUOTATION_CUSTOM_FIELD_TABLE,
+    hostResource: QUOTATION_FIELD_RESOURCE,
     loadWhenOpen: true,
     open: isFormPage,
   });
@@ -669,7 +670,10 @@ const QuotationsPage: React.FC = () => {
     customFieldValues: quotationDetailCustomFieldValues,
     loadFieldValuesForDetail: loadQuotationFieldValuesForDetail,
     resetDetailFieldValues: resetQuotationDetailFieldValues,
-  } = useCustomFieldsForList<Quotation>({ tableName: QUOTATION_CUSTOM_FIELD_TABLE });
+  } = useCustomFieldsForList<Quotation>({
+    tableName: QUOTATION_CUSTOM_FIELD_TABLE,
+    hostResource: QUOTATION_FIELD_RESOURCE,
+  });
   const quotationCustomFieldColumns = generateQuotationCustomFieldColumns();
   const { message: messageApi } = App.useApp();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal({
@@ -2689,7 +2693,7 @@ const QuotationsPage: React.FC = () => {
   }
 
   const submitCreate = async (values: any, options?: { asDraft?: boolean }) => {
-    const { customData, standardValues } = extractQuotationFormValues(values);
+    const { customData, standardValues } = extractQuotationFormValues(values, formRef.current);
     Object.keys(values).forEach((key) => {
       if (key.startsWith('custom_')) delete values[key];
     });
@@ -2811,7 +2815,7 @@ const QuotationsPage: React.FC = () => {
       messageApi.error(t('app.kuaizhizao.quotation.updateFailed'));
       throw new Error(t('app.kuaizhizao.quotation.updateFailed'));
     }
-    const { customData, standardValues } = extractQuotationFormValues(values);
+    const { customData, standardValues } = extractQuotationFormValues(values, formRef.current);
     Object.keys(values).forEach((key) => {
       if (key.startsWith('custom_')) delete values[key];
     });

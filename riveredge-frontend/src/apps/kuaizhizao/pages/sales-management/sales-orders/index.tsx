@@ -526,7 +526,12 @@ const SalesOrdersPage: React.FC = () => {
     extractFormValues: extractSalesOrderFormValues,
     saveCustomFieldValues: saveSalesOrderCustomFieldValues,
     resetFieldValues: resetSalesOrderFormFieldValues,
-  } = useCustomFields({ tableName: SALES_ORDER_CUSTOM_FIELD_TABLE, loadWhenOpen: true, open: isFormPage });
+  } = useCustomFields({
+    tableName: SALES_ORDER_CUSTOM_FIELD_TABLE,
+    hostResource: SO,
+    loadWhenOpen: true,
+    open: isFormPage,
+  });
 
   const {
     customFields: salesOrderListCustomFields,
@@ -535,7 +540,10 @@ const SalesOrdersPage: React.FC = () => {
     customFieldValues: salesOrderDetailCustomFieldValues,
     loadFieldValuesForDetail: loadSalesOrderFieldValuesForDetail,
     resetDetailFieldValues: resetSalesOrderDetailFieldValues,
-  } = useCustomFieldsForList<SalesOrder>({ tableName: SALES_ORDER_CUSTOM_FIELD_TABLE });
+  } = useCustomFieldsForList<SalesOrder>({
+    tableName: SALES_ORDER_CUSTOM_FIELD_TABLE,
+    hostResource: SO,
+  });
 
   /** 表格搜索表单 ref，用于 statCard 点击时设置筛选并刷新 */
   const tableSearchFormRef = useRef<any>(null);
@@ -1249,7 +1257,7 @@ const SalesOrdersPage: React.FC = () => {
    */
   const handleSaveInternal = async (values: any, isDraft: boolean) => {
     try {
-      const { customData, standardValues } = extractSalesOrderFormValues(values);
+      const { customData, standardValues } = extractSalesOrderFormValues(values, formRef.current);
       Object.keys(values).forEach((key) => {
         if (key.startsWith('custom_')) delete values[key];
       });

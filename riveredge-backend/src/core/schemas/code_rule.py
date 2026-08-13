@@ -226,7 +226,7 @@ class AutoCounterComponent(CodeRuleComponentBase):
     可选组件，不可重复添加。
     """
     type: Literal["auto_counter"] = "auto_counter"
-    digits: int = Field(default=5, ge=2, le=12, description="计数位数（2-12）")
+    digits: int = Field(default=5, ge=2, le=18, description="计数位数（2-12）")
     fixed_width: bool = Field(default=True, description="是否固定位数（开启后显示固定位数，如00001）")
     reset_cycle: Literal["never", "daily", "monthly", "yearly"] = Field(default="never", description="重置周期")
     initial_value: int = Field(default=1, ge=0, description="初始值")

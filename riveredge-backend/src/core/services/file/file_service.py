@@ -7,7 +7,7 @@
 import os
 import uuid
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
 from uuid import UUID
 
@@ -413,7 +413,7 @@ class FileService:
         file.deleted_at = resolve_business_datetime()
         await file.save()
         
-        ImageTierService.delete_tier_cache(uuid)
+        await ImageTierService.delete_tiers_for_file(tenant_id, file)
         
         # 物理删除文件（安全增强：防止已删除记录的文件通过 URL 被执行或访问）
         await FileService.destroy_physical_file(
@@ -438,6 +438,8 @@ class FileService:
         Returns:
             int: 删除的文件数量
         """
+        from types import SimpleNamespace
+
         # 先获取文件路径与存储元数据，用于物理删除
         files_to_delete = await File.filter(
             tenant_id=tenant_id,
@@ -457,7 +459,15 @@ class FileService:
         
         # 执行物理删除
         for file_uuid, path, storage_backend, storage_connection_uuid in files_to_delete:
-            ImageTierService.delete_tier_cache(str(file_uuid))
+            await ImageTierService.delete_tiers_for_file(
+                tenant_id,
+                SimpleNamespace(
+                    uuid=file_uuid,
+                    file_path=path,
+                    storage_backend=storage_backend or "local",
+                    storage_connection_uuid=storage_connection_uuid,
+                ),
+            )
             await FileService.destroy_physical_file(
                 path,
                 tenant_id=tenant_id,
@@ -549,10 +559,12 @@ class FileService:
         )
 
         if ImageTierService.is_tier_eligible_image(file_type, file_extension):
-            ImageTierService.ensure_tiers_for_content(
+            await ImageTierService.ensure_tiers_for_content(
                 file.uuid,
                 file_content,
                 file_type,
+                storage,
+                key_prefix=str(meta.get("key_prefix") or ""),
             )
         
         return file
@@ -665,6 +677,126 @@ class FileService:
             return False
 
     @staticmethod
+    async def _put_local_file_to_cos(
+        cos,
+        dest_key: str,
+        abs_path: str,
+        content_type: Optional[str],
+        target_bucket: Optional[str],
+    ) -> int:
+        """不分格式、不分大小：从磁盘上传到 COS，HEAD 校验字节数后才视为成功。"""
+        local_size = os.path.getsize(abs_path)
+        await cos.put_file(dest_key, abs_path, content_type=content_type)
+        remote_size = await cos.head_content_length(dest_key)
+        if remote_size is None:
+            raise ValidationError(
+                f"上传后对象不存在（bucket={target_bucket or '未知'} key={dest_key}）"
+            )
+        if remote_size != local_size:
+            raise ValidationError(
+                f"上传后对象大小不一致（bucket={target_bucket or '未知'} key={dest_key} "
+                f"本地={local_size} COS={remote_size}），未删除本地文件"
+            )
+        return local_size
+
+    @staticmethod
+    async def _migrate_local_tiers_for_uuid(
+        *,
+        cos,
+        local,
+        file_uuid: str,
+        key_prefix: str,
+        delete_local: bool,
+        dry_run: bool,
+        target_bucket: Optional[str],
+    ) -> int:
+        from core.services.file.image_tier_service import IMAGE_TIER_SIZES
+        from core.services.file.storage import apply_key_prefix
+
+        moved = 0
+        for size in IMAGE_TIER_SIZES:
+            rel = ImageTierService.tier_relative_key(file_uuid, size)
+            if not await local.exists(rel):
+                continue
+            dest_key = apply_key_prefix(key_prefix, rel)
+            abs_path = os.path.join(local.upload_dir, rel)
+            if dry_run:
+                moved += 1
+                continue
+            if await cos.exists(dest_key):
+                remote_size = await cos.head_content_length(dest_key)
+                if remote_size == os.path.getsize(abs_path):
+                    if delete_local:
+                        await local.delete(rel)
+                    moved += 1
+                    continue
+            content_type = ImageTierService.sniff_local_image_content_type(abs_path)
+            await FileService._put_local_file_to_cos(
+                cos, dest_key, abs_path, content_type, target_bucket,
+            )
+            if delete_local:
+                await local.delete(rel)
+            moved += 1
+        return moved
+
+    @staticmethod
+    async def _migrate_leftover_local_tiers(
+        *,
+        tenant_id: int,
+        cos,
+        local,
+        key_prefix: str,
+        delete_local: bool,
+        dry_run: bool,
+        target_bucket: Optional[str],
+        failures: List[Dict[str, str]],
+    ) -> Tuple[int, int]:
+        """已标记 COS 的文件若仍留着本机档位，一并上传后删除。"""
+        thumb_dir = os.path.join(FileService.UPLOAD_DIR, "thumbnails")
+        if not os.path.isdir(thumb_dir):
+            return 0, 0
+
+        migrated = 0
+        failed = 0
+        seen_uuids: set[str] = set()
+        names = sorted(os.listdir(thumb_dir))
+        for name in names:
+            parsed = ImageTierService.parse_local_tier_filename(name)
+            if not parsed:
+                continue
+            file_uuid, _size = parsed
+            if file_uuid in seen_uuids:
+                continue
+            seen_uuids.add(file_uuid)
+            row = await File.filter(
+                tenant_id=tenant_id,
+                uuid=file_uuid,
+                deleted_at__isnull=True,
+            ).first()
+            if not row:
+                continue
+            backend = str(getattr(row, "storage_backend", None) or "local").strip().lower()
+            if backend != "tencent_cos":
+                continue
+            file_prefix = await ImageTierService.key_prefix_for_file(tenant_id, row)
+            prefix = file_prefix or key_prefix
+            try:
+                moved = await FileService._migrate_local_tiers_for_uuid(
+                    cos=cos,
+                    local=local,
+                    file_uuid=file_uuid,
+                    key_prefix=prefix,
+                    delete_local=delete_local,
+                    dry_run=dry_run,
+                    target_bucket=target_bucket,
+                )
+                migrated += moved
+            except Exception as e:
+                failed += 1
+                failures.append({"uuid": file_uuid, "reason": f"图片档位迁移失败: {str(e)[:180]}"})
+        return migrated, failed
+
+    @staticmethod
     async def migrate_local_files_to_cos(
         tenant_id: int,
         *,
@@ -674,7 +806,10 @@ class FileService:
         limit: int = 50,
     ) -> Dict[str, Any]:
         """
-        将本租户本地文件分页迁移到腾讯 COS（仅处理当前环境库与磁盘）。
+        将本租户本地文件全部迁移到腾讯 COS。
+
+        不论格式、不论大小；原文件与同 uuid 的图片档位一并上传。
+        HEAD 校验字节数成功后才更新元数据、才删除本地原文件与档位。
         """
         from core.services.file.storage import (
             apply_key_prefix,
@@ -738,24 +873,36 @@ class FileService:
                     })
                     continue
 
-                async with aiofiles.open(abs_path, "rb") as f:
-                    content = await f.read()
-
                 dest_key = apply_key_prefix(key_prefix, source_key)
                 if dry_run:
+                    await FileService._migrate_local_tiers_for_uuid(
+                        cos=cos,
+                        local=local,
+                        file_uuid=str(row.uuid),
+                        key_prefix=key_prefix,
+                        delete_local=False,
+                        dry_run=True,
+                        target_bucket=target_bucket,
+                    )
                     migrated += 1
                     continue
 
-                await cos.put(dest_key, content, content_type=row.file_type)
-                # 必须 HEAD 确认对象已进当前连接指向的桶，再改库/删本地
-                if not await cos.exists(dest_key):
-                    raise ValidationError(
-                        f"上传后对象不存在（bucket={target_bucket or '未知'} key={dest_key}）"
-                    )
+                await FileService._put_local_file_to_cos(
+                    cos, dest_key, abs_path, row.file_type, target_bucket,
+                )
                 await File.filter(id=row.id).update(
                     storage_backend="tencent_cos",
                     storage_connection_uuid=target_uuid,
                     file_path=dest_key,
+                )
+                await FileService._migrate_local_tiers_for_uuid(
+                    cos=cos,
+                    local=local,
+                    file_uuid=str(row.uuid),
+                    key_prefix=key_prefix,
+                    delete_local=delete_local,
+                    dry_run=False,
+                    target_bucket=target_bucket,
                 )
                 if delete_local:
                     await local.delete(source_key)
@@ -765,13 +912,27 @@ class FileService:
                 failures.append({"uuid": str(row.uuid), "reason": str(e)[:200]})
 
         next_cursor = int(rows[-1].id) if rows else safe_cursor
-        done = len(rows) == 0 or len(rows) < safe_limit
+        originals_exhausted = len(rows) == 0 or len(rows) < safe_limit
+        if originals_exhausted:
+            leftover_ok, leftover_fail = await FileService._migrate_leftover_local_tiers(
+                tenant_id=tenant_id,
+                cos=cos,
+                local=local,
+                key_prefix=key_prefix,
+                delete_local=delete_local,
+                dry_run=dry_run,
+                target_bucket=target_bucket,
+                failures=failures,
+            )
+            migrated += leftover_ok
+            failed += leftover_fail
+
         return {
             "total": total,
             "cursor": safe_cursor,
             "next_cursor": next_cursor,
             "limit": safe_limit,
-            "done": done,
+            "done": originals_exhausted,
             "migrated": migrated,
             "skipped": skipped,
             "failed": failed,

@@ -43,5 +43,11 @@ class LocalFileStorage(FileStorageBackend):
             return False
         return False
 
+    async def head_content_length(self, key: str) -> Optional[int]:
+        full = self._abs(key)
+        if not os.path.isfile(full):
+            return None
+        return os.path.getsize(full)
+
     async def exists(self, key: str) -> bool:
         return os.path.isfile(self._abs(key))

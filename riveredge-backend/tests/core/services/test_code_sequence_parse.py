@@ -1,8 +1,5 @@
-"""编码序号解析：必须用序号前完整前缀，禁止把日期段当成流水。"""
+"""编码序号解析：必须用序号前完整前缀；流水写入 BIGINT，不因位数爆掉或截断。"""
 
-import pytest
-
-from infra.exceptions.exceptions import ValidationError
 from core.services.business.code_generation_service import (
     CodeGenerationService,
     _resolve_scan_prefix_for_sequence,
@@ -21,7 +18,7 @@ def test_parse_counter_with_full_date_prefix():
 
 
 def test_parse_counter_incomplete_prefix_is_not_a_match():
-    """前缀漏掉日期时，剩余数字长于规则位数，该编码不参与校准（不是截尾、也不是丢弃溢出）。"""
+    """前缀漏掉日期时，剩余数字长于规则位数，该编码不参与校准（不是截尾）。"""
     assert (
         CodeGenerationService._parse_counter_suffix_int(
             "CG20260812000000000026", "CG", digits=12
@@ -34,18 +31,27 @@ def test_parse_counter_incomplete_prefix_is_not_a_match():
     )
 
 
-def test_parse_counter_without_digits_still_returns_mashed_date():
-    """未配 digits 时解析器按「前缀后全数字」取值；错误前缀会得到超大整数，由校准入口报错。"""
-    n = CodeGenerationService._parse_counter_suffix_int("CG202608120004", "CG")
-    assert n == 202608120004
-    assert n > CodeGenerationService._INT32_MAX
+def test_parse_twelve_digit_seq_fits_bigint():
+    n = CodeGenerationService._parse_counter_suffix_int(
+        "CG999999999999", "CG", digits=12
+    )
+    assert n == 999999999999
+    assert n < CodeGenerationService._INT64_MAX
 
 
-def test_recalibrate_raises_when_parsed_seq_exceeds_int32():
-    with pytest.raises(ValidationError, match="超出序号表容量"):
-        CodeGenerationService._assert_parsed_seq_fits_storage(
-            202608120004, "PURCHASE_ORDER_CODE", "CG"
-        )
+def test_parse_mashed_date_as_twelve_digit_seq_is_stored_not_rejected():
+    """规则无日期、仅固定字+12 位流水时，历史 CG+日期+4 位会被读成 12 位整数并续编，不中断开单。"""
+    n = CodeGenerationService._parse_counter_suffix_int("CG202608070004", "CG", digits=12)
+    assert n == 202608070004
+    assert n < CodeGenerationService._INT64_MAX
+
+
+def test_parse_beyond_int64_is_skipped_not_truncated():
+    too_big = "9" * 19
+    assert (
+        CodeGenerationService._parse_counter_suffix_int(f"CG{too_big}", "CG", digits=19)
+        is None
+    )
 
 
 def test_scan_prefix_none_when_form_field_missing():

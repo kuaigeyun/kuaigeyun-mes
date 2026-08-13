@@ -691,8 +691,9 @@ class CodeGenerationService:
                 return m.group(1)
         return None
 
-    # PostgreSQL integer / Tortoise IntField 上限（core_code_sequences.current_seq）
-    _INT32_MAX = 2147483647
+    # PostgreSQL bigint / Tortoise BigIntField 上限（core_code_sequences.current_seq）
+    # 18 位流水 10^18-1 仍小于该值；超过则该条编码不参与校准，不中断开单。
+    _INT64_MAX = 9223372036854775807
 
     @staticmethod
     def _parse_counter_suffix_int(
@@ -728,22 +729,12 @@ class CodeGenerationService:
         if digits and digits > 0 and len(digit_str) > digits:
             return None
         try:
-            return int(digit_str)
+            n = int(digit_str)
         except ValueError:
             return None
-
-    @staticmethod
-    def _assert_parsed_seq_fits_storage(
-        seq: int,
-        rule_code: str,
-        prefix: Optional[str],
-    ) -> None:
-        if seq > CodeGenerationService._INT32_MAX:
-            raise ValidationError(
-                f"编码规则 {rule_code} 从库内解析到的序号 {seq} "
-                f"超出序号表容量（前缀={prefix!r}）。"
-                "请检查编码规则中「序号前」是否包含日期/分组，避免把日期段当成流水号。"
-            )
+        if n > CodeGenerationService._INT64_MAX:
+            return None
+        return n
 
     @staticmethod
     def _resolve_entity_config_for_rule(
@@ -934,9 +925,6 @@ class CodeGenerationService:
                 scope_key,
             )
             return
-        CodeGenerationService._assert_parsed_seq_fits_storage(
-            max_from_db, request_rule_code, log_prefix
-        )
 
         if sequence.current_seq != max_from_db:
             logger.info(
