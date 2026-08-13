@@ -46,6 +46,12 @@ def cos_authorization(
     *,
     headers_to_sign: Optional[Dict[str, str]] = None,
 ) -> str:
+    """
+    腾讯云 COS 请求签名（文档：HttpMethod\\nUriPath\\nHttpParameters\\nHttpHeaders\\n）。
+
+    HttpHeaders 必须为 key1=urlencode(v1)&key2=urlencode(v2)（按 key 字典序），
+    禁止用换行拼接多个头，否则服务端 FormatString 对不上 → SignatureDoesNotMatch。
+    """
     now = int(time.time())
     key_time = f"{now};{now + 600}"
     sign_key = hmac.new(
@@ -54,12 +60,19 @@ def cos_authorization(
         hashlib.sha1,
     ).hexdigest()
 
-    signed_headers = {"host": host.lower()}
+    host_value = (host or "").strip().lower()
+    if not host_value:
+        raise ValidationError("COS 签名缺少 Host")
+
+    signed_headers = {"host": host_value}
     if headers_to_sign:
         for k, v in headers_to_sign.items():
-            signed_headers[k.lower()] = v.strip()
+            signed_headers[k.lower().strip()] = str(v).strip()
     header_list = sorted(signed_headers.keys())
-    http_headers = "".join(f"{k}={quote(signed_headers[k], safe='-_.~')}\n" for k in header_list)
+    # 官方格式：key=value 用 & 连接；整个 HttpHeaders 后再跟一个 \\n
+    http_headers = "&".join(
+        f"{k}={quote(signed_headers[k], safe='-_.~')}" for k in header_list
+    )
     http_string = f"{method.lower()}\n{path}\n\n{http_headers}\n"
     sha1_http = hashlib.sha1(http_string.encode("utf-8")).hexdigest()
     string_to_sign = f"sha1\n{key_time}\n{sha1_http}\n"
@@ -94,37 +107,44 @@ class TencentCosStorage(FileStorageBackend):
         path = _cos_uri_path(key)
         return f"{self.base_url}{path}", path
 
-    async def put(self, key: str, data: bytes, content_type: Optional[str] = None) -> None:
+    async def _request(
+        self,
+        method: str,
+        key: str,
+        *,
+        content: Optional[bytes] = None,
+        content_type: Optional[str] = None,
+        timeout: float = 60.0,
+    ):
         url, path = self._object_url(key)
-        ct = (content_type or "application/octet-stream").strip()
-        # 只签 Host（与连接探测 HEAD / GET / DELETE 一致）。
-        # 把 Content-Type 放进签名时，客户端改写/编码差异会触发 SignatureDoesNotMatch。
-        auth = cos_authorization(self.secret_id, self.secret_key, "PUT", self.host, path)
-        resp = await get_http_client().request(
-            "PUT",
+        auth = cos_authorization(self.secret_id, self.secret_key, method, self.host, path)
+        headers = {
+            "Host": self.host,
+            "Authorization": auth,
+        }
+        if content is not None:
+            ct = (content_type or "application/octet-stream").strip()
+            headers["Content-Type"] = ct
+            headers["Content-Length"] = str(len(content))
+        # 禁止跟随重定向：跳转后 Host/Path 与签名不一致会 403
+        return await get_http_client().request(
+            method.upper(),
             url,
-            content=data,
-            headers={
-                "Host": self.host,
-                "Authorization": auth,
-                "Content-Type": ct,
-                "Content-Length": str(len(data)),
-            },
-            timeout=120.0,
+            content=content,
+            headers=headers,
+            timeout=timeout,
+            follow_redirects=False,
         )
+
+    async def put(self, key: str, data: bytes, content_type: Optional[str] = None) -> None:
+        # 只签 Host；Content-Type 不进签名（避免客户端改写导致验签失败）
+        resp = await self._request("PUT", key, content=data, content_type=content_type, timeout=120.0)
         if resp.status_code not in (200, 201):
             detail = (resp.text or "")[:300]
             raise ValidationError(f"COS 上传失败 HTTP {resp.status_code}: {detail or '未知错误'}")
 
     async def get(self, key: str) -> bytes:
-        url, path = self._object_url(key)
-        auth = cos_authorization(self.secret_id, self.secret_key, "GET", self.host, path)
-        resp = await get_http_client().request(
-            "GET",
-            url,
-            headers={"Host": self.host, "Authorization": auth},
-            timeout=120.0,
-        )
+        resp = await self._request("GET", key, timeout=120.0)
         if resp.status_code == 404:
             raise NotFoundError("文件")
         if resp.status_code >= 400:
@@ -133,23 +153,9 @@ class TencentCosStorage(FileStorageBackend):
         return resp.content
 
     async def delete(self, key: str) -> bool:
-        url, path = self._object_url(key)
-        auth = cos_authorization(self.secret_id, self.secret_key, "DELETE", self.host, path)
-        resp = await get_http_client().request(
-            "DELETE",
-            url,
-            headers={"Host": self.host, "Authorization": auth},
-            timeout=60.0,
-        )
+        resp = await self._request("DELETE", key, timeout=60.0)
         return resp.status_code in (200, 204, 404)
 
     async def exists(self, key: str) -> bool:
-        url, path = self._object_url(key)
-        auth = cos_authorization(self.secret_id, self.secret_key, "HEAD", self.host, path)
-        resp = await get_http_client().request(
-            "HEAD",
-            url,
-            headers={"Host": self.host, "Authorization": auth},
-            timeout=30.0,
-        )
+        resp = await self._request("HEAD", key, timeout=30.0)
         return resp.status_code in (200, 204)
