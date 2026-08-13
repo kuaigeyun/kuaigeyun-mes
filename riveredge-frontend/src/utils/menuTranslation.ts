@@ -197,6 +197,25 @@ export function isTenantCustomMenuDisplayName(name?: string | null): boolean {
   return true;
 }
 
+/** 侧栏展示名覆盖（写入 core_menus.meta.display_name，不改结构键 name） */
+export const MENU_META_DISPLAY_NAME = 'display_name';
+
+export function getMenuDisplayNameOverride(
+  meta?: Record<string, unknown> | null,
+): string {
+  if (!meta || typeof meta !== 'object') return '';
+  const raw = meta[MENU_META_DISPLAY_NAME];
+  return typeof raw === 'string' ? raw.trim() : '';
+}
+
+/** manifest / 系统内置菜单的结构键，展示名应走 meta.display_name */
+export function isSyncedI18nMenuName(name?: string | null): boolean {
+  const n = (name || '').trim();
+  if (n.startsWith('app.') && n.includes('.menu.')) return true;
+  if (n.startsWith('menu.')) return true;
+  return false;
+}
+
 /**
  * 侧栏 APP 分组标题：租户在菜单/应用中心改过名称时优先用库内名，否则走 locale。
  */
@@ -339,15 +358,22 @@ export function translateMenuName(
  * @param path 菜单路径
  * @param t 翻译函数
  * @param children 子菜单项（可选，用于分组菜单）
+ * @param meta 菜单元数据（可选，含 display_name 覆盖时优先展示）
  * @returns 翻译后的名称
  */
 export function translateAppMenuItemName(
   name: string | undefined,
   path: string | undefined,
   t: any,
-  children?: any[]
+  children?: any[],
+  meta?: Record<string, unknown> | null,
 ): string {
   if (!name) return '';
+
+  const displayOverride = getMenuDisplayNameOverride(meta);
+  if (displayOverride && isSyncedI18nMenuName(name)) {
+    return displayOverride;
+  }
 
   // 1. 若 name 本身是翻译 key（如 app.kuaizhizao.menu.warehouse-management.inbound-group），优先直接翻译
   // 修复：分组菜单的 title 为 i18n key 时，此前被路径推导逻辑覆盖，导致二级菜单均显示父级名称
@@ -467,7 +493,13 @@ export function mapMenuTreeWithTranslatedLabels<
       : node.children;
     return {
       ...node,
-      name: translateAppMenuItemName(node.name, node.path, t, children),
+      name: translateAppMenuItemName(
+        node.name,
+        node.path,
+        t,
+        children,
+        (node as { meta?: Record<string, unknown> }).meta,
+      ),
       children,
     };
   });
@@ -529,6 +561,8 @@ export function translatePathTitle(path: string, t: any): string {
 export type MenuDataItemWithLocaleKey = {
   /** navigation-tree / manifest 同步的 name（i18n key），侧栏/Tab/面包屑唯一标题源 */
   menuNameKey?: string;
+  /** 租户自定义侧栏展示名；有值时优先于 i18n */
+  displayNameOverride?: string;
 };
 
 function normalizeMenuPath(path: string | undefined): string {
@@ -559,6 +593,9 @@ export function translateMenuItemTitle(
   t: (key: string, options?: { defaultValue?: string }) => string,
   options?: { isAppRoot?: boolean },
 ): string {
+  const override =
+    typeof item.displayNameOverride === 'string' ? item.displayNameOverride.trim() : '';
+  if (override) return override;
   if (options?.isAppRoot) {
     return typeof item.name === 'string' ? item.name : resolveMenuLocaleKey(item);
   }

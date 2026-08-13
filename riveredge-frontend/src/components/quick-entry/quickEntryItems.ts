@@ -7,6 +7,8 @@ import type { MenuTree } from '../../services/menu';
 import {
   extractAppCodeFromPath,
   getAppDisplayName,
+  getMenuDisplayNameOverride,
+  isSyncedI18nMenuName,
   translateAppMenuItemName,
   translateMenuName,
   translatePathTitle,
@@ -88,7 +90,7 @@ export function getTranslatedMenuTitle(
   const appCode = extractAppCodeFromPath(effectivePath);
 
   if (effectivePath?.startsWith('/apps/')) {
-    const translated = translateAppMenuItemName(menu.name, effectivePath, t, menu.children);
+    const translated = translateAppMenuItemName(menu.name, effectivePath, t, menu.children, menu.meta);
     const isAppRootByPath = !!appCode && (menu.path || '').replace(/\/$/, '') === `/apps/${appCode}`;
     const isAppRootByNameKey = typeof menu.name === 'string' && /^app\.[a-z0-9-]+\.name$/i.test(menu.name);
     if (appCode && (isAppRootByPath || isAppRootByNameKey)) {
@@ -99,6 +101,8 @@ export function getTranslatedMenuTitle(
     }
     return translated;
   }
+  const override = getMenuDisplayNameOverride(menu.meta);
+  if (override && isSyncedI18nMenuName(menu.name)) return override;
   return translateMenuName(menu.name, t, effectivePath);
 }
 

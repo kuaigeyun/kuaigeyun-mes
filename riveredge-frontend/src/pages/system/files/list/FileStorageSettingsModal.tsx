@@ -207,14 +207,14 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ ope
       onCancel={onClose}
       footer={null}
       width={MODAL_CONFIG.SMALL_WIDTH}
-      destroyOnClose
+      destroyOnHidden
       confirmLoading={loading}
     >
       <Alert
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message={t('pages.system.files.storageSettingsEnvHint')}
+        title={t('pages.system.files.storageSettingsEnvHint')}
       />
       <Form
         form={form}
@@ -317,7 +317,7 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ ope
                 type="warning"
                 showIcon
                 style={{ marginTop: 8 }}
-                message={t('pages.system.files.storageMigrateFailureHint')}
+                title={t('pages.system.files.storageMigrateFailureHint')}
                 description={
                   <ul style={{ margin: 0, paddingLeft: 18 }}>
                     {migrateProgress.failureSamples.map((f) => (

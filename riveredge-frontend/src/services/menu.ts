@@ -57,6 +57,8 @@ export interface UpdateMenuData {
   is_external?: boolean;
   external_url?: string;
   meta?: Record<string, any>;
+  /** 侧栏展示名覆盖；空字符串表示恢复系统默认 */
+  display_name?: string;
 }
 
 export interface MenuOrderItem {

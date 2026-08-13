@@ -61,6 +61,8 @@ _DEFAULT_EDITABLE: Dict[str, EditableFieldsSpec] = {
         "required_date",
         "requisition_name",
         "requisition_date",
+        "applicant_id",
+        "applicant_name",
         "attachments",
     ],
     "sales_forecast": [

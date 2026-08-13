@@ -23,6 +23,8 @@ import type { CustomMenuLayoutNode, MenuTree } from '../../../services/menu';
 import {
   extractAppCodeFromPath,
   getAppDisplayName,
+  getMenuDisplayNameOverride,
+  isSyncedI18nMenuName,
   translateAppMenuItemName,
   translateMenuName,
 } from '../../../utils/menuTranslation';
@@ -88,8 +90,12 @@ function resolveMenuTitle(
   t: (key: string, options?: { defaultValue?: string }) => string,
 ): string {
   const path = (node.path || '').trim();
+  const override = getMenuDisplayNameOverride(node.meta);
+  if (override && isSyncedI18nMenuName(node.name)) {
+    return override;
+  }
   const title = path.startsWith('/apps/')
-    ? translateAppMenuItemName(node.name, node.path, t, node.children)
+    ? translateAppMenuItemName(node.name, node.path, t, node.children, node.meta)
     : translateMenuName(node.name, t, node.path);
   return (title || node.name || '').trim() || path;
 }

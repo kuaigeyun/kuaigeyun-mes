@@ -285,12 +285,12 @@ const ConfigCenterPage: React.FC = () => {
         }
       >
         {param.type === 'boolean' ? <Switch disabled={disabled} /> :
-         param.type === 'number' ? <InputNumber size="middle" min={param.min} max={param.max} style={{ width: 120 }} disabled={!implemented} /> :
-         param.type === 'select' ? <Select size="middle" options={param.selectOptions?.map(o => ({ value: o.value, label: renderText(o.labelKey, o.value) }))} style={{ minWidth: 160 }} disabled={!implemented} /> :
+         param.type === 'number' ? <InputNumber size="medium" min={param.min} max={param.max} style={{ width: 120 }} disabled={!implemented} /> :
+         param.type === 'select' ? <Select size="medium" options={param.selectOptions?.map(o => ({ value: o.value, label: renderText(o.labelKey, o.value) }))} style={{ minWidth: 160 }} disabled={!implemented} /> :
          param.type === 'multiselect' ? (
            <Select
              mode="multiple"
-             size="middle"
+             size="medium"
              allowClear
              options={param.selectOptions?.map(o => ({ value: o.value, label: renderText(o.labelKey, o.value) }))}
              style={{ minWidth: 220 }}
@@ -300,7 +300,7 @@ const ConfigCenterPage: React.FC = () => {
          param.type === 'tags' ? (
            <Select
              mode="tags"
-             size="middle"
+             size="medium"
              tokenSeparators={[',', ' ']}
              style={{ minWidth: 220 }}
              disabled={!implemented}

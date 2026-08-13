@@ -27,6 +27,9 @@ MENU_TAKEOVER_RULES: Dict[str, MenuTakeoverRule] = {
 }
 
 META_SUPPRESSED_BY_TAKEOVER = "suppressed_by_takeover"
+META_DISPLAY_NAME = "display_name"
+RUNTIME_META_KEYS = (META_SUPPRESSED_BY_TAKEOVER, META_DISPLAY_NAME)
+MENU_DISPLAY_NAME_MAX_LEN = 100
 
 
 def merge_menu_meta_for_sync(
@@ -34,13 +37,19 @@ def merge_menu_meta_for_sync(
     manifest_meta: Dict[str, Any] | None,
 ) -> Dict[str, Any] | None:
     """
-    菜单同步时合并 manifest meta，保留运行时写入的键（如 suppressed_by_takeover）。
+    菜单同步时合并 manifest meta，保留运行时写入的键。
 
-    manifest 未声明 meta 时不覆盖已有 meta，避免接管标记丢失导致禁用时无法交还。
+    运行时键（接管标记、侧栏展示名覆盖）不以 manifest 为准，避免同步冲掉租户自定义。
+    manifest 未声明 meta 时不覆盖已有 meta。
     """
     if manifest_meta is None:
         return existing_meta
-    return {**(existing_meta or {}), **manifest_meta}
+    merged: Dict[str, Any] = {**(existing_meta or {}), **manifest_meta}
+    for key in RUNTIME_META_KEYS:
+        merged.pop(key, None)
+        if existing_meta and key in existing_meta:
+            merged[key] = existing_meta[key]
+    return merged or None
 
 
 def path_matches_takeover_prefix(path: str | None, rule: MenuTakeoverRule) -> bool:
@@ -57,6 +66,9 @@ __all__ = [
     "MenuTakeoverRule",
     "MENU_TAKEOVER_RULES",
     "META_SUPPRESSED_BY_TAKEOVER",
+    "META_DISPLAY_NAME",
+    "RUNTIME_META_KEYS",
+    "MENU_DISPLAY_NAME_MAX_LEN",
     "merge_menu_meta_for_sync",
     "path_matches_takeover_prefix",
 ]

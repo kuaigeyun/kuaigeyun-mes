@@ -62,23 +62,26 @@ async def create_receivable(
 ):
     try:
         pull_preview: Optional[Dict[str, Any]] = None
+        pull_plan: Optional[Dict[str, Any]] = None
         pull_source_type = str(data.pull_source_type or "").strip()
         pull_source_id = data.pull_source_id
         if pull_source_type and pull_source_id:
             if pull_source_type not in _PULL_SOURCE_TYPES:
                 raise BusinessLogicError(f"不支持的加载源单类型: {pull_source_type}")
-            pull_preview = await receivable_pull_service.assert_pull_create_allowed(
+            # 前端填的是「净应收」（已扣预收）；开立时还原全额并自动核销预收
+            pull_plan = await receivable_pull_service.plan_pull_receivable_amounts(
                 tenant_id=tenant_id,
                 source_type=pull_source_type,
                 source_id=int(pull_source_id),
-                total_amount=Decimal(data.total_amount),
+                net_amount=Decimal(str(data.total_amount)),
             )
+            pull_preview = pull_plan["preview"]
 
         create_payload = data.model_dump(
             exclude_unset=True,
             exclude={"pull_source_type", "pull_source_id"},
         )
-        if pull_preview:
+        if pull_preview and pull_plan:
             create_payload["customer_id"] = int(pull_preview.get("customer_id") or create_payload.get("customer_id"))
             create_payload["customer_name"] = str(
                 pull_preview.get("customer_name") or create_payload.get("customer_name") or ""
@@ -86,6 +89,10 @@ async def create_receivable(
             create_payload["source_type"] = pull_source_type
             create_payload["source_id"] = int(pull_source_id)
             create_payload["source_code"] = str(pull_preview.get("source_code") or create_payload.get("source_code") or "")
+            ar_total = Decimal(str(pull_plan["ar_total"]))
+            create_payload["total_amount"] = ar_total
+            create_payload["received_amount"] = Decimal("0")
+            create_payload["remaining_amount"] = ar_total
 
         receivable_data = ReceivableCreate.model_validate(create_payload)
         receivable = await receivable_service.create_receivable(tenant_id, receivable_data, current_user.id)
@@ -100,6 +107,18 @@ async def create_receivable(
                 receivable_code=str(receivable.receivable_code),
                 created_by=current_user.id,
             )
+            prepaid_apply = Decimal(str((pull_plan or {}).get("prepaid_apply") or 0))
+            if prepaid_apply > 0:
+                await receivable_pull_service.apply_prepayment_to_receivable(
+                    tenant_id,
+                    receivable_id=int(receivable.id),
+                    sales_order_id=(pull_plan or {}).get("sales_order_id"),
+                    amount=prepaid_apply,
+                    operator_id=current_user.id,
+                )
+                receivable = await receivable_service.get_receivable_by_id(
+                    tenant_id, int(receivable.id)
+                )
         return ReceivableResponse.model_validate(receivable)
     except ValidationError as e:
         raise _http_exception_with_trace(422, str(e), "/receivables", tenant_id)

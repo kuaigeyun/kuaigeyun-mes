@@ -5938,7 +5938,10 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             from apps.kuaizhizao.models.sales_order import SalesOrder
             from apps.kuaizhizao.services.contract_milestone_billing_service import ContractMilestoneBillingService
 
+            from apps.kuaicaiwu.services.receivable_pull_service import ReceivablePullService
+
             receivable_service = ReceivableService()
+            receivable_pull_service = ReceivablePullService()
             delivery_row = await SalesDelivery.get(tenant_id=tenant_id, id=delivery_id)
             if delivery_row.sales_order_id:
                 so = await SalesOrder.get_or_none(
@@ -5949,7 +5952,29 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         tenant_id, so.customer_id, int(so.contract_id)
                     ):
                         return updated_delivery
-            total_amount = Decimal(str(delivery_row.total_amount))
+            pull_preview = await receivable_pull_service.preview_pull_from_sales_delivery(
+                tenant_id, delivery_id
+            )
+            if pull_preview.get("has_blocking_issues"):
+                logger.info(
+                    "销售出库单 %s 跳过自动生成应收：%s",
+                    delivery_row.delivery_code,
+                    pull_preview.get("blocking_reason"),
+                )
+                return updated_delivery
+            net_amount = Decimal(
+                str((pull_preview.get("items") or [{}])[0].get("max_push_quantity") or 0)
+            )
+            if net_amount <= 0:
+                return updated_delivery
+            pull_plan = await receivable_pull_service.plan_pull_receivable_amounts(
+                tenant_id=tenant_id,
+                source_type="sales_delivery",
+                source_id=delivery_id,
+                net_amount=net_amount,
+                preview=pull_preview,
+            )
+            total_amount = Decimal(str(pull_plan["ar_total"]))
             from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
 
             biz_date = to_site_date(resolve_business_datetime())
@@ -6008,6 +6033,22 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 )
             except Exception as rel_e:
                 logger.warning("创建销售出库→应收单 单据关联/会计事件失败: %s", rel_e)
+            prepaid_apply = Decimal(str(pull_plan.get("prepaid_apply") or 0))
+            if prepaid_apply > 0:
+                try:
+                    await receivable_pull_service.apply_prepayment_to_receivable(
+                        tenant_id,
+                        receivable_id=int(receivable.id),
+                        sales_order_id=pull_plan.get("sales_order_id"),
+                        amount=prepaid_apply,
+                        operator_id=confirmed_by,
+                    )
+                except Exception as prep_e:
+                    logger.exception(
+                        "销售出库单 %s 自动应收后核销预收失败: %s",
+                        delivery_row.delivery_code,
+                        prep_e,
+                    )
         except Exception as e:
             logger.exception(
                 "销售出库单 %s 自动生成应收单失败: %s",

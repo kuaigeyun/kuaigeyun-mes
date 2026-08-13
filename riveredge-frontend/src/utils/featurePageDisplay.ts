@@ -49,7 +49,7 @@ export function buildMenuPathNameMap(
     for (const node of nodes) {
       const path = normalizePagePath(node.path);
       if (path && node.name) {
-        const translated = translateAppMenuItemName(node.name, node.path, t, node.children);
+        const translated = translateAppMenuItemName(node.name, node.path, t, node.children, node.meta);
         const label = translated || translateMenuName(node.name, t, node.path);
         if (label && !isI18nKey(label)) {
           map.set(path, label);

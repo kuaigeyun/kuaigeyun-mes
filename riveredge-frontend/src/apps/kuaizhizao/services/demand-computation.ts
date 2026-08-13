@@ -430,6 +430,8 @@ export interface PushOptions {
   default_purchase: 'requisition' | 'purchase_order'
   production_choices: 'work_order'[]
   purchase_choices: ('requisition' | 'purchase_order')[]
+  /** 组织配置「下推默认生成方式」：draft | confirm */
+  push_mode_default?: 'draft' | 'confirm' | string
 }
 
 export async function getPushOptions(id: number): Promise<PushOptions> {

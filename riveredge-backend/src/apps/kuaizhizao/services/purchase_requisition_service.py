@@ -92,14 +92,20 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
 
             req_date = data.requisition_date or date.today()
             user_info = await self.get_user_info(created_by)
-            applicant_name = user_info["name"]
+            applicant_id = int(data.applicant_id) if data.applicant_id else created_by
+            if data.applicant_name and str(data.applicant_name).strip():
+                applicant_name = str(data.applicant_name).strip()
+            elif applicant_id == created_by:
+                applicant_name = user_info["name"]
+            else:
+                applicant_name = (await self.get_user_info(applicant_id))["name"]
             req = await PurchaseRequisition.create(
                 tenant_id=tenant_id,
                 requisition_code=data.requisition_code,
                 requisition_name=data.requisition_name or f"采购申请-{data.requisition_code}",
                 status="草稿",
                 requisition_date=req_date,
-                applicant_id=created_by,
+                applicant_id=applicant_id,
                 applicant_name=applicant_name,
                 required_date=data.required_date,
                 source_type=data.source_type,
@@ -1173,6 +1179,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         today = date.today()
         purchase_orders_out: List[Dict[str, Any]] = []
         persisted_material_ids: List[int] = []
+        push_mode = await BusinessConfigService().get_push_default_mode(tenant_id)
+        push_as_confirm = push_mode == "confirm"
 
         try:
             from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
@@ -1262,19 +1270,21 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             po = await self.purchase_service.create_purchase_order(
                 tenant_id=tenant_id, order_data=po_data, created_by=created_by
             )
-            try:
-                po = await self.purchase_service.submit_purchase_order(
-                    tenant_id=tenant_id,
-                    order_id=po.id,
-                    submitted_by=created_by,
-                )
-            except Exception as e:
-                logger.warning(
-                    "采购申请转单后自动提交采购订单失败: requisition_id={} po_id={} err={}",
-                    requisition_id,
-                    po.id,
-                    e,
-                )
+            # 与业务自动化「下推默认生成方式」一致：confirm 才自动提交，draft 保持草稿
+            if push_as_confirm:
+                try:
+                    po = await self.purchase_service.submit_purchase_order(
+                        tenant_id=tenant_id,
+                        order_id=po.id,
+                        submitted_by=created_by,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "采购申请转单后自动提交采购订单失败: requisition_id={} po_id={} err={}",
+                        requisition_id,
+                        po.id,
+                        e,
+                    )
 
             for i, (item, _) in enumerate(items_converted):
                 po_item = po.items[i] if i < len(po.items) else None

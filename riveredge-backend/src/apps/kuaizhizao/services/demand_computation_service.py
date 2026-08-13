@@ -3995,6 +3995,7 @@ class DemandComputationService(AppBaseService):
 
         biz_config = BusinessConfigService()
         can_direct_wo = await biz_config.can_direct_generate_work_order_from_computation(tenant_id)
+        push_mode_default = await biz_config.get_push_default_mode(tenant_id)
 
         default_purchase = "requisition" if purchase_items_without_supplier > 0 else "purchase_order"
 
@@ -4020,6 +4021,7 @@ class DemandComputationService(AppBaseService):
             "default_purchase": default_purchase,
             "production_choices": production_choices,
             "purchase_choices": purchase_choices,
+            "push_mode_default": push_mode_default,
         }
 
     async def preview_push_to_purchase_requisition(

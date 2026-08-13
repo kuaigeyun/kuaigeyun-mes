@@ -28,7 +28,11 @@ from core.schemas.menu import (
 )
 from core.services.application.application_service import ApplicationService
 from core.services.system.site_setting_service import SiteSettingService
-from core.config.menu_takeover import merge_menu_meta_for_sync
+from core.config.menu_takeover import (
+    MENU_DISPLAY_NAME_MAX_LEN,
+    META_DISPLAY_NAME,
+    merge_menu_meta_for_sync,
+)
 from core.config.menu_sync_is_active_policy import resolve_sync_is_active_for_existing_row
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.cache.cache_manager import cache_manager
@@ -62,6 +66,27 @@ class MenuService:
     @staticmethod
     def _is_app_root_menu_path(path: Optional[str]) -> bool:
         return MenuService._parse_app_root_code(path) is not None
+
+    @staticmethod
+    def _is_synced_i18n_menu_name(name: Optional[str]) -> bool:
+        """manifest / 系统内置菜单的结构键（i18n key），禁止当展示文案改写。"""
+        n = (name or "").strip()
+        if n.startswith("app.") and ".menu." in n:
+            return True
+        if n.startswith("menu."):
+            return True
+        return False
+
+    @staticmethod
+    def _apply_menu_display_name(menu: Menu, display_name: Optional[str]) -> None:
+        """只改 meta.display_name，不改 name（路径匹配 / 分组键 / 同步仍用 name）。"""
+        meta = dict(menu.meta or {})
+        trimmed = (display_name or "").strip()[:MENU_DISPLAY_NAME_MAX_LEN]
+        if not trimmed:
+            meta.pop(META_DISPLAY_NAME, None)
+        else:
+            meta[META_DISPLAY_NAME] = trimmed
+        menu.meta = meta or None
 
     @staticmethod
     async def _sync_app_root_menu_to_application(
@@ -211,7 +236,7 @@ class MenuService:
                 existing_menu.sort_order = sort_order
                 existing_menu.is_external = is_external
                 existing_menu.external_url = external_url
-                existing_menu.meta = meta
+                existing_menu.meta = merge_menu_meta_for_sync(existing_menu.meta, meta)
                 existing_menu.is_active = True
                 await existing_menu.save()
                 menu_obj = existing_menu
@@ -1123,6 +1148,9 @@ class MenuService:
             if _optional in update_data and update_data[_optional] is None:
                 update_data.pop(_optional, None)
 
+        display_name_provided = "display_name" in update_data
+        display_name_value = update_data.pop("display_name", None) if display_name_provided else None
+
         # 可点击页面必须显式绑定权限码，禁止空值入库
         next_path = update_data.get("path", menu.path)
         next_is_external = update_data.get("is_external", menu.is_external)
@@ -1181,11 +1209,21 @@ class MenuService:
         # 检查权限代码是否变更
         old_permission_code = menu.permission_code
         new_permission_code = update_data.get("permission_code", old_permission_code)
+
+        # 同步菜单的 name 是结构键（i18n / 分组匹配），展示名走 meta.display_name
+        if (
+            MenuService._is_synced_i18n_menu_name(menu.name)
+            and not MenuService._is_app_root_menu_path(menu.path)
+        ):
+            update_data.pop("name", None)
         
         # 更新其他字段
         for key, value in update_data.items():
             if hasattr(menu, key):
                 setattr(menu, key, value)
+
+        if display_name_provided:
+            MenuService._apply_menu_display_name(menu, display_name_value)
 
         await MenuService._sync_app_root_menu_to_application(tenant_id, menu, update_data)
 

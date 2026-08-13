@@ -93,6 +93,8 @@ import {
 import {
   extractAppCodeFromPath,
   getAppDisplayName,
+  getMenuDisplayNameOverride,
+  isSyncedI18nMenuName,
   translateAppMenuItemName,
   translateMenuName,
 } from '../../../utils/menuTranslation';
@@ -374,8 +376,10 @@ function menuTreeNodeTitle(menu: MenuTree, t: (key: string, opts?: { defaultValu
         if (dn) return dn;
       }
     }
-    return translateAppMenuItemName(menu.name, path, t, menu.children);
+    return translateAppMenuItemName(menu.name, path, t, menu.children, menu.meta);
   }
+  const override = getMenuDisplayNameOverride(menu.meta);
+  if (override && isSyncedI18nMenuName(menu.name)) return override;
   return translateMenuName(menu.name, t, menu.path);
 }
 

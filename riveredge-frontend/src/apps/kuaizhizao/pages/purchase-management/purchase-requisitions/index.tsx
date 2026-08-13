@@ -51,6 +51,10 @@ import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../
 import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
+import {
+  EquipmentPersonSelect,
+  resolveUserUuidById,
+} from '../../../components/EquipmentPersonSelect';
 import type { Material } from '../../../../master-data/types/material';
 import {
   applyPurchaseDocumentLineMaterialPricing,
@@ -451,10 +455,13 @@ const PurchaseRequisitionsPage: React.FC = () => {
           navigate(PURCHASE_REQUISITION_LIST_PATH);
           return;
         }
+        const applicantUuid = await resolveUserUuidById(detail.applicant_id);
         const baseValues = {
           requisition_code: detail.requisition_code ?? '',
           requisition_name: detail.requisition_name,
           requisition_date: detail.requisition_date ? dayjs(detail.requisition_date) : dayjs(),
+          applicant_uuid: applicantUuid,
+          applicant_id: detail.applicant_id,
           applicant_name: detail.applicant_name ?? '',
           required_date: detail.required_date ? dayjs(detail.required_date) : undefined,
           notes: detail.notes,
@@ -515,16 +522,28 @@ const PurchaseRequisitionsPage: React.FC = () => {
     return 0;
   }, [purchaseRequestAuditEnabled]);
 
+  const defaultApplicantFields = useCallback(() => {
+    if (!currentUser) return {};
+    return {
+      applicant_uuid: currentUser.uuid,
+      applicant_id: currentUser.id,
+      applicant_name: currentUser.full_name || currentUser.username || '',
+    };
+  }, [currentUser]);
+
   const applyCreateFormDefaults = useCallback(
     (values: Record<string, unknown>) => {
       prFormHydratingRef.current = true;
       try {
-        createFormRef.current?.setFieldsValue(values);
+        createFormRef.current?.setFieldsValue({
+          ...defaultApplicantFields(),
+          ...values,
+        });
       } finally {
         prFormHydratingRef.current = false;
       }
     },
-    [],
+    [defaultApplicantFields],
   );
 
   const initPurchaseRequisitionCreateForm = useCallback(async () => {
@@ -830,7 +849,10 @@ const PurchaseRequisitionsPage: React.FC = () => {
     requisition_name?: string;
     requisition_date?: any;
     required_date?: any;
+    applicant_id?: number;
+    applicant_name?: string;
     notes?: string;
+    attachments?: unknown;
     items?: Array<{
       material_id?: number;
       material_code?: string;
@@ -859,6 +881,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
           requisition_name: values.requisition_name,
           requisition_date: requisitionDate,
           required_date: requiredDate,
+          applicant_id: values.applicant_id,
+          applicant_name: values.applicant_name,
           notes: values.notes,
           attachments: normalizeDocumentAttachments(values.attachments),
           items: mapItemsForApi(validItems),
@@ -897,6 +921,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
         requisition_name: values.requisition_name,
         requisition_date: requisitionDate,
         required_date: requiredDate,
+        applicant_id: values.applicant_id,
+        applicant_name: values.applicant_name,
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
         items: mapItemsForApi(validItems),
@@ -1725,7 +1751,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
               name="required_date"
               label={t('app.kuaizhizao.purchaseRequisition.form.requiredDate')}
               fieldProps={buildFutureDateShortcutFieldProps({
-                getForm: () => formRef.current,
+                getForm: () => createFormRef.current,
                 fieldName: 'required_date',
                 baseFieldName: 'requisition_date',
                 t,
@@ -1737,18 +1763,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
           <div className="document-form-untitled-group">
         <Row gutter={16}>
           <Col span={12}>
-            {editingId != null ? (
-              <ProFormText name="applicant_name" label={t('app.kuaizhizao.purchaseRequisition.form.applicant')} disabled />
-            ) : (
-              <AntForm.Item label={t('app.kuaizhizao.purchaseRequisition.form.applicant')}>
-                <Typography.Text>{currentUser?.full_name || currentUser?.username || '—'}</Typography.Text>
-                <div>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    {t('app.kuaizhizao.purchaseRequisition.form.applicantHint')}
-                  </Typography.Text>
-                </div>
-              </AntForm.Item>
-            )}
+            <EquipmentPersonSelect
+              uuidFieldName="applicant_uuid"
+              idFieldName="applicant_id"
+              nameFieldName="applicant_name"
+              label={t('app.kuaizhizao.purchaseRequisition.form.applicant')}
+              formRef={createFormRef}
+              required
+            />
           </Col>
           <Col span={12} />
         </Row>

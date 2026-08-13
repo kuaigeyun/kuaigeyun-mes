@@ -1134,6 +1134,8 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         supplier_by_id = {s.id: s for s in supplier_rows}
         today = date.today()
         purchase_orders_out: List[Dict[str, Any]] = []
+        push_mode = await BusinessConfigService().get_push_default_mode(tenant_id)
+        push_as_confirm = push_mode == "confirm"
 
         try:
             from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
@@ -1194,12 +1196,19 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             po = await self.purchase_service.create_purchase_order(
                 tenant_id=tenant_id, order_data=po_data, created_by=created_by
             )
-            try:
-                po = await self.purchase_service.submit_purchase_order(
-                    tenant_id=tenant_id, order_id=po.id, submitted_by=created_by
-                )
-            except Exception as e:
-                logger.warning("询价转单后自动提交采购订单失败: inquiry_id={} po_id={} err={}", inquiry_id, po.id, e)
+            # 与业务自动化「下推默认生成方式」一致：confirm 才自动提交，draft 保持草稿
+            if push_as_confirm:
+                try:
+                    po = await self.purchase_service.submit_purchase_order(
+                        tenant_id=tenant_id, order_id=po.id, submitted_by=created_by
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "询价转单后自动提交采购订单失败: inquiry_id={} po_id={} err={}",
+                        inquiry_id,
+                        po.id,
+                        e,
+                    )
 
             for i, (item, _) in enumerate(items_converted):
                 po_item = po.items[i] if i < len(po.items) else None

@@ -1057,6 +1057,7 @@ const DemandComputationPage: React.FC = () => {
       try {
         const opts = await getPushOptions(pushPanelRecord.id!)
         setPushOptions(opts)
+        setPushMode(opts.push_mode_default === 'confirm' ? 'confirm' : 'draft')
         const preset = pushPanelPresetRef.current
         pushPanelPresetRef.current = null
         setPushConfig({
@@ -3293,7 +3294,7 @@ const DemandComputationPage: React.FC = () => {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {pushPreviewLoadError ? (
-              <Alert type="error" showIcon message={pushPreviewLoadError} />
+              <Alert type="error" showIcon title={pushPreviewLoadError} />
             ) : null}
             {pushOptions && (
               <>

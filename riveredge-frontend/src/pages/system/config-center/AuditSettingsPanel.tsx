@@ -233,7 +233,7 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
                       <Select
                         allowClear
                         showSearch
-                        size="middle"
+                        size="medium"
                         placeholder={t('pages.system.configCenter.auditBinding.processPlaceholder')}
                         style={{ width: '100%' }}
                         optionFilterProp="label"

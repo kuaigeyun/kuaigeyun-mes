@@ -68,6 +68,11 @@ class MenuUpdate(BaseModel):
     is_external: Optional[bool] = Field(None, description="是否外部链接")
     external_url: Optional[str] = Field(None, description="外部链接URL")
     meta: Optional[Dict[str, Any]] = Field(None, description="菜单元数据")
+    display_name: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="侧栏展示名覆盖；空字符串表示恢复系统默认。不修改 name 结构键",
+    )
 
     model_config = ConfigDict(extra="ignore")
 

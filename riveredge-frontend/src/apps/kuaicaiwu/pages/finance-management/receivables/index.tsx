@@ -1029,7 +1029,7 @@ const ReceivableList: React.FC = () => {
                                 type="warning"
                                 showIcon
                                 style={{ marginBottom: 12 }}
-                                message={receivableCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
+                                title={receivableCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
                             />
                         ) : null}
                         {pullPreviewData.items?.length > 0 ? (
@@ -1038,28 +1038,35 @@ const ReceivableList: React.FC = () => {
                                 dataSource={pullPreviewData.items}
                                 rowKey={(row) => String(row.item_id)}
                                 pagination={false}
-                                scroll={{ x: 720 }}
+                                scroll={{ x: 840 }}
                                 columns={[
                                     { title: t(`${P}.pull.col.sourceCode`), dataIndex: 'source_code', width: 140, ellipsis: true },
-                                    { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', width: 160, ellipsis: true },
+                                    { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', width: 140, ellipsis: true },
                                     {
                                         title: t(`${P}.pull.col.docAmount`),
                                         dataIndex: 'quantity',
-                                        width: 120,
+                                        width: 110,
                                         align: 'right',
                                         render: (v: number) => formatPullMoney(v),
                                     },
                                     {
                                         title: t(`${P}.pull.col.receivableAmount`),
                                         dataIndex: 'pushed_quantity',
-                                        width: 120,
+                                        width: 110,
+                                        align: 'right',
+                                        render: (v: number) => formatPullMoney(v),
+                                    },
+                                    {
+                                        title: t(`${P}.pull.col.prepaidOffset`),
+                                        dataIndex: 'prepaid_offset',
+                                        width: 110,
                                         align: 'right',
                                         render: (v: number) => formatPullMoney(v),
                                     },
                                     {
                                         title: t(`${P}.pull.col.receivableableAmount`),
                                         dataIndex: 'max_push_quantity',
-                                        width: 120,
+                                        width: 110,
                                         align: 'right',
                                         render: (v: number) => formatPullMoney(v),
                                     },

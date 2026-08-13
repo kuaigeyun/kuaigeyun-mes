@@ -126,15 +126,21 @@ def _resolve_scan_prefix_for_sequence(
     context: Optional[Dict[str, Any]],
     scope_key: str,
     static_prefix: str = "",
-) -> str:
+) -> Optional[str]:
     """
     解析库内流水校准前缀：与生成规则一致，物料分组编号仅末级（group_id 对应分组的 code）。
+
+    若序号前存在表单字段但 context 无法渲染完整前缀，返回 None，由调用方跳过校准。
+    禁止回退到「仅 fixed_text」前缀：否则会把日期等中间段吞进流水号，
+    例如前缀 CG + 编码 CG202608120004 → 误解析为 202608120004，超出 int32。
     """
     dyn_prefix = _render_prefix_before_auto_counter(components, context)
     leaf_prefix = _get_leaf_group_code(context)
 
-    if dyn_prefix is not None:
-        return dyn_prefix if dyn_prefix else (leaf_prefix or static_prefix)
+    if dyn_prefix is None:
+        return None
+    if dyn_prefix:
+        return dyn_prefix
     return leaf_prefix or static_prefix
 
 
@@ -685,12 +691,21 @@ class CodeGenerationService:
                 return m.group(1)
         return None
 
+    # PostgreSQL integer / Tortoise IntField 上限（core_code_sequences.current_seq）
+    _INT32_MAX = 2147483647
+
     @staticmethod
-    def _parse_counter_suffix_int(code: Optional[str], prefix: str) -> Optional[int]:
+    def _parse_counter_suffix_int(
+        code: Optional[str],
+        prefix: str,
+        digits: Optional[int] = None,
+    ) -> Optional[int]:
         """
-        从完整编码中解析流水号整数：prefix 之后若全为数字则取其值；
-        否则取末尾连续数字（如 WLPJ0003 -> 3，0003 -> 3）。
-        prefix 为空时表示整段编码参与解析。
+        从完整编码中解析流水号：必须先剥掉「序号前完整前缀」（含日期/分组），
+        剩余部分才是流水。prefix 为空时表示整段编码参与解析。
+
+        规则配置了 digits 时，剩余数字长度不得超过该位数；更长说明前缀不完整
+        （例如只剥了 CG，把 20260812 连进流水），该编码不参与校准，而不是截尾或丢弃。
         """
         s = (code or "").strip()
         if not s:
@@ -704,11 +719,31 @@ class CodeGenerationService:
         if not rest:
             return None
         if rest.isdigit():
-            return int(rest)
-        m = re.search(r"(\d+)$", rest)
-        if m:
-            return int(m.group(1))
-        return None
+            digit_str = rest
+        else:
+            m = re.search(r"(\d+)$", rest)
+            if not m:
+                return None
+            digit_str = m.group(1)
+        if digits and digits > 0 and len(digit_str) > digits:
+            return None
+        try:
+            return int(digit_str)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _assert_parsed_seq_fits_storage(
+        seq: int,
+        rule_code: str,
+        prefix: Optional[str],
+    ) -> None:
+        if seq > CodeGenerationService._INT32_MAX:
+            raise ValidationError(
+                f"编码规则 {rule_code} 从库内解析到的序号 {seq} "
+                f"超出序号表容量（前缀={prefix!r}）。"
+                "请检查编码规则中「序号前」是否包含日期/分组，避免把日期段当成流水号。"
+            )
 
     @staticmethod
     def _resolve_entity_config_for_rule(
@@ -758,14 +793,18 @@ class CodeGenerationService:
     async def _get_max_sequence_from_db(
         tenant_id: int,
         entity_config: tuple,
-        prefix: str,
+        prefix: Optional[str],
         *,
         rule_code: str = "",
+        digits: Optional[int] = None,
     ) -> Optional[int]:
         """
         从库中查询该规则对应实体的编码字段，解析流水号数字，返回当前最大序号。
         用于校准 CodeSequence：删除记录后仍能根据库中最大号回落。
+        prefix 为 None 表示无法安全确定扫描前缀，跳过校准。
         """
+        if prefix is None:
+            return None
         module_path, class_name, attr_name = entity_config
         try:
             mod = importlib.import_module(module_path)
@@ -790,7 +829,9 @@ class CodeGenerationService:
             max_seq = None
             for code in rows:
                 n = CodeGenerationService._parse_counter_suffix_int(
-                    str(code) if code is not None else None, prefix
+                    str(code) if code is not None else None,
+                    prefix,
+                    digits=digits,
                 )
                 if n is None:
                     continue
@@ -824,6 +865,12 @@ class CodeGenerationService:
         scan_prefix = _resolve_scan_prefix_for_sequence(
             components, context, scope_key or "", static_prefix
         )
+        if scan_prefix is None:
+            logger.info(
+                "code_sequence_max_from_db_skip rule_code={} reason=incomplete_scan_prefix",
+                request_rule_code or getattr(rule, "code", "") or "",
+            )
+            return None
         # 物料规则：禁止空前缀全库扫号（否则会产生 1173 等无分组含义的纯数字编号）
         _rc = (request_rule_code or getattr(rule, "code", None) or "").upper()
         if not scan_prefix and "MATERIAL" in _rc and context and _get_leaf_group_code(context):
@@ -834,11 +881,21 @@ class CodeGenerationService:
         )
         if not entity_config:
             return None
+        counter_config = CodeRuleComponentService.get_counter_component_config(components or [])
+        digits = None
+        if counter_config:
+            raw_digits = counter_config.get("digits")
+            if raw_digits is not None:
+                try:
+                    digits = int(raw_digits)
+                except (TypeError, ValueError):
+                    digits = None
         return await CodeGenerationService._get_max_sequence_from_db(
             tenant_id=tenant_id,
             entity_config=entity_config,
             prefix=scan_prefix,
             rule_code=request_rule_code or getattr(rule, "code", "") or "",
+            digits=digits,
         )
 
     @staticmethod
@@ -877,6 +934,9 @@ class CodeGenerationService:
                 scope_key,
             )
             return
+        CodeGenerationService._assert_parsed_seq_fits_storage(
+            max_from_db, request_rule_code, log_prefix
+        )
 
         if sequence.current_seq != max_from_db:
             logger.info(

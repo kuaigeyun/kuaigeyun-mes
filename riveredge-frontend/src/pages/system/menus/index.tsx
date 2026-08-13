@@ -54,7 +54,8 @@ import { useTranslation } from 'react-i18next';
 import {
   mapMenuTreeWithTranslatedLabels,
   translateAppMenuItemName,
-  translateMenuName,
+  getMenuDisplayNameOverride,
+  isSyncedI18nMenuName,
 } from '../../../utils/menuTranslation';
 import CustomMenuLayoutEditor, {
   buildCustomLayoutPayload,
@@ -79,7 +80,25 @@ function isManifestSyncedAppMenuName(name?: string | null): boolean {
 }
 
 // 菜单图标展示（与侧栏 ManufacturingIcons 一致）
-const IconItem = ({ icon }: { icon?: string }) => renderMenuIconByKey(icon, 16);
+function MenuNameIcon({ icon }: { icon?: string }) {
+  const node = renderMenuIconByKey(icon, 16);
+  if (!node) return null;
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 16,
+        height: 16,
+        flexShrink: 0,
+        lineHeight: 0,
+      }}
+    >
+      {node}
+    </span>
+  );
+}
 
 function findMenuInTree(uuid: string | undefined | null, nodes: MenuTree[]): MenuTree | undefined {
   if (!uuid) return undefined;
@@ -91,6 +110,18 @@ function findMenuInTree(uuid: string | undefined | null, nodes: MenuTree[]): Men
     }
   }
   return undefined;
+}
+
+/** 叶子节点去掉空 children，避免表格把 [] 当成可展开而画出加号 */
+function stripEmptyMenuChildren(nodes: MenuTree[]): MenuTree[] {
+  return nodes.map((node) => {
+    const nextChildren = node.children?.length ? stripEmptyMenuChildren(node.children) : [];
+    if (!nextChildren.length) {
+      const { children: _omit, ...rest } = node;
+      return rest as MenuTree;
+    }
+    return { ...node, children: nextChildren };
+  });
 }
 
 const trimField = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
@@ -132,7 +163,7 @@ const MenuListPage: React.FC = () => {
         title: t('pages.system.menus.name'),
         dataIndex: 'name',
         render: (_: unknown, row: Menu) =>
-          translateAppMenuItemName(row?.name, row?.path, t, (row as any)?.children),
+          translateAppMenuItemName(row?.name, row?.path, t, (row as any)?.children, row?.meta),
       },
       { title: t('pages.system.menus.path'), dataIndex: 'path' },
       {
@@ -181,12 +212,15 @@ const MenuListPage: React.FC = () => {
 
   const editingMenuMeta = useMemo(() => {
     const path = formInitialValues?.path as string | undefined;
-    const name = formInitialValues?.name as string | undefined;
+    const structuralName = (formInitialValues?._structuralName || formInitialValues?.name) as
+      | string
+      | undefined;
     const isAppRoot = isAppRootMenuPath(path);
     const isManifestMenu =
-      !!formInitialValues?.application_uuid && isManifestSyncedAppMenuName(name) && !isAppRoot;
-    return { isAppRoot, isManifestMenu };
-  }, [formInitialValues]);
+      !!formInitialValues?.application_uuid && isManifestSyncedAppMenuName(structuralName) && !isAppRoot;
+    const useDisplayOverride = isEdit && !isAppRoot && isSyncedI18nMenuName(structuralName);
+    return { isAppRoot, isManifestMenu, useDisplayOverride, structuralName };
+  }, [formInitialValues, isEdit]);
   
   // 菜单树数据缓存（用于父菜单选择）
   const [menuTreeData, setMenuTreeData] = useState<MenuTree[]>([]);
@@ -454,7 +488,7 @@ const MenuListPage: React.FC = () => {
         }, []);
       };
 
-      const finalData = filterTree(response);
+      const finalData = stripEmptyMenuChildren(filterTree(response));
 
       // 统计和扁平化 (基于完整数据 response)
       let active = 0;
@@ -573,9 +607,17 @@ const MenuListPage: React.FC = () => {
         setIsEdit(true);
         setCurrentMenuUuid(record.uuid);
         const detail = await getMenuDetail(record.uuid);
-        
-        const { meta: _meta, ...detailWithoutMeta } = detail;
-        setFormInitialValues(detailWithoutMeta);
+        const { meta, ...detailWithoutMeta } = detail;
+        const structuralName = detail.name;
+        const override = getMenuDisplayNameOverride(meta);
+        const defaultLabel = isAppRootMenuPath(detail.path)
+          ? structuralName
+          : translateAppMenuItemName(structuralName, detail.path, t);
+        setFormInitialValues({
+          ...detailWithoutMeta,
+          _structuralName: structuralName,
+          name: override || defaultLabel,
+        });
         setModalVisible(true);
     } catch (error: any) {
         messageApi.error(error.message || t('pages.system.menus.getDetailFailed'));
@@ -610,7 +652,7 @@ const MenuListPage: React.FC = () => {
   const handleSubmit = useCallback(async (values: any) => {
     try {
         setFormLoading(true);
-        // 只提交后端支持的字段，去掉详情里可能混入的只读字段；meta 由 manifest 同步维护，不在此编辑
+        // 只提交后端支持的字段，去掉详情里可能混入的只读字段；meta 由 manifest 同步维护，不在此整包编辑
         const payload: Record<string, any> = {
           name: values.name,
           path: values.path,
@@ -624,6 +666,23 @@ const MenuListPage: React.FC = () => {
           is_external: values.is_external,
           external_url: values.external_url,
         };
+        const structuralName = String(
+          formInitialValues?._structuralName || formInitialValues?.name || values.name || '',
+        );
+        const useDisplayOverride =
+          isEdit &&
+          !isAppRootMenuPath(values.path || formInitialValues?.path) &&
+          isSyncedI18nMenuName(structuralName);
+        if (useDisplayOverride) {
+          const typed = trimField(values.name);
+          const defaultLabel = translateAppMenuItemName(
+            structuralName,
+            values.path || formInitialValues?.path,
+            t,
+          );
+          payload.display_name = !typed || typed === defaultLabel ? '' : typed;
+          delete payload.name;
+        }
         Object.keys(payload).forEach((k) => {
           const v = payload[k];
           if (v === undefined) delete payload[k];
@@ -652,7 +711,7 @@ const MenuListPage: React.FC = () => {
     } finally {
         setFormLoading(false);
     }
-  }, [currentMenuUuid, isEdit, menuTreeData, messageApi, refreshLayoutMenus, t]);
+  }, [currentMenuUuid, formInitialValues, isEdit, menuTreeData, messageApi, refreshLayoutMenus, t]);
 
   const columns: ProColumns<Menu>[] = useMemo(() => alignProColumns([
     {
@@ -667,23 +726,32 @@ const MenuListPage: React.FC = () => {
                record.path,
                t,
                treeItem.children,
+               record.meta,
              );
              const dbName = (record.name || '').trim();
              const showDbHint = dbName.length > 0 && dbName !== displayName;
              return (
-               <Space size={6}>
-                 <IconItem icon={record.icon} />
+               <span
+                 style={{
+                   display: 'inline-flex',
+                   alignItems: 'center',
+                   gap: 6,
+                   verticalAlign: 'middle',
+                   minWidth: 0,
+                 }}
+               >
+                 <MenuNameIcon icon={record.icon} />
                  {showDbHint ? (
                    <Tooltip title={t('pages.system.menus.dbMenuName', { name: dbName })}>
-                     <span style={{ fontWeight: 500 }}>{displayName}</span>
+                     <span style={{ fontWeight: 500, lineHeight: '22px' }}>{displayName}</span>
                    </Tooltip>
                  ) : (
-                   <span style={{ fontWeight: 500 }}>{displayName}</span>
+                   <span style={{ fontWeight: 500, lineHeight: '22px' }}>{displayName}</span>
                  )}
                  {backendHome?.menu_uuid === record.uuid ? (
                    renderSystemTypeMarker(t('pages.system.menus.backendHomeCurrent'), 'warning')
                  ) : null}
-               </Space>
+               </span>
              );
         }
     },
@@ -939,20 +1007,39 @@ const MenuListPage: React.FC = () => {
                 parent?.application_uuid ?? undefined,
               );
             }}
+            extraFooter={
+              isEdit && editingMenuMeta.useDisplayOverride ? (
+                <Tooltip title={t('pages.system.menus.resetDisplayNameHint')}>
+                  <Button
+                    icon={<UndoOutlined />}
+                    onClick={() => {
+                      const defaultLabel = translateAppMenuItemName(
+                        editingMenuMeta.structuralName,
+                        formInitialValues?.path,
+                        t,
+                      );
+                      menuFormRef.current?.setFieldsValue({ name: defaultLabel });
+                    }}
+                  >
+                    {t('pages.system.menus.resetDisplayName')}
+                  </Button>
+                </Tooltip>
+              ) : undefined
+            }
         >
              <ProFormText
                name="name"
                label={t('pages.system.menus.menuName')}
                rules={[{ required: true, message: t('pages.system.menus.menuNameRequired') }]}
                placeholder={t('pages.system.menus.menuNamePlaceholder')}
-               disabled={isEdit && editingMenuMeta.isManifestMenu}
                tooltip={
                  editingMenuMeta.isAppRoot
                    ? t('pages.system.menus.appRootNameHint')
-                   : editingMenuMeta.isManifestMenu
-                     ? t('menu.system.appMenuSyncTip')
+                   : editingMenuMeta.useDisplayOverride
+                     ? t('pages.system.menus.menuNameDisplayHint')
                      : undefined
                }
+               fieldProps={{ maxLength: 100 }}
                colProps={{ span: 12 }}
              />
              <ProFormText name="path" label={t('pages.system.menus.path')} placeholder={t('pages.system.menus.pathPlaceholder')} colProps={{ span: 12 }} />

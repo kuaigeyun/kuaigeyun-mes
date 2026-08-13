@@ -45,6 +45,8 @@ import {
   findMenuTitleWithTranslation,
   resolveAppMenuGroupDisplayName,
   translateMenuItemTitle,
+  getMenuDisplayNameOverride,
+  isSyncedI18nMenuName,
   type MenuDataItemWithLocaleKey,
 } from '../utils/menuTranslation';
 import { resolveCustomPageTitle } from '../utils/customPageTitle';
@@ -1312,11 +1314,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
     // 处理菜单名称翻译
     const menuNameKey = menu.name;
+    const meta = (menu as { meta?: Record<string, any> }).meta;
+    const displayNameOverride = isSyncedI18nMenuName(menuNameKey)
+      ? getMenuDisplayNameOverride(meta)
+      : '';
     let menuName = menuNameKey;
-    if (isAppMenu && menuNameKey) {
+    if (displayNameOverride) {
+      menuName = displayNameOverride;
+    } else if (isAppMenu && menuNameKey) {
       // 应用菜单使用应用菜单翻译函数
       // 对于分组菜单（没有path），传递子菜单以便从子菜单路径提取应用code
-      menuName = translateAppMenuItemName(menuNameKey, menu.path, t, menu.children);
+      menuName = translateAppMenuItemName(menuNameKey, menu.path, t, menu.children, meta);
     } else if (menuNameKey) {
       // 系统菜单使用通用菜单翻译函数
       menuName = translateMenuName(menuNameKey, t, menu.path);
@@ -1326,6 +1334,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       path: menu.path == null ? undefined : menu.path, // 确保 path 不为 null，避免 @umijs/route-utils mergePath 报错
       name: menuName,
       menuNameKey,
+      displayNameOverride: displayNameOverride || undefined,
       icon: iconElement,
       key: menu.uuid || menu.path, // 添加 key 字段，ProLayout 需要
       // 如果菜单有子项，确保子项也有 key（应用菜单的子项也是应用菜单）
@@ -1345,7 +1354,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
 
     // 从 meta 同步 type、className、hideInMenu（数据库系统菜单入库后使用）
-    const meta = (menu as { meta?: Record<string, any> }).meta;
     if (meta) {
       if (meta.type === 'group') menuItem.type = 'group';
       if (meta.className) menuItem.className = meta.className;
