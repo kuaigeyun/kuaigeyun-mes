@@ -53,7 +53,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import {
-  buildInspectorTimeStackedColumn,
+  buildInspectorNameColumn,
   buildQualityInspectionListCodeColumn,
   buildQualityInspectionListMaterialColumn,
   buildQualityInspectionListMaterialHiddenColumns,
@@ -1153,7 +1153,7 @@ const IncomingInspectionPage: React.FC = () => {
     },
     buildQualityInspectionListMaterialColumn<IncomingInspection>(t),
     ...buildQualityInspectionListMaterialHiddenColumns<IncomingInspection>(t),
-    buildInspectorTimeStackedColumn<IncomingInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
+    buildInspectorNameColumn<IncomingInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
     ...buildQualityInspectionListQuantityResultColumns<IncomingInspection>(t, [
       {
         title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
@@ -1241,7 +1241,7 @@ const IncomingInspectionPage: React.FC = () => {
     >
       <UniTable<IncomingInspection>
         headerTitle={t('app.kuaizhizao.quality.incoming.pageTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.quality-management.incoming-inspection.rank-v3"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.incoming-inspection.rank-v4"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

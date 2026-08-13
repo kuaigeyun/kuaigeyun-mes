@@ -1684,6 +1684,53 @@ class IntegrationConfigService:
         return default
 
     @staticmethod
+    def _build_minio_base_url(config: Dict[str, Any]) -> str:
+        """构造 MinIO API 根地址（不含 bucket）。"""
+        endpoint = str(config.get("endpoint") or "").strip().rstrip("/")
+        use_ssl = IntegrationConfigService._coerce_config_bool(config.get("use_ssl"), default=True)
+        if not endpoint:
+            raise ValueError("请填写 MinIO Endpoint（如 minio.example.com:9000）")
+        if endpoint.startswith("http://") or endpoint.startswith("https://"):
+            parsed = urlparse(endpoint)
+            if use_ssl and parsed.scheme != "https":
+                raise ValueError(
+                    "已开启「使用 HTTPS」，Endpoint 必须为 https://。"
+                    "若 MinIO 仅提供 HTTP，请关闭该开关或为 MinIO 配置 TLS。"
+                )
+            if not use_ssl and parsed.scheme == "https":
+                raise ValueError(
+                    "已关闭「使用 HTTPS」，Endpoint 应为 http://。"
+                    "若 MinIO 已启用 TLS，请打开「使用 HTTPS」。"
+                )
+            # 去掉误填的 bucket 路径，探测时再按 path-style 拼
+            path = (parsed.path or "").strip("/")
+            if path and path == str(config.get("bucket") or "").strip():
+                return f"{parsed.scheme}://{parsed.netloc}"
+            if path:
+                raise ValueError(
+                    "MinIO Endpoint 请只填 API 地址（如 http://host:9000），不要带 Bucket 路径。"
+                    "控制台端口（常见 9001）不可用作 Endpoint。"
+                )
+            return f"{parsed.scheme}://{parsed.netloc}"
+        scheme = "https" if use_ssl else "http"
+        return f"{scheme}://{endpoint}"
+
+    @staticmethod
+    def _build_minio_bucket_probe_url(config: Dict[str, Any], bucket: str) -> str:
+        """
+        MinIO 探测 URL：默认 path-style HEAD /{bucket}。
+        对根路径 HEAD / 常返回 HTTP 400，不能当作连通性依据。
+        """
+        base = IntegrationConfigService._build_minio_base_url(config)
+        use_path_style = IntegrationConfigService._coerce_config_bool(
+            config.get("use_path_style"), default=True
+        )
+        if use_path_style:
+            return f"{base}/{bucket}"
+        parsed = urlparse(base)
+        return f"{parsed.scheme}://{bucket}.{parsed.netloc}"
+
+    @staticmethod
     def _build_object_storage_probe_url(storage_type: str, config: Dict[str, Any]) -> str:
         """根据 endpoint / region / bucket 构造探测 URL。"""
         endpoint = str(config.get("endpoint") or "").strip().rstrip("/")
@@ -1709,25 +1756,7 @@ class IntegrationConfigService:
             return f"https://{bucket}.cos.{region}.myqcloud.com"
 
         if storage_type == "minio":
-            # MinIO：use_ssl=true 强制 HTTPS；裸 host 按开关补全 scheme（避免 HTTP 服务被误拼 https 导致 WRONG_VERSION_NUMBER）
-            use_ssl = IntegrationConfigService._coerce_config_bool(config.get("use_ssl"), default=True)
-            if not endpoint:
-                raise ValueError("请填写 MinIO Endpoint（如 minio.example.com:9000）")
-            if endpoint.startswith("http://") or endpoint.startswith("https://"):
-                parsed = urlparse(endpoint)
-                if use_ssl and parsed.scheme != "https":
-                    raise ValueError(
-                        "已开启「使用 HTTPS」，Endpoint 必须为 https://。"
-                        "若 MinIO 仅提供 HTTP，请关闭该开关或为 MinIO 配置 TLS。"
-                    )
-                if not use_ssl and parsed.scheme == "https":
-                    raise ValueError(
-                        "已关闭「使用 HTTPS」，Endpoint 应为 http://。"
-                        "若 MinIO 已启用 TLS，请打开「使用 HTTPS」。"
-                    )
-                return endpoint
-            scheme = "https" if use_ssl else "http"
-            return f"{scheme}://{endpoint}"
+            return IntegrationConfigService._build_minio_base_url(config)
 
         if endpoint:
             if not endpoint.startswith("http://") and not endpoint.startswith("https://"):
@@ -1812,20 +1841,13 @@ class IntegrationConfigService:
             if not secret or secret == "****":
                 raise ValueError("请填写 Secret Key")
 
+        if storage_type == "minio":
+            return await IntegrationConfigService._test_minio_endpoint(config, bucket)
+
         probe_url = IntegrationConfigService._build_object_storage_probe_url(storage_type, config)
         try:
             resp = await get_http_client().request("HEAD", probe_url, timeout=15.0)
         except Exception as e:
-            err_text = str(e)
-            if storage_type == "minio" and (
-                "WRONG_VERSION_NUMBER" in err_text
-                or "wrong version number" in err_text.lower()
-            ):
-                raise ValueError(
-                    "无法访问存储 Endpoint：SSL 协议不匹配（WRONG_VERSION_NUMBER）。"
-                    "通常是用 HTTPS 连接了仅提供 HTTP 的 MinIO。"
-                    "请关闭「使用 HTTPS」并改用 http://，或为 MinIO 正确配置 TLS 证书后再开启 HTTPS。"
-                ) from e
             raise ValueError(f"无法访问存储 Endpoint：{e}") from e
         if resp.status_code >= 500:
             raise ValueError(f"存储服务异常 HTTP {resp.status_code}")
@@ -1839,3 +1861,55 @@ class IntegrationConfigService:
                 "verification_level": "endpoint_reachable",
             }
         raise ValueError(f"存储探测失败 HTTP {resp.status_code}，请检查 Endpoint / Bucket / Region")
+
+    @staticmethod
+    async def _test_minio_endpoint(config: Dict[str, Any], bucket: str) -> Dict[str, Any]:
+        """
+        MinIO 连通性：对 path-style /{bucket} 发 HEAD。
+        根路径 HEAD / 在 MinIO 上经常直接 400，不能用来判断可达。
+        未签名时 403 表示 API 可达（密钥正确性需实际上传/SDK 校验）。
+        """
+        base_url = IntegrationConfigService._build_minio_base_url(config)
+        probe_url = IntegrationConfigService._build_minio_bucket_probe_url(config, bucket)
+        try:
+            resp = await get_http_client().request("HEAD", probe_url, timeout=15.0)
+        except Exception as e:
+            err_text = str(e)
+            if "WRONG_VERSION_NUMBER" in err_text or "wrong version number" in err_text.lower():
+                raise ValueError(
+                    "无法访问 MinIO：SSL 协议不匹配（WRONG_VERSION_NUMBER）。"
+                    "通常是用 HTTPS 连接了仅提供 HTTP 的服务。"
+                    "请关闭「使用 HTTPS」并使用 http://host:9000，或为 MinIO 配置 TLS。"
+                ) from e
+            raise ValueError(f"无法访问 MinIO Endpoint：{e}") from e
+
+        status = resp.status_code
+        if status >= 500:
+            raise ValueError(f"MinIO 服务异常 HTTP {status}（Endpoint: {base_url}）")
+        if status == 404:
+            raise ValueError(
+                f"MinIO 桶不存在或路径不对：{bucket}。"
+                f"请确认 Bucket 名称，且 Endpoint 为 S3 API 地址（常见 :9000，不是控制台 :9001）。"
+            )
+        # 200/204 桶可匿名读；301/302 重定向；401/403 需鉴权但服务可达
+        if status in (200, 204, 301, 302, 401, 403):
+            return {
+                "message": "MinIO Endpoint 可达（已校验必填项；未做签名鉴权）",
+                "status_code": status,
+                "endpoint": base_url,
+                "probe_url": probe_url,
+                "bucket": bucket,
+                "verification_level": "endpoint_reachable",
+            }
+        body_preview = ""
+        try:
+            body_preview = (resp.text or "").strip().replace("\n", " ")[:160]
+        except Exception:
+            body_preview = ""
+        hint = (
+            "请确认 Endpoint 为 MinIO S3 API（如 http://host:9000），"
+            "不要填控制台地址；Bucket 名称仅小写字母/数字/连字符。"
+        )
+        if body_preview:
+            raise ValueError(f"MinIO 存储探测失败 HTTP {status}：{body_preview}。{hint}")
+        raise ValueError(f"MinIO 存储探测失败 HTTP {status}。{hint}")

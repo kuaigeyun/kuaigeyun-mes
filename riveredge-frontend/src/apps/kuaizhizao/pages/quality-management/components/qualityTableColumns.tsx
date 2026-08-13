@@ -16,7 +16,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar';
-import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { formatQuantity } from '../../../../../utils/format';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 
@@ -95,30 +95,26 @@ export function buildQualityInspectionPartnerStackedColumn<T extends object>(
   );
 }
 
-export function buildInspectorTimeStackedColumn<T extends object>(
+/** 检验四单据检验员列：只展示人名，不叠检验时间（时间在高级搜索） */
+export function buildInspectorNameColumn<T extends object>(
   title: string,
-  options?: { dataIndex?: string; width?: number; timeKeys?: string[]; primaryKeys?: string[] },
+  options?: { dataIndex?: string; width?: number; primaryKeys?: string[] },
 ): ProColumns<T> {
-  const timeKeys = options?.timeKeys ?? ['inspection_time', 'inspectionTime'];
   const primaryKeys = options?.primaryKeys ?? ['inspector_name', 'inspectorName'];
+  const width = options?.width ?? 96;
   return {
     title,
     key: 'inspector_name',
     dataIndex: options?.dataIndex ?? 'inspector_name',
-    width: options?.width ?? 168,
+    width,
+    minWidth: width,
     uniTableKeepWidth: true,
+    resizable: false,
     sorter: true,
     hideInSearch: true,
-    render: (_, record) => {
-      const rawTime = pickRecordText(record as Record<string, unknown>, ...timeKeys);
-      return (
-        <UniTableStackedPrimaryCell
-          primary={pickRecordText(record as Record<string, unknown>, ...primaryKeys) || '-'}
-          secondary={rawTime ? formatDateTime(rawTime, 'YYYY-MM-DD HH:mm:ss') : '-'}
-          secondaryCopyable={false}
-        />
-      );
-    },
+    ellipsis: true,
+    render: (_, record) =>
+      pickRecordText(record as Record<string, unknown>, ...primaryKeys) || '-',
   };
 }
 

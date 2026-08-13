@@ -837,8 +837,8 @@ const ApplicationConnectionsListPage: React.FC = () => {
               label="Endpoint"
               rules={[{ required: true }]}
               colProps={{ span: 24 }}
-              placeholder="minio.example.com:9000 或 https://minio.example.com"
-              extra="未写协议时由「使用 HTTPS」决定补全 http/https；开启 HTTPS 时不允许填写 http://"
+              placeholder="minio.example.com:9000 或 http://192.168.1.10:9000"
+              extra="填 S3 API 地址（常见 :9000），不要填控制台（:9001），也不要带 Bucket 路径；未写协议时由「使用 HTTPS」补全"
             />
             <ProFormSwitch
               name="use_ssl"
@@ -847,10 +847,22 @@ const ApplicationConnectionsListPage: React.FC = () => {
               colProps={{ span: 12 }}
               extra="强制走 TLS。若 MinIO 仅 HTTP（常见 9000 端口），请关闭，否则会报 WRONG_VERSION_NUMBER"
             />
-            <ProFormText name="region" label="Region" colProps={{ span: 12 }} />
+            <ProFormText
+              name="region"
+              label="Region"
+              colProps={{ span: 12 }}
+              placeholder="us-east-1"
+              extra="多数自建 MinIO 可填 us-east-1"
+            />
             <ProFormText name="access_key" label="Access Key" rules={[{ required: true }]} colProps={{ span: 12 }} />
             <ProFormText.Password name="secret_key" label="Secret Key" rules={[{ required: true }]} colProps={{ span: 12 }} />
-            <ProFormText name="bucket" label="Bucket" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText
+              name="bucket"
+              label="Bucket"
+              rules={[{ required: true }]}
+              colProps={{ span: 12 }}
+              extra="桶名需符合 S3 规则（小写等）；探测走 path-style /{bucket}"
+            />
           </>
         );
       case 'qiniu_kodo':

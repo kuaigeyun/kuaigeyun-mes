@@ -53,7 +53,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import {
-  buildInspectorTimeStackedColumn,
+  buildInspectorNameColumn,
   buildQualityInspectionListCodeColumn,
   buildQualityInspectionListMaterialColumn,
   buildQualityInspectionListMaterialHiddenColumns,
@@ -1103,7 +1103,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     },
     buildQualityInspectionListMaterialColumn<FinishedGoodsInspection>(t),
     ...buildQualityInspectionListMaterialHiddenColumns<FinishedGoodsInspection>(t),
-    buildInspectorTimeStackedColumn<FinishedGoodsInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
+    buildInspectorNameColumn<FinishedGoodsInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
     ...buildQualityInspectionListQuantityResultColumns<FinishedGoodsInspection>(t, [
       buildQualityInspectionListPushProgressColumn<FinishedGoodsInspection>(t, {
         dataIndex: 'pushed_rework_quantity',
@@ -1179,7 +1179,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     >
       <UniTable<FinishedGoodsInspection>
         headerTitle={t('app.kuaizhizao.quality.finished.pageTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.quality-management.finished-goods-inspection.rank-v3"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.finished-goods-inspection.rank-v4"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

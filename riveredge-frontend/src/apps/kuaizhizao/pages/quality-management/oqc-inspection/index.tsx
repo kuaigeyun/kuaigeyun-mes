@@ -15,7 +15,7 @@ import {
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import {
-  buildInspectorTimeStackedColumn,
+  buildInspectorNameColumn,
   buildQualityInspectionListCodeColumn,
   buildQualityInspectionListMaterialColumn,
   buildQualityInspectionListMaterialHiddenColumns,
@@ -557,7 +557,7 @@ const OQCInspectionPage: React.FC = () => {
       { title: t('app.kuaizhizao.quality.oqc.columns.customer'), dataIndex: 'customer_name', hideInTable: true, hideInSearch: true },
       buildQualityInspectionListMaterialColumn<OQCInspection>(t),
       ...buildQualityInspectionListMaterialHiddenColumns<OQCInspection>(t),
-      buildInspectorTimeStackedColumn<OQCInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
+      buildInspectorNameColumn<OQCInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
       ...buildQualityInspectionListQuantityResultColumns<OQCInspection>(t, [
         {
           title: t('app.kuaizhizao.quality.oqc.columns.releaseDecision'),
@@ -619,7 +619,7 @@ const OQCInspectionPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           permissionResource={OQC_RESOURCE}
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.oqc-inspection.rank-v3"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.oqc-inspection.rank-v4"
           showAdvancedSearch
           pinnedTabsField={QUALITY_INSPECTION_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter

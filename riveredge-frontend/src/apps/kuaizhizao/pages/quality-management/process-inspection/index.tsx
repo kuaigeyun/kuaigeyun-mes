@@ -52,7 +52,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import {
-  buildInspectorTimeStackedColumn,
+  buildInspectorNameColumn,
   buildQualityInspectionListCodeColumn,
   buildQualityInspectionListMaterialColumn,
   buildQualityInspectionListMaterialHiddenColumns,
@@ -977,7 +977,7 @@ const ProcessInspectionPage: React.FC = () => {
     },
     buildQualityInspectionListMaterialColumn<ProcessInspection>(t),
     ...buildQualityInspectionListMaterialHiddenColumns<ProcessInspection>(t),
-    buildInspectorTimeStackedColumn<ProcessInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
+    buildInspectorNameColumn<ProcessInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
     ...buildQualityInspectionListQuantityResultColumns<ProcessInspection>(t),
     ...buildDocumentAuditColumns<ProcessInspection>(t),
     ...inspectionCustomFieldColumns,
@@ -1044,7 +1044,7 @@ const ProcessInspectionPage: React.FC = () => {
     >
       <UniTable<ProcessInspection>
         headerTitle={t('app.kuaizhizao.quality.process.pageTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.quality-management.process-inspection.rank-v3"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.process-inspection.rank-v4"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
