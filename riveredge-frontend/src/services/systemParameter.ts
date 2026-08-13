@@ -29,7 +29,10 @@ export interface SystemParameter {
 export interface SystemParameterListParams {
   page?: number;
   page_size?: number;
+  skip?: number;
+  limit?: number;
   is_active?: boolean;
+  keyword?: string;
 }
 
 /**

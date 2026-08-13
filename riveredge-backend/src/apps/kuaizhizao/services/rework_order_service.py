@@ -337,6 +337,14 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         if isinstance(resp, ReworkOrderResponse):
             items = await build_operation_items(tenant_id, rework_order)
             resp.rework_operations = [ReworkOrderOperationItem.model_validate(i) for i in items]
+            if rework_order.verification_required or rework_order.verification_inspection_id:
+                resp.verification_inspection_type = (
+                    "finished_goods_inspection"
+                    if rework_order.source_inspection_id
+                    else "process_inspection"
+                )
+            # heal 可能改写 verification_inspection_id，回填最新值
+            resp.verification_inspection_id = rework_order.verification_inspection_id
 
     async def _get_rework_operations(
         self, tenant_id: int, rework_order_id: int

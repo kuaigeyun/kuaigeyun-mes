@@ -5,7 +5,7 @@
 """
 
 import re
-from typing import Optional, List, Dict, Any, Type
+from typing import Optional, List, Dict, Any, Type, Sequence
 from tortoise.models import Model
 from tortoise.queryset import QuerySet
 from tortoise.expressions import Q
@@ -15,6 +15,21 @@ try:
     PYPINYIN_AVAILABLE = True
 except ImportError:
     PYPINYIN_AVAILABLE = False
+
+
+def apply_keyword_icontains(queryset, keyword: Optional[str], fields: Sequence[str]):
+    """
+    列表模糊搜索唯一路径：对指定字段做 OR icontains。
+
+    空关键词不改查询。中文必须走数据库 icontains，不得只靠当前页前端过滤。
+    """
+    text = (keyword or "").strip()
+    if not text or not fields:
+        return queryset
+    cond = Q(**{f"{fields[0]}__icontains": text})
+    for field in fields[1:]:
+        cond |= Q(**{f"{field}__icontains": text})
+    return queryset.filter(cond)
 
 
 def is_pinyin_keyword(keyword: str) -> bool:

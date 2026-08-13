@@ -2,8 +2,81 @@
  * 系统配置列表展示：启用/类型/标识 → MarkerTag；流程/登录/备份等状态 → StatusTag。
  * 系统级多为配置主数据：业务列不堆叠（与主数据 plants 一致）；审计叠列另议。
  */
+import { useEffect, useState } from 'react';
 import type { TFunction } from 'i18next';
+import { Avatar, theme } from 'antd';
 import { MarkerTag, StatusTag } from '../../../constants/statusBadges';
+import {
+  getAvatarFontSize,
+  getAvatarText,
+  getAvatarUrl,
+  getCachedAvatarUrl,
+  getImageAvatarCircleStyle,
+  getTextAvatarCircleStyle,
+  isTextAvatarDisplay,
+} from '../../../utils/avatar';
+
+export function SystemUserAvatar({
+  avatarUuid,
+  fullName,
+  username,
+  size = 32,
+}: {
+  avatarUuid?: string | null;
+  fullName?: string;
+  username?: string;
+  size?: number;
+}) {
+  const { token } = theme.useToken();
+  const [src, setSrc] = useState<string | undefined>(() =>
+    avatarUuid ? getCachedAvatarUrl(avatarUuid) : undefined,
+  );
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+    if (!avatarUuid) {
+      setSrc(undefined);
+      return;
+    }
+    const cached = getCachedAvatarUrl(avatarUuid);
+    if (cached) {
+      setSrc(cached);
+      return;
+    }
+    let cancelled = false;
+    getAvatarUrl(avatarUuid)
+      .then((url) => {
+        if (!cancelled) setSrc(url);
+      })
+      .catch(() => {
+        if (!cancelled) setSrc(undefined);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [avatarUuid]);
+
+  const textAvatar = isTextAvatarDisplay(src, imageFailed);
+
+  return (
+    <Avatar
+      size={size}
+      src={textAvatar ? undefined : src}
+      onError={() => {
+        setImageFailed(true);
+        return false;
+      }}
+      style={{
+        ...(textAvatar ? getTextAvatarCircleStyle(token) : getImageAvatarCircleStyle()),
+        flexShrink: 0,
+        fontSize: getAvatarFontSize(size),
+      }}
+    >
+      {textAvatar ? getAvatarText(fullName, username) : null}
+    </Avatar>
+  );
+}
 
 export function renderSystemActiveTag(
   t: TFunction,

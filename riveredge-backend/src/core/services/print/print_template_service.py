@@ -12,6 +12,7 @@ from tortoise.exceptions import IntegrityError
 from tortoise.transactions import in_transaction
 
 from core.models.print_template import PrintTemplate
+from core.utils.search_utils import apply_keyword_icontains
 from core.services.print.print_device_service import PrintDeviceService
 from core.services.print.template_renderer import (
     is_pdfme_template,
@@ -411,6 +412,7 @@ class PrintTemplateService:
         type: Optional[str] = None,
         is_active: Optional[bool] = None,
         document_type: Optional[str] = None,
+        keyword: Optional[str] = None,
         installed_app_codes: Optional[Set[str]] = None,
     ) -> List[PrintTemplate]:
         """
@@ -423,6 +425,7 @@ class PrintTemplateService:
             type: 模板类型筛选
             is_active: 是否启用筛选
             document_type: 关联业务单据类型（按 config.document_type 筛选）
+            keyword: 名称/代码/描述模糊搜索
             installed_app_codes: 已安装应用；传入时按单据归属应用过滤列表
             
         Returns:
@@ -445,6 +448,8 @@ class PrintTemplateService:
         
         if document_type:
             query = query.filter(config__contains={"document_type": document_type})
+
+        query = apply_keyword_icontains(query, keyword, ["name", "code", "description"])
 
         if installed_app_codes is None:
             return await query.order_by("-created_at").offset(skip).limit(limit).all()

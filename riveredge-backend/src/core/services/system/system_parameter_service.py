@@ -10,6 +10,7 @@ from tortoise.exceptions import IntegrityError
 import json
 
 from core.models.system_parameter import SystemParameter
+from core.utils.search_utils import apply_keyword_icontains
 from core.schemas.system_parameter import SystemParameterCreate, SystemParameterUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.cache.cache import cache
@@ -174,7 +175,8 @@ class SystemParameterService:
         tenant_id: int,
         skip: int = 0,
         limit: int = 100,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
     ) -> List[SystemParameter]:
         """
         获取参数列表
@@ -195,6 +197,8 @@ class SystemParameterService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
+
+        query = apply_keyword_icontains(query, keyword, ["key", "description"])
         
         return await query.offset(skip).limit(limit).order_by("-created_at")
     

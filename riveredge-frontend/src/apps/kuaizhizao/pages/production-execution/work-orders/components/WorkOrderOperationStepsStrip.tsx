@@ -1,9 +1,10 @@
 /**
  * 工单列表「工序」步骤轴：按实际节点数全部展开显示（不限宽）。
+ * 低配机优化：无 antd Tooltip 门户、React.memo 跳过无关重渲染。
  */
 
 import React, { useMemo } from 'react';
-import { Tooltip, theme } from 'antd';
+import { theme } from 'antd';
 import { CheckOutlined } from '@ant-design/icons';
 import {
   buildAllWorkOrderOperationStepSlots,
@@ -16,7 +17,14 @@ export interface WorkOrderOperationStepsStripProps {
   compact?: boolean;
 }
 
-export function WorkOrderOperationStepsStrip({
+function stepsSignature(steps?: WorkOrderOperationStep[] | null): string {
+  if (!steps?.length) return '';
+  return steps
+    .map((s) => `${s.name}\0${s.status}\0${s.progress ?? ''}\0${s.sequence ?? ''}`)
+    .join('\n');
+}
+
+function WorkOrderOperationStepsStripInner({
   steps,
   compact = true,
 }: WorkOrderOperationStepsStripProps) {
@@ -44,48 +52,6 @@ export function WorkOrderOperationStepsStrip({
   if (!slots.length) {
     return null;
   }
-
-  const renderNode = (step: WorkOrderOperationStep) => {
-    const isDone = step.status === 'done';
-    const isActive = step.status === 'active';
-    const isPending = step.status === 'pending';
-    const borderColor = isPending ? pendingBorder : isDone ? doneColor : activeColor;
-
-    return (
-      <div
-        style={{
-          position: 'relative',
-          zIndex: 1,
-          width: nodeSize,
-          height: nodeSize,
-          borderRadius: '50%',
-          background: isDone ? doneColor : nodeBg,
-          border: `2px solid ${borderColor}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxSizing: 'border-box',
-          flexShrink: 0,
-        }}
-      >
-        {isDone ? (
-          <CheckOutlined style={{ color: '#fff', fontSize: compact ? 12 : 14 }} />
-        ) : isActive && typeof step.progress === 'number' ? (
-          <span
-            style={{
-              color: activeColor,
-              fontSize: progressFontSize,
-              fontWeight: 700,
-              lineHeight: 1,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {step.progress}%
-          </span>
-        ) : null}
-      </div>
-    );
-  };
 
   const trackWidth = slots.length * slotWidth;
 
@@ -125,10 +91,18 @@ export function WorkOrderOperationStepsStrip({
         />
         {slots.map(({ key, step }) => {
           if (!step) return null;
-          const node = renderNode(step);
+          const isDone = step.status === 'done';
+          const isActive = step.status === 'active';
+          const isPending = step.status === 'pending';
+          const borderColor = isPending ? pendingBorder : isDone ? doneColor : activeColor;
+          const title =
+            isActive && typeof step.progress === 'number'
+              ? `${step.name} - ${step.progress}%`
+              : step.name;
           return (
             <div
               key={key}
+              title={title}
               style={{
                 position: 'relative',
                 zIndex: 1,
@@ -138,15 +112,38 @@ export function WorkOrderOperationStepsStrip({
                 justifyContent: 'center',
               }}
             >
-              <Tooltip
-                title={
-                  step.status === 'active' && typeof step.progress === 'number'
-                    ? `${step.name} - ${step.progress}%`
-                    : step.name
-                }
+              <div
+                style={{
+                  position: 'relative',
+                  zIndex: 1,
+                  width: nodeSize,
+                  height: nodeSize,
+                  borderRadius: '50%',
+                  background: isDone ? doneColor : nodeBg,
+                  border: `2px solid ${borderColor}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxSizing: 'border-box',
+                  flexShrink: 0,
+                }}
               >
-                {node}
-              </Tooltip>
+                {isDone ? (
+                  <CheckOutlined style={{ color: '#fff', fontSize: compact ? 12 : 14 }} />
+                ) : isActive && typeof step.progress === 'number' ? (
+                  <span
+                    style={{
+                      color: activeColor,
+                      fontSize: progressFontSize,
+                      fontWeight: 700,
+                      lineHeight: 1,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {step.progress}%
+                  </span>
+                ) : null}
+              </div>
             </div>
           );
         })}
@@ -183,5 +180,20 @@ export function WorkOrderOperationStepsStrip({
     </div>
   );
 }
+
+function stripPropsAreEqual(
+  prev: WorkOrderOperationStepsStripProps,
+  next: WorkOrderOperationStepsStripProps,
+): boolean {
+  return (
+    (prev.compact ?? true) === (next.compact ?? true) &&
+    stepsSignature(prev.steps) === stepsSignature(next.steps)
+  );
+}
+
+export const WorkOrderOperationStepsStrip = React.memo(
+  WorkOrderOperationStepsStripInner,
+  stripPropsAreEqual,
+);
 
 export default WorkOrderOperationStepsStrip;

@@ -31,6 +31,7 @@ export interface PrintTemplateListParams {
   type?: string;
   is_active?: boolean;
   document_type?: string;
+  keyword?: string;
 }
 
 export interface CreatePrintTemplateData {

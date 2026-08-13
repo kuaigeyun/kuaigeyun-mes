@@ -72,6 +72,7 @@ import {
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../utils/spreadsheetImportTemplate';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { mergeListKeyword } from '../../../../utils/tableQueryKey';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 
 const TYPE_COLORS: Record<string, { color: string; icon: React.ReactNode }> = {
@@ -829,6 +830,29 @@ const ApplicationConnectionsListPage: React.FC = () => {
           </>
         );
       case 'minio':
+        return (
+          <>
+            <ProFormText
+              name="endpoint"
+              label="Endpoint"
+              rules={[{ required: true }]}
+              colProps={{ span: 24 }}
+              placeholder="minio.example.com:9000 或 https://minio.example.com"
+              extra="未写协议时由「使用 HTTPS」决定补全 http/https；开启 HTTPS 时不允许填写 http://"
+            />
+            <ProFormSwitch
+              name="use_ssl"
+              label="使用 HTTPS"
+              initialValue={true}
+              colProps={{ span: 12 }}
+              extra="强制走 TLS。若 MinIO 仅 HTTP（常见 9000 端口），请关闭，否则会报 WRONG_VERSION_NUMBER"
+            />
+            <ProFormText name="region" label="Region" colProps={{ span: 12 }} />
+            <ProFormText name="access_key" label="Access Key" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText.Password name="secret_key" label="Secret Key" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText name="bucket" label="Bucket" rules={[{ required: true }]} colProps={{ span: 12 }} />
+          </>
+        );
       case 'qiniu_kodo':
         return (
           <>
@@ -1127,7 +1151,8 @@ const ApplicationConnectionsListPage: React.FC = () => {
               page: params.current || 1,
               page_size: params.pageSize || 20,
             };
-            if (searchFormValues?.search) apiParams.search = searchFormValues.search;
+            const kw = mergeListKeyword(searchFormValues, 'search');
+            if (kw) apiParams.search = kw;
             if (searchFormValues?.type) apiParams.type = searchFormValues.type;
             if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
               apiParams.is_active = searchFormValues.is_active;

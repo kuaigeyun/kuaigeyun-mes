@@ -65,9 +65,14 @@ import {
 } from '../../../utils/financeListCore';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import MergeFinanceDocsModal, {
+  type MergeFinanceMode,
+  type MergeFinanceSourceRow,
+} from '../../../components/MergeFinanceDocsModal';
 
 const P = 'app.kuaicaiwu.receivable';
 const RECEIVABLE_RESOURCE = 'kuaicaiwu:receivable';
+const RECEIPT_RESOURCE = 'kuaicaiwu:receipt';
 const SALES_INVOICE_RESOURCE = 'kuaicaiwu:sales-invoice';
 
 type PullPreviewKind = 'sales_order' | 'sales_delivery';
@@ -100,6 +105,7 @@ const ReceivableList: React.FC = () => {
 
     const receivableAuditEnabled = useAuditRequired('receivable', false);
     const receivablePerms = useResourcePermissions(RECEIVABLE_RESOURCE);
+    const receiptPerms = useResourcePermissions(RECEIPT_RESOURCE);
     const salesInvoicePerms = useResourcePermissions(SALES_INVOICE_RESOURCE);
     const receivableAuditBatchHandlers = useMemo(
         () => createUniAuditBatchHandlers('receivable'),
@@ -109,10 +115,63 @@ const ReceivableList: React.FC = () => {
         () => tableRows.filter((row) => row.id != null && selectedRowKeys.includes(row.id)),
         [tableRows, selectedRowKeys],
     );
+    const [mergeModalOpen, setMergeModalOpen] = useState(false);
+    const [mergeMode, setMergeMode] = useState<MergeFinanceMode>('merge_receipt');
+    const [mergeSources, setMergeSources] = useState<MergeFinanceSourceRow[]>([]);
     const handleReceivableAuditBatchSuccess = () => {
         setSelectedRowKeys([]);
         actionRef.current?.reload();
     };
+
+    const openMergeModal = (mode: MergeFinanceMode) => {
+        const selected = selectedRecordsForBatch;
+        if (selected.length === 0) {
+            messageApi.warning(t('app.kuaicaiwu.mergeFinance.needSelection'));
+            return;
+        }
+        const partnerIds = new Set(selected.map((r) => Number(r.customer_id)));
+        if (partnerIds.size !== 1) {
+            messageApi.error(t('app.kuaicaiwu.mergeFinance.sameCustomerRequired'));
+            return;
+        }
+        const sources: MergeFinanceSourceRow[] = [];
+        for (const row of selected) {
+            const isInvoice = mode === 'merge_sales_invoice';
+            const available = isInvoice
+                ? Number(row.remaining_invoice_amount ?? row.total_amount ?? 0)
+                : Number(row.remaining_amount ?? 0);
+            const pushAllowed = isInvoice
+                ? row.capabilities?.push_sales_invoice?.allowed !== false
+                : row.capabilities?.push_receipt?.allowed !== false;
+            if (!(available > 0) || !pushAllowed) {
+                messageApi.error(
+                    t('app.kuaicaiwu.mergeFinance.sourceNotEligible', {
+                        code: row.receivable_code || row.id,
+                    }),
+                );
+                return;
+            }
+            sources.push({
+                id: Number(row.id),
+                code: String(row.receivable_code || row.id),
+                partnerId: Number(row.customer_id),
+                partnerName: String(row.customer_name || ''),
+                availableAmount: available,
+            });
+        }
+        setMergeMode(mode);
+        setMergeSources(sources);
+        setMergeModalOpen(true);
+    };
+
+    const mergeReceiptDisabled =
+        !receiptPerms.canCreate ||
+        selectedRecordsForBatch.length === 0 ||
+        new Set(selectedRecordsForBatch.map((r) => Number(r.customer_id))).size !== 1;
+    const mergeInvoiceDisabled =
+        !salesInvoicePerms.canCreate ||
+        selectedRecordsForBatch.length === 0 ||
+        new Set(selectedRecordsForBatch.map((r) => Number(r.customer_id))).size !== 1;
 
     const receivableImportTemplate = useMemo(
         () =>
@@ -821,6 +880,22 @@ const ReceivableList: React.FC = () => {
                         onSuccess={handleReceivableAuditBatchSuccess}
                         toolBarButtonSize="middle"
                     />,
+                    <Button
+                        key="merge-receipt"
+                        size="medium"
+                        disabled={mergeReceiptDisabled}
+                        onClick={() => openMergeModal('merge_receipt')}
+                    >
+                        {t('app.kuaicaiwu.mergeFinance.mergeReceipt')}
+                    </Button>,
+                    <Button
+                        key="merge-sales-invoice"
+                        size="medium"
+                        disabled={mergeInvoiceDisabled}
+                        onClick={() => openMergeModal('merge_sales_invoice')}
+                    >
+                        {t('app.kuaicaiwu.mergeFinance.mergeSalesInvoice')}
+                    </Button>,
                 ]}
                 showAdvancedSearch={true}
                 showImportButton
@@ -1149,6 +1224,17 @@ const ReceivableList: React.FC = () => {
                 <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
                 <DocumentAttachmentsField category="receivable_attachments" />
             </ModalForm>
+
+            <MergeFinanceDocsModal
+                open={mergeModalOpen}
+                mode={mergeMode}
+                sources={mergeSources}
+                onOpenChange={setMergeModalOpen}
+                onSuccess={() => {
+                    setSelectedRowKeys([]);
+                    actionRef.current?.reload();
+                }}
+            />
         </ListPageTemplate>
     );
 };

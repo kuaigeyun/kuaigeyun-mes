@@ -11,6 +11,7 @@ from datetime import datetime
 from tortoise.exceptions import IntegrityError
 
 from core.models.invitation_code import InvitationCode
+from core.utils.search_utils import apply_keyword_icontains
 from core.schemas.invitation_code import InvitationCodeCreate, InvitationCodeUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from core.utils.timezone_utils import resolve_business_datetime
@@ -113,7 +114,8 @@ class InvitationCodeService:
         tenant_id: int,
         skip: int = 0,
         limit: int = 100,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
     ) -> List[InvitationCode]:
         """
         获取邀请码列表
@@ -134,6 +136,8 @@ class InvitationCodeService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
+
+        query = apply_keyword_icontains(query, keyword, ["code", "email"])
         
         return await query.offset(skip).limit(limit).order_by("-created_at")
     

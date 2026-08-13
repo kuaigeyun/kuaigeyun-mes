@@ -84,6 +84,9 @@ interface ReworkOrder {
   status?: string;
   routing_mode?: string;
   verification_required?: boolean;
+  source_inspection_id?: number;
+  verification_inspection_id?: number;
+  verification_inspection_type?: 'process_inspection' | 'finished_goods_inspection' | string;
   capabilities?: Record<string, { allowed?: boolean; reason?: string }>;
   planned_start_date?: string;
   planned_end_date?: string;
@@ -561,6 +564,29 @@ const ReworkOrdersPage: React.FC = () => {
             onClick={() => void handleRequestComplete(record)}
           >
             {t('app.kuaizhizao.reworkOrder.actionRequestComplete')}
+          </Button>
+        ) : null,
+        String(record.status || '') === 'pending_verification' &&
+        record.verification_inspection_id ? (
+          <Button
+            key="go-verify"
+            {...rowActionKind('execute')}
+            onClick={() => {
+              const kind =
+                record.verification_inspection_type ||
+                (record.source_inspection_id ? 'finished_goods_inspection' : 'process_inspection');
+              if (kind === 'finished_goods_inspection') {
+                navigate(
+                  `/apps/kuaizhizao/quality-management/finished-goods-inspection?finished_goods_inspection_id=${record.verification_inspection_id}`,
+                );
+              } else {
+                navigate(
+                  `/apps/kuaizhizao/quality-management/process-inspection?process_inspection_id=${record.verification_inspection_id}`,
+                );
+              }
+            }}
+          >
+            {t('app.kuaizhizao.reworkOrder.actionGoVerification')}
           </Button>
         ) : null,
         reworkCapabilityAllowed(record, 'quality_release') ? (
@@ -1849,6 +1875,37 @@ const ReworkOrdersPage: React.FC = () => {
                     render: () => (
                       <Button type="link" size="small" onClick={() => void handleRequestComplete(detail)}>
                         {t('app.kuaizhizao.reworkOrder.actionRequestComplete')}
+                      </Button>
+                    ),
+                  },
+                  {
+                    key: 'go-verify',
+                    visible:
+                      String(detail.status || '') === 'pending_verification' &&
+                      Boolean(detail.verification_inspection_id),
+                    render: () => (
+                      <Button
+                        type="link"
+                        size="small"
+                        onClick={() => {
+                          setDetailDrawerVisible(false);
+                          const kind =
+                            detail.verification_inspection_type ||
+                            (detail.source_inspection_id
+                              ? 'finished_goods_inspection'
+                              : 'process_inspection');
+                          if (kind === 'finished_goods_inspection') {
+                            navigate(
+                              `/apps/kuaizhizao/quality-management/finished-goods-inspection?finished_goods_inspection_id=${detail.verification_inspection_id}`,
+                            );
+                          } else {
+                            navigate(
+                              `/apps/kuaizhizao/quality-management/process-inspection?process_inspection_id=${detail.verification_inspection_id}`,
+                            );
+                          }
+                        }}
+                      >
+                        {t('app.kuaizhizao.reworkOrder.actionGoVerification')}
                       </Button>
                     ),
                   },

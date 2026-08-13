@@ -259,6 +259,7 @@ class UserService:
                     "id": user.id,
                     "uuid": user.uuid,
                     "username": user.username,
+                    "avatar": user.avatar,
                     "email": user.email,
                     "full_name": user.full_name,
                     "phone": user.phone,

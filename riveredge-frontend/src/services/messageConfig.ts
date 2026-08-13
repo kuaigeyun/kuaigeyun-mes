@@ -26,6 +26,7 @@ export interface MessageConfigListParams {
   limit?: number;
   type?: string;
   is_active?: boolean;
+  keyword?: string;
 }
 
 export interface CreateMessageConfigData {

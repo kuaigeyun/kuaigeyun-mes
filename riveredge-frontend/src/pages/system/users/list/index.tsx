@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography, theme } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
-import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag } from '../../utils/systemListPresentation';
+import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag, SystemUserAvatar } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { flushDrawerOpen, DRAWER_CONFIG, ListPageTemplate } from '../../../../components/layout-templates';
@@ -453,6 +453,24 @@ const UserListPage: React.FC = () => {
    */
   const columns: ProColumns<User>[] = React.useMemo(() => alignProColumns([
     {
+      title: t('field.user.avatar'),
+      key: 'avatar',
+      dataIndex: 'avatar',
+      width: 56,
+      minWidth: 56,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      fixed: 'left',
+      render: (_, record) => (
+        <SystemUserAvatar
+          avatarUuid={record.avatar}
+          fullName={record.full_name}
+          username={record.username}
+        />
+      ),
+    },
+    {
       title: t('field.user.username'),
       dataIndex: 'username',
       width: 150,
@@ -704,7 +722,7 @@ const UserListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<User>
-        columnPersistenceId="pages.system.users.list-v1"
+        columnPersistenceId="pages.system.users.list-v2"
         actionRef={actionRef}
         columns={columns}
         request={async (params, _, __, searchFormValues) => {

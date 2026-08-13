@@ -130,8 +130,15 @@ class PayableService(AppBaseService[Payable]):
             operation_content=content,
         )
 
-    async def create_payable(self, tenant_id: int, payable_data: PayableCreate, created_by: int) -> PayableResponse:
-        """创建应付单"""
+    async def create_payable(
+        self,
+        tenant_id: int,
+        payable_data: PayableCreate,
+        created_by: int,
+        *,
+        submit_review: bool = True,
+    ) -> PayableResponse:
+        """创建应付单。外层已有事务时须 submit_review=False，由调用方在提交后审核。"""
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "payable")
         if not is_enabled:
             raise BusinessLogicError("应付账款节点未启用，无法创建应付单")
@@ -149,9 +156,10 @@ class PayableService(AppBaseService[Payable]):
         for attempt in range(5):
             try:
                 created_id: Optional[int] = None
+                code = await self.generate_code(
+                    tenant_id, "PAYABLE_CODE", prefix=f"PY{today_site_str()}"
+                )
                 async with in_transaction():
-                    today = today_site_str()
-                    code = await self.generate_code(tenant_id, "PAYABLE_CODE", prefix=f"PY{today}")
                     payable = await Payable.create(
                         tenant_id=tenant_id,
                         payable_code=code,
@@ -188,16 +196,17 @@ class PayableService(AppBaseService[Payable]):
                         payload={"status": payable.status},
                     )
                     created_id = payable.id
-                from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
+                if submit_review:
+                    from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
 
-                await submit_finance_review(
-                    model=Payable,
-                    tenant_id=tenant_id,
-                    doc_id=int(created_id),
-                    updated_by=created_by,
-                    doc_label="应付单",
-                    node_key="payable",
-                )
+                    await submit_finance_review(
+                        model=Payable,
+                        tenant_id=tenant_id,
+                        doc_id=int(created_id),
+                        updated_by=created_by,
+                        doc_label="应付单",
+                        node_key="payable",
+                    )
                 return await self.get_payable_by_id(tenant_id, int(created_id))
             except IntegrityError as e:
                 last_error = e
@@ -352,16 +361,15 @@ class PayableService(AppBaseService[Payable]):
     async def submit_payable(self, tenant_id: int, payable_id: int, submitted_by: int) -> PayableResponse:
         from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
 
-        async with in_transaction():
-            await submit_finance_review(
-                model=Payable,
-                tenant_id=tenant_id,
-                doc_id=payable_id,
-                updated_by=submitted_by,
-                doc_label="应付单",
-                node_key="payable",
-            )
-            return await self.get_payable_by_id(tenant_id, payable_id)
+        await submit_finance_review(
+            model=Payable,
+            tenant_id=tenant_id,
+            doc_id=payable_id,
+            updated_by=submitted_by,
+            doc_label="应付单",
+            node_key="payable",
+        )
+        return await self.get_payable_by_id(tenant_id, payable_id)
 
     async def withdraw_payable(self, tenant_id: int, payable_id: int, withdrawn_by: int) -> PayableResponse:
         from apps.kuaicaiwu.services.finance_audit_workflow import withdraw_finance_review
@@ -506,16 +514,19 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
         created_by: int,
         *,
         skip_legacy_amount_gate: bool = False,
+        submit_review: bool = True,
+        invoice_code: Optional[str] = None,
     ) -> PurchaseInvoiceResponse:
-        """创建采购发票"""
+        """创建采购发票。外层已有事务时须 submit_review=False，编码须在事务外生成。"""
         created_id: Optional[int] = None
+        auto_payable_id: Optional[int] = None
+        if not skip_legacy_amount_gate:
+            await self._validate_purchase_invoice_amount_gate(tenant_id=tenant_id, invoice_data=invoice_data)
+        user_info = await self.get_user_info(created_by)
+        code = (invoice_code or "").strip() or await self.generate_code(
+            tenant_id, "PURCHASE_INVOICE_CODE", prefix=f"PI{today_site_str()}"
+        )
         async with in_transaction():
-            if not skip_legacy_amount_gate:
-                await self._validate_purchase_invoice_amount_gate(tenant_id=tenant_id, invoice_data=invoice_data)
-            user_info = await self.get_user_info(created_by)
-            today = today_site_str()
-            code = await self.generate_code(tenant_id, "PURCHASE_INVOICE_CODE", prefix=f"PI{today}")
-
             from apps.kuaicaiwu.services.finance_tax import compute_tax_from_excluding
 
             payload = invoice_data.model_dump(
@@ -569,22 +580,32 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 source_doc_id=event_source_id,
                 payload={"status": invoice.status},
             )
-            await self._maybe_auto_generate_payable_for_purchase_invoice(
+            auto_payable_id = await self._maybe_auto_generate_payable_for_purchase_invoice(
                 tenant_id=tenant_id,
                 invoice=invoice,
                 created_by=created_by,
             )
             created_id = invoice.id
-        from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
+        if submit_review:
+            from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
 
-        await submit_finance_review(
-            model=PurchaseInvoice,
-            tenant_id=tenant_id,
-            doc_id=int(created_id),
-            updated_by=created_by,
-            doc_label="采购发票",
-            node_key="purchase_invoice",
-        )
+            if auto_payable_id:
+                await submit_finance_review(
+                    model=Payable,
+                    tenant_id=tenant_id,
+                    doc_id=int(auto_payable_id),
+                    updated_by=created_by,
+                    doc_label="应付单",
+                    node_key="payable",
+                )
+            await submit_finance_review(
+                model=PurchaseInvoice,
+                tenant_id=tenant_id,
+                doc_id=int(created_id),
+                updated_by=created_by,
+                doc_label="采购发票",
+                node_key="purchase_invoice",
+            )
         return await self.get_purchase_invoice_by_id(tenant_id, int(created_id))
 
     async def _maybe_auto_generate_payable_for_purchase_invoice(
@@ -593,21 +614,21 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
         tenant_id: int,
         invoice: PurchaseInvoice,
         created_by: int,
-    ) -> None:
+    ) -> Optional[int]:
         if invoice.payable_id:
-            return
+            return None
         _sup_id = getattr(invoice, "supplier_id", None)
         if not await self.business_config_service.should_auto_generate_payable_from_purchase_invoice_effective(
             tenant_id, int(_sup_id) if _sup_id is not None else None
         ):
-            return
+            return None
         if not await self.business_config_service.check_node_enabled(tenant_id, "payable"):
-            return
+            return None
 
         payable_service = PayableService()
         from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
 
-        biz_date = invoice.invoice_date or date.today()
+        biz_date = invoice.invoice_date or to_site_date(resolve_business_datetime())
         due = await resolve_partner_due_date(
             tenant_id, "supplier", int(invoice.supplier_id), biz_date
         )
@@ -629,6 +650,7 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 invoice_number=invoice.invoice_number,
             ),
             created_by=created_by,
+            submit_review=False,
         )
         await PurchaseInvoice.filter(tenant_id=tenant_id, id=invoice.id).update(
             payable_id=payable.id,
@@ -660,6 +682,7 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
             )
         except Exception as rel_e:
             logger.warning("创建采购发票→应付单 单据关联失败: {}", rel_e)
+        return int(payable.id)
 
     async def get_purchase_invoice_by_id(self, tenant_id: int, invoice_id: int) -> PurchaseInvoiceResponse:
         """根据ID获取采购发票"""
@@ -747,16 +770,15 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
     async def submit_invoice(self, tenant_id: int, invoice_id: int, submitted_by: int) -> PurchaseInvoiceResponse:
         from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
 
-        async with in_transaction():
-            await submit_finance_review(
-                model=PurchaseInvoice,
-                tenant_id=tenant_id,
-                doc_id=invoice_id,
-                updated_by=submitted_by,
-                doc_label="采购发票",
-                node_key="purchase_invoice",
-            )
-            return await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
+        await submit_finance_review(
+            model=PurchaseInvoice,
+            tenant_id=tenant_id,
+            doc_id=invoice_id,
+            updated_by=submitted_by,
+            doc_label="采购发票",
+            node_key="purchase_invoice",
+        )
+        return await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
 
     async def withdraw_invoice(self, tenant_id: int, invoice_id: int, withdrawn_by: int) -> PurchaseInvoiceResponse:
         from apps.kuaicaiwu.services.finance_audit_workflow import withdraw_finance_review
@@ -834,8 +856,15 @@ class ReceivableService(AppBaseService[Receivable]):
             operation_content=content,
         )
 
-    async def create_receivable(self, tenant_id: int, receivable_data: ReceivableCreate, created_by: int) -> ReceivableResponse:
-        """创建应收单"""
+    async def create_receivable(
+        self,
+        tenant_id: int,
+        receivable_data: ReceivableCreate,
+        created_by: int,
+        *,
+        submit_review: bool = True,
+    ) -> ReceivableResponse:
+        """创建应收单。外层已有事务时须 submit_review=False，由调用方在提交后审核。"""
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "receivable")
         if not is_enabled:
             raise BusinessLogicError("应收账款节点未启用，无法创建应收单")
@@ -853,9 +882,10 @@ class ReceivableService(AppBaseService[Receivable]):
         for attempt in range(5):
             try:
                 created_id: Optional[int] = None
+                code = await self.generate_code(
+                    tenant_id, "RECEIVABLE_CODE", prefix=f"YS{today_site_str()}"
+                )
                 async with in_transaction():
-                    today = today_site_str()
-                    code = await self.generate_code(tenant_id, "RECEIVABLE_CODE", prefix=f"YS{today}")
                     receivable = await Receivable.create(
                         tenant_id=tenant_id,
                         receivable_code=code,
@@ -892,16 +922,17 @@ class ReceivableService(AppBaseService[Receivable]):
                         payload={"status": receivable.status},
                     )
                     created_id = receivable.id
-                from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
+                if submit_review:
+                    from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
 
-                await submit_finance_review(
-                    model=Receivable,
-                    tenant_id=tenant_id,
-                    doc_id=int(created_id),
-                    updated_by=created_by,
-                    doc_label="应收单",
-                    node_key="receivable",
-                )
+                    await submit_finance_review(
+                        model=Receivable,
+                        tenant_id=tenant_id,
+                        doc_id=int(created_id),
+                        updated_by=created_by,
+                        doc_label="应收单",
+                        node_key="receivable",
+                    )
                 return await self.get_receivable_by_id(tenant_id, int(created_id))
             except IntegrityError as e:
                 last_error = e
@@ -1044,16 +1075,15 @@ class ReceivableService(AppBaseService[Receivable]):
     async def submit_receivable(self, tenant_id: int, receivable_id: int, submitted_by: int) -> ReceivableResponse:
         from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
 
-        async with in_transaction():
-            await submit_finance_review(
-                model=Receivable,
-                tenant_id=tenant_id,
-                doc_id=receivable_id,
-                updated_by=submitted_by,
-                doc_label="应收单",
-                node_key="receivable",
-            )
-            return await self.get_receivable_by_id(tenant_id, receivable_id)
+        await submit_finance_review(
+            model=Receivable,
+            tenant_id=tenant_id,
+            doc_id=receivable_id,
+            updated_by=submitted_by,
+            doc_label="应收单",
+            node_key="receivable",
+        )
+        return await self.get_receivable_by_id(tenant_id, receivable_id)
 
     async def withdraw_receivable(self, tenant_id: int, receivable_id: int, withdrawn_by: int) -> ReceivableResponse:
         from apps.kuaicaiwu.services.finance_audit_workflow import withdraw_finance_review

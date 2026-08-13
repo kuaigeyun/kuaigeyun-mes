@@ -59,6 +59,7 @@ async def list_invitation_codes(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（邀请码、邮箱）"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
@@ -79,7 +80,8 @@ async def list_invitation_codes(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
-        is_active=is_active
+        is_active=is_active,
+        keyword=keyword,
     )
     return [InvitationCodeResponse.model_validate(c) for c in codes]
 

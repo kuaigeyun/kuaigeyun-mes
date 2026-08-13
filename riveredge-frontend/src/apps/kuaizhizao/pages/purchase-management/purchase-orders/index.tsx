@@ -415,12 +415,6 @@ const PurchaseOrdersPage: React.FC = () => {
   useEffect(() => {
     dataViewModeRef.current = dataViewMode;
   }, [dataViewMode]);
-  const lastOrdersCacheRef = useRef<{
-    orders: PurchaseOrder[];
-    total: number;
-    baseParamsKey: string;
-    includeItems: boolean;
-  } | null>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
 
   const materialUnitImport = useImportMaterialUnitOptions();
@@ -3683,23 +3677,6 @@ const PurchaseOrdersPage: React.FC = () => {
                   : apiParams.created_start_date;
               }
               apiParams.include_items = dataViewModeRef.current === 'detail';
-              const baseParamsKey = JSON.stringify({
-                skip: apiParams.skip,
-                limit: apiParams.limit,
-                status: apiParams.status,
-                review_status: apiParams.review_status,
-                supplier_id: apiParams.supplier_id,
-                order_code: apiParams.order_code,
-                keyword: apiParams.keyword,
-                order_date_from: apiParams.order_date_from,
-                order_date_to: apiParams.order_date_to,
-                delivery_date_from: apiParams.delivery_date_from,
-                delivery_date_to: apiParams.delivery_date_to,
-                created_start_date: apiParams.created_start_date,
-                created_end_date: apiParams.created_end_date,
-                order_by: apiParams.order_by,
-              });
-              const needItems = apiParams.include_items === true;
 
               const toFlatRows = (orders: PurchaseOrder[]): PurchaseOrderItemRow[] => {
                 const flatRows: PurchaseOrderItemRow[] = [];
@@ -3764,25 +3741,11 @@ const PurchaseOrdersPage: React.FC = () => {
                 return { data: toFlatRows(orders), success: true, total };
               };
 
-              const cached = lastOrdersCacheRef.current;
-              if (cached && cached.baseParamsKey === baseParamsKey) {
-                const canServeFromCache = needItems ? cached.includeItems : true;
-                if (canServeFromCache) {
-                  return formatListResponse(cached.orders, cached.total);
-                }
-              }
-
               const response = await listPurchaseOrders(
                 apiParams as Parameters<typeof listPurchaseOrders>[0],
               );
               const orders = response.data || [];
               const total = response.total || 0;
-              lastOrdersCacheRef.current = {
-                orders,
-                total,
-                baseParamsKey,
-                includeItems: needItems,
-              };
               return formatListResponse(orders, total);
             } catch (error) {
               messageApi.error(t('app.kuaizhizao.purchaseOrder.listFailed'));

@@ -273,6 +273,8 @@ class OutboundHubCapabilities(BaseModel):
     confirm: ActionCapability
     withdraw: ActionCapability
     print: ActionCapability
+    delete: ActionCapability
+    update: ActionCapability
 
 
 class CustomerMaterialRegistrationCapabilities(BaseModel):
@@ -616,10 +618,18 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "customer_material.cancel.not_pending": "仅待入库状态可取消",
     "customer_material.delete.not_pending": "仅待入库状态可删除",
     "outbound_hub.confirm.not_pending": "当前状态不可确认出库",
-    "outbound_hub.confirm.pending_audit": "领料单待审核，通过后方可确认出库",
+    "outbound_hub.confirm.pending_audit": "单据待审核，通过后方可确认出库",
     "outbound_hub.confirm.outsource_issue": "委外发料不支持在此确认",
     "outbound_hub.withdraw.not_posted": "当前状态不可撤回出库",
     "outbound_hub.withdraw.outsource_issue": "委外发料不支持撤回",
+    "outbound_hub.delete.not_allowed": "当前状态不可删除出库单",
+    "outbound_hub.delete.audited": "已审核通过，请先撤销审核后再删除",
+    "outbound_hub.delete.posted": "已出库单据不可删除，请先撤回出库",
+    "outbound_hub.delete.outsource_issue": "委外发料不支持在此删除",
+    "outbound_hub.update.not_allowed": "当前状态不可编辑",
+    "outbound_hub.update.posted": "已领料/已出库单据不可编辑，请先撤回",
+    "outbound_hub.update.outsource_issue": "委外发料不支持在此编辑",
+    "outbound_hub.update.production_picking_only": "当前仅支持编辑生产领料单",
     "inventory_alert.handle.already_handled": "该预警已处理，无法再次标记",
     "replenishment_suggestion.process.not_pending": "仅待处理状态的补货建议可处理",
     "replenishment_suggestion.push.not_pending": "仅待处理状态的补货建议可下推",

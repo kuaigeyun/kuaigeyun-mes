@@ -591,6 +591,13 @@ const PartnerStatementsPage: React.FC = () => {
 
           {preview ? (
             <>
+              {Number(preview.excluded_from_period || 0) > 0 ? (
+                <Alert
+                  type="info"
+                  showIcon
+                  title={t(`${PS}.excludedStatedHint`, { count: preview.excluded_from_period })}
+                />
+              ) : null}
               <Descriptions size="small" bordered column={4}>
                 <Descriptions.Item label={t(`${PS}.col.partner`)}>{preview.partner_name}</Descriptions.Item>
                 <Descriptions.Item label={t(`${PS}.col.periodRange`)}>

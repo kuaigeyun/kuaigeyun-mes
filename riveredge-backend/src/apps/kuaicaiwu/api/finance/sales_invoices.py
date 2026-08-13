@@ -30,6 +30,7 @@ from apps.kuaicaiwu.models.invoice import Invoice, InvoiceItem
 from apps.kuaicaiwu.models.receivable import Receivable
 from apps.kuaicaiwu.constants import RECEIVABLE_SOURCE_SALES_INVOICE
 from apps.kuaicaiwu.services.finance_service import ReceivableService
+from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
 from apps.kuaicaiwu.services.invoice_service import InvoiceService
 from apps.kuaicaiwu.services.invoice_concurrent_settlement import (
     create_concurrent_receipt_for_receivable,
@@ -42,7 +43,7 @@ from core.services.authorization.permission_policy_service import PermissionPoli
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.services.business_config_service import BusinessConfigService
-from core.utils.timezone_utils import resolve_business_datetime, today_site_str
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
 
 router = APIRouter(prefix="/sales-invoices", tags=["App - Kuaicaiwu - Finance"])
 business_config_service = BusinessConfigService()
@@ -196,7 +197,7 @@ async def _maybe_auto_generate_receivable_for_sales_invoice(
 
     from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
 
-    biz_date = invoice.invoice_date or date.today()
+    biz_date = invoice.invoice_date or to_site_date(resolve_business_datetime())
     due = await resolve_partner_due_date(
         tenant_id, "customer", int(invoice.partner_id), biz_date
     )
@@ -218,6 +219,7 @@ async def _maybe_auto_generate_receivable_for_sales_invoice(
             invoice_number=invoice.invoice_number,
         ),
         created_by=created_by,
+        submit_review=False,
     )
     await Invoice.filter(tenant_id=tenant_id, id=invoice.id).update(
         receivable_id=receivable.id,
@@ -328,6 +330,7 @@ async def create_sales_invoice(
             "status": "未审核",
         }
         apply_create_audit(create_payload, current_user)
+        auto_receivable_id: Optional[int] = None
         async with in_transaction():
             invoice = await Invoice.create(**create_payload)
             if pull_preview and data.source_type and data.source_id:
@@ -362,11 +365,20 @@ async def create_sales_invoice(
                         current_user=current_user,
                     )
             elif not (pull_preview and str(data.source_type or "").strip() == "receivable"):
-                await _maybe_auto_generate_receivable_for_sales_invoice(
+                auto_receivable_id, _ = await _maybe_auto_generate_receivable_for_sales_invoice(
                     tenant_id=tenant_id,
                     invoice=invoice,
                     created_by=current_user.id,
                 )
+        if auto_receivable_id:
+            await submit_finance_review(
+                model=Receivable,
+                tenant_id=tenant_id,
+                doc_id=int(auto_receivable_id),
+                updated_by=current_user.id,
+                doc_label="应收单",
+                node_key="receivable",
+            )
         invoice = await _get_or_404(tenant_id, invoice.id)
         return await _serialize(tenant_id, current_user.id, invoice)
     except BusinessLogicError as e:

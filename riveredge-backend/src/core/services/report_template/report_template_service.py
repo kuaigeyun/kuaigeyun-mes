@@ -11,6 +11,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 from core.models.report_template import ReportTemplate
+from core.utils.search_utils import apply_keyword_icontains
 from core.models.integration_config import IntegrationConfig
 from core.schemas.report import (
     ReportTemplateCreate,
@@ -112,6 +113,7 @@ class ReportTemplateService(BaseService):
         type: Optional[str] = None,
         category: Optional[str] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
     ) -> List[ReportTemplateListResponse]:
@@ -137,6 +139,8 @@ class ReportTemplateService(BaseService):
             query = query.filter(category=category)
         if status:
             query = query.filter(status=status)
+
+        query = apply_keyword_icontains(query, keyword, ["name", "code", "description"])
 
         templates = await query.order_by('-created_at').offset(skip).limit(limit)
         return [ReportTemplateListResponse.model_validate(t) for t in templates]

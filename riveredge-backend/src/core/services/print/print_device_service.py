@@ -12,6 +12,7 @@ import socket
 from tortoise.exceptions import IntegrityError
 
 from core.models.print_device import PrintDevice
+from core.utils.search_utils import apply_keyword_icontains
 from core.models.print_template import PrintTemplate
 from core.schemas.print_device import (
     PrintDeviceCreate,
@@ -96,7 +97,8 @@ class PrintDeviceService:
         skip: int = 0,
         limit: int = 100,
         type: Optional[str] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
     ) -> List[PrintDevice]:
         """
         获取打印设备列表
@@ -121,6 +123,8 @@ class PrintDeviceService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
+
+        query = apply_keyword_icontains(query, keyword, ["name", "code", "description"])
         
         return await query.order_by("-created_at").offset(skip).limit(limit).all()
     

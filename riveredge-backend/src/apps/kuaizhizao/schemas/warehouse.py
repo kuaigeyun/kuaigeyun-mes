@@ -46,9 +46,24 @@ class ProductionPickingCreate(ProductionPickingBase):
     pass
 
 
-class ProductionPickingUpdate(ProductionPickingBase):
-    """生产领料单更新schema"""
-    picking_code: Optional[str] = Field(None, max_length=50, description="领料单编码")
+class ProductionPickingItemEditLine(BaseSchema):
+    """生产领料单明细编辑行（确认领料前）"""
+    id: int = Field(..., description="明细ID")
+    required_quantity: Optional[float] = Field(None, gt=0, description="应领数量")
+    warehouse_id: Optional[int] = Field(None, description="出库仓库ID")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="出库仓库名称")
+    batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
+    notes: Optional[str] = Field(None, description="明细备注")
+
+
+class ProductionPickingUpdate(BaseSchema):
+    """生产领料单更新（确认领料前可改备注/领料人/明细数量与仓库）"""
+    notes: Optional[str] = Field(None, description="备注")
+    picker_id: Optional[int] = Field(None, description="领料人ID")
+    picker_name: Optional[str] = Field(None, max_length=100, description="领料人姓名")
+    workshop_id: Optional[int] = Field(None, description="车间ID")
+    workshop_name: Optional[str] = Field(None, max_length=100, description="车间名称")
+    items: Optional[List[ProductionPickingItemEditLine]] = Field(None, description="明细编辑行")
 
 
 class ProductionPickingResponse(ProductionPickingBase):

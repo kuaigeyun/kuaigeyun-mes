@@ -73,6 +73,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   invoice_code: 10,
   account_code: 10,
   statement_code: 10,
+  /** 系统配置：账户头像（用户名左侧） */
+  avatar: 9.5,
   /** 系统配置：账户/应用/字典等编码列 */
   username: 10,
   account: 10,

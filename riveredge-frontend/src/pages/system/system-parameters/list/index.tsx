@@ -37,6 +37,7 @@ import {
   UpdateSystemParameterData,
 } from '../../../../services/systemParameter';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { mergeListKeyword } from '../../../../utils/tableQueryKey';
 
 /**
  * 系统参数管理列表页面组件
@@ -638,9 +639,10 @@ const SystemParameterListPage: React.FC = () => {
               apiParams.type = searchFormValues.type;
             }
             
-            // 搜索条件处理：key 使用模糊搜索
-            if (searchFormValues?.key) {
-              apiParams.key = searchFormValues.key as string;
+            // 搜索条件：顶栏模糊词 + 高级搜索 key
+            const keyword = mergeListKeyword(searchFormValues, 'key');
+            if (keyword) {
+              apiParams.keyword = keyword;
             }
             
             try {

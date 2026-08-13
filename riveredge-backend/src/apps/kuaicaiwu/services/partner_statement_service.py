@@ -40,6 +40,18 @@ _APPROVED_REVIEW = ("已审核",)
 _EXCLUDED_REVIEW = ("待审核", "驳回")
 _MONEY = Decimal("0.01")
 
+# 对账单行 doc_type → 稳定族，用于「已纳入其它对账单」去重
+_DOC_TYPE_FAMILY: Dict[str, str] = {
+    "应收单": "receivable",
+    "销售退货": "receivable",
+    "收款单": "receipt",
+    "收款退款": "receipt",
+    "应付单": "payable",
+    "采购退货": "payable",
+    "付款单": "payment",
+    "付款退款": "payment",
+}
+
 
 def _q_money(value: Decimal | float | int | str) -> Decimal:
     return Decimal(str(value or 0)).quantize(_MONEY)
@@ -47,6 +59,18 @@ def _q_money(value: Decimal | float | int | str) -> Decimal:
 
 def _is_refund_voucher(settlement_type: Optional[str], total_amount: Decimal) -> bool:
     return (settlement_type or "normal") == "refund" or total_amount < 0
+
+
+def _line_doc_key(doc_type: Any, doc_id: Any) -> Optional[Tuple[str, int]]:
+    if doc_id is None:
+        return None
+    family = _DOC_TYPE_FAMILY.get(str(doc_type or "").strip())
+    if not family:
+        return None
+    try:
+        return family, int(doc_id)
+    except (TypeError, ValueError):
+        return None
 
 
 def _abs_money(value: Decimal | float | int | str) -> Decimal:
@@ -549,6 +573,49 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             result.append(row)
         return _q_money(debit_total), _q_money(credit_total), balance, result
 
+    async def _load_stated_doc_keys(
+        self,
+        tenant_id: int,
+        partner_id: int,
+        partner_type: str,
+    ) -> set[Tuple[str, int]]:
+        """已出现在该往来任意未删除对账单明细中的单据键（族, id）。"""
+        rows = await PartnerStatement.filter(
+            tenant_id=tenant_id,
+            partner_id=partner_id,
+            partner_type=partner_type,
+            deleted_at__isnull=True,
+        ).only("id", "transaction_details").all()
+        keys: set[Tuple[str, int]] = set()
+        for stmt in rows:
+            details = stmt.transaction_details or {}
+            for ln in details.get("lines") or []:
+                key = _line_doc_key(ln.get("doc_type"), ln.get("doc_id"))
+                if key:
+                    keys.add(key)
+        return keys
+
+    def _filter_unstated_lines(
+        self,
+        lines: List[Dict[str, Any]],
+        stated_keys: set[Tuple[str, int]],
+    ) -> Tuple[List[Dict[str, Any]], Decimal]:
+        """
+        剔除已对账单据；返回剩余行，以及已剔除行对余额的净影响（借-贷），
+        用于把已对账发生额并入本期预览的期初，避免余额断层。
+        """
+        if not stated_keys:
+            return lines, Decimal("0.00")
+        remaining: List[Dict[str, Any]] = []
+        excluded_net = Decimal("0.00")
+        for ln in lines:
+            key = _line_doc_key(ln.get("doc_type"), ln.get("doc_id"))
+            if key and key in stated_keys:
+                excluded_net += _q_money(ln.get("debit", 0)) - _q_money(ln.get("credit", 0))
+                continue
+            remaining.append(ln)
+        return remaining, _q_money(excluded_net)
+
     async def preview_statement(
         self,
         tenant_id: int,
@@ -564,6 +631,12 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         raw_lines = await self._collect_period_raw_lines(
             tenant_id, partner_id, partner_type, start_date, end_date
         )
+        stated_keys = await self._load_stated_doc_keys(tenant_id, partner_id, partner_type)
+        before_count = len(raw_lines)
+        raw_lines, excluded_net = self._filter_unstated_lines(raw_lines, stated_keys)
+        excluded_from_period = before_count - len(raw_lines)
+        # 已纳入其它对账单的本期发生额并入期初，剩余行续算余额
+        opening = _q_money(opening + excluded_net)
         debit_total, credit_total, closing, lines = self._apply_running_balance(opening, raw_lines)
         company_name = await self._get_tenant_company_name(tenant_id)
         balance_label = "应收余额" if partner_type == "Customer" else "应付余额"
@@ -583,6 +656,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             },
             "lines": lines,
             "partner_snapshot": partner,
+            "excluded_from_period": excluded_from_period,
         }
 
     async def _generate_statement_code(self, tenant_id: int) -> str:
@@ -612,22 +686,27 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             period_label = period
             stmt_period = period
 
-        exists = await PartnerStatement.get_or_none(
-            tenant_id=tenant_id,
-            partner_id=partner_id,
-            partner_type=partner_type,
-            start_date=start_date,
-            end_date=end_date,
-            deleted_at__isnull=True,
-        )
-        if exists:
-            raise BusinessLogicError(
-                f"该往来单位在 {period_label} 已存在对账单 {exists.statement_code}，请勿重复生成"
-            )
-
         preview = await self.preview_statement(
             tenant_id, partner_id, partner_type, start_date, end_date
         )
+        if not (preview.get("lines") or []):
+            exists = await PartnerStatement.get_or_none(
+                tenant_id=tenant_id,
+                partner_id=partner_id,
+                partner_type=partner_type,
+                start_date=start_date,
+                end_date=end_date,
+                deleted_at__isnull=True,
+            )
+            if exists:
+                raise BusinessLogicError(
+                    f"该往来单位在 {period_label} 的单据已全部纳入对账单 "
+                    f"{exists.statement_code}，没有可再生成的明细"
+                )
+            raise BusinessLogicError(
+                f"该往来单位在 {period_label} 没有可纳入对账单的已审核应收/应付或已确认收/付款"
+            )
+
         code = await self._generate_statement_code(tenant_id)
         company_name = preview["company_name"]
         summary = preview["summary"]

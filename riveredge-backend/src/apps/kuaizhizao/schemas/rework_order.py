@@ -137,6 +137,10 @@ class ReworkOrderResponse(ReworkOrderBase):
     closed_by_name: Optional[str] = Field(None, description="关闭人")
     source_inspection_id: Optional[int] = Field(None, description="来源检验单 ID")
     verification_inspection_id: Optional[int] = Field(None, description="复检单 ID")
+    verification_inspection_type: Optional[str] = Field(
+        None,
+        description="复检单类型：process_inspection（工序）/ finished_goods_inspection（成品）",
+    )
     cost: Decimal = Field(Decimal("0"), description="返工成本")
     created_by: Optional[int] = Field(None, description="创建人ID")
     created_by_name: Optional[str] = Field(None, description="创建人姓名")

@@ -20,6 +20,7 @@ from core.models.approval_history import ApprovalHistory
 from tortoise.exceptions import IntegrityError
 
 from core.models.approval_instance import ApprovalInstance
+from core.utils.search_utils import apply_keyword_icontains
 from core.models.approval_process import ApprovalProcess
 from core.models.approval_task import ApprovalTask
 from core.models.department import Department
@@ -904,7 +905,8 @@ class ApprovalInstanceService:
         limit: int = 100,
         status: Optional[str] = None,
         submitter_id: Optional[int] = None,
-        current_approver_id: Optional[int] = None
+        current_approver_id: Optional[int] = None,
+        keyword: Optional[str] = None,
     ) -> List[ApprovalInstance]:
         """
         获取审批实例列表
@@ -933,6 +935,8 @@ class ApprovalInstanceService:
         
         if current_approver_id:
             query = query.filter(current_approver_id=current_approver_id)
+
+        query = apply_keyword_icontains(query, keyword, ["title", "content", "current_node"])
         
         return await query.prefetch_related("process").order_by("-created_at").offset(skip).limit(limit).all()
     

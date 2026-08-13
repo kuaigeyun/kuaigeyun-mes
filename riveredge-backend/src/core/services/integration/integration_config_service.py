@@ -1669,6 +1669,21 @@ class IntegrationConfigService:
         raise ValueError("无法连接到配置的 API 地址，请检查 base_url 和认证信息")
 
     @staticmethod
+    def _coerce_config_bool(value: Any, default: bool = False) -> bool:
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value != 0
+        text = str(value).strip().lower()
+        if text in ("1", "true", "yes", "y", "on"):
+            return True
+        if text in ("0", "false", "no", "n", "off", ""):
+            return False
+        return default
+
+    @staticmethod
     def _build_object_storage_probe_url(storage_type: str, config: Dict[str, Any]) -> str:
         """根据 endpoint / region / bucket 构造探测 URL。"""
         endpoint = str(config.get("endpoint") or "").strip().rstrip("/")
@@ -1692,6 +1707,27 @@ class IntegrationConfigService:
                     return endpoint if endpoint.startswith("http") else f"https://{endpoint}"
                 return f"https://{endpoint}"
             return f"https://{bucket}.cos.{region}.myqcloud.com"
+
+        if storage_type == "minio":
+            # MinIO：use_ssl=true 强制 HTTPS；裸 host 按开关补全 scheme（避免 HTTP 服务被误拼 https 导致 WRONG_VERSION_NUMBER）
+            use_ssl = IntegrationConfigService._coerce_config_bool(config.get("use_ssl"), default=True)
+            if not endpoint:
+                raise ValueError("请填写 MinIO Endpoint（如 minio.example.com:9000）")
+            if endpoint.startswith("http://") or endpoint.startswith("https://"):
+                parsed = urlparse(endpoint)
+                if use_ssl and parsed.scheme != "https":
+                    raise ValueError(
+                        "已开启「使用 HTTPS」，Endpoint 必须为 https://。"
+                        "若 MinIO 仅提供 HTTP，请关闭该开关或为 MinIO 配置 TLS。"
+                    )
+                if not use_ssl and parsed.scheme == "https":
+                    raise ValueError(
+                        "已关闭「使用 HTTPS」，Endpoint 应为 http://。"
+                        "若 MinIO 已启用 TLS，请打开「使用 HTTPS」。"
+                    )
+                return endpoint
+            scheme = "https" if use_ssl else "http"
+            return f"{scheme}://{endpoint}"
 
         if endpoint:
             if not endpoint.startswith("http://") and not endpoint.startswith("https://"):
@@ -1780,6 +1816,16 @@ class IntegrationConfigService:
         try:
             resp = await get_http_client().request("HEAD", probe_url, timeout=15.0)
         except Exception as e:
+            err_text = str(e)
+            if storage_type == "minio" and (
+                "WRONG_VERSION_NUMBER" in err_text
+                or "wrong version number" in err_text.lower()
+            ):
+                raise ValueError(
+                    "无法访问存储 Endpoint：SSL 协议不匹配（WRONG_VERSION_NUMBER）。"
+                    "通常是用 HTTPS 连接了仅提供 HTTP 的 MinIO。"
+                    "请关闭「使用 HTTPS」并改用 http://，或为 MinIO 正确配置 TLS 证书后再开启 HTTPS。"
+                ) from e
             raise ValueError(f"无法访问存储 Endpoint：{e}") from e
         if resp.status_code >= 500:
             raise ValueError(f"存储服务异常 HTTP {resp.status_code}")

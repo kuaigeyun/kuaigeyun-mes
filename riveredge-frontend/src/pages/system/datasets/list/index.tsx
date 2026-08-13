@@ -42,6 +42,7 @@ import {
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../utils/spreadsheetImportTemplate';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { mergeListKeyword } from '../../../../utils/tableQueryKey';
 import {
   getDataConnectionsForDataset,
   IntegrationConfig,
@@ -654,9 +655,9 @@ const DatasetListPage: React.FC = () => {
               page_size: params.pageSize || 20,
             };
             
-            // 搜索关键词
-            if (searchFormValues?.search) {
-              apiParams.search = searchFormValues.search;
+            const kw = mergeListKeyword(searchFormValues, 'search');
+            if (kw) {
+              apiParams.search = kw;
             }
             
             // 查询类型筛选

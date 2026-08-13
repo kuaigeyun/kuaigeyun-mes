@@ -16,7 +16,7 @@ import {
 import { formatSettlementType } from '../../../utils/financeUiLabels';
 import { documentReconciliationGapReasonMessage } from '../../../utils/documentReconciliationCapabilityMessages';
 import { formatQuantity } from '../../../../../utils/format';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   documentReconciliationGapSearchColumns,
   resolveDocumentReconciliationGapListParams,
@@ -311,11 +311,12 @@ const DocumentReconciliationPage: React.FC = () => {
     {
       title: t(`${D}.col.gapReason`),
       dataIndex: 'gap_reason',
-      width: 180,
-      minWidth: 180,
-      uniTableKeepWidth: true,
+      key: 'gap_reason',
+      minWidth: 200,
+      uniTablePrimaryFlex: true,
+      uniTablePrimaryFlexMaxWidth: 280,
       resizable: false,
-      ellipsis: true,
+      ellipsis: false,
       render: (_, r) => (r.gap_reason ? documentReconciliationGapReasonMessage(r.gap_reason, t) : '—'),
     },
     {
@@ -347,11 +348,18 @@ const DocumentReconciliationPage: React.FC = () => {
       valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
-      render: (_, r) => (
-        <Button type="link" size="small" icon={<LinkOutlined />} onClick={() => openChainFromGap(r)}>
+      uniActionRenderOptions: { directMax: 1 },
+      render: (_, r) => [
+        <Button
+          key="link"
+          type="link"
+          size="small"
+          icon={<LinkOutlined />}
+          onClick={() => openChainFromGap(r)}
+        >
           {t(`${D}.col.linkChain`)}
-        </Button>
-      ),
+        </Button>,
+      ],
     },
   ], [t, docTypeEnum]);
 
@@ -488,8 +496,8 @@ const DocumentReconciliationPage: React.FC = () => {
         request={gapRequest}
         tanstackQuery={{ enabled: false }}
         rowKey={(r) => `${r.doc_type}-${r.doc_id}`}
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.document-reconciliation.gaps.list-v1"
-        columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.document-reconciliation.gaps.list-v2"
+        columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
         loading={loading}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter

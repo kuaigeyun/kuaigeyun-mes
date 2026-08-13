@@ -640,6 +640,8 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
       bucket: '',
       region: 'us-east-1',
       use_path_style: true,
+      /** 默认强制 HTTPS；内网 MinIO 仅 HTTP 时请关闭 */
+      use_ssl: true,
     },
   },
   {

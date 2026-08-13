@@ -36,6 +36,7 @@ from apps.kuaizhizao.models import (
 from apps.kuaizhizao.services.document_action_policy.purchase_requisition import (
     assert_purchase_requisition_capability,
 )
+from apps.kuaizhizao.schemas.purchase import PurchaseOrderCreate, PurchaseOrderItemCreate
 from apps.kuaizhizao.schemas.purchase_inquiry import (
     AwardQuotesRequest,
     ComparisonCell,

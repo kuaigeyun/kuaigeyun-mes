@@ -59,6 +59,7 @@ async def list_working_hours_configs(
     scope_type: Optional[str] = Query(None, description="适用范围类型"),
     scope_id: Optional[int] = Query(None, description="适用范围ID"),
     is_enabled: Optional[bool] = Query(None, description="是否启用"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（名称、适用范围、备注）"),
     tenant_id: int = Depends(get_current_tenant),
 ) -> List[WorkingHoursConfigListResponse]:
     """
@@ -75,6 +76,7 @@ async def list_working_hours_configs(
         scope_type=scope_type,
         scope_id=scope_id,
         is_enabled=is_enabled,
+        keyword=keyword,
     )
 
 

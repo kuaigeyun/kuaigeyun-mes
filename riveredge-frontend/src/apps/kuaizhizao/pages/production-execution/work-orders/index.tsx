@@ -878,21 +878,18 @@ function getWorkOrderReadinessStrokeColor(percent: number): string {
 
 function renderWorkOrderReadinessRing(rate: number): React.ReactNode {
   const percent = Math.min(100, Math.max(0, Math.round(Number(rate))))
+  const stroke = getWorkOrderReadinessStrokeColor(percent)
+  // 纯 CSS 圆环：避免每行挂载 antd Progress（低配机列表卡顿主因）
   return (
-    <div className="wo-readiness-ring-wrap">
-      <Progress
+    <div className="wo-readiness-ring-wrap" aria-label={`${percent}%`}>
+      <div
         className="wo-readiness-ring"
-        type="circle"
-        percent={percent}
-        size={42}
-        strokeWidth={10}
-        strokeColor={getWorkOrderReadinessStrokeColor(percent)}
-        status={percent === 100 ? 'success' : percent > 0 ? 'active' : 'normal'}
-        format={(value) => `${value}%`}
-        styles={{
-          text: { fontSize: 10, lineHeight: 1 },
+        style={{
+          background: `conic-gradient(${stroke} ${percent * 3.6}deg, var(--ant-color-fill-secondary) 0)`,
         }}
-      />
+      >
+        <span className="wo-readiness-ring-inner">{percent}%</span>
+      </div>
     </div>
   )
 }
@@ -1089,7 +1086,7 @@ function renderWorkOrderTreeChildTags(record: WorkOrder, tagStyle: React.CSSProp
   )
 }
 
-function WorkOrderProductCodeCell({
+const WorkOrderProductCodeCell = React.memo(function WorkOrderProductCodeCell({
   record,
   primaryExtra,
 }: {
@@ -1122,7 +1119,7 @@ function WorkOrderProductCodeCell({
       {renderWorkOrderSourceOrderLine(record, secondaryTextStyle)}
     </div>
   )
-}
+})
 
 function getWorkOrderListRowKey(record: WorkOrder): string {
   const kind = record.row_kind || 'work_order'
@@ -1235,7 +1232,11 @@ function renderWorkOrderGroupMemberCountTag(
   )
 }
 
-function WorkOrderListPrimaryCell({ record }: { record: WorkOrder }) {
+const WorkOrderListPrimaryCell = React.memo(function WorkOrderListPrimaryCell({
+  record,
+}: {
+  record: WorkOrder
+}) {
   const kind = record.row_kind || 'work_order'
   const { token } = theme.useToken()
   const splitTagStyle = getWorkOrderStackedPrimaryTagStyle(token)
@@ -1308,9 +1309,13 @@ function WorkOrderListPrimaryCell({ record }: { record: WorkOrder }) {
   }
 
   return <WorkOrderProductCodeCell record={record} />
-}
+})
 
-function WorkOrderTreeProductCodeCell({ record }: { record: WorkOrder }) {
+const WorkOrderTreeProductCodeCell = React.memo(function WorkOrderTreeProductCodeCell({
+  record,
+}: {
+  record: WorkOrder
+}) {
   const { token } = theme.useToken()
   const secondaryTextStyle = getWorkOrderStackedSecondaryTextStyle(token)
   const secondaryTagStyle = getWorkOrderStackedSecondaryTagStyle(token)
@@ -1324,9 +1329,13 @@ function WorkOrderTreeProductCodeCell({ record }: { record: WorkOrder }) {
       {renderWorkOrderBatchSerialLine(record, secondaryTextStyle)}
     </div>
   )
-}
+})
 
-function WorkOrderPlannedRangeCell({ record }: { record: WorkOrder }) {
+const WorkOrderPlannedRangeCell = React.memo(function WorkOrderPlannedRangeCell({
+  record,
+}: {
+  record: WorkOrder
+}) {
   const { t } = useTranslation()
   const overdue = isWorkOrderPlannedEndOverdue(record)
   return (
@@ -1346,7 +1355,7 @@ function WorkOrderPlannedRangeCell({ record }: { record: WorkOrder }) {
       uniformText
     />
   )
-}
+})
 
 const WorkOrdersPage: React.FC = () => {
   const { t, i18n } = useTranslation()
@@ -1593,6 +1602,31 @@ const WorkOrdersPage: React.FC = () => {
     staleTime: WORK_ORDER_EXECUTION_CONFIG_STALE_MS,
   })
 
+  /** 指标卡折线推迟到空闲再挂载，避免与首屏表格抢主线程 */
+  const [statChartsReady, setStatChartsReady] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    const enable = () => {
+      if (!cancelled) setStatChartsReady(true)
+    }
+    const ric = (window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number
+      cancelIdleCallback?: (id: number) => void
+    }).requestIdleCallback
+    if (typeof ric === 'function') {
+      const id = ric(enable, { timeout: 1200 })
+      return () => {
+        cancelled = true
+        ;(window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback?.(id)
+      }
+    }
+    const timer = window.setTimeout(enable, 300)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [])
+
   useEffect(() => {
     hydrateDefaultWorkOrderListPageFromSession(
       queryClient,
@@ -1678,6 +1712,7 @@ const WorkOrdersPage: React.FC = () => {
             include_downstream_push_progress: !isPrefetch && heavyMetrics,
             // 工序列是展示列；prefetch 结果在 staleTime 内会直接当展示页，不能关
             include_operation_steps: true,
+            persistSnapshot: !isPrefetch,
           },
         )
         if (result.success && Array.isArray(result.data)) {
@@ -3202,6 +3237,27 @@ const WorkOrdersPage: React.FC = () => {
    */
   const WO_ROW_EXPAND_TRIGGER_CLASS = 'wo-row-expand-trigger'
 
+  const pruneWorkOrderOperationPanelState = (panelWorkOrderId: number) => {
+    setExpandedOperationsMap((prev) => {
+      if (!(panelWorkOrderId in prev)) return prev
+      const next = { ...prev }
+      delete next[panelWorkOrderId]
+      return next
+    })
+    setExpandedWorkOrderDetailMap((prev) => {
+      if (!(panelWorkOrderId in prev)) return prev
+      const next = { ...prev }
+      delete next[panelWorkOrderId]
+      return next
+    })
+    setLoadingOperationsMap((prev) => {
+      if (!(panelWorkOrderId in prev)) return prev
+      const next = { ...prev }
+      delete next[panelWorkOrderId]
+      return next
+    })
+  }
+
   const toggleWorkOrderOperationPanel = (record: WorkOrder, e?: React.SyntheticEvent) => {
     e?.preventDefault()
     e?.stopPropagation()
@@ -3214,6 +3270,7 @@ const WorkOrdersPage: React.FC = () => {
         operationPanelRecordByKeyRef.current.set(rowKey, record)
       } else {
         operationPanelRecordByKeyRef.current.delete(rowKey)
+        if (record.id != null) pruneWorkOrderOperationPanelState(Number(record.id))
       }
       void handleExpand(nextExpanded, record)
       return nextExpanded ? [...prev, rowKey] : prev.filter((k) => k !== rowKey)
@@ -4313,7 +4370,6 @@ const WorkOrdersPage: React.FC = () => {
       try {
         const operations = await workOrderApi.getOperations(record.id!.toString())
         setWorkOrderOperations(operations)
-        setExpandedOperationsMap((prev) => ({ ...prev, [record.id!]: operations }))
       } catch (error) {
         console.error('获取工单工序列表失败:', error)
         setWorkOrderOperations([])
@@ -6830,7 +6886,10 @@ const WorkOrdersPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const workOrderCustomFieldColumns = generateWorkOrderCustomFieldColumns()
+  const workOrderCustomFieldColumns = useMemo(
+    () => generateWorkOrderCustomFieldColumns(),
+    [generateWorkOrderCustomFieldColumns],
+  )
   const columns = useMemo<ProColumns<WorkOrder>[]>(() => [
     {
       title: t('app.kuaizhizao.workOrder.colProductWorkOrderCode'),
@@ -7460,8 +7519,12 @@ const WorkOrdersPage: React.FC = () => {
     return visibleDataCols + 2
   }, [columns])
 
+  const operationPanelAnchorToRoot = useMemo(
+    () => buildWorkOrderOperationPanelAnchorToRoot(operationExpandedRowKeys),
+    [operationExpandedRowKeys],
+  )
+
   const workOrderTableComponents = useMemo(() => {
-    const anchorToRoot = buildWorkOrderOperationPanelAnchorToRoot(operationExpandedRowKeys)
     const Wrapper = React.forwardRef<
       HTMLTableSectionElement,
       React.HTMLAttributes<HTMLTableSectionElement>
@@ -7475,7 +7538,7 @@ const WorkOrdersPage: React.FC = () => {
         const rowKeyStr =
           bodyRowKey != null ? String(bodyRowKey) : child.key != null ? String(child.key) : ''
         if (!rowKeyStr) return
-        const panelRootKey = anchorToRoot.get(rowKeyStr)
+        const panelRootKey = operationPanelAnchorToRoot.get(rowKeyStr)
         if (!panelRootKey) return
         const panelRecord =
           workOrderRowByKeyRef.current.get(panelRootKey) ??
@@ -7512,7 +7575,7 @@ const WorkOrdersPage: React.FC = () => {
     Wrapper.displayName = 'WorkOrderTableBodyWrapper'
     return { body: { wrapper: Wrapper } }
   }, [
-    operationExpandedRowKeys,
+    operationPanelAnchorToRoot,
     workOrderTableBodyColSpan,
     renderWorkOrderOperationCardsPanel,
   ])
@@ -7520,8 +7583,7 @@ const WorkOrdersPage: React.FC = () => {
   const workOrderTableRowClassName = useCallback(
     (record: WorkOrder) => {
       const key = getWorkOrderListRowKey(record)
-      const anchorToRoot = buildWorkOrderOperationPanelAnchorToRoot(operationExpandedRowKeys)
-      if (anchorToRoot.has(key)) {
+      if (operationPanelAnchorToRoot.has(key)) {
         return 'wo-operation-panel-anchor-row'
       }
       if (highlightPlannedEndOverdue && isWorkOrderPlannedEndOverdue(record)) {
@@ -7529,7 +7591,7 @@ const WorkOrdersPage: React.FC = () => {
       }
       return ''
     },
-    [operationExpandedRowKeys, highlightPlannedEndOverdue],
+    [operationPanelAnchorToRoot, highlightPlannedEndOverdue],
   )
 
   const workOrderHighlightOverdueToolbar = useMemo(
@@ -7569,9 +7631,9 @@ const WorkOrdersPage: React.FC = () => {
     );
   };
 
-  /** 折线图渲染（与 StatCardTrendArea / 销售订单指标卡一致） */
+  /** 折线图渲染（与 StatCardTrendArea / 销售订单指标卡一致）；首屏空闲后再挂载 */
   const renderTrendChart = (data: { date: string; value: number }[] = [], color: string) => {
-    if (!data || data.length === 0) return null
+    if (!statChartsReady || !data || data.length === 0) return null
     return (
       <Suspense fallback={null}>
         <LazyStatTrendArea data={data} color={color} />
@@ -7730,9 +7792,9 @@ const WorkOrdersPage: React.FC = () => {
           tanstackQuery={{
             queryKeyPrefix: ['kuaizhizao', 'work-orders', 'list'],
             staleTime: WORK_ORDER_LIST_STALE_MS,
-            gcTime: 15 * 60 * 1000,
+            gcTime: 5 * 60 * 1000,
             prefetchNextPage: true,
-            staleWhileRevalidate: true,
+            staleWhileRevalidate: false,
           }}
           request={handleWorkOrderTableRequest}
           onTableDataChange={syncWorkOrderListRowIndexFromTableData}

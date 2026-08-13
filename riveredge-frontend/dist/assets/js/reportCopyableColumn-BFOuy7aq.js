@@ -1,0 +1,1 @@
+import{j as l,T as c}from"./vendor-B7mQtHhG.js";function x(o,t,e){return{title:o,dataIndex:t,width:e,render:(i,n)=>{const r=n[t],s=r==null||r===""?"-":String(r);return l.jsx(c.Text,{copyable:{text:r==null||r===""?"":String(r)},ellipsis:!0,children:s})}}}export{x as c};

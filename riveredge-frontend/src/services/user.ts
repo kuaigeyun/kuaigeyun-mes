@@ -18,6 +18,7 @@ export interface User {
   id: number;
   uuid: string;
   username: string;
+  avatar?: string | null;
   email?: string;
   full_name?: string;
   phone?: string;

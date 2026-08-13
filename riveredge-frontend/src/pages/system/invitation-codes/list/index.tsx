@@ -24,6 +24,7 @@ import {
 } from '../../../../services/invitationCode';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { pickListSearchKeyword } from '../../../../utils/tableQueryKey';
 
 const InvitationCodeListPage: React.FC = () => {
   const { t } = useTranslation();
@@ -300,6 +301,10 @@ const InvitationCodeListPage: React.FC = () => {
               page: params.current || 1,
               page_size: params.pageSize || 20,
             };
+            const keyword = pickListSearchKeyword(searchFormValues);
+            if (keyword) {
+              apiParams.keyword = keyword;
+            }
             if (
               searchFormValues?.is_active !== undefined &&
               searchFormValues.is_active !== '' &&

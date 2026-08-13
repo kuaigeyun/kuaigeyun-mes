@@ -138,6 +138,7 @@ import {
 } from '../../../../utils/menuTranslation';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { mergeListKeyword } from '../../../../utils/tableQueryKey';
 
 /** 应用中心行/卡片操作图标（表格与卡片共用，避免 uni-action 按 manifest action 覆盖） */
 const APP_ACTION_ICON = {
@@ -1843,9 +1844,9 @@ const ApplicationListPage: React.FC = () => {
                 filteredData = filteredData.filter(item => item.is_system === (searchFormValues.is_system === 'true' || searchFormValues.is_system === true));
               }
 
-              // 搜索关键词筛选（name 或 code）
-              if (searchFormValues?.name) {
-                const keyword = String(searchFormValues.name).toLowerCase();
+              // 搜索关键词筛选（顶栏模糊词或高级搜索 name）
+              const keyword = mergeListKeyword(searchFormValues, 'name').toLowerCase();
+              if (keyword) {
                 filteredData = filteredData.filter(item =>
                   item.name.toLowerCase().includes(keyword) ||
                   item.code.toLowerCase().includes(keyword) ||

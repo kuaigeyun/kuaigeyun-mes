@@ -63,6 +63,7 @@ async def list_scripts(
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     type: Optional[str] = Query(None, description="脚本类型（可选）"),
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（名称、代码、描述）"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
@@ -85,7 +86,8 @@ async def list_scripts(
         skip=skip,
         limit=limit,
         type=type,
-        is_active=is_active
+        is_active=is_active,
+        keyword=keyword,
     )
     return [ScriptResponse.model_validate(s) for s in scripts]
 

@@ -27,6 +27,7 @@ export interface ApprovalProcessListParams {
   skip?: number;
   limit?: number;
   is_active?: boolean;
+  keyword?: string;
   /** 配置中心审核设置：返回全部审核开关流程（不受已安装应用过滤） */
   for_audit_config?: boolean;
 }

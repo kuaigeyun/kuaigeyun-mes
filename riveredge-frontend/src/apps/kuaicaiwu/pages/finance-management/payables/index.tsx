@@ -66,9 +66,14 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import MergeFinanceDocsModal, {
+  type MergeFinanceMode,
+  type MergeFinanceSourceRow,
+} from '../../../components/MergeFinanceDocsModal';
 
 const P = 'app.kuaicaiwu.payable';
 const PAYABLE_RESOURCE = 'kuaicaiwu:payable';
+const PAYMENT_RESOURCE = 'kuaicaiwu:payment';
 const PURCHASE_INVOICE_RESOURCE = 'kuaicaiwu:purchase-invoice';
 
 type PullPreviewKind = 'purchase_order' | 'purchase_receipt';
@@ -101,6 +106,7 @@ const PayableList: React.FC = () => {
 
     const payableAuditEnabled = useAuditRequired('payable', false);
     const payablePerms = useResourcePermissions(PAYABLE_RESOURCE);
+    const paymentPerms = useResourcePermissions(PAYMENT_RESOURCE);
     const purchaseInvoicePerms = useResourcePermissions(PURCHASE_INVOICE_RESOURCE);
     const payableAuditBatchHandlers = useMemo(
         () => createUniAuditBatchHandlers('payable'),
@@ -110,10 +116,63 @@ const PayableList: React.FC = () => {
         () => tableRows.filter((row) => row.id != null && selectedRowKeys.includes(row.id)),
         [tableRows, selectedRowKeys],
     );
+    const [mergeModalOpen, setMergeModalOpen] = useState(false);
+    const [mergeMode, setMergeMode] = useState<MergeFinanceMode>('merge_payment');
+    const [mergeSources, setMergeSources] = useState<MergeFinanceSourceRow[]>([]);
     const handlePayableAuditBatchSuccess = () => {
         setSelectedRowKeys([]);
         actionRef.current?.reload();
     };
+
+    const openMergeModal = (mode: MergeFinanceMode) => {
+        const selected = selectedRecordsForBatch;
+        if (selected.length === 0) {
+            messageApi.warning(t('app.kuaicaiwu.mergeFinance.needSelection'));
+            return;
+        }
+        const partnerIds = new Set(selected.map((r) => Number(r.supplier_id)));
+        if (partnerIds.size !== 1) {
+            messageApi.error(t('app.kuaicaiwu.mergeFinance.sameSupplierRequired'));
+            return;
+        }
+        const sources: MergeFinanceSourceRow[] = [];
+        for (const row of selected) {
+            const isInvoice = mode === 'merge_purchase_invoice';
+            const available = isInvoice
+                ? Number(row.remaining_invoice_amount ?? row.total_amount ?? 0)
+                : Number(row.remaining_amount ?? 0);
+            const pushAllowed = isInvoice
+                ? row.capabilities?.push_purchase_invoice?.allowed !== false
+                : row.capabilities?.push_payment?.allowed !== false;
+            if (!(available > 0) || !pushAllowed) {
+                messageApi.error(
+                    t('app.kuaicaiwu.mergeFinance.sourceNotEligible', {
+                        code: row.payable_code || row.id,
+                    }),
+                );
+                return;
+            }
+            sources.push({
+                id: Number(row.id),
+                code: String(row.payable_code || row.id),
+                partnerId: Number(row.supplier_id),
+                partnerName: String(row.supplier_name || ''),
+                availableAmount: available,
+            });
+        }
+        setMergeMode(mode);
+        setMergeSources(sources);
+        setMergeModalOpen(true);
+    };
+
+    const mergePaymentDisabled =
+        !paymentPerms.canCreate ||
+        selectedRecordsForBatch.length === 0 ||
+        new Set(selectedRecordsForBatch.map((r) => Number(r.supplier_id))).size !== 1;
+    const mergeInvoiceDisabled =
+        !purchaseInvoicePerms.canCreate ||
+        selectedRecordsForBatch.length === 0 ||
+        new Set(selectedRecordsForBatch.map((r) => Number(r.supplier_id))).size !== 1;
 
     const payableImportTemplate = useMemo(
         () =>
@@ -821,6 +880,22 @@ const PayableList: React.FC = () => {
                         onSuccess={handlePayableAuditBatchSuccess}
                         toolBarButtonSize="middle"
                     />,
+                    <Button
+                        key="merge-payment"
+                        size="medium"
+                        disabled={mergePaymentDisabled}
+                        onClick={() => openMergeModal('merge_payment')}
+                    >
+                        {t('app.kuaicaiwu.mergeFinance.mergePayment')}
+                    </Button>,
+                    <Button
+                        key="merge-purchase-invoice"
+                        size="medium"
+                        disabled={mergeInvoiceDisabled}
+                        onClick={() => openMergeModal('merge_purchase_invoice')}
+                    >
+                        {t('app.kuaicaiwu.mergeFinance.mergePurchaseInvoice')}
+                    </Button>,
                 ]}
                 showAdvancedSearch={true}
                 showImportButton
@@ -1142,6 +1217,17 @@ const PayableList: React.FC = () => {
                 <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
                 <DocumentAttachmentsField category="payable_attachments" />
             </ModalForm>
+
+            <MergeFinanceDocsModal
+                open={mergeModalOpen}
+                mode={mergeMode}
+                sources={mergeSources}
+                onOpenChange={setMergeModalOpen}
+                onSuccess={() => {
+                    setSelectedRowKeys([]);
+                    actionRef.current?.reload();
+                }}
+            />
         </ListPageTemplate>
     );
 };

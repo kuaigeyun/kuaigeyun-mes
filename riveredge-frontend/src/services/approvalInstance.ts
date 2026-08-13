@@ -31,6 +31,7 @@ export interface ApprovalInstanceListParams {
   status?: string;
   submitter_id?: number;
   current_approver_id?: number;
+  keyword?: string;
 }
 
 export interface CreateApprovalInstanceData {

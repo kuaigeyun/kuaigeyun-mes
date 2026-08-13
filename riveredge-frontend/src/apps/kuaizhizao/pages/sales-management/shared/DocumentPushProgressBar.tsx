@@ -1,6 +1,5 @@
 import React from 'react';
-import { Popover, Progress } from 'antd';
-import type { ProgressProps } from 'antd';
+import { Popover } from 'antd';
 import { UNI_TABLE_PROGRESS_COLUMN_WIDTH } from '../../../../../utils/uniTableLayoutColumns';
 
 export function clampPushProgressPercent(value: number): number {
@@ -142,12 +141,23 @@ export type DocumentPushProgressBarProps = {
   /** 已下推下游单据（hover 展示） */
   documents?: PushProgressDocument[];
   formatMoreDocs?: (hidden: number) => string;
-  status?: ProgressProps['status'];
+  /** success | exception | normal | active（与旧 Progress status 对齐） */
+  status?: 'success' | 'exception' | 'normal' | 'active';
   width?: number | string;
 };
 
 const BAR_HEIGHT = 20;
 const BAR_FONT_SIZE = 11;
+
+function resolvePushBarFillColor(
+  status: DocumentPushProgressBarProps['status'],
+  percent: number,
+): string {
+  if (status === 'exception') return 'var(--ant-color-error)';
+  if (status === 'success' || percent >= 100) return 'var(--ant-color-success)';
+  return 'var(--ant-color-primary)';
+}
+
 /**
  * 进度条列的整套列属性：宽度真源 `UNI_TABLE_PROGRESS_COLUMN_WIDTH`（80）。
  *
@@ -181,7 +191,8 @@ export const DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS = {
   hideInSearch: true,
 } as const;
 
-export const DocumentPushProgressBar: React.FC<DocumentPushProgressBarProps> = ({
+/** 列表进度条：纯 CSS，避免每行挂载 antd Progress（低配机主因之一） */
+export const DocumentPushProgressBar: React.FC<DocumentPushProgressBarProps> = React.memo(({
   percent,
   tooltip,
   tooltipSummary,
@@ -191,16 +202,28 @@ export const DocumentPushProgressBar: React.FC<DocumentPushProgressBarProps> = (
   width = '100%',
 }) => {
   const displayPercent = clampPushProgressPercent(percent);
+  const fillColor = resolvePushBarFillColor(status, displayPercent);
   const bar = (
     <div style={{ position: 'relative', width, minWidth: 56, height: BAR_HEIGHT, cursor: 'default' }}>
-      <Progress
-        percent={displayPercent}
-        showInfo={false}
-        status={status}
-        strokeWidth={BAR_HEIGHT}
-        strokeLinecap="round"
-        style={{ margin: 0, height: BAR_HEIGHT, lineHeight: `${BAR_HEIGHT}px` }}
-      />
+      <div
+        style={{
+          width: '100%',
+          height: BAR_HEIGHT,
+          borderRadius: BAR_HEIGHT / 2,
+          background: 'var(--ant-color-fill-secondary)',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            width: `${displayPercent}%`,
+            height: '100%',
+            borderRadius: BAR_HEIGHT / 2,
+            background: fillColor,
+            transition: 'width 0.2s ease',
+          }}
+        />
+      </div>
       <span
         style={{
           position: 'absolute',
@@ -212,6 +235,7 @@ export const DocumentPushProgressBar: React.FC<DocumentPushProgressBarProps> = (
           fontSize: BAR_FONT_SIZE,
           lineHeight: `${BAR_HEIGHT}px`,
           fontWeight: 500,
+          fontVariantNumeric: 'tabular-nums',
           color: displayPercent >= 50 ? '#fff' : 'var(--ant-color-text)',
           textShadow: displayPercent >= 50 ? '0 0 2px rgba(0, 0, 0, 0.45)' : undefined,
           pointerEvents: 'none',
@@ -223,36 +247,48 @@ export const DocumentPushProgressBar: React.FC<DocumentPushProgressBarProps> = (
   );
 
   const hasDocuments = Array.isArray(documents) && documents.length > 0;
-  let content: React.ReactNode = null;
-  if (hasDocuments) {
-    const percentLine =
-      typeof tooltip === 'string' && tooltip
-        ? tooltip
-        : tooltipSummary || `${displayPercent}%`;
-    content = buildPushProgressPopoverContent({
-      percentLine,
-      documents,
-      formatMore: formatMoreDocs,
-    });
-  } else if (tooltip != null && tooltip !== '') {
-    content =
-      typeof tooltip === 'string' ? <div style={SUMMARY_STYLE}>{tooltip}</div> : tooltip;
-  } else if (tooltipSummary) {
-    content = <div style={SUMMARY_STYLE}>{tooltipSummary}</div>;
+  // 仅文案提示：原生 title，避免每行 Popover（低配机滚动卡顿）
+  if (!hasDocuments) {
+    if (typeof tooltip === 'string' && tooltip) {
+      return <div title={tooltip}>{bar}</div>;
+    }
+    if (tooltipSummary) {
+      return <div title={tooltipSummary}>{bar}</div>;
+    }
+    if (tooltip != null && tooltip !== '') {
+      return (
+        <Popover
+          trigger="hover"
+          placement="top"
+          mouseEnterDelay={0.15}
+          styles={{ body: POPOVER_BODY_STYLE }}
+          content={tooltip}
+        >
+          {bar}
+        </Popover>
+      );
+    }
+    return bar;
   }
 
-  if (content != null && content !== '') {
-    return (
-      <Popover
-        trigger="hover"
-        placement="top"
-        mouseEnterDelay={0.15}
-        styles={{ body: POPOVER_BODY_STYLE }}
-        content={content}
-      >
-        {bar}
-      </Popover>
-    );
-  }
-  return bar;
-};
+  const percentLine =
+    typeof tooltip === 'string' && tooltip
+      ? tooltip
+      : tooltipSummary || `${displayPercent}%`;
+  return (
+    <Popover
+      trigger="hover"
+      placement="top"
+      mouseEnterDelay={0.15}
+      styles={{ body: POPOVER_BODY_STYLE }}
+      content={buildPushProgressPopoverContent({
+        percentLine,
+        documents,
+        formatMore: formatMoreDocs,
+      })}
+    >
+      {bar}
+    </Popover>
+  );
+});
+DocumentPushProgressBar.displayName = 'DocumentPushProgressBar';

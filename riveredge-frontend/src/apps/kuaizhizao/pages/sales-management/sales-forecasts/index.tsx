@@ -145,17 +145,6 @@ export default function SalesForecastsPage() {
   const actionRef = useRef<ActionType>();
   const queryClient = useQueryClient();
 
-  /** 视图切换缓存：明细模式才请求 include_items */
-  const lastForecastsCacheRef = useRef<{
-    forecasts: SalesForecast[];
-    total: number;
-    paramsKey: string;
-    includeItems: boolean;
-  } | null>(null)
-  const invalidateForecastCache = () => {
-    lastForecastsCacheRef.current = null
-  }
-
   const invalidateMenuBadge = useInvalidateMenuBadgeCounts();
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['salesForecastStatistics'] });
@@ -734,7 +723,6 @@ export default function SalesForecastsPage() {
       } else {
         messageApi.success(t('common.importSuccess', { count: result.success_count }))
       }
-      invalidateForecastCache()
       actionRef.current?.reload()
     } catch (e: any) {
       messageApi.error(e?.message || t('common.importFailed'))
@@ -809,7 +797,6 @@ export default function SalesForecastsPage() {
         await deleteSalesForecast(id);
       }
       messageApi.success(t('common.deleteSuccess', { count: deleteCount }))
-      invalidateForecastCache();
       actionRef.current?.reload()
       setSelectedRowKeys([])
       if (actionRef.current?.clearSelected) actionRef.current.clearSelected();
@@ -929,7 +916,6 @@ export default function SalesForecastsPage() {
       setPreviewCode(null)
       setEffectiveRuleCode(null)
       setEffectiveAutoGen(null)
-      invalidateForecastCache();
       invalidateStatistics();
       invalidateMenuBadge();
       setTrackingRefreshKey((k) => k + 1);
@@ -991,7 +977,6 @@ export default function SalesForecastsPage() {
 
   const refreshForecastAfterPush = useCallback(
     (forecastId: number) => {
-      invalidateForecastCache()
       invalidateStatistics()
       invalidateMenuBadge()
       setTrackingRefreshKey((k) => k + 1)
@@ -1301,7 +1286,6 @@ export default function SalesForecastsPage() {
               if (record.id != null) {
                 refreshForecastAfterPush(record.id);
               } else {
-                invalidateForecastCache();
                 invalidateStatistics();
                 invalidateMenuBadge();
                 setTrackingRefreshKey((k) => k + 1);
@@ -1483,7 +1467,6 @@ export default function SalesForecastsPage() {
                 if (record.forecast_id) {
                   refreshForecastAfterPush(record.forecast_id);
                 } else {
-                  invalidateForecastCache();
                   invalidateStatistics();
                   invalidateMenuBadge();
                   setTrackingRefreshKey((k) => k + 1);
@@ -2093,8 +2076,6 @@ export default function SalesForecastsPage() {
               apiParams.start_date = formatDateTime(sf.start_date, 'YYYY-MM-DD');
             if (sf.end_date) apiParams.end_date = formatDateTime(sf.end_date, 'YYYY-MM-DD');
 
-            const paramsKey = JSON.stringify({ ...apiParams, include_items: needItems });
-
             const formatListResponse = (forecasts: SalesForecast[], total: number) => {
               // 行缓存唯一真源：onTableDataChange（prefetch 会走本 request，禁止在此覆盖）
               if (dataViewModeRef.current === 'order') {
@@ -2153,23 +2134,9 @@ export default function SalesForecastsPage() {
             };
 
             try {
-              const cached = lastForecastsCacheRef.current;
-              if (cached && cached.paramsKey === paramsKey) {
-                const canServeFromCache = needItems ? cached.includeItems : true;
-                if (canServeFromCache) {
-                  return formatListResponse(cached.forecasts, cached.total);
-                }
-              }
-
               const res = await listSalesForecasts(apiParams);
               const forecasts: SalesForecast[] = Array.isArray(res.data) ? res.data : [];
               const total: number = res.total ?? forecasts.length;
-              lastForecastsCacheRef.current = {
-                forecasts,
-                total,
-                paramsKey,
-                includeItems: needItems,
-              };
               return formatListResponse(forecasts, total);
             } catch (e: any) {
               messageApi.error(e?.message || t('common.loadFailed'));
@@ -2226,7 +2193,6 @@ export default function SalesForecastsPage() {
               }}
               onSuccess={() => {
                 setSelectedRowKeys([]);
-                invalidateForecastCache();
                 actionRef.current?.reload();
               }}
               toolBarButtonSize="middle"
@@ -2328,7 +2294,6 @@ export default function SalesForecastsPage() {
                   if (currentForecast.id != null) {
                     refreshForecastAfterPush(currentForecast.id);
                   } else {
-                    invalidateForecastCache();
                     invalidateStatistics();
                     invalidateMenuBadge();
                     setTrackingRefreshKey((k) => k + 1);

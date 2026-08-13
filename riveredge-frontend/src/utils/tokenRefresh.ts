@@ -5,6 +5,7 @@
  * API 前缀与 services/api.ts 中 API_BASE_URL 保持一致。
  */
 import { getToken, setToken, getTenantId } from './auth';
+import { updateLastActivity } from './activityUtils';
 
 const API_BASE_URL = '/api/v1';
 
@@ -43,6 +44,8 @@ export async function refreshAccessTokenSilently(): Promise<boolean> {
         return false;
       }
       setToken(data.access_token);
+      // 续期成功视为会话仍有效；不经过 apiRequest，需显式刷新活动时间
+      updateLastActivity(true);
       return true;
     } catch {
       return false;

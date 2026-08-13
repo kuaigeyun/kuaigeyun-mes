@@ -1442,11 +1442,15 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             # 列表与详情共用生命周期计算，避免出库 Hub 列表显示「生命周期缺失」
             resp.lifecycle = get_production_picking_lifecycle(picking, milestones=[])
             list_rows.append(resp)
+        picking_audit_required = await BusinessConfigService().check_audit_required(
+            tenant_id, "production_picking"
+        )
         rows = enrich_outbound_hub_list_capabilities(
             pickings,
             list_rows,
             "production_picking",
             item_counts={pid: v["total_items"] for pid, v in qty_by_id.items()},
+            audit_required=picking_audit_required,
         )
         enriched_qty: List[ProductionPickingListResponse] = []
         for picking, row in zip(pickings, rows):
@@ -1497,15 +1501,83 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         return rows, total
 
     async def update_production_picking(self, tenant_id: int, picking_id: int, picking_data: ProductionPickingUpdate, updated_by: int) -> ProductionPickingResponse:
-        """更新生产领料单"""
-        async with in_transaction():
-            picking = await self.get_production_picking_by_id(tenant_id, picking_id)
-            update_data = picking_data.model_dump(exclude_unset=True, exclude={'updated_by'})
-            update_data['updated_by'] = updated_by
+        """更新生产领料单（确认领料前：备注/领料人/明细应领数量与仓库）"""
+        from apps.kuaizhizao.services.document_action_policy.warehouse_outbound_hub import (
+            assert_outbound_hub_capability,
+        )
+        from infra.services.business_config_service import BusinessConfigService
 
-            await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(**update_data)
-            updated_picking = await self.get_production_picking_by_id(tenant_id, picking_id)
-            return updated_picking
+        async with in_transaction():
+            picking = await ProductionPicking.get_or_none(
+                tenant_id=tenant_id, id=picking_id, deleted_at__isnull=True
+            )
+            if not picking:
+                raise NotFoundError(f"生产领料单不存在: {picking_id}")
+
+            audit_required = await BusinessConfigService().check_audit_required(
+                tenant_id, "production_picking"
+            )
+            assert_outbound_hub_capability(
+                picking,
+                "update",
+                outbound_type="production_picking",
+                audit_required=audit_required,
+            )
+
+            user_info = await self.get_user_info(updated_by)
+            header_dump = picking_data.model_dump(
+                exclude_unset=True, exclude={"items", "updated_by"}
+            )
+            if header_dump:
+                header_dump["updated_by"] = updated_by
+                header_dump["updated_by_name"] = user_info.get("name")
+                await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(
+                    **header_dump
+                )
+
+            if picking_data.items is not None:
+                existing = {
+                    int(i.id): i
+                    for i in await ProductionPickingItem.filter(
+                        tenant_id=tenant_id,
+                        picking_id=picking_id,
+                        deleted_at__isnull=True,
+                    ).all()
+                }
+                if not picking_data.items:
+                    raise ValidationError("领料明细不能为空")
+                for line in picking_data.items:
+                    item = existing.get(int(line.id))
+                    if not item:
+                        raise ValidationError(f"领料明细不存在或不属于本单: {line.id}")
+                    item_updates: dict = {}
+                    if line.required_quantity is not None:
+                        qty = Decimal(str(line.required_quantity))
+                        if qty <= 0:
+                            raise ValidationError(
+                                f"物料 {item.material_code} 应领数量须大于 0"
+                            )
+                        item_updates["required_quantity"] = qty
+                        # 未领料前 remaining 与应领同步
+                        item_updates["remaining_quantity"] = qty
+                    if line.warehouse_id is not None:
+                        item_updates["warehouse_id"] = int(line.warehouse_id)
+                    if line.warehouse_name is not None:
+                        item_updates["warehouse_name"] = str(line.warehouse_name).strip()
+                    if line.batch_number is not None:
+                        item_updates["batch_number"] = (
+                            str(line.batch_number).strip() or None
+                        )
+                    if line.notes is not None:
+                        item_updates["notes"] = line.notes
+                    if item_updates:
+                        item_updates["updated_by"] = updated_by
+                        item_updates["updated_by_name"] = user_info.get("name")
+                        await ProductionPickingItem.filter(
+                            tenant_id=tenant_id, id=item.id
+                        ).update(**item_updates)
+
+            return await self.get_production_picking_by_id(tenant_id, picking_id)
 
     async def get_material_prep_reminders(
         self,
@@ -1585,13 +1657,16 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         )
 
     async def delete_production_picking(self, tenant_id: int, picking_id: int) -> bool:
-        """删除生产领料单"""
+        """删除生产领料单（未审核/草稿/已取消可删；审核通过后须先撤销审核）。"""
+        from apps.kuaizhizao.services.document_action_policy.warehouse_outbound_hub import (
+            assert_outbound_hub_delete,
+        )
+
         picking = await ProductionPicking.get_or_none(tenant_id=tenant_id, id=picking_id)
         if not picking:
             raise NotFoundError(f"生产领料单不存在: {picking_id}")
 
-        if picking.status not in ["待领料", "待审核", "草稿", "draft", "已取消"]:
-            raise BusinessLogicError("只能删除未确认出库或已取消的生产领料单")
+        await assert_outbound_hub_delete(tenant_id, picking, "production_picking")
 
         await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(
             is_active=False,
@@ -4801,8 +4876,15 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         )
         from core.services.approval.audit_record_enricher import enrich_items
 
+        delivery_audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "sales_delivery"
+        )
         rows = await enrich_items(tenant_id, "sales_delivery", enrich_outbound_hub_list_capabilities(
-            deliveries, out, "sales_delivery", item_counts=item_counts
+            deliveries,
+            out,
+            "sales_delivery",
+            item_counts=item_counts,
+            audit_required=delivery_audit_required,
         ))
         return rows, total
 
@@ -4848,9 +4930,12 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             return SalesDeliveryResponse.model_validate(delivery)
 
     async def delete_sales_delivery(self, tenant_id: int, delivery_id: int) -> None:
-        """删除销售出库单（软删除，仅待出库可删）。"""
+        """删除销售出库单（软删除：未审核/草稿/已取消可删；审核通过后须先撤销审核）。"""
         from apps.kuaizhizao.models.delivery_notice import DeliveryNotice
         from apps.kuaizhizao.models.sales_return import SalesReturn
+        from apps.kuaizhizao.services.document_action_policy.warehouse_outbound_hub import (
+            assert_outbound_hub_delete,
+        )
 
         delivery = await SalesDelivery.get_or_none(
             id=delivery_id,
@@ -4859,8 +4944,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         )
         if not delivery:
             raise NotFoundError(f"销售出库单不存在: {delivery_id}")
-        if delivery.status not in ["待出库", "draft", "草稿", "已取消", "cancelled"]:
-            raise BusinessLogicError("只有待出库或已取消状态的销售出库单才能删除")
+        await assert_outbound_hub_delete(tenant_id, delivery, "sales_delivery")
 
         if await DeliveryNotice.filter(
             tenant_id=tenant_id,
@@ -10493,8 +10577,15 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
         item_counts = await batch_document_item_counts(
             tenant_id, OtherOutboundItem, "outbound_id", [int(o.id) for o in outbounds]
         )
+        other_audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "other_outbound"
+        )
         enriched = enrich_outbound_hub_list_capabilities(
-            outbounds, out, "other_outbound", item_counts=item_counts
+            outbounds,
+            out,
+            "other_outbound",
+            item_counts=item_counts,
+            audit_required=other_audit_required,
         )
         return enriched, total
 
@@ -10518,12 +10609,15 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             )
 
     async def delete_other_outbound(self, tenant_id: int, outbound_id: int) -> bool:
-        """删除其他出库单"""
+        """删除其他出库单（未审核/待出库未过审/已取消可删；审核通过后须先撤销审核）。"""
+        from apps.kuaizhizao.services.document_action_policy.warehouse_outbound_hub import (
+            assert_outbound_hub_delete,
+        )
+
         outbound = await OtherOutbound.get_or_none(tenant_id=tenant_id, id=outbound_id)
         if not outbound:
             raise NotFoundError(f"其他出库单不存在: {outbound_id}")
-        if outbound.status not in ("待出库", "已取消"):
-            raise BusinessLogicError("只能删除待出库或已取消状态的其他出库单")
+        await assert_outbound_hub_delete(tenant_id, outbound, "other_outbound")
 
         await OtherOutbound.filter(tenant_id=tenant_id, id=outbound_id).update(
             is_active=False,
@@ -10868,8 +10962,15 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
         item_counts = await batch_document_item_counts(
             tenant_id, MaterialBorrowItem, "borrow_id", [int(b.id) for b in borrows]
         )
+        borrow_audit_required = await BusinessConfigService().check_audit_required(
+            tenant_id, "material_borrow"
+        )
         enriched = enrich_outbound_hub_list_capabilities(
-            borrows, out, "material_borrow", item_counts=item_counts
+            borrows,
+            out,
+            "material_borrow",
+            item_counts=item_counts,
+            audit_required=borrow_audit_required,
         )
         return enriched, total
 
@@ -10896,12 +10997,15 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
             )
 
     async def delete_material_borrow(self, tenant_id: int, borrow_id: int) -> bool:
-        """删除借料单"""
+        """删除借料单（未审核/待借出未过审可删；审核通过后须先撤销审核）。"""
+        from apps.kuaizhizao.services.document_action_policy.warehouse_outbound_hub import (
+            assert_outbound_hub_delete,
+        )
+
         borrow = await MaterialBorrow.get_or_none(tenant_id=tenant_id, id=borrow_id, deleted_at__isnull=True)
         if not borrow:
             raise NotFoundError(f"借料单不存在: {borrow_id}")
-        if borrow.status != "待借出":
-            raise BusinessLogicError("只能删除待借出状态的借料单")
+        await assert_outbound_hub_delete(tenant_id, borrow, "material_borrow")
 
         await MaterialBorrow.filter(tenant_id=tenant_id, id=borrow_id).update(
             deleted_at=resolve_business_datetime()

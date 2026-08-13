@@ -1,0 +1,1 @@
+import{ar as t,j as s,a7 as e}from"./vendor-B7mQtHhG.js";import{b as a}from"./ModuleTrendLine-NCCLHbi0.js";function l({children:o,columns:n=2}){const r=t.useBreakpoint().lg?n:1;return s.jsx(e,{span:24,children:s.jsx("div",{style:{columnCount:r,columnGap:a},children:o})})}export{l as M};

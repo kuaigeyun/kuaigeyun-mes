@@ -34,6 +34,20 @@ STAGE_TO_PLAN_TYPE: Dict[str, str] = {
     "oqc": "outbound",
 }
 
+STAGE_DISPLAY_LABELS: Dict[str, str] = {
+    "iqc": "来料检验",
+    "ipqc": "过程检验",
+    "fqc": "成品检验",
+    "oqc": "出货检验",
+}
+
+PLAN_TYPE_DISPLAY_LABELS: Dict[str, str] = {
+    "incoming": "来料检验",
+    "process": "过程检验",
+    "finished": "成品检验",
+    "outbound": "出货检验",
+}
+
 STAGE_MODULE_KEY: Dict[str, Optional[str]] = {
     "iqc": "incoming",
     "ipqc": "process",
@@ -298,16 +312,207 @@ def stage_plan_type(stage: InspectionStage) -> str:
     return STAGE_TO_PLAN_TYPE[stage]
 
 
+def plan_type_display_label(plan_type: Any) -> str:
+    key = str(plan_type or "").strip()
+    return PLAN_TYPE_DISPLAY_LABELS.get(key, key or "-")
+
+
+def stage_display_label(stage: Any) -> str:
+    key = str(stage or "").strip()
+    return STAGE_DISPLAY_LABELS.get(key, key or "-")
+
+
+def _binding_token(code: Any, name: Any) -> str:
+    return f"{str(code or '').strip()} {str(name or '').strip()}".strip() or "-"
+
+
+def incompatible_bindings_for_plan_type(
+    bindings: List[Dict[str, Any]],
+    new_plan_type: str,
+) -> List[Dict[str, Any]]:
+    want = str(new_plan_type or "").strip()
+    return [b for b in bindings if str(b.get("expected_plan_type") or "").strip() != want]
+
+
+def format_incompatible_plan_type_change_message(
+    plan_code: str,
+    old_type: str,
+    new_type: str,
+    incompatible: List[Dict[str, Any]],
+) -> str:
+    ops = [_binding_token(b.get("code"), b.get("name")) for b in incompatible if b.get("kind") == "operation"]
+    mats = [_binding_token(b.get("code"), b.get("name")) for b in incompatible if b.get("kind") == "material"]
+    groups = [_binding_token(b.get("code"), b.get("name")) for b in incompatible if b.get("kind") == "material_group"]
+    parts: List[str] = []
+    if ops:
+        parts.append("工序 " + "、".join(ops[:8]))
+    if mats:
+        parts.append("物料 " + "、".join(mats[:8]))
+    if groups:
+        parts.append("物料分组 " + "、".join(groups[:8]))
+    bound = "，".join(parts) if parts else "主数据"
+    return (
+        f"质检方案 {plan_code} 已绑定{bound}，"
+        f"不能将类型从{plan_type_display_label(old_type)}改为{plan_type_display_label(new_type)}。"
+        f"请先解除绑定或改选与新类型一致的方案。"
+    )
+
+
+def assert_stage_plan_types(
+    stage_plan_ids: List[Tuple[str, int]],
+    plans_by_id: Dict[int, Any],
+) -> None:
+    """方案质检绑定：plan_type 必须与场景一致（工序仅 process，物料 iqc/fqc/oqc 各对其类型）。"""
+    for stage, pid in stage_plan_ids:
+        expected = STAGE_TO_PLAN_TYPE.get(str(stage or "").strip())
+        if not expected:
+            continue
+        plan = plans_by_id.get(int(pid))
+        if not plan:
+            raise ValidationError(f"质检方案不存在：{pid}")
+        actual = str(getattr(plan, "plan_type", None) or "").strip()
+        if actual != expected:
+            code = str(getattr(plan, "plan_code", None) or pid)
+            raise ValidationError(
+                f"质检方案 {code} 类型为{plan_type_display_label(actual)}，"
+                f"不能绑定到{stage_display_label(stage)}（须为{plan_type_display_label(expected)}）"
+            )
+
+
+def _collect_stage_plan_ids_from_material(stages: Dict[str, Any]) -> List[Tuple[str, int]]:
+    out: List[Tuple[str, int]] = []
+    for key in MATERIAL_INSPECTION_STAGE_KEYS:
+        pol = normalize_stage_policy(stages.get(key))
+        if pol["mode"] == "plan" and pol.get("plan_id"):
+            out.append((key, int(pol["plan_id"])))
+    return out
+
+
+def _collect_stage_plan_ids_from_operation(stages: Dict[str, Any]) -> List[Tuple[str, int]]:
+    out: List[Tuple[str, int]] = []
+    for key in OPERATION_INSPECTION_STAGE_KEYS:
+        pol = normalize_stage_policy(stages.get(key))
+        if pol["mode"] == "plan" and pol.get("plan_id"):
+            out.append((key, int(pol["plan_id"])))
+    return out
+
+
+async def _load_plans_by_id(tenant_id: int, plan_ids: List[int]) -> Dict[int, Any]:
+    from apps.kuaizhizao.models.inspection_plan import InspectionPlan
+
+    ids = list({int(x) for x in plan_ids if x})
+    if not ids:
+        return {}
+    plans = await InspectionPlan.filter(
+        tenant_id=tenant_id, id__in=ids, deleted_at__isnull=True
+    ).all()
+    return {int(p.id): p for p in plans}
+
+
+async def list_inspection_plan_bindings(tenant_id: int, plan_id: int) -> List[Dict[str, Any]]:
+    """列出仍引用该方案的工序 / 物料 / 物料分组。"""
+    from tortoise.expressions import Q
+
+    from apps.master_data.models.material import Material, MaterialGroup
+    from apps.master_data.models.process import Operation
+
+    pid = int(plan_id)
+    bindings: List[Dict[str, Any]] = []
+
+    ops = await Operation.filter(tenant_id=tenant_id, deleted_at__isnull=True).filter(
+        Q(default_inspection_plan_id=pid) | Q(inspection_mode="plan")
+    ).all()
+    for op in ops:
+        stages = normalize_operation_inspection_stages(
+            getattr(op, "inspection_stages", None),
+            legacy_mode=getattr(op, "inspection_mode", None),
+            legacy_plan_id=getattr(op, "default_inspection_plan_id", None),
+        )
+        for stage, bound_id in _collect_stage_plan_ids_from_operation(stages):
+            if bound_id != pid:
+                continue
+            bindings.append({
+                "kind": "operation",
+                "code": getattr(op, "code", None),
+                "name": getattr(op, "name", None),
+                "stage": stage,
+                "expected_plan_type": STAGE_TO_PLAN_TYPE[stage],
+            })
+
+    mats = await Material.filter(tenant_id=tenant_id, deleted_at__isnull=True).filter(
+        Q(default_inspection_plan_id=pid) | Q(inspection_mode="plan")
+    ).all()
+    for mat in mats:
+        stages = normalize_material_inspection_stages(
+            getattr(mat, "inspection_stages", None),
+            legacy_mode=getattr(mat, "inspection_mode", None),
+            legacy_plan_id=getattr(mat, "default_inspection_plan_id", None),
+        )
+        for stage, bound_id in _collect_stage_plan_ids_from_material(stages):
+            if bound_id != pid:
+                continue
+            bindings.append({
+                "kind": "material",
+                "code": getattr(mat, "main_code", None) or getattr(mat, "code", None),
+                "name": getattr(mat, "name", None),
+                "stage": stage,
+                "expected_plan_type": STAGE_TO_PLAN_TYPE[stage],
+            })
+
+    groups = await MaterialGroup.filter(
+        tenant_id=tenant_id, deleted_at__isnull=True
+    ).exclude(inspection_stages=None).all()
+    for group in groups:
+        stages = normalize_material_inspection_stages(getattr(group, "inspection_stages", None))
+        for stage, bound_id in _collect_stage_plan_ids_from_material(stages):
+            if bound_id != pid:
+                continue
+            bindings.append({
+                "kind": "material_group",
+                "code": getattr(group, "code", None),
+                "name": getattr(group, "name", None),
+                "stage": stage,
+                "expected_plan_type": STAGE_TO_PLAN_TYPE[stage],
+            })
+
+    return bindings
+
+
+async def assert_inspection_plan_type_change_allowed(
+    tenant_id: int,
+    plan: Any,
+    new_plan_type: str,
+) -> None:
+    """已绑定主数据时，新类型必须仍匹配各绑定场景；否则拒绝改类型。"""
+    old_type = str(getattr(plan, "plan_type", None) or "").strip()
+    new_type = str(new_plan_type or "").strip()
+    if not new_type or new_type == old_type:
+        return
+    bindings = await list_inspection_plan_bindings(tenant_id, int(plan.id))
+    incompatible = incompatible_bindings_for_plan_type(bindings, new_type)
+    if not incompatible:
+        return
+    raise ValidationError(
+        format_incompatible_plan_type_change_message(
+            str(getattr(plan, "plan_code", None) or plan.id),
+            old_type,
+            new_type,
+            incompatible,
+        )
+    )
+
+
 async def assert_master_data_inspection_stages_allowed(
     tenant_id: int,
     *,
     material_stages: Optional[Dict[str, Any]] = None,
     operation_stages: Optional[Dict[str, Any]] = None,
 ) -> None:
-    """主数据保存：某场景 mode≠none 时组织须启用对应环节。"""
+    """主数据保存：某场景 mode≠none 时组织须启用对应环节；方案质检须类型匹配场景。"""
     from infra.exceptions.exceptions import ConflictError
 
     cfg = await get_quality_effective_config(tenant_id)
+    stage_plan_ids: List[Tuple[str, int]] = []
 
     if material_stages:
         norm = normalize_material_inspection_stages(material_stages)
@@ -319,12 +524,18 @@ async def assert_master_data_inspection_stages_allowed(
         for key, label, ok in checks:
             if normalize_stage_policy(norm.get(key))["mode"] != "none" and not ok:
                 raise ConflictError(f"组织未启用{label}环节，无法将该场景的质检模式设为简易或方案质检")
+        stage_plan_ids.extend(_collect_stage_plan_ids_from_material(norm))
 
     if operation_stages:
         norm = normalize_operation_inspection_stages(operation_stages)
         if normalize_stage_policy(norm.get("ipqc"))["mode"] != "none":
             if not (cfg["stage_enabled"]["ipqc"] and cfg["module_enabled"]["process"]):
                 raise ConflictError("组织未启用过程检验环节，无法将工序 IPQC 设为简易或方案质检")
+        stage_plan_ids.extend(_collect_stage_plan_ids_from_operation(norm))
+
+    if stage_plan_ids:
+        plans_by_id = await _load_plans_by_id(tenant_id, [pid for _, pid in stage_plan_ids])
+        assert_stage_plan_types(stage_plan_ids, plans_by_id)
 
 
 async def assert_master_data_inspection_mode_allowed(

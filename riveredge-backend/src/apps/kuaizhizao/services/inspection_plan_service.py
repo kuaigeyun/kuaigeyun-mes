@@ -217,6 +217,15 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
                 raise NotFoundError(f"质检方案 ID {plan_id} 不存在")
 
             update_dict = plan_data.model_dump(exclude_unset=True, exclude={"steps"})
+            new_plan_type = update_dict.get("plan_type")
+            if new_plan_type is not None:
+                from apps.kuaizhizao.services.inspection_policy_service import (
+                    assert_inspection_plan_type_change_allowed,
+                )
+
+                await assert_inspection_plan_type_change_allowed(
+                    tenant_id, plan, str(new_plan_type)
+                )
             for key, value in update_dict.items():
                 setattr(plan, key, value)
             if updated_by is not None:

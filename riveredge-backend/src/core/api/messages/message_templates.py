@@ -63,6 +63,7 @@ async def list_message_templates(
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     type: Optional[str] = Query(None, description="消息类型（可选）"),
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（名称、代码、描述、主题）"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
@@ -86,6 +87,7 @@ async def list_message_templates(
         limit=limit,
         type=type,
         is_active=is_active,
+        keyword=keyword,
         installed_app_codes=await get_installed_application_codes(tenant_id),
     )
     return [MessageTemplateResponse.model_validate(mt) for mt in message_templates]

@@ -20,9 +20,12 @@ from apps.kuaicaiwu.services.invoice_concurrent_settlement import (
     create_concurrent_payment_for_payable,
 )
 from apps.kuaicaiwu.services.purchase_invoice_pull_service import PurchaseInvoicePullService
+from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
 from apps.kuaicaiwu.models.payable import Payable
+from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
 from core.api.deps.access import AuthContext, ensure_permission_codes, require_permission_codes
 from core.api.deps.deps import get_current_tenant
+from core.utils.timezone_utils import today_site_str
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
@@ -128,20 +131,31 @@ async def create_purchase_invoice(
                             }
                         )
 
+        input_payable_id = data.payable_id
+        invoice_id: Optional[int] = None
+        auto_payable_id: Optional[int] = None
+        allocated_code = await invoice_service.generate_code(
+            tenant_id, "PURCHASE_INVOICE_CODE", prefix=f"PI{today_site_str()}"
+        )
         async with in_transaction():
             invoice = await invoice_service.create_purchase_invoice(
                 tenant_id,
                 data,
                 current_user.id,
                 skip_legacy_amount_gate=bool(pull_preview),
+                submit_review=False,
+                invoice_code=allocated_code,
             )
+            invoice_id = int(invoice.id)
+            if invoice.payable_id and not input_payable_id:
+                auto_payable_id = int(invoice.payable_id)
             if pull_preview and data.source_type and data.source_id:
                 await purchase_invoice_pull_service.create_pull_relation(
                     tenant_id=tenant_id,
                     source_type=str(data.source_type).strip(),
                     source_id=int(data.source_id),
                     source_code=str(pull_preview.get("source_code") or ""),
-                    invoice_id=int(invoice.id),
+                    invoice_id=invoice_id,
                     invoice_code=str(invoice.invoice_code),
                     created_by=current_user.id,
                 )
@@ -166,7 +180,25 @@ async def create_purchase_invoice(
                         or f"进项发票 {invoice.invoice_code} 开票同时付款",
                         current_user=current_user,
                     )
-        return invoice
+        # 审核/审批通知不得放在写库事务内：create_task 会与连接行锁互相等待，网关 504。
+        if auto_payable_id:
+            await submit_finance_review(
+                model=Payable,
+                tenant_id=tenant_id,
+                doc_id=auto_payable_id,
+                updated_by=current_user.id,
+                doc_label="应付单",
+                node_key="payable",
+            )
+        await submit_finance_review(
+            model=PurchaseInvoice,
+            tenant_id=tenant_id,
+            doc_id=int(invoice_id),
+            updated_by=current_user.id,
+            doc_label="采购发票",
+            node_key="purchase_invoice",
+        )
+        return await invoice_service.get_purchase_invoice_by_id(tenant_id, int(invoice_id))
     except ValidationError as e:
         raise _http_exception_with_trace(422, str(e), "/purchase-invoices", tenant_id) from e
     except BusinessLogicError as e:

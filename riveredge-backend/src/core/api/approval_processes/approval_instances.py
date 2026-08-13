@@ -67,6 +67,7 @@ async def list_approval_instances(
     status: Optional[str] = Query(None, description="审批状态（可选）"),
     submitter_id: Optional[int] = Query(None, description="提交人ID（可选）"),
     current_approver_id: Optional[int] = Query(None, description="当前审批人ID（可选）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（标题、内容、当前节点）"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -92,7 +93,8 @@ async def list_approval_instances(
         limit=limit,
         status=status,
         submitter_id=submitter_id,
-        current_approver_id=current_approver_id
+        current_approver_id=current_approver_id,
+        keyword=keyword,
     )
     return [ApprovalInstanceResponse.model_validate(ai) for ai in approval_instances]
 

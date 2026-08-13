@@ -83,4 +83,51 @@ export const payableService = {
       method: 'DELETE',
     });
   },
+
+  mergeCreatePayment: (data: MergePaymentCreatePayload) =>
+    apiRequest<MergeFinanceVoucherResult>(`${PAYABLE_API}/merge-payment`, {
+      method: 'POST',
+      data,
+    }),
+
+  mergeCreatePurchaseInvoice: (data: MergePurchaseInvoiceCreatePayload) =>
+    apiRequest<MergeFinanceVoucherResult>(`${PAYABLE_API}/merge-purchase-invoice`, {
+      method: 'POST',
+      data,
+    }),
+};
+
+export type MergeFinanceAllocationLine = {
+  source_id: number;
+  amount: number;
+};
+
+export type MergeFinanceVoucherResult = {
+  voucher_type: string;
+  voucher_id: number;
+  voucher_code: string;
+  total_amount: number;
+  partner_id: number;
+  partner_name: string;
+  allocations: Array<{ source_id: number; source_code?: string; amount: number }>;
+};
+
+export type MergePaymentCreatePayload = {
+  allocations: MergeFinanceAllocationLine[];
+  payment_date: string;
+  payment_method: string;
+  bank_account?: string;
+  bank_account_id?: number;
+  settlement_type?: string;
+  notes?: string;
+  attachments?: Record<string, unknown>[];
+};
+
+export type MergePurchaseInvoiceCreatePayload = {
+  allocations: MergeFinanceAllocationLine[];
+  invoice_date: string;
+  invoice_number: string;
+  invoice_type?: string;
+  tax_rate?: number;
+  notes?: string;
 };

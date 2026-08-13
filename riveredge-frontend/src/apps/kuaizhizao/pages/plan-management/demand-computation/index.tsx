@@ -157,6 +157,7 @@ import type { ProcessRoute } from '../../../../master-data/types/process'
 import { ThemedSegmented } from '../../../../../components/themed-segmented'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts'
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry'
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions'
 import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown'
@@ -841,8 +842,11 @@ const DemandComputationPage: React.FC = () => {
     [selectedRowKeys, tableComputations],
   )
 
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts()
+
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['demandComputationStatistics'] })
+    invalidateMenuBadgeCounts()
   }
 
   const { data: statistics } = useQuery({

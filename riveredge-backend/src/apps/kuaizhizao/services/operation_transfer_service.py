@@ -20,12 +20,21 @@ from apps.kuaizhizao.services.inspection_policy_service import (
 )
 
 
+def is_rework_verification_process_inspection(inspection: Any) -> bool:
+    """返工完修生成的过程复检单：不计入前道转序/卡片不合格，避免与原检验单双计。"""
+    code = str(getattr(inspection, "inspection_code", "") or "").strip()
+    notes = str(getattr(inspection, "notes", "") or "")
+    return code.startswith("PQ-RW-") or "返工复检" in notes
+
+
 async def sum_plan_transfer_qualified_from_inspections(
     tenant_id: int,
     inspections: List[Any],
 ) -> Decimal:
     total = Decimal("0")
     for insp in inspections:
+        if is_rework_verification_process_inspection(insp):
+            continue
         if await ipqc_inspection_passed_for_transfer(tenant_id, insp):
             total += Decimal(str(getattr(insp, "qualified_quantity", None) or 0))
     return total
@@ -177,6 +186,8 @@ def sum_process_inspection_quality_quantities(
     qualified = Decimal("0")
     unqualified = Decimal("0")
     for insp in inspections:
+        if is_rework_verification_process_inspection(insp):
+            continue
         st = str(getattr(insp, "status", "") or "").strip()
         if st not in ("已检验", "已审核"):
             continue

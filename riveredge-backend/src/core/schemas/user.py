@@ -111,7 +111,8 @@ class UserResponse(SoilUserResponse):
     position_uuid: Optional[str] = Field(None, description="所属职位UUID（前端表单回填）")
     position: Optional[dict] = Field(None, description="职位信息（如果关联）")
     roles: Optional[List[dict]] = Field(None, description="角色列表（如果关联）")
-    
+    avatar: Optional[str] = Field(None, description="头像文件UUID")
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -126,6 +127,7 @@ class UserListItem(BaseModel):
     id: int = Field(..., description="用户 ID（自增主键，内部关联使用）")
     uuid: str = Field(..., description="用户UUID（对外暴露，业务标识）")
     username: str = Field(..., description="用户名")
+    avatar: Optional[str] = Field(None, description="头像文件UUID")
     email: Optional[str] = Field(None, description="用户邮箱")
     full_name: Optional[str] = Field(None, description="用户全名")
     phone: Optional[str] = Field(None, description="手机号")

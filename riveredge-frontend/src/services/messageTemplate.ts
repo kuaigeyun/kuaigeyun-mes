@@ -27,6 +27,7 @@ export interface MessageTemplateListParams {
   limit?: number;
   type?: string;
   is_active?: boolean;
+  keyword?: string;
 }
 
 export interface CreateMessageTemplateData {

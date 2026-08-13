@@ -13,6 +13,7 @@ from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
 from core.models.approval_process import ApprovalProcess
+from core.utils.search_utils import apply_keyword_icontains
 from core.models.approval_instance import ApprovalInstance
 from core.schemas.approval_process import ApprovalProcessCreate, ApprovalProcessUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -204,6 +205,7 @@ class ApprovalProcessService:
         skip: int = 0,
         limit: int = 100,
         is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
         installed_app_codes: Optional[Set[str]] = None,
         for_audit_config: bool = False,
     ) -> List[ApprovalProcess]:
@@ -227,6 +229,8 @@ class ApprovalProcessService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
+
+        query = apply_keyword_icontains(query, keyword, ["name", "code", "description"])
 
         if installed_app_codes is not None:
             from core.config.audit_registry import all_entries

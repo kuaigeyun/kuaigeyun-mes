@@ -10,9 +10,13 @@ from loguru import logger
 
 from apps.kuaicaiwu.schemas.finance import (
     ReceivableCreate, ReceivableUpdate, ReceivableResponse, ReceivableListResponse,
-    ReceiptRecordCreate
+    ReceiptRecordCreate,
+    MergeReceiptCreate,
+    MergeSalesInvoiceCreate,
+    MergeFinanceVoucherResponse,
 )
 from apps.kuaicaiwu.services.finance_service import ReceivableService
+from apps.kuaicaiwu.services.merge_settlement_service import MergeSettlementService
 from apps.kuaicaiwu.services.receivable_pull_service import ReceivablePullService
 from apps.kuaicaiwu.utils.settlement_db_guard import (
     SETTLEMENTS_TABLE_MISSING_HINT,
@@ -28,6 +32,7 @@ router = APIRouter(prefix="/receivables", tags=["App - Kuaicaiwu - Finance"])
 
 receivable_service = ReceivableService()
 receivable_pull_service = ReceivablePullService()
+merge_settlement_service = MergeSettlementService()
 
 _PULL_SOURCE_TYPES = frozenset({"sales_order", "sales_delivery"})
 
@@ -267,6 +272,46 @@ async def preview_pull_receivable_from_sales_delivery(
         tenant_id=tenant_id,
         delivery_id=delivery_id,
     )
+
+
+@router.post(
+    "/merge-receipt",
+    response_model=MergeFinanceVoucherResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Merge create receipt from receivables",
+)
+async def merge_create_receipt(
+    data: MergeReceiptCreate,
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receipt:create")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await merge_settlement_service.merge_create_receipt(tenant_id, data, current_user)
+    except (BusinessLogicError, ValidationError) as e:
+        raise _http_exception_with_trace(422, str(e), "/receivables/merge-receipt", tenant_id) from e
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/receivables/merge-receipt", tenant_id) from e
+
+
+@router.post(
+    "/merge-sales-invoice",
+    response_model=MergeFinanceVoucherResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Merge create sales invoice from receivables",
+)
+async def merge_create_sales_invoice(
+    data: MergeSalesInvoiceCreate,
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:sales-invoice:create")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await merge_settlement_service.merge_create_sales_invoice(tenant_id, data, current_user)
+    except (BusinessLogicError, ValidationError) as e:
+        raise _http_exception_with_trace(422, str(e), "/receivables/merge-sales-invoice", tenant_id) from e
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/receivables/merge-sales-invoice", tenant_id) from e
 
 
 @router.get("/{id}", response_model=ReceivableResponse)

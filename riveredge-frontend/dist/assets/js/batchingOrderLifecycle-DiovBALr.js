@@ -1,0 +1,1 @@
+import{l as c}from"./LinkedDocumentDetailContext-BzD3Zc21.js";const l={draft:"草稿",picking:"备料中",配料中:"备料中",备料中:"备料中",completed:"已完成",cancelled:"已取消"};function a(e){return e?l[e]??e:"草稿"}const r=c({stageDefs:[{key:"draft",label:"草稿"},{key:"picking",label:"备料中"},{key:"completed",label:"已完成"},{key:"cancelled",label:"已取消"}],nextStepSuggestionKeys:{}});export{a,r as g};

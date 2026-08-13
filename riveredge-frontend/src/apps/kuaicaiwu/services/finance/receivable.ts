@@ -83,4 +83,51 @@ export const receivableService = {
       method: 'DELETE',
     });
   },
+
+  mergeCreateReceipt: (data: MergeReceiptCreatePayload) =>
+    apiRequest<MergeFinanceVoucherResult>(`${RECEIVABLE_API}/merge-receipt`, {
+      method: 'POST',
+      data,
+    }),
+
+  mergeCreateSalesInvoice: (data: MergeSalesInvoiceCreatePayload) =>
+    apiRequest<MergeFinanceVoucherResult>(`${RECEIVABLE_API}/merge-sales-invoice`, {
+      method: 'POST',
+      data,
+    }),
+};
+
+export type MergeFinanceAllocationLine = {
+  source_id: number;
+  amount: number;
+};
+
+export type MergeFinanceVoucherResult = {
+  voucher_type: string;
+  voucher_id: number;
+  voucher_code: string;
+  total_amount: number;
+  partner_id: number;
+  partner_name: string;
+  allocations: Array<{ source_id: number; source_code?: string; amount: number }>;
+};
+
+export type MergeReceiptCreatePayload = {
+  allocations: MergeFinanceAllocationLine[];
+  receipt_date: string;
+  payment_method: string;
+  bank_account?: string;
+  bank_account_id?: number;
+  settlement_type?: string;
+  notes?: string;
+  attachments?: Record<string, unknown>[];
+};
+
+export type MergeSalesInvoiceCreatePayload = {
+  allocations: MergeFinanceAllocationLine[];
+  invoice_date: string;
+  invoice_number?: string;
+  invoice_type?: string;
+  tax_rate?: number;
+  notes?: string;
 };

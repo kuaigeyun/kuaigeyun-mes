@@ -31,6 +31,9 @@ export interface LanguageListParams {
   page?: number;
   page_size?: number;
   is_active?: boolean;
+  code?: string;
+  name?: string;
+  keyword?: string;
 }
 
 /**

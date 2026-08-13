@@ -54,6 +54,8 @@ export interface OutboundHubOrder {
     confirm?: { allowed?: boolean; reason?: string };
     withdraw?: { allowed?: boolean; reason?: string };
     print?: { allowed?: boolean; reason?: string };
+    delete?: { allowed?: boolean; reason?: string };
+    update?: { allowed?: boolean; reason?: string };
   };
   [key: string]: unknown;
 }
@@ -130,12 +132,35 @@ export function isOutboundWithdrawable(record: OutboundHubOrder): boolean {
   return record.capabilities?.withdraw?.allowed === true;
 }
 
+export function isOutboundDeletable(record: OutboundHubOrder): boolean {
+  if (record.outbound_type === 'outsource_issue') return false;
+  if (record.capabilities?.delete != null) {
+    return record.capabilities.delete.allowed === true;
+  }
+  const st = String(record.status || '').trim();
+  return ['待审核', '草稿', 'draft', '已取消', 'cancelled'].includes(st);
+}
+
+/** 生产领料：确认领料前可编辑（capabilities.update） */
+export function isOutboundEditable(record: OutboundHubOrder): boolean {
+  if (record.outbound_type !== 'production_picking') return false;
+  if (record.capabilities?.update != null) {
+    return record.capabilities.update.allowed === true;
+  }
+  const st = String(record.status || '').trim();
+  return ['草稿', 'draft', '待审核', '待领料', 'pending'].includes(st);
+}
+
 export function outboundConfirmCapabilityReasonMessage(record: OutboundHubOrder, t: TFunction): string {
   return outboundHubCapabilityReasonMessage(record.capabilities?.confirm?.reason, t);
 }
 
 export function outboundWithdrawCapabilityReasonMessage(record: OutboundHubOrder, t: TFunction): string {
   return outboundHubCapabilityReasonMessage(record.capabilities?.withdraw?.reason, t);
+}
+
+export function outboundUpdateCapabilityReasonMessage(record: OutboundHubOrder, t: TFunction): string {
+  return outboundHubCapabilityReasonMessage(record.capabilities?.update?.reason, t);
 }
 
 export function outboundDocumentCode(record: OutboundHubOrder): string {

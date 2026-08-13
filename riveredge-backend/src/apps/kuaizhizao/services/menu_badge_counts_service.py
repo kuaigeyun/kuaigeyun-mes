@@ -241,23 +241,11 @@ async def _section_quality_inspection(tenant_id: int) -> BadgeFragment:
 async def _section_equipment_assets(tenant_id: int) -> BadgeFragment:
     from apps.kuaizhizao.models.equipment import Equipment
     from apps.kuaizhizao.models.mold import Mold
-    from apps.kuaizhizao.models.demand import Demand
     from apps.kuaizhizao.models.equipment_point_inspection import EquipmentPointInspectionRecord
-    from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
 
-    _audited_status = ["AUDITED", "已审核", "CONFIRMED", "已确认", DemandStatus.AUDITED.value]
-    _approved_review = ["APPROVED", "审核通过", "通过", "已通过", ReviewStatus.APPROVED.value]
-
-    eq_cnt, mold_cnt, dc_cnt, epi_cnt = await asyncio.gather(
+    eq_cnt, mold_cnt, epi_cnt = await asyncio.gather(
         Equipment.filter(tenant_id=tenant_id, deleted_at__isnull=True, status__in=["维修中", "校验中"]).count(),
         Mold.filter(tenant_id=tenant_id, deleted_at__isnull=True, status__in=["维修中", "校验中"]).count(),
-        Demand.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            pushed_to_computation=False,
-            status__in=_audited_status,
-            review_status__in=_approved_review,
-        ).count(),
         EquipmentPointInspectionRecord.filter(
             tenant_id=tenant_id, status="待点检", deleted_at__isnull=True,
         ).count(),
@@ -265,7 +253,6 @@ async def _section_equipment_assets(tenant_id: int) -> BadgeFragment:
     return {
         "equipment": {"overdue": 0, "pending": 0, "in_progress": eq_cnt},
         "mold": {"overdue": 0, "pending": 0, "in_progress": mold_cnt},
-        "demand_computation": {"overdue": 0, "pending": dc_cnt, "in_progress": 0},
         "equipment_inspection": {"overdue": 0, "pending": epi_cnt, "in_progress": 0},
     }
 

@@ -136,21 +136,18 @@ async def compute_capability_context(
         current_link=current_link,
     )
 
-    verification_passed = False
-    if rework_order.verification_inspection_id:
-        from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+    # 工序返工若误挂了成品检验复检单，在能力计算前纠偏为过程检验
+    if (
+        str(rework_order.status or "") == "pending_verification"
+        and rework_order.verification_required
+        and not rework_order.source_inspection_id
+    ):
+        await _heal_process_verification_inspection(tenant_id, rework_order)
 
-        inspection = await FinishedGoodsInspection.get_or_none(
-            tenant_id=tenant_id,
-            id=rework_order.verification_inspection_id,
-            deleted_at__isnull=True,
-        )
-        if inspection and (
-            _norm_status(inspection.review_status) in ("已通过", "approved", "audited")
-            or _norm_status(inspection.status) in ("已审核", "audited", "approved", "已检验", "inspected")
-        ):
-            req_qty = _dec(rework_order.completed_quantity or rework_order.quantity)
-            verification_passed = _dec(inspection.qualified_quantity) >= req_qty
+    req_qty = _dec(rework_order.completed_quantity or rework_order.quantity)
+    verification_passed = await _is_verification_passed(
+        tenant_id, rework_order, req_qty=req_qty
+    )
 
     return {
         "has_reports": has_reports,
@@ -379,10 +376,198 @@ async def request_completion(
             rework_order.remarks = f"{base}\n完修申请: {request.remarks}".strip()
 
         await rework_order.save()
+        if rework_order.status == "quality_released":
+            await _writeback_start_operation_after_quality_release(
+                tenant_id, rework_order, actor_id=actor_id
+            )
     return rework_order
 
 
-async def _create_verification_inspection(
+def _uses_finished_goods_verification(rework_order: ReworkOrder) -> bool:
+    """成品检验下推的返工 → FQC 复检；其余（工序/手工返工）→ 过程检验复检。"""
+    return bool(rework_order.source_inspection_id)
+
+
+async def _inspection_status_passed(inspection: Any) -> bool:
+    return (
+        _norm_status(getattr(inspection, "review_status", None))
+        in ("已通过", "通过", "approved", "audited")
+        or _norm_status(getattr(inspection, "status", None))
+        in ("已审核", "audited", "approved", "已检验", "inspected")
+    )
+
+
+async def _is_verification_passed(
+    tenant_id: int,
+    rework_order: ReworkOrder,
+    *,
+    req_qty: Decimal,
+) -> bool:
+    vid = rework_order.verification_inspection_id
+    if not vid:
+        return False
+    if _uses_finished_goods_verification(rework_order):
+        from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+
+        inspection = await FinishedGoodsInspection.get_or_none(
+            tenant_id=tenant_id, id=vid, deleted_at__isnull=True
+        )
+        if not inspection or not await _inspection_status_passed(inspection):
+            return False
+        return _dec(inspection.qualified_quantity) >= req_qty
+
+    from apps.kuaizhizao.models.process_inspection import ProcessInspection
+
+    process = await ProcessInspection.get_or_none(
+        tenant_id=tenant_id, id=vid, deleted_at__isnull=True
+    )
+    if process:
+        if not await _inspection_status_passed(process):
+            return False
+        return _dec(process.qualified_quantity) >= req_qty
+
+    # 历史误生成的 FQC 复检单：仍认结果，避免卡死
+    from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+
+    legacy = await FinishedGoodsInspection.get_or_none(
+        tenant_id=tenant_id, id=vid, deleted_at__isnull=True
+    )
+    if not legacy or not await _inspection_status_passed(legacy):
+        return False
+    return _dec(legacy.qualified_quantity) >= req_qty
+
+
+async def _resolve_rework_start_work_order_operation(
+    tenant_id: int,
+    rework_order: ReworkOrder,
+) -> WorkOrderOperation:
+    woo_id = rework_order.start_work_order_operation_id
+    if woo_id:
+        woo = await WorkOrderOperation.get_or_none(
+            tenant_id=tenant_id, id=int(woo_id), deleted_at__isnull=True
+        )
+        if woo:
+            return woo
+    if rework_order.original_work_order_id:
+        woo = (
+            await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id=int(rework_order.original_work_order_id),
+                deleted_at__isnull=True,
+            )
+            .order_by("sequence", "id")
+            .first()
+        )
+        if woo:
+            return woo
+    raise BusinessLogicError("工序返工复检需要起始工序，请指定返工起始工序后再申请完修")
+
+
+async def _create_process_verification_inspection(
+    tenant_id: int,
+    rework_order: ReworkOrder,
+    quantity: Decimal,
+    created_by: int,
+) -> int:
+    from apps.kuaizhizao.models.process_inspection import ProcessInspection
+    from apps.kuaizhizao.services.quality_service import (
+        ProcessInspectionService,
+        _quality_inspection_initial_review_fields,
+        _require_ipqc_stage_enabled,
+        _resolve_inspection_template_fields,
+        _resolve_material_base_unit,
+    )
+
+    await _require_ipqc_stage_enabled(tenant_id)
+    woo = await _resolve_rework_start_work_order_operation(tenant_id, rework_order)
+    wo = await WorkOrder.get_or_none(
+        tenant_id=tenant_id,
+        id=rework_order.original_work_order_id,
+        deleted_at__isnull=True,
+    )
+    if not wo:
+        raise NotFoundError(f"原工单不存在: {rework_order.original_work_order_id}")
+
+    master_op_id = int(woo.operation_id)
+    from core.utils.timezone_utils import today_site_str
+
+    code = await ProcessInspectionService().generate_code(
+        tenant_id, "PROCESS_INSPECTION_CODE", prefix=f"PQ{today_site_str()}"
+    )
+    # 业务可读：返工复检单号带返工单编码，避免与普通 IPQC 混淆
+    inspection_code = f"PQ-RW-{rework_order.code}"
+    exists = await ProcessInspection.filter(
+        tenant_id=tenant_id, inspection_code=inspection_code, deleted_at__isnull=True
+    ).exists()
+    if exists:
+        inspection_code = f"{code}-RW"
+
+    template = await _resolve_inspection_template_fields(
+        tenant_id,
+        rework_order.product_id,
+        "ipqc",
+        operation_id=master_op_id,
+        use_quality_characteristics=True,
+    )
+    initial_review_fields = await _quality_inspection_initial_review_fields(
+        tenant_id, "process_inspection"
+    )
+    material_unit = await _resolve_material_base_unit(tenant_id, rework_order.product_id)
+
+    inspection = await ProcessInspection.create(
+        tenant_id=tenant_id,
+        inspection_code=inspection_code,
+        work_order_id=int(wo.id),
+        work_order_code=wo.code,
+        operation_id=master_op_id,
+        operation_code=woo.operation_code,
+        operation_name=woo.operation_name,
+        workshop_id=getattr(wo, "workshop_id", None),
+        workshop_name=getattr(wo, "workshop_name", None),
+        material_id=rework_order.product_id,
+        material_code=rework_order.product_code,
+        material_name=rework_order.product_name,
+        material_unit=material_unit,
+        inspection_quantity=quantity,
+        qualified_quantity=Decimal("0"),
+        unqualified_quantity=Decimal("0"),
+        inspection_result="待检验",
+        quality_status="待判定",
+        status="待检验",
+        notes=f"返工复检（工序）：{rework_order.code}",
+        created_by=created_by,
+        **template,
+        **initial_review_fields,
+    )
+
+    try:
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+
+        await DocumentRelationNewService().create_relation(
+            tenant_id=tenant_id,
+            relation_data=DocumentRelationCreate(
+                source_type="rework_order",
+                source_id=int(rework_order.id),
+                source_code=rework_order.code,
+                source_name=None,
+                target_type="process_inspection",
+                target_id=int(inspection.id),
+                target_code=str(inspection.inspection_code),
+                target_name=None,
+                relation_type="source",
+                relation_mode="push",
+                relation_desc="返工完修生成过程复检单",
+            ),
+            created_by=created_by,
+        )
+    except Exception as exc:
+        logger.warning("建立返工单→过程复检关联失败: {}", exc)
+
+    return int(inspection.id)
+
+
+async def _create_finished_goods_verification_inspection(
     tenant_id: int,
     rework_order: ReworkOrder,
     quantity: Decimal,
@@ -412,7 +597,60 @@ async def _create_verification_inspection(
         source_id=rework_order.id,
         source_code=rework_order.code,
     )
-    return inspection.id
+    return int(inspection.id)
+
+
+async def _create_verification_inspection(
+    tenant_id: int,
+    rework_order: ReworkOrder,
+    quantity: Decimal,
+    created_by: int,
+) -> int:
+    if _uses_finished_goods_verification(rework_order):
+        return await _create_finished_goods_verification_inspection(
+            tenant_id, rework_order, quantity, created_by
+        )
+    return await _create_process_verification_inspection(
+        tenant_id, rework_order, quantity, created_by
+    )
+
+
+async def _heal_process_verification_inspection(
+    tenant_id: int,
+    rework_order: ReworkOrder,
+) -> None:
+    """
+    工序返工待复检但误挂成品检验单时：若 FQC 仍待检则改为过程检验复检单。
+    """
+    from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+    from apps.kuaizhizao.models.process_inspection import ProcessInspection
+
+    vid = rework_order.verification_inspection_id
+    if vid:
+        process = await ProcessInspection.get_or_none(
+            tenant_id=tenant_id, id=int(vid), deleted_at__isnull=True
+        )
+        if process:
+            return
+        fqc = await FinishedGoodsInspection.get_or_none(
+            tenant_id=tenant_id, id=int(vid), deleted_at__isnull=True
+        )
+        if fqc and _norm_status(fqc.status) not in ("待检验", "pending", "draft", ""):
+            # 已在 FQC 做过检，不再改挂
+            return
+        if fqc and _norm_status(fqc.status) in ("待检验", "pending", "draft", ""):
+            fqc.deleted_at = resolve_business_datetime()
+            await fqc.save(update_fields=["deleted_at"])
+
+    qty = _dec(rework_order.completed_quantity or rework_order.quantity)
+    if qty <= 0:
+        return
+    actor_id = int(rework_order.completion_requested_by or rework_order.updated_by or 0) or 0
+    new_id = await _create_process_verification_inspection(
+        tenant_id, rework_order, qty, actor_id or 1
+    )
+    rework_order.verification_inspection_id = new_id
+    await rework_order.save(update_fields=["verification_inspection_id"])
 
 
 async def quality_release(
@@ -438,6 +676,9 @@ async def quality_release(
             base = (rework_order.remarks or "").strip()
             rework_order.remarks = f"{base}\n质量放行: {request.remarks}".strip()
         await rework_order.save()
+        await _writeback_start_operation_after_quality_release(
+            tenant_id, rework_order, actor_id=actor_id
+        )
     return rework_order
 
 
@@ -469,6 +710,106 @@ async def close_rework_order(
     return rework_order
 
 
+async def _writeback_start_operation_after_quality_release(
+    tenant_id: int,
+    rework_order: ReworkOrder,
+    *,
+    actor_id: int,
+) -> None:
+    """
+    工序返工质量放行后：把完修数量从起始工序原过程检验的不合格转入合格，
+    使后道可报数量 = 前道转序合格（含返工挽回）。
+    成品检验来源返工不改工序转序。
+    """
+    if rework_order.source_inspection_id:
+        return
+    if not rework_order.original_work_order_id:
+        return
+    qty = _dec(rework_order.completed_quantity or rework_order.quantity)
+    if qty <= 0:
+        return
+
+    from apps.kuaizhizao.models.process_inspection import ProcessInspection
+    from apps.kuaizhizao.services.operation_transfer_service import (
+        is_rework_verification_process_inspection,
+    )
+    from apps.kuaizhizao.services.quality_service import ProcessInspectionService
+    from apps.kuaizhizao.services.work_order_service import WorkOrderService
+
+    try:
+        woo = await _resolve_rework_start_work_order_operation(tenant_id, rework_order)
+    except Exception as exc:
+        logger.warning("返工放行回写跳过（无起始工序）: rework={} err={}", rework_order.code, exc)
+        return
+
+    master_op_id = int(woo.operation_id)
+    work_order_id = int(rework_order.original_work_order_id)
+    remaining = qty
+
+    # 优先消化原检验单不合格；按 id 升序稳定回写
+    insp_rows = (
+        await ProcessInspection.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            operation_id=master_op_id,
+            deleted_at__isnull=True,
+        )
+        .order_by("id")
+        .all()
+    )
+    for insp in insp_rows:
+        if remaining <= 0:
+            break
+        if is_rework_verification_process_inspection(insp):
+            continue
+        u = _dec(insp.unqualified_quantity)
+        if u <= 0:
+            continue
+        take = min(remaining, u)
+        insp.unqualified_quantity = u - take
+        insp.qualified_quantity = _dec(insp.qualified_quantity) + take
+        await insp.save(
+            update_fields=["unqualified_quantity", "qualified_quantity", "updated_at"]
+        )
+        remaining -= take
+
+    # 复检单本身不参与前道转序合计；放行后软删，避免列表干扰
+    vid = rework_order.verification_inspection_id
+    if vid and not _uses_finished_goods_verification(rework_order):
+        v_insp = await ProcessInspection.get_or_none(
+            tenant_id=tenant_id, id=int(vid), deleted_at__isnull=True
+        )
+        if v_insp and is_rework_verification_process_inspection(v_insp):
+            v_insp.deleted_at = resolve_business_datetime()
+            await v_insp.save(update_fields=["deleted_at"])
+
+    try:
+        await ProcessInspectionService()._reconcile_operation_quality_after_inspection(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            operation_id=master_op_id,
+        )
+        await WorkOrderService().refresh_work_order_operation_transfer_state(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+        )
+    except Exception as exc:
+        logger.warning(
+            "返工放行后刷新工序转序失败: rework={} wo={} err={}",
+            rework_order.code,
+            work_order_id,
+            exc,
+        )
+    logger.info(
+        "返工质量放行已回写前道可转序: rework={} wo={} op={} qty={} leftover={}",
+        rework_order.code,
+        work_order_id,
+        master_op_id,
+        qty,
+        remaining,
+    )
+
+
 async def _writeback_source_on_close(
     tenant_id: int,
     rework_order: ReworkOrder,
@@ -477,6 +818,15 @@ async def _writeback_source_on_close(
     """关闭时回写原工单返工数量并建立追溯关联。"""
     if not rework_order.original_work_order_id:
         return
+    # 若尚未质量放行就关闭（极少路径），补做工序回写
+    if (
+        not rework_order.source_inspection_id
+        and rework_order.completed_quantity
+        and str(rework_order.status or "") == "closed"
+    ):
+        await _writeback_start_operation_after_quality_release(
+            tenant_id, rework_order, actor_id=actor_id
+        )
     try:
         from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
         from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate

@@ -17,6 +17,7 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from
 import { UniDetail } from '../../../components/uni-detail';
 import { apiRequest } from '../../../services/api';
 import { fetchAllListItems } from '../../../utils/fetchAllListPages';
+import { pickListSearchKeyword } from '../../../utils/tableQueryKey';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 
 /**
@@ -287,13 +288,14 @@ const WorkingHoursConfigsPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           try {
             const result = await apiRequest('/core/working-hours-configs', {
               method: 'GET',
               params: {
                 skip: (params.current! - 1) * params.pageSize!,
                 limit: params.pageSize,
+                keyword: pickListSearchKeyword(searchFormValues),
               },
             });
             return {

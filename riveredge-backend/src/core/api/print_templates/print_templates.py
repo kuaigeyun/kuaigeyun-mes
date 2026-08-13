@@ -69,6 +69,7 @@ async def list_print_templates(
     type: Optional[str] = Query(None, description="模板类型（可选）"),
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
     document_type: Optional[str] = Query(None, description="关联业务单据类型（可选，按 config.document_type 筛选）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（名称、代码、描述）"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
@@ -93,6 +94,7 @@ async def list_print_templates(
         type=type,
         is_active=is_active,
         document_type=document_type,
+        keyword=keyword,
         installed_app_codes=await get_installed_application_codes(tenant_id),
     )
     return [PrintTemplateResponse.model_validate(pt) for pt in print_templates]

@@ -30,7 +30,10 @@ export interface InvitationCode {
 export interface InvitationCodeListParams {
   page?: number;
   page_size?: number;
+  skip?: number;
+  limit?: number;
   is_active?: boolean;
+  keyword?: string;
 }
 
 /**

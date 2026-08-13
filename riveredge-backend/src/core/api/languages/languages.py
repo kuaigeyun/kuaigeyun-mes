@@ -82,6 +82,7 @@ async def list_languages(
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
     code: Optional[str] = Query(None, description="语言代码（模糊搜索）"),
     name: Optional[str] = Query(None, description="语言名称（模糊搜索）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（代码、名称、本地名称）"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
@@ -107,6 +108,7 @@ async def list_languages(
         is_active=is_active,
         code=code,
         name=name,
+        keyword=keyword,
     )
     return LanguageListResponse(
         items=[LanguageResponse.model_validate(l) for l in languages],

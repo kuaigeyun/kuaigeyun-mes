@@ -145,22 +145,32 @@ async def _section_purchase_inquiry(tenant_id: int, now_date) -> BadgeFragment:
 
 async def _section_demand_and_reporting(tenant_id: int, now_date) -> BadgeFragment:
     from apps.kuaizhizao.models.demand import Demand
+    from apps.kuaizhizao.models.demand_computation import DemandComputation
     from apps.kuaizhizao.models.reporting_record import ReportingRecord
 
     demand_term = list(dict.fromkeys([*_DOC_TERMINAL_STATUSES, "已关闭", "已取消"]))
     audited = [DocumentStatus.AUDITED.value, "已审核", "AUDITED", "CONFIRMED", "已确认"]
+    # 与列表「进行中」及 statistics.pending_count 对齐；含执行中的计算中态
+    dc_open_statuses = ["进行中", "计算中", "pending", "running"]
     dm = Demand.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-    dm_od, dm_p, dm_x, rep_p = await asyncio.gather(
+    dm_od, dm_p, dm_x, dc_x, rep_p = await asyncio.gather(
         dm.filter(end_date__lt=now_date, end_date__isnull=False).exclude(status__in=demand_term).count(),
         dm.filter(review_status__in=_RV_PENDING).exclude(status__in=[*demand_term, "DRAFT", "草稿"]).count(),
         dm.filter(status__in=audited, review_status__in=[ReviewStatus.APPROVED.value, "APPROVED", "已通过"])
         .filter(pushed_to_computation=False)
         .exclude(status__in=demand_term)
         .count(),
+        DemandComputation.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            computation_status__in=dc_open_statuses,
+        ).count(),
         ReportingRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="pending").count(),
     )
     return {
         "demand": _tri(dm_od, dm_p, dm_x),
+        # 需求计算菜单：计进行中的需求计算单（非「未下推需求」）
+        "demand_computation": _tri(in_progress=dc_x),
         "reporting_record": _tri(pending=rep_p),
     }
 

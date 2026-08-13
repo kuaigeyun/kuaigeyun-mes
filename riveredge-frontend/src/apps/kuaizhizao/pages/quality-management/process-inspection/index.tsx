@@ -295,7 +295,7 @@ const ProcessInspectionPage: React.FC = () => {
   const ncPerms = useResourcePermissions(NC_RESOURCE);
   const { canRead: canReadNcLedger } = useResourcePermissions(NC_RESOURCE);
   const actionRef = useRef<ActionType>(null);
-  const urlListFiltersRef = useRef<{ work_order_id?: number; operation_id?: number }>({});
+  const urlListFiltersRef = useRef<{ id?: number; work_order_id?: number; operation_id?: number }>({});
   const deepLinkOpenedRef = useRef(false);
   const tableRowsRef = useRef<ProcessInspection[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -431,8 +431,15 @@ const ProcessInspectionPage: React.FC = () => {
   // URL 深链只过滤列表，不自动打开详情抽屉（详情仅操作列「详情」按钮）
   useEffect(() => {
     if (deepLinkOpenedRef.current) return;
+    const piId = searchParams.get('process_inspection_id');
     const woId = searchParams.get('work_order_id');
     const opId = searchParams.get('operation_id');
+    if (piId && /^\d+$/.test(piId)) {
+      deepLinkOpenedRef.current = true;
+      urlListFiltersRef.current = { id: Number(piId) };
+      actionRef.current?.reload();
+      return;
+    }
     if (woId && /^\d+$/.test(woId) && opId && /^\d+$/.test(opId)) {
       deepLinkOpenedRef.current = true;
       urlListFiltersRef.current = {

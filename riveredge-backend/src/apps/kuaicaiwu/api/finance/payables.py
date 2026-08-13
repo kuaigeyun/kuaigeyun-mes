@@ -11,9 +11,13 @@ from loguru import logger
 from apps.kuaicaiwu.constants.finance_source_types import PAYABLE_SOURCE_PURCHASE_RECEIPT
 from apps.kuaicaiwu.schemas.finance import (
     PayableCreate, PayableUpdate, PayableResponse, PayableListResponse,
-    PaymentRecordCreate
+    PaymentRecordCreate,
+    MergePaymentCreate,
+    MergePurchaseInvoiceCreate,
+    MergeFinanceVoucherResponse,
 )
 from apps.kuaicaiwu.services.finance_service import PayableService
+from apps.kuaicaiwu.services.merge_settlement_service import MergeSettlementService
 from apps.kuaicaiwu.services.payable_pull_service import PayablePullService
 from apps.kuaicaiwu.utils.settlement_db_guard import (
     SETTLEMENTS_TABLE_MISSING_HINT,
@@ -29,6 +33,7 @@ router = APIRouter(prefix="/payables", tags=["App - Kuaicaiwu - Finance"])
 
 payable_service = PayableService()
 payable_pull_service = PayablePullService()
+merge_settlement_service = MergeSettlementService()
 
 _PULL_SOURCE_TYPES = frozenset({"purchase_order", "purchase_receipt"})
 
@@ -252,6 +257,46 @@ async def preview_pull_payable_from_purchase_receipt(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
     )
+
+
+@router.post(
+    "/merge-payment",
+    response_model=MergeFinanceVoucherResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Merge create payment from payables",
+)
+async def merge_create_payment(
+    data: MergePaymentCreate,
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payment:create")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await merge_settlement_service.merge_create_payment(tenant_id, data, current_user)
+    except (BusinessLogicError, ValidationError) as e:
+        raise _http_exception_with_trace(422, str(e), "/payables/merge-payment", tenant_id) from e
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/payables/merge-payment", tenant_id) from e
+
+
+@router.post(
+    "/merge-purchase-invoice",
+    response_model=MergeFinanceVoucherResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Merge create purchase invoice from payables",
+)
+async def merge_create_purchase_invoice(
+    data: MergePurchaseInvoiceCreate,
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:create")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await merge_settlement_service.merge_create_purchase_invoice(tenant_id, data, current_user)
+    except (BusinessLogicError, ValidationError) as e:
+        raise _http_exception_with_trace(422, str(e), "/payables/merge-purchase-invoice", tenant_id) from e
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/payables/merge-purchase-invoice", tenant_id) from e
 
 
 @router.get("/{id}", response_model=PayableResponse)

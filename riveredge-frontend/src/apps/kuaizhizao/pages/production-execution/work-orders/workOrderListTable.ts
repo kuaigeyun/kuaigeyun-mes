@@ -324,20 +324,55 @@ export function normalizeWorkOrderListTreeData(rows: WorkOrderListRow[]): WorkOr
   return inheritOperationStepsFromParent([...groupForest, ...ungroupedRoots])
 }
 
-function listSnapshotStorageKey(queryKey: readonly unknown[]): string {
+function listSnapshotStoragePrefix(): string {
   /* v14：拆分主工单不再继承 BOM 上级工序摘要 */
-  return `riveredge.woList.v14:${tenantIdForSnapshot()}:${stableJsonForQueryKey(queryKey)}`
+  return `riveredge.woList.v14:${tenantIdForSnapshot()}:`
 }
 
-/** 将上次成功的列表写入 sessionStorage，下次进页可瞬时 hydrate */
+function listSnapshotStorageKey(queryKey: readonly unknown[]): string {
+  return `${listSnapshotStoragePrefix()}${stableJsonForQueryKey(queryKey)}`
+}
+
+/** 只保留当前默认首屏这一把快照；翻页/筛选产生的历史 key 会把 sessionStorage 和主线程 JSON 拖死 */
+function evictOtherWorkOrderListSnapshots(keepKey: string): void {
+  if (typeof window === 'undefined') return
+  const prefix = listSnapshotStoragePrefix()
+  const toRemove: string[] = []
+  try {
+    for (let i = 0; i < sessionStorage.length; i += 1) {
+      const k = sessionStorage.key(i)
+      if (k && k.startsWith(prefix) && k !== keepKey) toRemove.push(k)
+    }
+    for (const k of toRemove) sessionStorage.removeItem(k)
+  } catch {
+    /* 隐私模式 */
+  }
+}
+
+function isDefaultWorkOrderListSnapshotQuery(
+  params: { current: number; pageSize: number },
+  sort: Record<string, 'ascend' | 'descend' | null>,
+  filter: Record<string, ReactText[] | null>,
+  searchFormValues: Record<string, any> | undefined,
+): boolean {
+  if (params.current !== 1) return false
+  if (stableJsonForQueryKey(sort) !== stableJsonForQueryKey(WORK_ORDER_LIST_DEFAULT_SORT)) return false
+  if (stableJsonForQueryKey(filter ?? {}) !== stableJsonForQueryKey(emptyFilter)) return false
+  if (stableJsonForQueryKey(searchFormValues ?? {}) !== stableJsonForQueryKey({})) return false
+  return true
+}
+
+/** 将默认首屏列表写入 sessionStorage，下次进页可瞬时 hydrate；禁止按筛选/翻页各写一把 */
 export function persistWorkOrderListSnapshot(
   queryKey: readonly unknown[],
   result: WorkOrderListTableResult
 ): void {
   if (typeof window === 'undefined' || !result?.success || !Array.isArray(result.data)) return
+  const key = listSnapshotStorageKey(queryKey)
   try {
+    evictOtherWorkOrderListSnapshots(key)
     sessionStorage.setItem(
-      listSnapshotStorageKey(queryKey),
+      key,
       JSON.stringify({
         data: result.data,
         total: result.total,
@@ -351,7 +386,7 @@ export function persistWorkOrderListSnapshot(
 }
 
 /**
- * 从 sessionStorage 灌入 QueryClient；updatedAt 置为过期以触发 staleWhileRevalidate（先显旧数据再静默刷新）
+ * 从 sessionStorage 灌入 QueryClient。updatedAt 标为过期，避免把昨日快照当 fresh 挡住首屏网络请求。
  */
 export function hydrateWorkOrderListQueryFromSession(
   queryClient: QueryClient,
@@ -387,6 +422,7 @@ export function hydrateDefaultWorkOrderListPageFromSession(
   staleTimeMs: number
 ): void {
   const key = buildWorkOrderListUniTableQueryKey(1, pageSize, WORK_ORDER_LIST_DEFAULT_SORT, emptyFilter, {})
+  evictOtherWorkOrderListSnapshots(listSnapshotStorageKey(key))
   hydrateWorkOrderListQueryFromSession(queryClient, key, staleTimeMs)
 }
 
@@ -467,6 +503,8 @@ export type WorkOrderListFetchOptions = {
   include_downstream_push_progress?: boolean
   /** 工序列步骤摘要；prefetch 下一页时应关闭 */
   include_operation_steps?: boolean
+  /** 仅默认首屏展示请求可写 session 快照；prefetch / 翻页 / 筛选禁止 */
+  persistSnapshot?: boolean
 }
 
 /**
@@ -494,7 +532,11 @@ export async function fetchWorkOrderListForTable(
   if (result.success && Array.isArray(result.data)) {
     result.data = normalizeWorkOrderListTreeData(result.data)
   }
-  if (result.success) {
+  if (
+    result.success &&
+    options?.persistSnapshot !== false &&
+    isDefaultWorkOrderListSnapshotQuery(params, sort, filter, searchFormValues)
+  ) {
     const qk = buildWorkOrderListUniTableQueryKey(
       params.current,
       params.pageSize,
@@ -516,6 +558,7 @@ export function prefetchDefaultWorkOrderList(queryClient: QueryClient, pageSize:
       fetchWorkOrderListForTable({ current: 1, pageSize }, WORK_ORDER_LIST_DEFAULT_SORT, emptyFilter, {}, {
         include_readiness: false,
         include_downstream_push_progress: false,
+        persistSnapshot: false,
       }),
     staleTime: WORK_ORDER_LIST_STALE_MS,
   })

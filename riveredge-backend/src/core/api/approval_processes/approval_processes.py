@@ -105,6 +105,7 @@ async def list_approval_processes(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（名称、代码、描述）"),
     for_audit_config: bool = Query(False, description="配置中心审核设置：返回全部审核开关流程"),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -128,6 +129,7 @@ async def list_approval_processes(
             skip=skip,
             limit=limit,
             is_active=is_active,
+            keyword=keyword,
             installed_app_codes=await get_installed_application_codes(tenant_id),
             for_audit_config=for_audit_config,
         )

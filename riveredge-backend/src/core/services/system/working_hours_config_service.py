@@ -12,6 +12,7 @@ from typing import List, Optional
 from decimal import Decimal
 
 from core.models.working_hours_config import WorkingHoursConfig
+from core.utils.search_utils import apply_keyword_icontains
 from core.schemas.working_hours_config import (
     WorkingHoursConfigCreate,
     WorkingHoursConfigUpdate,
@@ -88,6 +89,7 @@ class WorkingHoursConfigService(BaseService[WorkingHoursConfig]):
         scope_type: Optional[str] = None,
         scope_id: Optional[int] = None,
         is_enabled: Optional[bool] = None,
+        keyword: Optional[str] = None,
     ) -> List[WorkingHoursConfigListResponse]:
         """
         获取工作时间段配置列表
@@ -109,6 +111,8 @@ class WorkingHoursConfigService(BaseService[WorkingHoursConfig]):
             query = query.filter(scope_id=scope_id)
         if is_enabled is not None:
             query = query.filter(is_enabled=is_enabled)
+
+        query = apply_keyword_icontains(query, keyword, ["name", "scope_name", "remarks"])
 
         configs = await query.order_by('-priority', 'id')
         return [WorkingHoursConfigListResponse.model_validate(c) for c in configs]

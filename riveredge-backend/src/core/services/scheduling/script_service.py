@@ -14,6 +14,7 @@ import time
 from tortoise.exceptions import IntegrityError
 
 from core.models.script import Script
+from core.utils.search_utils import apply_keyword_icontains
 from core.schemas.script import (
     ScriptCreate,
     ScriptUpdate,
@@ -97,7 +98,8 @@ class ScriptService:
         skip: int = 0,
         limit: int = 100,
         type: Optional[str] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
     ) -> List[Script]:
         """
         获取脚本列表
@@ -122,6 +124,8 @@ class ScriptService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
+
+        query = apply_keyword_icontains(query, keyword, ["name", "code", "description"])
         
         return await query.order_by("-created_at").offset(skip).limit(limit).all()
     

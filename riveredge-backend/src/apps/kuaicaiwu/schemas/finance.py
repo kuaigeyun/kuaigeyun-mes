@@ -568,6 +568,9 @@ class PartnerStatementPreviewResponse(BaseSchema):
     summary: PartnerStatementSummaryResponse
     lines: List[PartnerStatementLineResponse]
     partner_snapshot: dict = Field(default_factory=dict)
+    excluded_from_period: int = Field(
+        0, description="本期因已纳入其它对账单而排除的明细行数"
+    )
 
 
 class PartnerStatementCreate(BaseSchema):
@@ -630,3 +633,73 @@ class PartnerStatementListResponse(BaseSchema):
     total: int
     skip: int
     limit: int
+
+
+# === 合并收款 / 合并付款 / 合并开票 ===
+
+
+class MergeFinanceAllocationLine(BaseSchema):
+    """合并分摊行：源单 + 本次金额"""
+
+    source_id: int = Field(..., description="源单ID（应收或应付）")
+    amount: Decimal = Field(..., gt=0, description="本次分摊金额（收款/付款为余额口径；开票为价税合计）")
+
+
+class MergeReceiptCreate(BaseSchema):
+    """多应收合并创建一张收款单"""
+
+    allocations: List[MergeFinanceAllocationLine] = Field(..., min_length=1)
+    receipt_date: date = Field(..., description="收款日期")
+    payment_method: str = Field(..., max_length=50, description="收款方式")
+    bank_account: Optional[str] = Field(None, max_length=100, description="收款账号")
+    bank_account_id: Optional[int] = Field(None, description="银行账户ID")
+    settlement_type: str = Field("normal", max_length=20, description="结算类型 normal/prepayment")
+    notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
+
+
+class MergePaymentCreate(BaseSchema):
+    """多应付合并创建一张付款单"""
+
+    allocations: List[MergeFinanceAllocationLine] = Field(..., min_length=1)
+    payment_date: date = Field(..., description="付款日期")
+    payment_method: str = Field(..., max_length=50, description="付款方式")
+    bank_account: Optional[str] = Field(None, max_length=100, description="付款账号")
+    bank_account_id: Optional[int] = Field(None, description="银行账户ID")
+    settlement_type: str = Field("normal", max_length=20, description="结算类型 normal/prepayment")
+    notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
+
+
+class MergeSalesInvoiceCreate(BaseSchema):
+    """多应收合并创建一张销售发票"""
+
+    allocations: List[MergeFinanceAllocationLine] = Field(..., min_length=1)
+    invoice_date: date = Field(..., description="开票日期")
+    invoice_number: str = Field(default="", max_length=50, description="发票号码")
+    invoice_type: str = Field("增值税专用发票", max_length=50, description="发票类型")
+    tax_rate: Decimal = Field(Decimal("13"), ge=0, le=100, description="税率(%)")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class MergePurchaseInvoiceCreate(BaseSchema):
+    """多应付合并创建一张采购发票"""
+
+    allocations: List[MergeFinanceAllocationLine] = Field(..., min_length=1)
+    invoice_date: date = Field(..., description="发票日期")
+    invoice_number: str = Field(..., max_length=100, description="发票号码")
+    invoice_type: str = Field("增值税专用发票", max_length=20, description="发票类型")
+    tax_rate: Decimal = Field(Decimal("13"), ge=0, le=100, description="税率(%)")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class MergeFinanceVoucherResponse(BaseSchema):
+    """合并创建凭证响应"""
+
+    voucher_type: str
+    voucher_id: int
+    voucher_code: str
+    total_amount: float
+    partner_id: int
+    partner_name: str
+    allocations: List[dict]

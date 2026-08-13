@@ -562,6 +562,7 @@ const InspectionPlansPage: React.FC = () => {
             <ProFormItem
               name="plan_type"
               label={t('app.kuaizhizao.quality.plans.form.planType')}
+              extra={t('app.kuaizhizao.quality.plans.form.planTypeHint')}
               rules={[{ required: true, message: t('app.kuaizhizao.quality.plans.validation.requiredPlanType') }]}
             >
               <UniDropdown

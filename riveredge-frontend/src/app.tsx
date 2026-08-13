@@ -51,7 +51,14 @@ import { useUserPreferenceStore } from './stores/userPreferenceStore';
 import { getPlatformSettingsPublic } from './services/platformSettings';
 import { applyFavicon } from './utils/favicon';
 import { useThemeStore } from './stores/themeStore';
-import { updateLastActivity, getLastActivityTime, hasPendingRequests } from './utils/activityUtils';
+import {
+  ACTIVITY_STORAGE_KEY,
+  updateLastActivity,
+  getLastActivityTime,
+  hasPendingRequests,
+  bumpLastActivityBy,
+  syncMemoryActivityFromStorage,
+} from './utils/activityUtils';
 import { useTouchScreen } from './hooks/useTouchScreen';
 import { initDocumentStatusCache } from './services/enums';
 import { buildLoginRedirectPath, resolveTenantDomainFromUrl } from './utils/tenantDomainAccess';
@@ -224,31 +231,57 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     // 进入受保护页面时重置活动时间（清除可能来自上一会话的旧数据）
     updateLastActivity(true);
 
+    /** 捕获阶段：避免表格/画布 stopPropagation 导致操作不刷新活动时间 */
     const onActivity = () => updateLastActivity();
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') updateLastActivity(true);
+    let hiddenSince: number | null = document.visibilityState === 'hidden' ? Date.now() : null;
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenSince = Date.now();
+        return;
+      }
+      // 回到前台：隐藏时长不计入无操作超时（暂停计时，而非清零重算）
+      if (hiddenSince != null) {
+        bumpLastActivityBy(Date.now() - hiddenSince);
+        hiddenSince = null;
+      }
     };
 
-    window.addEventListener('mousemove', onActivity);
-    window.addEventListener('keydown', onActivity);
-    window.addEventListener('click', onActivity);
-    window.addEventListener('scroll', onActivity, { passive: true });
-    window.addEventListener('wheel', onActivity, { passive: true });
-    window.addEventListener('touchstart', onActivity);
-    document.addEventListener('visibilitychange', onVisible);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== ACTIVITY_STORAGE_KEY || !e.newValue) return;
+      const ts = parseInt(e.newValue, 10);
+      if (Number.isFinite(ts)) syncMemoryActivityFromStorage(ts);
+    };
+
+    const activityOpts: AddEventListenerOptions = { capture: true, passive: true };
+    window.addEventListener('pointerdown', onActivity, activityOpts);
+    window.addEventListener('pointermove', onActivity, activityOpts);
+    window.addEventListener('keydown', onActivity, activityOpts);
+    window.addEventListener('keyup', onActivity, activityOpts);
+    window.addEventListener('wheel', onActivity, activityOpts);
+    window.addEventListener('scroll', onActivity, activityOpts);
+    window.addEventListener('touchstart', onActivity, activityOpts);
+    window.addEventListener('input', onActivity, activityOpts);
+    window.addEventListener('focusin', onActivity, activityOpts);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('storage', onStorage);
 
     return () => {
-      window.removeEventListener('mousemove', onActivity);
-      window.removeEventListener('keydown', onActivity);
-      window.removeEventListener('click', onActivity);
-      window.removeEventListener('scroll', onActivity);
-      window.removeEventListener('wheel', onActivity);
-      window.removeEventListener('touchstart', onActivity);
-      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pointerdown', onActivity, true);
+      window.removeEventListener('pointermove', onActivity, true);
+      window.removeEventListener('keydown', onActivity, true);
+      window.removeEventListener('keyup', onActivity, true);
+      window.removeEventListener('wheel', onActivity, true);
+      window.removeEventListener('scroll', onActivity, true);
+      window.removeEventListener('touchstart', onActivity, true);
+      window.removeEventListener('input', onActivity, true);
+      window.removeEventListener('focusin', onActivity, true);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('storage', onStorage);
     };
   }, [isPublicPath]);
 
-  // TOKEN 过期与不活动检测
+  // TOKEN 过期与不活动检测（空闲仅在「页面可见 + 无操作 + 无进行中请求」时累计）
   React.useEffect(() => {
     // 如果是公开页面，不需要检测
     if (isPublicPath) {
@@ -283,9 +316,26 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
 
     // 定时器 ref 需在 handleLogout 之前声明，避免 handleLogout 被首次检查调用时访问未初始化变量
     const checkTimerRef = { current: null as NodeJS.Timeout | null };
+    let cancelled = false;
+
+    // 统一处理退出逻辑
+    const handleLogout = () => {
+      if (cancelled) return;
+      clearAuth();
+      setCurrentUser(undefined);
+
+      if (checkTimerRef.current) {
+        clearInterval(checkTimerRef.current);
+        checkTimerRef.current = null;
+      }
+
+      redirectAfterLogout(navigate);
+    };
 
     // 检查 TOKEN：先主动续期（临近过期），已过期则尝试静默刷新（与后端 grace 对齐），失败再登出
     const checkAuthStatus = async (): Promise<boolean> => {
+      if (cancelled) return false;
+
       const currentToken = getToken();
       if (!currentToken) {
         return false;
@@ -294,11 +344,13 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       const remaining = getTokenRemainingTime(currentToken);
       if (remaining > 0 && remaining < proactiveRefreshMs) {
         await refreshAccessTokenSilently();
+        if (cancelled) return false;
       }
 
       const tokenAfterProactive = getToken() || currentToken;
       if (isTokenExpired(tokenAfterProactive)) {
         const ok = await refreshAccessTokenSilently();
+        if (cancelled) return false;
         if (!ok) {
           console.warn('⚠️ TOKEN 已过期且无法续期，清除认证信息并跳转到登录页');
           handleLogout();
@@ -307,12 +359,19 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       }
 
       if (inactivityTimeout > 0) {
+        // 后台标签不累计、不踢出；切回前台由 bumpLastActivityBy 暂停补偿
+        if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+          return true;
+        }
+        // 有进行中请求 = 操作中，刷新活动并跳过空闲判定
         if (hasPendingRequests()) {
+          updateLastActivity(true);
           return true;
         }
         const lastActivityTime = getLastActivityTime();
         const inactiveTime = Date.now() - lastActivityTime;
         if (inactiveTime > inactivityTimeout) {
+          if (cancelled) return false;
           console.warn(`⚠️ 用户已不活动 ${inactiveTime / 1000} 秒，超过阈值 ${inactivityTimeout / 1000} 秒，自动退出`);
           message.warning(t('common.autoLogoutInactivity'));
           handleLogout();
@@ -322,20 +381,6 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
 
       return true;
     };
-
-    // 统一处理退出逻辑
-    const handleLogout = () => {
-      clearAuth();
-      setCurrentUser(undefined);
-
-      if (checkTimerRef.current) {
-        clearInterval(checkTimerRef.current);
-      }
-
-      redirectAfterLogout(navigate);
-    };
-
-    let cancelled = false;
 
     const onTokenVisibility = () => {
       if (document.visibilityState !== 'visible') {
@@ -350,7 +395,8 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
           return;
         }
         const r = getTokenRemainingTime(tok);
-        if (r > 0 && r < proactiveRefreshMs) {
+        // 回到前台：剩余不足或已过期都尝试静默续期，避免「正在用却被过期踢出」
+        if (r < proactiveRefreshMs) {
           await refreshAccessTokenSilently();
         }
       })();
@@ -364,7 +410,9 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       }
       checkTimerRef.current = setInterval(() => {
         void (async () => {
+          if (cancelled) return;
           const stillOk = await checkAuthStatus();
+          if (cancelled) return;
           if (!stillOk && checkTimerRef.current) {
             clearInterval(checkTimerRef.current);
             checkTimerRef.current = null;
@@ -383,7 +431,6 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     };
   }, [
     isPublicPath,
-    location.pathname,
     setCurrentUser,
     getConfig,
     t,

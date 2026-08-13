@@ -559,8 +559,20 @@ async def _resolve_inspection_template_fields(
                 tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True, is_active=True
             ).first()
             if plan and str(plan.plan_type) != plan_type:
+                from apps.kuaizhizao.services.inspection_policy_service import (
+                    plan_type_display_label,
+                    stage_display_label,
+                )
+
+                hint = (
+                    "请在工序主数据上改选过程检验方案。"
+                    if stage == "ipqc"
+                    else "请在物料主数据上改选与当前检验环节类型一致的方案。"
+                )
                 raise ConflictError(
-                    f"质检方案 {plan.plan_code} 类型为 {plan.plan_type}，与当前场景 {stage} 所需 {plan_type} 不一致"
+                    f"质检方案 {plan.plan_code} 类型为{plan_type_display_label(plan.plan_type)}，"
+                    f"与当前{stage_display_label(stage)}所需{plan_type_display_label(plan_type)}不一致。"
+                    f"{hint}"
                 )
         if not plan:
             plan = await InspectionPlan.filter(
@@ -2727,6 +2739,11 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             query = query.filter(work_order_id=filters['work_order_id'])
         if filters.get('operation_id'):
             query = query.filter(operation_id=filters['operation_id'])
+        if filters.get('id') is not None:
+            try:
+                query = query.filter(id=int(filters['id']))
+            except (TypeError, ValueError):
+                query = query.filter(id=-1)
         if filters.get("scoped_work_order_ids") is not None:
             query = query.filter(work_order_id__in=filters["scoped_work_order_ids"])
         query = _apply_quality_inspection_list_filters(

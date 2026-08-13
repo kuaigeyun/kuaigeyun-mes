@@ -44,6 +44,7 @@ import {
 } from '../../../../utils/presetEntityI18n';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { pickListSearchKeyword } from '../../../../utils/tableQueryKey';
 
 /**
  * 消息模板管理列表页面组件
@@ -445,6 +446,10 @@ const MessageTemplateListPage: React.FC = () => {
           // 启用状态筛选
           if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
             apiParams.is_active = searchFormValues.is_active;
+          }
+          const keyword = pickListSearchKeyword(searchFormValues);
+          if (keyword) {
+            apiParams.keyword = keyword;
           }
           
           try {

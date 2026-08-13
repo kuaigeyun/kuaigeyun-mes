@@ -41,6 +41,7 @@ import {
   TranslationUpdateRequest,
 } from '../../../../services/language';
 import { cacheTenantDefaultLanguage } from '../../../../utils/localeBootstrap';
+import { pickListSearchKeyword } from '../../../../utils/tableQueryKey';
 import zhCN from '../../../../locales/zh-CN';
 import enUS from '../../../../locales/en-US';
 import zhHant from '../../../../locales/zh-Hant';
@@ -639,6 +640,10 @@ const LanguageListPage: React.FC = () => {
             }
             if (searchFormValues?.name) {
               apiParams.name = searchFormValues.name as string;
+            }
+            const keyword = pickListSearchKeyword(searchFormValues);
+            if (keyword) {
+              apiParams.keyword = keyword;
             }
             
             try {

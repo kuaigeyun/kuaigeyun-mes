@@ -35,6 +35,8 @@ export interface PartnerStatementPreview {
   summary: PartnerStatementSummary;
   lines: PartnerStatementLine[];
   partner_snapshot?: Record<string, unknown>;
+  /** 本期因已纳入其它对账单而排除的行数 */
+  excluded_from_period?: number;
 }
 
 export interface PartnerStatement {

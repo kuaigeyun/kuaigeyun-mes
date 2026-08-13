@@ -56,6 +56,7 @@ async def list_report_templates(
     type: Optional[str] = Query(None, description="报表类型"),
     category: Optional[str] = Query(None, description="分类"),
     status: Optional[str] = Query(None, description="状态"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（名称、编码、描述）"),
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     current_user: User = Depends(get_current_user),
@@ -71,6 +72,7 @@ async def list_report_templates(
         type=type,
         category=category,
         status=status,
+        keyword=keyword,
         skip=skip,
         limit=limit,
     )

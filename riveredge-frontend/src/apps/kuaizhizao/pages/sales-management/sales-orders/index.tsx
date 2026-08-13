@@ -552,18 +552,8 @@ const SalesOrdersPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const leaveSalesOrderFormPage = useLeaveFormTab(SALES_ORDER_LIST_PATH);
 
-  /** 视图切换缓存：明细视图含 items；订单视图可复用含 items 的缓存，避免重复请求 */
-  const lastOrdersCacheRef = useRef<{
-    orders: SalesOrder[];
-    total: number;
-    baseParamsKey: string;
-    includeItems: boolean;
-  } | null>(null);
   /** 订单视图表格当前页数据（唯一源：UniTable onTableDataChange，与表格展示一致） */
   const [tableOrders, setTableOrders] = useState<SalesOrder[]>([]);
-  const invalidateOrdersCache = () => {
-    lastOrdersCacheRef.current = null;
-  };
 
   /** 将表格 rowKey 解析为销售订单 ID（订单视图 rowKey=id 时可直接数值解析；明细视图走映射表） */
   const resolveOrderIdByRowKey = useCallback((rowKey: React.Key): number | null => {
@@ -602,7 +592,6 @@ const SalesOrdersPage: React.FC = () => {
   useEffect(() => {
     if (listRefreshVersion <= listRefreshHandledRef.current) return;
     listRefreshHandledRef.current = listRefreshVersion;
-    invalidateOrdersCache();
     invalidateMenuBadge();
     invalidateStatistics();
     actionRef.current?.reload();
@@ -640,7 +629,6 @@ const SalesOrdersPage: React.FC = () => {
   useEffect(() => {
     if (auditEnabledRef.current === auditEnabled) return;
     auditEnabledRef.current = auditEnabled;
-    invalidateOrdersCache();
     invalidateStatistics();
     actionRef.current?.reload();
   }, [auditEnabled]);
@@ -1137,7 +1125,6 @@ const SalesOrdersPage: React.FC = () => {
           t('app.kuaizhizao.salesOrder.deletePartial', { success: res.success_count, failed: res.failed_count }),
         );
       }
-      invalidateOrdersCache();
       invalidateMenuBadge();
       invalidateStatistics();
       actionRef.current?.reload();
@@ -1162,13 +1149,12 @@ const SalesOrdersPage: React.FC = () => {
    * 通用批量操作处理器（关单等非审核 capabilities）
    */
   const handleBulkCapabilityBatchSuccess = useCallback(() => {
-    invalidateOrdersCache();
     invalidateMenuBadge();
     invalidateStatistics();
     actionRef.current?.reload();
     if (actionRef.current?.clearSelected) actionRef.current.clearSelected();
     setSelectedRowKeys([]);
-  }, [invalidateMenuBadge, invalidateOrdersCache, invalidateStatistics]);
+  }, [invalidateMenuBadge, invalidateStatistics]);
 
   const salesOrderAuditBulkHandlers = useMemo(
     () => ({
@@ -1202,7 +1188,6 @@ const SalesOrdersPage: React.FC = () => {
         try {
           await deleteSalesOrder(id);
           messageApi.success(t('app.kuaizhizao.salesOrder.deleteSuccess', { count: 1 }));
-          invalidateOrdersCache();
           invalidateMenuBadge();
           invalidateStatistics();
 
@@ -1235,7 +1220,6 @@ const SalesOrdersPage: React.FC = () => {
         successCount += 1;
       }
       messageApi.success(t('app.kuaizhizao.salesOrder.syncSuccess', { count: successCount }));
-      invalidateOrdersCache();
       invalidateMenuBadge();
       invalidateStatistics();
 
@@ -1428,7 +1412,6 @@ const SalesOrdersPage: React.FC = () => {
 
       setPreviewCode(null);
       setEffectiveRuleCode(null);
-      invalidateOrdersCache();
       invalidateMenuBadge();
       invalidateStatistics();
 
@@ -1879,6 +1862,7 @@ const SalesOrdersPage: React.FC = () => {
         messageApi.success(t('app.kuaizhizao.salesOrder.shipmentNoticeCreated'));
       } else if (pushPreviewData.target_type === 'demand_computation') {
         messageApi.success(t('app.kuaizhizao.salesOrder.demandComputationCreated'));
+        invalidateMenuBadge();
       } else if (pushPreviewData.target_type === 'work_order') {
         messageApi.success(t('app.kuaizhizao.salesOrder.workOrderCreated'));
       }
@@ -2086,7 +2070,6 @@ const SalesOrdersPage: React.FC = () => {
         );
         pullFromQuotationQuery.closeModal();
         invalidateMenuBadge();
-        invalidateOrdersCache();
         actionRef.current?.reload();
         if (result?.sales_order?.id) {
           refreshDrawerOrder(result.sales_order.id);
@@ -2176,7 +2159,6 @@ const SalesOrdersPage: React.FC = () => {
         );
         pullFromSalesContractQuery.closeModal();
         invalidateMenuBadge();
-        invalidateOrdersCache();
         actionRef.current?.reload();
         if (result?.sales_order?.id) {
           refreshDrawerOrder(result.sales_order.id);
@@ -2427,8 +2409,7 @@ const SalesOrdersPage: React.FC = () => {
         // 忽略
       }
     }
-    invalidateOrdersCache();
-          actionRef.current?.reload();
+    actionRef.current?.reload();
   };
 
   /**
@@ -2538,7 +2519,6 @@ const SalesOrdersPage: React.FC = () => {
 
       if (failureCount === 0) {
         messageApi.success(t('app.kuaizhizao.salesOrder.importSuccess', { count: successCount }));
-        invalidateOrdersCache();
         invalidateMenuBadge();
         invalidateStatistics();
 
@@ -2560,7 +2540,6 @@ const SalesOrdersPage: React.FC = () => {
             zIndex: elevatedModalZIndex,
           });
         }
-        invalidateOrdersCache();
         invalidateMenuBadge();
         invalidateStatistics();
 
@@ -3202,7 +3181,6 @@ const SalesOrdersPage: React.FC = () => {
               if (drawerVisible && currentSalesOrder?.id === record.id && record.id != null) {
                 void refreshDrawerOrder(record.id);
               } else {
-                invalidateOrdersCache();
                 invalidateMenuBadge();
                 invalidateStatistics();
                 actionRef.current?.reload();
@@ -4494,22 +4472,6 @@ const SalesOrdersPage: React.FC = () => {
                 : apiParams.start_date;
             }
             apiParams.include_items = dataViewModeRef.current === 'detail';
-            const baseParamsKey = JSON.stringify({
-              skip: apiParams.skip,
-              limit: apiParams.limit,
-              status: apiParams.status,
-              review_status: apiParams.review_status,
-              lifecycle_stage: apiParams.lifecycle_stage,
-              customer_id: apiParams.customer_id,
-              order_code: apiParams.order_code,
-              contract_code: apiParams.contract_code,
-              salesman_id: apiParams.salesman_id,
-              keyword: apiParams.keyword,
-              start_date: apiParams.start_date,
-              end_date: apiParams.end_date,
-              order_by: apiParams.order_by,
-            });
-            const needItems = apiParams.include_items === true;
 
             const toFlatRows = (orders: SalesOrder[], writeRowKeyMap: boolean): SalesOrderItemRow[] => {
               const map = new Map<string, number>();
@@ -4614,28 +4576,12 @@ const SalesOrdersPage: React.FC = () => {
               return { data: toFlatRows(orders, !isPrefetch), success: true, total };
             };
 
-            const cached = lastOrdersCacheRef.current;
-            if (cached && cached.baseParamsKey === baseParamsKey) {
-              const canServeFromCache = needItems ? cached.includeItems : true;
-              if (canServeFromCache) {
-                return formatOrdersListResponse(cached.orders, cached.total);
-              }
-            }
-
             try {
               const response = await listSalesOrders(apiParams);
               const orders: SalesOrder[] = Array.isArray(response)
                 ? response
                 : (response as any).data || [];
               const total: number = (response as any).total ?? orders.length;
-              if (!isPrefetch) {
-                lastOrdersCacheRef.current = {
-                  orders,
-                  total,
-                  baseParamsKey,
-                  includeItems: needItems,
-                };
-              }
               return formatOrdersListResponse(orders, total);
             } catch (error: any) {
               messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.getListFailed'));

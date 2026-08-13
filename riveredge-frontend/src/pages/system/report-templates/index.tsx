@@ -28,6 +28,7 @@ import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni
 import { rowActionKind } from '../../../components/uni-action';
 import { apiRequest } from '../../../services/api';
 import { fetchAllListItems } from '../../../utils/fetchAllListPages';
+import { pickListSearchKeyword } from '../../../utils/tableQueryKey';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 
 /**
@@ -353,7 +354,7 @@ const ReportTemplatesPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           try {
             const result = await apiRequest('/core/reports/templates', {
               method: 'GET',
@@ -363,6 +364,7 @@ const ReportTemplatesPage: React.FC = () => {
                 type: params.type,
                 category: params.category,
                 status: params.status,
+                keyword: pickListSearchKeyword(searchFormValues),
               },
             });
             return {

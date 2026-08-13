@@ -1544,9 +1544,28 @@ code {
   justify-content: center;
   line-height: 0;
 }
-.kuaizhizao-work-orders-table .wo-readiness-ring.ant-progress {
-  margin-inline-end: 0 !important;
-  line-height: 0;
+.kuaizhizao-work-orders-table .wo-readiness-ring {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.kuaizhizao-work-orders-table .wo-readiness-ring-inner {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--ant-color-bg-container);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--ant-color-text);
+  box-sizing: border-box;
 }
 .kuaizhizao-work-orders-table .wo-operation-cards-panel {
   width: 100%;
