@@ -97,14 +97,9 @@ class TencentCosStorage(FileStorageBackend):
     async def put(self, key: str, data: bytes, content_type: Optional[str] = None) -> None:
         url, path = self._object_url(key)
         ct = (content_type or "application/octet-stream").strip()
-        auth = cos_authorization(
-            self.secret_id,
-            self.secret_key,
-            "PUT",
-            self.host,
-            path,
-            headers_to_sign={"content-type": ct},
-        )
+        # 只签 Host（与连接探测 HEAD / GET / DELETE 一致）。
+        # 把 Content-Type 放进签名时，客户端改写/编码差异会触发 SignatureDoesNotMatch。
+        auth = cos_authorization(self.secret_id, self.secret_key, "PUT", self.host, path)
         resp = await get_http_client().request(
             "PUT",
             url,
