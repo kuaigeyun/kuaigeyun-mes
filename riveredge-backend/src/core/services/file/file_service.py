@@ -692,6 +692,21 @@ class FileService:
         local = LocalFileStorage()
         key_prefix = cfg.get("key_prefix") or ""
         delete_local = cfg.get("delete_local_after_migrate") is not False
+        target_bucket = str((cos.config or {}).get("bucket") or "").strip() or None
+        target_endpoint = getattr(cos, "base_url", None) or None
+
+        # 首批真实迁移前做写探测，避免「连接测试通过但无写权限 / 桶不一致」仍批跑完
+        safe_cursor = max(0, int(cursor or 0))
+        if not dry_run and safe_cursor == 0:
+            probe_key = apply_key_prefix(key_prefix, f"_riveredge_migrate_probe/{tenant_id}.txt")
+            probe_body = b"riveredge-cos-migrate-probe"
+            await cos.put(probe_key, probe_body, content_type="text/plain")
+            if not await cos.exists(probe_key):
+                raise ValidationError(
+                    f"已写入 COS 但无法通过 HEAD 读回（桶={target_bucket or '未知'}）。"
+                    "请核对应用连接器中的 Bucket/Region 是否与控制台一致，以及账号是否有写权限。"
+                )
+            await cos.delete(probe_key)
 
         local_q = File.filter(
             tenant_id=tenant_id,
@@ -700,7 +715,6 @@ class FileService:
 
         total = await local_q.count()
         safe_limit = max(1, min(int(limit or 50), 100))
-        safe_cursor = max(0, int(cursor or 0))
         # id 游标：迁移成功后记录离开 local 集合，不可用 offset（会跳过剩余行）
         rows = await local_q.filter(id__gt=safe_cursor).order_by("id").limit(safe_limit).all()
 
@@ -715,7 +729,13 @@ class FileService:
                 source_key = corrected or row.file_path
                 if not abs_path:
                     failed += 1
-                    failures.append({"uuid": str(row.uuid), "reason": "本地文件不存在"})
+                    failures.append({
+                        "uuid": str(row.uuid),
+                        "reason": (
+                            "本地文件不存在（仅能迁移当前环境磁盘上的文件；"
+                            f"UPLOAD_DIR={FileService.UPLOAD_DIR}，path={source_key}）"
+                        ),
+                    })
                     continue
 
                 async with aiofiles.open(abs_path, "rb") as f:
@@ -727,6 +747,11 @@ class FileService:
                     continue
 
                 await cos.put(dest_key, content, content_type=row.file_type)
+                # 必须 HEAD 确认对象已进当前连接指向的桶，再改库/删本地
+                if not await cos.exists(dest_key):
+                    raise ValidationError(
+                        f"上传后对象不存在（bucket={target_bucket or '未知'} key={dest_key}）"
+                    )
                 await File.filter(id=row.id).update(
                     storage_backend="tencent_cos",
                     storage_connection_uuid=target_uuid,
@@ -753,5 +778,7 @@ class FileService:
             "failures": failures,
             "dry_run": dry_run,
             "connection_uuid": target_uuid,
+            "target_bucket": target_bucket,
+            "target_endpoint": target_endpoint,
         }
 

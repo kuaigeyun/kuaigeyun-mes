@@ -167,4 +167,6 @@ class FileStorageMigrateResponse(BaseModel):
     failures: List[FileStorageMigrateFailure] = Field(default_factory=list)
     dry_run: bool = Field(default=False)
     connection_uuid: str = Field(..., description="实际使用的目标连接 UUID")
+    target_bucket: Optional[str] = Field(None, description="目标桶名（便于核对控制台）")
+    target_endpoint: Optional[str] = Field(None, description="目标桶访问域名")
 
