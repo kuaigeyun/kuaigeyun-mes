@@ -1,5 +1,6 @@
 /**
- * 报工工时：开始时间 / 结束时间 / 工时(小时) 三向联动。
+ * 报工工时：开始 / 结束 / 工时 两项推第三项。
+ * 规则见 deriveReportingWorkTimeUpdates（起止时刻优先，开始为锚点）。
  */
 import React, { useCallback, useRef } from 'react';
 import { Form } from 'antd';

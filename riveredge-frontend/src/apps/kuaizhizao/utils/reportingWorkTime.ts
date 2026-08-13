@@ -11,6 +11,14 @@ export type ReportingWorkTimeField =
   | typeof REPORTING_WORK_END_FIELD
   | typeof REPORTING_WORK_HOURS_FIELD;
 
+/**
+ * 报工三字段联动（两项推第三项）最佳实践：
+ *
+ * 1. 起止时刻优先：开始+结束都有效时，改任一端 → 重算工时（绝不倒推另一端）
+ * 2. 开始为锚点：改工时且已有开始 → 重算结束
+ * 3. 仅一端+工时：有开始无结束 → 推结束；有结束无开始 → 推开始
+ * 4. 只填一项或非法区间（结束早于开始）→ 不自动改其它字段
+ */
 export function toReportingDayjs(value: unknown): Dayjs | null {
   if (value == null || value === '') return null;
   if (dayjs.isDayjs(value)) return value.isValid() ? value : null;
@@ -30,6 +38,18 @@ export function formatReportingDateTime(value: Dayjs): string {
   return value.format('YYYY-MM-DD HH:mm:ss');
 }
 
+/** null/空视为未填；0 是合法工时 */
+export function parseReportingWorkHours(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
+}
+
+function hoursFromRange(start: Dayjs, end: Dayjs): number {
+  return roundReportingWorkHours(end.diff(start, 'minute') / 60);
+}
+
 export function deriveReportingWorkTimeUpdates(
   source: ReportingWorkTimeField,
   values: {
@@ -40,30 +60,44 @@ export function deriveReportingWorkTimeUpdates(
 ): Partial<Record<ReportingWorkTimeField, Dayjs | number>> {
   const start = toReportingDayjs(values.work_start_time);
   const end = toReportingDayjs(values.work_end_time);
-  const hoursRaw = Number(values.work_hours);
-  const hasHours = Number.isFinite(hoursRaw) && hoursRaw >= 0;
+  const hours = parseReportingWorkHours(values.work_hours);
+  const rangeValid = !!(start && end && !end.isBefore(start));
 
   if (source === REPORTING_WORK_START_FIELD) {
     if (!start) return {};
-    if (hasHours) return { [REPORTING_WORK_END_FIELD]: start.add(hoursRaw, 'hour') };
-    if (end && !end.isBefore(start)) {
-      return { [REPORTING_WORK_HOURS_FIELD]: roundReportingWorkHours(end.diff(start, 'minute') / 60) };
+    // 起止齐全：时刻权威 → 重算工时
+    if (rangeValid) {
+      return { [REPORTING_WORK_HOURS_FIELD]: hoursFromRange(start, end!) };
+    }
+    // 仅开始+工时 → 推结束
+    if (hours != null) {
+      return { [REPORTING_WORK_END_FIELD]: start.add(hours, 'hour') };
     }
     return {};
   }
 
   if (source === REPORTING_WORK_END_FIELD) {
     if (!end) return {};
-    if (hasHours) return { [REPORTING_WORK_START_FIELD]: end.subtract(hoursRaw, 'hour') };
-    if (start && !end.isBefore(start)) {
-      return { [REPORTING_WORK_HOURS_FIELD]: roundReportingWorkHours(end.diff(start, 'minute') / 60) };
+    // 起止齐全：时刻权威 → 重算工时（禁止用旧工时倒推开始）
+    if (rangeValid) {
+      return { [REPORTING_WORK_HOURS_FIELD]: hoursFromRange(start!, end) };
+    }
+    // 仅结束+工时 → 推开始
+    if (hours != null) {
+      return { [REPORTING_WORK_START_FIELD]: end.subtract(hours, 'hour') };
     }
     return {};
   }
 
-  if (!hasHours) return {};
-  if (start) return { [REPORTING_WORK_END_FIELD]: start.add(hoursRaw, 'hour') };
-  if (end) return { [REPORTING_WORK_START_FIELD]: end.subtract(hoursRaw, 'hour') };
+  // source === work_hours
+  if (hours == null) return {};
+  // 开始锚定：有开始则推结束（即使结束已有，改工时表示调整时长）
+  if (start) {
+    return { [REPORTING_WORK_END_FIELD]: start.add(hours, 'hour') };
+  }
+  if (end) {
+    return { [REPORTING_WORK_START_FIELD]: end.subtract(hours, 'hour') };
+  }
   return {};
 }
 
@@ -75,9 +109,9 @@ export function resolveReportingWorkTimeForSubmit(values: Record<string, unknown
 } {
   let start = toReportingDayjs(values.work_start_time);
   let end = toReportingDayjs(values.work_end_time);
-  let hours = Number(values.work_hours);
-  if (!Number.isFinite(hours) || hours < 0) hours = 0;
+  let hours = parseReportingWorkHours(values.work_hours) ?? 0;
 
+  // 提交时同样：缺一端用工时补全；两端齐全则以时刻重算工时
   if (start && !end && hours > 0) {
     end = start.add(hours, 'hour');
   } else if (end && !start && hours > 0) {
@@ -85,7 +119,7 @@ export function resolveReportingWorkTimeForSubmit(values: Record<string, unknown
   }
 
   if (start && end && !end.isBefore(start)) {
-    hours = roundReportingWorkHours(end.diff(start, 'minute') / 60);
+    hours = hoursFromRange(start, end);
   }
 
   const tz = getTimezoneFromSiteSetting();
