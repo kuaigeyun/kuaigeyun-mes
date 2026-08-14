@@ -18,7 +18,7 @@ import {
   type ComputationCompareResult,
 } from '../../../services/demand-computation';
 import { buildDemandBusinessModeValueEnum } from '../../../utils/businessMode';
-import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import {
   buildComputationStatusValueEnum,
@@ -86,7 +86,7 @@ const ComputationHistoryTab: React.FC = () => {
       }
       await downloadRecordsAsXlsx(
         items as Array<Record<string, unknown>>,
-        `computation-history-${new Date().toISOString().slice(0, 10)}.xlsx`,
+        `computation-history-${todaySiteDateString()}.xlsx`,
       );
       messageApi.success(t('app.kuaizhizao.demandComputation.exportedCount', { count: items.length }));
     } catch (error: any) {

@@ -35,7 +35,7 @@ import {
 import { StorageAreaFormModal } from '../../../components/StorageAreaFormModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { StorageArea, StorageAreaCreate, Warehouse } from '../../../types/warehouse';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
   buildFactoryImportTemplate,
@@ -48,7 +48,8 @@ import {
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
 /**
  * 库区管理列表页面组件
  */
@@ -204,7 +205,7 @@ const StorageAreasPage: React.FC = () => {
 
     // 如果仓库列表为空，提示用户先创建仓库
     if (warehouses.length === 0) {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.importDisabled'),
         content: t('app.master-data.importNoWarehouse'),
       });
@@ -349,7 +350,7 @@ const StorageAreasPage: React.FC = () => {
     if (errors.length > 0) {
       const hasWarehouseError = errors.some(e => e.kind === 'warehouse');
       
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.warehouses.importValidationFailed'),
         width: 700,
         content: (
@@ -399,18 +400,19 @@ const StorageAreasPage: React.FC = () => {
 
     // 批量导入
     try {
-      const result = await batchImport({
+      const result = await importInChunksViaPerItemCreate({
         items: importData,
-        importFn: async (item: StorageAreaCreate) => {
+        createOne: async (item: StorageAreaCreate, _index) => {
           return await storageAreaApi.create(item);
         },
         title: t('app.master-data.storageAreas.importTitle'),
-        concurrency: 5,
+        chunkSize: 100,
+        concurrency: 4,
       });
 
       // 显示导入结果
       if (result.failureCount > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.master-data.warehouses.importPartialFailure'),
           width: 600,
           content: (
@@ -466,15 +468,15 @@ const StorageAreasPage: React.FC = () => {
           return;
         }
         exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
-        filename = t('app.master-data.storageAreas.exportFilenameSelected', { date: new Date().toISOString().slice(0, 10) });
+        filename = t('app.master-data.storageAreas.exportFilenameSelected', { date: todaySiteDateString() });
       } else if (type === 'currentPage' && currentPageData) {
         // 导出当前页数据
         exportData = currentPageData;
-        filename = t('app.master-data.storageAreas.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) });
+        filename = t('app.master-data.storageAreas.exportFilenameCurrentPage', { date: todaySiteDateString() });
       } else {
         // 导出全部数据
         exportData = await fetchAllListItems((p) => storageAreaApi.list({ ...p, ...lastListParamsRef.current }));
-        filename = t('app.master-data.storageAreas.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) });
+        filename = t('app.master-data.storageAreas.exportFilenameAll', { date: todaySiteDateString() });
       }
 
       if (exportData.length === 0) {
@@ -492,7 +494,7 @@ const StorageAreasPage: React.FC = () => {
           warehouse ? `${warehouse.code}(${warehouse.name})` : '',
           item.description || '',
           item.isActive ? t('common.enabled') : t('common.disabled'),
-          item.createdAt ? new Date(item.createdAt).toLocaleString(i18n.language) : '',
+          item.createdAt ? formatDateTimeBySiteSetting(item.createdAt) : '',
         ];
       });
 

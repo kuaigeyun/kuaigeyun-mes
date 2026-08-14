@@ -66,7 +66,7 @@ import ReworkOrderCreateModal from '../../../components/ReworkOrderCreateModal';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useTranslation } from 'react-i18next';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const REWORK_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_rework_orders';
 
 interface ReworkOrder {
@@ -830,7 +830,7 @@ const ReworkOrdersPage: React.FC = () => {
         value: op.id,
       }));
       let nextOpId = options[0]?.value as number | undefined;
-      Modal.confirm({
+      getAntdModal().confirm({
         title: t('app.kuaizhizao.reworkOrder.actionAdvanceNext'),
         content: (
           <UniDropdown
@@ -860,7 +860,7 @@ const ReworkOrdersPage: React.FC = () => {
    * 处理删除
    */
   const handleDelete = async (record: ReworkOrder) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.reworkOrder.confirmDeleteTitle'),
       content: t('app.kuaizhizao.reworkOrder.confirmDeleteContent', { code: record.code }),
       okText: t('common.confirm'),

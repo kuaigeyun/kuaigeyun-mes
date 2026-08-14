@@ -28,7 +28,7 @@ import { ListPageTemplate, DetailDrawerSection } from '../../../../../components
 import { Column } from '@ant-design/charts';
 import { apiRequest } from '../../../../../services/api';
 import dayjs, { Dayjs } from 'dayjs';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, todaySiteDateString } from '../../../../../utils/format';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { downloadFile } from '../../../../../utils/fileDownload';
 
@@ -124,7 +124,7 @@ const DocumentEfficiencyPage: React.FC = () => {
         ...nodes.map((n) => row('节点统计', n)),
       ];
       const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
-      downloadFile(blob, `document-efficiency_${new Date().toISOString().slice(0, 10)}.csv`);
+      downloadFile(blob, `document-efficiency_${todaySiteDateString()}.csv`);
       messageApi.success(t('app.kuaireport.analysis.exportSuccess', { defaultValue: '导出成功' }));
     } finally {
       setExporting(false);

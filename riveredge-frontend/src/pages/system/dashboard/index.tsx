@@ -98,10 +98,18 @@ const { useBreakpoint } = Grid;
 
 
 /**
- * 获取问候语 i18n 键（精细时间段划分，按北京时间）
+ * 获取问候语 i18n 键（按站点时区墙钟划分；时区未下发则不假定）
  */
 const getGreetingKey = (): string => {
-  const hour = new Date().getHours();
+  const tz = useConfigStore.getState().configs?.timezone;
+  const name = tz != null ? String(tz).trim() : '';
+  if (!name) return 'pages.dashboard.greetingMorning';
+  const hourText = new Intl.DateTimeFormat('en-US', {
+    timeZone: name,
+    hour: 'numeric',
+    hour12: false,
+  }).format(new Date());
+  const hour = Number.parseInt(hourText, 10);
   if (hour >= 0 && hour < 6) return 'pages.dashboard.greetingEarlyMorning';
   if (hour >= 6 && hour < 9) return 'pages.dashboard.greetingMorning';
   if (hour >= 9 && hour < 12) return 'pages.dashboard.greetingLateMorning';
@@ -254,10 +262,10 @@ export default function DashboardPage() {
   });
   const resolvedUserDetail = userDetail || userDetailFallback;
 
-  const displayTimezone =
-    useConfigStore((s) => s.configs?.timezone) ||
-    Intl.DateTimeFormat().resolvedOptions().timeZone ||
-    'Asia/Shanghai';
+  const displayTimezone = useConfigStore((s) => {
+    const tz = s.configs?.timezone;
+    return tz != null ? String(tz).trim() : '';
+  });
 
   const { data: platformVersion } = useQuery({
     queryKey: ['platformVersion'],
@@ -266,7 +274,10 @@ export default function DashboardPage() {
   });
 
   const buildTimeDisplay = useMemo(
-    () => formatTimeInTimezone(platformVersion?.build_time, displayTimezone),
+    () =>
+      displayTimezone
+        ? formatTimeInTimezone(platformVersion?.build_time, displayTimezone)
+        : '-',
     [platformVersion?.build_time, displayTimezone],
   );
 

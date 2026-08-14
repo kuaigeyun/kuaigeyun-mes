@@ -1413,7 +1413,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}
-          destroyInactiveTabPane={false}
+          destroyOnHidden={false}
           items={[
             {
               key: 'basic',

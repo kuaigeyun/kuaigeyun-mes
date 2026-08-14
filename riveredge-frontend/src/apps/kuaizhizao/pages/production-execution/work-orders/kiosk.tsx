@@ -863,7 +863,7 @@ const WorkOrdersKioskPage: React.FC = () => {
             <Tabs
                 activeKey={middleTabKey}
                 onChange={setMiddleTabKey}
-                destroyInactiveTabPane={true}
+                destroyOnHidden={true}
                 size="large"
                 style={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}
                 tabBarStyle={{ marginBottom: 12, paddingTop: 0, borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, minHeight: 40 }}

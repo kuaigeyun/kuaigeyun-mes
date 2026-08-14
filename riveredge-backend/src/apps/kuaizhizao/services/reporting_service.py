@@ -17,6 +17,7 @@ from core.utils.timezone_utils import (
     coerce_business_datetime_to_utc,
     resolve_business_datetime,
     today_site_str,
+    to_api_isoformat,
 )
 
 from tortoise.queryset import Q
@@ -1571,7 +1572,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             
             # 记录在备注中
             user_info = await self.get_user_info(revoked_by)
-            revocation_note = f"\n[撤回审核] {resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')} 由 {user_info['name']} 撤回审核"
+            revocation_note = f"\n[撤回审核] {to_api_isoformat(resolve_business_datetime())} 由 {user_info['name']} 撤回审核"
             if record.remarks:
                 record.remarks += revocation_note
             else:
@@ -1618,7 +1619,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
         # 获取用户信息
         user_info = await self.get_user_info(revoked_by)
         revoked_by_name = user_info['name']
-        now_str = resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')
+        now_str = to_api_isoformat(resolve_business_datetime())
 
         # 记录受影响的工单ID，用于最后刷新进度
         affected_work_order_ids = set()
@@ -2456,7 +2457,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             # 构建修正备注（记录修正历史）
             correction_note = (
-                f"\n[数据修正] {resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')} "
+                f"\n[数据修正] {to_api_isoformat(resolve_business_datetime())} "
                 f"由 {corrected_by_name} 修正，原因：{correction_reason}"
             )
             if reporting_record.remarks:

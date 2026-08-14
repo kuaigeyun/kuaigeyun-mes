@@ -273,7 +273,7 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
         <CompanyNameAsciiParenHint open={open} anchorSelector={SUPPLIER_FORM_SMART_ANCHOR} />
         <Col span={24}>
           <Tabs
-            destroyInactiveTabPane={false}
+            destroyOnHidden={false}
             style={{ width: '100%' }}
             items={[
               {

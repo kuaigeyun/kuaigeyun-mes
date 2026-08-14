@@ -21,7 +21,7 @@ import { customerApi, getDictionaryOptions, getDictionaryOptionsSync } from '../
 import { CustomerFormModal } from '../../master-data/components/CustomerFormModal';
 import type { Customer } from '../../master-data/types/supply-chain';
 import { formatDateTime } from '../../../utils/format';
-
+import { getAntdModal } from '../../../utils/antdAppApis';
 const DICT_CODE = 'SALES_FOLLOW_UP_TYPE';
 const STAGE_DICT_CODE = 'SALES_OPPORTUNITY_STAGE';
 const TERMINAL_STAGES = new Set(['WON', 'LOST']);
@@ -357,7 +357,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
       return;
     }
     if (TERMINAL_STAGES.has(code)) {
-      Modal.confirm({
+      getAntdModal().confirm({
         title: t('app.kuaizhizao.quotationStage.closeStageConfirmTitle'),
         content: t('app.kuaizhizao.quotationStage.closeStageConfirmContent', {
           stage: stageOptions.find((s) => s.value === code)?.label || code,

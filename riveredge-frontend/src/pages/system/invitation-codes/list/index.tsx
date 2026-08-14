@@ -28,7 +28,8 @@ import {
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { pickListSearchKeyword } from '../../../../utils/tableQueryKey';
-
+import { getAntdModal } from '../../../../utils/antdAppApis';
+import { todaySiteDateString } from '../../../../utils/format';
 const InvitationCodeListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -91,7 +92,7 @@ const InvitationCodeListPage: React.FC = () => {
       messageApi.warning(t('pages.system.selectFirst'));
       return;
     }
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('common.confirm'),
       content: t('field.invitationCode.batchDeleteConfirm', { count: keys.length }),
       okText: t('common.confirm'),
@@ -350,7 +351,7 @@ const InvitationCodeListPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `invitation-codes-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `invitation-codes-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {

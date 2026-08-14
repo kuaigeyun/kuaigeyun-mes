@@ -24,6 +24,7 @@ import CoordinationPipelinePanel from './CoordinationPipelinePanel';
 import { ModuleKpiRow, ModuleShortcutGrid } from '../../../components/module-center';
 import { UniDashboard } from '../../../../../components/uni-dashboard';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
+import { toApiDateTimeString } from '../../../../../utils/formDate';
 
 const { Text } = Typography;
 
@@ -102,8 +103,8 @@ const ProductionControlTower: React.FC = () => {
         data: {
           product_id: values.product_id,
           quantity: values.quantity,
-          planned_start_date: values.dates[0].toISOString(),
-          planned_end_date: values.dates[1].toISOString(),
+          planned_start_date: toApiDateTimeString(values.dates[0]),
+          planned_end_date: toApiDateTimeString(values.dates[1]),
           priority: "urgent"
         }
       });

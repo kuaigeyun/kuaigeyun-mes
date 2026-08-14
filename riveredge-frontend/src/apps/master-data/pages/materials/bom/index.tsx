@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptionsItemProps, ProFormList, ProFormDateTimePicker, ProFormSelect, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 import CodeField from '../../../../../components/code-field';
-import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntForm, Select, Switch, InputNumber, Dropdown, Checkbox, Descriptions, theme } from 'antd';
+import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntForm, Select, Switch, InputNumber, Dropdown, Checkbox, Descriptions, theme, Progress } from 'antd';
 import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
@@ -32,11 +32,11 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { openPrintHtmlWindow } from '../../../../../utils/printResponseHelpers';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { formatQuantity, formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import { formatQuantity, formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates';
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../../../../utils/modalEventIsolation';
 import { bomApi, materialApi } from '../../../services/material';
-import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate, BOMBatchImport, BOMBatchImportItem, BOMVersionCreate, BOMVersionCompare, BOMVersionCompareResult, BOMHierarchy, BOMHierarchyItem, BOMQuantityResult, BOMQuantityComponent, BOMRelationImportEntity, BOMRelationImportWriteStrategy, BOMWhereUsedResult } from '../../../types/material';
+import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate, BOMBatchImportItem, BOMVersionCreate, BOMVersionCompare, BOMVersionCompareResult, BOMHierarchy, BOMHierarchyItem, BOMQuantityResult, BOMQuantityComponent, BOMRelationImportEntity, BOMRelationImportWriteStrategy, BOMWhereUsedResult } from '../../../types/material';
 import { testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { batchSetFieldValues } from '../../../../../services/customField';
 
@@ -80,7 +80,7 @@ import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH } from '../../../../../utils/uniTableLayoutColumns';
 import { flattenBomGroupsForExport, resolveBomExportGroup } from './utils';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const BOM_CUSTOM_FIELD_TABLE = 'master_data_boms';
 const BOM_RESOURCE = 'master-data:process:engineering-bom';
 
@@ -902,7 +902,7 @@ const BOMPage: React.FC = () => {
       return;
     }
     recursiveUnapproveRef.current = false;
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.master-data.bom.unapproveConfirmTitle'),
       content: (
         <div>
@@ -1004,7 +1004,7 @@ const BOMPage: React.FC = () => {
   const handleDeleteGroup = (record: BOMGroupRow) => {
     const uuids = record.items.map((i) => i.uuid);
     if (!uuids.length) return;
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.master-data.bom.deleteConfirmTitle'),
       content: t('app.master-data.bom.deleteConfirmContent', { count: uuids.length }),
       okText: t('app.master-data.bom.ok'),
@@ -1109,7 +1109,7 @@ const BOMPage: React.FC = () => {
     // 重置默认值
     recursiveApprovalRef.current = false;
 
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.master-data.bom.batchApproveTitle'),
       content: (
         <div>
@@ -1166,7 +1166,7 @@ const BOMPage: React.FC = () => {
     // 重置默认值
     recursiveApprovalRef.current = false;
 
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.master-data.bom.batchUnapproveTitle'),
       content: (
           <div>
@@ -2084,55 +2084,127 @@ const BOMPage: React.FC = () => {
         return;
       }
 
-      // 调用批量导入API
-      const batchImportData: BOMBatchImport = {
-        items: importItems,
+      // 按 parentCode 首次出现顺序分组，再打包为行数 ≤ CHUNK 的请求片
+      const CHUNK = 100;
+      const parentOrder: string[] = [];
+      const groupedByParent = new Map<
+        string,
+        { items: BOMBatchImportItem[]; customValues: Array<Record<string, any>> }
+      >();
+      importItems.forEach((item, idx) => {
+        if (!groupedByParent.has(item.parentCode)) {
+          groupedByParent.set(item.parentCode, { items: [], customValues: [] });
+          parentOrder.push(item.parentCode);
+        }
+        const g = groupedByParent.get(item.parentCode)!;
+        g.items.push(item);
+        g.customValues.push(importItemCustomFieldValues[idx] || {});
+      });
+
+      type BomImportChunk = {
+        items: BOMBatchImportItem[];
+        customValues: Array<Record<string, any>>;
       };
+      const importChunks: BomImportChunk[] = [];
+      let currentChunk: BomImportChunk = { items: [], customValues: [] };
+      for (const parentCode of parentOrder) {
+        const g = groupedByParent.get(parentCode)!;
+        if (
+          currentChunk.items.length > 0 &&
+          currentChunk.items.length + g.items.length > CHUNK
+        ) {
+          importChunks.push(currentChunk);
+          currentChunk = { items: [], customValues: [] };
+        }
+        currentChunk.items.push(...g.items);
+        currentChunk.customValues.push(...g.customValues);
+      }
+      if (currentChunk.items.length > 0) {
+        importChunks.push(currentChunk);
+      }
 
-      const createdBoms = await bomApi.batchImport(batchImportData);
-      const hasCustomFieldImportData = importItemCustomFieldValues.some((row) => Object.keys(row).length > 0);
-
-      if (hasCustomFieldImportData && createdBoms.length > 0) {
-        // 与后端 batch_import_bom 的分组逻辑保持一致：按 parentCode 首次出现顺序分组，组内保持原顺序
-        const parentOrder: string[] = [];
-        const groupedIndexes = new Map<string, number[]>();
-        importItems.forEach((item, idx) => {
-          if (!groupedIndexes.has(item.parentCode)) {
-            groupedIndexes.set(item.parentCode, []);
-            parentOrder.push(item.parentCode);
-          }
-          groupedIndexes.get(item.parentCode)!.push(idx);
-        });
-        const backendOrderedImportIndexes = parentOrder.flatMap((parentCode) => groupedIndexes.get(parentCode) || []);
-
-        const fieldUuidByCode = new Map<string, string>();
+      const hasCustomFieldImportData = importItemCustomFieldValues.some(
+        (row) => Object.keys(row).length > 0,
+      );
+      const fieldUuidByCode = new Map<string, string>();
+      if (hasCustomFieldImportData) {
         bomListCustomFields.forEach((f: any) => {
           if (f?.code && f?.uuid) fieldUuidByCode.set(String(f.code), String(f.uuid));
         });
-
-        await Promise.all(
-          createdBoms.map(async (bomRow, createdIdx) => {
-            const importIdx = backendOrderedImportIndexes[createdIdx];
-            if (importIdx === undefined) return;
-            const rowValues = importItemCustomFieldValues[importIdx];
-            if (!rowValues || Object.keys(rowValues).length === 0) return;
-            const values = Object.entries(rowValues)
-              .map(([fieldCode, value]) => {
-                const fieldUuid = fieldUuidByCode.get(fieldCode);
-                if (!fieldUuid) return null;
-                return { field_uuid: fieldUuid, value };
-              })
-              .filter(Boolean) as Array<{ field_uuid: string; value: any }>;
-            if (!values.length) return;
-            await batchSetFieldValues({
-              record_id: bomRow.id,
-              record_table: BOM_CUSTOM_FIELD_TABLE,
-              values,
-            });
-          }),
-        );
       }
-      messageApi.success(t('app.master-data.bom.importSuccess', { count: importItems.length }));
+
+      const title = t('app.master-data.bom.importTitle', {
+        defaultValue: '正在导入 BOM',
+      });
+      const progressModal = getAntdModal().info({
+        title,
+        width: 600,
+        content: (
+          <div>
+            <Progress percent={0} status="active" />
+            <p style={{ marginTop: 16 }}>
+              {t('app.master-data.materials.importPreparing', {
+                defaultValue: '准备导入 {{count}} 条数据…',
+                count: importItems.length,
+              })}
+            </p>
+          </div>
+        ),
+        okButtonProps: { style: { display: 'none' } },
+      });
+
+      let successLineCount = 0;
+      try {
+        let doneLines = 0;
+        for (const chunk of importChunks) {
+          const createdBoms = await bomApi.batchImport({ items: chunk.items });
+          successLineCount += createdBoms.length;
+
+          if (hasCustomFieldImportData && createdBoms.length > 0) {
+            // 片内已按 parent 首次出现顺序排列，与后端分组顺序一致
+            await Promise.all(
+              createdBoms.map(async (bomRow, createdIdx) => {
+                const rowValues = chunk.customValues[createdIdx];
+                if (!rowValues || Object.keys(rowValues).length === 0) return;
+                const values = Object.entries(rowValues)
+                  .map(([fieldCode, value]) => {
+                    const fieldUuid = fieldUuidByCode.get(fieldCode);
+                    if (!fieldUuid) return null;
+                    return { field_uuid: fieldUuid, value };
+                  })
+                  .filter(Boolean) as Array<{ field_uuid: string; value: any }>;
+                if (!values.length) return;
+                await batchSetFieldValues({
+                  record_id: bomRow.id,
+                  record_table: BOM_CUSTOM_FIELD_TABLE,
+                  values,
+                });
+              }),
+            );
+          }
+
+          doneLines += chunk.items.length;
+          const percent = Math.round((doneLines / importItems.length) * 100);
+          progressModal.update({
+            content: (
+              <div>
+                <Progress percent={percent} status="active" />
+                <p style={{ marginTop: 16 }}>
+                  {t('app.master-data.materials.importProgress', {
+                    defaultValue: '已处理 {{done}} / {{total}} 条…',
+                    done: doneLines,
+                    total: importItems.length,
+                  })}
+                </p>
+              </div>
+            ),
+          });
+        }
+      } finally {
+        progressModal.destroy();
+      }
+
+      messageApi.success(t('app.master-data.bom.importSuccess', { count: successLineCount || importItems.length }));
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.bom.batchImportFailed'));
@@ -2158,6 +2230,8 @@ const BOMPage: React.FC = () => {
     entities: BOMRelationImportEntity[];
     writeStrategy: BOMRelationImportWriteStrategy;
   }) => {
+    // 不分片：后端 batch_import_bom 对每个 (parent, version) 做全量替换。
+    // 若按行切成 100 条，同一父件的明细会被拆到多片，后片会覆盖前片已写入的子件。
     const result = await bomApi.relationImport({
       rows: payload.rawRows,
       entities: payload.entities,
@@ -2261,7 +2335,7 @@ const BOMPage: React.FC = () => {
       messageApi.info(t('app.master-data.bom.alreadyDefaultVersion'));
       return;
     }
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.master-data.bom.setDefaultVersionTitle'),
       content: t('app.master-data.bom.setDefaultVersionContent', { bomCode: record.bomCode, version: record.version }),
       okText: t('app.master-data.bom.ok'),
@@ -3475,7 +3549,7 @@ const BOMPage: React.FC = () => {
 
             await downloadRecordsAsXlsx(
               flatRows as Array<Record<string, unknown>>,
-              `BOM_${new Date().toISOString().slice(0, 10)}.xlsx`,
+              `BOM_${todaySiteDateString()}.xlsx`,
               { columns: exportColumns },
             );
             messageApi.success(t('common.exportSuccess', { count: flatRows.length }));

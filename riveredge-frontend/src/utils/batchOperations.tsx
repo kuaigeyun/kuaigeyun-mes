@@ -7,6 +7,7 @@
 import React from 'react';
 import { Progress } from 'antd';
 import { getAntdMessage, getAntdModal } from './antdAppApis';
+import { todaySiteDateString } from './format';
 
 /**
  * 批量导入配置
@@ -115,51 +116,35 @@ export async function batchImport<T = any>(
     return { success: false, error: lastError };
   };
 
-  // 并发执行导入（使用 Promise.allSettled 确保所有任务完成）
-  const tasks = items.map((item, index) => importWithRetry(item, index));
-  
-  // 分批执行，控制并发数
-  const batches: Promise<{ success: boolean; error?: string; data?: any }>[][] = [];
-  for (let i = 0; i < tasks.length; i += concurrency) {
-    batches.push(tasks.slice(i, i + concurrency));
-  }
-  
-  for (const batch of batches) {
-    const batchResults = await Promise.allSettled(batch);
-    
-    batchResults.forEach((settledResult, batchIndex) => {
-      const globalIndex = batches.indexOf(batch) * concurrency + batchIndex;
-      
-      if (settledResult.status === 'fulfilled') {
-        const importResult = settledResult.value;
-        if (importResult.success) {
-          result.successCount++;
-          result.successItems.push(importResult.data);
-        } else {
-          result.failureCount++;
-          result.errors.push({
-            row: globalIndex + 1,
-            error: importResult.error || '未知错误',
-          });
-          result.failureItems.push(items[globalIndex]);
-        }
+  // 真正的并发池：同时最多 concurrency 个在途，禁止 map 后立刻启动全部 Promise
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.max(1, concurrency) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      const item = items[index];
+      const importResult = await importWithRetry(item, index);
+
+      if (importResult.success) {
+        result.successCount++;
+        result.successItems.push(importResult.data);
       } else {
         result.failureCount++;
         result.errors.push({
-          row: globalIndex + 1,
-          error: settledResult.reason?.message || '未知错误',
+          row: index + 1,
+          error: importResult.error || '未知错误',
         });
-        result.failureItems.push(items[globalIndex]);
+        result.failureItems.push(item);
       }
-      
-      // 更新进度
-      const percent = Math.round(((globalIndex + 1) / items.length) * 100);
+
+      const done = result.successCount + result.failureCount;
+      const percent = Math.round((done / items.length) * 100);
       progressModal.update({
         content: (
           <div>
             <Progress percent={percent} status="active" />
             <p style={{ marginTop: 16 }}>
-              正在导入第 {globalIndex + 1} / {items.length} 条数据...
+              正在导入第 {done} / {items.length} 条数据...
             </p>
             <p style={{ marginTop: 8, color: '#52c41a' }}>
               成功：{result.successCount} 条 | 失败：{result.failureCount} 条
@@ -167,12 +152,14 @@ export async function batchImport<T = any>(
           </div>
         ),
       });
-      
+
       if (onProgress) {
-        onProgress(globalIndex + 1, items.length, result.successCount, result.failureCount);
+        onProgress(done, items.length, result.successCount, result.failureCount);
       }
-    });
-  }
+    }
+  });
+
+  await Promise.all(workers);
 
   // 关闭进度 Modal
   progressModal.destroy();
@@ -213,7 +200,7 @@ export function exportToCSV(
   data: any[],
   headers: string[],
   fieldMapping: Record<string, string>,
-  filename: string = `export_${new Date().toISOString().slice(0, 10)}.csv`
+  filename: string = `export_${todaySiteDateString()}.csv`
 ): void {
   // 构建 CSV 内容
   const csvRows: string[] = [];

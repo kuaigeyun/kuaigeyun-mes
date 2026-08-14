@@ -40,10 +40,10 @@ function provenanceTagColor(status: BuildProvenanceStatus): string {
 export default function IterationFloatButton() {
   const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
-  const displayTimezone =
-    useConfigStore((s) => s.configs?.timezone) ||
-    Intl.DateTimeFormat().resolvedOptions().timeZone ||
-    'Asia/Shanghai';
+  const displayTimezone = useConfigStore((s) => {
+    const tz = s.configs?.timezone;
+    return tz != null ? String(tz).trim() : '';
+  });
 
   const { data: settings } = useQuery({
     queryKey: ['platformSettingsPublic'],
@@ -70,11 +70,17 @@ export default function IterationFloatButton() {
   const handleOpen = () => setVisible(true);
 
   const buildTimeDisplay = useMemo(
-    () => formatTimeInTimezone(version?.build_time || provenance?.build_time, displayTimezone),
+    () =>
+      displayTimezone
+        ? formatTimeInTimezone(version?.build_time || provenance?.build_time, displayTimezone)
+        : '-',
     [version?.build_time, provenance?.build_time, displayTimezone]
   );
   const gitTimeDisplay = useMemo(
-    () => formatTimeInTimezone(version?.git_latest_commit_time, displayTimezone),
+    () =>
+      displayTimezone
+        ? formatTimeInTimezone(version?.git_latest_commit_time, displayTimezone)
+        : '-',
     [version?.git_latest_commit_time, displayTimezone]
   );
 

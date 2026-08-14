@@ -90,7 +90,7 @@ import {
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_orders';
 const OUTSOURCE_ORDER_HOST_RESOURCE = 'kuaizhizao:outsource-order';
 
@@ -635,7 +635,7 @@ export const OutsourceOrdersTable: React.FC = () => {
    * 处理删除（从记录）
    */
   const handleDeleteFromRecord = async (record: OutsourceOrder) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.outsourceOrder.confirmDeleteTitle'),
       content: t('app.kuaizhizao.outsourceOrder.confirmDeleteContent', { code: record.code }),
       okText: t('common.confirm'),

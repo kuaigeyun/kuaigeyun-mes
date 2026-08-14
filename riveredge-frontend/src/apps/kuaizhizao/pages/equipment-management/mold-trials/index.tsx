@@ -37,6 +37,7 @@ import {
   EquipmentMasterDetailDrawer,
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const P = 'app.kuaizhizao.moldOps.trial';
 const RESOURCE = 'kuaizhizao:mold-trial';
@@ -143,7 +144,7 @@ const MoldTrialsPage: React.FC = () => {
   };
 
   const handleDelete = async (keys: React.Key[]) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('common.batchDeleteTitle'),
       content: t('common.batchDeleteContent', { count: keys.length }),
       onOk: async () => {
@@ -300,7 +301,7 @@ const MoldTrialsPage: React.FC = () => {
                 icon={<DeleteOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
-                  Modal.confirm({
+                  getAntdModal().confirm({
                     title: t('common.deleteTitle'),
                     onOk: () => record.id && handleDelete([record.id]),
                   });

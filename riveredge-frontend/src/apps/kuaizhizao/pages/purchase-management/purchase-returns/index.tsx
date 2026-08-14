@@ -122,7 +122,7 @@ import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
 import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { materialApi } from '../../../../master-data/services/material';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useImportMaterialUnitOptions';
@@ -143,7 +143,7 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import { formatDateTime, formatNumber, formatQuantity } from '../../../../../utils/format';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const PURCHASE_RETURN_RESOURCE = 'kuaizhizao:purchase-return';
 
 const PURCHASE_RETURN_LIST_PERSISTENCE_ID =
@@ -519,7 +519,7 @@ const PurchaseReturnsPage: React.FC = () => {
   };
 
   const handleConfirm = async (record: PurchaseReturn) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.purchaseReturn.confirmTitle'),
       content: t('app.kuaizhizao.purchaseReturn.confirmContent', { code: record.return_code }),
       onOk: async () => {
@@ -841,7 +841,7 @@ const PurchaseReturnsPage: React.FC = () => {
   };
 
   const handleWithdraw = async (record: PurchaseReturn) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.purchaseReturn.withdrawTitle'),
       content: t('app.kuaizhizao.purchaseReturn.withdrawContent', { code: record.return_code }),
       onOk: async () => {
@@ -999,7 +999,7 @@ const PurchaseReturnsPage: React.FC = () => {
       });
 
       if (errors.length > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.kuaizhizao.quotation.validationFailed'),
           width: 600,
           content: (
@@ -1030,9 +1030,9 @@ const PurchaseReturnsPage: React.FC = () => {
         return;
       }
 
-      const result = await batchImport({
+      const result = await importInChunksViaPerItemCreate({
         items: toImport,
-        importFn: async (item) =>
+        createOne: async (item, _index) =>
           warehouseApi.purchaseReturn.create({
             return_code: item.return_code,
             supplier_id: item.partner_id,
@@ -1047,11 +1047,12 @@ const PurchaseReturnsPage: React.FC = () => {
             items: item.items,
           }),
         title: t('app.kuaizhizao.purchaseReturn.listImport.importing'),
-        concurrency: 3,
+        chunkSize: 100,
+        concurrency: 4,
       });
 
       if (result.failureCount > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.kuaizhizao.quotation.importPartialTitle'),
           width: 600,
           content: (

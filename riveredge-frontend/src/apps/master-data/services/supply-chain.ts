@@ -44,6 +44,37 @@ export const customerApi = {
   },
 
   /**
+   * 批量创建客户（导入分片，单次最多 200）
+   */
+  bulkCreate: async (
+    items: CustomerCreate[],
+  ): Promise<{
+    createdCount: number;
+    failedCount: number;
+    requestedCount: number;
+    failedItems: Array<{ index: number; reason: string }>;
+  }> => {
+    const raw = (await api.post('/apps/master-data/supply-chain/customers/batch-create', {
+      items,
+    })) as Record<string, unknown>;
+    const failedRaw = Array.isArray(raw?.failedItems)
+      ? (raw.failedItems as Array<Record<string, unknown>>)
+      : Array.isArray(raw?.failed_items)
+        ? (raw.failed_items as Array<Record<string, unknown>>)
+        : [];
+    return {
+      createdCount: Number(raw?.createdCount ?? raw?.created_count ?? 0) || 0,
+      failedCount: Number(raw?.failedCount ?? raw?.failed_count ?? 0) || 0,
+      requestedCount:
+        Number(raw?.requestedCount ?? raw?.requested_count ?? items.length) || items.length,
+      failedItems: failedRaw.map((f) => ({
+        index: Number(f.index ?? 0) || 0,
+        reason: String(f.reason ?? ''),
+      })),
+    };
+  },
+
+  /**
    * 获取客户列表
    */
   list: async (params?: CustomerListParams): Promise<CustomerListResponse> => {
@@ -81,6 +112,37 @@ export const supplierApi = {
    */
   create: async (data: SupplierCreate): Promise<Supplier> => {
     return api.post('/apps/master-data/supply-chain/suppliers', data);
+  },
+
+  /**
+   * 批量创建供应商（导入分片，单次最多 200）
+   */
+  bulkCreate: async (
+    items: SupplierCreate[],
+  ): Promise<{
+    createdCount: number;
+    failedCount: number;
+    requestedCount: number;
+    failedItems: Array<{ index: number; reason: string }>;
+  }> => {
+    const raw = (await api.post('/apps/master-data/supply-chain/suppliers/batch-create', {
+      items,
+    })) as Record<string, unknown>;
+    const failedRaw = Array.isArray(raw?.failedItems)
+      ? (raw.failedItems as Array<Record<string, unknown>>)
+      : Array.isArray(raw?.failed_items)
+        ? (raw.failed_items as Array<Record<string, unknown>>)
+        : [];
+    return {
+      createdCount: Number(raw?.createdCount ?? raw?.created_count ?? 0) || 0,
+      failedCount: Number(raw?.failedCount ?? raw?.failed_count ?? 0) || 0,
+      requestedCount:
+        Number(raw?.requestedCount ?? raw?.requested_count ?? items.length) || items.length,
+      failedItems: failedRaw.map((f) => ({
+        index: Number(f.index ?? 0) || 0,
+        reason: String(f.reason ?? ''),
+      })),
+    };
   },
 
   /**

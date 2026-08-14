@@ -36,6 +36,7 @@ import {
   renderEquipmentMasterRowActions,
   renderIsActiveTag,
 } from '../shared/equipmentMasterDataDetail';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const P = 'app.kuaizhizao.equipmentOps.maintenanceScheme';
 const RESOURCE = 'kuaizhizao:equipment-maintenance-scheme';
@@ -135,7 +136,7 @@ const MaintenanceSchemesPage: React.FC = () => {
   };
 
   const handleDelete = async (keys: React.Key[]) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('common.batchDeleteTitle'),
       content: t('common.batchDeleteContent', { count: keys.length }),
       onOk: async () => {

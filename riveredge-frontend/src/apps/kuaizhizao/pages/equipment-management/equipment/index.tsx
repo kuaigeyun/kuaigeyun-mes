@@ -62,7 +62,7 @@ import {
   workstationApi,
   workshopApi,
 } from '../../../../master-data/services/factory';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import {
@@ -76,7 +76,7 @@ import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForL
 import {
   CustomFieldsFormSection,
 } from '../../../../../components/custom-fields';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, todaySiteDateString } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { formDateFormItemProps, formDateRangeFormItemProps, toApiDateString } from '../../../../../utils/formDate';
@@ -88,6 +88,7 @@ import {
   EQUIPMENT_LEDGER_GROUP_PINNED_FIELD,
   type EquipmentLedgerGroupMode,
 } from '../../../utils/equipmentListCore';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const EQUIPMENT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_equipment';
 
@@ -430,7 +431,7 @@ const EquipmentPage: React.FC = () => {
    * 处理批量删除设备（keys 为 uuid 数组）
    */
   const handleDelete = async (keys: React.Key[]) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.equipment.confirmBatchDeleteTitle'),
       content: t('app.kuaizhizao.equipment.confirmBatchDeleteContent', { count: keys.length }),
       onOk: async () => {
@@ -559,7 +560,7 @@ const EquipmentPage: React.FC = () => {
         icon={<DeleteOutlined />}
         onClick={(e) => {
           e.stopPropagation();
-          Modal.confirm({
+          getAntdModal().confirm({
             title: t('app.kuaizhizao.equipment.confirmDeleteTitle'),
             content: t('app.kuaizhizao.equipment.confirmDeleteContent', { name: record.name }),
             onOk: () => record.uuid && handleDelete([record.uuid]),
@@ -1051,11 +1052,12 @@ const EquipmentPage: React.FC = () => {
               messageApi.warning(t('app.kuaizhizao.equipment.importNoRows'));
               return;
             }
-            const result = await batchImport({
+            const result = await importInChunksViaPerItemCreate({
               items,
-              importFn: async (item) => equipmentApi.create(item),
+              createOne: async (item, _index) => equipmentApi.create(item),
               title: t('app.kuaizhizao.equipment.importTitle'),
-              concurrency: 5,
+              chunkSize: 100,
+              concurrency: 4,
             });
             if (result.successCount > 0) {
               messageApi.success(t('app.kuaizhizao.equipment.importSuccess', { count: result.successCount }));
@@ -1101,7 +1103,7 @@ const EquipmentPage: React.FC = () => {
               ];
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `equipment-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `equipment-${todaySiteDateString()}.xlsx`,
                 { columns: exportColumns, sheetName: t('app.kuaizhizao.equipment.title') },
               );
               messageApi.success(t('common.exportCountSuccess', { count: items.length }));

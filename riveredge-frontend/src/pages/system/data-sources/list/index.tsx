@@ -71,6 +71,7 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { extractProTableSort, mergeListKeyword, mapIntegrationConfigListSortField } from '../../../../utils/tableQueryKey';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { todaySiteDateString } from '../../../../utils/format';
 
 dayjs.extend(relativeTime);
 
@@ -1053,7 +1054,7 @@ const DataSourceListPage: React.FC = () => {
             }
             await downloadRecordsAsXlsx(
               items as Array<Record<string, unknown>>,
-              `data-sources-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              `data-sources-${todaySiteDateString()}.xlsx`,
             );
             messageApi.success(t('pages.system.dataSources.exportSuccess'));
           }}

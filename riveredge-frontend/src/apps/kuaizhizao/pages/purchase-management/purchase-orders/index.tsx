@@ -96,7 +96,7 @@ import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { setFormPriceType } from '../../../../../utils/priceTypeSwitch';
 import dayjs from 'dayjs';
-import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -190,14 +190,14 @@ import {
 } from '../../../../../hooks/useDocumentCapabilities';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 /** 与后端 DocumentStatus / ReviewStatus 及中文存量值对齐，供 UniWorkflowActions 识别 */
 const PO_WORKFLOW_DRAFT_STATUSES = ['草稿', 'draft', 'DRAFT', DocumentStatus.DRAFT];
 /** 仅匹配主状态「待审核」，勿包含 review 的 PENDING：新建草稿默认 review_status=PENDING，否则会误显「审核」按钮 */
@@ -1719,7 +1719,7 @@ const PurchaseOrdersPage: React.FC = () => {
 
   // 处理删除
   const handleDelete = async (record: PurchaseOrder) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.purchaseOrder.deleteTitle'),
       content: t('app.kuaizhizao.purchaseOrder.deleteContent', { code: record.order_code }),
       okType: 'danger',
@@ -1898,7 +1898,7 @@ const PurchaseOrdersPage: React.FC = () => {
     });
 
     if (errors.length > 0) {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.kuaizhizao.purchaseOrder.importValidationTitle'),
         width: 600,
         content: (
@@ -1938,15 +1938,16 @@ const PurchaseOrdersPage: React.FC = () => {
     }
 
     try {
-      const result = await batchImport({
+      const result = await importInChunksViaPerItemCreate({
         items: toImport,
-        importFn: async (item) => createPurchaseOrder(item),
+        createOne: async (item, _index) => createPurchaseOrder(item),
         title: t('app.kuaizhizao.purchaseOrder.importingTitle'),
-        concurrency: 3,
+        chunkSize: 100,
+        concurrency: 4,
       });
 
       if (result.failureCount > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.kuaizhizao.purchaseOrder.importPartialTitle'),
           width: 600,
           content: (
@@ -3452,7 +3453,7 @@ const PurchaseOrdersPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 toExport,
-                `purchase-orders-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `purchase-orders-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('common.exportSuccess', { count: toExport.length }));
             } catch (error: any) {

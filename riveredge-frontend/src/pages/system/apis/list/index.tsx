@@ -61,6 +61,7 @@ import { CODE_FONT_FAMILY } from '../../../../constants/fonts'
 import { extractProTableSort, mergeListKeyword, mapApiListSortField } from '../../../../utils/tableQueryKey'
 import { rowActionKind } from '../../../../components/uni-action'
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { todaySiteDateString } from '../../../../utils/format';
 
 const { TextArea } = Input
 const { Text, Paragraph } = Typography
@@ -786,7 +787,7 @@ const APIListPage: React.FC = () => {
             }
             await downloadRecordsAsXlsx(
               items as Array<Record<string, unknown>>,
-              `apis-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              `apis-${todaySiteDateString()}.xlsx`,
             );
             messageApi.success(t('pages.system.apis.exportSuccess'))
           }}

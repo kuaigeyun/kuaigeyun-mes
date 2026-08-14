@@ -33,6 +33,7 @@ import {
   renderEquipmentMasterRowActions,
   renderIsActiveTag,
 } from '../shared/equipmentMasterDataDetail';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const P = 'app.kuaizhizao.equipmentOps.inspectionItem';
 const RESOURCE = 'kuaizhizao:equipment-inspection-item';
@@ -109,7 +110,7 @@ const InspectionItemsPage: React.FC = () => {
   };
 
   const handleDelete = async (keys: React.Key[]) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('common.batchDeleteTitle'),
       content: t('common.batchDeleteContent', { count: keys.length }),
       onOk: async () => {

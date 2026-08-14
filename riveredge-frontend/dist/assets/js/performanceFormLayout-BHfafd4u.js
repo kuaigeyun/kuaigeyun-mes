@@ -1,0 +1,1 @@
+import{F as o}from"./main-BuO0hBxb.js";const s=o.PERFORMANCE_FORM_MODAL_CLASS,r=o.MODAL_FIELD_HALF_CLASS,F=o.MODAL_FIELD_FULL_CLASS;function L(){return{className:r}}function _(){return{className:F}}function A(){return{formItemProps:L(),fieldProps:{style:{width:"100%"}}}}function m(t=12){return t>=24?_():L()}export{s as P,A as a,m};

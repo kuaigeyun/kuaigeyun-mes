@@ -39,6 +39,7 @@ import {
 import { getOutboundIssueTypeLabel } from './outboundHubTypes';
 import { OUTBOUND_LIST_PATH, outboundSalesOrderEntryPath } from './outboundPaths';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { toApiDateTimeString } from '../../../../../utils/formDate';
 
 const OutboundSalesOrderPullEntryPage: React.FC = () => {
   const { t } = useTranslation();
@@ -313,7 +314,7 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
         customer_name: String(order?.customer_name ?? ''),
         warehouse_id: headerWhId,
         warehouse_name: whOpt?.name,
-        delivery_time: deliveryTime?.toISOString(),
+        delivery_time: toApiDateTimeString(deliveryTime),
         deliverer_name: operatorHook.receiverName.trim() || undefined,
         // 备注已在下推创建时写入，避免 update 覆盖掉来源说明
         attachments: normalizeDocumentAttachments(attachments),

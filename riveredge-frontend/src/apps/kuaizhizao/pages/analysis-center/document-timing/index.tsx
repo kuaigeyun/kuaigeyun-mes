@@ -17,6 +17,7 @@ import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../sales-managem
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { downloadFile } from '../../../../../utils/fileDownload';
 import { renderReportDocTypeMarker } from '../../../../kuaireport/utils/reportListPresentation';
+import { todaySiteDateString } from '../../../../../utils/format';
 import {
   DocumentTimingDetailDrawer,
   type DocumentTiming,
@@ -95,7 +96,7 @@ const DocumentTimingPage: React.FC = () => {
         ),
       ];
       const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
-      downloadFile(blob, `document-timing_${new Date().toISOString().slice(0, 10)}.csv`);
+      downloadFile(blob, `document-timing_${todaySiteDateString()}.csv`);
       messageApi.success(t('app.kuaireport.analysis.exportSuccess', { defaultValue: '导出成功' }));
     } finally {
       setExporting(false);

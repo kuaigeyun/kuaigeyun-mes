@@ -35,6 +35,7 @@ import {
 } from '../../../../utils/presetEntityI18n';
 import { rowActionKind } from '../../../../components/uni-action';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { todaySiteDateString } from '../../../../utils/format';
 
 /**
  * 审批流程管理列表页面组件
@@ -462,7 +463,7 @@ const ApprovalProcessListPage: React.FC = () => {
           }
           await downloadRecordsAsXlsx(
             items as Array<Record<string, unknown>>,
-            `approval-processes-${new Date().toISOString().slice(0, 10)}.xlsx`,
+            `approval-processes-${todaySiteDateString()}.xlsx`,
           );
           messageApi.success(t('pages.system.approvalProcesses.exportSuccess'));
         }}

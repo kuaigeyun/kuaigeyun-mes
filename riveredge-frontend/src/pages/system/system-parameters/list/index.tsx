@@ -41,7 +41,8 @@ import {
 } from '../../../../services/systemParameter';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { mergeListKeyword } from '../../../../utils/tableQueryKey';
-
+import { getAntdModal } from '../../../../utils/antdAppApis';
+import { todaySiteDateString } from '../../../../utils/format';
 /**
  * 系统参数管理列表页面组件
  */
@@ -158,7 +159,7 @@ const SystemParameterListPage: React.FC = () => {
       return;
     }
 
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('field.systemParameter.batchDeleteTitle'),
       content: t('field.systemParameter.batchDeleteConfirm', { count: selectedRowKeys.length }),
       okText: t('common.confirm'),
@@ -688,7 +689,7 @@ const SystemParameterListPage: React.FC = () => {
             }
             await downloadRecordsAsXlsx(
               items as Array<Record<string, unknown>>,
-              `system-parameters-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              `system-parameters-${todaySiteDateString()}.xlsx`,
             );
             messageApi.success(t('field.systemParameter.exportSuccess'));
           }}

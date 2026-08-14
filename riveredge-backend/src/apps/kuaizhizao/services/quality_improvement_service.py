@@ -37,7 +37,7 @@ from apps.kuaizhizao.services.quality_service import _summarize_pull_preview_ite
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 from tortoise.transactions import in_transaction
 from datetime import timezone
-from core.utils.timezone_utils import resolve_business_datetime
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 
 VALID_8D_STATUS_FLOW = [
     "d1_team",
@@ -167,7 +167,7 @@ class Quality8DService(AppBaseService[Quality8DReport]):
     def _append_transition_history_line(self, row: Quality8DReport, payload: Quality8DTransition) -> None:
         if not payload.remarks:
             return
-        history = f"[{resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')}] {payload.to_status}: {payload.remarks}"
+        history = f"[{to_api_isoformat(resolve_business_datetime())}] {payload.to_status}: {payload.remarks}"
         row.remarks = f"{row.remarks}\n{history}".strip() if row.remarks else history
 
     def _parse_history_from_remarks(self, row: Quality8DReport) -> List[Quality8DHistoryEntry]:

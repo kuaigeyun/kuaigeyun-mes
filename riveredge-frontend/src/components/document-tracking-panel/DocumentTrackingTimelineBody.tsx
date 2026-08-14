@@ -21,6 +21,7 @@ import type {
   DocumentTrackingFieldChange,
 } from '../../services/documentTracking';
 import { getDocumentLifecycleStageTagProps } from '../../utils/documentLifecycleStatusTag';
+import { formatDateTimeBySiteSetting } from '../../utils/format';
 
 /**
  * 原始状态值 -> lifecycle 阶段 i18n key
@@ -123,7 +124,7 @@ export const DocumentTrackingTimelineBody: React.FC<{
         <LinkOutlined />
       );
     const label = typeLabel[item.type] || item.type;
-    const time = item.at ? new Date(item.at).toLocaleString() : '';
+    const time = item.at ? formatDateTimeBySiteSetting(item.at) : '';
     const fieldChanges = item.type === 'edit' && item.field_changes && item.field_changes.length > 0;
     const metaStr = [item.by, time].filter(Boolean).join(' - ');
 

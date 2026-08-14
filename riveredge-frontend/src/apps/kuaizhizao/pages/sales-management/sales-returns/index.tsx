@@ -95,7 +95,7 @@ import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
 import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { materialApi } from '../../../../master-data/services/material';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useImportMaterialUnitOptions';
@@ -107,6 +107,7 @@ import {
   referenceDisplayToIdOptions,
   searchReferenceDisplay,
 } from '../../../../../utils/referenceDisplay';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const SALES_RETURN_RESOURCE = 'kuaizhizao:sales-return';
 const SALES_RETURN_LIST_PERSISTENCE_ID =
@@ -1308,7 +1309,7 @@ const SalesReturnsPage: React.FC = () => {
       });
 
       if (errors.length > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.kuaizhizao.quotation.validationFailed'),
           width: 600,
           content: (
@@ -1339,9 +1340,9 @@ const SalesReturnsPage: React.FC = () => {
         return;
       }
 
-      const result = await batchImport({
+      const result = await importInChunksViaPerItemCreate({
         items: toImport,
-        importFn: async (item) =>
+        createOne: async (item, _index) =>
           warehouseApi.salesReturn.create({
             return_code: item.return_code,
             customer_id: item.partner_id,
@@ -1356,11 +1357,12 @@ const SalesReturnsPage: React.FC = () => {
             items: item.items,
           }),
         title: t('app.kuaizhizao.salesReturn.listImport.importing'),
-        concurrency: 3,
+        chunkSize: 100,
+        concurrency: 4,
       });
 
       if (result.failureCount > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.kuaizhizao.quotation.importPartialTitle'),
           width: 600,
           content: (

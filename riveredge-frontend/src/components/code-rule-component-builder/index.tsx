@@ -45,7 +45,7 @@ import {
 import CodeRuleComponentConfigModal from './ComponentConfigModal';
 import { CodeRuleComponentService } from '../../utils/codeRuleComponent';
 import { CODE_FONT_FAMILY } from '../../constants/fonts';
-
+import { getAntdModal } from '../../utils/antdAppApis';
 const { Text } = Typography;
 
 interface CodeRuleComponentBuilderProps {
@@ -292,7 +292,7 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
       return;
     }
 
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('components.codeRuleComponentBuilder.modal.deleteTitle'),
       content: t('components.codeRuleComponentBuilder.modal.deleteContent', { name: t(info.labelKey, { defaultValue: info.label }) }),
       onOk: () => {

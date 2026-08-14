@@ -37,7 +37,7 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useTranslation } from 'react-i18next';
 import { formatQuantity } from '../../../../../utils/format';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formDateRangeFormItemProps, toApiDateTimeString, nowSiteDateTimeString } from '../../../../../utils/formDate';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
   buildWarehouseWorkflowStatusValueEnum,
@@ -48,7 +48,7 @@ import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { alignDescriptionColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 type OrderLike = {
   id?: number;
   code?: string;
@@ -246,11 +246,10 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
 
   const submitCreateOrder = async (values: any) => {
     try {
-      const orderDate = dayjs(values[config.dateField]);
       const payload = {
         warehouse_id: values.warehouse_id,
         warehouse_name: values.warehouse_name || values._warehouse_name || '',
-        [config.dateField]: orderDate.isValid() ? orderDate.toISOString() : new Date().toISOString(),
+        [config.dateField]: toApiDateTimeString(values[config.dateField]) ?? nowSiteDateTimeString(),
         product_material_id: values.product_material_id,
         product_material_code: values.product_material_code || '',
         product_material_name: values.product_material_name || '',
@@ -332,7 +331,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       void applyTemplateToOrder(order, selectedTemplateId, replaceExisting);
     };
     if (pendingCount > 0) {
-      Modal.confirm({
+      getAntdModal().confirm({
         title: t('app.kuaizhizao.assemblyOrder.applyTemplateTitle'),
         content: t('app.kuaizhizao.assemblyOrder.applyTemplateConfirm'),
         onOk: () => runApply(true),
@@ -343,7 +342,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
   };
 
   const confirmDeleteOrder = async (record: OrderLike) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.warehouseCommon.deleteOrderTitle', { noun: config.actionNoun }),
       content: t('app.kuaizhizao.warehouseCommon.deleteOrderConfirm', { noun: config.actionNoun, code: record.code }),
       onOk: async () => {
@@ -420,7 +419,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
   };
 
   const confirmDeleteItem = (order: OrderLike, item: ItemLike) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.warehouseCommon.deleteItemTitle'),
       content: t('app.kuaizhizao.warehouseCommon.deleteItemConfirm', {
         name: item.material_code || item.material_name || item.id,
@@ -446,7 +445,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       messageApi.warning(t('app.kuaizhizao.warehouseCommon.addItemBeforeExecute', { noun: config.actionNoun }));
       return;
     }
-    Modal.confirm({
+    getAntdModal().confirm({
       title: config.executeActionLabel,
       content: t('app.kuaizhizao.warehouseCommon.executeConfirmContent', {
         action: config.executeActionLabel,
@@ -759,7 +758,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         enableRowSelection
         showDeleteButton
         onDelete={async (keys) => {
-          Modal.confirm({
+          getAntdModal().confirm({
             title: t('app.kuaizhizao.warehouseCommon.batchDeleteTitle', { noun: config.actionNoun }),
             content: t('app.kuaizhizao.warehouseCommon.batchDeleteConfirm', { count: keys.length, noun: config.actionNoun }),
             onOk: async () => {

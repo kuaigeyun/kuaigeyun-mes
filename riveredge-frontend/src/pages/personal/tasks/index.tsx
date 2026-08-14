@@ -27,6 +27,7 @@ import {
   TaskActionRequest,
 } from '../../../services/userTask';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
+import { formatDateTimeBySiteSetting, formatDateBySiteSetting, todaySiteDateString } from '../../../utils/format';
 import {
   KUAIPLM_APPROVAL_TITLE_PREFIX_I18N,
   KUAIPLM_CHANGE_TYPE_I18N,
@@ -254,7 +255,7 @@ const UserTasksPage: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
           {statusInfo}
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {item.submitted_at ? new Date(item.submitted_at).toLocaleDateString() : ''}
+            {item.submitted_at ? formatDateBySiteSetting(item.submitted_at) : ''}
           </Typography.Text>
         </div>
       </div>
@@ -476,7 +477,7 @@ const UserTasksPage: React.FC = () => {
               </Tag>
               {history.comment && <span>{history.comment}</span>}
               <Typography.Text type="secondary" style={{ marginLeft: '8px' }}>
-                {history.timestamp ? new Date(history.timestamp).toLocaleString() : ''}
+                {history.timestamp ? formatDateTimeBySiteSetting(history.timestamp) : ''}
               </Typography.Text>
             </div>
           ))}
@@ -585,7 +586,7 @@ const UserTasksPage: React.FC = () => {
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
                 t('pages.personal.tasks.exportFileName', {
-                  date: new Date().toISOString().slice(0, 10),
+                  date: todaySiteDateString(),
                 }),
               );
               messageApi.success(t('common.exportSuccess', { count: items.length }));

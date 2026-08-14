@@ -119,9 +119,10 @@ import { downloadFile } from '../../../services/common'
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField'
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments'
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import { importExcelMatrixInChunks } from '../../../../../utils/chunkedBulkImport';
 
 export default function SalesForecastsPage() {
   const { t, i18n } = useTranslation();
@@ -681,7 +682,7 @@ export default function SalesForecastsPage() {
     }
   }
 
-  // 处理批量导入（UniTable 列表：提交矩阵，表头规范化为后端字段名）
+  // 处理批量导入（UniTable 列表：提交矩阵，表头规范化为后端字段名；分片避免大文件超时）
   const handleImport = async (data: any[][]) => {
     try {
       const headers = (data[0] || []).map((h) => String(h ?? '').trim())
@@ -705,7 +706,12 @@ export default function SalesForecastsPage() {
         return next
       })
       const payload = [normalizedHeaders, ...bodyRows]
-      const result = await importSalesForecasts(payload)
+      const result = await importExcelMatrixInChunks({
+        data: payload,
+        hasExampleRow: true,
+        title: t('common.importing', { defaultValue: '正在导入数据' }),
+        importChunk: (matrix) => importSalesForecasts(matrix),
+      })
       if (result.failure_count > 0) {
         messageApi.warning(
           t('common.importResult', {
@@ -738,7 +744,7 @@ export default function SalesForecastsPage() {
     try {
       if (type === 'all') {
         const blob = await exportSalesForecasts()
-        const filename = `${t('app.kuaizhizao.salesForecast.exportFilename', { date: new Date().toISOString().slice(0, 10) })}.xlsx`
+        const filename = `${t('app.kuaizhizao.salesForecast.exportFilename', { date: todaySiteDateString() })}.xlsx`
         downloadFile(blob, filename)
         messageApi.success(t('common.exportSuccess'))
       } else {
@@ -752,7 +758,7 @@ export default function SalesForecastsPage() {
         }
         await downloadRecordsAsXlsx(
           toExport as Array<Record<string, unknown>>,
-          `${t('app.kuaizhizao.salesForecast.exportFilename', { date: new Date().toISOString().slice(0, 10) })}.xlsx`,
+          `${t('app.kuaizhizao.salesForecast.exportFilename', { date: todaySiteDateString() })}.xlsx`,
         );
         messageApi.success(t('common.exportCountSuccess', { count: toExport.length }))
       }

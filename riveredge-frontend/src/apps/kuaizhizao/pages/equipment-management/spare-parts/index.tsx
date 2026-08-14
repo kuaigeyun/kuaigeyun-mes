@@ -39,6 +39,7 @@ import {
   renderIsActiveTag,
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const P = 'app.kuaizhizao.sparePart';
 const RESOURCE = 'kuaizhizao:spare-part';
@@ -129,7 +130,7 @@ const SparePartsPage: React.FC = () => {
   );
 
   const handleDelete = async (keys: React.Key[]) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('common.batchDeleteTitle'),
       content: t('common.batchDeleteContent', { count: keys.length }),
       onOk: async () => {
@@ -295,7 +296,7 @@ const SparePartsPage: React.FC = () => {
               key="delete"
               {...rowActionKind('delete')}
               onClick={() => {
-                Modal.confirm({
+                getAntdModal().confirm({
                   title: t('common.deleteTitle'),
                   onOk: () => {
                     if (record.id != null) {

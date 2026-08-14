@@ -139,9 +139,9 @@ class OutsourceCollaborationService(BaseService):
             # 更新备注
             if progress_data.get('remarks'):
                 if outsource_work_order.remarks:
-                    outsource_work_order.remarks += f"\n[{resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')}] {progress_data['remarks']}"
+                    outsource_work_order.remarks += f"\n[{to_api_isoformat(resolve_business_datetime())}] {progress_data['remarks']}"
                 else:
-                    outsource_work_order.remarks = f"[{resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')}] {progress_data['remarks']}"
+                    outsource_work_order.remarks = f"[{to_api_isoformat(resolve_business_datetime())}] {progress_data['remarks']}"
             
             await outsource_work_order.save()
             
@@ -210,9 +210,9 @@ class OutsourceCollaborationService(BaseService):
             
             if completion_data.get('remarks'):
                 if outsource_work_order.remarks:
-                    outsource_work_order.remarks += f"\n[完工申请 {resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')}] {completion_data['remarks']}"
+                    outsource_work_order.remarks += f"\n[完工申请 {to_api_isoformat(resolve_business_datetime())}] {completion_data['remarks']}"
                 else:
-                    outsource_work_order.remarks = f"[完工申请 {resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')}] {completion_data['remarks']}"
+                    outsource_work_order.remarks = f"[完工申请 {to_api_isoformat(resolve_business_datetime())}] {completion_data['remarks']}"
             
             await outsource_work_order.save()
             

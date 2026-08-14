@@ -21,6 +21,7 @@ import { redirectAfterLogout } from '../../utils/loginEntry';
 import { useNavigate } from 'react-router-dom';
 import { useGlobalStore } from '../../stores';
 import { useTranslation } from 'react-i18next';
+import { getAntdModal } from '../../utils/antdAppApis';
 // import InfraSuperAdminForm from './form'; // 暂时注释掉，等待后续实现
 
 /**
@@ -80,7 +81,7 @@ export default function InfraSuperAdminPage() {
    * 处理退出登录
    */
   const handleLogout = () => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('pages.infra.admin.logoutConfirmTitle'),
       content: t('pages.infra.admin.logoutConfirmContent'),
       onOk: () => {

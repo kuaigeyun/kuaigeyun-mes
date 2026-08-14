@@ -48,7 +48,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-
+import { getAntdModal } from '../../utils/antdAppApis';
 /**
  * 可拖拽的列表项组件
  */
@@ -1377,7 +1377,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       return;
     }
     
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('components.uniQuery.deleteConfirm'),
       content: t('components.uniQuery.deleteConfirmContent'),
       onOk: () => {

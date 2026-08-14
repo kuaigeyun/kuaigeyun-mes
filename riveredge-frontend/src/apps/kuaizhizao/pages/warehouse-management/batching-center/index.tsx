@@ -1,4 +1,5 @@
 import { formatQuantity } from '../../../../../utils/format';
+import { toApiDateTimeString, nowSiteDateTimeString } from '../../../../../utils/formDate';
 /**
  * 物料中心页面
  *
@@ -281,7 +282,7 @@ const BatchingCenterPage: React.FC = () => {
           work_order_id: values.work_order_id,
           warehouse_id: values.warehouse_id || undefined,
           warehouse_name: values._warehouse_name || undefined,
-          batching_date: values.batching_date?.toISOString?.() || new Date().toISOString(),
+          batching_date: toApiDateTimeString(values.batching_date) ?? nowSiteDateTimeString(),
           target_warehouse_id: values.target_warehouse_id || undefined,
           target_warehouse_name: values._target_warehouse_name || undefined,
           remarks: values.remarks,
@@ -297,7 +298,7 @@ const BatchingCenterPage: React.FC = () => {
         const orderData: any = {
           warehouse_id: values.warehouse_id,
           warehouse_name: values._warehouse_name || '',
-          batching_date: values.batching_date?.toISOString?.() || new Date().toISOString(),
+          batching_date: toApiDateTimeString(values.batching_date) ?? nowSiteDateTimeString(),
           remarks: values.remarks,
           attachments: normalizeDocumentAttachments(values.attachments),
         };

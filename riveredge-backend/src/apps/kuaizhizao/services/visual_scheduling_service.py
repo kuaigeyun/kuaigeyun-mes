@@ -31,9 +31,7 @@ from apps.kuaizhizao.utils.working_time import is_within_working_hours, load_sch
 
 from apps.kuaizhizao.services.scheduling_config_service import SchedulingConfigService
 
-from core.utils.timezone_utils import make_aware, resolve_business_datetime
-
-from infra.config.infra_config import infra_settings
+from core.utils.timezone_utils import make_aware, resolve_business_datetime, site_timezone_name
 
 from apps.kuaizhizao.services.scheduling_freeze import (
 
@@ -195,7 +193,7 @@ class VisualSchedulingService(BaseService):
 
     @staticmethod
     def _plan_day_bounds(plan_date: date) -> Tuple[datetime, datetime]:
-        tz_name = infra_settings.TIMEZONE or "Asia/Shanghai"
+        tz_name = site_timezone_name()
         start = make_aware(datetime.combine(plan_date, datetime.min.time()), tz_name)
         end = make_aware(datetime.combine(plan_date, datetime.max.time()), tz_name)
         return start, end

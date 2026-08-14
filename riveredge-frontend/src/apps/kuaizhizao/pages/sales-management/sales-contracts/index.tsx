@@ -128,7 +128,7 @@ import {
 } from '@ant-design/icons';
 
 import dayjs from 'dayjs';
-import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 
 import {
@@ -277,14 +277,13 @@ const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 );
 
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import {
   buildContractListImportTemplate,
   parseContractListImport,
 } from './contractListImport';
 
 import {
-
   calcContractLineAmounts,
 
   convertUnitPriceByPriceType,
@@ -294,6 +293,7 @@ import {
   resolveContractLineMaterialFields,
 
 } from './contract-line-items-shared';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const SALES_CONTRACT_RESOURCE = SC;
 
@@ -980,7 +980,7 @@ const SalesContractsPage: React.FC = () => {
     });
 
     if (errors.length > 0) {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.kuaizhizao.quotation.validationFailed'),
         width: 600,
         content: (
@@ -1012,15 +1012,16 @@ const SalesContractsPage: React.FC = () => {
     }
 
     try {
-      const result = await batchImport({
+      const result = await importInChunksViaPerItemCreate({
         items: toImport,
-        importFn: async (item) => salesContractApi.create(item, false),
+        createOne: async (item, _index) => salesContractApi.create(item, false),
         title: t('app.kuaizhizao.salesContract.listImport.importing'),
-        concurrency: 3,
+        chunkSize: 100,
+        concurrency: 4,
       });
 
       if (result.failureCount > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.kuaizhizao.quotation.importPartialTitle'),
           width: 600,
           content: (
@@ -1661,7 +1662,7 @@ const SalesContractsPage: React.FC = () => {
 
   const handleDeleteDraft = (record: SalesContract) => {
 
-    Modal.confirm({
+    getAntdModal().confirm({
 
       title: t('app.kuaizhizao.salesContract.deleteTitle'),
 
@@ -3464,7 +3465,7 @@ const SalesContractsPage: React.FC = () => {
             }
             await downloadRecordsAsXlsx(
               items as Array<Record<string, unknown>>,
-              `sales-contracts-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              `sales-contracts-${todaySiteDateString()}.xlsx`,
             );
             messageApi.success(t('app.kuaizhizao.salesContract.exportSuccess', { count: items.length }));
           } catch (error: any) {

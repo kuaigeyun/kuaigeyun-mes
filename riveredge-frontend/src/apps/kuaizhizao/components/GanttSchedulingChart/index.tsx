@@ -37,6 +37,7 @@ import type { EffectiveWorkCalendar } from '../../types/performance';
 import { ensureGanttIconsCssLoaded } from '../../../../utils/loadGanttIconsCss';
 import { GanttTaskLabel } from './GanttTaskLabel';
 import { scrollGanttToToday } from './scrollGanttToToday';
+import { toApiDateTimeString } from '../../../../utils/formDate';
 
 const GANTT_ROW_HEIGHT = 36;
 const RESOURCE_LEVELS: GanttTaskLevel[] = ['station', 'equipment', 'operation'];
@@ -812,14 +813,14 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
           if (parsed.kind === 'operation') {
             opUpdates.push({
               operation_id: parsed.id,
-              planned_start_date: dayjs(start).toISOString(),
-              planned_end_date: dayjs(end).toISOString(),
+              planned_start_date: toApiDateTimeString(start),
+              planned_end_date: toApiDateTimeString(end),
             });
           } else {
             woUpdates.push({
               work_order_id: parsed.id,
-              planned_start_date: dayjs(start).toISOString(),
-              planned_end_date: dayjs(end).toISOString(),
+              planned_start_date: toApiDateTimeString(start),
+              planned_end_date: toApiDateTimeString(end),
             });
           }
         }

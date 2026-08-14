@@ -15,7 +15,7 @@ import {
   type ReceivablePullPreview,
 } from '../../../services/finance/receivable';
 import { Receivable, ReceivableCreateData, ReceivableListParams } from '../../../types/finance/receivable';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { useTranslation } from 'react-i18next';
 import {
@@ -46,7 +46,7 @@ import { receivableCapabilityReasonMessage } from '../../../utils/receivableCapa
 import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, todaySiteDateString } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   DocumentPushProgressBar,
@@ -956,11 +956,12 @@ const ReceivableList: React.FC = () => {
                         messageApi.warning(t('app.kuaicaiwu.common.importNoValidRows'));
                         return;
                     }
-                    const result = await batchImport({
+                    const result = await importInChunksViaPerItemCreate({
                         items,
-                        importFn: async (item) => receivableService.createReceivable(item),
+                        createOne: async (item, _index) => receivableService.createReceivable(item),
                         title: t(`${P}.importTitle`),
-                        concurrency: 5,
+                        chunkSize: 100,
+                        concurrency: 4,
                     });
                     if (result.successCount > 0) {
                         messageApi.success(t(`${P}.importSuccess`, { count: result.successCount }));
@@ -995,7 +996,7 @@ const ReceivableList: React.FC = () => {
                         }
                         await downloadRecordsAsXlsx(
                           items as Array<Record<string, unknown>>,
-                          `receivables-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                          `receivables-${todaySiteDateString()}.xlsx`,
                         );
                         messageApi.success(t('common.exportCountSuccess', { count: items.length }));
                     } catch (error: any) {

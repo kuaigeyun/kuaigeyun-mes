@@ -140,7 +140,8 @@ import {
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { mergeListKeyword } from '../../../../utils/tableQueryKey';
-
+import { getAntdModal } from '../../../../utils/antdAppApis';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../utils/format';
 /** 应用中心行/卡片操作图标（表格与卡片共用，避免 uni-action 按 manifest action 覆盖） */
 const APP_ACTION_ICON = {
   view: EyeOutlined,
@@ -728,7 +729,7 @@ const ApplicationListPage: React.FC = () => {
    */
   const showProUpgradeRequired = useCallback(
     (record?: Application) => {
-      Modal.info({
+      getAntdModal().info({
         title: t('pages.system.applications.proUpgradeRequiredTitle', {
           defaultValue: '需升级专业版',
         }),
@@ -1898,7 +1899,7 @@ const ApplicationListPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `applications-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `applications-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('pages.system.applications.exportSuccessCount', { count: items.length }));
             } catch (error: any) {
@@ -2091,7 +2092,7 @@ const ApplicationListPage: React.FC = () => {
               width: 200,
               render: (v: string) => {
                 try {
-                  return new Date(v).toLocaleString();
+                  return formatDateTimeBySiteSetting(v);
                 } catch {
                   return v;
                 }

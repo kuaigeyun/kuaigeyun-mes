@@ -46,7 +46,7 @@ import {
   partnerSettlementMethodLabel,
   partnerTaxpayerTypeLabel,
 } from '../../../utils/partner-static-labels';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunks } from '../../../../../utils/chunkedBulkImport';
 import { downloadFile } from '../../../../../utils';
 import {
   CustomerFollowUpFormModal,
@@ -87,7 +87,8 @@ import {
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
 /**
  * 客户管理列表页面组件
  */
@@ -390,7 +391,7 @@ const CustomersPage: React.FC = () => {
   };
 
   /**
-   * 处理批量导入客户（batchImport + customerApi.create 循环）
+   * 处理批量导入客户（分片 bulkCreate）
    */
   const handleImport = async (data: any[][]) => {
     if (!data || data.length === 0) {
@@ -531,7 +532,7 @@ const CustomersPage: React.FC = () => {
     });
 
     if (errors.length > 0) {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.dataValidationFailed'),
         width: 600,
         content: (
@@ -560,15 +561,23 @@ const CustomersPage: React.FC = () => {
     }
 
     try {
-      const result = await batchImport({
+      const CHUNK = 100;
+      const result = await importInChunks({
         items: importData,
-        importFn: async (item: CustomerCreate) => customerApi.create(item),
+        chunkSize: CHUNK,
         title: t('app.master-data.customers.importTitle'),
-        concurrency: 5,
+        showResultModal: false,
+        importChunk: async (chunk) => {
+          const res = await customerApi.bulkCreate(chunk);
+          return {
+            createdCount: res.createdCount,
+            failedItems: res.failedItems,
+          };
+        },
       });
 
       if (result.failureCount > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.master-data.importPartialResultTitle'),
           width: 600,
           content: (
@@ -622,13 +631,13 @@ const CustomersPage: React.FC = () => {
           return;
         }
         exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
-        filename = `${t('app.master-data.customers.exportFilenameSelected', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+        filename = `${t('app.master-data.customers.exportFilenameSelected', { date: todaySiteDateString() })}.csv`;
       } else if (type === 'currentPage' && currentPageData) {
         exportData = currentPageData;
-        filename = `${t('app.master-data.customers.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+        filename = `${t('app.master-data.customers.exportFilenameCurrentPage', { date: todaySiteDateString() })}.csv`;
       } else {
         exportData = await fetchAllListItems((p) => customerApi.list({ ...p, ...lastListParamsRef.current }));
-        filename = `${t('app.master-data.customers.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+        filename = `${t('app.master-data.customers.exportFilenameAll', { date: todaySiteDateString() })}.csv`;
       }
 
       if (exportData.length === 0) {
@@ -669,7 +678,7 @@ const CustomersPage: React.FC = () => {
           item.deliveryAddress || '',
           item.salesmanName || '',
           (item.isActive ?? (item as any)?.is_active) ? t('common.enabled') : t('common.disabled'),
-          item.createdAt ? new Date(item.createdAt).toLocaleString() : '',
+          item.createdAt ? formatDateTimeBySiteSetting(item.createdAt) : '',
         ];
         csvRows.push(row.map(cell => {
           const cellStr = String(cell || '');

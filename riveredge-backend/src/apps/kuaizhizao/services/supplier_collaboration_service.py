@@ -138,9 +138,9 @@ class SupplierCollaborationService(BaseService):
             # 更新备注
             if progress_data.get('remarks'):
                 if purchase_order.remarks:
-                    purchase_order.remarks += f"\n[{resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')}] {progress_data['remarks']}"
+                    purchase_order.remarks += f"\n[{to_api_isoformat(resolve_business_datetime())}] {progress_data['remarks']}"
                 else:
-                    purchase_order.remarks = f"[{resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')}] {progress_data['remarks']}"
+                    purchase_order.remarks = f"[{to_api_isoformat(resolve_business_datetime())}] {progress_data['remarks']}"
             
             await purchase_order.save()
             
@@ -208,7 +208,7 @@ class SupplierCollaborationService(BaseService):
                 delivery_info += f", 物流单号: {tracking_number}"
             
             # 更新备注
-            delivery_remarks = f"[发货通知 {resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')}] {delivery_info}"
+            delivery_remarks = f"[发货通知 {to_api_isoformat(resolve_business_datetime())}] {delivery_info}"
             if delivery_data.get('remarks'):
                 delivery_remarks += f" - {delivery_data['remarks']}"
             

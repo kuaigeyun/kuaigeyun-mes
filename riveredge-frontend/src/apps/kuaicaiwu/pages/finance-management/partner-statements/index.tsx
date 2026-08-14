@@ -55,7 +55,7 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const money = (v: number | string | undefined) =>
   `¥${Number(v ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -177,7 +177,7 @@ const PartnerStatementsPage: React.FC = () => {
   };
 
   const handleDelete = (record: PartnerStatement) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t(`${PS}.deleteTitle`),
       content: t(`${PS}.deleteConfirm`, { code: record.statement_code }),
       okType: 'danger',

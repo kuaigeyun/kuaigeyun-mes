@@ -45,7 +45,7 @@ import {
 import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
 import type { DocumentAttachmentFile } from '../../../utils/documentAttachments';
 import { fetchKuaiiotFillContext } from '../../../../../utils/kuaiiotFillContext';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const P = 'app.kuaizhizao.equipmentOps.spotCheck';
 const RESOURCE = 'kuaizhizao:equipment-spot-check';
 
@@ -242,7 +242,7 @@ const SpotChecksPage: React.FC = () => {
   };
 
   const handleDelete = async (keys: React.Key[]) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('common.batchDeleteTitle'),
       content: t('common.batchDeleteContent', { count: keys.length }),
       onOk: async () => {

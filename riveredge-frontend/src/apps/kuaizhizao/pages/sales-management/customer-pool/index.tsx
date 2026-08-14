@@ -57,7 +57,7 @@ import {
   type CustomerPoolLogItem,
   type CustomerPoolRule,
 } from '../../../services/customer-pool';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunks } from '../../../../../utils/chunkedBulkImport';
 import { downloadFile } from '../../../../../utils';
 import {
   buildFactoryImportTemplate,
@@ -1066,11 +1066,19 @@ const CustomerPoolPage: React.FC = () => {
       return;
     }
 
-    const result = await batchImport({
+    const CHUNK = 100;
+    const result = await importInChunks({
       items: importData,
-      importFn: async (item: CustomerCreate) => customerApi.create(item),
+      chunkSize: CHUNK,
       title: t('app.master-data.customers.importTitle'),
-      concurrency: 5,
+      showResultModal: false,
+      importChunk: async (chunk) => {
+        const res = await customerApi.bulkCreate(chunk);
+        return {
+          createdCount: res.createdCount,
+          failedItems: res.failedItems,
+        };
+      },
     });
     if (result.successCount > 0) {
       message.success(t('common.importSuccess', { count: result.successCount }));

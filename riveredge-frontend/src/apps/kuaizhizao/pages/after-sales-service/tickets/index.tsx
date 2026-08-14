@@ -74,6 +74,7 @@ import {
   renderAfterSalesStatusTag,
   renderAfterSalesTypeMarker,
 } from '../shared/afterSalesListPresentation';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 /** 取单弹窗状态码 → documentStatus.*（与单据跟踪一致） */
 const PULL_STATUS_I18N: Record<string, string> = {
@@ -269,7 +270,7 @@ const AfterSalesTicketsPage: React.FC = () => {
   };
 
   const handleDelete = (record: AfterSalesTicket, opts?: { closeDrawer?: boolean }) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.afterSalesTicket.deleteConfirm'),
       onOk: async () => {
         try {
@@ -286,7 +287,7 @@ const AfterSalesTicketsPage: React.FC = () => {
 
   const handleCloseTicket = (record: AfterSalesTicket) => {
     if (record.status === '已关闭') return;
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.afterSalesTicket.closeConfirm'),
       content: (
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>

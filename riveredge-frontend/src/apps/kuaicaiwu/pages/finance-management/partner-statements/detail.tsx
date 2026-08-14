@@ -29,7 +29,7 @@ import {
 import { formatDateTime } from '../../../../../utils/format';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { renderPartnerStatementDocType } from '../../../utils/partnerStatementLineDisplay';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const PS = 'app.kuaicaiwu.partnerStatement';
 const PARTNER_STATEMENT_RESOURCE = 'kuaicaiwu:partner-statement';
 
@@ -122,7 +122,7 @@ const PartnerStatementDetailPage: React.FC = () => {
 
   const handleConfirm = () => {
     if (!data) return;
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t(`${PS}.detail.confirmTitle`),
       content: t(`${PS}.detail.confirmContent`, { code: data.statement_code }),
       onOk: async () => {
@@ -137,7 +137,7 @@ const PartnerStatementDetailPage: React.FC = () => {
     if (!data) return;
     let channel = 'wechat_manual';
     let notes = '';
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t(`${PS}.detail.markSentTitle`),
       width: 480,
       content: (
@@ -174,7 +174,7 @@ const PartnerStatementDetailPage: React.FC = () => {
   const handleDispute = () => {
     if (!data) return;
     let reason = '';
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t(`${PS}.detail.disputeTitle`),
       content: (
         <Input.TextArea

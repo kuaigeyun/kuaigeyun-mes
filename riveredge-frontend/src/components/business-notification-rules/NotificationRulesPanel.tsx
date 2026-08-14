@@ -43,7 +43,7 @@ import {
   normalizeNotificationChannelRefs,
 } from './notificationChannelRefs';
 import { stripMiddleDotSeparator } from './stripMiddleDotSeparator';
-
+import { getAntdModal } from '../../utils/antdAppApis';
 function splitRecipientScopes(scopes: unknown): {
   recipient_role_scopes: string[];
   enable_form_user_notify: boolean;
@@ -456,7 +456,7 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
     recipients: string;
     template: string;
   }) => {
-    Modal.info({
+    getAntdModal().info({
       title: t('pages.system.configCenter.notification.modal.detailTitle'),
       width: 720,
       content: (
@@ -500,7 +500,7 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
   };
 
   const handleDeleteNotificationRule = (row: { id: string }) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('pages.system.configCenter.notification.modal.deleteTitle'),
       content: t('pages.system.configCenter.notification.modal.deleteConfirm'),
       onOk: async () => {

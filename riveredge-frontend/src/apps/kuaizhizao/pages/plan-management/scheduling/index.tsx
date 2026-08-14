@@ -81,6 +81,7 @@ import { searchUserDisplay } from '../../../../../services/user';
 import { displayItemsToUsers } from '../../../../../utils/userDisplay';
 import { getEquipmentList } from '../../../../../services/equipment';
 import { getMoldList } from '../../../../../services/mold';
+import { toApiDateTimeString } from '../../../../../utils/formDate';
 
 const GANTT_WORK_ORDER_LIMIT = 500;
 
@@ -1016,8 +1017,8 @@ const SchedulingPage: React.FC = () => {
         .slice(0, 50)
         .map((wo) => ({
           work_order_id: wo.id,
-          planned_start_date: dayjs(wo.planned_start_date).add(days, 'day').toISOString(),
-          planned_end_date: dayjs(wo.planned_end_date).add(days, 'day').toISOString(),
+          planned_start_date: toApiDateTimeString(dayjs(wo.planned_start_date).add(days, 'day')),
+          planned_end_date: toApiDateTimeString(dayjs(wo.planned_end_date).add(days, 'day')),
         }));
       if (updates.length === 0) {
         messageApi.warning(t('app.kuaizhizao.scheduling.msg.batchShiftNoValid'));

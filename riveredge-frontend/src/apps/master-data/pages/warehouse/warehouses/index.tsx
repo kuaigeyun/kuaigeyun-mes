@@ -41,7 +41,7 @@ import {
 import { WarehouseFormModal } from '../../../components/WarehouseFormModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { Warehouse, WarehouseCreate } from '../../../types/warehouse';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { useTrialRunMode } from '../../../../../hooks/useTrialRunMode';
 import {
@@ -55,7 +55,8 @@ import {
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
 /**
  * 仓库管理列表页面组件
  */
@@ -376,7 +377,7 @@ const WarehousesPage: React.FC = () => {
 
     // 如果有验证错误，显示错误信息
     if (errors.length > 0) {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.warehouses.importValidationFailed'),
         width: 600,
         content: (
@@ -406,18 +407,19 @@ const WarehousesPage: React.FC = () => {
 
     // 批量导入
     try {
-      const result = await batchImport({
+      const result = await importInChunksViaPerItemCreate({
         items: importData,
-        importFn: async (item: WarehouseCreate) => {
+        createOne: async (item: WarehouseCreate, _index) => {
           return await warehouseApi.create(item);
         },
         title: t('app.master-data.warehouses.importTitle'),
-        concurrency: 5,
+        chunkSize: 100,
+        concurrency: 4,
       });
 
       // 显示导入结果
       if (result.failureCount > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.master-data.warehouses.importPartialFailure'),
           width: 600,
           content: (
@@ -473,15 +475,15 @@ const WarehousesPage: React.FC = () => {
           return;
         }
         exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
-        filename = t('app.master-data.warehouses.exportFilenameSelected', { date: new Date().toISOString().slice(0, 10) });
+        filename = t('app.master-data.warehouses.exportFilenameSelected', { date: todaySiteDateString() });
       } else if (type === 'currentPage' && currentPageData) {
         // 导出当前页数据
         exportData = currentPageData;
-        filename = t('app.master-data.warehouses.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) });
+        filename = t('app.master-data.warehouses.exportFilenameCurrentPage', { date: todaySiteDateString() });
       } else {
         // 导出全部数据
         exportData = await fetchAllListItems((p) => warehouseApi.list({ ...p, ...lastListParamsRef.current }));
-        filename = t('app.master-data.warehouses.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) });
+        filename = t('app.master-data.warehouses.exportFilenameAll', { date: todaySiteDateString() });
       }
 
       if (exportData.length === 0) {
@@ -518,7 +520,7 @@ const WarehousesPage: React.FC = () => {
         item.workCenterName || '',
         item.description || '',
         item.isActive ? t('common.enabled') : t('common.disabled'),
-        item.createdAt ? new Date(item.createdAt).toLocaleString(i18n.language) : '',
+        item.createdAt ? formatDateTimeBySiteSetting(item.createdAt) : '',
       ]);
 
       // 生成 CSV 内容

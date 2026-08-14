@@ -13,7 +13,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { App, message, Modal } from 'antd';
 import ReportDesigner, { ReportConfig } from '../../../../components/report-designer';
 import { apiRequest } from '../../../../services/api';
-
+import { getAntdModal } from '../../../../utils/antdAppApis';
 /**
  * 报表设计页面组件
  */
@@ -79,7 +79,7 @@ const ReportDesignPage: React.FC = () => {
    * 处理预览
    */
   const handlePreview = (reportConfig: ReportConfig) => {
-    Modal.info({
+    getAntdModal().info({
       title: t('pages.system.reportTemplates.designPreviewTitle'),
       width: 800,
       content: (

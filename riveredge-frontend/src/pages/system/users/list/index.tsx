@@ -41,7 +41,9 @@ import {
   resolvePresetRoleName,
 } from '../../../../utils/presetEntityI18n';
 import { downloadFile } from '../../../../utils';
-
+import { getAntdModal } from '../../../../utils/antdAppApis';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../utils/format';
+import { importExcelMatrixInChunks } from '../../../../utils/chunkedBulkImport';
 /**
  * 账户管理列表页面组件
  */
@@ -250,7 +252,7 @@ const UserListPage: React.FC = () => {
    * 处理重置密码
    */
   const handleResetPassword = useCallback(async (record: User) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('field.user.resetPasswordTitle'),
       content: t('field.user.resetPasswordConfirm', { username: record.username }),
       onOk: async () => {
@@ -265,7 +267,7 @@ const UserListPage: React.FC = () => {
   }, [messageApi, t]);
 
   const showImportResult = (result: Awaited<ReturnType<typeof importUsers>>) => {
-    Modal.info({
+    getAntdModal().info({
       title: t('field.user.importComplete'),
       width: 600,
       content: (
@@ -328,8 +330,18 @@ const UserListPage: React.FC = () => {
   }, [t]);
 
   const runUserImport = async (data: any[][], autoCreateReferences: boolean) => {
-    const result = await importUsers(data, { autoCreateReferences });
-    showImportResult(result);
+    const result = await importExcelMatrixInChunks({
+      data,
+      hasExampleRow: true,
+      chunkSize: 100,
+      title: t('field.user.importing', { defaultValue: '正在导入用户' }),
+      importChunk: (matrix) => importUsers(matrix, { autoCreateReferences }),
+    });
+    showImportResult({
+      success_count: result.success_count,
+      failure_count: result.failure_count,
+      errors: result.errors.map((e) => ({ row: e.row, message: e.error })),
+    });
     if (result.success_count > 0) {
       actionRef.current?.reload();
       if (autoCreateReferences) {
@@ -360,7 +372,7 @@ const UserListPage: React.FC = () => {
     try {
       const preview = await previewUserImport(data);
       if (preview.has_missing) {
-        Modal.confirm({
+        getAntdModal().confirm({
           title: t('field.user.importMissingRefsTitle'),
           width: 560,
           content: renderMissingRefsContent(preview),
@@ -417,19 +429,19 @@ const UserListPage: React.FC = () => {
           user.roles?.map((role) => resolvePresetRoleName(role, t)).join(', ') || '',
           user.is_active ? t('field.role.enabled') : t('field.role.disabled'),
           user.is_tenant_admin ? t('field.customField.yes') : t('field.customField.no'),
-          user.last_login ? new Date(user.last_login).toLocaleString() : '',
-          user.created_at ? new Date(user.created_at).toLocaleString() : '',
+          user.last_login ? formatDateTimeBySiteSetting(user.last_login) : '',
+          user.created_at ? formatDateTimeBySiteSetting(user.created_at) : '',
         ];
         csvRows.push(row.map(escapeCsvCell).join(','));
       });
       const blob = new Blob(['\ufeff' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8' });
-      downloadFile(blob, `users_${new Date().toISOString().slice(0, 10)}.csv`);
+      downloadFile(blob, `users_${todaySiteDateString()}.csv`);
     };
 
     try {
       if (type === 'all') {
         const blob = await exportUsers();
-        downloadFile(blob, `users_${new Date().toISOString().slice(0, 10)}.csv`);
+        downloadFile(blob, `users_${todaySiteDateString()}.csv`);
       } else {
         let toExport: User[] = [];
         if (type === 'selected' && selectedRowKeys?.length && currentPageData) {

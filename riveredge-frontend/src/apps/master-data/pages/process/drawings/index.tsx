@@ -64,7 +64,7 @@ import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForL
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { MASTER_DATA_LIST_FIELD_RANK } from '../../../utils/masterListCore';
 import { masterCrudCreatedUpdatedColumns } from '../../../utils/masterListCore';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const STATUS_COLOR: Record<DrawingStatus, string> = {
   Draft: 'default',
   Released: 'success',
@@ -444,7 +444,7 @@ const DrawingsPage: React.FC = () => {
   useNewShortcut(handleCreate);
 
   const handleRelease = async (record: EngineeringDrawing) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.master-data.drawings.release'),
       content: t('app.master-data.drawings.releaseConfirm'),
       onOk: async () => {
@@ -458,7 +458,7 @@ const DrawingsPage: React.FC = () => {
 
   const handleObsolete = async (record: EngineeringDrawing) => {
     let reason = '';
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.master-data.drawings.obsolete'),
       content: (
         <Input.TextArea

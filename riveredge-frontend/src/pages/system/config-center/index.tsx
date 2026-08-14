@@ -31,7 +31,7 @@ import { TRIAL_RUN_MODE_QUERY_KEY } from '../../../hooks/useTrialRunMode';
 import { qualityApi } from '../../../apps/kuaizhizao/services/quality-execution';
 
 import type { Color } from 'antd/es/color-picker';
-
+import { getAntdModal } from '../../../utils/antdAppApis';
 const { Sider, Content } = Layout;
 const { Text, Paragraph } = Typography;
 const { useToken } = theme;
@@ -426,7 +426,7 @@ const ConfigCenterPage: React.FC = () => {
                         changedValues['quality.require_incoming_inspection_for_receipt'] === true
                         && !form.getFieldValue('quality.auto_create_iqc_on_purchase_receipt')
                       ) {
-                        Modal.confirm({
+                        getAntdModal().confirm({
                           title: t('pages.system.configCenter.quality.gateRecommendAutoIqcTitle'),
                           content: t('pages.system.configCenter.quality.gateRecommendAutoIqcContent'),
                           okText: t('pages.system.configCenter.quality.gateRecommendAutoIqcEnableBoth'),

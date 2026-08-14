@@ -4,7 +4,7 @@
 import { Modal } from 'antd';
 import { COPYRIGHT_COMPANY_NAME, COPYRIGHT_TRADEMARK } from '../constants/copyrightContent';
 import { _ as checkData } from '../constants/copyrightCheck';
-
+import { getAntdModal } from './antdAppApis';
 function decodeBase64Utf8(str: string): string {
   try {
     const binary = atob(str);
@@ -36,7 +36,7 @@ const WARNING_CONTENT =
 export function verifyCopyright(): boolean {
   const expected = getExpected();
   if (!expected) {
-    Modal.warning({
+    getAntdModal().warning({
       title: '版权声明校验异常',
       content: WARNING_CONTENT,
     });
@@ -45,7 +45,7 @@ export function verifyCopyright(): boolean {
   const ok =
     COPYRIGHT_COMPANY_NAME === expected.company && COPYRIGHT_TRADEMARK === expected.trademark;
   if (!ok) {
-    Modal.warning({
+    getAntdModal().warning({
       title: '版权声明校验未通过',
       content: WARNING_CONTENT,
     });

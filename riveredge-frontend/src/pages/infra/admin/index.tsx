@@ -26,7 +26,7 @@ import PlatformSettingsPage from './settings';
 import BuildProvenanceSummaryTab from './build-provenance-summary';
 import { getBuildProvenance } from '../../../services/platformSettings';
 import { canShowRegistrySummaryAdmin } from '../../../utils/officialRegistrySite';
-
+import { getAntdModal } from '../../../utils/antdAppApis';
 /**
  * 平台超级管理员管理页面组件
  */
@@ -69,7 +69,7 @@ export default function InfraSuperAdminPage() {
   };
 
   const handleLogout = useCallback(() => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('pages.infra.admin.logoutConfirmTitle'),
       content: t('pages.infra.admin.logoutConfirmContent'),
       onOk: () => {

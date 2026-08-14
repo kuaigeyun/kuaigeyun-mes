@@ -14,6 +14,7 @@ import { eightDReportRowGates } from '../../../../../../hooks/useDocumentCapabil
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { alignDescriptionColumns } from '../../../sales-management/shared/documentFieldAlignment';
+import { toApiDateTimeString } from '../../../../../../utils/formDate';
 
 interface EightDDetailDrawerProps {
   open: boolean;
@@ -141,7 +142,7 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
     try {
       const payload = {
         ...values,
-        due_date: values.due_date ? dayjs(values.due_date as any).toISOString() : null,
+        due_date: values.due_date ? toApiDateTimeString(values.due_date as any) : null,
         attachments: normalizeDocumentAttachments(values.attachments as any),
       };
       await qualityImprovementApi.eightD.update(report.id, payload);
@@ -170,7 +171,7 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
     try {
       await qualityImprovementApi.eightD.update(report.id, {
         ...formValues,
-        due_date: formValues.due_date ? dayjs(formValues.due_date as any).toISOString() : null,
+        due_date: formValues.due_date ? toApiDateTimeString(formValues.due_date as any) : null,
         attachments: normalizeDocumentAttachments(formValues.attachments as any),
       });
       await qualityImprovementApi.eightD.transition(report.id, {

@@ -56,7 +56,7 @@ import {
 } from '../../sales-management/shared/DocumentPushProgressBar';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 type BatchPickOption = { value: string; label: string; quantity?: number };
 
 export type BatchingTaskRow = {
@@ -253,7 +253,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
   const openMaterialCallComplete = (record: BatchingTaskRow) => {
     const items = Array.isArray(record?.items) ? record.items : [];
     if (items.length === 0) {
-      Modal.confirm({
+      getAntdModal().confirm({
         title: t('app.kuaizhizao.batchingCenter.confirmCompleteTitle'),
         content: t('app.kuaizhizao.batchingCenter.confirmCompleteNoItems'),
         onOk: async () => handleMaterialCallUpdate(record.task_id, 'completed'),
@@ -745,7 +745,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
                 size="small"
                 icon={<CloseCircleOutlined />}
                 onClick={() => {
-                  Modal.confirm({
+                  getAntdModal().confirm({
                     title: t('app.kuaizhizao.batchingCenter.confirmCancelTitle'),
                     content: t('app.kuaizhizao.batchingCenter.confirmCancelCall'),
                     onOk: () => handleMaterialCallUpdate(record.task_id, 'cancelled'),

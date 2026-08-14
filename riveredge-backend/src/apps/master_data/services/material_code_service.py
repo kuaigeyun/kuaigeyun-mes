@@ -476,11 +476,22 @@ class MaterialCodeService:
         """
         duplicates = []
         
-        # 查询所有未删除的物料
-        materials = await Material.filter(
+        name_s = (name or "").strip()
+        if not name_s:
+            return duplicates
+
+        # 仅拉名称相关候选，禁止对租户全表物料做内存扫描（大批量导入会超时）
+        exact = await Material.filter(
             tenant_id=tenant_id,
-            deleted_at__isnull=True
+            deleted_at__isnull=True,
+            name=name_s,
         ).all()
+        fuzzy = await Material.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            name__icontains=name_s[:80],
+        ).exclude(name=name_s).limit(200).all()
+        materials = list(exact) + list(fuzzy)
         
         for material in materials:
             match_score = 0

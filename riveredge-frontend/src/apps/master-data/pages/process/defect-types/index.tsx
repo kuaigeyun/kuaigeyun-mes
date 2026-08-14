@@ -24,7 +24,7 @@ import type { DefectType, DefectTypeCreate } from '../../../types/process';
 import { generateCode } from '../../../../../services/codeRule';
 import { downloadFile } from '../../../../../utils';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
-import { batchImportParsedRows } from '../../../../../utils/import';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import {
   buildMasterCrudActiveValueEnum,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
@@ -47,7 +47,8 @@ import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/s
 import { renderMasterActiveTag } from '../../../utils/masterListPresentation';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { todaySiteDateString } from '../../../../../utils/format';
 /**
  * 不良品信息管理列表页面组件
  */
@@ -334,7 +335,7 @@ const DefectTypesPage: React.FC = () => {
     });
 
     if (errors.length > 0) {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.dataValidationFailed'),
         width: 600,
         content: (
@@ -362,9 +363,9 @@ const DefectTypesPage: React.FC = () => {
 
     const ruleCode = getPageRuleCode('master-data-defect-type');
     try {
-      const result = await batchImportParsedRows<DefectTypeCreate>(
-        importData.map((item, i) => ({ data: item, rowIndex: i + 3, rawRow: [] })),
-        async (item) => {
+      const result = await importInChunksViaPerItemCreate({
+        items: importData,
+        createOne: async (item) => {
           let data = { ...item };
           if (!data.code && autoCodeEnabled && ruleCode) {
             const res = await generateCode({ rule_code: ruleCode });
@@ -375,25 +376,26 @@ const DefectTypesPage: React.FC = () => {
           }
           return defectTypeApi.create(data);
         },
-        { title: t('app.master-data.defectTypes.importTitle') }
-      );
+        title: t('app.master-data.defectTypes.importTitle'),
+        chunkSize: 100,
+        concurrency: 4,
+        rowNumberForIndex: (i) => i + 3,
+        showResultModal: false,
+      });
 
-      const successCount = result.filter((r) => r.success).length;
-      const failureCount = result.filter((r) => !r.success).length;
-
-      if (failureCount > 0) {
-        Modal.warning({
+      if (result.failureCount > 0) {
+        getAntdModal().warning({
           title: t('app.master-data.importPartialResultTitle'),
           width: 600,
           content: (
             <div>
-              <p><strong>{t('app.master-data.importPartialResultIntro', { success: successCount, failure: failureCount })}</strong></p>
+              <p><strong>{t('app.master-data.importPartialResultIntro', { success: result.successCount, failure: result.failureCount })}</strong></p>
               <List
                 size="small"
-                dataSource={result.filter((r) => !r.success)}
+                dataSource={result.errors}
                 renderItem={(item) => (
                   <List.Item>
-                    <Typography.Text type="danger">{t('app.master-data.rowError', { row: item.rowIndex, message: item.error?.message ?? item.message })}</Typography.Text>
+                    <Typography.Text type="danger">{t('app.master-data.rowError', { row: item.row, message: item.error })}</Typography.Text>
                   </List.Item>
                 )}
               />
@@ -401,7 +403,7 @@ const DefectTypesPage: React.FC = () => {
           ),
         });
       } else {
-        messageApi.success(t('app.master-data.defectTypes.importSuccess', { count: successCount }));
+        messageApi.success(t('app.master-data.defectTypes.importSuccess', { count: result.successCount }));
       }
       actionRef.current?.reload();
     } catch (error: any) {
@@ -432,7 +434,7 @@ const DefectTypesPage: React.FC = () => {
       }
       await downloadRecordsAsXlsx(
         exportData as Array<Record<string, unknown>>,
-        `${t('app.master-data.defectTypes.exportFilename', { date: new Date().toISOString().slice(0, 10) })}.xlsx`,
+        `${t('app.master-data.defectTypes.exportFilename', { date: todaySiteDateString() })}.xlsx`,
       );
       messageApi.success(t('common.exportSuccess', { count: exportData.length }));
     } catch (error: any) {

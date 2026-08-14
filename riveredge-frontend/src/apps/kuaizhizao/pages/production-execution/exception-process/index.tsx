@@ -50,7 +50,7 @@ import { WorkOrderOperationStepsStrip } from '../work-orders/components/WorkOrde
 import type { WorkOrderOperationStep } from '../work-orders/workOrderOperationSteps';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const EXCEPTION_PROCESS_RESOURCE = 'kuaizhizao:production-execution-exception-process';
 
 const P = 'app.kuaizhizao.productionException';
@@ -383,7 +383,7 @@ const ExceptionProcessPage: React.FC = () => {
   };
 
   const handleCancel = async (record: ExceptionProcessRecord) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t(`${PROC}.confirm.cancelTitle`),
       content: t(`${PROC}.confirm.cancelContent`),
       onOk: async () => {

@@ -40,6 +40,7 @@ import {
 } from '../../../../../components/material-unit-select';
 import { recalculateQuantityOnUnitChange } from '../../../../../components/quantity-with-unit/formHelpers';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
+import { toApiDateTimeString } from '../../../../../utils/formDate';
 
 type PreviewLine = {
   material_id: number;
@@ -221,7 +222,7 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
     try {
       let createdId: number | undefined;
       const headerPatch = {
-        receipt_time: receiptTime?.toISOString(),
+        receipt_time: toApiDateTimeString(receiptTime),
         receiver_name: receiverHook.receiverName.trim() || undefined,
         notes: receiptNotes.trim() || undefined,
       };

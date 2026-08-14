@@ -34,6 +34,7 @@ import {
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { todaySiteDateString } from '../../../../utils/format';
 
 const { TextArea } = Input;
 
@@ -452,7 +453,7 @@ const ScriptListPage: React.FC = () => {
             }
             await downloadRecordsAsXlsx(
               items as Array<Record<string, unknown>>,
-              `scripts-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              `scripts-${todaySiteDateString()}.xlsx`,
             );
             messageApi.success(t('pages.infra.scripts.exportSuccess'));
           }}

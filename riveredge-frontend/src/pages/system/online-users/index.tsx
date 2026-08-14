@@ -27,7 +27,7 @@ import {
 import { useGlobalStore } from '../../../stores';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
-import { formatDateTime } from '../../../utils/format';
+import { formatDateTime, todaySiteDateString } from '../../../utils/format';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 
 dayjs.extend(relativeTime);
@@ -471,7 +471,7 @@ const OnlineUsersPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `online-users-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `online-users-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('pages.system.onlineUsers.exportSuccessCount', { count: items.length }));
             } catch (error: any) {

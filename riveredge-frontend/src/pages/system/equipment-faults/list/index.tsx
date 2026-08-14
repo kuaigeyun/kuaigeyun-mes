@@ -42,6 +42,7 @@ import {
 import { getEquipmentList, Equipment } from '../../../../services/equipment';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { todaySiteDateString } from '../../../../utils/format';
 
 /**
  * 设备故障维修管理列表页面组件
@@ -476,7 +477,7 @@ const EquipmentFaultListPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `equipment-faults-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `equipment-faults-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {

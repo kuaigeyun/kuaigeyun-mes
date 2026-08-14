@@ -94,7 +94,7 @@ import {
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { renderFinanceTypeMarker } from '../../../utils/financeListPresentation';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 type PullPreviewKind = 'sales_order' | 'sales_delivery' | 'receivable';
 
 const TAX_RATE_OPTIONS = [
@@ -470,7 +470,7 @@ const SalesInvoicesPage: React.FC = () => {
   };
 
   const handleApprove = async (record: SalesInvoice) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t(`${P}.approveTitle`),
       content: t(`${P}.approveContent`, {
         number: record.invoice_number?.trim() || displaySalesInvoiceListCode(record),
@@ -488,7 +488,7 @@ const SalesInvoicesPage: React.FC = () => {
   };
 
   const handleDelete = async (record: SalesInvoice) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t(`${P}.deleteTitle`),
       content: t(`${P}.deleteContent`, {
         number: record.invoice_number?.trim() || displaySalesInvoiceListCode(record),

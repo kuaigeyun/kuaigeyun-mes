@@ -14,6 +14,7 @@ import { App, Card, Table, Tag, Tabs, Descriptions, Spin, message, Button } from
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { getEquipmentTrace, EquipmentTrace } from '../../../../services/equipmentTrace';
 import { getEquipmentByUuid, Equipment } from '../../../../services/equipment';
+import { formatDateTimeBySiteSetting } from '../../../../utils/format';
 
 /**
  * 设备使用记录追溯页面组件
@@ -136,21 +137,21 @@ const EquipmentTracePage: React.FC = () => {
       dataIndex: 'planned_start_date',
       key: 'planned_start_date',
       width: 150,
-      render: (date: string) => date ? new Date(date).toLocaleString() : '-',
+      render: (date: string) => date ? formatDateTimeBySiteSetting(date) : '-',
     },
     {
       title: t('pages.system.equipmentTrace.plannedEndDate'),
       dataIndex: 'planned_end_date',
       key: 'planned_end_date',
       width: 150,
-      render: (date: string) => date ? new Date(date).toLocaleString() : '-',
+      render: (date: string) => date ? formatDateTimeBySiteSetting(date) : '-',
     },
     {
       title: t('pages.system.equipmentFaults.columnCreatedAt'),
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180,
-      render: (date: string) => new Date(date).toLocaleString(),
+      render: (date: string) => formatDateTimeBySiteSetting(date),
     },
   ];
 
@@ -169,7 +170,7 @@ const EquipmentTracePage: React.FC = () => {
       dataIndex: 'execution_date',
       key: 'execution_date',
       width: 150,
-      render: (date: string) => new Date(date).toLocaleString(),
+      render: (date: string) => formatDateTimeBySiteSetting(date),
     },
     {
       title: t('pages.system.equipmentTrace.executor'),
@@ -200,7 +201,7 @@ const EquipmentTracePage: React.FC = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180,
-      render: (date: string) => new Date(date).toLocaleString(),
+      render: (date: string) => formatDateTimeBySiteSetting(date),
     },
   ];
 
@@ -219,7 +220,7 @@ const EquipmentTracePage: React.FC = () => {
       dataIndex: 'fault_date',
       key: 'fault_date',
       width: 150,
-      render: (date: string) => new Date(date).toLocaleString(),
+      render: (date: string) => formatDateTimeBySiteSetting(date),
     },
     {
       title: t('pages.system.equipmentFaults.columnFaultType'),
@@ -254,7 +255,7 @@ const EquipmentTracePage: React.FC = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180,
-      render: (date: string) => new Date(date).toLocaleString(),
+      render: (date: string) => formatDateTimeBySiteSetting(date),
     },
   ];
 
@@ -273,7 +274,7 @@ const EquipmentTracePage: React.FC = () => {
       dataIndex: 'repair_date',
       key: 'repair_date',
       width: 150,
-      render: (date: string) => new Date(date).toLocaleString(),
+      render: (date: string) => formatDateTimeBySiteSetting(date),
     },
     {
       title: t('pages.system.equipmentTrace.repairType'),
@@ -304,7 +305,7 @@ const EquipmentTracePage: React.FC = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180,
-      render: (date: string) => new Date(date).toLocaleString(),
+      render: (date: string) => formatDateTimeBySiteSetting(date),
     },
   ];
 

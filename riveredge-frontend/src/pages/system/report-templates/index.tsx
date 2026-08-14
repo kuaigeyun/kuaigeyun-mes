@@ -32,6 +32,7 @@ import { apiRequest } from '../../../services/api';
 import { fetchAllListItems } from '../../../utils/fetchAllListPages';
 import { pickListSearchKeyword } from '../../../utils/tableQueryKey';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
+import { todaySiteDateString } from '../../../utils/format';
 
 /**
  * 报表模板接口定义
@@ -402,7 +403,7 @@ const ReportTemplatesPage: React.FC = () => {
             }
             await downloadRecordsAsXlsx(
               toExport as Array<Record<string, unknown>>,
-              `report-templates-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              `report-templates-${todaySiteDateString()}.xlsx`,
             );
             messageApi.success(t('pages.system.reportTemplates.exportSuccess', { count: toExport.length }));
           } catch (error: any) {

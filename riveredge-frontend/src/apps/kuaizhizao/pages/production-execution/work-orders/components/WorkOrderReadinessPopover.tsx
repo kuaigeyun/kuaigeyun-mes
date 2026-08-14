@@ -26,7 +26,7 @@ import { UniTableStackedPrimaryCell } from '../../../../../../components/uni-tab
 import { formatQuantity } from '../../../../../../utils/format'
 import { WorkOrderMaterialMovementsPanel } from './WorkOrderMaterialMovementsPanel'
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../../../../../utils/modalEventIsolation'
-
+import { getAntdModal } from '../../../../../../utils/antdAppApis';
 /** 与后端 issue_method_resolver.resolve_issue_method / is_pick_list_material 一致 */
 function resolveIssueMethod(issueMethod: unknown, sourceType: unknown): string {
   const im = String(issueMethod ?? '')
@@ -1523,7 +1523,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                         danger
                         onClick={(e) => {
                           stopRowToggle(e)
-                          Modal.confirm({
+                          getAntdModal().confirm({
                             title: t('app.kuaizhizao.workOrder.modalConfirmWithdrawCall'),
                             content: t('app.kuaizhizao.workOrder.modalWithdrawCallContent'),
                             okText: t('app.kuaizhizao.workOrder.actionRevoke'),

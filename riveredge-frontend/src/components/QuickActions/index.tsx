@@ -22,7 +22,8 @@ import {
 } from '@ant-design/icons';
 import { QuickActionHelper, QuickActionConfig, OperationHistory } from '@/utils/quickActions';
 import type { MenuProps } from 'antd';
-
+import { getAntdModal } from '../../utils/antdAppApis';
+import { formatDateTimeBySiteSetting } from '../../utils/format';
 interface QuickActionsProps {
   /** 模块名称 */
   module: string;
@@ -172,7 +173,7 @@ const QuickActions: React.FC<QuickActionsProps> = ({
   // 显示操作历史
   const showOperationHistory = () => {
     const history = getOperationHistory();
-    Modal.info({
+    getAntdModal().info({
       title: '操作历史',
       width: 600,
       content: (
@@ -188,7 +189,7 @@ const QuickActions: React.FC<QuickActionsProps> = ({
                       <strong>{item.action}</strong> - {item.module}
                     </span>
                     <span style={{ color: '#999', fontSize: '12px' }}>
-                      {new Date(item.timestamp).toLocaleString()}
+                      {formatDateTimeBySiteSetting(item.timestamp)}
                     </span>
                   </div>
                 </li>

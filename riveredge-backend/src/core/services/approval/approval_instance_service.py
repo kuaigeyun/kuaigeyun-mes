@@ -9,10 +9,10 @@ Worker 仅用于消息通知等可选后台任务（asyncio.create_task）。
 """
 
 import asyncio
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
+from datetime import datetime
 from typing import Optional, List, Dict, Any, Union
 from uuid import UUID
-from datetime import datetime
-from zoneinfo import ZoneInfo
 from loguru import logger
 
 from core.models.approval_history import ApprovalHistory
@@ -30,9 +30,7 @@ from core.schemas.approval_instance import ApprovalInstanceCreate, ApprovalInsta
 from core.services.messaging.message_service import MessageService
 from core.schemas.message_template import SendMessageRequest
 from infra.models.user import User
-from infra.config.infra_config import infra_settings
 from infra.exceptions.exceptions import NotFoundError, ValidationError
-from core.utils.timezone_utils import resolve_business_datetime
 
 
 class ApprovalInstanceService:
@@ -44,16 +42,8 @@ class ApprovalInstanceService:
 
     @staticmethod
     def _format_dt_for_api(value: Optional[datetime]) -> Optional[str]:
-        """与 core.schemas.base.BaseSchema 一致：UTC naive → 系统时区可读字符串。"""
-        if value is None:
-            return None
-        dt = value
-        if dt.tzinfo is None:
-            aware_dt = dt.replace(tzinfo=ZoneInfo("UTC"))
-        else:
-            aware_dt = dt
-        target_tz = ZoneInfo(infra_settings.TIMEZONE)
-        return aware_dt.astimezone(target_tz).strftime("%Y-%m-%d %H:%M:%S")
+        """唯一出口：to_api_isoformat（与 BaseSchema / SiteTimezoneJSONResponse 同口径）。"""
+        return to_api_isoformat(value)
 
     @staticmethod
     def _normalize_execution_action(action: Optional[str]) -> str:

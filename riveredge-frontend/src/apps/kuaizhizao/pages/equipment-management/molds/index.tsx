@@ -24,7 +24,7 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../.
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { moldApi } from '../../../services/equipment';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import {
   buildFactoryImportTemplate,
@@ -58,7 +58,8 @@ import {
   renderIsActiveTag,
 } from '../shared/equipmentMasterDataDetail';
 import { buildMoldDetailPath } from './moldPaths';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { todaySiteDateString } from '../../../../../utils/format';
 const MOLD_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_molds';
 
 interface Mold {
@@ -282,7 +283,7 @@ const MoldsPage: React.FC = () => {
    * 处理批量删除模具（keys 为 uuid 数组）
    */
   const handleDelete = async (keys: React.Key[]) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.mold.confirmBatchDeleteTitle'),
       content: t('app.kuaizhizao.mold.confirmBatchDeleteContent', { count: keys.length }),
       onOk: async () => {
@@ -636,11 +637,12 @@ const MoldsPage: React.FC = () => {
               messageApi.warning(t('app.kuaizhizao.mold.importNoRows'));
               return;
             }
-            const result = await batchImport({
+            const result = await importInChunksViaPerItemCreate({
               items,
-              importFn: async (item) => moldApi.create(item),
+              createOne: async (item, _index) => moldApi.create(item),
               title: t('app.kuaizhizao.mold.importTitle'),
-              concurrency: 5,
+              chunkSize: 100,
+              concurrency: 4,
             });
             if (result.successCount > 0) {
               messageApi.success(t('app.kuaizhizao.mold.importSuccess', { count: result.successCount }));
@@ -682,7 +684,7 @@ const MoldsPage: React.FC = () => {
               ];
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `molds-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `molds-${todaySiteDateString()}.xlsx`,
                 { columns: exportColumns, sheetName: t('app.kuaizhizao.mold.title') },
               );
               messageApi.success(t('common.exportCountSuccess', { count: items.length }));

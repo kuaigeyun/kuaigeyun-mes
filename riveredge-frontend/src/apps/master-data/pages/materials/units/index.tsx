@@ -26,7 +26,7 @@ import {
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { batchImportParsedRows } from '../../../../../utils/import';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
@@ -45,6 +45,8 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { todaySiteDateString } from '../../../../../utils/format';
 
 type TabKey = 'units' | 'conversions';
 
@@ -211,7 +213,7 @@ const UnitsPage: React.FC = () => {
 
   const showImportErrors = useCallback(
     (errors: Array<{ row: number; message: string }>) => {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.dataValidationFailed'),
         width: 600,
         content: (
@@ -318,15 +320,17 @@ const UnitsPage: React.FC = () => {
     }
 
     try {
-      const result = await batchImportParsedRows(
-        importData.map((item, i) => ({ data: item, rowIndex: i + 3, rawRow: [] })),
-        async (item) => materialUnitApi.create(item),
-        { title: t('app.master-data.units.importTitle') },
-      );
-      const successCount = result.filter((r) => r.success).length;
-      const failureCount = result.filter((r) => !r.success).length;
-      if (failureCount > 0) {
-        Modal.warning({
+      const result = await importInChunksViaPerItemCreate({
+        items: importData,
+        createOne: async (item) => materialUnitApi.create(item),
+        title: t('app.master-data.units.importTitle'),
+        chunkSize: 100,
+        concurrency: 4,
+        rowNumberForIndex: (i) => i + 3,
+        showResultModal: false,
+      });
+      if (result.failureCount > 0) {
+        getAntdModal().warning({
           title: t('app.master-data.importPartialResultTitle'),
           width: 600,
           content: (
@@ -334,20 +338,20 @@ const UnitsPage: React.FC = () => {
               <p>
                 <strong>
                   {t('app.master-data.importPartialResultIntro', {
-                    success: successCount,
-                    failure: failureCount,
+                    success: result.successCount,
+                    failure: result.failureCount,
                   })}
                 </strong>
               </p>
               <List
                 size="small"
-                dataSource={result.filter((r) => !r.success)}
+                dataSource={result.errors}
                 renderItem={(item) => (
                   <List.Item>
                     <Typography.Text type="danger">
                       {t('app.master-data.rowError', {
-                        row: item.rowIndex,
-                        message: item.error?.message ?? item.message,
+                        row: item.row,
+                        message: item.error,
                       })}
                     </Typography.Text>
                   </List.Item>
@@ -357,7 +361,7 @@ const UnitsPage: React.FC = () => {
           ),
         });
       } else {
-        messageApi.success(t('app.master-data.units.importSuccess', { count: successCount }));
+        messageApi.success(t('app.master-data.units.importSuccess', { count: result.successCount }));
       }
       invalidateMaterialUnitDisplayMapCache();
       unitActionRef.current?.reload();
@@ -453,15 +457,17 @@ const UnitsPage: React.FC = () => {
     }
 
     try {
-      const result = await batchImportParsedRows(
-        importData.map((item, i) => ({ data: item, rowIndex: i + 3, rawRow: [] })),
-        async (item) => materialUnitApi.createConversion(item),
-        { title: t('app.master-data.units.conversionImportTitle') },
-      );
-      const successCount = result.filter((r) => r.success).length;
-      const failureCount = result.filter((r) => !r.success).length;
-      if (failureCount > 0) {
-        Modal.warning({
+      const result = await importInChunksViaPerItemCreate({
+        items: importData,
+        createOne: async (item) => materialUnitApi.createConversion(item),
+        title: t('app.master-data.units.conversionImportTitle'),
+        chunkSize: 100,
+        concurrency: 4,
+        rowNumberForIndex: (i) => i + 3,
+        showResultModal: false,
+      });
+      if (result.failureCount > 0) {
+        getAntdModal().warning({
           title: t('app.master-data.importPartialResultTitle'),
           width: 600,
           content: (
@@ -469,20 +475,20 @@ const UnitsPage: React.FC = () => {
               <p>
                 <strong>
                   {t('app.master-data.importPartialResultIntro', {
-                    success: successCount,
-                    failure: failureCount,
+                    success: result.successCount,
+                    failure: result.failureCount,
                   })}
                 </strong>
               </p>
               <List
                 size="small"
-                dataSource={result.filter((r) => !r.success)}
+                dataSource={result.errors}
                 renderItem={(item) => (
                   <List.Item>
                     <Typography.Text type="danger">
                       {t('app.master-data.rowError', {
-                        row: item.rowIndex,
-                        message: item.error?.message ?? item.message,
+                        row: item.row,
+                        message: item.error,
                       })}
                     </Typography.Text>
                   </List.Item>
@@ -493,7 +499,7 @@ const UnitsPage: React.FC = () => {
         });
       } else {
         messageApi.success(
-          t('app.master-data.units.conversionImportSuccess', { count: successCount }),
+          t('app.master-data.units.conversionImportSuccess', { count: result.successCount }),
         );
       }
       convActionRef.current?.reload();
@@ -533,7 +539,7 @@ const UnitsPage: React.FC = () => {
           updated_at: r.updated_at ?? '',
         })),
         `${t('app.master-data.units.exportFilename', {
-          date: new Date().toISOString().slice(0, 10),
+          date: todaySiteDateString(),
         })}.xlsx`,
         {
           columns: [
@@ -586,7 +592,7 @@ const UnitsPage: React.FC = () => {
           updated_at: r.updated_at ?? '',
         })),
         `${t('app.master-data.units.conversionExportFilename', {
-          date: new Date().toISOString().slice(0, 10),
+          date: todaySiteDateString(),
         })}.xlsx`,
         {
           columns: [

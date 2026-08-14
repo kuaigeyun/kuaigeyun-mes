@@ -120,7 +120,7 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 interface ReceiptNoticeDetail extends ReceiptNotice {
   items?: { id?: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price?: number; total_amount?: number }[];
 }
@@ -580,7 +580,7 @@ const ReceiptNoticesPage: React.FC = () => {
   }, [executeNotify, messageApi, notifyPreviewData, notifyPreviewTarget, resetNotifyPreviewModal, t]);
 
   const handleWithdraw = (record: ReceiptNotice) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.shipmentNotice.withdrawNotify'),
       content: t('app.kuaizhizao.receiptNotice.withdrawConfirmContent', { code: record.notice_code }),
       onOk: async () => {
@@ -607,7 +607,7 @@ const ReceiptNoticesPage: React.FC = () => {
   };
 
   const handleDelete = (record: ReceiptNotice) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.receiptNotice.deleteModalTitle'),
       content: t('app.kuaizhizao.shipmentNotice.deleteConfirmContent', { code: record.notice_code }),
       onOk: async () => {

@@ -22,7 +22,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from loguru import logger
-from core.utils.timezone_utils import resolve_business_datetime
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 
 
 class MessageConfigService:
@@ -294,7 +294,7 @@ class MessageConfigService:
             message["To"] = target
             message["Subject"] = "RiverEdge 消息发送测试"
             
-            body = f"这是一条来自 RiverEdge 系统的测试邮件。\n发送时间：{resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')}\n如果您收到这封邮件，说明您的 SMTP 配置正确。"
+            body = f"这是一条来自 RiverEdge 系统的测试邮件。\n发送时间：{to_api_isoformat(resolve_business_datetime())}\n如果您收到这封邮件，说明您的 SMTP 配置正确。"
             message.attach(MIMEText(body, "plain", "utf-8"))
 
             await aiosmtplib.send(

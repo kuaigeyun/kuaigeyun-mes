@@ -76,6 +76,7 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 /** 与后端 DECIMAL(12,2) 一致 */
 const MAX_PACKING_QUANTITY = 9999999999.99;
@@ -588,7 +589,7 @@ const PackingBindingPage: React.FC = () => {
       return;
     }
     messageApi.warning(t('app.kuaizhizao.packingBinding.qrcodePartial', { success: successCount, failed: failed.length }));
-    Modal.error({
+    getAntdModal().error({
       title: t('app.kuaizhizao.packingBinding.qrcodeBatchFailedTitle'),
       content: (
         <div style={{ maxHeight: 280, overflowY: 'auto' }}>
@@ -703,7 +704,7 @@ const PackingBindingPage: React.FC = () => {
         return;
       }
       messageApi.warning(t('app.kuaizhizao.packingBinding.batchDeletePartial', { success: successCount, failed: failed.length }));
-      Modal.error({
+      getAntdModal().error({
         title: t('app.kuaizhizao.packingBinding.batchDeleteFailedTitle'),
         content: (
           <div style={{ maxHeight: 280, overflowY: 'auto' }}>

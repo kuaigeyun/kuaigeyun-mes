@@ -121,7 +121,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
-import { formatDateTime, formatNumber, formatQuantity } from '../../../../../utils/format';
+import { formatDateTime, formatNumber, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
@@ -2217,7 +2217,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `purchase-requisitions-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `purchase-requisitions-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {

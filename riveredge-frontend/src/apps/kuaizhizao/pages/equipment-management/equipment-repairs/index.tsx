@@ -31,7 +31,7 @@ import { ROUTES } from '../../../constants/routes';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
 import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const P = 'app.kuaizhizao.equipmentRepair';
 const RESOURCE = 'kuaizhizao:equipment-fault';
 
@@ -84,7 +84,7 @@ const EquipmentRepairsPage: React.FC = () => {
   };
 
   const handleDelete = async (keys: React.Key[]) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('common.batchDeleteTitle'),
       content: t('common.batchDeleteContent', { count: keys.length }),
       onOk: async () => {

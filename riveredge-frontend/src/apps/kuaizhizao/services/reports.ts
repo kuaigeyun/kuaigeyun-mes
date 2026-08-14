@@ -10,6 +10,7 @@
 import { getToken } from '../../../utils/auth';
 import { updateLastActivity, incrementPendingRequests, decrementPendingRequests } from '../../../utils/activityUtils';
 import { apiRequest } from '../../../services/api';
+import { todaySiteDateString } from '../../../utils/format';
 
 /**
  * 报表通用参数接口
@@ -527,7 +528,7 @@ export async function exportDomainReport(domain: string, params: ReportParams = 
     const link = document.createElement('a');
     link.href = url;
     const reportType = params.report_type || params.reportType || 'report';
-    link.download = `${domain}-${reportType}-${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `${domain}-${reportType}-${todaySiteDateString()}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

@@ -6,7 +6,7 @@
 
 import logging
 from typing import List, Optional, Dict
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from tortoise.expressions import Q
 
@@ -21,6 +21,7 @@ from core.schemas.login_log import (
     LoginLogStatsResponse,
 )
 from infra.exceptions.exceptions import NotFoundError
+from core.utils.timezone_utils import now_utc, site_day_bounds_utc, to_naive_utc, to_site_date
 
 
 class LoginLogService:
@@ -169,33 +170,25 @@ class LoginLogService:
         by_user_raw = await LoginLog.filter(query & Q(user_id__isnull=False)).group_by("user_id", "username").annotate(count=Count("id")).order_by("-count").limit(10).values("user_id", "username", "count")
         by_user = {f"{item['username']}({item['user_id']})": item["count"] for item in by_user_raw}
         
-        # 计算最近7天趋势数据 (采用固定的 Asia/Shanghai 时区偏移确保统计边界正确)
+        # 最近 7 天趋势：站点日历日边界 → UTC（唯一真源 site_day_bounds_utc）
         import asyncio
-        from datetime import timedelta as td, datetime as dt, timezone as tz_module
-        
-        sh_tz = tz_module(td(hours=8))
-        now_sh = dt.now(sh_tz)
-        today = now_sh.date()
-        
+
+        today = to_site_date(now_utc())
         trend_data = []
         tasks = []
-        
+
         for i in range(6, -1, -1):
-            d = today - td(days=i)
-            # 这里的 d 是上海日期的 midnight
-            start_sh = dt.combine(d, dt.min.time()).replace(tzinfo=sh_tz)
-            end_sh = dt.combine(d + td(days=1), dt.min.time()).replace(tzinfo=tz_module.utc if False else sh_tz) # 保持 sh_tz
-            
-            # 转换为 naive UTC 供数据库查询 (因 DB 存储的是 UTC)
-            start_utc = start_sh.astimezone(tz_module.utc).replace(tzinfo=None)
-            end_utc = end_sh.astimezone(tz_module.utc).replace(tzinfo=None)
-            
-            day_query = query & Q(created_at__gte=start_utc, created_at__lt=end_utc)
-            tasks.append((d.strftime("%Y-%m-%d"), LoginLog.filter(day_query).count()))
-            
+            d = today - timedelta(days=i)
+            start_utc, end_utc = site_day_bounds_utc(d)
+            day_query = query & Q(
+                created_at__gte=to_naive_utc(start_utc),
+                created_at__lt=to_naive_utc(end_utc),
+            )
+            tasks.append((d.isoformat(), LoginLog.filter(day_query).count()))
+
         day_strs, day_counts_awaitables = zip(*tasks)
         day_counts = await asyncio.gather(*day_counts_awaitables)
-        
+
         for date_str, count in zip(day_strs, day_counts):
             trend_data.append({"date": date_str, "value": count})
             

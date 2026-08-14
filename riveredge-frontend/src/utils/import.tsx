@@ -6,7 +6,7 @@
 
 import { Modal, Progress, List, Typography } from 'antd';
 import { App } from 'antd';
-
+import { getAntdModal } from './antdAppApis';
 /**
  * 导入字段映射配置
  */
@@ -280,7 +280,7 @@ export function parseImportData<T = Record<string, any>>(
  * @param errors - 验证错误列表
  */
 export function showValidationErrors(errors: ImportValidationError[]): void {
-  Modal.error({
+  getAntdModal().error({
     title: '数据验证失败',
     width: 600,
     content: (
@@ -320,7 +320,7 @@ export async function batchImportParsedRows<T = any>(
   const { title = '正在导入数据', onProgress, onComplete } = options || {};
 
   // 显示导入进度 Modal
-  const progressModal = Modal.info({
+  const progressModal = getAntdModal().info({
     title,
     width: 600,
     content: (
@@ -429,7 +429,7 @@ export function showImportResults<T = any>(
   const failedResults = results.filter(r => !r.success);
 
   if (failedResults.length > 0) {
-    Modal.warning({
+    getAntdModal().warning({
       title: `${title}（部分失败）`,
       width: 700,
       content: (

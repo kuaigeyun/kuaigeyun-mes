@@ -47,7 +47,7 @@ import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { customerApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
 import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const DICT_CODE = 'SALES_FOLLOW_UP_TYPE';
 
 function followUpPresetFromRecord(record: CustomerFollowUp): CustomerFollowUpPreset {
@@ -329,7 +329,7 @@ const CustomerFollowUpsPage: React.FC = () => {
   };
 
   const handleDelete = (record: CustomerFollowUp, options?: { closeDrawer?: boolean }) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.customerFollowUp.deleteConfirm'),
       onOk: async () => {
         try {

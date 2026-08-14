@@ -124,6 +124,19 @@ class CustomerCreate(PartnerInvoiceAndExtendedMixin):
         return v.strip()
 
 
+class CustomerBulkCreateRequest(BaseModel):
+    """批量创建客户（导入分片；单次最多 200）"""
+
+    items: List[CustomerCreate] = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="待创建客户列表（单次最多 200）",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class CustomerBase(PartnerInvoiceAndExtendedMixin):
     """客户响应基础 Schema（含池只读字段）"""
 
@@ -292,6 +305,19 @@ class SupplierBase(PartnerInvoiceAndExtendedMixin):
 class SupplierCreate(SupplierBase):
     """创建供应商 Schema"""
     pass
+
+
+class SupplierBulkCreateRequest(BaseModel):
+    """批量创建供应商（导入分片；单次最多 200）"""
+
+    items: List[SupplierCreate] = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="待创建供应商列表（单次最多 200）",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class SupplierUpdate(PartnerInvoiceAndExtendedMixin):

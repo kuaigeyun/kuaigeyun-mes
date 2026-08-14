@@ -36,6 +36,7 @@ import {
   normalizeEquipmentListResponse,
   resolveApprovalDocListParams,
 } from '../../../utils/equipmentListCore';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const P = 'app.kuaizhizao.equipmentOps.scrap';
 const RESOURCE = 'kuaizhizao:equipment-scrap';
@@ -129,7 +130,7 @@ const EquipmentScrapPage: React.FC = () => {
   };
 
   const handleDelete = async (keys: React.Key[]) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('common.batchDeleteTitle'),
       content: t('common.batchDeleteContent', { count: keys.length }),
       onOk: async () => {
@@ -364,7 +365,7 @@ const EquipmentScrapPage: React.FC = () => {
               icon={<DeleteOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
-                Modal.confirm({
+                getAntdModal().confirm({
                   title: t('common.deleteTitle'),
                   onOk: () => record.id && handleDelete([record.id]),
                 });

@@ -41,6 +41,7 @@ import {
 } from '../shared/pullEntryFormDraft';
 import { navigateLeavingPullEntry, pullEntryTabKey } from '../shared/pullEntryCloseTab';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { toApiDateTimeString } from '../../../../../utils/formDate';
 
 type PreviewLine = {
   sales_order_item_id?: number;
@@ -265,7 +266,7 @@ const InboundSalesReturnPullEntryPage: React.FC = () => {
         return;
       }
       await warehouseApi.salesReturn.update(String(created.id), {
-        return_time: returnTime?.toISOString(),
+        return_time: toApiDateTimeString(returnTime),
         returner_name: receiverHook.receiverName.trim() || undefined,
         notes: returnNotes.trim() || undefined,
         attachments: normalizeDocumentAttachments(attachments),

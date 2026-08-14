@@ -33,7 +33,7 @@ import {
 import { useGlobalStore } from '../../../stores';
 import { CODE_FONT_FAMILY } from '../../../constants/fonts';
 import dayjs from 'dayjs';
-import { formatDateTimeBySiteSetting } from '../../../utils/format';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../utils/format';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 
 /**
@@ -423,7 +423,7 @@ const OperationLogsPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `operation-logs-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `operation-logs-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('pages.system.operationLogs.exportSuccessCount', { count: items.length }));
             } catch (error: any) {

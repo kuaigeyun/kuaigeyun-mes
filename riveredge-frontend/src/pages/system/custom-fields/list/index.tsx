@@ -61,6 +61,7 @@ import {
   enrichPagesWithMenuNames,
 } from '../../../../utils/featurePageDisplay';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { todaySiteDateString } from '../../../../utils/format';
 
 /**
  * 获取所有可用的表名选项（用于关联表名选择框）
@@ -1430,7 +1431,7 @@ const CustomFieldListPage: React.FC = () => {
                         }
                         await downloadRecordsAsXlsx(
                           items as Array<Record<string, unknown>>,
-                          `custom-fields-${selectedPage.tableName}-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                          `custom-fields-${selectedPage.tableName}-${todaySiteDateString()}.xlsx`,
                         );
                         messageApi.success(t('field.customField.exportSuccess', { count: items.length }));
                       } catch (error: any) {

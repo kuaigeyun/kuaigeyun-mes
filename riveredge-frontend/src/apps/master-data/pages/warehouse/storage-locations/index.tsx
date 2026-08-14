@@ -34,7 +34,7 @@ import { StorageLocationFormModal } from '../../../components/StorageLocationFor
 import { BatchCreateStorageLocationModal } from '../../../components/BatchCreateStorageLocationModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { StorageLocation, StorageLocationCreate, StorageArea } from '../../../types/warehouse';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
   MasterDataBatchActiveMenuButton,
@@ -47,7 +47,8 @@ import {
 } from '../../../utils/factoryImportTemplate';
 import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
 /**
  * 库位管理列表页面组件
  */
@@ -207,7 +208,7 @@ const StorageLocationsPage: React.FC = () => {
 
     // 如果库区列表为空，提示用户先创建库区
     if (storageAreas.length === 0) {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.importDisabled'),
         content: t('app.master-data.importNoStorageArea'),
       });
@@ -352,7 +353,7 @@ const StorageLocationsPage: React.FC = () => {
     if (errors.length > 0) {
       const hasStorageAreaError = errors.some(e => e.kind === 'storageArea');
       
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.warehouses.importValidationFailed'),
         width: 700,
         content: (
@@ -402,18 +403,19 @@ const StorageLocationsPage: React.FC = () => {
 
     // 批量导入
     try {
-      const result = await batchImport({
+      const result = await importInChunksViaPerItemCreate({
         items: importData,
-        importFn: async (item: StorageLocationCreate) => {
+        createOne: async (item: StorageLocationCreate, _index) => {
           return await storageLocationApi.create(item);
         },
         title: t('app.master-data.storageLocations.importTitle'),
-        concurrency: 5,
+        chunkSize: 100,
+        concurrency: 4,
       });
 
       // 显示导入结果
       if (result.failureCount > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.master-data.warehouses.importPartialFailure'),
           width: 600,
           content: (
@@ -469,15 +471,15 @@ const StorageLocationsPage: React.FC = () => {
           return;
         }
         exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
-        filename = t('app.master-data.storageLocations.exportFilenameSelected', { date: new Date().toISOString().slice(0, 10) });
+        filename = t('app.master-data.storageLocations.exportFilenameSelected', { date: todaySiteDateString() });
       } else if (type === 'currentPage' && currentPageData) {
         // 导出当前页数据
         exportData = currentPageData;
-        filename = t('app.master-data.storageLocations.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) });
+        filename = t('app.master-data.storageLocations.exportFilenameCurrentPage', { date: todaySiteDateString() });
       } else {
         // 导出全部数据
         exportData = await fetchAllListItems((p) => storageLocationApi.list({ ...p, ...lastListParamsRef.current }));
-        filename = t('app.master-data.storageLocations.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) });
+        filename = t('app.master-data.storageLocations.exportFilenameAll', { date: todaySiteDateString() });
       }
 
       if (exportData.length === 0) {
@@ -495,7 +497,7 @@ const StorageLocationsPage: React.FC = () => {
           storageArea ? `${storageArea.code}(${storageArea.name})` : '',
           item.description || '',
           (item.isActive ?? (item as any).is_active) ? t('common.enabled') : t('common.disabled'),
-          item.createdAt ? new Date(item.createdAt).toLocaleString(i18n.language) : '',
+          item.createdAt ? formatDateTimeBySiteSetting(item.createdAt) : '',
         ];
       });
 

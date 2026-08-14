@@ -50,8 +50,6 @@ import { LogoThemeColorModal } from '../../../components/logo-theme-color/LogoTh
 import { getSiteSettingsDictCache, setSiteSettingsDictCache } from '../../../utils/siteSettingsDictCache';
 import { cacheTenantDefaultLanguage } from '../../../utils/localeBootstrap';
 import {
-  buildFallbackCurrencyOptions,
-  buildFallbackTimezoneOptions,
   mapCurrencyDictionaryOptions,
   mapTimezoneDictionaryOptions,
 } from '../../../utils/systemDictionaryLabels';
@@ -92,7 +90,7 @@ function getInitialValuesFromConfigStore(
     default_currency: configs.default_currency ?? 'CNY',
     date_format: configs.date_format ?? 'YYYY-MM-DD',
     default_language: configs.default_language ?? 'zh-CN',
-    timezone: configs.timezone ?? 'Asia/Shanghai',
+    timezone: configs.timezone ?? '',
     theme_color: normalizedThemeColor,
     theme_borderRadius: themeConfig.borderRadius ?? 6,
     theme_fontSize: themeConfig.fontSize ?? 14,
@@ -140,7 +138,7 @@ const DEFAULT_FORM_INITIAL = {
   default_currency: 'CNY',
   date_format: 'YYYY-MM-DD',
   default_language: 'zh-CN',
-  timezone: 'Asia/Shanghai',
+  timezone: '',
   enable_register: true,
   enable_launch_wizard: true,
   enable_system_dashboard: true,
@@ -248,8 +246,6 @@ const SiteSettingsPage: React.FC = () => {
     () => mapTimezoneDictionaryOptions(timezoneOptions, t),
     [timezoneOptions, t],
   );
-  const fallbackCurrencyOptions = useMemo(() => buildFallbackCurrencyOptions(t), [t]);
-  const fallbackTimezoneOptions = useMemo(() => buildFallbackTimezoneOptions(t), [t]);
   const [branchOrgCapability, setBranchOrgCapability] = useState<BranchOrganizationCapability | null>(null);
   const [branchOrgList, setBranchOrgList] = useState<BranchOrganizationItem[]>([]);
   const [branchOrgTotal, setBranchOrgTotal] = useState(0);
@@ -713,7 +709,7 @@ const SiteSettingsPage: React.FC = () => {
         default_currency: setting.settings?.default_currency || 'CNY',
         date_format: setting.settings?.date_format || 'YYYY-MM-DD',
         default_language: setting.settings?.default_language || 'zh-CN',
-        timezone: setting.settings?.timezone || 'Asia/Shanghai',
+        timezone: setting.settings?.timezone,
         theme_color: normalizedThemeColor,
         theme_borderRadius: themeConfig.borderRadius ?? 6,
         theme_fontSize: themeConfig.fontSize || 14,
@@ -1408,12 +1404,6 @@ const SiteSettingsPage: React.FC = () => {
                 {item.label}
               </Select.Option>
             ))}
-            {localizedCurrencyOptions.length === 0 &&
-              fallbackCurrencyOptions.map((item) => (
-                <Select.Option key={item.value} value={item.value}>
-                  {item.label}
-                </Select.Option>
-              ))}
           </Select>
         </Form.Item>
       </Col>
@@ -1435,29 +1425,21 @@ const SiteSettingsPage: React.FC = () => {
                 {item.label}
               </Select.Option>
             ))}
-            {languageOptions.length === 0 && (
-              <>
-                <Select.Option value="zh-CN">{t('pages.system.siteSettings.langZhCN')}</Select.Option>
-                <Select.Option value="en-US">{t('pages.system.siteSettings.langEnUS')}</Select.Option>
-              </>
-            )}
           </Select>
         </Form.Item>
       </Col>
       <Col xs={24} sm={24} md={12} lg={12}>
-        <Form.Item name="timezone" label={t('pages.system.siteSettings.timezone')}>
-          <Select placeholder={t('pages.system.siteSettings.timezonePlaceholder')} loading={loading} allowClear>
+        <Form.Item
+          name="timezone"
+          label={t('pages.system.siteSettings.timezone')}
+          rules={[{ required: true, message: t('pages.system.siteSettings.timezonePlaceholder') }]}
+        >
+          <Select placeholder={t('pages.system.siteSettings.timezonePlaceholder')} loading={loading}>
             {localizedTimezoneOptions.map((item) => (
               <Select.Option key={item.value} value={item.value}>
                 {item.label}
               </Select.Option>
             ))}
-            {localizedTimezoneOptions.length === 0 &&
-              fallbackTimezoneOptions.map((item) => (
-                <Select.Option key={item.value} value={item.value}>
-                  {item.label}
-                </Select.Option>
-              ))}
           </Select>
         </Form.Item>
       </Col>

@@ -25,6 +25,7 @@ import { CANVAS_FLOW_GRAPH_GRID_STYLE } from '../layout-templates/constants';
 import { getDocumentRelationTrace } from '../../services/documentRelations';
 import type { TraceGraphNodeMeta } from './traceToGraph';
 import { traceDocumentNodeKey, traceResponseToFlowGraphData } from './traceToGraph';
+import { formatDateTimeBySiteSetting } from '../../utils/format';
 
 /** fitView 时画布内边距（左右留白），与视口选项 padding 一致 */
 const TRACE_FLOW_VIEWPORT_PADDING = { compact: 24, normal: 36 } as const;
@@ -155,7 +156,7 @@ const TraceDocumentFlowNode: React.FC<TraceDocumentFlowNodeProps> = ({
     `#${document_id}`;
   const subTitleRaw = (document_name || '').trim();
   const displaySubtitle = traceNodeSubtitleToShow(typeTitle, code, subTitleRaw);
-  const createdAtText = created_at ? new Date(created_at).toLocaleString() : '-';
+  const createdAtText = created_at ? formatDateTimeBySiteSetting(created_at) : '-';
 
   const cardBorder =
     selected

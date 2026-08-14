@@ -58,6 +58,7 @@ import {
 } from '../shared/pullEntryFormDraft';
 import { navigateLeavingPullEntry, pullEntryTabKey } from '../shared/pullEntryCloseTab';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { toApiDateTimeString } from '../../../../../utils/formDate';
 
 const InboundPoPullEntryPage: React.FC = () => {
   const { poId: poIdParam } = useParams<{ poId: string }>();
@@ -408,7 +409,7 @@ const InboundPoPullEntryPage: React.FC = () => {
       supplier_name: order.supplier_name || '',
       warehouse_id: headerWhId,
       warehouse_name: whOpt.name,
-      receipt_time: receiptTime?.toISOString(),
+      receipt_time: toApiDateTimeString(receiptTime),
       receiver_name: receiverHook.receiverName.trim() || undefined,
       delivery_note: deliveryNote.trim() || undefined,
       notes: receiptNotes.trim() || undefined,

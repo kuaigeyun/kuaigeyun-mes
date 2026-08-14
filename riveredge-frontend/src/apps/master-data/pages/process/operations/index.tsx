@@ -29,7 +29,7 @@ import {
   type OperationPresetRow,
 } from '../../../services/process';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { qrcodeApi } from '../../../../../services/qrcode';
 import type { Operation, DefectTypeMinimal } from '../../../types/process';
 import {
@@ -57,6 +57,7 @@ import {
   resolvePresetOperationDefectName,
 } from '../../../../../utils/presetEntityI18n';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { todaySiteDateString } from '../../../../../utils/format';
 import {
   buildOperationReportingTypeValueEnum,
   renderOperationActiveStatusTag,
@@ -457,11 +458,12 @@ const OperationsPage: React.FC = () => {
       messageApi.warning(t('app.master-data.importAllEmpty'));
       return;
     }
-    const result = await batchImport({
+    const result = await importInChunksViaPerItemCreate({
       items,
-      importFn: async (item) => operationApi.create(item),
+      createOne: async (item, _index) => operationApi.create(item),
       title: t('app.master-data.operations.importTitle'),
-      concurrency: 5,
+      chunkSize: 100,
+      concurrency: 4,
     });
     if (result.successCount > 0) {
       messageApi.success(t('app.master-data.importSuccess', { count: result.successCount }));
@@ -506,7 +508,7 @@ const OperationsPage: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${t('app.master-data.operations.exportFilename', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+      a.download = `${t('app.master-data.operations.exportFilename', { date: todaySiteDateString() })}.csv`;
       a.click();
       URL.revokeObjectURL(url);
       messageApi.success(t('common.exportSuccess', { count: list.length }));

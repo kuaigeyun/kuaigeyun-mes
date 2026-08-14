@@ -114,11 +114,11 @@ import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import dayjs from 'dayjs';
-import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { coerceFormDate, formDateFormItemProps, formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -193,7 +193,7 @@ const quotationEditPath = (id: number) => `${QUOTATION_LIST_PATH}/${id}/edit`;
 import { KUAIZHIZAO_QUOTATION_FIELD_RESOURCE as QUOTATION_FIELD_RESOURCE } from '../../../../../constants/fieldPermissionResources';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport }))
 );
@@ -1553,7 +1553,7 @@ const QuotationsPage: React.FC = () => {
   };
 
   const handleDelete = (record: Quotation) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.quotation.deleteModalTitle'),
       content: t('app.kuaizhizao.quotation.confirmDelete', { code: record.quotation_code }),
       onOk: async () => {
@@ -1893,7 +1893,7 @@ const QuotationsPage: React.FC = () => {
     });
 
     if (errors.length > 0) {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.kuaizhizao.quotation.validationFailed'),
         width: 600,
         content: (
@@ -1942,18 +1942,19 @@ const QuotationsPage: React.FC = () => {
     }
 
     try {
-      const result = await batchImport({
+      const result = await importInChunksViaPerItemCreate({
         items: toImport,
-        importFn: async (item) =>
+        createOne: async (item, _index) =>
           createQuotation(item, {
             autoSubmit: (item.status || '草稿') !== '草稿',
           }),
         title: t('app.kuaizhizao.quotation.importing'),
-        concurrency: 3,
+        chunkSize: 100,
+        concurrency: 4,
       });
 
       if (result.failureCount > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.kuaizhizao.quotation.importPartialTitle'),
           width: 600,
           content: (
@@ -2130,7 +2131,7 @@ const QuotationsPage: React.FC = () => {
   // 统一审核动作由 UniWorkflowActions 接管（提交/撤回提交/审核/驳回/撤销审核）
 
   const handleConfirmCustomer = (record: Quotation) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.quotation.customerConfirm'),
       content: t('app.kuaizhizao.quotation.customerConfirmContent'),
       onOk: async () => {
@@ -2149,7 +2150,7 @@ const QuotationsPage: React.FC = () => {
   };
 
   const handleCancelCustomerConfirm = (record: Quotation) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.quotation.cancelCustomerConfirm'),
       content: t('app.kuaizhizao.quotation.cancelCustomerConfirmContent'),
       onOk: async () => {
@@ -2168,7 +2169,7 @@ const QuotationsPage: React.FC = () => {
   };
 
   const handleReopen = (record: Quotation) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.quotation.reopenEdit'),
       content: t('app.kuaizhizao.quotation.reopenContent'),
       onOk: async () => {
@@ -2187,7 +2188,7 @@ const QuotationsPage: React.FC = () => {
   };
 
   const handleRevokePush = (record: Quotation) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.quotation.revokePush'),
       content: t('app.kuaizhizao.quotation.revokePushContent'),
       onOk: async () => {
@@ -2206,7 +2207,7 @@ const QuotationsPage: React.FC = () => {
   };
 
   const handleRevision = (record: Quotation) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.quotation.saveAsRevision'),
       content: t('app.kuaizhizao.quotation.saveAsRevisionHint'),
       onOk: async () => {
@@ -4000,7 +4001,7 @@ const QuotationsPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `quotations-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `quotations-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {

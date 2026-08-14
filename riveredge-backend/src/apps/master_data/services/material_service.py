@@ -43,6 +43,11 @@ from apps.master_data.schemas.material_schemas import (
     MaterialBatchMoveGroupRequest, MaterialBatchMoveGroupResponse,
     MaterialBatchUpdateProcessRouteRequest, MaterialBatchUpdateSourceTypeRequest,
     MaterialBatchFieldUpdateResponse,
+    MaterialBulkInspectionPatchRequest,
+    MaterialBulkInspectionPatchResponse,
+    MaterialBulkCreateRequest,
+    MaterialBulkCreateResponse,
+    MaterialBulkCreateFailedItem,
     MaterialRewriteMainCodesRequest, MaterialRewriteMainCodesResponse,
     MaterialRewriteMainCodesFailedItem,
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
@@ -956,6 +961,8 @@ class MaterialService:
         tenant_id: int,
         data: MaterialCreate,
         current_user: Optional[User] = None,
+        *,
+        skip_duplicate_scan: bool = False,
     ) -> MaterialResponse:
         """
         创建物料
@@ -963,6 +970,7 @@ class MaterialService:
         Args:
             tenant_id: 租户ID
             data: 物料创建数据
+            skip_duplicate_scan: 批量导入时跳过名称模糊防重扫描（仍做 main_code 唯一校验）
             
         Returns:
             MaterialResponse: 创建的物料对象
@@ -1140,22 +1148,23 @@ class MaterialService:
                             f"请检查编码规则配置或联系系统管理员"
                         )
         
-        # 智能识别重复物料
-        duplicates = await MaterialCodeService.find_duplicate_materials(
-            tenant_id=tenant_id,
-            name=data.name,
-            specification=data.specification,
-            base_unit=data.base_unit
-        )
-        
-        # 如果有高置信度的重复物料，记录警告（但不阻止创建）
-        if duplicates:
-            high_confidence_duplicates = [d for d in duplicates if d["confidence"] == "high"]
-            if high_confidence_duplicates:
-                logger.warning(
-                    f"检测到高置信度重复物料: {data.name}，"
-                    f"可能重复的物料: {[d['material'].main_code for d in high_confidence_duplicates]}"
-                )
+        # 智能识别重复物料（单条交互创建；批量导入跳过以避免全量/大范围扫描）
+        if not skip_duplicate_scan:
+            duplicates = await MaterialCodeService.find_duplicate_materials(
+                tenant_id=tenant_id,
+                name=data.name,
+                specification=data.specification,
+                base_unit=data.base_unit
+            )
+            
+            # 如果有高置信度的重复物料，记录警告（但不阻止创建）
+            if duplicates:
+                high_confidence_duplicates = [d for d in duplicates if d["confidence"] == "high"]
+                if high_confidence_duplicates:
+                    logger.warning(
+                        f"检测到高置信度重复物料: {data.name}，"
+                        f"可能重复的物料: {[d['material'].main_code for d in high_confidence_duplicates]}"
+                    )
         
         # 准备创建数据
         # 使用 model_dump 方法（Pydantic v2）或 dict 方法（Pydantic v1）
@@ -1375,6 +1384,74 @@ class MaterialService:
         
         # 构建响应
         return await _build_material_response(tenant_id, material)
+
+    @staticmethod
+    async def bulk_create_materials(
+        tenant_id: int,
+        data: "MaterialBulkCreateRequest",
+        current_user: Optional[User] = None,
+    ) -> "MaterialBulkCreateResponse":
+        """
+        批量创建物料（导入分片）。
+
+        跳过逐条名称模糊防重扫描；仍做 main_code 唯一与业务校验。
+        单条失败不中断整批，返回失败明细。
+        """
+        from apps.master_data.schemas.material_schemas import (
+            MaterialBulkCreateFailedItem,
+            MaterialBulkCreateResponse,
+        )
+
+        items = list(getattr(data, "items", None) or [])
+        created_uuids: List[str] = []
+        failed_items: List[MaterialBulkCreateFailedItem] = []
+
+        for index, item in enumerate(items):
+            main_code_hint: Optional[str] = None
+            try:
+                main_code_hint = getattr(item, "main_code", None)
+                if isinstance(main_code_hint, str):
+                    main_code_hint = main_code_hint.strip() or None
+                resp = await MaterialService.create_material(
+                    tenant_id,
+                    item,
+                    current_user=current_user,
+                    skip_duplicate_scan=True,
+                )
+                created_uuids.append(str(resp.uuid))
+            except ValidationError as exc:
+                failed_items.append(
+                    MaterialBulkCreateFailedItem(
+                        index=index,
+                        reason=str(exc),
+                        main_code=main_code_hint,
+                    )
+                )
+            except NotFoundError as exc:
+                failed_items.append(
+                    MaterialBulkCreateFailedItem(
+                        index=index,
+                        reason=str(exc),
+                        main_code=main_code_hint,
+                    )
+                )
+            except Exception as exc:
+                logger.exception("bulk_create_materials failed index=%s", index)
+                failed_items.append(
+                    MaterialBulkCreateFailedItem(
+                        index=index,
+                        reason=f"创建失败: {exc}",
+                        main_code=main_code_hint,
+                    )
+                )
+
+        return MaterialBulkCreateResponse(
+            created_count=len(created_uuids),
+            failed_count=len(failed_items),
+            requested_count=len(items),
+            created_uuids=created_uuids,
+            failed_items=failed_items,
+        )
 
     @staticmethod
     def get_standard_parts_preset_catalog() -> Dict[str, Any]:
@@ -2471,10 +2548,11 @@ class MaterialService:
                 raise ValidationError(f"物料编码 {data.code} 已存在")
 
         # 主编号创建后不可修改（允许请求体带回原值；禁止改成其它值）
-        if data.main_code is not None:
-            incoming_main = str(data.main_code).strip()
+        incoming_main = getattr(data, "main_code", None)
+        if incoming_main is not None:
+            incoming_main_s = str(incoming_main).strip()
             current_main = str(material.main_code or "").strip()
-            if incoming_main and incoming_main != current_main:
+            if incoming_main_s and incoming_main_s != current_main:
                 raise ValidationError("物料主编号不可修改")
 
         # 如果是属性物料，验证属性组合唯一性和属性值

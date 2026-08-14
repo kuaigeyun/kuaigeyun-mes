@@ -43,10 +43,10 @@ export function useUniDashboardSidebar() {
     [calendarDayKey],
   );
 
-  const displayTimezone =
-    useConfigStore((s) => s.configs?.timezone) ||
-    Intl.DateTimeFormat().resolvedOptions().timeZone ||
-    'Asia/Shanghai';
+  const displayTimezone = useConfigStore((s) => {
+    const tz = s.configs?.timezone;
+    return tz != null ? String(tz).trim() : '';
+  });
 
   const { data: platformVersion } = useQuery({
     queryKey: ['platformVersion'],
@@ -55,7 +55,10 @@ export function useUniDashboardSidebar() {
   });
 
   const buildTimeDisplay = useMemo(
-    () => formatTimeInTimezone(platformVersion?.build_time, displayTimezone),
+    () =>
+      displayTimezone
+        ? formatTimeInTimezone(platformVersion?.build_time, displayTimezone)
+        : '-',
     [platformVersion?.build_time, displayTimezone],
   );
 

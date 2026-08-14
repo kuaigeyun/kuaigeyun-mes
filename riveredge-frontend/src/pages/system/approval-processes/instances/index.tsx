@@ -34,6 +34,7 @@ import { getApprovalProcessList } from '../../../../services/approvalProcess';
 import { rowActionKind } from '../../../../components/uni-action';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { formatDateBySiteSetting, todaySiteDateString } from '../../../../utils/format';
 
 const { TextArea } = Input;
 
@@ -395,7 +396,7 @@ const ApprovalInstanceListPage: React.FC = () => {
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {new Date(item.submitted_at).toLocaleDateString()}
+            {formatDateBySiteSetting(item.submitted_at)}
           </Typography.Text>
           <Button
             type="text"
@@ -599,7 +600,7 @@ const ApprovalInstanceListPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 toExport as Array<Record<string, unknown>>,
-                `approval-instances-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `approval-instances-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('pages.system.approvalInstances.exportSuccessCount', { count: toExport.length }));
             } catch (error: any) {

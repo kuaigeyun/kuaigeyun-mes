@@ -58,7 +58,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { ROUTES } from '../../../constants/routes';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const P = 'app.kuaizhizao.equipmentFault';
 const FAULT_RESOURCE = 'kuaizhizao:equipment-fault';
 const MAINT_RESOURCE = 'kuaizhizao:maintenance-plan';
@@ -252,7 +252,7 @@ const EquipmentFaultsPage: React.FC = () => {
    * 处理批量删除故障记录（keys 为 uuid 数组）
    */
   const handleDelete = async (keys: React.Key[]) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t(`${P}.batchDeleteTitle`),
       content: t(`${P}.batchDeleteContent`, { count: keys.length }),
       onOk: async () => {
@@ -558,7 +558,7 @@ const EquipmentFaultsPage: React.FC = () => {
           icon={<DeleteOutlined />}
           onClick={(e) => {
             e.stopPropagation();
-            Modal.confirm({
+            getAntdModal().confirm({
               title: t(`${P}.deleteTitle`),
               content: t(`${P}.deleteContent`, { code: record.fault_no }),
               onOk: () => record.uuid && handleDelete([record.uuid]),

@@ -183,6 +183,7 @@ from apps.kuaizhizao.schemas.batching_order import (
     BatchingPullPreviewResponse,
     BatchingCenterTaskListResponse,
 )
+from core.utils.timezone_utils import to_api_isoformat
 
 router = APIRouter(
     tags=["App - Kuaige Zhizao - Warehouse Execution"],
@@ -3807,7 +3808,7 @@ async def print_sales_delivery(
             "sales_order_code": delivery.sales_order_code or "",
             "customer_name": delivery.customer_name or "",
             "warehouse_name": delivery.warehouse_name or "",
-            "delivery_time": delivery.delivery_time.strftime("%Y-%m-%d %H:%M:%S") if delivery.delivery_time else "",
+            "delivery_time": to_api_isoformat(delivery.delivery_time) if delivery.delivery_time else "",
             "status": delivery.status,
             "total_quantity": str(delivery.total_quantity) if delivery.total_quantity else "0",
             "total_amount": str(delivery.total_amount) if delivery.total_amount else "0",
@@ -3828,7 +3829,7 @@ async def print_sales_delivery(
                 }
                 for item in items
             ],
-            "created_at": delivery.created_at.strftime("%Y-%m-%d %H:%M:%S") if delivery.created_at else "",
+            "created_at": to_api_isoformat(delivery.created_at) if delivery.created_at else "",
         }
         
         # 如果没有提供模板UUID，尝试查找默认模板

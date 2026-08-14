@@ -33,6 +33,7 @@ import {
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { todaySiteDateString } from '../../../../utils/format';
 
 const { TextArea } = Input;
 
@@ -527,7 +528,7 @@ const ScheduledTaskListPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `scheduled-tasks-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `scheduled-tasks-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('field.scheduledTask.exportSuccess', { count: items.length }));
             } catch (error: any) {

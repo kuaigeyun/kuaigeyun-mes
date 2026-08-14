@@ -277,6 +277,13 @@ class MaterialCreate(MaterialBase):
 class MaterialUpdate(BaseModel):
     """更新物料 Schema"""
     
+    # 允许请求体带回原主编码；服务层校验不可改并在落库前剔除
+    main_code: Optional[str] = Field(
+        None,
+        alias="mainCode",
+        max_length=50,
+        description="主编码（创建后不可修改；可带回原值）",
+    )
     code: Optional[str] = Field(None, max_length=50, description="物料编码")
     name: Optional[str] = Field(None, max_length=200, description="物料名称")
     group_id: Optional[int] = Field(None, description="物料分组ID")
@@ -706,6 +713,49 @@ class MaterialBulkInspectionPatchResponse(BaseModel):
     )
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class MaterialBulkCreateFailedItem(BaseModel):
+    """批量创建物料失败项（index 与请求 items 下标对齐，从 0 起）"""
+
+    index: int = Field(..., description="请求 items 下标（从 0 起）")
+    reason: str = Field(..., description="失败原因")
+    main_code: Optional[str] = Field(None, alias="mainCode", description="尝试创建的主编码（若有）")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MaterialBulkCreateRequest(BaseModel):
+    """批量创建物料（导入分片；单次建议 ≤200，避免网关超时）"""
+
+    items: List[MaterialCreate] = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="待创建物料列表（单次最多 200）",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MaterialBulkCreateResponse(BaseModel):
+    """批量创建物料结果"""
+
+    created_count: int = Field(..., alias="createdCount", description="成功创建数量")
+    failed_count: int = Field(..., alias="failedCount", description="失败数量")
+    requested_count: int = Field(..., alias="requestedCount", description="请求条目数")
+    created_uuids: List[str] = Field(
+        default_factory=list,
+        alias="createdUuids",
+        description="成功创建的物料 UUID",
+    )
+    failed_items: List[MaterialBulkCreateFailedItem] = Field(
+        default_factory=list,
+        alias="failedItems",
+        description="失败明细",
+    )
+
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
 
 
 class MaterialRewriteMainCodesFailedItem(BaseModel):

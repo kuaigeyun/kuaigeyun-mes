@@ -37,6 +37,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { todaySiteDateString } from '../../../../utils/format';
 
 const { Title } = Typography;
 
@@ -2242,7 +2243,7 @@ const PrintTemplateDesignPage: React.FC = () => {
       const a = document.createElement('a');
       const base = (templateName.trim() || 'print-template-design').replace(/[/\\?%*:|"<>]/g, '-').slice(0, 80);
       a.href = url;
-      a.download = `${base}-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `${base}-${todaySiteDateString()}.json`;
       a.click();
       window.URL.revokeObjectURL(url);
       messageApi.success(t('pages.system.printTemplatesDesign.exportPortableSuccess'));

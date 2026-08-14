@@ -61,7 +61,7 @@ import {
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { renderMasterActiveTag } from '../../../../master-data/utils/masterListPresentation';
 import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 interface InspectionPlan {
   id?: number;
   uuid?: string;
@@ -251,7 +251,7 @@ const InspectionPlansPage: React.FC = () => {
       const stepsChanged = isEdit && stepsFingerprint(steps) !== stepsBaseline;
       if (stepsChanged) {
         const nextVersion = bumpPlanVersion(values.version || currentPlan?.version);
-        Modal.confirm({
+        getAntdModal().confirm({
           title: t('app.kuaizhizao.quality.plans.versionBump.title'),
           content: t('app.kuaizhizao.quality.plans.versionBump.content', {
             from: values.version || currentPlan?.version || '1.0',

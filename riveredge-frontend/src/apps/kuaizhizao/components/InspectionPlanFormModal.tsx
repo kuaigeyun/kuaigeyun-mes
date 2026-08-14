@@ -23,7 +23,7 @@ import { inspectionPlanApi } from '../services/production';
 import { InspectionPlanStepEditor, type InspectionPlanStepItem } from './InspectionPlanStepEditor';
 import { bumpPlanVersion, stepsFingerprint } from '../types/inspectionStepSpec';
 import { getQualityPlanTypeFallback } from '../pages/quality-management/components/qualityMeta';
-
+import { getAntdModal } from '../../../utils/antdAppApis';
 export interface InspectionPlanRecord {
   id?: number;
   uuid?: string;
@@ -157,7 +157,7 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
       const stepsChanged = isEdit && stepsFingerprint(steps) !== stepsBaseline;
       if (stepsChanged) {
         const nextVersion = bumpPlanVersion(values.version || currentPlan?.version);
-        Modal.confirm({
+        getAntdModal().confirm({
           title: t('app.kuaizhizao.quality.plans.versionBump.title'),
           content: t('app.kuaizhizao.quality.plans.versionBump.content', {
             from: values.version || currentPlan?.version || '1.0',

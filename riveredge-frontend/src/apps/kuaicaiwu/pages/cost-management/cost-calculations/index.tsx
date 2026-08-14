@@ -1065,7 +1065,7 @@ const CostCalculationPage: React.FC = () => {
     <div>
       <Tabs
         defaultActiveKey="by_product"
-        destroyInactiveTabPane={false}
+        destroyOnHidden={false}
         items={[
           {
             key: 'by_product',
@@ -1396,7 +1396,7 @@ const CostCalculationPage: React.FC = () => {
         <Tabs
           activeKey={analyzeInnerTab}
           onChange={setAnalyzeInnerTab}
-          destroyInactiveTabPane={false}
+          destroyOnHidden={false}
           style={{ marginTop: 16 }}
           items={[
             {
@@ -1455,7 +1455,7 @@ const CostCalculationPage: React.FC = () => {
     <Tabs
       activeKey={cat === 'trial' ? sub : 'production'}
       onChange={(k) => setInnerSubOnly(k)}
-      destroyInactiveTabPane={false}
+      destroyOnHidden={false}
       items={[
         {
           key: 'production',

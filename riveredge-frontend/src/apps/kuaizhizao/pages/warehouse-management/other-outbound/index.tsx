@@ -59,6 +59,7 @@ import {
   normalizeWarehouseListResponse,
   resolveWarehouseDocListParams,
 } from '../../../utils/warehouseListCore';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const REASON_TYPES_FALLBACK = [
   { value: '盘亏', label: '盘亏' },
@@ -416,7 +417,7 @@ const OtherOutboundPage: React.FC = () => {
   };
 
   const handleConfirm = async (record: OtherOutbound) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.otherOutbound.msg.confirmTitle'),
       content: t('app.kuaizhizao.otherOutbound.msg.confirmContent', { code: record.outbound_code }),
       onOk: async () => {
@@ -434,7 +435,7 @@ const OtherOutboundPage: React.FC = () => {
   };
 
   const handleWithdraw = async (record: OtherOutbound) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.otherOutbound.msg.withdrawTitle'),
       content: t('app.kuaizhizao.otherOutbound.msg.withdrawContent', { code: record.outbound_code }),
       onOk: async () => {
@@ -456,7 +457,7 @@ const OtherOutboundPage: React.FC = () => {
   };
 
   const handleDelete = async (record: OtherOutbound) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.otherOutbound.msg.deleteTitle'),
       content: t('app.kuaizhizao.otherOutbound.msg.deleteContent', { code: record.outbound_code }),
       onOk: async () => {

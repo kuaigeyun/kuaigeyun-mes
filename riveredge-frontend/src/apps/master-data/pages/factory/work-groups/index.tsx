@@ -44,7 +44,9 @@ import {
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
 const WorkGroupsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -290,7 +292,7 @@ const WorkGroupsPage: React.FC = () => {
     });
 
     if (errors.length > 0) {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.dataValidationFailed'),
         width: 600,
         content: (
@@ -319,15 +321,16 @@ const WorkGroupsPage: React.FC = () => {
     }
 
     try {
-      const result = await batchImport({
+      const result = await importInChunksViaPerItemCreate({
         items: importData,
-        importFn: async (item: WorkGroupCreate) => workGroupApi.create(item),
+        createOne: async (item: WorkGroupCreate, _index) => workGroupApi.create(item),
         title: t('app.master-data.workGroups.importTitle'),
-        concurrency: 5,
+        chunkSize: 100,
+        concurrency: 4,
       });
 
       if (result.failureCount > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.master-data.importPartialResultTitle'),
           width: 600,
           content: (
@@ -384,17 +387,17 @@ const WorkGroupsPage: React.FC = () => {
         }
         exportData = currentPageData.filter((item) => selectedKeys.includes(item.uuid));
         filename = `${t('app.master-data.workGroups.exportFilenameSelected', {
-          date: new Date().toISOString().slice(0, 10),
+          date: todaySiteDateString(),
         })}.csv`;
       } else if (type === 'currentPage' && currentPageData) {
         exportData = currentPageData;
         filename = `${t('app.master-data.workGroups.exportFilenameCurrentPage', {
-          date: new Date().toISOString().slice(0, 10),
+          date: todaySiteDateString(),
         })}.csv`;
       } else {
         exportData = await fetchAllListItems((p) => workGroupApi.list({ ...p, ...lastListParamsRef.current }));
         filename = `${t('app.master-data.workGroups.exportFilenameAll', {
-          date: new Date().toISOString().slice(0, 10),
+          date: todaySiteDateString(),
         })}.csv`;
       }
 
@@ -420,7 +423,7 @@ const WorkGroupsPage: React.FC = () => {
           item.description || '',
           formatMembersSummary(item),
           item.isActive ? t('common.enabled') : t('common.disabled'),
-          item.createdAt ? new Date(item.createdAt).toLocaleString(i18n.language) : '',
+          item.createdAt ? formatDateTimeBySiteSetting(item.createdAt) : '',
         ];
         csvRows.push(
           row.map((cell) => {

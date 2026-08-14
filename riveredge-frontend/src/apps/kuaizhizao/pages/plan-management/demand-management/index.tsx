@@ -77,7 +77,7 @@ import { getDemandBusinessModeTagColor, buildDemandBusinessModeValueEnum } from 
 import { getDemandTypeTagProps, normalizeDemandTypeKey } from '../../../utils/demandType';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import dayjs from 'dayjs';
-import {formatDateTime as formatDateTimeValue, formatQuantity} from '../../../../../utils/format';
+import { formatDateTime as formatDateTimeValue, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { DemandDetailDrawer, DEMAND_WORKFLOW_PROPS } from './components/DemandDetailDrawer';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
@@ -87,7 +87,7 @@ import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const DEMAND_RESOURCE = 'kuaizhizao:demand';
 
 /** 统一状态判断（兼容枚举与中文） */
@@ -456,7 +456,7 @@ const DemandManagementPage: React.FC = () => {
   );
 
   const handleWithdrawFromComputation = async (id: number) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.demandManagement.withdrawTitle'),
       content: t('app.kuaizhizao.demandManagement.withdrawConfirm'),
       onOk: async () => {
@@ -1061,7 +1061,7 @@ const DemandManagementPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `demands-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `demands-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {

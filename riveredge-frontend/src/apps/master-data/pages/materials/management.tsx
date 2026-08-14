@@ -71,6 +71,7 @@ import {
 } from '@ant-design/pro-components'
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components'
 import type { DataNode, TreeProps } from 'antd/es/tree'
+import type { MenuProps } from 'antd'
 
 /** 经典 Windows 资源管理器式实心文件夹（黄褐色） */
 const MATERIAL_GROUP_FOLDER_ICON_STYLE = { fontSize: 16, verticalAlign: 'middle' } as const
@@ -301,7 +302,7 @@ import { materialUnitApi } from '../../services/material-unit'
 import { SecureImage } from '../../../../components/secure-image'
 import FilePreviewModal from '../../../../components/file-preview'
 import { getFileByUuid, getFileDownloadUrlWithToken } from '../../../../services/file'
-import { batchImport } from '../../../../utils/batchOperations'
+import { importInChunks, importInChunksViaPerItemCreate } from '../../../../utils/chunkedBulkImport';
 import {
   buildMaterialImportColumnIndex,
   materialImportHasRemovedSkuColumns,
@@ -338,7 +339,7 @@ import {
 import { inspectionPlanApi, unwrapInspectionPlanList } from '../../../kuaizhizao/services/quality-execution'
 import { buildFactoryImportTemplate } from '../../utils/factoryImportTemplate'
 import { downloadFile } from '../../../../utils'
-import { formatDateTimeBySiteSetting } from '../../../../utils/format'
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../utils/format'
 import { formDateRangeFormItemProps } from '../../../../utils/formDate'
 import { useNewShortcut } from '../../../../hooks/useNewShortcut'
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut'
@@ -352,7 +353,7 @@ import { getSuspendedModal, clearSuspendedModal } from '../../utils/suspendedMod
 import { useCustomFieldsForList } from '../../../../hooks/useCustomFieldsForList'
 import { useCustomFields } from '../../../../hooks/useCustomFields'
 import { useTrialRunMode } from '../../../../hooks/useTrialRunMode'
-
+import { getAntdModal } from '../../../../utils/antdAppApis';
 /** 与 MaterialForm 一致：表示使用系统默认批号/序列号规则 */
 const SYSTEM_DEFAULT_BATCH_SERIAL_RULE = '__SYSTEM_DEFAULT__'
 
@@ -1105,6 +1106,38 @@ const MaterialsManagementPage: React.FC = () => {
       setContextMenuPosition(adjusted)
     }
   }, [contextMenuVisible, contextMenuGroup, contextMenuPosition.x, contextMenuPosition.y])
+
+  const materialGroupContextMenuItems = useMemo((): MenuProps['items'] => {
+    const items: NonNullable<MenuProps['items']> = []
+    if (contextMenuGroup) {
+      items.push({
+        key: 'createSub',
+        icon: <PlusOutlined />,
+        label: t('app.master-data.materials.createSubGroup'),
+      })
+    }
+    items.push({
+      key: 'create',
+      icon: <PlusOutlined />,
+      label: t('app.master-data.materials.createGroup'),
+    })
+    if (contextMenuGroup) {
+      items.push(
+        {
+          key: 'edit',
+          icon: <EditOutlined />,
+          label: t('app.master-data.materials.editGroup'),
+        },
+        {
+          key: 'delete',
+          icon: <DeleteOutlined />,
+          danger: true,
+          label: t('app.master-data.materials.deleteGroup'),
+        },
+      )
+    }
+    return items
+  }, [contextMenuGroup, t])
 
   // 物料来源类型选项（用于搜索下拉框和列表展示，使用 i18n）
   const sourceTypeOptions = useMemo(() => buildMaterialSourceTypeOptions(t), [t])
@@ -2274,7 +2307,7 @@ const MaterialsManagementPage: React.FC = () => {
 
   const showImportValidationErrors = useCallback(
     (errors: Array<{ row: number; message: string }>) => {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.dataValidationFailed'),
         width: 600,
         content: (
@@ -2300,7 +2333,7 @@ const MaterialsManagementPage: React.FC = () => {
 
   const showImportPartialErrors = useCallback(
     (successCount: number, importErrors: Array<{ row: number; error: string }>) => {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.importPartialResultTitle'),
         width: 600,
         content: (
@@ -2413,7 +2446,7 @@ const MaterialsManagementPage: React.FC = () => {
     )
 
     if (errors.length > 0) {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.dataValidationFailed'),
         width: 600,
         content: (
@@ -2443,25 +2476,32 @@ const MaterialsManagementPage: React.FC = () => {
 
     const importErrors: Array<{ row: number; error: string }> = []
     let successCount = 0
+    const title = t('app.master-data.materials.importTitle', { defaultValue: '正在导入物料' })
 
     try {
-      const masterResult = await batchImport({
+      const result = await importInChunks({
         items: masterItems,
-        importFn: async (item) => materialApi.create(item.data),
-        title: t('app.master-data.materials.importTitle', { defaultValue: '正在导入物料' }),
-        concurrency: 5,
+        chunkSize: 100,
+        title,
+        showResultModal: false,
+        rowNumberForIndex: (_i, item) => item.rowNum ?? _i + 1,
+        importChunk: async (chunk) => {
+          const res = await materialApi.bulkCreate(chunk.map((item) => item.data))
+          return {
+            createdCount: res.createdCount,
+            failedItems: res.failedItems.map((f) => ({
+              index: f.index,
+              reason: f.reason || t('common.unknownError', { defaultValue: '未知错误' }),
+            })),
+          }
+        },
       })
-      successCount += masterResult.successCount
-      importErrors.push(
-        ...masterResult.errors.map((e) => ({
-          row: masterItems[e.row - 1]?.rowNum ?? e.row,
-          error: e.error,
-        })),
-      )
+      successCount = result.successCount
+      importErrors.push(...result.errors)
 
       const failureCount = importErrors.length
       if (failureCount > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.master-data.importPartialResultTitle'),
           width: 600,
           content: (
@@ -2567,9 +2607,9 @@ const MaterialsManagementPage: React.FC = () => {
     let successCount = 0
 
     try {
-      const result = await batchImport({
+      const result = await importInChunksViaPerItemCreate({
         items,
-        importFn: async (row) => {
+        createOne: async (row, _index) => {
           let master = await resolveMasterByMainCode(row.mainCode, masterCache)
           if (!master) {
             throw new Error(
@@ -2588,7 +2628,8 @@ const MaterialsManagementPage: React.FC = () => {
           }
         },
         title: t('app.master-data.materials.importMenu.skuTitle'),
-        concurrency: 3,
+        chunkSize: 100,
+        concurrency: 4,
       })
       successCount = result.successCount
       importErrors.push(
@@ -2649,8 +2690,14 @@ const MaterialsManagementPage: React.FC = () => {
     let successCount = 0
 
     try {
-      for (const group of groups) {
-        try {
+      const result = await importInChunksViaPerItemCreate({
+        items: groups,
+        chunkSize: 50,
+        concurrency: 3,
+        title: t('app.master-data.materials.importUnitsTitle', { defaultValue: '正在导入物料单位' }),
+        showResultModal: false,
+        rowNumberForIndex: (_i, g) => g.rowNums?.[0] ?? _i + 1,
+        createOne: async (group) => {
           const master = await resolveMasterByMainCode(group.mainCode, masterCache)
           if (!master) {
             throw new Error(
@@ -2660,13 +2707,17 @@ const MaterialsManagementPage: React.FC = () => {
           const full = await materialApi.get(master.uuid)
           const mergedUnits = mergeMaterialUnits(full.units, group)
           await materialApi.update(master.uuid, { units: mergedUnits })
-          successCount += 1
-        } catch (error: any) {
-          for (const rowNum of group.rowNums) {
-            importErrors.push({ row: rowNum, error: error?.message || String(error) })
-          }
+        },
+      })
+      successCount = result.successCount
+      result.failureItems.forEach((item, i) => {
+        const g = item as (typeof groups)[number]
+        const reason = result.errors[i]?.error || t('common.unknownError', { defaultValue: '未知错误' })
+        const rows = g?.rowNums?.length ? g.rowNums : [result.errors[i]?.row ?? i + 1]
+        for (const rowNum of rows) {
+          importErrors.push({ row: rowNum, error: reason })
         }
-      }
+      })
 
       if (importErrors.length > 0) {
         showImportPartialErrors(successCount, importErrors)
@@ -2731,8 +2782,16 @@ const MaterialsManagementPage: React.FC = () => {
     let successCount = 0
 
     try {
-      for (const group of groups) {
-        try {
+      const result = await importInChunksViaPerItemCreate({
+        items: groups,
+        chunkSize: 50,
+        concurrency: 3,
+        title: t('app.master-data.materials.importCustomerCodesTitle', {
+          defaultValue: '正在导入客户料号',
+        }),
+        showResultModal: false,
+        rowNumberForIndex: (_i, g) => g.rowNums?.[0] ?? _i + 1,
+        createOne: async (group) => {
           const master = await resolveMasterByMainCode(group.mainCode, masterCache)
           if (!master) {
             throw new Error(
@@ -2754,13 +2813,17 @@ const MaterialsManagementPage: React.FC = () => {
                 description: code.description,
               })),
           } as MaterialUpdate)
-          successCount += 1
-        } catch (error: any) {
-          for (const rowNum of group.rowNums) {
-            importErrors.push({ row: rowNum, error: error?.message || String(error) })
-          }
+        },
+      })
+      successCount = result.successCount
+      result.failureItems.forEach((item, i) => {
+        const g = item as (typeof groups)[number]
+        const reason = result.errors[i]?.error || t('common.unknownError', { defaultValue: '未知错误' })
+        const rows = g?.rowNums?.length ? g.rowNums : [result.errors[i]?.row ?? i + 1]
+        for (const rowNum of rows) {
+          importErrors.push({ row: rowNum, error: reason })
         }
-      }
+      })
 
       if (importErrors.length > 0) {
         showImportPartialErrors(successCount, importErrors)
@@ -2825,8 +2888,16 @@ const MaterialsManagementPage: React.FC = () => {
     let successCount = 0
 
     try {
-      for (const item of items) {
-        try {
+      const result = await importInChunksViaPerItemCreate({
+        items,
+        chunkSize: 100,
+        concurrency: 4,
+        title: t('app.master-data.materials.importDefaultsTitle', {
+          defaultValue: '正在导入物料默认值',
+        }),
+        showResultModal: false,
+        rowNumberForIndex: (_i, item) => item.rowNum ?? _i + 1,
+        createOne: async (item) => {
           const master = await resolveMasterByMainCode(item.mainCode, masterCache)
           if (!master) {
             throw new Error(
@@ -2837,11 +2908,10 @@ const MaterialsManagementPage: React.FC = () => {
             material_uuids: [master.uuid],
             ...item.patch,
           })
-          successCount += 1
-        } catch (error: any) {
-          importErrors.push({ row: item.rowNum, error: error?.message || String(error) })
-        }
-      }
+        },
+      })
+      successCount = result.successCount
+      importErrors.push(...result.errors)
 
       if (importErrors.length > 0) {
         showImportPartialErrors(successCount, importErrors)
@@ -3328,7 +3398,7 @@ const MaterialsManagementPage: React.FC = () => {
         )
       })
       const blob = new Blob(['\ufeff' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8' })
-      downloadFile(blob, `materials_${new Date().toISOString().slice(0, 10)}.csv`)
+      downloadFile(blob, `materials_${todaySiteDateString()}.csv`)
       messageApi.success(t('common.exportSuccess', { count: toExport.length }))
     } catch (error: any) {
       messageApi.error(error?.message || t('common.exportFailed'))
@@ -5182,6 +5252,7 @@ const MaterialsManagementPage: React.FC = () => {
           onClick={() => setContextMenuVisible(false)}
         >
           <Menu
+            items={materialGroupContextMenuItems}
             onClick={({ key }) => {
               switch (key) {
                 case 'edit':
@@ -5205,26 +5276,7 @@ const MaterialsManagementPage: React.FC = () => {
               }
               setContextMenuVisible(false)
             }}
-          >
-            {contextMenuGroup && (
-              <Menu.Item key="createSub" icon={<PlusOutlined />}>
-                {t('app.master-data.materials.createSubGroup')}
-              </Menu.Item>
-            )}
-            <Menu.Item key="create" icon={<PlusOutlined />}>
-              {t('app.master-data.materials.createGroup')}
-            </Menu.Item>
-            {contextMenuGroup && (
-              <>
-                <Menu.Item key="edit" icon={<EditOutlined />}>
-                  {t('app.master-data.materials.editGroup')}
-                </Menu.Item>
-                <Menu.Item key="delete" icon={<DeleteOutlined />} danger>
-                  {t('app.master-data.materials.deleteGroup')}
-                </Menu.Item>
-              </>
-            )}
-          </Menu>
+          />
         </div>
       )}
 

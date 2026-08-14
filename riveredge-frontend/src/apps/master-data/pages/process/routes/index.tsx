@@ -14,7 +14,7 @@ import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { downloadFile } from '../../../../../utils';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
@@ -45,7 +45,8 @@ import {
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderMasterActiveTag } from '../../../utils/masterListPresentation';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
 /**
  * 工艺路线管理列表页面组件
  */
@@ -341,7 +342,7 @@ const ProcessRoutesPage: React.FC = () => {
       items.push({ code, name, description: desc || undefined, isActive });
     });
     if (errors.length > 0) {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.dataValidationFailed'),
         width: 600,
         content: (
@@ -356,14 +357,15 @@ const ProcessRoutesPage: React.FC = () => {
       return;
     }
     try {
-      const result = await batchImport({
+      const result = await importInChunksViaPerItemCreate({
         items,
-        importFn: async (item) => processRouteApi.create(item),
+        createOne: async (item, _index) => processRouteApi.create(item),
         title: t('app.master-data.routes.importTitle'),
-        concurrency: 5,
+        chunkSize: 100,
+        concurrency: 4,
       });
       if (result.failureCount > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.master-data.importPartialResultTitle'),
           width: 600,
           content: (
@@ -419,14 +421,14 @@ const ProcessRoutesPage: React.FC = () => {
           r.name || '',
           (r as any).description || '',
           isActive ? enabledLabel : disabledLabel,
-          r.created_at ? new Date(r.created_at).toLocaleString() : '',
+          r.created_at ? formatDateTimeBySiteSetting(r.created_at) : '',
         ].map((c) => {
           const s = String(c ?? '');
           return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
         }).join(','));
       });
       const blob = new Blob(['\ufeff' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8' });
-      downloadFile(blob, `${t('app.master-data.routes.exportFilename', { date: new Date().toISOString().slice(0, 10) })}.csv`);
+      downloadFile(blob, `${t('app.master-data.routes.exportFilename', { date: todaySiteDateString() })}.csv`);
       messageApi.success(t('common.exportSuccess', { count: toExport.length }));
     } catch (error: any) {
       messageApi.error(error?.message || t('common.exportFailed'));

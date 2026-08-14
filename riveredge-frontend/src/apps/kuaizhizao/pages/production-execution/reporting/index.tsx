@@ -115,6 +115,7 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const REPORTING_RESOURCE = 'kuaizhizao:production-execution-reporting';
 const REPORTING_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_reporting_records';
@@ -1186,7 +1187,7 @@ const ReportingPage: React.FC = () => {
           danger
           onClick={(e) => {
             e.stopPropagation();
-            Modal.confirm({
+            getAntdModal().confirm({
               title: t('app.kuaizhizao.workReporting.confirmDeleteTitle'),
               content: t('app.kuaizhizao.workReporting.confirmDeletePendingContent'),
               onOk: async () => {
@@ -1266,7 +1267,7 @@ const ReportingPage: React.FC = () => {
           danger
           onClick={(e) => {
             e.stopPropagation();
-            Modal.confirm({
+            getAntdModal().confirm({
               title: t('app.kuaizhizao.workReporting.confirmDeleteTitle'),
               content: t('app.kuaizhizao.workReporting.confirmDeleteRejectedContent'),
               onOk: async () => {

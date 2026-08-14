@@ -16,7 +16,7 @@ from core.services.messaging.message_service import MessageService
 from core.schemas.message_template import SendMessageRequest
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
-from core.utils.timezone_utils import resolve_business_datetime
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 
 
 class ScheduledTaskService:
@@ -384,7 +384,7 @@ class ScheduledTaskService:
 
             error_text = f"，错误信息：{error}" if error else ""
             run_at = (
-                scheduled_task.last_run_at.strftime("%Y-%m-%d %H:%M:%S")
+                to_api_isoformat(scheduled_task.last_run_at)
                 if scheduled_task.last_run_at
                 else "未知"
             )

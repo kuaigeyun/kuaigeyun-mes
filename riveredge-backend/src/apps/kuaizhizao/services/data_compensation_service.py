@@ -22,7 +22,7 @@ from apps.kuaicaiwu.models.receivable import Receivable
 from apps.kuaicaiwu.models.payable import Payable
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import ValidationError
-from core.utils.timezone_utils import today_site_str
+from core.utils.timezone_utils import today_site_str, to_api_isoformat
 
 
 class DataCompensationService:
@@ -214,7 +214,7 @@ class DataCompensationService:
                         review_status="已审核",
                         total_quantity=float(abs(net_change)),
                         total_amount=Decimal('0'),
-                        notes=f"动态数据补偿（快照时间点：{snapshot_time.strftime('%Y-%m-%d %H:%M:%S')} 到上线日期：{launch_date.strftime('%Y-%m-%d %H:%M:%S')}，净变化：{net_change}）",
+                        notes=f"动态数据补偿（快照时间点：{to_api_isoformat(snapshot_time)} 到上线日期：{to_api_isoformat(launch_date)}，净变化：{net_change}）",
                         created_by=created_by,
                         updated_by=created_by,
                     )

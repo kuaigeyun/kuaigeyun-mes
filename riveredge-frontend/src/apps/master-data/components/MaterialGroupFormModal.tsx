@@ -215,7 +215,7 @@ export const MaterialGroupFormModal: React.FC<MaterialGroupFormModalProps> = ({
       <Tabs
         activeKey={activeTab}
         onChange={setActiveTab}
-        destroyInactiveTabPane={false}
+        destroyOnHidden={false}
         items={[
           {
             key: 'basic',

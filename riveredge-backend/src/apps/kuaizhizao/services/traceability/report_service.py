@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from apps.kuaizhizao.schemas.traceability_schemas import TraceDirection, TraceProfileResponse
 from apps.kuaizhizao.services.print_service import _html_to_pdf_bytes
-from core.utils.timezone_utils import resolve_business_datetime, today_site_str
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str, to_api_isoformat
 
 
 _BIZ_STEP_ZH = {
@@ -51,7 +51,7 @@ class TraceReportService:
     def _format_dt(value: Optional[datetime]) -> str:
         if not value:
             return "-"
-        return value.strftime("%Y-%m-%d %H:%M:%S")
+        return to_api_isoformat(value) or "-"
 
     @staticmethod
     def render_html(
@@ -62,7 +62,7 @@ class TraceReportService:
     ) -> str:
         anchor = profile.anchor
         report_no = f"TR-{today_site_str()}-{uuid4().hex[:8].upper()}"
-        generated_at = resolve_business_datetime().strftime("%Y-%m-%d %H:%M:%S")
+        generated_at = to_api_isoformat(resolve_business_datetime())
         direction_zh = {"forward": "正向", "backward": "反向", "both": "双向"}.get(
             profile.summary.direction, profile.summary.direction
         )

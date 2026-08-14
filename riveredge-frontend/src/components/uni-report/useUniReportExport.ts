@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { ProColumns } from '@ant-design/pro-components';
 import { exportDomainReport, type ReportParams } from '../../apps/kuaizhizao/services/reports';
 import type { UniReportExportConfig } from './types';
+import { todaySiteDateString } from '../../utils/format';
 
 function escapeCsvCell(v: unknown): string {
   const s = v == null ? '' : String(v);
@@ -53,7 +54,7 @@ export function useUniReportExport(options: UseUniReportExportOptions) {
       selectedRowKeys?: React.Key[],
       currentPageData?: Record<string, unknown>[],
     ) => {
-      const dateStr = new Date().toISOString().split('T')[0];
+      const dateStr = todaySiteDateString();
       const baseName = `${title}-${dateStr}.csv`;
 
       if (type === 'all') {

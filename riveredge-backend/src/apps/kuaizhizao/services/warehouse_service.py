@@ -19,7 +19,7 @@ from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
 from loguru import logger
 
-from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str, to_api_isoformat
 from apps.common.audit_actor import audit_response_fields
 from apps.kuaizhizao.utils.material_unit_utils import convert_to_base_quantity
 
@@ -6414,7 +6414,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     delivery.sales_order_code or '',
                     delivery.customer_name or '',
                     delivery.warehouse_name or '',
-                    delivery.delivery_time.strftime('%Y-%m-%d %H:%M:%S') if delivery.delivery_time else '',
+                    to_api_isoformat(delivery.delivery_time) if delivery.delivery_time else '',
                     delivery.status,
                     str(delivery.total_quantity) if delivery.total_quantity else '0',
                     str(delivery.total_amount) if delivery.total_amount else '0',
@@ -6422,7 +6422,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     delivery.tracking_number or '',
                     delivery.shipping_address or '',
                     delivery.notes or '',
-                    delivery.created_at.strftime('%Y-%m-%d %H:%M:%S') if delivery.created_at else '',
+                    to_api_isoformat(delivery.created_at) if delivery.created_at else '',
                 ])
         
         return file_path
@@ -7602,12 +7602,12 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     receipt.purchase_order_code or '',
                     receipt.supplier_name or '',
                     receipt.warehouse_name or '',
-                    receipt.receipt_time.strftime('%Y-%m-%d %H:%M:%S') if receipt.receipt_time else '',
+                    to_api_isoformat(receipt.receipt_time) if receipt.receipt_time else '',
                     receipt.status,
                     str(receipt.total_quantity) if receipt.total_quantity else '0',
                     str(receipt.total_amount) if receipt.total_amount else '0',
                     receipt.notes or '',
-                    receipt.created_at.strftime('%Y-%m-%d %H:%M:%S') if receipt.created_at else '',
+                    to_api_isoformat(receipt.created_at) if receipt.created_at else '',
                 ])
         
         return file_path

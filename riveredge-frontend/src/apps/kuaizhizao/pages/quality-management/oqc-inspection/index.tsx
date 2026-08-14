@@ -64,7 +64,7 @@ import PermissionGuard from '../../../../../components/permission/PermissionGuar
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { useTranslation } from 'react-i18next';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-import { formatQuantity } from '../../../../../utils/format';
+import { formatQuantity, todaySiteDateString } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
@@ -92,7 +92,7 @@ import {
   type QualityPullCandidateBase,
 } from '../components/qualityPullQueryColumns';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const OQC_RESOURCE = 'kuaizhizao:quality-management-oqc-inspection';
 
 type OqcPullSourceCandidate = QualityPullCandidateBase & {
@@ -345,7 +345,7 @@ const OQCInspectionPage: React.FC = () => {
   const handleDeleteRow = useCallback(
     (record: OQCInspection) => {
       if (record.id == null) return;
-      Modal.confirm({
+      getAntdModal().confirm({
         title: t('app.kuaizhizao.quality.oqc.messages.deleteConfirm', { count: 1 }),
         content: t('app.kuaizhizao.quality.oqc.messages.deleteConfirmDescription'),
         onOk: async () => {
@@ -361,7 +361,7 @@ const OQCInspectionPage: React.FC = () => {
   const handleRevokeConduct = useCallback(
     (record: OQCInspection) => {
       if (record.id == null) return;
-      Modal.confirm({
+      getAntdModal().confirm({
         title: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle'),
         content: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmContent', {
           code: record.inspection_code || record.id,
@@ -382,7 +382,7 @@ const OQCInspectionPage: React.FC = () => {
       messageApi.warning(t('app.kuaizhizao.quality.common.messages.revokeConductBatchEmpty'));
       return;
     }
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle'),
       content: t('app.kuaizhizao.quality.common.messages.revokeConductBatchConfirm', { count: targets.length }),
       onOk: async () => {
@@ -624,7 +624,7 @@ const OQCInspectionPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `${t('app.kuaizhizao.quality.common.entity.oqcInspection')}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `${t('app.kuaizhizao.quality.common.entity.oqcInspection')}_${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('common.exportCountSuccess', { count: items.length }));
             } catch (e: any) {

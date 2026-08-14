@@ -24,6 +24,7 @@ import {
 } from '@ant-design/icons';
 import { api } from '../../../services/api';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
+import { todaySiteDateString } from '../../../utils/format';
 
 interface PluginInfo {
   code: string;
@@ -278,7 +279,7 @@ const PluginManagerPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 toExport as Array<Record<string, unknown>>,
-                `plugins-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `plugins-${todaySiteDateString()}.xlsx`,
               );
               message.success(t('pages.system.pluginManager.exportSuccess', { count: toExport.length }));
             } catch (error: any) {

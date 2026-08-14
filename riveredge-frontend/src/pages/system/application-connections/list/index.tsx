@@ -73,6 +73,7 @@ import {
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { mergeListKeyword } from '../../../../utils/tableQueryKey';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
+import { todaySiteDateString } from '../../../../utils/format';
 
 const TYPE_COLORS: Record<string, { color: string; icon: React.ReactNode }> = {
   feishu: { color: 'blue', icon: <MessageOutlined /> },
@@ -1282,7 +1283,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
             await downloadRecordsAsXlsx(
               items as Array<Record<string, unknown>>,
               t('pages.system.applicationConnections.exportFileName', {
-                date: new Date().toISOString().slice(0, 10),
+                date: todaySiteDateString(),
               }),
             );
             messageApi.success(t('common.exportSuccess', { count: items.length }));

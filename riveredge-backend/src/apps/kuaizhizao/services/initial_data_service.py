@@ -34,7 +34,7 @@ from apps.master_data.services.material_code_mapping_service import MaterialCode
 from apps.master_data.schemas.material_schemas import MaterialCodeConvertRequest
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
-from core.utils.timezone_utils import resolve_business_datetime, today_site_str
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str, to_api_isoformat
 
 
 class InitialDataService:
@@ -139,144 +139,144 @@ class InitialDataService:
         # 用于批量创建入库单（按仓库分组）
         receipts_by_warehouse: Dict[str, Dict[str, Any]] = {}
         
-        async with in_transaction():
-            for row, row_idx in non_empty_rows:
-                try:
-                    # 解析行数据
-                    row_data = {}
-                    for field, col_idx in header_index_map.items():
-                        if col_idx < len(row):
-                            value = row[col_idx]
-                            if value is not None:
-                                row_data[field] = str(value).strip()
+        for row, row_idx in non_empty_rows:
+            try:
+                # 解析行数据
+                row_data = {}
+                for field, col_idx in header_index_map.items():
+                    if col_idx < len(row):
+                        value = row[col_idx]
+                        if value is not None:
+                            row_data[field] = str(value).strip()
                     
-                    # 验证必填字段
-                    if not row_data.get('material_code'):
-                        errors.append({
-                            "row": row_idx,
-                            "error": "物料编码为空"
-                        })
-                        failure_count += 1
-                        continue
-                    
-                    if not row_data.get('warehouse_code'):
-                        errors.append({
-                            "row": row_idx,
-                            "error": "仓库编码为空"
-                        })
-                        failure_count += 1
-                        continue
-                    
-                    if not row_data.get('quantity'):
-                        errors.append({
-                            "row": row_idx,
-                            "error": "期初数量为空"
-                        })
-                        failure_count += 1
-                        continue
-                    
-                    # 转换物料编码（支持部门编码，自动映射到主编码）
-                    material_code = row_data['material_code']
-                    try:
-                        # 尝试通过编码映射转换
-                        convert_request = MaterialCodeConvertRequest(
-                            external_code=material_code,
-                            external_system="期初数据导入"
-                        )
-                        convert_result = await MaterialCodeMappingService.convert_code(
-                            tenant_id=tenant_id,
-                            request=convert_request
-                        )
-                        if convert_result.found:
-                            material_code = convert_result.internal_code
-                    except Exception as e:
-                        logger.warning(f"物料编码映射转换失败: {material_code}, 错误: {e}")
-                        # 如果映射失败，继续使用原始编码
-                    
-                    # 查找物料
-                    material = await Material.filter(
-                        tenant_id=tenant_id,
-                        code=material_code,
-                        deleted_at__isnull=True
-                    ).first()
-                    
-                    if not material:
-                        errors.append({
-                            "row": row_idx,
-                            "error": f"物料不存在: {material_code}"
-                        })
-                        failure_count += 1
-                        continue
-                    
-                    # 查找仓库
-                    warehouse = await Warehouse.filter(
-                        tenant_id=tenant_id,
-                        code=row_data['warehouse_code'],
-                        deleted_at__isnull=True
-                    ).first()
-                    
-                    if not warehouse:
-                        errors.append({
-                            "row": row_idx,
-                            "error": f"仓库不存在: {row_data['warehouse_code']}"
-                        })
-                        failure_count += 1
-                        continue
-                    
-                    # 解析数量
-                    try:
-                        quantity = Decimal(str(row_data['quantity']))
-                        if quantity <= 0:
-                            raise ValueError("数量必须大于0")
-                    except (ValueError, TypeError) as e:
-                        errors.append({
-                            "row": row_idx,
-                            "error": f"期初数量格式错误: {row_data['quantity']}"
-                        })
-                        failure_count += 1
-                        continue
-                    
-                    # 解析金额（可选）
-                    amount = Decimal('0')
-                    if row_data.get('amount'):
-                        try:
-                            amount = Decimal(str(row_data['amount']))
-                        except (ValueError, TypeError):
-                            # 金额格式错误，使用0
-                            pass
-                    
-                    # 按仓库分组，准备批量创建入库单
-                    warehouse_key = f"{warehouse.id}_{warehouse.code}"
-                    if warehouse_key not in receipts_by_warehouse:
-                        receipts_by_warehouse[warehouse_key] = {
-                            'warehouse': warehouse,
-                            'items': []
-                        }
-                    
-                    receipts_by_warehouse[warehouse_key]['items'].append({
-                        'material': material,
-                        'quantity': quantity,
-                        'amount': amount,
-                        'batch_number': row_data.get('batch_number'),
-                        'location_code': row_data.get('location_code'),
-                        'row_idx': row_idx,
-                    })
-                    
-                except Exception as e:
-                    logger.error(f"处理第 {row_idx} 行数据时出错: {e}")
+                # 验证必填字段
+                if not row_data.get('material_code'):
                     errors.append({
                         "row": row_idx,
-                        "error": f"处理数据时出错: {str(e)}"
+                        "error": "物料编码为空"
                     })
                     failure_count += 1
                     continue
-            
-            # 批量创建期初库存入库单
-            for warehouse_key, receipt_data in receipts_by_warehouse.items():
-                warehouse = receipt_data['warehouse']
-                items = receipt_data['items']
-                
+                    
+                if not row_data.get('warehouse_code'):
+                    errors.append({
+                        "row": row_idx,
+                        "error": "仓库编码为空"
+                    })
+                    failure_count += 1
+                    continue
+                    
+                if not row_data.get('quantity'):
+                    errors.append({
+                        "row": row_idx,
+                        "error": "期初数量为空"
+                    })
+                    failure_count += 1
+                    continue
+                    
+                # 转换物料编码（支持部门编码，自动映射到主编码）
+                material_code = row_data['material_code']
                 try:
+                    # 尝试通过编码映射转换
+                    convert_request = MaterialCodeConvertRequest(
+                        external_code=material_code,
+                        external_system="期初数据导入"
+                    )
+                    convert_result = await MaterialCodeMappingService.convert_code(
+                        tenant_id=tenant_id,
+                        request=convert_request
+                    )
+                    if convert_result.found:
+                        material_code = convert_result.internal_code
+                except Exception as e:
+                    logger.warning(f"物料编码映射转换失败: {material_code}, 错误: {e}")
+                    # 如果映射失败，继续使用原始编码
+                    
+                # 查找物料
+                material = await Material.filter(
+                    tenant_id=tenant_id,
+                    code=material_code,
+                    deleted_at__isnull=True
+                ).first()
+                    
+                if not material:
+                    errors.append({
+                        "row": row_idx,
+                        "error": f"物料不存在: {material_code}"
+                    })
+                    failure_count += 1
+                    continue
+                    
+                # 查找仓库
+                warehouse = await Warehouse.filter(
+                    tenant_id=tenant_id,
+                    code=row_data['warehouse_code'],
+                    deleted_at__isnull=True
+                ).first()
+                    
+                if not warehouse:
+                    errors.append({
+                        "row": row_idx,
+                        "error": f"仓库不存在: {row_data['warehouse_code']}"
+                    })
+                    failure_count += 1
+                    continue
+                    
+                # 解析数量
+                try:
+                    quantity = Decimal(str(row_data['quantity']))
+                    if quantity <= 0:
+                        raise ValueError("数量必须大于0")
+                except (ValueError, TypeError) as e:
+                    errors.append({
+                        "row": row_idx,
+                        "error": f"期初数量格式错误: {row_data['quantity']}"
+                    })
+                    failure_count += 1
+                    continue
+                    
+                # 解析金额（可选）
+                amount = Decimal('0')
+                if row_data.get('amount'):
+                    try:
+                        amount = Decimal(str(row_data['amount']))
+                    except (ValueError, TypeError):
+                        # 金额格式错误，使用0
+                        pass
+                    
+                # 按仓库分组，准备批量创建入库单
+                warehouse_key = f"{warehouse.id}_{warehouse.code}"
+                if warehouse_key not in receipts_by_warehouse:
+                    receipts_by_warehouse[warehouse_key] = {
+                        'warehouse': warehouse,
+                        'items': []
+                    }
+                    
+                receipts_by_warehouse[warehouse_key]['items'].append({
+                    'material': material,
+                    'quantity': quantity,
+                    'amount': amount,
+                    'batch_number': row_data.get('batch_number'),
+                    'location_code': row_data.get('location_code'),
+                    'row_idx': row_idx,
+                })
+                    
+            except Exception as e:
+                logger.error(f"处理第 {row_idx} 行数据时出错: {e}")
+                errors.append({
+                    "row": row_idx,
+                    "error": f"处理数据时出错: {str(e)}"
+                })
+                failure_count += 1
+                continue
+            
+        # 批量创建期初库存入库单（按仓库独立事务）
+        for warehouse_key, receipt_data in receipts_by_warehouse.items():
+            warehouse = receipt_data['warehouse']
+            items = receipt_data['items']
+                
+            try:
+                async with in_transaction():
                     # 生成入库单编码
                     today = today_site_str()
                     from apps.common.base_service import AppBaseService
@@ -307,7 +307,7 @@ class InitialDataService:
                         review_status="已审核",  # 期初库存直接标记为已审核
                         total_quantity=float(total_quantity),
                         total_amount=float(total_amount),
-                        notes=f"期初库存导入（快照时间点：{snapshot_time.strftime('%Y-%m-%d %H:%M:%S') if snapshot_time else '未指定'}）",
+                        notes=f"期初库存导入（快照时间点：{to_api_isoformat(snapshot_time) if snapshot_time else '未指定'}）",
                         created_by=created_by,
                         updated_by=created_by,
                     )
@@ -336,16 +336,15 @@ class InitialDataService:
                     
                     success_count += len(items)
                     
-                except Exception as e:
-                    logger.error(f"创建期初库存入库单失败（仓库：{warehouse.code}）: {e}")
-                    # 记录所有相关行的错误
-                    for item in items:
-                        errors.append({
-                            "row": item['row_idx'],
-                            "error": f"创建入库单失败: {str(e)}"
-                        })
-                        failure_count += 1
-                    success_count -= len(items)
+            except Exception as e:
+                logger.error(f"创建期初库存入库单失败（仓库：{warehouse.code}）: {e}")
+                # 记录所有相关行的错误
+                for item in items:
+                    errors.append({
+                        "row": item['row_idx'],
+                        "error": f"创建入库单失败: {str(e)}"
+                    })
+                    failure_count += 1
         
         return {
             "success_count": success_count,
@@ -442,218 +441,217 @@ class InitialDataService:
         failure_count = 0
         errors = []
         
-        async with in_transaction():
-            
-            for row, row_idx in non_empty_rows:
-                try:
-                    # 解析行数据
-                    row_data = {}
-                    for field, col_idx in header_index_map.items():
-                        if col_idx < len(row):
-                            value = row[col_idx]
-                            if value is not None:
-                                row_data[field] = str(value).strip()
+        # 逐行独立写入：单行失败不影响其它行（支持 FE 分片多次调用）
+        for row, row_idx in non_empty_rows:
+            try:
+                # 解析行数据
+                row_data = {}
+                for field, col_idx in header_index_map.items():
+                    if col_idx < len(row):
+                        value = row[col_idx]
+                        if value is not None:
+                            row_data[field] = str(value).strip()
                     
-                    # 验证必填字段
-                    if not row_data.get('product_code'):
-                        errors.append({
-                            "row": row_idx,
-                            "error": "产品编码为空"
-                        })
-                        failure_count += 1
-                        continue
-                    
-                    if not row_data.get('current_operation'):
-                        errors.append({
-                            "row": row_idx,
-                            "error": "当前工序为空"
-                        })
-                        failure_count += 1
-                        continue
-                    
-                    if not row_data.get('wip_quantity'):
-                        errors.append({
-                            "row": row_idx,
-                            "error": "在制品数量为空"
-                        })
-                        failure_count += 1
-                        continue
-                    
-                    # 转换产品编码（支持部门编码，自动映射到主编码）
-                    product_code = row_data['product_code']
-                    try:
-                        convert_request = MaterialCodeConvertRequest(
-                            external_code=product_code,
-                            external_system="期初数据导入"
-                        )
-                        convert_result = await MaterialCodeMappingService.convert_code(
-                            tenant_id=tenant_id,
-                            request=convert_request
-                        )
-                        if convert_result.found:
-                            product_code = convert_result.internal_code
-                    except Exception as e:
-                        logger.warning(f"产品编码映射转换失败: {product_code}, 错误: {e}")
-                    
-                    # 查找产品（物料）
-                    product = await Material.filter(
-                        tenant_id=tenant_id,
-                        code=product_code,
-                        deleted_at__isnull=True
-                    ).first()
-                    
-                    if not product:
-                        errors.append({
-                            "row": row_idx,
-                            "error": f"产品不存在: {product_code}"
-                        })
-                        failure_count += 1
-                        continue
-                    
-                    # 查找当前工序
-                    current_operation_code = row_data['current_operation']
-                    operation = await Operation.filter(
-                        tenant_id=tenant_id,
-                        code=current_operation_code,
-                        deleted_at__isnull=True
-                    ).first()
-                    
-                    if not operation:
-                        errors.append({
-                            "row": row_idx,
-                            "error": f"工序不存在: {current_operation_code}"
-                        })
-                        failure_count += 1
-                        continue
-                    
-                    # 解析在制品数量
-                    try:
-                        wip_quantity = Decimal(str(row_data['wip_quantity']))
-                        if wip_quantity <= 0:
-                            raise ValueError("在制品数量必须大于0")
-                    except (ValueError, TypeError) as e:
-                        errors.append({
-                            "row": row_idx,
-                            "error": f"在制品数量格式错误: {row_data['wip_quantity']}"
-                        })
-                        failure_count += 1
-                        continue
-                    
-                    # 解析已投入数量（可选）
-                    input_quantity = Decimal('0')
-                    if row_data.get('input_quantity'):
-                        try:
-                            input_quantity = Decimal(str(row_data['input_quantity']))
-                        except (ValueError, TypeError):
-                            pass
-                    
-                    # 解析预计完成时间（可选）
-                    estimated_completion_time = None
-                    if row_data.get('estimated_completion_time'):
-                        try:
-                            from datetime import datetime as dt
-                            # 尝试多种日期格式
-                            for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d']:
-                                try:
-                                    estimated_completion_time = dt.strptime(row_data['estimated_completion_time'], fmt)
-                                    break
-                                except ValueError:
-                                    continue
-                        except Exception:
-                            pass
-                    
-                    # 查找车间（可选）
-                    workshop = None
-                    if row_data.get('workshop_code'):
-                        workshop = await Workshop.filter(
-                            tenant_id=tenant_id,
-                            code=row_data['workshop_code'],
-                            deleted_at__isnull=True
-                        ).first()
-                    
-                    # 生成工单编码（如果未提供）
-                    work_order_code = row_data.get('work_order_code')
-                    if not work_order_code:
-                        today = today_site_str()
-                        base_service = AppBaseService(WorkOrder)
-                        work_order_code = await base_service.generate_code(
-                            tenant_id,
-                            "WORK_ORDER_CODE",
-                            prefix=f"INIT-WIP{today}"
-                        )
-                    
-                    # 检查工单是否已存在
-                    existing_work_order = await WorkOrder.filter(
-                        tenant_id=tenant_id,
-                        code=work_order_code,
-                        deleted_at__isnull=True
-                    ).first()
-                    
-                    if existing_work_order:
-                        errors.append({
-                            "row": row_idx,
-                            "error": f"工单已存在: {work_order_code}"
-                        })
-                        failure_count += 1
-                        continue
-                    
-                    # 创建期初在制品工单（标记为"期初在制品"）
-                    work_order = await WorkOrder.create(
-                        tenant_id=tenant_id,
-                        uuid=str(uuid.uuid4()),
-                        code=work_order_code,
-                        name=f"期初在制品-{product.name}",
-                        product_id=product.id,
-                        product_code=product.code,
-                        product_name=product.name,
-                        quantity=wip_quantity,
-                        production_mode="MTS",
-                        workshop_id=workshop.id if workshop else None,
-                        workshop_name=workshop.name if workshop else None,
-                        status="进行中",  # 期初在制品直接标记为进行中
-                        priority="normal",
-                        actual_start_date=snapshot_time or resolve_business_datetime(),
-                        completed_quantity=Decimal('0'),
-                        qualified_quantity=Decimal('0'),
-                        unqualified_quantity=Decimal('0'),
-                        remarks=f"期初在制品导入（快照时间点：{snapshot_time.strftime('%Y-%m-%d %H:%M:%S') if snapshot_time else '未指定'}，当前工序：{operation.name}）",
-                        created_by=created_by,
-                        updated_by=created_by,
-                    )
-                    
-                    # 创建工单工序（当前工序标记为进行中）
-                    await WorkOrderOperation.create(
-                        tenant_id=tenant_id,
-                        uuid=str(uuid.uuid4()),
-                        work_order_id=work_order.id,
-                        work_order_code=work_order.code,
-                        operation_id=operation.id,
-                        operation_code=operation.code,
-                        operation_name=operation.name,
-                        sequence=1,  # 期初在制品只有一个当前工序
-                        workshop_id=workshop.id if workshop else None,
-                        workshop_name=workshop.name if workshop else None,
-                        actual_start_date=snapshot_time or resolve_business_datetime(),
-                        completed_quantity=Decimal('0'),  # 当前工序未完成
-                        qualified_quantity=Decimal('0'),
-                        unqualified_quantity=Decimal('0'),
-                        status="进行中",
-                        remarks=f"期初在制品，在制品数量：{wip_quantity}",
-                    )
-                    
-                    # TODO: 如果提供了已投入数量，可以创建生产领料单记录
-                    # 这里暂时不实现，因为需要更复杂的BOM展开逻辑
-                    
-                    success_count += 1
-                    
-                except Exception as e:
-                    logger.error(f"处理第 {row_idx} 行数据时出错: {e}")
+                # 验证必填字段
+                if not row_data.get('product_code'):
                     errors.append({
                         "row": row_idx,
-                        "error": f"处理数据时出错: {str(e)}"
+                        "error": "产品编码为空"
                     })
                     failure_count += 1
                     continue
+                    
+                if not row_data.get('current_operation'):
+                    errors.append({
+                        "row": row_idx,
+                        "error": "当前工序为空"
+                    })
+                    failure_count += 1
+                    continue
+                    
+                if not row_data.get('wip_quantity'):
+                    errors.append({
+                        "row": row_idx,
+                        "error": "在制品数量为空"
+                    })
+                    failure_count += 1
+                    continue
+                    
+                # 转换产品编码（支持部门编码，自动映射到主编码）
+                product_code = row_data['product_code']
+                try:
+                    convert_request = MaterialCodeConvertRequest(
+                        external_code=product_code,
+                        external_system="期初数据导入"
+                    )
+                    convert_result = await MaterialCodeMappingService.convert_code(
+                        tenant_id=tenant_id,
+                        request=convert_request
+                    )
+                    if convert_result.found:
+                        product_code = convert_result.internal_code
+                except Exception as e:
+                    logger.warning(f"产品编码映射转换失败: {product_code}, 错误: {e}")
+                    
+                # 查找产品（物料）
+                product = await Material.filter(
+                    tenant_id=tenant_id,
+                    code=product_code,
+                    deleted_at__isnull=True
+                ).first()
+                    
+                if not product:
+                    errors.append({
+                        "row": row_idx,
+                        "error": f"产品不存在: {product_code}"
+                    })
+                    failure_count += 1
+                    continue
+                    
+                # 查找当前工序
+                current_operation_code = row_data['current_operation']
+                operation = await Operation.filter(
+                    tenant_id=tenant_id,
+                    code=current_operation_code,
+                    deleted_at__isnull=True
+                ).first()
+                    
+                if not operation:
+                    errors.append({
+                        "row": row_idx,
+                        "error": f"工序不存在: {current_operation_code}"
+                    })
+                    failure_count += 1
+                    continue
+                    
+                # 解析在制品数量
+                try:
+                    wip_quantity = Decimal(str(row_data['wip_quantity']))
+                    if wip_quantity <= 0:
+                        raise ValueError("在制品数量必须大于0")
+                except (ValueError, TypeError) as e:
+                    errors.append({
+                        "row": row_idx,
+                        "error": f"在制品数量格式错误: {row_data['wip_quantity']}"
+                    })
+                    failure_count += 1
+                    continue
+                    
+                # 解析已投入数量（可选）
+                input_quantity = Decimal('0')
+                if row_data.get('input_quantity'):
+                    try:
+                        input_quantity = Decimal(str(row_data['input_quantity']))
+                    except (ValueError, TypeError):
+                        pass
+                    
+                # 解析预计完成时间（可选）
+                estimated_completion_time = None
+                if row_data.get('estimated_completion_time'):
+                    try:
+                        from datetime import datetime as dt
+                        # 尝试多种日期格式
+                        for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d']:
+                            try:
+                                estimated_completion_time = dt.strptime(row_data['estimated_completion_time'], fmt)
+                                break
+                            except ValueError:
+                                continue
+                    except Exception:
+                        pass
+                    
+                # 查找车间（可选）
+                workshop = None
+                if row_data.get('workshop_code'):
+                    workshop = await Workshop.filter(
+                        tenant_id=tenant_id,
+                        code=row_data['workshop_code'],
+                        deleted_at__isnull=True
+                    ).first()
+                    
+                # 生成工单编码（如果未提供）
+                work_order_code = row_data.get('work_order_code')
+                if not work_order_code:
+                    today = today_site_str()
+                    base_service = AppBaseService(WorkOrder)
+                    work_order_code = await base_service.generate_code(
+                        tenant_id,
+                        "WORK_ORDER_CODE",
+                        prefix=f"INIT-WIP{today}"
+                    )
+                    
+                # 检查工单是否已存在
+                existing_work_order = await WorkOrder.filter(
+                    tenant_id=tenant_id,
+                    code=work_order_code,
+                    deleted_at__isnull=True
+                ).first()
+                    
+                if existing_work_order:
+                    errors.append({
+                        "row": row_idx,
+                        "error": f"工单已存在: {work_order_code}"
+                    })
+                    failure_count += 1
+                    continue
+                    
+                # 创建期初在制品工单（标记为"期初在制品"）
+                work_order = await WorkOrder.create(
+                    tenant_id=tenant_id,
+                    uuid=str(uuid.uuid4()),
+                    code=work_order_code,
+                    name=f"期初在制品-{product.name}",
+                    product_id=product.id,
+                    product_code=product.code,
+                    product_name=product.name,
+                    quantity=wip_quantity,
+                    production_mode="MTS",
+                    workshop_id=workshop.id if workshop else None,
+                    workshop_name=workshop.name if workshop else None,
+                    status="进行中",  # 期初在制品直接标记为进行中
+                    priority="normal",
+                    actual_start_date=snapshot_time or resolve_business_datetime(),
+                    completed_quantity=Decimal('0'),
+                    qualified_quantity=Decimal('0'),
+                    unqualified_quantity=Decimal('0'),
+                    remarks=f"期初在制品导入（快照时间点：{to_api_isoformat(snapshot_time) if snapshot_time else '未指定'}，当前工序：{operation.name}）",
+                    created_by=created_by,
+                    updated_by=created_by,
+                )
+                    
+                # 创建工单工序（当前工序标记为进行中）
+                await WorkOrderOperation.create(
+                    tenant_id=tenant_id,
+                    uuid=str(uuid.uuid4()),
+                    work_order_id=work_order.id,
+                    work_order_code=work_order.code,
+                    operation_id=operation.id,
+                    operation_code=operation.code,
+                    operation_name=operation.name,
+                    sequence=1,  # 期初在制品只有一个当前工序
+                    workshop_id=workshop.id if workshop else None,
+                    workshop_name=workshop.name if workshop else None,
+                    actual_start_date=snapshot_time or resolve_business_datetime(),
+                    completed_quantity=Decimal('0'),  # 当前工序未完成
+                    qualified_quantity=Decimal('0'),
+                    unqualified_quantity=Decimal('0'),
+                    status="进行中",
+                    remarks=f"期初在制品，在制品数量：{wip_quantity}",
+                )
+                    
+                # TODO: 如果提供了已投入数量，可以创建生产领料单记录
+                # 这里暂时不实现，因为需要更复杂的BOM展开逻辑
+                    
+                success_count += 1
+                    
+            except Exception as e:
+                logger.error(f"处理第 {row_idx} 行数据时出错: {e}")
+                errors.append({
+                    "row": row_idx,
+                    "error": f"处理数据时出错: {str(e)}"
+                })
+                failure_count += 1
+                continue
         
         return {
             "success_count": success_count,
@@ -740,221 +738,221 @@ class InitialDataService:
         failure_count = 0
         errors = []
         
-        async with in_transaction():
-            for row, row_idx in non_empty_rows:
-                try:
-                    # 解析行数据
-                    row_data = {}
-                    for field, col_idx in header_index_map.items():
-                        if col_idx < len(row):
-                            value = row[col_idx]
-                            if value is not None:
-                                row_data[field] = str(value).strip()
+        # 逐行独立写入：单行失败不影响其它行（支持 FE 分片多次调用）
+        for row, row_idx in non_empty_rows:
+            try:
+                # 解析行数据
+                row_data = {}
+                for field, col_idx in header_index_map.items():
+                    if col_idx < len(row):
+                        value = row[col_idx]
+                        if value is not None:
+                            row_data[field] = str(value).strip()
                     
-                    # 验证类型
-                    if not row_data.get('type'):
-                        errors.append({"row": row_idx, "error": "类型为空（应收/应付）"})
+                # 验证类型
+                if not row_data.get('type'):
+                    errors.append({"row": row_idx, "error": "类型为空（应收/应付）"})
+                    failure_count += 1
+                    continue
+                    
+                data_type = row_data['type'].strip().upper()
+                if data_type not in ['应收', '应付', 'RECEIVABLE', 'PAYABLE', 'AR', 'AP']:
+                    errors.append({"row": row_idx, "error": f"类型错误: {row_data['type']}，应为'应收'或'应付'"})
+                    failure_count += 1
+                    continue
+                    
+                is_receivable = data_type in ['应收', 'RECEIVABLE', 'AR']
+                    
+                # 验证客户/供应商编码
+                if is_receivable:
+                    if not row_data.get('customer_code'):
+                        errors.append({"row": row_idx, "error": "客户编码为空"})
+                        failure_count += 1
+                        continue
+                else:
+                    if not row_data.get('supplier_code'):
+                        errors.append({"row": row_idx, "error": "供应商编码为空"})
                         failure_count += 1
                         continue
                     
-                    data_type = row_data['type'].strip().upper()
-                    if data_type not in ['应收', '应付', 'RECEIVABLE', 'PAYABLE', 'AR', 'AP']:
-                        errors.append({"row": row_idx, "error": f"类型错误: {row_data['type']}，应为'应收'或'应付'"})
+                # 验证其他必填字段
+                for field in ['source_type', 'source_code', 'business_date']:
+                    if not row_data.get(field):
+                        errors.append({"row": row_idx, "error": f"{field}为空"})
                         failure_count += 1
-                        continue
-                    
-                    is_receivable = data_type in ['应收', 'RECEIVABLE', 'AR']
-                    
-                    # 验证客户/供应商编码
+                        break
+                else:
+                    # 解析金额和日期
+                    from datetime import datetime as dt, date
+                        
+                    # 解析金额
                     if is_receivable:
-                        if not row_data.get('customer_code'):
-                            errors.append({"row": row_idx, "error": "客户编码为空"})
+                        if not row_data.get('receivable_amount'):
+                            errors.append({"row": row_idx, "error": "应收金额为空"})
                             failure_count += 1
                             continue
-                    else:
-                        if not row_data.get('supplier_code'):
-                            errors.append({"row": row_idx, "error": "供应商编码为空"})
-                            failure_count += 1
-                            continue
-                    
-                    # 验证其他必填字段
-                    for field in ['source_type', 'source_code', 'business_date']:
-                        if not row_data.get(field):
-                            errors.append({"row": row_idx, "error": f"{field}为空"})
-                            failure_count += 1
-                            break
-                    else:
-                        # 解析金额和日期
-                        from datetime import datetime as dt, date
-                        
-                        # 解析金额
-                        if is_receivable:
-                            if not row_data.get('receivable_amount'):
-                                errors.append({"row": row_idx, "error": "应收金额为空"})
-                                failure_count += 1
-                                continue
-                            try:
-                                total_amount = Decimal(str(row_data['receivable_amount']))
-                                if total_amount <= 0:
-                                    raise ValueError("应收金额必须大于0")
-                            except (ValueError, TypeError):
-                                errors.append({"row": row_idx, "error": f"应收金额格式错误: {row_data['receivable_amount']}"})
-                                failure_count += 1
-                                continue
-                            
-                            received_amount = Decimal('0')
-                            if row_data.get('received_amount'):
-                                try:
-                                    received_amount = Decimal(str(row_data['received_amount']))
-                                except (ValueError, TypeError):
-                                    pass
-                            remaining_amount = total_amount - received_amount
-                        else:
-                            if not row_data.get('payable_amount'):
-                                errors.append({"row": row_idx, "error": "应付金额为空"})
-                                failure_count += 1
-                                continue
-                            try:
-                                total_amount = Decimal(str(row_data['payable_amount']))
-                                if total_amount <= 0:
-                                    raise ValueError("应付金额必须大于0")
-                            except (ValueError, TypeError):
-                                errors.append({"row": row_idx, "error": f"应付金额格式错误: {row_data['payable_amount']}"})
-                                failure_count += 1
-                                continue
-                            
-                            paid_amount = Decimal('0')
-                            if row_data.get('paid_amount'):
-                                try:
-                                    paid_amount = Decimal(str(row_data['paid_amount']))
-                                except (ValueError, TypeError):
-                                    pass
-                            remaining_amount = total_amount - paid_amount
-                        
-                        # 解析日期
                         try:
-                            business_date_str = row_data['business_date']
-                            business_date = None
-                            for fmt in ['%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d', '%Y-%m-%d %H:%M:%S']:
+                            total_amount = Decimal(str(row_data['receivable_amount']))
+                            if total_amount <= 0:
+                                raise ValueError("应收金额必须大于0")
+                        except (ValueError, TypeError):
+                            errors.append({"row": row_idx, "error": f"应收金额格式错误: {row_data['receivable_amount']}"})
+                            failure_count += 1
+                            continue
+                            
+                        received_amount = Decimal('0')
+                        if row_data.get('received_amount'):
+                            try:
+                                received_amount = Decimal(str(row_data['received_amount']))
+                            except (ValueError, TypeError):
+                                pass
+                        remaining_amount = total_amount - received_amount
+                    else:
+                        if not row_data.get('payable_amount'):
+                            errors.append({"row": row_idx, "error": "应付金额为空"})
+                            failure_count += 1
+                            continue
+                        try:
+                            total_amount = Decimal(str(row_data['payable_amount']))
+                            if total_amount <= 0:
+                                raise ValueError("应付金额必须大于0")
+                        except (ValueError, TypeError):
+                            errors.append({"row": row_idx, "error": f"应付金额格式错误: {row_data['payable_amount']}"})
+                            failure_count += 1
+                            continue
+                            
+                        paid_amount = Decimal('0')
+                        if row_data.get('paid_amount'):
+                            try:
+                                paid_amount = Decimal(str(row_data['paid_amount']))
+                            except (ValueError, TypeError):
+                                pass
+                        remaining_amount = total_amount - paid_amount
+                        
+                    # 解析日期
+                    try:
+                        business_date_str = row_data['business_date']
+                        business_date = None
+                        for fmt in ['%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d', '%Y-%m-%d %H:%M:%S']:
+                            try:
+                                business_date = dt.strptime(business_date_str, fmt).date()
+                                break
+                            except ValueError:
+                                continue
+                        if not business_date:
+                            raise ValueError(f"日期格式错误: {business_date_str}")
+                    except Exception:
+                        errors.append({"row": row_idx, "error": f"单据日期格式错误: {row_data['business_date']}"})
+                        failure_count += 1
+                        continue
+                        
+                    # 解析到期日期（可选）
+                    due_date = business_date
+                    if row_data.get('due_date'):
+                        try:
+                            due_date_str = row_data['due_date']
+                            for fmt in ['%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d']:
                                 try:
-                                    business_date = dt.strptime(business_date_str, fmt).date()
+                                    due_date = dt.strptime(due_date_str, fmt).date()
                                     break
                                 except ValueError:
                                     continue
-                            if not business_date:
-                                raise ValueError(f"日期格式错误: {business_date_str}")
                         except Exception:
-                            errors.append({"row": row_idx, "error": f"单据日期格式错误: {row_data['business_date']}"})
+                            pass
+                        
+                    # 查找客户/供应商并创建应收/应付单
+                    if is_receivable:
+                        customer = await Customer.filter(
+                            tenant_id=tenant_id,
+                            code=row_data['customer_code'],
+                            deleted_at__isnull=True
+                        ).first()
+                            
+                        if not customer:
+                            errors.append({"row": row_idx, "error": f"客户不存在: {row_data['customer_code']}"})
                             failure_count += 1
                             continue
-                        
-                        # 解析到期日期（可选）
-                        due_date = business_date
-                        if row_data.get('due_date'):
-                            try:
-                                due_date_str = row_data['due_date']
-                                for fmt in ['%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d']:
-                                    try:
-                                        due_date = dt.strptime(due_date_str, fmt).date()
-                                        break
-                                    except ValueError:
-                                        continue
-                            except Exception:
-                                pass
-                        
-                        # 查找客户/供应商并创建应收/应付单
-                        if is_receivable:
-                            customer = await Customer.filter(
-                                tenant_id=tenant_id,
-                                code=row_data['customer_code'],
-                                deleted_at__isnull=True
-                            ).first()
                             
-                            if not customer:
-                                errors.append({"row": row_idx, "error": f"客户不存在: {row_data['customer_code']}"})
-                                failure_count += 1
-                                continue
+                        # 生成应收单编码
+                        today = today_site_str()
+                        base_service = AppBaseService(Receivable)
+                        receivable_code = await base_service.generate_code(
+                            tenant_id, "RECEIVABLE_CODE", prefix=f"INIT-AR{today}"
+                        )
                             
-                            # 生成应收单编码
-                            today = today_site_str()
-                            base_service = AppBaseService(Receivable)
-                            receivable_code = await base_service.generate_code(
-                                tenant_id, "RECEIVABLE_CODE", prefix=f"INIT-AR{today}"
-                            )
+                        # 创建期初应收单
+                        await Receivable.create(
+                            tenant_id=tenant_id,
+                            uuid=str(uuid.uuid4()),
+                            receivable_code=receivable_code,
+                            source_type=row_data['source_type'],
+                            source_id=0,
+                            source_code=row_data['source_code'],
+                            customer_id=customer.id,
+                            customer_name=customer.name,
+                            total_amount=total_amount,
+                            received_amount=received_amount,
+                            remaining_amount=remaining_amount,
+                            due_date=due_date,
+                            status="未收款" if remaining_amount > 0 else "已收款",
+                            business_date=business_date,
+                            invoice_issued=bool(row_data.get('invoice_number')),
+                            invoice_number=row_data.get('invoice_number'),
+                            review_status="已审核",
+                            notes=f"期初应收导入（快照时间点：{to_api_isoformat(snapshot_time) if snapshot_time else '未指定'}）",
+                            created_by=created_by,
+                            updated_by=created_by,
+                        )
+                        success_count += 1
+                    else:
+                        supplier = await Supplier.filter(
+                            tenant_id=tenant_id,
+                            code=row_data['supplier_code'],
+                            deleted_at__isnull=True
+                        ).first()
                             
-                            # 创建期初应收单
-                            await Receivable.create(
-                                tenant_id=tenant_id,
-                                uuid=str(uuid.uuid4()),
-                                receivable_code=receivable_code,
-                                source_type=row_data['source_type'],
-                                source_id=0,
-                                source_code=row_data['source_code'],
-                                customer_id=customer.id,
-                                customer_name=customer.name,
-                                total_amount=total_amount,
-                                received_amount=received_amount,
-                                remaining_amount=remaining_amount,
-                                due_date=due_date,
-                                status="未收款" if remaining_amount > 0 else "已收款",
-                                business_date=business_date,
-                                invoice_issued=bool(row_data.get('invoice_number')),
-                                invoice_number=row_data.get('invoice_number'),
-                                review_status="已审核",
-                                notes=f"期初应收导入（快照时间点：{snapshot_time.strftime('%Y-%m-%d %H:%M:%S') if snapshot_time else '未指定'}）",
-                                created_by=created_by,
-                                updated_by=created_by,
-                            )
-                            success_count += 1
-                        else:
-                            supplier = await Supplier.filter(
-                                tenant_id=tenant_id,
-                                code=row_data['supplier_code'],
-                                deleted_at__isnull=True
-                            ).first()
+                        if not supplier:
+                            errors.append({"row": row_idx, "error": f"供应商不存在: {row_data['supplier_code']}"})
+                            failure_count += 1
+                            continue
                             
-                            if not supplier:
-                                errors.append({"row": row_idx, "error": f"供应商不存在: {row_data['supplier_code']}"})
-                                failure_count += 1
-                                continue
+                        # 生成应付单编码
+                        today = today_site_str()
+                        base_service = AppBaseService(Payable)
+                        payable_code = await base_service.generate_code(
+                            tenant_id, "PAYABLE_CODE", prefix=f"INIT-AP{today}"
+                        )
                             
-                            # 生成应付单编码
-                            today = today_site_str()
-                            base_service = AppBaseService(Payable)
-                            payable_code = await base_service.generate_code(
-                                tenant_id, "PAYABLE_CODE", prefix=f"INIT-AP{today}"
-                            )
-                            
-                            # 创建期初应付单
-                            await Payable.create(
-                                tenant_id=tenant_id,
-                                uuid=str(uuid.uuid4()),
-                                payable_code=payable_code,
-                                source_type=row_data['source_type'],
-                                source_id=0,
-                                source_code=row_data['source_code'],
-                                supplier_id=supplier.id,
-                                supplier_name=supplier.name,
-                                total_amount=total_amount,
-                                paid_amount=paid_amount,
-                                remaining_amount=remaining_amount,
-                                due_date=due_date,
-                                status="未付款" if remaining_amount > 0 else "已付款",
-                                business_date=business_date,
-                                invoice_received=bool(row_data.get('invoice_number')),
-                                invoice_number=row_data.get('invoice_number'),
-                                review_status="已审核",
-                                notes=f"期初应付导入（快照时间点：{snapshot_time.strftime('%Y-%m-%d %H:%M:%S') if snapshot_time else '未指定'}）",
-                                created_by=created_by,
-                                updated_by=created_by,
-                            )
-                            success_count += 1
+                        # 创建期初应付单
+                        await Payable.create(
+                            tenant_id=tenant_id,
+                            uuid=str(uuid.uuid4()),
+                            payable_code=payable_code,
+                            source_type=row_data['source_type'],
+                            source_id=0,
+                            source_code=row_data['source_code'],
+                            supplier_id=supplier.id,
+                            supplier_name=supplier.name,
+                            total_amount=total_amount,
+                            paid_amount=paid_amount,
+                            remaining_amount=remaining_amount,
+                            due_date=due_date,
+                            status="未付款" if remaining_amount > 0 else "已付款",
+                            business_date=business_date,
+                            invoice_received=bool(row_data.get('invoice_number')),
+                            invoice_number=row_data.get('invoice_number'),
+                            review_status="已审核",
+                            notes=f"期初应付导入（快照时间点：{to_api_isoformat(snapshot_time) if snapshot_time else '未指定'}）",
+                            created_by=created_by,
+                            updated_by=created_by,
+                        )
+                        success_count += 1
                     
-                except Exception as e:
-                    logger.error(f"处理第 {row_idx} 行数据时出错: {e}")
-                    errors.append({"row": row_idx, "error": f"处理数据时出错: {str(e)}"})
-                    failure_count += 1
-                    continue
+            except Exception as e:
+                logger.error(f"处理第 {row_idx} 行数据时出错: {e}")
+                errors.append({"row": row_idx, "error": f"处理数据时出错: {str(e)}"})
+                failure_count += 1
+                continue
         
         return {
             "success_count": success_count,

@@ -16,7 +16,7 @@ import type { DataNode } from 'antd/es/tree';
 import { QuickEntryIcon } from './QuickEntryIcon';
 import { generateQuickEntryGradient, type QuickEntryThemeStyle } from './quickEntryGradients';
 import { useThemeStore } from '../../stores/themeStore';
-
+import { getAntdModal } from '../../utils/antdAppApis';
 const { useToken } = theme;
 
 export interface QuickEntryItem {
@@ -156,7 +156,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
 
   // 右键快捷删除（非编辑态）
   const handleDeleteByContextMenu = (targetItem: QuickEntryItem) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('pages.dashboard.quickEntryDeleteTitle'),
       content: t('pages.dashboard.quickEntryDeleteConfirm', { name: targetItem.menu_name }),
       okText: t('common.delete'),

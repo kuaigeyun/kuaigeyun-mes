@@ -33,7 +33,7 @@ import {
 import { canDeleteSalesInvoice } from '../../../utils/salesInvoiceUi';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { formatDateTime } from '../../../../../utils/format';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const P = 'app.kuaicaiwu.salesInvoice';
 const SALES_INVOICE_RESOURCE = 'kuaicaiwu:sales-invoice';
 
@@ -193,7 +193,7 @@ const SalesInvoiceDetailPage: React.FC = () => {
 
   const approve = () => {
     if (!id || !data) return;
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t(`${P}.approvePass`),
       content: t(`${P}.approveConfirm`, { number: data.invoice_number?.trim() || t(`${P}.detailTitle`) }),
       onOk: async () => {
@@ -206,7 +206,7 @@ const SalesInvoiceDetailPage: React.FC = () => {
 
   const remove = () => {
     if (!id || !data) return;
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t(`${P}.deleteTitle`),
       content: t(`${P}.deleteConfirm`),
       okType: 'danger',
@@ -222,7 +222,7 @@ const SalesInvoiceDetailPage: React.FC = () => {
     voidReasonRef.current = '';
     reasonFieldKeyRef.current += 1;
     const rk = reasonFieldKeyRef.current;
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t(`${P}.voidTitle`),
       width: 480,
       content: (
@@ -254,7 +254,7 @@ const SalesInvoiceDetailPage: React.FC = () => {
     redLetterReasonRef.current = '';
     reasonFieldKeyRef.current += 1;
     const rk = reasonFieldKeyRef.current;
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t(`${P}.redLetterTitle`),
       width: 520,
       content: (

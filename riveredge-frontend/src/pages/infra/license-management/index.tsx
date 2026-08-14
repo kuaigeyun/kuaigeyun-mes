@@ -23,6 +23,7 @@ import {
   revokePlatformLicense,
   type PlatformLicenseItem,
 } from '../../../services/licenseCenter';
+import { getAntdModal } from '../../../utils/antdAppApis';
 
 const GLOBAL_SCOPE = '*';
 
@@ -153,7 +154,7 @@ export default function LicenseManagementPage() {
             danger
             disabled={!record.is_active}
             onClick={() => {
-              Modal.confirm({
+              getAntdModal().confirm({
                 title: t('pages.infra.licenseCenter.revokeTitle', { defaultValue: '撤销许可证' }),
                 content: t('pages.infra.licenseCenter.revokeConfirm', { defaultValue: '撤销后将不能再用于新激活，是否继续？' }),
                 onOk: async () => {

@@ -19,6 +19,7 @@ import {
   TaskActionRequest,
 } from '../../../services/userTask';
 import { handleError } from '../../../utils/errorHandler';
+import { formatDateTimeBySiteSetting, formatDateBySiteSetting } from '../../../utils/format';
 
 const { Text, Paragraph } = Typography;
 
@@ -196,7 +197,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ taskType, onRefresh }) => {
           <Space size="small">
             {getStatusTag(task.status)}
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {new Date(task.submitted_at).toLocaleDateString()}
+              {formatDateBySiteSetting(task.submitted_at)}
             </Text>
           </Space>
           {task.status === 'pending' && taskType === 'pending' && (
@@ -306,11 +307,11 @@ const KanbanView: React.FC<KanbanViewProps> = ({ taskType, onRefresh }) => {
                 {getStatusTag(selectedTask.status)}
               </Descriptions.Item>
               <Descriptions.Item label={t('pages.personal.tasks.submittedAt')}>
-                {new Date(selectedTask.submitted_at).toLocaleString()}
+                {formatDateTimeBySiteSetting(selectedTask.submitted_at)}
               </Descriptions.Item>
               {selectedTask.completed_at && (
                 <Descriptions.Item label={t('pages.personal.tasks.completedAt')}>
-                  {new Date(selectedTask.completed_at).toLocaleString()}
+                  {formatDateTimeBySiteSetting(selectedTask.completed_at)}
                 </Descriptions.Item>
               )}
               {selectedTask.current_node && (

@@ -62,7 +62,7 @@ import FilePreviewModal from '../../../../components/file-preview';
 import FileStorageSettingsModal from './FileStorageSettingsModal';
 import { useNavigationMenuTreeQuery } from '../../../../hooks/useNavigationMenuTreeQuery';
 import { collectNavigationMenuPaths } from '../../../../utils/navigationMenuPaths';
-import { 
+import {
   FILE_ATTACHMENTS_GROUP_KEY,
   FILE_SYSTEM_FOLDERS_GROUP_KEY,
   FILE_USER_FOLDERS_GROUP_KEY,
@@ -73,6 +73,8 @@ import {
   isUserFolderCategory,
   resolveFileUploadCategoryDisplayName,
 } from '../../../../core/constants/fileUploadCategories';
+import { getAntdModal } from '../../../../utils/antdAppApis';
+import { formatDateTimeBySiteSetting } from '../../../../utils/format';
 
 /**
  * 判断是否为图片类型（用于图标视图缩略图与预览）
@@ -832,7 +834,7 @@ const FileListPage: React.FC = () => {
 
   const handleDeleteFolder = useCallback((category: string) => {
     const filesInFolder = allFiles.filter(file => file.category === category);
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('pages.system.files.contextDeleteFolder'),
       content: t('pages.system.files.deleteFolderConfirm'),
       okType: 'danger',
@@ -1125,7 +1127,7 @@ const FileListPage: React.FC = () => {
       width: '20%',
       sorter: true,
       sortOrder: sortField === 'updated_at' ? sortOrder : null,
-      render: (_, record) => new Date(record.updated_at).toLocaleString('zh-CN'),
+      render: (_, record) => formatDateTimeBySiteSetting(record.updated_at),
     },
   ];
 
@@ -1249,7 +1251,7 @@ const FileListPage: React.FC = () => {
                 {formatFileSize(file.file_size)}
               </span>
               <span style={{ color: '#999', fontSize: '12px', width: '180px' }}>
-                {new Date(file.updated_at).toLocaleString('zh-CN')}
+                {formatDateTimeBySiteSetting(file.updated_at)}
               </span>
             </Space>
           </div>

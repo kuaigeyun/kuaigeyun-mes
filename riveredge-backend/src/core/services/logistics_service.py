@@ -12,7 +12,7 @@ import os
 from typing import List, Dict, Any
 from datetime import datetime, timedelta
 from loguru import logger
-from core.utils.timezone_utils import resolve_business_datetime
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 
 
 class LogisticsService:
@@ -63,17 +63,17 @@ class LogisticsService:
         now = resolve_business_datetime()
         traces = [
             {
-                "time": (now - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                "time": to_api_isoformat(now - timedelta(days=2)),
                 "status": "已揽收",
                 "location": "【发件城市】已揽收",
             },
             {
-                "time": (now - timedelta(days=1, hours=12)).strftime("%Y-%m-%d %H:%M:%S"),
+                "time": to_api_isoformat(now - timedelta(days=1, hours=12)),
                 "status": "运输中",
                 "location": "【转运中心】快件已到达转运中心",
             },
             {
-                "time": (now - timedelta(hours=6)).strftime("%Y-%m-%d %H:%M:%S"),
+                "time": to_api_isoformat(now - timedelta(hours=6)),
                 "status": "派送中",
                 "location": "【派件城市】快件正在派送中",
             },

@@ -1,4 +1,4 @@
-import { formatQuantity } from '../../../../../utils/format';
+import { formatQuantity, todaySiteDateString } from '../../../../../utils/format';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
 import { App, Popover, Select, Space, Tag, Typography } from 'antd';
@@ -545,7 +545,7 @@ const BatchInventoryQuery: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `batch-inventory-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `batch-inventory-${todaySiteDateString()}.csv`;
       a.click();
       URL.revokeObjectURL(url);
       messageApi.success(t('app.kuaizhizao.warehouseCommon.exportSuccess', { count: items.length }));

@@ -35,6 +35,7 @@ import {
   normalizeEquipmentListResponse,
   resolveApprovalDocListParams,
 } from '../../../utils/equipmentListCore';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const P = 'app.kuaizhizao.equipmentOps.sparePartRequisition';
 const RESOURCE = 'kuaizhizao:spare-part-requisition';
@@ -152,7 +153,7 @@ const SparePartRequisitionsPage: React.FC = () => {
   };
 
   const handleDelete = async (keys: React.Key[]) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('common.batchDeleteTitle'),
       content: t('common.batchDeleteContent', { count: keys.length }),
       onOk: async () => {

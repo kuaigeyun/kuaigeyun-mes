@@ -24,7 +24,7 @@ import { useCurrentUser } from '../hooks/useCurrentUser';
 // 核心页面（立即加载，首屏必需）
 import IndexPage from '../pages';
 import NotFoundPage from '../pages/404';
-
+import { getAntdModal } from '../utils/antdAppApis';
 // 登录页懒加载（按需加载以减小主包）。Suspense fallback 不用骨架屏：与独立 login.html 入口一致，chunk 就绪前留白即可。
 // 独立 MPA：开发/生产均优先 login.html；本懒加载路由作为主 SPA 内跳转与无 MPA 时的回退。
 const LoginPage = React.lazy(() => import('../pages/login'));
@@ -97,7 +97,7 @@ const RoutePermissionGuard: React.FC<{ permissionCodes: string[]; children: Reac
   useEffect(() => {
     if (denied && !notifiedRef.current) {
       notifiedRef.current = true;
-      Modal.warning({
+      getAntdModal().warning({
         title: t('common.permissionDenied'),
         content: t('common.permissionDeniedDetail', { permissions: permissionCodes.join(' / ') }),
       });

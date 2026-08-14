@@ -303,6 +303,43 @@ export const materialApi = {
   },
 
   /**
+   * 批量创建物料（导入分片，单次最多 200）
+   */
+  bulkCreate: async (
+    items: MaterialCreate[],
+  ): Promise<{
+    createdCount: number;
+    failedCount: number;
+    requestedCount: number;
+    createdUuids: string[];
+    failedItems: Array<{ index: number; reason: string; mainCode?: string }>;
+  }> => {
+    const raw = (await api.post('/apps/master-data/materials/batch-create', {
+      items,
+    })) as Record<string, unknown>;
+    const failedRaw = Array.isArray(raw?.failedItems)
+      ? (raw.failedItems as Array<Record<string, unknown>>)
+      : Array.isArray(raw?.failed_items)
+        ? (raw.failed_items as Array<Record<string, unknown>>)
+        : [];
+    return {
+      createdCount: Number(raw?.createdCount ?? raw?.created_count ?? 0) || 0,
+      failedCount: Number(raw?.failedCount ?? raw?.failed_count ?? 0) || 0,
+      requestedCount: Number(raw?.requestedCount ?? raw?.requested_count ?? items.length) || items.length,
+      createdUuids: Array.isArray(raw?.createdUuids)
+        ? (raw.createdUuids as string[])
+        : Array.isArray(raw?.created_uuids)
+          ? (raw.created_uuids as string[])
+          : [],
+      failedItems: failedRaw.map((f) => ({
+        index: Number(f.index ?? 0) || 0,
+        reason: String(f.reason ?? ''),
+        mainCode: (f.mainCode ?? f.main_code) as string | undefined,
+      })),
+    };
+  },
+
+  /**
    * 获取物料列表
    */
   list: async (params?: MaterialListParams): Promise<MaterialListResponse> => {

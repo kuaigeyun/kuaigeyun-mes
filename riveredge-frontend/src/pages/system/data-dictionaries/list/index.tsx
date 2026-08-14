@@ -56,7 +56,8 @@ import {
   resolveSystemDictionaryName,
 } from '../../../../utils/systemDictionaryI18n';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
-
+import { getAntdModal } from '../../../../utils/antdAppApis';
+import { todaySiteDateString } from '../../../../utils/format';
 const DataDictionaryListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -177,7 +178,7 @@ const DataDictionaryListPage: React.FC = () => {
       messageApi.warning(t('pages.system.selectFirst'));
       return;
     }
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('common.confirm'),
       content: t('field.dataDictionary.batchDeleteConfirm', { count: keys.length }),
       okText: t('common.confirm'),
@@ -635,7 +636,7 @@ const DataDictionaryListPage: React.FC = () => {
             }
             await downloadRecordsAsXlsx(
               items as Array<Record<string, unknown>>,
-              `data-dictionaries-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              `data-dictionaries-${todaySiteDateString()}.xlsx`,
             );
             messageApi.success(t('common.exportSuccess', { count: items.length }));
           } catch (error: any) {

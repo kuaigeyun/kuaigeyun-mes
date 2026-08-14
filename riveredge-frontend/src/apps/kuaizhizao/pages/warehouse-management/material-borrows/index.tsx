@@ -37,7 +37,7 @@ import { useTranslation } from 'react-i18next';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import { getDepartmentTree } from '../../../../../services/department';
 import { FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
-import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
@@ -52,7 +52,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 interface MaterialBorrow {
   id?: number;
   tenant_id?: number;
@@ -342,7 +342,7 @@ const MaterialBorrowsPage: React.FC = () => {
   };
 
   const handleConfirm = async (record: MaterialBorrow) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.materialBorrow.msg.confirmTitle'),
       content: t('app.kuaizhizao.materialBorrow.msg.confirmContent', { code: record.borrow_code }),
       onOk: async () => {
@@ -360,7 +360,7 @@ const MaterialBorrowsPage: React.FC = () => {
   };
 
   const handleWithdraw = async (record: MaterialBorrow) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.materialBorrow.msg.withdrawTitle'),
       content: t('app.kuaizhizao.materialBorrow.msg.withdrawContent', { code: record.borrow_code }),
       onOk: async () => {
@@ -377,7 +377,7 @@ const MaterialBorrowsPage: React.FC = () => {
   };
 
   const handleDelete = async (record: MaterialBorrow) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.materialBorrow.msg.deleteTitle'),
       content: t('app.kuaizhizao.materialBorrow.msg.deleteContent', { code: record.borrow_code }),
       onOk: async () => {
@@ -621,7 +621,7 @@ const MaterialBorrowsPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `material-borrows-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `material-borrows-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('app.kuaizhizao.materialBorrow.msg.exportSuccess', { count: items.length }));
             } catch (error: any) {

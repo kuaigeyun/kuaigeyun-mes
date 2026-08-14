@@ -30,15 +30,14 @@ from apps.kuaizhizao.models.outsource_order import OutsourceOrder
 from apps.kuaizhizao.utils.outsource_operation import occupies_factory_capacity
 from apps.master_data.models.work_calendar import StationUnavailableWindow
 from apps.master_data.models.factory import Workstation
-from core.utils.timezone_utils import make_aware, to_site_timezone
-from infra.config.infra_config import infra_settings
+from core.utils.timezone_utils import make_aware, site_timezone_name, to_site_timezone
 
 
 PRIORITY_WEIGHT = {"urgent": 0, "high": 1, "normal": 2, "low": 3}
 
 
 def _business_tz_name() -> str:
-    return infra_settings.TIMEZONE or "Asia/Shanghai"
+    return site_timezone_name()
 
 
 def _scheduling_dt(value: datetime) -> datetime:

@@ -48,6 +48,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { todaySiteDateString } from '../../../../utils/format';
 
 dayjs.extend(relativeTime);
 
@@ -763,7 +764,7 @@ const PrintTemplateListPage: React.FC = () => {
             }
             await downloadRecordsAsXlsx(
               items as Array<Record<string, unknown>>,
-              `print-templates-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              `print-templates-${todaySiteDateString()}.xlsx`,
             );
             messageApi.success(t('pages.system.printTemplates.exportSuccess'));
           }}

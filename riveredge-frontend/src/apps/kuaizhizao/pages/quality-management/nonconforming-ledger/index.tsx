@@ -35,7 +35,7 @@ import {
   renderNcLedgerStatusTag,
 } from '../components/qualityMeta';
 import { DowngradeDispositionFields } from '../components/DowngradeDispositionFields';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
 const EIGHT_D_RESOURCE = 'kuaizhizao:quality-management-eight-d-reports';
 
@@ -90,7 +90,7 @@ const NonconformingLedgerPage: React.FC = () => {
   const ncDispositionValueEnum = useMemo(() => buildNcDispositionValueEnum(t), [t]);
 
   const handleStart8d = (row: DefectLedgerItem) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.quality.nc.modal.start8dTitle'),
       content: t('app.kuaizhizao.quality.nc.modal.start8dContent', { code: row.code }),
       onOk: async () => {

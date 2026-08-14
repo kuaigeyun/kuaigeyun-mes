@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormDigit, ProFormDateTimePicker, ProFormInstance, ProFormGroup } from '@ant-design/pro-components';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Modal, Progress, List, Typography, Divider, Spin, Alert } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Divider, Spin, Alert } from 'antd';
 import { CheckOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined, EditOutlined, DeleteOutlined, SyncOutlined, StarOutlined, StarFilled } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
@@ -42,7 +42,8 @@ import { getPlatformSettings, updatePlatformSettings } from '../../../../service
 // @ts-ignore
 import { apiRequest } from '../../../../services/api';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
-
+import { getAntdModal } from '../../../../utils/antdAppApis';
+import { importInChunksViaPerItemCreate } from '../../../../utils/chunkedBulkImport';
 const statusTagMap: Record<TenantStatus, { color: string; textKey: string }> = {
   [TenantStatus.ACTIVE]: { color: 'success', textKey: 'pages.infra.tenant.statusActive' },
   [TenantStatus.INACTIVE]: { color: 'default', textKey: 'pages.infra.tenant.statusInactive' },
@@ -553,7 +554,7 @@ const SuperAdminTenantList: React.FC = () => {
     });
 
     if (errors.length > 0) {
-      Modal.error({
+      getAntdModal().error({
         title: t('pages.infra.tenant.importValidationFailed'),
         width: 600,
         content: (
@@ -574,100 +575,47 @@ const SuperAdminTenantList: React.FC = () => {
       return;
     }
 
-    const progressModal = Modal.info({
-      title: t('pages.infra.tenant.importing'),
-      width: 600,
-      content: (
-        <div>
-          <Progress percent={0} status="active" />
-          <p style={{ marginTop: 16 }}>{t('pages.infra.tenant.importPreparing', { count: importData.length })}</p>
-        </div>
-      ),
-      okButtonProps: { style: { display: 'none' } },
-    });
-
-    // 批量创建组织
-    const results: Array<{ success: boolean; rowIndex: number; message: string; data?: Tenant }> = [];
-    let successCount = 0;
-    let failCount = 0;
-
-    for (let i = 0; i < importData.length; i++) {
-      const item = importData[i];
-      const percent = Math.round(((i + 1) / importData.length) * 100);
-
-      try {
-        // 使用平台超级管理员接口创建组织
-        const tenant = await apiRequest<Tenant>('/infra/tenants', {
+    const result = await importInChunksViaPerItemCreate({
+      items: importData,
+      createOne: async (item) => {
+        return apiRequest<Tenant>('/infra/tenants', {
           method: 'POST',
           data: item.data,
         });
+      },
+      title: t('pages.infra.tenant.importing'),
+      chunkSize: 100,
+      concurrency: 4,
+      rowNumberForIndex: (_i, item) => item.rowIndex,
+      showResultModal: false,
+    });
 
-        successCount++;
-        results.push({
-          success: true,
-          rowIndex: item.rowIndex,
-          message: t('pages.infra.tenant.importRowSuccess', { name: item.data.name, domain: item.data.domain }),
-          data: tenant,
-        });
-
-        progressModal.update({
-          content: (
-            <div>
-              <Progress percent={percent} status="active" />
-              <p style={{ marginTop: 16 }}>
-                {t('pages.infra.tenant.importProgress', { current: i + 1, total: importData.length })}
-              </p>
-              <p style={{ marginTop: 8, color: '#52c41a' }}>
-                {t('pages.infra.tenant.importProgressCount', { success: successCount, fail: failCount })}
-              </p>
-            </div>
-          ),
-        });
-      } catch (error: any) {
-        failCount++;
-        const errorMessage = error?.message || error?.detail || t('pages.infra.tenant.operationFailed');
-        results.push({
-          success: false,
-          rowIndex: item.rowIndex,
-          message: t('pages.infra.tenant.importRowFail', { row: item.rowIndex, message: errorMessage }),
-        });
-
-        progressModal.update({
-          content: (
-            <div>
-              <Progress percent={percent} status="active" />
-              <p style={{ marginTop: 16 }}>
-                {t('pages.infra.tenant.importProgress', { current: i + 1, total: importData.length })}
-              </p>
-              <p style={{ marginTop: 8, color: '#52c41a' }}>
-                {t('pages.infra.tenant.importProgressCount', { success: successCount, fail: failCount })}
-              </p>
-            </div>
-          ),
-        });
-      }
-    }
-
-    // 关闭进度 Modal，显示结果
-    progressModal.destroy();
-
-    const failedResults = results.filter(r => !r.success);
-    if (failedResults.length > 0) {
-      Modal.warning({
+    if (result.failureCount > 0) {
+      getAntdModal().warning({
         title: t('pages.infra.tenant.importPartialTitle'),
         width: 700,
         content: (
           <div>
             <p>
-              <strong>{t('pages.infra.tenant.importResult', { success: successCount, fail: failCount })}</strong>
+              <strong>
+                {t('pages.infra.tenant.importResult', {
+                  success: result.successCount,
+                  fail: result.failureCount,
+                })}
+              </strong>
             </p>
             <p style={{ marginTop: 16 }}>{t('pages.infra.tenant.importFailedRecords')}</p>
             <List
               size="small"
-              dataSource={failedResults}
+              dataSource={result.errors}
               renderItem={(item) => (
                 <List.Item>
-                  <Typography.Text type="danger">{item.message}</Typography.Text>
+                  <Typography.Text type="danger">
+                    {t('pages.infra.tenant.importRowFail', {
+                      row: item.row,
+                      message: item.error,
+                    })}
+                  </Typography.Text>
                 </List.Item>
               )}
             />
@@ -678,7 +626,7 @@ const SuperAdminTenantList: React.FC = () => {
     } else {
       Modal.success({
         title: t('pages.infra.tenant.importSuccessTitle'),
-        content: t('pages.infra.tenant.importSuccessContent', { count: successCount }),
+        content: t('pages.infra.tenant.importSuccessContent', { count: result.successCount }),
         onOk: () => actionRef.current?.reload(),
       });
     }

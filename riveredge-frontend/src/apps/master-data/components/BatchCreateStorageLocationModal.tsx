@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Modal, Form, InputNumber, Select, Input, App, Table, Steps, Typography, Button, Space } from 'antd';
 import { storageLocationApi, storageAreaApi } from '../services/warehouse';
 import type { StorageLocationCreate, StorageArea } from '../types/warehouse';
-import { batchImport } from '../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../utils/chunkedBulkImport';
 
 /** 批量建位参数 */
 export interface BatchCreateStorageLocationParams {
@@ -134,11 +134,12 @@ export const BatchCreateStorageLocationModal: React.FC<BatchCreateStorageLocatio
 
     setLoading(true);
     try {
-      const result = await batchImport({
+      const result = await importInChunksViaPerItemCreate({
         items: previewItems,
-        importFn: async (item) => storageLocationApi.create(item),
+        createOne: async (item, _index) => storageLocationApi.create(item),
         title: t('field.storageLocation.batchCreateTitle'),
-        concurrency: 5,
+        chunkSize: 100,
+        concurrency: 4,
       });
 
       if (result.failureCount > 0) {

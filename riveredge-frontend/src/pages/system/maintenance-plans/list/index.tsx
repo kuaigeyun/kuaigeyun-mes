@@ -43,6 +43,7 @@ import {
 import { getEquipmentList, Equipment } from '../../../../services/equipment';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { todaySiteDateString } from '../../../../utils/format';
 
 /**
  * 维护保养计划管理列表页面组件
@@ -516,7 +517,7 @@ const MaintenancePlanListPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `maintenance-plans-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `maintenance-plans-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('pages.system.maintenancePlans.exportSuccess', { count: items.length }));
             } catch (error: any) {

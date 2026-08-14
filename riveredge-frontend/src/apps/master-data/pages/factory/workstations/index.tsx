@@ -39,7 +39,7 @@ import {
 import { WorkstationFormModal } from '../../../components/WorkstationFormModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { Workstation, WorkstationCreate, ProductionLine } from '../../../types/factory';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
   buildFactoryImportTemplate,
@@ -52,7 +52,8 @@ import {
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
 /**
  * 工位管理列表页面组件
  */
@@ -217,7 +218,7 @@ const WorkstationsPage: React.FC = () => {
 
     // 如果产线列表为空，提示用户先创建产线
     if (productionLines.length === 0) {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.importDisabled'),
         content: t('app.master-data.importNoProductionLine'),
       });
@@ -362,7 +363,7 @@ const WorkstationsPage: React.FC = () => {
     if (errors.length > 0) {
       const hasProductionLineError = errors.some(e => e.kind === 'productionLine');
       
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.dataValidationFailed'),
         width: 700,
         content: (
@@ -412,18 +413,19 @@ const WorkstationsPage: React.FC = () => {
 
     // 批量导入
     try {
-      const result = await batchImport({
+      const result = await importInChunksViaPerItemCreate({
         items: importData,
-        importFn: async (item: WorkstationCreate) => {
+        createOne: async (item: WorkstationCreate, _index) => {
           return await workstationApi.create(item);
         },
         title: t('app.master-data.workstations.importTitle'),
-        concurrency: 5,
+        chunkSize: 100,
+        concurrency: 4,
       });
 
       // 显示导入结果
       if (result.failureCount > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.master-data.importPartialResultTitle'),
           width: 600,
           content: (
@@ -479,15 +481,15 @@ const WorkstationsPage: React.FC = () => {
           return;
         }
         exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
-        filename = `${t('app.master-data.workstations.exportFilenameSelected', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+        filename = `${t('app.master-data.workstations.exportFilenameSelected', { date: todaySiteDateString() })}.csv`;
       } else if (type === 'currentPage' && currentPageData) {
         // 导出当前页数据
         exportData = currentPageData;
-        filename = `${t('app.master-data.workstations.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+        filename = `${t('app.master-data.workstations.exportFilenameCurrentPage', { date: todaySiteDateString() })}.csv`;
       } else {
         // 导出全部数据
         exportData = await fetchAllListItems((p) => workstationApi.list({ ...p, ...lastListParamsRef.current }));
-        filename = `${t('app.master-data.workstations.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+        filename = `${t('app.master-data.workstations.exportFilenameAll', { date: todaySiteDateString() })}.csv`;
       }
 
       if (exportData.length === 0) {
@@ -511,7 +513,7 @@ const WorkstationsPage: React.FC = () => {
           plLabel,
           item.description || '',
           item.isActive ? t('common.enabled') : t('common.disabled'),
-          item.createdAt ? new Date(item.createdAt).toLocaleString(i18n.language) : '',
+          item.createdAt ? formatDateTimeBySiteSetting(item.createdAt) : '',
         ];
       });
 

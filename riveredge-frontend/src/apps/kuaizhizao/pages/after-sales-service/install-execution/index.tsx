@@ -44,6 +44,7 @@ import {
   renderAfterSalesStatusTag,
   renderAfterSalesTypeMarker,
 } from '../shared/afterSalesListPresentation';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const RESOURCE = 'kuaizhizao:after-sales-install';
 
@@ -127,7 +128,7 @@ const InstallExecutionPage: React.FC = () => {
         failed: failed.length,
       }),
     );
-    Modal.error({
+    getAntdModal().error({
       title: t('app.kuaizhizao.installExecution.batchDeleteFailedTitle'),
       content: (
         <div style={{ maxHeight: 280, overflowY: 'auto' }}>

@@ -42,7 +42,8 @@ import {
 } from '../../../services/initial-data';
 import dayjs, { Dayjs } from 'dayjs';
 import { formatDateTime } from '../../../../../utils/format';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { importExcelMatrixInChunks } from '../../../../../utils/chunkedBulkImport';
 /** 与后端 header_map 一致的默认列（CSV 模板同步） */
 const INV_HEADER_KEYS = [
   'app.kuaizhizao.initialData.csvHeaders.material_code',
@@ -261,81 +262,111 @@ const InitialDataImportPage: React.FC = () => {
     }
   };
 
-  const handleImportReceivablesPayables = async (data: any[][]) => {
+  const runInitialMatrixImport = async (
+    data: any[][],
+    title: string,
+    importChunk: (matrix: any[][]) => Promise<InitialInventoryImportResponse>,
+  ): Promise<InitialInventoryImportResponse | null> => {
     try {
-      const result = await importInitialReceivablesPayables(data, snapshotIso());
-      showImportErrors(t('app.kuaizhizao.initialData.importArTitle'), result);
-      if (result.failure_count === 0 && result.success_count > 0) {
-        messageApi.success(
-          t('app.kuaizhizao.initialData.importArOk', { n: result.success_count })
-        );
-        setReceivablesPayablesImportVisible(false);
-        setArDone(true);
-        setArSkipped(false);
-        await patchWizardCountdown({
-          stage: 'receivables_payables',
-          stage_status: 'completed',
-          wizard_step: 2,
-        });
-      } else if (result.failure_count > 0) {
-        messageApi.warning(
-          t('app.kuaizhizao.initialData.importPartial', {
-            ok: result.success_count,
-            bad: result.failure_count,
-          })
-        );
-      }
+      const result = await importExcelMatrixInChunks({
+        data,
+        hasExampleRow: true,
+        title,
+        importChunk,
+      });
+      return {
+        success_count: result.success_count,
+        failure_count: result.failure_count,
+        errors: result.errors,
+        total: result.total,
+      };
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaizhizao.initialData.importFailed'));
+      return null;
+    }
+  };
+
+  const handleImportReceivablesPayables = async (data: any[][]) => {
+    const snap = snapshotIso();
+    const result = await runInitialMatrixImport(
+      data,
+      t('app.kuaizhizao.initialData.importArTitle'),
+      (matrix) => importInitialReceivablesPayables(matrix, snap),
+    );
+    if (!result) return;
+    showImportErrors(t('app.kuaizhizao.initialData.importArTitle'), result);
+    if (result.failure_count === 0 && result.success_count > 0) {
+      messageApi.success(
+        t('app.kuaizhizao.initialData.importArOk', { n: result.success_count })
+      );
+      setReceivablesPayablesImportVisible(false);
+      setArDone(true);
+      setArSkipped(false);
+      await patchWizardCountdown({
+        stage: 'receivables_payables',
+        stage_status: 'completed',
+        wizard_step: 2,
+      });
+    } else if (result.failure_count > 0) {
+      messageApi.warning(
+        t('app.kuaizhizao.initialData.importPartial', {
+          ok: result.success_count,
+          bad: result.failure_count,
+        })
+      );
     }
   };
 
   const handleImportWIP = async (data: any[][]) => {
-    try {
-      const result = await importInitialWIP(data, snapshotIso());
-      showImportErrors(t('app.kuaizhizao.initialData.importWipTitle'), result);
-      if (result.failure_count === 0 && result.success_count > 0) {
-        messageApi.success(
-          t('app.kuaizhizao.initialData.importWipOk', { n: result.success_count })
-        );
-        setWipImportVisible(false);
-        setWipDone(true);
-        setWipSkipped(false);
-        await patchWizardCountdown({ stage: 'wip', stage_status: 'completed', wizard_step: 1 });
-      } else if (result.failure_count > 0) {
-        messageApi.warning(
-          t('app.kuaizhizao.initialData.importPartial', {
-            ok: result.success_count,
-            bad: result.failure_count,
-          })
-        );
-      }
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.initialData.importFailed'));
+    const snap = snapshotIso();
+    const result = await runInitialMatrixImport(
+      data,
+      t('app.kuaizhizao.initialData.importWipTitle'),
+      (matrix) => importInitialWIP(matrix, snap),
+    );
+    if (!result) return;
+    showImportErrors(t('app.kuaizhizao.initialData.importWipTitle'), result);
+    if (result.failure_count === 0 && result.success_count > 0) {
+      messageApi.success(
+        t('app.kuaizhizao.initialData.importWipOk', { n: result.success_count })
+      );
+      setWipImportVisible(false);
+      setWipDone(true);
+      setWipSkipped(false);
+      await patchWizardCountdown({ stage: 'wip', stage_status: 'completed', wizard_step: 1 });
+    } else if (result.failure_count > 0) {
+      messageApi.warning(
+        t('app.kuaizhizao.initialData.importPartial', {
+          ok: result.success_count,
+          bad: result.failure_count,
+        })
+      );
     }
   };
 
   const handleImportInventory = async (data: any[][]) => {
-    try {
-      const result = await importInitialInventory(data, snapshotIso());
-      showImportErrors(t('app.kuaizhizao.initialData.importInvTitle'), result);
-      if (result.failure_count === 0 && result.success_count > 0) {
-        messageApi.success(
-          t('app.kuaizhizao.initialData.importInvOk', { n: result.success_count })
-        );
-        setImportVisible(false);
-        setInventoryGatePassed(true);
-        await patchWizardCountdown({ stage: 'inventory', stage_status: 'completed', wizard_step: 0 });
-      } else if (result.failure_count > 0) {
-        messageApi.warning(
-          t('app.kuaizhizao.initialData.importPartial', {
-            ok: result.success_count,
-            bad: result.failure_count,
-          })
-        );
-      }
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.initialData.importFailed'));
+    const snap = snapshotIso();
+    const result = await runInitialMatrixImport(
+      data,
+      t('app.kuaizhizao.initialData.importInvTitle'),
+      (matrix) => importInitialInventory(matrix, snap),
+    );
+    if (!result) return;
+    showImportErrors(t('app.kuaizhizao.initialData.importInvTitle'), result);
+    if (result.failure_count === 0 && result.success_count > 0) {
+      messageApi.success(
+        t('app.kuaizhizao.initialData.importInvOk', { n: result.success_count })
+      );
+      setImportVisible(false);
+      setInventoryGatePassed(true);
+      await patchWizardCountdown({ stage: 'inventory', stage_status: 'completed', wizard_step: 0 });
+    } else if (result.failure_count > 0) {
+      messageApi.warning(
+        t('app.kuaizhizao.initialData.importPartial', {
+          ok: result.success_count,
+          bad: result.failure_count,
+        })
+      );
     }
   };
 
@@ -381,7 +412,7 @@ const InitialDataImportPage: React.FC = () => {
   };
 
   const confirmSkipWip = () => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.initialData.skipWipTitle'),
       content: t('app.kuaizhizao.initialData.skipWipBody'),
       okText: t('app.kuaizhizao.initialData.skipConfirm'),
@@ -404,7 +435,7 @@ const InitialDataImportPage: React.FC = () => {
   };
 
   const confirmSkipAr = () => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.initialData.skipArTitle'),
       content: t('app.kuaizhizao.initialData.skipArBody'),
       okText: t('app.kuaizhizao.initialData.skipConfirm'),

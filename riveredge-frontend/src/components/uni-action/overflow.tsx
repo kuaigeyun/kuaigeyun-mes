@@ -23,7 +23,7 @@ import {
 } from './actionText'
 import { rowActionSortRank } from './actionCatalog'
 import { normalizeActionTree } from './normalize'
-
+import { getAntdModal } from '../../utils/antdAppApis';
 /**
  * 行内默认仅直出基础动作（详情/编辑/删除等），其余动作折叠到「更多」，
  * 以收窄操作列宽度并提升右侧固定列稳定性；「更多」仅 1 项时仍直出。
@@ -262,7 +262,7 @@ function toMenuItem(node: React.ReactNode, key: string) {
         const descriptionNode = popProps.description as React.ReactNode
         const hasDescription =
           descriptionNode != null && descriptionNode !== false && descriptionNode !== ''
-        Modal.confirm({
+        getAntdModal().confirm({
           // 无 description 时把问句放在 content，布局接近行内 Popconfirm（图标 + 文案）
           title: hasDescription ? titleNode : undefined,
           content: hasDescription ? descriptionNode : titleNode,

@@ -1,0 +1,1 @@
+import{w as i}from"./clearSessionQueries-DKtNbeDi.js";import"./vendor-DDW-N5Dq.js";function e(){return i("/apps/kuaiiot/config/notification-rules/load-presets",{method:"POST"})}export{e as loadKuaiiotNotificationRulePresets};

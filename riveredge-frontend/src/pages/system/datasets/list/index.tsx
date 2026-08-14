@@ -49,7 +49,8 @@ import {
   IntegrationConfig,
 } from '../../../../services/integrationConfig';
 import { rowActionKind } from '../../../../components/uni-action';
-
+import { getAntdModal } from '../../../../utils/antdAppApis';
+import { todaySiteDateString } from '../../../../utils/format';
 /**
  * 数据集管理列表页面组件
  */
@@ -329,7 +330,7 @@ const DatasetListPage: React.FC = () => {
       messageApi.warning(t('pages.system.datasets.selectToDelete'));
       return;
     }
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('pages.system.datasets.confirmBatchDelete', { count: selectedRowKeys.length }),
       okText: t('common.confirm'),
       cancelText: t('common.cancel'),
@@ -805,7 +806,7 @@ const DatasetListPage: React.FC = () => {
             await downloadRecordsAsXlsx(
               items as Array<Record<string, unknown>>,
               t('pages.system.datasets.exportFileName', {
-                date: new Date().toISOString().slice(0, 10),
+                date: todaySiteDateString(),
               }),
             );
             messageApi.success(t('pages.system.datasets.exportSuccess'));

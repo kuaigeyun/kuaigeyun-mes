@@ -55,7 +55,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { resolveDeliveryNoticeQualityCertificates } from '../../../services/print';
 import { SafetyCertificateOutlined } from '@ant-design/icons';
-import {formatDateTime, formatQuantity} from '../../../../../utils/format';
+import { formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
@@ -71,7 +71,7 @@ import { salesDeliveryCapabilityReasonMessage } from '../../../../../hooks/useDo
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 interface DeliveryNotice {
   id?: number;
   notice_code?: string;
@@ -393,7 +393,7 @@ const DeliveryNotesPage: React.FC = () => {
   };
 
   const handleSend = (record: DeliveryNotice) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.deliveryNote.msg.sendTitle'),
       content: t('app.kuaizhizao.deliveryNote.msg.sendContent', { code: record.notice_code }),
       onOk: async () => {
@@ -411,7 +411,7 @@ const DeliveryNotesPage: React.FC = () => {
   };
 
   const handleDelete = (record: DeliveryNotice) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.deliveryNote.msg.deleteTitle'),
       content: t('app.kuaizhizao.deliveryNote.msg.deleteContent', { code: record.notice_code }),
       onOk: async () => {
@@ -1236,7 +1236,7 @@ const DeliveryNotesPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `delivery-notes-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `delivery-notes-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('app.kuaizhizao.deliveryNote.msg.exportSuccess', { count: items.length }));
             } catch (error: any) {

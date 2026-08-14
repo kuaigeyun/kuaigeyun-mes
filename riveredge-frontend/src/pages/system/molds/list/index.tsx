@@ -42,6 +42,7 @@ import {
 } from '../../../../services/mold';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { todaySiteDateString } from '../../../../utils/format';
 
 /**
  * 模具管理列表页面组件
@@ -438,7 +439,7 @@ const MoldListPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `molds-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `molds-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {

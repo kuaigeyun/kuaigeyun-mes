@@ -12,6 +12,7 @@ from tortoise import timezone
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.master_data.models.customer import Customer
 from apps.master_data.models.supplier import Supplier
+from apps.common.bulk_import import BulkCreateResponse, run_bulk_create
 from apps.master_data.schemas.supply_chain_schemas import (
     CustomerContactItem,
     CustomerCreate,
@@ -398,6 +399,19 @@ class SupplyChainService:
             )
 
         return _to_customer_response(customer)
+
+    @staticmethod
+    async def bulk_create_customers(
+        tenant_id: int,
+        items: List[CustomerCreate],
+        current_user: User,
+    ) -> BulkCreateResponse:
+        """批量创建客户（导入分片）；单条失败不中断整批。"""
+
+        async def create_one(item: CustomerCreate, _index: int) -> CustomerResponse:
+            return await SupplyChainService.create_customer(tenant_id, item, current_user)
+
+        return await run_bulk_create(list(items or []), create_one)
     
     @staticmethod
     async def get_customer_by_uuid(
@@ -707,6 +721,21 @@ class SupplyChainService:
             raise
         
         return _to_supplier_response(supplier)
+
+    @staticmethod
+    async def bulk_create_suppliers(
+        tenant_id: int,
+        items: List[SupplierCreate],
+        current_user: Optional[User] = None,
+    ) -> BulkCreateResponse:
+        """批量创建供应商（导入分片）；单条失败不中断整批。"""
+
+        async def create_one(item: SupplierCreate, _index: int) -> SupplierResponse:
+            return await SupplyChainService.create_supplier(
+                tenant_id, item, current_user=current_user
+            )
+
+        return await run_bulk_create(list(items or []), create_one)
     
     @staticmethod
     async def get_supplier_by_uuid(

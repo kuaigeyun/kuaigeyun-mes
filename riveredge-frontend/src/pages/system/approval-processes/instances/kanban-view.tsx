@@ -18,6 +18,7 @@ import {
   ApprovalInstanceActionData,
 } from '../../../../services/approvalInstance';
 import { handleError } from '../../../../utils/errorHandler';
+import { formatDateTimeBySiteSetting, formatDateBySiteSetting} from '../../../../utils/format';
 
 const { Text, Paragraph } = Typography;
 
@@ -208,7 +209,7 @@ const KanbanView: React.FC = () => {
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            {new Date(instance.submitted_at).toLocaleDateString()}
+            {formatDateBySiteSetting(instance.submitted_at)}
           </Text>
           <Button
             type="text"
@@ -353,7 +354,7 @@ const KanbanView: React.FC = () => {
                 )}
                 <div>
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    {new Date(item.timestamp).toLocaleString()}
+                    {formatDateTimeBySiteSetting(item.timestamp)}
                   </Text>
                 </div>
               </div>
@@ -483,11 +484,11 @@ const KanbanView: React.FC = () => {
                 </Descriptions.Item>
               )}
               <Descriptions.Item label={t('pages.system.approvalInstances.submittedAt')}>
-                {new Date(selectedInstance.submitted_at).toLocaleString()}
+                {formatDateTimeBySiteSetting(selectedInstance.submitted_at)}
               </Descriptions.Item>
               {selectedInstance.completed_at && (
                 <Descriptions.Item label={t('pages.system.approvalInstances.completedAt')}>
-                  {new Date(selectedInstance.completed_at).toLocaleString()}
+                  {formatDateTimeBySiteSetting(selectedInstance.completed_at)}
                 </Descriptions.Item>
               )}
             </Descriptions>

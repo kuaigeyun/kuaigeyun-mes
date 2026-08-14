@@ -15,7 +15,7 @@ import {
     type PayablePullPreview,
 } from '../../../services/finance/payable';
 import { Payable, PayableCreateData } from '../../../types/finance/payable';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { useTranslation } from 'react-i18next';
 import {
@@ -46,7 +46,7 @@ import { payableCapabilityReasonMessage } from '../../../utils/payableCapability
 import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, todaySiteDateString } from '../../../../../utils/format';
 import {
   FINANCE_DOC_PINNED_STATUS_FIELD,
   financeDocCodePartnerSearchColumns,
@@ -956,11 +956,12 @@ const PayableList: React.FC = () => {
                         messageApi.warning(t('app.kuaicaiwu.common.importNoValidRows'));
                         return;
                     }
-                    const result = await batchImport({
+                    const result = await importInChunksViaPerItemCreate({
                         items,
-                        importFn: async (item) => payableService.createPayable(item),
+                        createOne: async (item, _index) => payableService.createPayable(item),
                         title: t(`${P}.importTitle`),
-                        concurrency: 5,
+                        chunkSize: 100,
+                        concurrency: 4,
                     });
                     if (result.successCount > 0) {
                         messageApi.success(t(`${P}.importSuccess`, { count: result.successCount }));
@@ -995,7 +996,7 @@ const PayableList: React.FC = () => {
                         }
                         await downloadRecordsAsXlsx(
                           items as Array<Record<string, unknown>>,
-                          `payables-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                          `payables-${todaySiteDateString()}.xlsx`,
                         );
                         messageApi.success(t('common.exportCountSuccess', { count: items.length }));
                     } catch (error: any) {

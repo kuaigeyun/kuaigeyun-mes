@@ -62,7 +62,7 @@ import {
 } from '../../../utils/equipmentListCore';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const P = 'app.kuaizhizao.maintenancePlan';
 
 function toApiDateTimeString(value: unknown): string | undefined {
@@ -259,7 +259,7 @@ const MaintenancePlansPage: React.FC = () => {
    * 处理批量删除维护计划（keys 为 uuid 数组）
    */
   const handleDelete = async (keys: React.Key[]) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t(`${P}.batchDeleteTitle`),
       content: t(`${P}.batchDeleteContent`, { count: keys.length }),
       onOk: async () => {
@@ -545,7 +545,7 @@ const MaintenancePlansPage: React.FC = () => {
         icon={<DeleteOutlined />}
         onClick={(e) => {
           e.stopPropagation();
-          Modal.confirm({
+          getAntdModal().confirm({
             title: t(`${P}.deleteTitle`),
             content: t(`${P}.deleteContent`, { name: record.plan_name }),
             onOk: () => record.uuid && handleDelete([record.uuid]),

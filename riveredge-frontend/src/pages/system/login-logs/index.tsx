@@ -30,7 +30,7 @@ import {
 } from '../../../services/loginLog';
 import { useGlobalStore } from '../../../stores';
 import dayjs from 'dayjs';
-import { formatDateTimeBySiteSetting } from '../../../utils/format';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../utils/format';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 
 /**
@@ -370,7 +370,7 @@ const LoginLogsPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `login-logs-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `login-logs-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('pages.system.loginLogs.exportSuccessCount', { count: items.length }));
             } catch (error: any) {

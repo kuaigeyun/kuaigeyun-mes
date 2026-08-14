@@ -28,7 +28,7 @@ import {
 import { ROUTES } from '../../../constants/routes';
 import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
 import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const P = 'app.kuaizhizao.maintenanceExecution';
 const RESOURCE = 'kuaizhizao:maintenance-plan';
 
@@ -81,7 +81,7 @@ const MaintenanceExecutionsPage: React.FC = () => {
   };
 
   const handleDelete = async (keys: React.Key[]) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('common.batchDeleteTitle'),
       content: t('common.batchDeleteContent', { count: keys.length }),
       onOk: async () => {

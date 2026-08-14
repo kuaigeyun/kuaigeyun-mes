@@ -50,7 +50,9 @@ import {
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
 /**
  * 工作中心列表页面组件
  */
@@ -311,7 +313,7 @@ const WorkCentersPage: React.FC = () => {
     });
 
     if (errors.length > 0) {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.dataValidationFailed'),
         width: 600,
         content: (
@@ -340,17 +342,18 @@ const WorkCentersPage: React.FC = () => {
     }
 
     try {
-      const result = await batchImport({
+      const result = await importInChunksViaPerItemCreate({
         items: importData,
-        importFn: async (item: WorkCenterCreate) => {
+        createOne: async (item: WorkCenterCreate, _index) => {
           return await workCenterApi.create(item);
         },
         title: t('app.master-data.workCenters.importTitle'),
-        concurrency: 5,
+        chunkSize: 100,
+        concurrency: 4,
       });
 
       if (result.failureCount > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.master-data.importPartialResultTitle'),
           width: 600,
           content: (
@@ -401,13 +404,13 @@ const WorkCentersPage: React.FC = () => {
           return;
         }
         exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
-        filename = `${t('app.master-data.workCenters.exportFilenameSelected', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+        filename = `${t('app.master-data.workCenters.exportFilenameSelected', { date: todaySiteDateString() })}.csv`;
       } else if (type === 'currentPage' && currentPageData) {
         exportData = currentPageData;
-        filename = `${t('app.master-data.workCenters.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+        filename = `${t('app.master-data.workCenters.exportFilenameCurrentPage', { date: todaySiteDateString() })}.csv`;
       } else {
         exportData = await fetchAllListItems((p) => workCenterApi.list({ ...p, ...lastListParamsRef.current }));
-        filename = `${t('app.master-data.workCenters.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+        filename = `${t('app.master-data.workCenters.exportFilenameAll', { date: todaySiteDateString() })}.csv`;
       }
 
       if (exportData.length === 0) {
@@ -424,7 +427,7 @@ const WorkCentersPage: React.FC = () => {
           item.name || '',
           item.description || '',
           item.isActive ? t('common.enabled') : t('common.disabled'),
-          item.createdAt ? new Date(item.createdAt).toLocaleString(i18n.language) : '',
+          item.createdAt ? formatDateTimeBySiteSetting(item.createdAt) : '',
         ];
         csvRows.push(row.map(cell => {
           const cellStr = String(cell || '');

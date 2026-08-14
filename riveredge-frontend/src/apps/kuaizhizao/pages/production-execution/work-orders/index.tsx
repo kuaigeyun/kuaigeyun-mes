@@ -298,14 +298,14 @@ function isWorkOrderReleasedForStart(status?: string | null): boolean {
 import { getFileDownloadUrl } from '../../../../../services/file'
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField'
 import ReworkOrderCreateModal from '../../../components/ReworkOrderCreateModal'
-import { batchImport } from '../../../../../utils/batchOperations'
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts'
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate'
 import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues'
-import { formatDateTime, formatDateTimeBySiteSetting, formatQuantity } from '../../../../../utils/format'
+import { formatDateTime, formatDateTimeBySiteSetting, formatQuantity, todaySiteDateString } from '../../../../../utils/format'
 import {
   convertBaseQtyToProductionDisplay,
   convertProductionInputToBaseQty,
@@ -324,7 +324,7 @@ import { createListAuditPhaseColumn } from '../../sales-management/shared/listAu
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions'
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired'
 import { isManualAuditEnabled } from '../../../../../utils/auditMode'
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const getFirstNonEmptyString = (...candidates: Array<unknown>): string | undefined => {
   for (const candidate of candidates) {
     if (typeof candidate === 'string') {
@@ -4082,19 +4082,13 @@ const WorkOrdersPage: React.FC = () => {
                 <div style={{ marginBottom: 2, whiteSpace: 'nowrap' }}>
                   <strong>计划时间: </strong>
                   {operation.planned_start_date
-                    ? (() => {
-                        const d = new Date(operation.planned_start_date)
-                        return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-                      })()
+                    ? formatDateTime(operation.planned_start_date, 'MM-DD HH:mm')
                     : '-'}
                 </div>
                 <div style={{ marginBottom: 2, whiteSpace: 'nowrap' }}>
                   <strong>实际开始: </strong>
                   {operation.actual_start_date
-                    ? (() => {
-                        const d = new Date(operation.actual_start_date)
-                        return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-                      })()
+                    ? formatDateTime(operation.actual_start_date, 'MM-DD HH:mm')
                     : '-'}
                 </div>
               </div>
@@ -4510,7 +4504,7 @@ const WorkOrdersPage: React.FC = () => {
     })
 
     if (errors.length > 0) {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.kuaizhizao.workOrder.modalImportValidating'),
         width: 600,
         content: (
@@ -4531,15 +4525,16 @@ const WorkOrdersPage: React.FC = () => {
     }
 
     try {
-      const result = await batchImport({
+      const result = await importInChunksViaPerItemCreate({
         items: toImport,
-        importFn: async (item) => workOrderApi.create(item),
+        createOne: async (item, _index) => workOrderApi.create(item),
         title: t('app.kuaizhizao.workOrder.modalImporting'),
-        concurrency: 3,
+        chunkSize: 100,
+        concurrency: 4,
       })
 
       if (result.failureCount > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.kuaizhizao.workOrder.modalImportPartialFail'),
           width: 600,
           content: (
@@ -4978,7 +4973,7 @@ const WorkOrdersPage: React.FC = () => {
       }
 
       // 确认对话框（优化，新增）
-      Modal.confirm({
+      getAntdModal().confirm({
         title: t('app.kuaizhizao.workOrder.modalConfirmBatchRelease'),
         content: `确定要${ignoreErrors ? '强制' : ''}下达 ${idsToRelease.length} 个工单吗？${ignoreErrors ? '（将忽略所有错误和警告）' : ''}`,
         onOk: async () => {
@@ -5007,7 +5002,7 @@ const WorkOrdersPage: React.FC = () => {
 
   /** 齐套自动下达 (Phase 2) */
   const handleSmartReleaseKitted = async () => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.workOrder.actionSmartRelease'),
       content: '系统将自动扫描所有未下达的工单，并将其中 100% 齐套的工单批量下达。是否确认？',
       onOk: async () => {
@@ -5076,7 +5071,7 @@ const WorkOrdersPage: React.FC = () => {
       }
 
       if (shortageLines.length > 0) {
-        Modal.confirm({
+        getAntdModal().confirm({
           title: t('app.kuaizhizao.workOrder.modalConfirmReleaseShortage'),
           content: (
             <div>
@@ -5129,7 +5124,7 @@ const WorkOrdersPage: React.FC = () => {
    * 处理撤回工单
    */
   const handleRevoke = async (record: WorkOrder) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.workOrder.modalConfirmRevoke'),
       content: `确定要撤回工单"${record.code}"吗？撤回后工单将变为草稿状态。`,
       onOk: async () => {
@@ -5160,7 +5155,7 @@ const WorkOrdersPage: React.FC = () => {
       }
       return
     }
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.workOrder.modalConfirmComplete'),
       content: `确定要指定结束工单"${record.code}"吗？指定结束的工单如果没有报工记录，可以撤回。`,
       onOk: async () => {
@@ -5784,7 +5779,7 @@ const WorkOrdersPage: React.FC = () => {
    * 处理解冻工单
    */
   const handleUnfreeze = async (record: WorkOrder) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.workOrder.modalConfirmUnfreeze'),
       content: `确定要解冻工单"${record.code}"吗？`,
       onOk: async () => {
@@ -5856,7 +5851,7 @@ const WorkOrdersPage: React.FC = () => {
       return
     }
 
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.workOrder.modalConfirmBatchCancel'),
       content: `确定要取消 ${selectedWorkOrderIds.length} 个工单吗？`,
       onOk: async () => {
@@ -6004,7 +5999,7 @@ const WorkOrdersPage: React.FC = () => {
         return
       }
       const label = formatDissolveGroupLabels(uniqueIds)
-      Modal.confirm({
+      getAntdModal().confirm({
         title: t('app.kuaizhizao.workOrder.actionDissolveGroup'),
         content: (
           <div>
@@ -6265,7 +6260,7 @@ const WorkOrdersPage: React.FC = () => {
 
   const handleUnsplit = (record: WorkOrder) => {
     if (record.id == null) return
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.workOrder.modalConfirmUnsplit'),
       content: t('app.kuaizhizao.workOrder.modalUnsplitContent'),
       onOk: async () => {
@@ -7107,7 +7102,7 @@ const WorkOrdersPage: React.FC = () => {
 
         const handleDeleteClick = () => {
           if (!canDelete) return
-          Modal.confirm({
+          getAntdModal().confirm({
             title: t('app.kuaizhizao.workOrder.modalConfirmDelete'),
             content: t('app.kuaizhizao.workOrder.modalDeleteContent'),
             onOk: async () => {
@@ -7700,7 +7695,7 @@ const WorkOrdersPage: React.FC = () => {
               })
               await downloadRecordsAsXlsx(
                 exportRows as Array<Record<string, unknown>>,
-                `work-orders-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `work-orders-${todaySiteDateString()}.xlsx`,
                 {
                   columns: exportColumns,
                   sheetName: t('app.kuaizhizao.workOrder.pageTitle'),

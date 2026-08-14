@@ -51,7 +51,6 @@ import {
 } from '../../../utils/equipmentListCore';
 
 import {
-
   buildDetailDrawerEditExtra,
 
   buildIsActiveDescriptionColumn,
@@ -65,6 +64,7 @@ import {
   useEquipmentDetailDrawer,
 
 } from '../shared/equipmentMasterDataDetail';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 
 
@@ -190,7 +190,7 @@ const ToolRepairItemsPage: React.FC = () => {
 
   const handleDelete = async (keys: React.Key[]) => {
 
-    Modal.confirm({
+    getAntdModal().confirm({
 
       title: t('common.batchDeleteTitle'),
 

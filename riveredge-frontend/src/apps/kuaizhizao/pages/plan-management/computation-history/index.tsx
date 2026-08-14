@@ -28,7 +28,7 @@ import {
   demandComputationBatchExportAllowed,
 } from '../../../../../hooks/useDocumentCapabilities';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
   buildComputationStatusValueEnum,
@@ -342,7 +342,7 @@ const ComputationHistoryPage: React.FC = () => {
                 }
                 await downloadRecordsAsXlsx(
                   items as Array<Record<string, unknown>>,
-                  `computation-history-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                  `computation-history-${todaySiteDateString()}.xlsx`,
                 );
                 messageApi.success(t('app.kuaizhizao.computationHistory.exportSuccess', { count: items.length }));
                 return { success_count: items.length, failed_count: ids.length - items.length };

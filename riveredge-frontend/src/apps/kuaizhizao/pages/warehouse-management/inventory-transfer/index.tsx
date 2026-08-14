@@ -29,7 +29,7 @@ import { DocumentLineUnitSelect, QuantityWithUnitDisplay } from '../../../../../
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import {formatDateTime, formatQuantity} from '../../../../../utils/format';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formDateRangeFormItemProps, toApiDateTimeString, nowSiteDateTimeString } from '../../../../../utils/formDate';
 import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { renderInventoryTransferModeMarkerTag } from '../shared/warehouseMarkerTags';
@@ -43,7 +43,7 @@ import {
 } from '../../../utils/warehouseListCore';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 interface InventoryTransfer {
   id?: number;
   uuid?: string;
@@ -247,7 +247,6 @@ const InventoryTransferPage: React.FC = () => {
         throw new Error('库内移位时，调出仓库和调入仓库必须相同');
       }
 
-      const transferDate = dayjs(values.transfer_date);
       const validItems = validateTransferItems(values.items || [], mode);
       const header = {
         from_warehouse_id: values.from_warehouse_id,
@@ -258,7 +257,7 @@ const InventoryTransferPage: React.FC = () => {
         from_warehouse_name: values._from_warehouse_name || '',
         to_warehouse_id: values.to_warehouse_id,
         to_warehouse_name: values._to_warehouse_name || '',
-        transfer_date: transferDate.isValid() ? transferDate.toISOString() : new Date().toISOString(),
+        transfer_date: toApiDateTimeString(values.transfer_date) ?? nowSiteDateTimeString(),
         transfer_reason: values.transfer_reason,
         remarks: values.remarks,
         attachments: normalizeDocumentAttachments(values.attachments),
@@ -313,7 +312,7 @@ const InventoryTransferPage: React.FC = () => {
    * 处理执行调拨
    */
   const handleExecute = async (record: InventoryTransfer) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.inventoryTransfer.msgExecuteTitle'),
       content: t('app.kuaizhizao.inventoryTransfer.msgExecuteContent', { code: record.code }),
       onOk: async () => {

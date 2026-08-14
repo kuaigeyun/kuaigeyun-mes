@@ -44,6 +44,7 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { extractProTableSort, mergeListKeyword, mapIntegrationConfigListSortField } from '../../../../utils/tableQueryKey';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { todaySiteDateString } from '../../../../utils/format';
 
 dayjs.extend(relativeTime);
 
@@ -732,7 +733,7 @@ const IntegrationConfigListPage: React.FC = () => {
             }
             await downloadRecordsAsXlsx(
               items as Array<Record<string, unknown>>,
-              `integration-configs-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              `integration-configs-${todaySiteDateString()}.xlsx`,
             );
             messageApi.success(t('pages.system.integrationConfigs.exportSuccess'));
           }}

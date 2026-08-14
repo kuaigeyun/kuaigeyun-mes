@@ -23,7 +23,7 @@ import { formatDateTime } from '../../../utils/format';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { useNavigate } from 'react-router-dom';
-
+import { getAntdModal } from '../../../utils/antdAppApis';
 dayjs.extend(relativeTime);
 
 const { Text, Paragraph } = Typography;
@@ -326,7 +326,7 @@ const CardView: React.FC = () => {
                           <Tooltip key="restore" title={t('pages.system.dataBackups.restoreBackup')}>
                             <ReloadOutlined
                               onClick={() => {
-                                Modal.confirm({
+                                getAntdModal().confirm({
                                   title: t('pages.system.dataBackups.restoreConfirmTitle'),
                                   content: t('pages.system.dataBackups.restoreConfirmContent'),
                                   okText: t('common.confirm'),

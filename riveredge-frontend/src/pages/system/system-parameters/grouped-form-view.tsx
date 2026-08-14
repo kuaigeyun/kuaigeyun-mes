@@ -22,6 +22,7 @@ import {
 import { getOperationLogs, OperationLog } from '../../../services/operationLog';
 import { handleError, handleSuccess } from '../../../utils/errorHandler';
 import { HelpTooltip } from '../../../components/help-tooltip';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../utils/format';
 
 const { TextArea } = Input;
 const { Text, Paragraph } = Typography;
@@ -229,7 +230,7 @@ const GroupedFormView: React.FC = () => {
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);
-      link.setAttribute('download', `系统参数_${new Date().toISOString().split('T')[0]}.csv`);
+      link.setAttribute('download', `系统参数_${todaySiteDateString()}.csv`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
@@ -614,7 +615,7 @@ const GroupedFormView: React.FC = () => {
                     )}
                     <div>
                       <Text type="secondary" style={{ fontSize: 12 }}>
-                        {new Date(log.created_at).toLocaleString()}
+                        {formatDateTimeBySiteSetting(log.created_at)}
                       </Text>
                     </div>
                   </div>

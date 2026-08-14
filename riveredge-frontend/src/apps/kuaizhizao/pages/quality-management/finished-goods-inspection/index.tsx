@@ -109,7 +109,7 @@ import {
   resolveQualityInspectionListParams,
 } from '../../../utils/qualityInspectionListCore';
 import dayjs from 'dayjs';
-import { formatQuantity } from '../../../../../utils/format';
+import { formatQuantity, todaySiteDateString } from '../../../../../utils/format';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
 import {
   InspectionConductQuantityFields,
@@ -150,7 +150,8 @@ import {
 } from '../components/qualityRevokeConduct';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { importExcelMatrixInChunks } from '../../../../../utils/chunkedBulkImport';
 const FINISHED_RESOURCE = 'kuaizhizao:quality-management-finished-goods-inspection';
 const FINISHED_GOODS_INSPECTION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_finished_goods_inspections';
 const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
@@ -500,12 +501,17 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     }
   };
 
-  // 处理批量导入（UniTable 内置）
+  // 处理批量导入（UniTable 内置，分片避免大文件超时）
   const handleImport = async (data: any[][]) => {
     try {
-      const result = await qualityApi.finishedGoodsInspection.import(data) as any;
-      const successCount = result?.success_count ?? result?.data?.success_count ?? 0;
-      const failureCount = result?.failure_count ?? result?.data?.failure_count ?? 0;
+      const result = await importExcelMatrixInChunks({
+        data,
+        hasExampleRow: true,
+        title: t('common.importing', { defaultValue: '正在导入数据' }),
+        importChunk: (matrix) => qualityApi.finishedGoodsInspection.import(matrix),
+      });
+      const successCount = result.success_count;
+      const failureCount = result.failure_count;
       if (failureCount > 0) {
         messageApi.warning(t('common.importResult', { success_count: successCount, failure_count: failureCount }));
       } else {
@@ -523,7 +529,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     try {
       if (type === 'all') {
         const blob = await qualityApi.finishedGoodsInspection.export();
-        const exportDate = new Date().toISOString().slice(0, 10);
+        const exportDate = todaySiteDateString();
         const filename = `${t('app.kuaizhizao.quality.common.entity.finishedInspection')}_${exportDate}.xlsx`;
         downloadFile(blob, filename);
         messageApi.success(t('app.kuaizhizao.quality.common.messages.exportSuccess'));
@@ -537,7 +543,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         }
         await downloadRecordsAsXlsx(
           toExport as Array<Record<string, unknown>>,
-          `${t('app.kuaizhizao.quality.common.entity.finishedInspection')}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+          `${t('app.kuaizhizao.quality.common.entity.finishedInspection')}_${todaySiteDateString()}.xlsx`,
         );
         messageApi.success(t('common.exportCountSuccess', { count: toExport.length }));
       }
@@ -818,7 +824,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   const handleDeleteRow = useCallback(
     (record: FinishedGoodsInspection) => {
       if (record.id == null) return;
-      Modal.confirm({
+      getAntdModal().confirm({
         title: t('app.kuaizhizao.quality.finished.messages.deleteConfirm', { count: 1 }),
         onOk: async () => {
           await qualityApi.finishedGoodsInspection.delete(String(record.id));
@@ -838,7 +844,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   const handleRevokeConduct = useCallback(
     (record: FinishedGoodsInspection) => {
       if (record.id == null) return;
-      Modal.confirm({
+      getAntdModal().confirm({
         title: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle'),
         content: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmContent', {
           code: record.inspection_code || record.id,
@@ -864,7 +870,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       messageApi.warning(t('app.kuaizhizao.quality.common.messages.revokeConductBatchEmpty'));
       return;
     }
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle'),
       content: t('app.kuaizhizao.quality.common.messages.revokeConductBatchConfirm', { count: targets.length }),
       onOk: async () => {

@@ -41,7 +41,7 @@ import {
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 interface MaterialReturn {
   id?: number;
   tenant_id?: number;
@@ -188,7 +188,7 @@ const MaterialReturnsPage: React.FC = () => {
   };
 
   const handleConfirm = async (record: MaterialReturn) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.warehouseMaterialReturn.confirm.title'),
       content: t('app.kuaizhizao.warehouseMaterialReturn.confirm.content', { code: record.return_code }),
       onOk: async () => {
@@ -206,7 +206,7 @@ const MaterialReturnsPage: React.FC = () => {
   };
 
   const handleDelete = async (record: MaterialReturn) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.warehouseMaterialReturn.confirm.deleteTitle'),
       content: t('app.kuaizhizao.warehouseMaterialReturn.confirm.deleteContent', { code: record.return_code }),
       onOk: async () => {

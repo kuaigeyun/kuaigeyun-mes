@@ -45,6 +45,8 @@ from apps.master_data.schemas.material_schemas import (
     MaterialBulkDefaultsPatchRequest,
     MaterialBulkInspectionPatchRequest,
     MaterialBulkInspectionPatchResponse,
+    MaterialBulkCreateRequest,
+    MaterialBulkCreateResponse,
     MaterialBatchFieldUpdateResponse,
     MaterialRewriteMainCodesRequest, MaterialRewriteMainCodesResponse,
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
@@ -1769,6 +1771,31 @@ async def materialize_variant_combo(
         return await MaterialService.materialize_variant_combo(tenant_id, data)
     except NotFoundError as e:
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/batch-create",
+    response_model=MaterialBulkCreateResponse,
+    response_model_by_alias=True,
+    summary="Batch create materials",
+)
+async def bulk_create_materials(
+    data: MaterialBulkCreateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """
+    批量创建物料（Excel 导入分片）。
+
+    - 单次最多 200 条，避免网关 30s 超时；前端按分片循环调用。
+    - 单条失败不回滚已成功行，失败原因见 failedItems。
+    """
+    try:
+        return await MaterialService.bulk_create_materials(
+            tenant_id, data, current_user=current_user
+        )
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

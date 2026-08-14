@@ -50,7 +50,8 @@ import {
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { pickListSearchKeyword } from '../../../../utils/tableQueryKey';
-
+import { getAntdModal } from '../../../../utils/antdAppApis';
+import { todaySiteDateString } from '../../../../utils/format';
 /**
  * 消息配置管理列表页面组件
  */
@@ -193,7 +194,7 @@ const MessageConfigListPage: React.FC = () => {
       return;
     }
 
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('pages.system.messageConfig.batchDeleteConfirmTitle'),
       content: t('pages.system.messageConfig.batchDeleteConfirmContent', { count: deletableKeys.length }),
       okText: t('common.confirm'),
@@ -290,7 +291,7 @@ const MessageConfigListPage: React.FC = () => {
       const { name: _n, code: _c, type, description: _d, is_active: _a, is_default: _def, ...config } = values;
       
       let testTarget = '';
-      Modal.confirm({
+      getAntdModal().confirm({
         title: t('pages.system.messageConfig.testTitle'),
         icon: null,
         content: (
@@ -319,7 +320,7 @@ const MessageConfigListPage: React.FC = () => {
             if (result.success) {
               messageApi.success(result.message);
             } else {
-              Modal.error({
+              getAntdModal().error({
                 title: t('pages.system.messageConfig.testFailed'),
                 content: (
                   <div>
@@ -608,7 +609,7 @@ const MessageConfigListPage: React.FC = () => {
             }
             await downloadRecordsAsXlsx(
               items as Array<Record<string, unknown>>,
-              `message-configs-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              `message-configs-${todaySiteDateString()}.xlsx`,
             );
             messageApi.success(t('pages.system.messageConfig.exportSuccessCount', { count: items.length }));
             } catch (error: any) {

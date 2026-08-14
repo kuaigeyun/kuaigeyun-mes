@@ -231,7 +231,8 @@ import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../..
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
-import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
@@ -2497,25 +2498,19 @@ const SalesOrdersPage: React.FC = () => {
         return;
       }
 
-      // 批量创建销售订单
-      let successCount = 0;
-      let failureCount = 0;
-      const errors: Array<{ row: number; error: string }> = [];
+      const result = await importInChunksViaPerItemCreate({
+        items: salesOrders,
+        createOne: async (order, _index) => createSalesOrder(order),
+        title: '正在导入销售订单',
+        chunkSize: 100,
+        concurrency: 4,
+        rowNumberForIndex: (globalIndex) => globalIndex + 2,
+        showResultModal: false,
+      });
 
-      for (let i = 0; i < salesOrders.length; i++) {
-        const order = salesOrders[i];
-        try {
-          await createSalesOrder(order);
-          successCount++;
-        } catch (error: any) {
-          failureCount++;
-          errors.push({
-            row: i + 2, // +2 因为第一行是表头，索引从0开始
-            error: error.message || t('app.kuaizhizao.salesOrder.createFailed'),
-          });
-          console.error('创建销售订单失败:', error);
-        }
-      }
+      const successCount = result.successCount;
+      const failureCount = result.failureCount;
+      const errors = result.errors;
 
       if (failureCount === 0) {
         messageApi.success(t('app.kuaizhizao.salesOrder.importSuccess', { count: successCount }));
@@ -4726,7 +4721,7 @@ const SalesOrdersPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 toExport as Array<Record<string, unknown>>,
-                `sales-order-items-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `sales-order-items-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('app.kuaizhizao.salesOrder.exportSuccess', { count: toExport.length }));
             } catch (error: any) {

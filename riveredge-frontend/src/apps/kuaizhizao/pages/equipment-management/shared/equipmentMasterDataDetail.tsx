@@ -14,7 +14,7 @@ import {
 import { rowActionKind } from '../../../../../components/uni-action';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 export function renderIsActiveTag(t: TFunction, isActive?: boolean) {
   return (
     <MarkerTag color={isActive ? 'success' : 'default'}>
@@ -71,7 +71,7 @@ export function renderEquipmentMasterRowActions<T extends { id?: number }>({
         key="delete"
         {...rowActionKind('delete')}
         onClick={() => {
-          Modal.confirm({
+          getAntdModal().confirm({
             title: t('common.deleteTitle'),
             onOk: () => {
               if (record.id != null) {

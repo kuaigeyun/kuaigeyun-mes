@@ -50,7 +50,8 @@ import jaJP from '../../../../locales/ja-JP';
 import viVN from '../../../../locales/vi-VN';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
-
+import { getAntdModal } from '../../../../utils/antdAppApis';
+import { todaySiteDateString } from '../../../../utils/format';
 /**
  * 语言管理列表页面组件
  */
@@ -344,7 +345,7 @@ const LanguageListPage: React.FC = () => {
       return;
     }
 
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('common.confirm'),
       content: t('field.language.batchDeleteConfirm', { count: selectedRowKeys.length }),
       okText: t('common.confirm'),
@@ -685,7 +686,7 @@ const LanguageListPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `languages-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `languages-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {

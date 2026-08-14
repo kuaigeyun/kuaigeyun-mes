@@ -28,7 +28,7 @@ from apps.kuaizhizao.schemas.defect_record import (
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
-from core.utils.timezone_utils import resolve_business_datetime, today_site_str
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str, to_api_isoformat
 
 
 class DefectRecordService(AppBaseService[DefectRecord]):
@@ -132,7 +132,7 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                     raise ValidationError("驳回时必须填写驳回原因")
 
                 defect_record.status = 'cancelled'
-                defect_record.remarks = (defect_record.remarks or '') + f"\n[让步接收审批驳回] {resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')} 由 {user_info['name']} 驳回，原因：{rejection_reason}"
+                defect_record.remarks = (defect_record.remarks or '') + f"\n[让步接收审批驳回] {to_api_isoformat(resolve_business_datetime())} 由 {user_info['name']} 驳回，原因：{rejection_reason}"
                 await defect_record.save()
 
                 logger.info(f"不良品记录 {defect_record.code} 让步接收审批驳回，审批人: {user_info['name']}, 原因: {rejection_reason}")
@@ -466,7 +466,7 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             if quarantine_location is not None:
                 defect_record.quarantine_location = quarantine_location
             if remarks:
-                append_line = f"[处置更新 {resolve_business_datetime().strftime('%Y-%m-%d %H:%M:%S')}] {remarks}"
+                append_line = f"[处置更新 {to_api_isoformat(resolve_business_datetime())}] {remarks}"
                 defect_record.remarks = f"{defect_record.remarks}\n{append_line}".strip() if defect_record.remarks else append_line
             if attachments is not None:
                 defect_record.attachments = attachments

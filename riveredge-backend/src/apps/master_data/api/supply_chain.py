@@ -13,12 +13,15 @@ from core.api.deps.deps import get_current_user, get_current_tenant
 from apps.master_data.api._master_data_route_access import require_master_data_module_access
 from infra.models.user import User
 from apps.master_data.services.supply_chain_service import SupplyChainService
+from apps.common.bulk_import import BulkCreateResponse
 from apps.master_data.schemas.supply_chain_schemas import (
     CustomerCreate,
+    CustomerBulkCreateRequest,
     CustomerUpdate,
     CustomerResponse,
     CustomerListResponse,
     SupplierCreate,
+    SupplierBulkCreateRequest,
     SupplierUpdate,
     SupplierResponse,
     SupplierListResponse,
@@ -82,6 +85,32 @@ async def create_customer(
     """
     try:
         return await SupplyChainService.create_customer(tenant_id, data, current_user)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/customers/batch-create",
+    response_model=BulkCreateResponse,
+    response_model_by_alias=True,
+    summary="Batch create customers",
+    dependencies=[Depends(require_master_data_module_access("supply-chain:customer"))],
+)
+async def bulk_create_customers(
+    data: CustomerBulkCreateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """
+    批量创建客户（Excel 导入分片）。
+
+    - 单次最多 200 条；前端按分片循环调用。
+    - 单条失败不回滚已成功行，失败原因见 failedItems。
+    """
+    try:
+        return await SupplyChainService.bulk_create_customers(
+            tenant_id, list(data.items), current_user
+        )
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -268,6 +297,32 @@ async def create_supplier(
     """
     try:
         return await SupplyChainService.create_supplier(tenant_id, data, current_user=current_user)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/suppliers/batch-create",
+    response_model=BulkCreateResponse,
+    response_model_by_alias=True,
+    summary="Batch create suppliers",
+    dependencies=[Depends(require_master_data_module_access("supply-chain:supplier"))],
+)
+async def bulk_create_suppliers(
+    data: SupplierBulkCreateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """
+    批量创建供应商（Excel 导入分片）。
+
+    - 单次最多 200 条；前端按分片循环调用。
+    - 单条失败不回滚已成功行，失败原因见 failedItems。
+    """
+    try:
+        return await SupplyChainService.bulk_create_suppliers(
+            tenant_id, list(data.items), current_user=current_user
+        )
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

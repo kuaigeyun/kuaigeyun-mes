@@ -24,14 +24,14 @@ import type { Material } from '../types/material';
 import type { VariantAttributeDefinition } from '../types/variant-attribute';
 import { variantAttributeApi } from '../services/variant-attribute';
 import { VariantAttributeFields } from './VariantAttributeFields';
-import { batchImport } from '../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../utils/chunkedBulkImport';
 import {
   buildVariantComboImportTemplate,
   parseVariantComboImportRows,
 } from '../utils/variantComboImport';
 import { DEFAULT_MATERIAL_BASE_UNIT } from '../constants/materialDefaults';
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../../utils/modalEventIsolation';
-
+import { getAntdModal } from '../../../utils/antdAppApis';
 const LazyUniImport = lazy(() =>
   import('../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 );
@@ -384,7 +384,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
 
     const validationErrors = errors.filter((e) => !e.message.includes('已存在'));
     if (validationErrors.length > 0) {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.dataValidationFailed', '数据校验失败'),
         width: 560,
         content: (
@@ -424,7 +424,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
           attribute_value: attrValue,
         });
         if (!result.is_valid) {
-          Modal.warning({
+          getAntdModal().warning({
             title: t('app.master-data.dataValidationFailed', '数据校验失败'),
             content: t('app.master-data.rowError', {
               row: row.rowNum,
@@ -442,18 +442,18 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
       const skipped = errors.filter((e) => e.message.includes('已存在')).length;
 
       if (masterSaved && (masterMaterial ?? material)) {
-        const result = await batchImport({
+        const result = await importInChunksViaPerItemCreate({
           items: rows,
-          importFn: async (row) =>
+          createOne: async (row, _index) =>
             materialApi.create(buildSkuCreatePayload(row.variantAttributes, row.isActive) as any),
           title: t('app.master-data.materials.variantComboImportTitle', {
             defaultValue: '正在导入属性组合',
           }),
-          concurrency: 1,
-          retryCount: 1,
+          chunkSize: 100,
+          concurrency: 4,
         });
         if (result.failureCount > 0) {
-          Modal.warning({
+          getAntdModal().warning({
             title: t('app.master-data.importPartialResultTitle', '导入完成（部分失败）'),
             width: 560,
             content: (
@@ -579,7 +579,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
       );
       return;
     }
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.master-data.materials.generateVariantsTitle', '批量自动生成'),
       content: t('app.master-data.materials.generateVariantsConfirmLimited', {
         count: autoComboEstimate,

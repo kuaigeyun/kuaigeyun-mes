@@ -23,7 +23,7 @@ from core.services.authorization.permission_version_service import PermissionVer
 from core.services.user.user_import_reference_service import UserImportReferenceService
 from infra.services.tenant_service import TenantService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
-from core.utils.timezone_utils import resolve_business_datetime
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 
 # 向后兼容别名
 PermissionDeniedError = AuthorizationError
@@ -1109,7 +1109,7 @@ class UserService:
                 last_login_str = ''
                 if user_dict.get('last_login'):
                     if isinstance(user_dict['last_login'], datetime):
-                        last_login_str = user_dict['last_login'].strftime('%Y-%m-%d %H:%M:%S')
+                        last_login_str = to_api_isoformat(user_dict['last_login'])
                     else:
                         last_login_str = str(user_dict['last_login'])
                 
@@ -1117,7 +1117,7 @@ class UserService:
                 created_at_str = ''
                 if user_dict.get('created_at'):
                     if isinstance(user_dict['created_at'], datetime):
-                        created_at_str = user_dict['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+                        created_at_str = to_api_isoformat(user_dict['created_at'])
                     else:
                         created_at_str = str(user_dict['created_at'])
                 

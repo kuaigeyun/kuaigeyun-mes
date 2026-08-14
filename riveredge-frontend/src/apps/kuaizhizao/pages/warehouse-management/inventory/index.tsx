@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
 import { App, Popover, Select, Space, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { formatQuantity } from '../../../../../utils/format';
+import { formatQuantity, todaySiteDateString } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { ListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
@@ -233,7 +233,7 @@ const InventoryPage: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `inventory-realtime-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `inventory-realtime-${todaySiteDateString()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

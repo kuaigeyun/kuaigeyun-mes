@@ -43,7 +43,7 @@ import {
 } from '../../../utils/equipmentListCore';
 import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
 import type { DocumentAttachmentFile } from '../../../utils/documentAttachments';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const P = 'app.kuaizhizao.equipmentOps.routePatrol';
 const RESOURCE = 'kuaizhizao:equipment-route-patrol';
 
@@ -169,7 +169,7 @@ const RoutePatrolsPage: React.FC = () => {
   };
 
   const handleDelete = async (keys: React.Key[]) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('common.batchDeleteTitle'),
       content: t('common.batchDeleteContent', { count: keys.length }),
       onOk: async () => {

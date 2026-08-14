@@ -27,7 +27,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { toolApi } from '../../../services/equipment';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import {
   buildFactoryImportTemplate,
@@ -54,7 +54,8 @@ import {
   renderEquipmentMasterRowActions,
 } from '../shared/equipmentMasterDataDetail';
 import { buildToolLedgerDetailPath } from './toolLedgerPaths';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { todaySiteDateString } from '../../../../../utils/format';
 interface Tool {
   id?: number;
   uuid?: string;
@@ -217,7 +218,7 @@ const ToolLedgerPage: React.FC = () => {
 
 
   const handleDelete = async (keys: React.Key[]) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.toolLedger.confirmBatchDeleteTitle'),
       content: t('app.kuaizhizao.toolLedger.confirmBatchDeleteContent', { count: keys.length }),
       onOk: async () => {
@@ -476,11 +477,12 @@ const ToolLedgerPage: React.FC = () => {
               messageApi.warning(t('app.kuaizhizao.toolLedger.importNoRows'));
               return;
             }
-            const result = await batchImport({
+            const result = await importInChunksViaPerItemCreate({
               items,
-              importFn: async (item) => toolApi.create(item),
+              createOne: async (item, _index) => toolApi.create(item),
               title: t('app.kuaizhizao.toolLedger.importTitle'),
-              concurrency: 5,
+              chunkSize: 100,
+              concurrency: 4,
             });
             if (result.successCount > 0) {
               messageApi.success(t('app.kuaizhizao.toolLedger.importSuccess', { count: result.successCount }));
@@ -521,7 +523,7 @@ const ToolLedgerPage: React.FC = () => {
               ];
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `tools-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `tools-${todaySiteDateString()}.xlsx`,
                 { columns: exportColumns, sheetName: t('app.kuaizhizao.toolLedger.title') },
               );
               messageApi.success(t('common.exportCountSuccess', { count: items.length }));

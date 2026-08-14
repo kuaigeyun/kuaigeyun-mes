@@ -46,7 +46,7 @@ import {
 } from '../../../services/dataBackup';
 import { useGlobalStore } from '../../../stores';
 import { getTenantId } from '../../../utils/auth';
-import { formatDateTime } from '../../../utils/format';
+import { formatDateTime, todaySiteDateString } from '../../../utils/format';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 
 function formatFileSize(bytes?: number): string {
@@ -866,7 +866,7 @@ const DataBackupsPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `data-backups-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `data-backups-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('pages.system.dataBackups.exportSuccess', { count: items.length }));
             } catch (error: any) {

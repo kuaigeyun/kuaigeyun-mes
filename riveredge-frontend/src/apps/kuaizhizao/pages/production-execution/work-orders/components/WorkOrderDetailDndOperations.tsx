@@ -24,7 +24,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { workOrderApi } from '../../../../services/production'
 import { formatDateTime } from '../../../../../../utils/format'
-
+import { getAntdModal } from '../../../../../../utils/antdAppApis';
 export interface WorkOrderOperationsListProps {
   workOrderId?: number
   operations: any[]
@@ -225,7 +225,7 @@ const WorkOrderOperationsList: React.FC<WorkOrderOperationsListProps> = ({
       return
     }
 
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.workOrder.modalConfirmDeleteOp'),
       content: t('app.kuaizhizao.workOrder.msgOpDeleteConfirm', { name: operation.operation_name }),
       onOk: async () => {

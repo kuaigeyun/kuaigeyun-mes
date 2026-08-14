@@ -34,7 +34,7 @@ import { normalizeDocumentAttachments } from '../../../utils/documentAttachments
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formDateRangeFormItemProps, toApiDateTimeString, nowSiteDateTimeString } from '../../../../../utils/formDate';
 import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { renderStocktakingTypeMarkerTag } from '../shared/warehouseMarkerTags';
@@ -46,6 +46,7 @@ import {
   normalizeWarehouseListResponse,
   resolveStocktakingListParams,
 } from '../../../utils/warehouseListCore';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 interface Stocktaking {
   id?: number;
@@ -150,14 +151,11 @@ const StocktakingPage: React.FC = () => {
    */
   const handleCreateSubmit = async (values: any) => {
     try {
-      const stocktakingDate = dayjs(values.stocktaking_date);
       await stocktakingApi.create({
         warehouse_id: values.warehouse_id,
         // 名称以后端按 warehouse_id 解析为准；有值时一并提交作首选
         ...(values._warehouse_name ? { warehouse_name: values._warehouse_name } : {}),
-        stocktaking_date: stocktakingDate.isValid()
-          ? stocktakingDate.toISOString()
-          : new Date().toISOString(),
+        stocktaking_date: toApiDateTimeString(values.stocktaking_date) ?? nowSiteDateTimeString(),
         stocktaking_type: values.stocktaking_type || 'full',
         line_granularity: values.line_granularity || 'batch',
         include_zero_stock: Boolean(values.include_zero_stock),
@@ -211,7 +209,7 @@ const StocktakingPage: React.FC = () => {
         })
       : t('app.kuaizhizao.stocktaking.msgStartPartialContent', { code: record.code });
 
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.stocktaking.msgStartTitle'),
       content,
       onOk: async () => {
@@ -373,7 +371,7 @@ const StocktakingPage: React.FC = () => {
 
   const handleComplete = async (record: Stocktaking) => {
     const hasDiff = (record.total_differences ?? 0) > 0;
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.stocktaking.msgCompleteTitle'),
       content: hasDiff
         ? t('app.kuaizhizao.stocktaking.msgCompleteWithDiff', {
@@ -398,7 +396,7 @@ const StocktakingPage: React.FC = () => {
   };
 
   const handleWithdraw = (record: Stocktaking) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.stocktaking.msgWithdrawTitle'),
       content: t('app.kuaizhizao.stocktaking.msgWithdrawContent', { code: record.code }),
       okText: t('app.kuaizhizao.stocktaking.actionWithdraw'),

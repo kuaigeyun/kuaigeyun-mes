@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import type { WorkOrderForGantt } from '../../../components/GanttSchedulingChart/types';
+import { toApiDateTimeString } from '../../../../../utils/formDate';
 
 export type WorkOrderSchedulingMissingField = 'planned_start_date' | 'planned_end_date';
 
@@ -153,8 +154,8 @@ export function resolveOperationPrepScheduleDates(
     }
     dates.push({
       operation_id: op.operationId,
-      planned_start_date: slot.start.toISOString(),
-      planned_end_date: slot.end.toISOString(),
+      planned_start_date: toApiDateTimeString(slot.start),
+      planned_end_date: toApiDateTimeString(slot.end),
     });
     prevEnd = slot.nextPrevEnd;
   }
@@ -451,8 +452,8 @@ export function buildScheduleWorkOrderDrop(
 
     operationDateUpdates.push({
       operation_id: opId,
-      planned_start_date: slotStart.toISOString(),
-      planned_end_date: slotEnd.toISOString(),
+      planned_start_date: toApiDateTimeString(slotStart),
+      planned_end_date: toApiDateTimeString(slotEnd),
     });
     operationStationUpdates.push({
       operation_id: opId,
@@ -478,8 +479,8 @@ export function buildAssignPendingOperationToStation(
     operationDateUpdates: [
       {
         operation_id: pendingOp.operationId,
-        planned_start_date: slotStart.toISOString(),
-        planned_end_date: slotEnd.toISOString(),
+        planned_start_date: toApiDateTimeString(slotStart),
+        planned_end_date: toApiDateTimeString(slotEnd),
       },
     ],
     operationStationUpdates: [{ operation_id: pendingOp.operationId, assigned_station_id: stationId }],

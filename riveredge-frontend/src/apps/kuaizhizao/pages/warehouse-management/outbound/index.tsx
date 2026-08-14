@@ -89,7 +89,7 @@ import { outboundIssueTypeMarkerValueEnum, renderOutboundIssueTypeMarkerTag } fr
 import { StatusTag } from '../../../../../constants/statusBadges';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import type { OutboundPullEntryNavigationState } from './outboundPullEntryTypes';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 interface OutboundOrder extends OutboundHubOrder {
   items?: OutboundOrderItem[];
 }
@@ -513,7 +513,7 @@ const OutboundPage: React.FC = () => {
       );
       return;
     }
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.warehouseOutbound.msg.withdrawTitle'),
       content: t('app.kuaizhizao.warehouseOutbound.msg.withdrawConfirm', { code: outboundDocumentCode(record) }),
       onOk: async () => {
@@ -641,7 +641,7 @@ const OutboundPage: React.FC = () => {
 
   const handleDelete = (record: OutboundOrder) => {
     const code = outboundDocumentCode(record);
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.warehouseOutbound.msg.deleteConfirmOne'),
       content: t('app.kuaizhizao.warehouseOutbound.msg.withdrawConfirm', { code }),
       okType: 'danger',

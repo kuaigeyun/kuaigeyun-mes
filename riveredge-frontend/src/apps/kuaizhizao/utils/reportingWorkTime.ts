@@ -25,8 +25,19 @@ export function toReportingDayjs(value: unknown): Dayjs | null {
   const tz = getTimezoneFromSiteSetting();
   const text = String(value).trim();
   if (!text) return null;
-  const normalized = text.includes('T') ? text.replace('T', ' ').slice(0, 19) : text;
-  const parsed = dayjs.tz(normalized.length <= 10 ? `${normalized} 00:00:00` : normalized, tz);
+  // 与 format.ts 同口径：无时区墙钟按站点解释；带 Z/偏移则转到站点时区
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    const parsed = dayjs.tz(`${text} 00:00:00`, tz);
+    return parsed.isValid() ? parsed : null;
+  }
+  if (
+    /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?$/.test(text) &&
+    !/(Z|[+-]\d{2}:?\d{2})$/i.test(text)
+  ) {
+    const parsed = dayjs.tz(text.replace('T', ' '), tz);
+    return parsed.isValid() ? parsed : null;
+  }
+  const parsed = dayjs(text).tz(tz);
   return parsed.isValid() ? parsed : null;
 }
 

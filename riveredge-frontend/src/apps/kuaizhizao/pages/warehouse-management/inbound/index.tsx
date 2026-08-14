@@ -123,6 +123,7 @@ import {
   buildInboundHubStatusValueEnum,
   resolveInboundHubListParams,
 } from '../../../utils/warehouseListCore';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 interface InboundOrder extends InboundHubOrder {
   workshop_name?: string;
@@ -1415,7 +1416,7 @@ const InboundPage: React.FC = () => {
   const handleWithdrawInbound = async (record: InboundOrder) => {
     const code = record.receipt_code || record.return_code || '';
     const isReturn = record.receipt_type === 'production_return';
-    Modal.confirm({
+    getAntdModal().confirm({
       title: isReturn ? t('app.kuaizhizao.warehouseInbound.confirm.withdrawReturn.title') : t('app.kuaizhizao.warehouseInbound.confirm.withdrawInbound.title'),
       content: t('app.kuaizhizao.warehouseInbound.confirm.withdraw.content', { code }),
       okText: t('app.kuaizhizao.warehouseInbound.action.withdraw'),
@@ -1520,7 +1521,7 @@ const InboundPage: React.FC = () => {
       (record.receipt_type
         ? inboundReceiptTypeLabel(t, record.receipt_type as InboundReceiptType)
         : t('app.kuaizhizao.warehouseInbound.fallbackDoc'));
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.warehouseInbound.confirm.delete.title', { type: typeLabel }),
       content: t('app.kuaizhizao.warehouseInbound.confirm.delete.content', { code: code || '-' }),
       okType: 'danger',

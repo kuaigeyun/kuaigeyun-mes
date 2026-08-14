@@ -70,7 +70,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 type PullReceivableCandidate = ReceiptPullCandidate;
 
 const R = 'app.kuaicaiwu.receipt';
@@ -333,7 +333,7 @@ const ReceiptsPage: React.FC = () => {
   };
 
   const handleConfirm = async (record: ReceiptVoucher) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t(`${R}.confirmTitle`),
       content: t(`${R}.confirmContent`, { code: record.receipt_code }),
       onOk: async () => {
@@ -350,7 +350,7 @@ const ReceiptsPage: React.FC = () => {
   };
 
   const handleCancel = async (record: ReceiptVoucher) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t(`${R}.voidTitle`),
       content: t(`${R}.voidContent`, { code: record.receipt_code }),
       onOk: async () => {
@@ -367,7 +367,7 @@ const ReceiptsPage: React.FC = () => {
   };
 
   const handleDelete = async (record: ReceiptVoucher) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t(`${R}.deleteTitle`),
       content: t(`${R}.deleteContent`, { code: record.receipt_code }),
       okType: 'danger',

@@ -47,6 +47,7 @@ import {
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { pickListSearchKeyword } from '../../../../utils/tableQueryKey';
+import { todaySiteDateString } from '../../../../utils/format';
 
 /**
  * 消息模板管理列表页面组件
@@ -517,7 +518,7 @@ const MessageTemplateListPage: React.FC = () => {
             }
             await downloadRecordsAsXlsx(
               items as Array<Record<string, unknown>>,
-              `message-templates-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              `message-templates-${todaySiteDateString()}.xlsx`,
             );
             messageApi.success(t('pages.system.messageTemplate.exportSuccessCount', { count: items.length }));
             } catch (error: any) {

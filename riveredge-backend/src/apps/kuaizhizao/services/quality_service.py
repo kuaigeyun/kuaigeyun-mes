@@ -2671,9 +2671,9 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     inspection.inspection_result,
                     inspection.quality_status,
                     inspection.inspector_name or '',
-                    inspection.inspection_time.strftime('%Y-%m-%d %H:%M:%S') if inspection.inspection_time else '',
+                    to_api_isoformat(inspection.inspection_time) if inspection.inspection_time else '',
                     inspection.reviewer_name or '',
-                    inspection.review_time.strftime('%Y-%m-%d %H:%M:%S') if inspection.review_time else '',
+                    to_api_isoformat(inspection.review_time) if inspection.review_time else '',
                     inspection.status,
                     inspection.notes or '',
                 ])
@@ -3862,7 +3862,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                     inspection.inspection_result,
                     inspection.quality_status,
                     inspection.inspector_name or '',
-                    inspection.inspection_time.strftime('%Y-%m-%d %H:%M:%S') if inspection.inspection_time else '',
+                    to_api_isoformat(inspection.inspection_time) if inspection.inspection_time else '',
                     inspection.status,
                     inspection.notes or '',
                 ])
@@ -5332,7 +5332,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                     inspection.inspection_result,
                     inspection.quality_status,
                     inspection.inspector_name or '',
-                    inspection.inspection_time.strftime('%Y-%m-%d %H:%M:%S') if inspection.inspection_time else '',
+                    to_api_isoformat(inspection.inspection_time) if inspection.inspection_time else '',
                     inspection.status,
                     inspection.notes or '',
                 ])

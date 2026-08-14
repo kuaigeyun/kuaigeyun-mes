@@ -23,6 +23,7 @@ import {
 import { sopExecutionApi, sopApi } from '../../../services/process';
 import type { SOPExecution, SOP, SOPNodeCompleteRequest } from '../../../types/process';
 import type { ISchema } from '@formily/json-schema';
+import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 
 const { Title, Text } = Typography;
 
@@ -339,13 +340,13 @@ const SOPExecutionPage: React.FC = () => {
               </div>
               <div style={{ marginTop: 8, color: '#666' }}>
                 {t('app.master-data.sop.executionStartedAt', {
-                  time: new Date(execution.startedAt).toLocaleString(),
+                  time: formatDateTimeBySiteSetting(execution.startedAt),
                 })}
               </div>
               {execution.completedAt && (
                 <div style={{ marginTop: 4, color: '#666' }}>
                   {t('app.master-data.sop.executionCompletedAt', {
-                    time: new Date(execution.completedAt).toLocaleString(),
+                    time: formatDateTimeBySiteSetting(execution.completedAt),
                   })}
                 </div>
               )}

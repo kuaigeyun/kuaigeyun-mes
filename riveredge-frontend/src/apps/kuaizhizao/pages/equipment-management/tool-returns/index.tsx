@@ -33,6 +33,7 @@ import {
   EquipmentMasterDetailDrawer,
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const P = 'app.kuaizhizao.toolOps.return';
 const RESOURCE = 'kuaizhizao:tool-return';
@@ -107,7 +108,7 @@ const ToolReturnsPage: React.FC = () => {
   };
 
   const handleDelete = async (keys: React.Key[]) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('common.batchDeleteTitle'),
       content: t('common.batchDeleteContent', { count: keys.length }),
       onOk: async () => {
@@ -243,7 +244,7 @@ const ToolReturnsPage: React.FC = () => {
                 icon={<DeleteOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
-                  Modal.confirm({
+                  getAntdModal().confirm({
                     title: t('common.deleteTitle'),
                     onOk: () => record.id && handleDelete([record.id]),
                   });

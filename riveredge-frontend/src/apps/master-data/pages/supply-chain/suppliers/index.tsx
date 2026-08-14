@@ -45,7 +45,7 @@ import {
   partnerSettlementMethodLabel,
   partnerTaxpayerTypeLabel,
 } from '../../../utils/partner-static-labels';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunks } from '../../../../../utils/chunkedBulkImport';
 import { downloadFile } from '../../../../../utils';
 import {
   buildFactoryImportTemplate,
@@ -82,7 +82,8 @@ import {
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
 /**
  * 供应商管理列表页面组件
  */
@@ -334,7 +335,7 @@ const SuppliersPage: React.FC = () => {
   };
 
   /**
-   * 处理批量导入供应商（batchImport + supplierApi.create 循环）
+   * 处理批量导入供应商（分片 bulkCreate）
    */
   const handleImport = async (data: any[][]) => {
     if (!data || data.length === 0) {
@@ -472,7 +473,7 @@ const SuppliersPage: React.FC = () => {
     });
 
     if (errors.length > 0) {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.dataValidationFailed'),
         width: 600,
         content: (
@@ -501,15 +502,23 @@ const SuppliersPage: React.FC = () => {
     }
 
     try {
-      const result = await batchImport({
+      const CHUNK = 100;
+      const result = await importInChunks({
         items: importData,
-        importFn: async (item: SupplierCreate) => supplierApi.create(item),
+        chunkSize: CHUNK,
         title: t('app.master-data.suppliers.importTitle'),
-        concurrency: 5,
+        showResultModal: false,
+        importChunk: async (chunk) => {
+          const res = await supplierApi.bulkCreate(chunk);
+          return {
+            createdCount: res.createdCount,
+            failedItems: res.failedItems,
+          };
+        },
       });
 
       if (result.failureCount > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.master-data.importPartialResultTitle'),
           width: 600,
           content: (
@@ -563,13 +572,13 @@ const SuppliersPage: React.FC = () => {
           return;
         }
         exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
-        filename = `${t('app.master-data.suppliers.exportFilenameSelected', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+        filename = `${t('app.master-data.suppliers.exportFilenameSelected', { date: todaySiteDateString() })}.csv`;
       } else if (type === 'currentPage' && currentPageData) {
         exportData = currentPageData;
-        filename = `${t('app.master-data.suppliers.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+        filename = `${t('app.master-data.suppliers.exportFilenameCurrentPage', { date: todaySiteDateString() })}.csv`;
       } else {
         exportData = await fetchAllListItems((p) => supplierApi.list({ ...p, ...lastListParamsRef.current }));
-        filename = `${t('app.master-data.suppliers.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+        filename = `${t('app.master-data.suppliers.exportFilenameAll', { date: todaySiteDateString() })}.csv`;
       }
 
       if (exportData.length === 0) {
@@ -610,7 +619,7 @@ const SuppliersPage: React.FC = () => {
           item.address || '',
           item.buyerName || '',
           item.isActive ? t('common.enabled') : t('common.disabled'),
-          item.createdAt ? new Date(item.createdAt).toLocaleString() : '',
+          item.createdAt ? formatDateTimeBySiteSetting(item.createdAt) : '',
         ];
         csvRows.push(row.map(cell => {
           const cellStr = String(cell || '');

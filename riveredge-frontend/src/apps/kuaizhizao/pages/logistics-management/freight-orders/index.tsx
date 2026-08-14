@@ -54,6 +54,7 @@ import {
   type FreightOrder,
   type FreightPullCandidate,
 } from '../../../services/logistics';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 function freightPullRowKey(row: FreightPullCandidate): string {
   return `${row.source_type}-${row.source_id}`;
@@ -496,7 +497,7 @@ const FreightOrdersPage: React.FC = () => {
                       type="primary"
                       onClick={() => {
                         signForm.resetFields();
-                        Modal.confirm({
+                        getAntdModal().confirm({
                           title: t('app.kuaizhizao.logistics.action.signReceipt'),
                           content: (
                             <Form form={signForm} layout="vertical">

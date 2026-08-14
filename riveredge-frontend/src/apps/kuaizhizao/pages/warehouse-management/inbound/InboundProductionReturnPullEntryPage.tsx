@@ -42,6 +42,7 @@ import {
 } from '../../../../../components/material-unit-select';
 import { recalculateQuantityOnUnitChange } from '../../../../../components/quantity-with-unit/formHelpers';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
+import { toApiDateTimeString } from '../../../../../utils/formDate';
 
 type PreviewPicking = {
   picking_id: number;
@@ -303,7 +304,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
         picking_code: pickingCode || undefined,
         warehouse_id: warehouseId,
         warehouse_name: whOpt.name,
-        return_time: returnTime?.toISOString(),
+        return_time: toApiDateTimeString(returnTime),
         returner_name: receiverHook.receiverName.trim() || undefined,
         notes: returnNotes.trim() || undefined,
         items: activeLines.map((it) => ({

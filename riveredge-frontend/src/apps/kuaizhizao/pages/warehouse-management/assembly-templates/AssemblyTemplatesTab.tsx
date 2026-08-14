@@ -28,7 +28,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { assemblyTemplateApi } from '../../../services/assembly-template';
 import { formatDateTimeBySiteSetting, formatQuantity } from '../../../../../utils/format';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const ASSEMBLY_ORDERS_RESOURCE = 'kuaizhizao:warehouse-management-assembly-orders';
 
 type TemplateItem = {
@@ -179,7 +179,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
   };
 
   const confirmDeleteTemplate = (record: AssemblyTemplate) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.assemblyTemplate.deleteTitle'),
       content: t('app.kuaizhizao.assemblyTemplate.deleteConfirm', { code: record.template_code }),
       onOk: async () => {
@@ -250,7 +250,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
   };
 
   const confirmDeleteItem = (template: AssemblyTemplate, item: TemplateItem) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.assemblyTemplate.deleteItemTitle'),
       content: t('app.kuaizhizao.assemblyTemplate.deleteItemConfirm', {
         name: item.material_code || item.material_name,
@@ -290,7 +290,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
   };
 
   const confirmImportFromBom = (template: AssemblyTemplate) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.assemblyTemplate.importFromBomTitle'),
       content: t('app.kuaizhizao.assemblyTemplate.importFromBomConfirm'),
       onOk: async () => {

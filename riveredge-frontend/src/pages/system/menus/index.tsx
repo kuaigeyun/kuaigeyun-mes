@@ -68,6 +68,7 @@ import CustomMenuLayoutEditor, {
 } from './CustomMenuLayoutEditor';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 import { renderMenuIconMarker, renderMenuSourceMarker } from './menuMeta';
+import { todaySiteDateString } from '../../../utils/format';
 
 function isAppRootMenuPath(path?: string | null): boolean {
   if (!path) return false;
@@ -919,7 +920,7 @@ const MenuListPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `menus-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `menus-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('pages.system.menus.exportedCount', { count: items.length }));
             }}

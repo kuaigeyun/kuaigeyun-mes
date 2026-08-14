@@ -29,8 +29,7 @@ from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreServ
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.master_data.models.factory import Workstation
 from apps.master_data.models.performance import Holiday
-from core.utils.timezone_utils import make_aware, resolve_business_datetime, to_api_isoformat
-from infra.config.infra_config import infra_settings
+from core.utils.timezone_utils import make_aware, resolve_business_datetime, site_timezone_name, to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 DISPATCH_ACTIVE_STATUSES = (
@@ -65,12 +64,12 @@ SOURCE_PRIORITY = {
 
 
 def _business_tz() -> ZoneInfo:
-    return ZoneInfo(infra_settings.TIMEZONE or "Asia/Shanghai")
+    return ZoneInfo(site_timezone_name())
 
 
 def _plan_day_bounds(plan_date: date) -> Tuple[datetime, datetime]:
     """业务日历日边界（timezone-aware），与库内 planned_*_date 可比。"""
-    tz_name = infra_settings.TIMEZONE or "Asia/Shanghai"
+    tz_name = site_timezone_name()
     start = make_aware(datetime.combine(plan_date, datetime.min.time()), tz_name)
     end = make_aware(datetime.combine(plan_date, datetime.max.time()), tz_name)
     return start, end
@@ -90,7 +89,7 @@ def _planned_on_plan_date(planned_start: Optional[datetime], plan_date: date) ->
 def _as_comparable_datetime(value: Optional[datetime]) -> Optional[datetime]:
     if value is None:
         return None
-    tz_name = infra_settings.TIMEZONE or "Asia/Shanghai"
+    tz_name = site_timezone_name()
     return make_aware(value, tz_name) if value.tzinfo is None else value
 
 

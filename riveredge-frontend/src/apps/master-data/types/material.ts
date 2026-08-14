@@ -291,6 +291,8 @@ export interface MaterialCreate {
 }
 
 export interface MaterialUpdate {
+  /** 可带回原值；后端拒绝修改主编号 */
+  mainCode?: string;
   code?: string;
   name?: string;
   groupId?: number;

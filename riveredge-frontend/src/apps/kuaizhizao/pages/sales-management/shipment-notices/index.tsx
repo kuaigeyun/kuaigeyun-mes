@@ -88,7 +88,7 @@ import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } f
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
-import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -98,6 +98,7 @@ import {
   referenceDisplayToIdOptions,
   searchReferenceDisplay,
 } from '../../../../../utils/referenceDisplay';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const SHIPMENT_NOTICE_RESOURCE = 'kuaizhizao:shipment-notice';
 
@@ -993,7 +994,7 @@ const ShipmentNoticesPage: React.FC = () => {
   ]);
 
   const handleWithdraw = (record: ShipmentNotice) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.shipmentNotice.withdrawNotify'),
       content: t('app.kuaizhizao.shipmentNotice.withdrawConfirmContent', { code: record.notice_code }),
       onOk: async () => {
@@ -1011,7 +1012,7 @@ const ShipmentNoticesPage: React.FC = () => {
   };
 
   const handleDelete = (record: ShipmentNotice) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.kuaizhizao.shipmentNotice.deleteModalTitle'),
       content: t('app.kuaizhizao.shipmentNotice.deleteConfirmContent', { code: record.notice_code }),
       onOk: async () => {
@@ -1789,7 +1790,7 @@ const ShipmentNoticesPage: React.FC = () => {
               }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
-                `shipment-notices-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                `shipment-notices-${todaySiteDateString()}.xlsx`,
               );
               messageApi.success(t('common.exportCountSuccess', { count: items.length }));
             } catch (error: any) {

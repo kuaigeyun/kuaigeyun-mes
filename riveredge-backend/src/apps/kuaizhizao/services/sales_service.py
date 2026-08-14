@@ -54,7 +54,7 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.user_service import UserService
-from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str, to_api_isoformat
 
 
 class SalesForecastService(AppBaseService[SalesForecast]):
@@ -1222,9 +1222,9 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                     forecast.status,
                     forecast.review_status,
                     forecast.reviewer_name or '',
-                    forecast.review_time.strftime('%Y-%m-%d %H:%M:%S') if forecast.review_time else '',
+                    to_api_isoformat(forecast.review_time) if forecast.review_time else '',
                     forecast.notes or '',
-                    forecast.created_at.strftime('%Y-%m-%d %H:%M:%S') if forecast.created_at else '',
+                    to_api_isoformat(forecast.created_at) if forecast.created_at else '',
                 ])
         
         return file_path
@@ -2118,7 +2118,7 @@ class SalesOrderService(AppBaseService[SalesOrder]):
                     order.shipping_address or '',
                     order.payment_terms or '',
                     order.notes or '',
-                    order.created_at.strftime('%Y-%m-%d %H:%M:%S') if order.created_at else '',
+                    to_api_isoformat(order.created_at) if order.created_at else '',
                 ])
         
         return file_path

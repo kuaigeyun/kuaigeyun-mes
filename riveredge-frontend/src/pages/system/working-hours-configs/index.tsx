@@ -21,6 +21,7 @@ import { apiRequest } from '../../../services/api';
 import { fetchAllListItems } from '../../../utils/fetchAllListPages';
 import { pickListSearchKeyword } from '../../../utils/tableQueryKey';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
+import { todaySiteDateString } from '../../../utils/format';
 
 /**
  * 工作时间段配置接口定义
@@ -393,7 +394,7 @@ const WorkingHoursConfigsPage: React.FC = () => {
             }
             await downloadRecordsAsXlsx(
               toExport as Array<Record<string, unknown>>,
-              `working-hours-configs-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              `working-hours-configs-${todaySiteDateString()}.xlsx`,
             );
             messageApi.success(t('pages.system.workingHoursConfigs.exportSuccess', { count: toExport.length }));
           } catch (error: any) {

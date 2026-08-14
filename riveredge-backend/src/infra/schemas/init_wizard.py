@@ -7,9 +7,11 @@ Author: Luigi Lu
 Date: 2025-01-15
 """
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+
+from core.utils.timezone_utils import site_timezone_name
 
 
 class InitStepConfig(BaseModel):
@@ -47,26 +49,13 @@ class Step1OrganizationInfo(BaseModel):
     scale: Optional[str] = Field(None, max_length=50, description="规模（small/medium/large）")
 
 
-# 步骤2：默认设置（与站点设置格式一致）
+# 步骤2：默认设置（时区唯一真源：infra_settings.TIMEZONE via site_timezone_name）
 class Step2DefaultSettings(BaseModel):
     """步骤2：默认设置"""
-    timezone: str = Field("Asia/Shanghai", description="时区")
+    timezone: str = Field(default_factory=site_timezone_name, description="时区")
     default_currency: str = Field("CNY", description="默认货币")
     default_language: str = Field("zh-CN", description="默认语言")
     date_format: str = Field("YYYY-MM-DD", description="日期格式")
-
-    @model_validator(mode="before")
-    @classmethod
-    def compat_legacy_format(cls, data: Any) -> Any:
-        """兼容旧格式：currency -> default_currency, language -> default_language"""
-        if isinstance(data, dict):
-            if "currency" in data and "default_currency" not in data:
-                data = {**data, "default_currency": data["currency"]}
-            if "language" in data and "default_language" not in data:
-                data = {**data, "default_language": data["language"]}
-            if "date_format" not in data:
-                data = {**data, "date_format": "YYYY-MM-DD"}
-        return data
 
 
 # 步骤2.5：编码规则配置
@@ -115,4 +104,3 @@ class InitWizardResponse(BaseModel):
     success: bool = Field(..., description="是否成功")
     message: str = Field(..., description="消息")
     tenant_id: int = Field(..., description="组织ID")
-

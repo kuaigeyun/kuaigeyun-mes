@@ -21,8 +21,6 @@ import { getLanguageList } from '../../services/language';
 import { useConfigStore } from '../../stores/configStore';
 import { getSiteSettingsDictCache, setSiteSettingsDictCache } from '../../utils/siteSettingsDictCache';
 import {
-  buildFallbackCurrencyOptions,
-  buildFallbackTimezoneOptions,
   mapCurrencyDictionaryOptions,
   mapTimezoneDictionaryOptions,
 } from '../../utils/systemDictionaryLabels';
@@ -224,25 +222,15 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
     }
   };
 
-  /** 步骤2 默认选项（字典为空时使用，与站点设置一致） */
-  const defaultCurrencyOptions = useMemo(() => buildFallbackCurrencyOptions(t), [t]);
-  const defaultTimezoneOptions = useMemo(() => buildFallbackTimezoneOptions(t), [t]);
+  /** 步骤2 选项：仅字典真源（TIMEZONE / CURRENCY），禁止硬编码兜底列表 */
   const localizedCurrencyOptions = useMemo(
-    () => (currencyOptions.length > 0 ? mapCurrencyDictionaryOptions(currencyOptions, t) : defaultCurrencyOptions),
-    [currencyOptions, defaultCurrencyOptions, t],
+    () => mapCurrencyDictionaryOptions(currencyOptions, t),
+    [currencyOptions, t],
   );
   const localizedTimezoneOptions = useMemo(
-    () => (timezoneOptions.length > 0 ? mapTimezoneDictionaryOptions(timezoneOptions, t) : defaultTimezoneOptions),
-    [timezoneOptions, defaultTimezoneOptions, t],
+    () => mapTimezoneDictionaryOptions(timezoneOptions, t),
+    [timezoneOptions, t],
   );
-  const defaultLanguageOptions = [
-    { label: '简体中文 (zh-CN)', value: 'zh-CN' },
-    { label: '繁体中文 (zh-Hant)', value: 'zh-Hant' },
-    { label: 'English (en-US)', value: 'en-US' },
-    { label: '日本語 (ja-JP)', value: 'ja-JP' },
-    { label: 'Tiếng Việt (vi-VN)', value: 'vi-VN' },
-    { label: '한국어 (ko-KR)', value: 'ko-KR' },
-  ];
   const dateFormatOptions = [
     { label: 'YYYY-MM-DD', value: 'YYYY-MM-DD' },
     { label: 'DD/MM/YYYY', value: 'DD/MM/YYYY' },
@@ -255,7 +243,7 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
    */
   const renderStep2 = () => {
     const stepData = initData.step2_default_settings || {
-      timezone: 'Asia/Shanghai',
+      timezone: '',
       default_currency: 'CNY',
       default_language: 'zh-CN',
       date_format: 'YYYY-MM-DD',
@@ -287,7 +275,7 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
               name="default_language"
               label={t('pages.init.wizard.defaultLanguage')}
               rules={[{ required: true, message: t('pages.init.wizard.selectLanguage') }]}
-              options={languageOptions.length > 0 ? languageOptions : defaultLanguageOptions}
+              options={languageOptions}
             />
             <ProFormSelect
               name="date_format"

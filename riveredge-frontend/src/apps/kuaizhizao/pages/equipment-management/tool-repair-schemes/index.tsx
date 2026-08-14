@@ -37,6 +37,7 @@ import {
   renderIsActiveTag,
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const P = 'app.kuaizhizao.toolOps.repairScheme';
 const RESOURCE = 'kuaizhizao:tool-repair-scheme';
@@ -126,7 +127,7 @@ const ToolRepairSchemesPage: React.FC = () => {
   );
 
   const handleDelete = async (keys: React.Key[]) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('common.batchDeleteTitle'),
       content: t('common.batchDeleteContent', { count: keys.length }),
       onOk: async () => {

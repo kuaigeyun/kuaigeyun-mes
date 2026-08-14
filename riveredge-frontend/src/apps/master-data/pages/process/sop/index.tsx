@@ -18,7 +18,7 @@ import { ROW_ACTIONS_INLINE_GAP, rowActionKind } from '../../../../../components
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { downloadFile } from '../../../../../utils';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { ListPageTemplate, FormModalTemplate, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
@@ -65,7 +65,8 @@ import {
 } from '../../../utils/sopBindingDuplicate';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
 const SOP_PAGE_CODE = 'master-data-process-sop';
 
 /**
@@ -559,7 +560,7 @@ const SOPPage: React.FC = () => {
       items.push({ code, name, version: version || undefined, isActive, operationId });
     });
     if (errors.length > 0) {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.dataValidationFailed'),
         width: 600,
         content: (
@@ -574,14 +575,15 @@ const SOPPage: React.FC = () => {
       return;
     }
     try {
-      const result = await batchImport({
+      const result = await importInChunksViaPerItemCreate({
         items,
-        importFn: async (item) => sopApi.create(item),
+        createOne: async (item, _index) => sopApi.create(item),
         title: t('app.master-data.sop.importTitle'),
-        concurrency: 5,
+        chunkSize: 100,
+        concurrency: 4,
       });
       if (result.failureCount > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.master-data.importPartialResultTitle'),
           width: 600,
           content: (
@@ -637,14 +639,14 @@ const SOPPage: React.FC = () => {
           r.name || '',
           r.version || '',
           isActive ? enabledLabel : disabledLabel,
-          r.createdAt ? new Date(r.createdAt).toLocaleString() : (r as any).created_at ? new Date((r as any).created_at).toLocaleString() : '',
+          r.createdAt ? formatDateTimeBySiteSetting(r.createdAt) : (r as any).created_at ? formatDateTimeBySiteSetting((r as any).created_at) : '',
         ].map((c) => {
           const s = String(c ?? '');
           return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
         }).join(','));
       });
       const blob = new Blob(['\ufeff' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8' });
-      downloadFile(blob, `${t('app.master-data.sop.exportFilename', { date: new Date().toISOString().slice(0, 10) })}.csv`);
+      downloadFile(blob, `${t('app.master-data.sop.exportFilename', { date: todaySiteDateString() })}.csv`);
       messageApi.success(t('common.exportSuccess', { count: toExport.length }));
     } catch (error: any) {
       messageApi.error(error?.message || t('common.exportFailed'));

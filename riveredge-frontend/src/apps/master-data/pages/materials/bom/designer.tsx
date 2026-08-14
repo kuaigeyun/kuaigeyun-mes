@@ -94,7 +94,7 @@ import {
   resolveMaterialScenarioUnit,
 } from '../../../../../utils/materialScenarioUnit';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 const BOM_RESOURCE = 'master-data:process:engineering-bom';
 
 /** 现代化配色：主色（根节点/选中） */
@@ -1167,7 +1167,7 @@ const BOMDesignerPage: React.FC = () => {
       messageApi.warning(t('app.master-data.bom.cannotDeleteRoot'));
       return;
     }
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('app.master-data.bom.deleteNode'),
       content: t('app.master-data.bom.deleteNodeConfirm'),
       okType: 'danger',

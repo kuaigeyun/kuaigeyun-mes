@@ -32,7 +32,7 @@ import {
 } from '../../../utils/masterListPresentation';
 import { PlantFormModal } from '../../../components/PlantFormModal';
 import type { Plant, PlantCreate } from '../../../types/factory';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { downloadFile } from '../../../../../utils';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
@@ -46,7 +46,8 @@ import {
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
 /**
  * 厂区管理列表页面组件
  */
@@ -332,7 +333,7 @@ const PlantsPage: React.FC = () => {
 
     // 如果有验证错误，显示错误信息
     if (errors.length > 0) {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.dataValidationFailed'),
         width: 600,
         content: (
@@ -362,18 +363,19 @@ const PlantsPage: React.FC = () => {
 
     // 批量导入
     try {
-      const result = await batchImport({
+      const result = await importInChunksViaPerItemCreate({
         items: importData,
-        importFn: async (item: PlantCreate) => {
+        createOne: async (item: PlantCreate, _index) => {
           return await plantApi.create(item);
         },
         title: t('app.master-data.plants.importTitle'),
-        concurrency: 5,
+        chunkSize: 100,
+        concurrency: 4,
       });
 
       // 显示导入结果
       if (result.failureCount > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.master-data.importPartialResultTitle'),
           width: 600,
           content: (
@@ -429,15 +431,15 @@ const PlantsPage: React.FC = () => {
           return;
         }
         exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
-        filename = `${t('app.master-data.plants.exportFilenameSelected', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+        filename = `${t('app.master-data.plants.exportFilenameSelected', { date: todaySiteDateString() })}.csv`;
       } else if (type === 'currentPage' && currentPageData) {
         // 导出当前页数据
         exportData = currentPageData;
-        filename = `${t('app.master-data.plants.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+        filename = `${t('app.master-data.plants.exportFilenameCurrentPage', { date: todaySiteDateString() })}.csv`;
       } else {
         // 导出全部数据
         exportData = await fetchAllListItems((p) => plantApi.list({ ...p, ...lastListParamsRef.current }));
-        filename = `${t('app.master-data.plants.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+        filename = `${t('app.master-data.plants.exportFilenameAll', { date: todaySiteDateString() })}.csv`;
       }
 
       if (exportData.length === 0) {
@@ -456,7 +458,7 @@ const PlantsPage: React.FC = () => {
           item.address || '',
           item.description || '',
           item.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled'),
-          item.createdAt ? new Date(item.createdAt).toLocaleString(i18n.language) : '',
+          item.createdAt ? formatDateTimeBySiteSetting(item.createdAt) : '',
         ];
         // 处理包含逗号、引号或换行符的字段
         csvRows.push(row.map(cell => {

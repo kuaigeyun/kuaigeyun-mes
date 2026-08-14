@@ -35,7 +35,7 @@ import {
   PrintDevicePrintResponse,
 } from '../../../../services/printDevice';
 import { getPrintTemplateList } from '../../../../services/printTemplate';
-import { formatDateTime } from '../../../../utils/format';
+import { formatDateTime, todaySiteDateString } from '../../../../utils/format';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -820,7 +820,7 @@ const PrintDeviceListPage: React.FC = () => {
             }
             await downloadRecordsAsXlsx(
               items as Array<Record<string, unknown>>,
-              `print-devices-${new Date().toISOString().slice(0, 10)}.xlsx`,
+              `print-devices-${todaySiteDateString()}.xlsx`,
             );
             messageApi.success(t('pages.system.printDevices.exportSuccess'));
           }}

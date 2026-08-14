@@ -53,6 +53,8 @@ import { executeDatasetQuery, getDatasetList } from '../../../../services/datase
 import { downloadFile } from '../../../../utils';
 import { useTrialRunMode } from '../../../../hooks/useTrialRunMode';
 import { resolvePresetDepartmentName } from '../../../../utils/presetEntityI18n';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../utils/format';
+import { importExcelMatrixInChunks } from '../../../../utils/chunkedBulkImport';
 
 const DepartmentListPage: React.FC = () => {
   const { t } = useTranslation();
@@ -358,7 +360,7 @@ const DepartmentListPage: React.FC = () => {
           (d as any).parent_name || '-',
           d.is_active ? t('field.role.enabled') : t('field.role.disabled'),
           String(d.sort_order ?? ''),
-          d.created_at ? new Date(d.created_at).toLocaleString() : '',
+          d.created_at ? formatDateTimeBySiteSetting(d.created_at) : '',
         ];
         csvRows.push(
           row.map((c) => {
@@ -368,7 +370,7 @@ const DepartmentListPage: React.FC = () => {
         );
       });
       const blob = new Blob(['\ufeff' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8' });
-      downloadFile(blob, `departments_${new Date().toISOString().slice(0, 10)}.csv`);
+      downloadFile(blob, `departments_${todaySiteDateString()}.csv`);
       messageApi.success(t('common.exportSuccess', { count: toExport.length }));
     } catch (error: any) {
       messageApi.error(error?.message || t('common.exportFailed'));
@@ -494,7 +496,13 @@ const DepartmentListPage: React.FC = () => {
 
   const handleImport = async (data: any[][]) => {
     try {
-      const result = await importDepartments(data);
+      const result = await importExcelMatrixInChunks({
+        data,
+        hasExampleRow: true,
+        chunkSize: 100,
+        title: t('field.department.importing', { defaultValue: '正在导入部门' }),
+        importChunk: (matrix) => importDepartments(matrix),
+      });
       if (result.success_count > 0) {
         messageApi.success(t('field.department.importSuccess', { count: result.success_count }));
         actionRef.current?.reload();

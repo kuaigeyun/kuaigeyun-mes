@@ -42,7 +42,7 @@ import {
   renderMasterActiveTag,
 } from '../../../utils/masterListPresentation';
 import type { Workshop, WorkshopCreate, Plant } from '../../../types/factory';
-import { batchImport } from '../../../../../utils/batchOperations';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
   buildFactoryImportTemplate,
@@ -55,7 +55,8 @@ import {
   useMasterDataBatchSetActive,
 } from '../../../hooks/useMasterDataBatchSetActive';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
 /**
  * 车间管理列表页面组件
  */
@@ -248,7 +249,7 @@ const WorkshopsPage: React.FC = () => {
 
     // 如果厂区列表为空，提示用户先创建厂区
     if (plants.length === 0) {
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.importDisabled'),
         content: t('app.master-data.workshops.importNoPlant'),
       });
@@ -402,7 +403,7 @@ const WorkshopsPage: React.FC = () => {
     if (errors.length > 0) {
       const hasPlantError = errors.some(e => e.kind === 'plant');
       
-      Modal.warning({
+      getAntdModal().warning({
         title: t('app.master-data.dataValidationFailed'),
         width: 700,
         content: (
@@ -452,18 +453,19 @@ const WorkshopsPage: React.FC = () => {
 
     // 批量导入
     try {
-      const result = await batchImport({
+      const result = await importInChunksViaPerItemCreate({
         items: importData,
-        importFn: async (item: WorkshopCreate) => {
+        createOne: async (item: WorkshopCreate, _index) => {
           return await workshopApi.create(item);
         },
         title: t('app.master-data.workshops.importTitle'),
-        concurrency: 5,
+        chunkSize: 100,
+        concurrency: 4,
       });
 
       // 显示导入结果
       if (result.failureCount > 0) {
-        Modal.warning({
+        getAntdModal().warning({
           title: t('app.master-data.importPartialResultTitle'),
           width: 600,
           content: (
@@ -519,15 +521,15 @@ const WorkshopsPage: React.FC = () => {
           return;
         }
         exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
-        filename = `${t('app.master-data.workshops.exportFilenameSelected', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+        filename = `${t('app.master-data.workshops.exportFilenameSelected', { date: todaySiteDateString() })}.csv`;
       } else if (type === 'currentPage' && currentPageData) {
         // 导出当前页数据
         exportData = currentPageData;
-        filename = `${t('app.master-data.workshops.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+        filename = `${t('app.master-data.workshops.exportFilenameCurrentPage', { date: todaySiteDateString() })}.csv`;
       } else {
         // 导出全部数据
         exportData = await fetchAllListItems((p) => workshopApi.list({ ...p, ...lastListParamsRef.current }));
-        filename = `${t('app.master-data.workshops.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+        filename = `${t('app.master-data.workshops.exportFilenameAll', { date: todaySiteDateString() })}.csv`;
       }
 
       if (exportData.length === 0) {
@@ -547,7 +549,7 @@ const WorkshopsPage: React.FC = () => {
           plant ? plant.name : '',
           item.description || '',
           (item.isActive ?? (item as any).is_active) ? t('common.enabled') : t('common.disabled'),
-          item.createdAt ? new Date(item.createdAt).toLocaleString(i18n.language) : '',
+          item.createdAt ? formatDateTimeBySiteSetting(item.createdAt) : '',
         ];
         // 处理包含逗号、引号或换行符的字段
         csvRows.push(row.map(cell => {

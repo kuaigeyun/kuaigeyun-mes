@@ -37,6 +37,7 @@ import {
   renderEquipmentMasterRowActions,
   renderIsActiveTag,
 } from '../shared/equipmentMasterDataDetail';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const P = 'app.kuaizhizao.equipmentOps.patrolRoute';
 const RESOURCE = 'kuaizhizao:equipment-patrol-route';
@@ -149,7 +150,7 @@ const PatrolRoutesPage: React.FC = () => {
   };
 
   const handleDelete = async (keys: React.Key[]) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t('common.batchDeleteTitle'),
       content: t('common.batchDeleteContent', { count: keys.length }),
       onOk: async () => {

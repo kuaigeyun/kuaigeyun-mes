@@ -70,7 +70,7 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 type PullPayableCandidate = PaymentPullCandidate;
 
 const P = 'app.kuaicaiwu.payment';
@@ -333,7 +333,7 @@ const PaymentsPage: React.FC = () => {
   };
 
   const handleConfirm = async (record: PaymentVoucher) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t(`${P}.confirmTitle`),
       content: t(`${P}.confirmContent`, { code: record.payment_code }),
       onOk: async () => {
@@ -350,7 +350,7 @@ const PaymentsPage: React.FC = () => {
   };
 
   const handleCancelVoucher = async (record: PaymentVoucher) => {
-    Modal.confirm({
+    getAntdModal().confirm({
       title: t(`${P}.voidTitle`),
       content: t(`${P}.voidContent`, { code: record.payment_code }),
       onOk: async () => {

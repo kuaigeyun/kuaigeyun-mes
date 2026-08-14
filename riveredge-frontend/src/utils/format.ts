@@ -19,10 +19,20 @@ function getDateFormatFromSiteSetting(): string {
   return useConfigStore.getState().getConfig('date_format', 'YYYY-MM-DD');
 }
 
-/** 从站点设置获取时区（配置真源；未下发时用与后端一致的默认，禁止业务侧再写死） */
+/** 从站点设置获取时区（唯一真源：configs.timezone；禁止业务侧再写死或缺省假定） */
 export function getTimezoneFromSiteSetting(): string {
   const tz = useConfigStore.getState().configs?.timezone;
-  return (tz && String(tz).trim()) || 'Asia/Shanghai';
+  const name = tz != null ? String(tz).trim() : '';
+  if (!name) {
+    throw new Error('站点时区未下发：configs.timezone 缺失，拒绝静默假定时区');
+  }
+  return name;
+}
+
+/** 站点日历日 YYYY-MM-DD（导出文件名等；禁止 toISOString().slice 当业务日） */
+export function todaySiteDateString(): string {
+  const tz = getTimezoneFromSiteSetting();
+  return dayjs().tz(tz).format('YYYY-MM-DD');
 }
 
 /** 从站点设置获取日期时间格式 */
