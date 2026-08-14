@@ -10,6 +10,7 @@ import type {
   MaterialGroupCreate,
   MaterialGroupUpdate,
   MaterialGroupListParams,
+  MaterialGroupTreeResult,
   Material,
   MaterialCreate,
   MaterialUpdate,
@@ -273,10 +274,20 @@ export const materialGroupApi = {
   },
 
   /**
-   * 获取物料分组树形结构
+   * 获取物料分组树形结构（含各节点物料数量与未分组/合计）
    */
-  tree: async (): Promise<any[]> => {
-    return api.get('/apps/master-data/materials/groups/tree');
+  tree: async (): Promise<MaterialGroupTreeResult> => {
+    const raw = await api.get('/apps/master-data/materials/groups/tree') as Record<string, unknown>;
+    const itemsRaw = raw?.items;
+    const items = Array.isArray(itemsRaw) ? (itemsRaw as MaterialGroup[]) : [];
+    const ungrouped =
+      Number(raw?.ungroupedMaterialCount ?? raw?.ungrouped_material_count ?? 0) || 0;
+    const total = Number(raw?.totalMaterialCount ?? raw?.total_material_count ?? 0) || 0;
+    return {
+      items,
+      ungroupedMaterialCount: ungrouped,
+      totalMaterialCount: total,
+    };
   },
 };
 

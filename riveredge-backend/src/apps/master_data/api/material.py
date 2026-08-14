@@ -51,7 +51,7 @@ from apps.master_data.schemas.material_schemas import (
     BOMBatchImport, BOMVersionCreate, BOMVersionCompare,
     BOMRelationImportRequest, BOMRelationImportResponse,
     BOMGroupSummary, BOMGroupListResponse, BOMBatchItemsRequest,
-    MaterialGroupTreeResponse,
+    MaterialGroupTreeListResponse,
     MaterialCodeMappingCreate, MaterialCodeMappingUpdate, MaterialCodeMappingResponse,
     MaterialCodeMappingListResponse, MaterialCodeConvertRequest, MaterialCodeConvertResponse,
     MaterialBatchCreate, MaterialBatchUpdate, MaterialBatchResponse, MaterialBatchListResponse,
@@ -151,48 +151,22 @@ async def list_material_groups(
     return await MaterialService.list_material_groups(tenant_id, skip, limit, parent_id, is_active)
 
 
-@router.get("/groups/tree", response_model=List[MaterialGroupTreeResponse], response_model_by_alias=True, summary="Get material group tree")
+@router.get(
+    "/groups/tree",
+    response_model=MaterialGroupTreeListResponse,
+    response_model_by_alias=True,
+    summary="Get material group tree",
+)
 async def get_material_group_tree(
     is_active: Optional[bool] = Query(None, description="是否只查询启用的数据（可选）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
     """
-    获取物料分组树形结构（物料分组→物料）
-    
-    返回完整的物料分组层级结构，支持多级分组，用于级联选择等场景。
-    
-    - **is_active**: 是否只查询启用的数据（可选）
-    
-    返回结构：
-    ```json
-    [
-      {
-        "id": 1,
-        "uuid": "...",
-        "code": "MG001",
-        "name": "物料分组1",
-        "children": [
-          {
-            "id": 2,
-            "uuid": "...",
-            "code": "MG002",
-            "name": "子分组1",
-            "children": [],
-            "materials": [
-              {
-                "id": 1,
-                "uuid": "...",
-                "code": "MAT001",
-                "name": "物料1"
-              }
-            ]
-          }
-        ],
-        "materials": []
-      }
-    ]
-    ```
+    获取物料分组树形结构。
+
+    每个节点含 materialCount（本组及下级树形列表主行数，含孤儿属性 SKU）。
+    另含 ungroupedMaterialCount / totalMaterialCount。
     """
     return await MaterialService.get_material_group_tree(tenant_id, is_active)
 

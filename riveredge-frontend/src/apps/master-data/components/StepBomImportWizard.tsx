@@ -165,15 +165,16 @@ export const StepBomImportWizard: React.FC<StepBomImportWizardProps> = ({
       setParsing(true);
       setParseError('');
       try {
-        const [matRes, groupTree] = await Promise.all([
+        const [matRes, groupTreeResult] = await Promise.all([
           materialApi.list({ limit: 500 }),
           materialGroupApi.tree(),
         ]);
         if (cancelled) return;
         const matList = matRes?.items ?? [];
         setMaterials(matList);
-        setGroups(flattenGroupTree(groupTree ?? []));
-        if (groupTree?.length && !defaultGroupId) {
+        const groupTree = groupTreeResult.items ?? [];
+        setGroups(flattenGroupTree(groupTree));
+        if (groupTree.length && !defaultGroupId) {
           const flat = flattenGroupTree(groupTree);
           if (flat[0]) setDefaultGroupId(flat[0].id);
         }

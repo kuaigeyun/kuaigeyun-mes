@@ -1,1 +1,0 @@
-import{j as n,Z as i}from"./vendor-gBTVkus8.js";const a=({items:s,size:t=8})=>{const r=s.filter(e=>e.visible!==!1);return r.length===0?null:n.jsx(i,{size:t,children:r.map(e=>n.jsx("span",{children:typeof e.render=="function"?e.render():e.render},e.key))})};export{a as D};

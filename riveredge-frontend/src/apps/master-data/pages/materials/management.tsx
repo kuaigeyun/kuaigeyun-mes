@@ -908,35 +908,62 @@ const MaterialsManagementPage: React.FC = () => {
   /**
    * 将后端树形数据转换为Ant Design Tree组件格式
    */
-  const convertToTreeData = useCallback((treeResponse: any[]): DataNode[] => {
-    const convertNode = (node: any): DataNode & { searchLabel?: string } => {
-      const label = formatMaterialGroupLabel(node)
-      // rc-tree 将 data.title 写入 node-content-wrapper 的 HTML title（含右侧空白区），须用完整悬停文案
-      return {
-        title: formatMaterialGroupHoverTitle(node),
-        searchLabel: label,
-        key: node.id.toString(),
-        isLeaf: !node.children || node.children.length === 0,
-        children: node.children ? node.children.map(convertNode) : undefined,
-      }
-    }
+  const convertToTreeData = useCallback(
+    (
+      treeResponse: any[],
+      summary?: { ungroupedMaterialCount?: number; totalMaterialCount?: number },
+    ): DataNode[] => {
+      const withCount = (label: string, count: number | undefined) =>
+        typeof count === 'number' && Number.isFinite(count) ? `${label} (${count})` : label
 
-    return [
-      {
-        title: t('app.master-data.materials.allMaterials'),
-        key: 'all',
-        isLeaf: false,
-        children: [
-          ...treeResponse.map(convertNode),
-          {
-            title: t('app.master-data.materials.noGroup'),
-            key: 'no-group',
-            isLeaf: true,
-          },
-        ],
-      },
-    ]
-  }, [t])
+      const convertNode = (node: any): DataNode & { searchLabel?: string } => {
+        const count = Number(node.materialCount ?? node.material_count)
+        const label = withCount(
+          formatMaterialGroupLabel(node),
+          Number.isFinite(count) ? count : undefined,
+        )
+        // rc-tree 将 data.title 写入 node-content-wrapper 的 HTML title（含右侧空白区），须用完整悬停文案
+        return {
+          title: withCount(
+            formatMaterialGroupHoverTitle(node),
+            Number.isFinite(count) ? count : undefined,
+          ),
+          searchLabel: label,
+          key: node.id.toString(),
+          isLeaf: !node.children || node.children.length === 0,
+          children: node.children ? node.children.map(convertNode) : undefined,
+        }
+      }
+
+      const allLabel = withCount(
+        t('app.master-data.materials.allMaterials'),
+        summary?.totalMaterialCount,
+      )
+      const noGroupLabel = withCount(
+        t('app.master-data.materials.noGroup'),
+        summary?.ungroupedMaterialCount,
+      )
+
+      return [
+        {
+          title: allLabel,
+          searchLabel: allLabel,
+          key: 'all',
+          isLeaf: false,
+          children: [
+            ...treeResponse.map(convertNode),
+            {
+              title: noGroupLabel,
+              searchLabel: noGroupLabel,
+              key: 'no-group',
+              isLeaf: true,
+            },
+          ],
+        },
+      ]
+    },
+    [t],
+  )
 
   /** 批量移动分组：TreeSelect 用树形数据（不含「全部物料」根节点） */
   const batchMoveGroupTreeData = useMemo(() => {
@@ -976,9 +1003,13 @@ const MaterialsManagementPage: React.FC = () => {
 
       // 获取树形结构数据
       const treeResult = await materialGroupApi.tree()
+      const treeItems = treeResult.items ?? []
 
-      // 构建树形数据
-      const treeData: DataNode[] = convertToTreeData(treeResult)
+      // 构建树形数据（含各节点物料数量）
+      const treeData: DataNode[] = convertToTreeData(treeItems, {
+        ungroupedMaterialCount: treeResult.ungroupedMaterialCount,
+        totalMaterialCount: treeResult.totalMaterialCount,
+      })
 
       setGroupTreeData(treeData)
       setFilteredGroupTreeData(treeData)
@@ -1353,12 +1384,13 @@ const MaterialsManagementPage: React.FC = () => {
       try {
         await materialApi.delete(record.uuid)
         messageApi.success(t('common.deleteSuccess'))
+        await loadMaterialGroups()
         actionRef.current?.reload()
       } catch (error: any) {
         messageApi.error(error.message || t('common.deleteFailed'))
       }
     },
-    [messageApi]
+    [messageApi, loadMaterialGroups, t]
   )
 
   /**
@@ -1390,12 +1422,15 @@ const MaterialsManagementPage: React.FC = () => {
       }
 
       setSelectedRowKeys([])
+      if (deletedCount > 0) {
+        await loadMaterialGroups()
+      }
       actionRef.current?.reload()
     } catch (error: any) {
       messageApi.error(error.message || t('common.batchDeleteFailed'))
       throw error
     }
-  }, [selectedRowKeys, messageApi, t])
+  }, [selectedRowKeys, messageApi, t, loadMaterialGroups])
 
   const handleOpenBatchMoveGroup = useCallback(() => {
     if (selectedRowKeys.length === 0) {
@@ -1428,13 +1463,16 @@ const MaterialsManagementPage: React.FC = () => {
       }
       setBatchMoveGroupOpen(false)
       setSelectedRowKeys([])
+      if (res.updated_count > 0) {
+        await loadMaterialGroups()
+      }
       actionRef.current?.reload()
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.materials.batchMoveGroupFailed'))
     } finally {
       setBatchMoveGroupSubmitting(false)
     }
-  }, [selectedRowKeys, batchMoveGroupId, messageApi, t])
+  }, [selectedRowKeys, batchMoveGroupId, messageApi, t, loadMaterialGroups])
 
   const handleOpenBatchProcessRoute = useCallback(() => {
     if (selectedRowKeys.length === 0) {
@@ -3320,6 +3358,7 @@ const MaterialsManagementPage: React.FC = () => {
         messageApi.success(t('common.updateSuccess'))
         
         setMaterialModalVisible(false)
+        await loadMaterialGroups()
         actionRef.current?.reload()
         await maybeOpenFabricationWizard(refreshed, values)
         return result
@@ -3328,6 +3367,7 @@ const MaterialsManagementPage: React.FC = () => {
         messageApi.success(t('common.createSuccess'))
         
         setMaterialModalVisible(false)
+        await loadMaterialGroups()
         actionRef.current?.reload()
         await maybeOpenFabricationWizard(result, values)
         return result

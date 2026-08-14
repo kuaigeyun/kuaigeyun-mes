@@ -845,11 +845,37 @@ class MaterialGroupTreeResponse(MaterialGroupResponse):
     
     children: List["MaterialGroupTreeResponse"] = Field(default_factory=list, alias="children", description="子分组列表")
     materials: List[MaterialTreeResponse] = Field(default_factory=list, alias="materials", description="物料列表")
+    material_count: int = Field(
+        0,
+        alias="materialCount",
+        description="本组及下级树形列表主行数（主物料 + 主物料不在范围内的孤儿属性 SKU）",
+    )
     
     model_config = ConfigDict(
         from_attributes=True,
         populate_by_name=True,
         by_alias=True
+    )
+
+
+class MaterialGroupTreeListResponse(BaseModel):
+    """物料分组树列表响应（含未分组/合计数量）"""
+
+    items: List[MaterialGroupTreeResponse] = Field(default_factory=list, description="根分组树")
+    ungrouped_material_count: int = Field(
+        0,
+        alias="ungroupedMaterialCount",
+        description="未分组物料数量",
+    )
+    total_material_count: int = Field(
+        0,
+        alias="totalMaterialCount",
+        description="全部物料数量（含未分组）",
+    )
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        by_alias=True,
     )
 
 

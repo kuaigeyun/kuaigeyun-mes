@@ -20,9 +20,17 @@ export interface MaterialGroup {
   process_route_name?: string;
   inspectionStages?: Record<string, { mode?: string; planId?: number | null; plan_id?: number | null }>;
   inspection_stages?: Record<string, { mode?: string; planId?: number | null; plan_id?: number | null }>;
+  /** 本组及下级树形列表主行数（主物料 + 孤儿属性 SKU） */
+  materialCount?: number;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
+}
+
+export interface MaterialGroupTreeResult {
+  items: MaterialGroup[];
+  ungroupedMaterialCount: number;
+  totalMaterialCount: number;
 }
 
 /** 物料分组展示标签：有代号时优先显示英文代号，否则显示编号 */

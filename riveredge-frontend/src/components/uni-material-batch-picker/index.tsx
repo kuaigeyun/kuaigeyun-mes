@@ -90,7 +90,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
   const loadTree = useCallback(async () => {
     try {
       const tree = await materialGroupApi.tree();
-      setGroupTree(mapMaterialGroupTree(Array.isArray(tree) ? tree : []));
+      setGroupTree(mapMaterialGroupTree(tree.items ?? []));
     } catch {
       setGroupTree([]);
       message.error(t('app.kuaizhizao.salesOrder.materialPickerLoadGroupFailed'));

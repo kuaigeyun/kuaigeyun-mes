@@ -439,6 +439,55 @@ async def _resolve_variant_material_code(
     raise ValidationError("无法生成唯一的属性物料编码，请检查属性组合或联系管理员")
 
 
+def _is_material_tree_master_row(variant_attributes: Any) -> bool:
+    """树形列表主行：variant_attributes 为空（属性 SKU 挂 children）。"""
+    return variant_attributes is None
+
+
+def _count_material_tree_roots_in_scope(
+    material_rows: List[Dict[str, Any]],
+    group_ids: Set[Optional[int]],
+) -> int:
+    """
+    统计某组分组范围内、与树形列表一致的主行数量。
+
+    含：variant_attributes 为空的主物料；以及主物料不在该范围内的孤儿属性 SKU
+    （否则删分组会提示有物料，但列表看不见）。
+    """
+    in_scope = [row for row in material_rows if row.get("group_id") in group_ids]
+    master_codes = {
+        row["main_code"]
+        for row in in_scope
+        if _is_material_tree_master_row(row.get("variant_attributes")) and row.get("main_code")
+    }
+    total = 0
+    for row in in_scope:
+        if _is_material_tree_master_row(row.get("variant_attributes")):
+            total += 1
+        elif not row.get("main_code") or row["main_code"] not in master_codes:
+            total += 1
+    return total
+
+
+async def _material_tree_root_queryset(query):
+    """
+    树形列表根行查询：主物料 + 当前过滤范围内的孤儿属性 SKU。
+    """
+    master_codes = {
+        code
+        for code in await query.filter(variant_attributes__isnull=True).values_list(
+            "main_code", flat=True
+        )
+        if code
+    }
+    if not master_codes:
+        return query
+    return query.filter(
+        Q(variant_attributes__isnull=True)
+        | (Q(variant_attributes__isnull=False) & ~Q(main_code__in=list(master_codes)))
+    )
+
+
 def _material_orm_matches_keyword(material, keyword: str) -> bool:
     """判断物料行是否匹配列表关键词（含 SKU 子编码 code）。"""
     kw = keyword.strip().lower()
@@ -552,6 +601,7 @@ async def _build_material_response(tenant_id: int, material: Material) -> "Mater
 if TYPE_CHECKING:
     from apps.master_data.schemas.material_schemas import (
         MaterialGroupTreeResponse,
+        MaterialGroupTreeListResponse,
         MaterialTreeResponse
     )
 
@@ -889,7 +939,10 @@ class MaterialService:
         ).count()
         
         if materials_count > 0:
-            raise ValidationError(f"物料分组下存在 {materials_count} 个物料，无法删除")
+            raise ValidationError(
+                f"物料分组下存在 {materials_count} 个物料，无法删除。"
+                "请先在列表中删除或移到其他分组（含属性 SKU）。"
+            )
         
         # 软删除
         from tortoise import timezone
@@ -1948,9 +2001,14 @@ class MaterialService:
         db_sort: str,
         desc: bool,
     ) -> MaterialListResponse:
-        """树形列表：仅分页主行（variant_attributes 为空），属性 SKU 挂到 children。"""
+        """
+        树形列表：分页主行（variant_attributes 为空），属性 SKU 挂到 children。
+
+        若属性 SKU 落在当前过滤范围、但其主物料不在该范围（孤儿 SKU），则作为独立主行展示，
+        避免「列表为空却无法删分组」。
+        """
         keyword_norm = (keyword or "").strip()
-        root_query = query.filter(variant_attributes__isnull=True)
+        root_query = await _material_tree_root_queryset(query)
         root_matched_codes: set = set()
 
         if keyword_norm:
@@ -1961,7 +2019,7 @@ class MaterialService:
                 if not mc:
                     continue
                 show_main_codes.add(mc)
-                if row.get("variant_attributes") is None:
+                if _is_material_tree_master_row(row.get("variant_attributes")):
                     root_matched_codes.add(mc)
             if not show_main_codes:
                 return MaterialListResponse(items=[], total=0)
@@ -1977,7 +2035,13 @@ class MaterialService:
             .all()
         )
 
-        variant_main_codes = [r.main_code for r in roots if r.variant_managed]
+        variant_main_codes = [
+            r.main_code
+            for r in roots
+            if r.variant_managed
+            and _is_material_tree_master_row(r.variant_attributes)
+            and r.main_code
+        ]
         children_by_main: Dict[str, List[Any]] = defaultdict(list)
         if variant_main_codes:
             children = (
@@ -2021,10 +2085,11 @@ class MaterialService:
                     f"code={getattr(root, 'code', None)}"
                 )
             kids_data = []
-            for child in children_by_main.get(root.main_code, []):
-                cd = row_by_id.get(child.id)
-                if cd:
-                    kids_data.append(MaterialResponse.model_validate(cd))
+            if _is_material_tree_master_row(root.variant_attributes):
+                for child in children_by_main.get(root.main_code, []):
+                    cd = row_by_id.get(child.id)
+                    if cd:
+                        kids_data.append(MaterialResponse.model_validate(cd))
             if kids_data:
                 root_data = {**root_data, "children": kids_data}
             items.append(MaterialResponse.model_validate(root_data))
@@ -4895,21 +4960,18 @@ class MaterialService:
     async def get_material_group_tree(
         tenant_id: int,
         is_active: Optional[bool] = None
-    ) -> List["MaterialGroupTreeResponse"]:
+    ) -> "MaterialGroupTreeListResponse":
         """
-        获取物料分组树形结构（物料分组→物料）
-        
-        返回完整的物料分组层级结构，支持多级分组，用于级联选择等场景。
-        
-        Args:
-            tenant_id: 租户ID
-            is_active: 是否只查询启用的数据（可选）
-            
-        Returns:
-            List[MaterialGroupTreeResponse]: 物料分组树形列表，每个分组包含子分组列表和物料列表
+        获取物料分组树形结构。
+
+        每个节点 material_count 与物料管理树形列表主行一致：
+        主物料 + 主物料不在该分组范围的孤儿属性 SKU（与删分组校验可见性对齐）。
         """
         # 延迟导入避免循环依赖
-        from apps.master_data.schemas.material_schemas import MaterialGroupTreeResponse
+        from apps.master_data.schemas.material_schemas import (
+            MaterialGroupTreeResponse,
+            MaterialGroupTreeListResponse,
+        )
         
         # 仅拉分组树；物料走列表分页/按分组过滤，禁止一次灌入全部物料
         group_query = MaterialGroup.filter(
@@ -4920,6 +4982,11 @@ class MaterialService:
             group_query = group_query.filter(is_active=is_active)
         
         groups = await group_query.prefetch_related("process_route").order_by("code").all()
+
+        material_rows = await Material.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).values("group_id", "main_code", "variant_attributes")
         
         # 构建分组映射（按父分组ID分组）
         group_map: dict[Optional[int], List[MaterialGroupTreeResponse]] = {}
@@ -4944,6 +5011,7 @@ class MaterialService:
                 "deleted_at": group.deleted_at,
                 "children": [],
                 "materials": [],
+                "material_count": 0,
                 "process_route_id": getattr(group, 'process_route_id', None) if hasattr(group, 'process_route_id') else (getattr(group.process_route, 'id', None) if hasattr(group, 'process_route') and group.process_route else None),
                 "process_route_name": getattr(group.process_route, 'name', None) if hasattr(group, 'process_route') and group.process_route else None,
                 "inspection_stages": getattr(group, "inspection_stages", None),
@@ -4951,22 +5019,40 @@ class MaterialService:
             group_response = MaterialGroupTreeResponse.model_validate(group_dict)
             group_map[parent_id].append(group_response)
         
-        # 递归构建分组树形结构
+        # 递归构建分组树形结构，并回填含下级的物料数量
         def build_tree(parent_id: Optional[int]) -> List[MaterialGroupTreeResponse]:
-            """递归构建分组树"""
             result: List[MaterialGroupTreeResponse] = []
             if parent_id not in group_map:
                 return result
             
             for group_response in group_map[parent_id]:
-                # 递归获取子分组
                 group_response.children = build_tree(group_response.id)
+                scope_ids: Set[Optional[int]] = {group_response.id}
+
+                def _collect(nodes: List[MaterialGroupTreeResponse]) -> None:
+                    for node in nodes:
+                        scope_ids.add(node.id)
+                        if node.children:
+                            _collect(node.children)
+
+                _collect(group_response.children)
+                group_response.material_count = _count_material_tree_roots_in_scope(
+                    material_rows, scope_ids
+                )
                 result.append(group_response)
             
             return result
         
-        # 从根分组（parent_id 为 None）开始构建树
-        return build_tree(None)
+        roots = build_tree(None)
+        ungrouped_count = _count_material_tree_roots_in_scope(material_rows, {None})
+        all_group_ids: Set[Optional[int]] = {g.id for g in groups}
+        all_group_ids.add(None)
+        total_count = _count_material_tree_roots_in_scope(material_rows, all_group_ids)
+        return MaterialGroupTreeListResponse(
+            items=roots,
+            ungrouped_material_count=ungrouped_count,
+            total_material_count=total_count,
+        )
     
     # ==================== BOM批量导入和验证相关方法（根据优化设计规范新增） ====================
     
