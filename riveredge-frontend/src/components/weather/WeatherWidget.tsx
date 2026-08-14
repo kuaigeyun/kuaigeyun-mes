@@ -27,6 +27,8 @@ import { getWeatherIcon } from './weatherIcons';
 
 const { Text } = Typography;
 const WEATHER_REFRESH_ONCE_PER_PAGE_KEY = 'RIVEREDGE_WEATHER_REFRESH_ONCE_PER_PAGE';
+/** Zustand selector 缺省值须稳定引用，禁止 inline []（每次 render 新数组 → 无限重渲染 React #185） */
+const EMPTY_REGION_CODES: string[] = [];
 
 interface WeatherWidgetProps {
   /** 是否显示刷新按钮 */
@@ -56,7 +58,9 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
 }) => {
   const { t, i18n } = useTranslation();
   const locationMode = useConfigStore((s) => s.getConfig<string>('user_location.mode', 'ip'));
-  const locationCodes = useConfigStore((s) => s.getConfig<string[]>('user_location.region_codes', []));
+  const locationCodes = useConfigStore((s) =>
+    s.getConfig<string[]>('user_location.region_codes', EMPTY_REGION_CODES),
+  );
   const locationKey = useMemo(
     () => getSiteWeatherLocationKey(),
     [locationMode, Array.isArray(locationCodes) ? locationCodes.join('/') : '']

@@ -1,0 +1,1 @@
+import{w as i}from"./clearSessionQueries-BUUvESVf.js";import"./vendor-gBTVkus8.js";function e(){return i("/apps/kuaiiot/config/notification-rules/load-presets",{method:"POST"})}export{e as loadKuaiiotNotificationRulePresets};
