@@ -174,7 +174,6 @@ const ComputationHistoryTab: React.FC = () => {
         width: 132,
         uniTableKeepWidth: true,
         sorter: true,
-        defaultSortOrder: 'descend',
         hideInSearch: true,
         render: (_, record) => formatDateTimeBySiteSetting(record.computation_start_time),
       },

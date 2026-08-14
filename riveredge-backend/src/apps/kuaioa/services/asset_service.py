@@ -34,7 +34,7 @@ class AssetPurchaseService:
             q = q.filter(status=status)
         if keyword:
             q = q.filter(build_keyword_q(keyword, "purchase_code", "title", "applicant_name"))
-        rows = await q.order_by("-updated_at")
+        rows = await q.order_by("-created_at", "-id")
         result = []
         for row in rows:
             item = model_to_dict(row)
@@ -192,7 +192,7 @@ class AssetRegistryService:
             q = q.filter(status=status)
         if keyword:
             q = q.filter(build_keyword_q(keyword, "asset_code", "asset_name", "custodian_name"))
-        rows = await q.order_by("-updated_at")
+        rows = await q.order_by("-created_at", "-id")
         return [model_to_dict(row) for row in rows]
 
     async def get_asset(self, tenant_id: int, asset_id: int) -> dict[str, Any]:

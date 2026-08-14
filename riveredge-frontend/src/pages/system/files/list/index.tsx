@@ -42,7 +42,6 @@ import {
   CopyOutlined,
   ScissorOutlined,
   SnippetsOutlined,
-  CompressOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
 import type { DataNode, TreeProps } from 'antd/es/tree';
@@ -55,7 +54,6 @@ import {
   updateFile,
   batchDeleteFiles,
   getFileDownloadUrlWithToken,
-  backfillImageTiers,
   type File,
   FileUpdate,
   FileListParams,
@@ -272,7 +270,6 @@ const FileListPage: React.FC = () => {
   const editFolderFormRef = useRef<ProFormInstance>();
   const [editingFolderCategory, setEditingFolderCategory] = useState<string | null>(null);
   const [savingFolderEdit, setSavingFolderEdit] = useState(false);
-  const [imageTierBackfillLoading, setImageTierBackfillLoading] = useState(false);
   const [storageSettingsVisible, setStorageSettingsVisible] = useState(false);
   
   // 右键菜单状态
@@ -866,43 +863,6 @@ const FileListPage: React.FC = () => {
   };
 
   /**
-   * 存量图片三档压缩：缩略图 64 / 预览图 512
-   */
-  const handleBackfillImageTiers = async () => {
-    try {
-      setImageTierBackfillLoading(true);
-      let offset = 0;
-      let done = false;
-      let totalGenerated = 0;
-      const treeKey = selectedTreeKeys[0] as string | undefined;
-      const category =
-        treeKey &&
-        treeKey !== ROOT_PATH_KEY &&
-        treeKey !== FILE_UNCATEGORIZED_GROUP_KEY &&
-        !CLIENT_FILTER_TREE_KEYS.has(treeKey)
-          ? treeKey
-          : undefined;
-
-      while (!done) {
-        const result = await backfillImageTiers({ limit: 50, offset, category });
-        totalGenerated += result.generated;
-        done = result.done;
-        offset = result.next_offset;
-      }
-      messageApi.success(
-        t('pages.system.files.imageTierBackfillSuccess', { count: totalGenerated }),
-      );
-      reloadCurrentFolder();
-    } catch (error: unknown) {
-      const msg =
-        error instanceof Error ? error.message : t('pages.system.files.imageTierBackfillFailed');
-      messageApi.error(msg);
-    } finally {
-      setImageTierBackfillLoading(false);
-    }
-  };
-
-  /**
    * 处理文件下载（使用带 token 的 URL，确保生产环境可下载）
    */
   const handleDownload = async (file: File) => {
@@ -1440,13 +1400,6 @@ const FileListPage: React.FC = () => {
                   {t('pages.system.files.deleteButton')}
                 </Button>
                 <Button
-                  icon={<CompressOutlined />}
-                  loading={imageTierBackfillLoading}
-                  onClick={() => void handleBackfillImageTiers()}
-                >
-                  {t('pages.system.files.imageTierBackfillButton')}
-                </Button>
-                <Button
                   icon={<SettingOutlined />}
                   onClick={() => setStorageSettingsVisible(true)}
                 >
@@ -1590,6 +1543,7 @@ const FileListPage: React.FC = () => {
       <FileStorageSettingsModal
         open={storageSettingsVisible}
         onClose={() => setStorageSettingsVisible(false)}
+        onImageTiersBackfilled={reloadCurrentFolder}
       />
 
       {/* 重命名 Modal */}

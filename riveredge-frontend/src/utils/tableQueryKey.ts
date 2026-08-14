@@ -33,13 +33,18 @@ export function stableJsonForQueryKey(value: unknown): string {
 /**
  * 从 ProTable / UniTable 的 sort 对象解析首个有效排序（含列头排序）。
  */
+/** ProTable sort → { sortBy, sortOrder }。
+ * 整站缺省：未点列排序时按创建时间倒序（新建在上），禁止用更新时间冒充。
+ */
 export function extractProTableSort(
   sort: Record<string, 'ascend' | 'descend' | null | undefined>
 ): { sortBy?: string; sortOrder?: 'asc' | 'desc' } {
   const entries = Object.entries(sort || {}).filter(
     ([, v]) => v === 'ascend' || v === 'descend'
   ) as [string, 'ascend' | 'descend'][]
-  if (entries.length === 0) return {}
+  if (entries.length === 0) {
+    return { sortBy: 'created_at', sortOrder: 'desc' }
+  }
   const [field, order] = entries[0]
   return {
     sortBy: field,

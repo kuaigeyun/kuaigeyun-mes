@@ -1,0 +1,1 @@
+import{n as i,m as u}from"./documentAttachments-C9Pg2dFW.js";function m(o){const n=i(o),s=[],a=new Set;for(const e of n){const t=String(e.uid||"").trim();!t||a.has(t)||(a.add(t),s.push(t))}return s}function c(o){return u((o??[]).filter(Boolean).map(n=>({uid:n,name:"附件",status:"done"})))}export{c as a,m as u};

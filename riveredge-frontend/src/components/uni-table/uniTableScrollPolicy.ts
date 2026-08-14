@@ -57,6 +57,9 @@ const VIEWPORT_SCROLL_MIN_AVAILABLE_PX = 80
 /**
  * natural-height 模式下实测表体是否超出可视区域（多行单元格、树表展开等）。
  * 返回 true 时应由 UniTable 强制开启 scroll.y。
+ *
+ * 仅用于尚未限高的 natural 表。限高后 antd 会拆表，tbody.scrollHeight 失效，
+ * 调用方不得据此再关回 natural（会与 ResizeObserver 形成 React #185）。
  */
 export function measureTableBodyOverflowsViewport(root: HTMLElement | null): boolean {
   if (!root || typeof window === 'undefined') return false

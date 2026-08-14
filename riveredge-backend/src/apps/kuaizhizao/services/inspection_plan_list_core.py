@@ -23,7 +23,7 @@ INSPECTION_PLAN_SORTABLE_FIELDS = frozenset({
 
 INSPECTION_PLAN_KEYWORD_FIELDS = ["plan_code", "plan_name"]
 
-DEFAULT_INSPECTION_PLAN_ORDER = "-updated_at"
+DEFAULT_INSPECTION_PLAN_ORDER = "-created_at"
 
 
 def apply_inspection_plan_search_filters(

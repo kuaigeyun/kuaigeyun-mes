@@ -452,10 +452,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         limit = params.limit or 20
 
         total = await query.count()
-        order_clause = params.order_by or "-updated_at"
+        order_clause = params.order_by or "-created_at"
         field = order_clause.lstrip("-")
         if field not in PURCHASE_ORDER_SORTABLE_FIELDS:
-            order_clause = "-updated_at"
+            order_clause = "-created_at"
         orders = await query.offset(skip).limit(limit).order_by(order_clause, "-id")
 
         # 不能直接 model_validate(order)：order.items 是 ReverseRelation，会导致 Pydantic 校验失败

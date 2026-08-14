@@ -407,7 +407,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
             keyword=merged_keyword,
             order_by=order_by,
             allowed_fields=INVENTORY_TRANSFER_SORTABLE_FIELDS,
-            default_order="-updated_at",
+            default_order="-created_at",
             keyword_fields=INVENTORY_TRANSFER_KEYWORD_FIELDS,
             doc_date_field="transfer_date",
             doc_start_date=transfer_date_start,

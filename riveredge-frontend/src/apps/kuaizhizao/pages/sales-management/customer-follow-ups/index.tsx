@@ -497,7 +497,6 @@ const CustomerFollowUpsPage: React.FC = () => {
       uniTableKeepWidth: true,
       sorter: true,
       hideInSearch: true,
-      defaultSortOrder: 'descend',
       render: (_, row) =>
         row.occurred_at ? formatDateTime(row.occurred_at, 'YYYY-MM-DD HH:mm') : '',
     },

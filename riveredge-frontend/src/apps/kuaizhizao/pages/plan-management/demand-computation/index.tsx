@@ -2178,7 +2178,6 @@ const DemandComputationPage: React.FC = () => {
       width: 188,
       uniTableKeepWidth: true,
       sorter: true,
-      defaultSortOrder: 'descend',
       hideInSearch: true,
       render: (_, record) => (
         <UniTableStackedPrimaryCell

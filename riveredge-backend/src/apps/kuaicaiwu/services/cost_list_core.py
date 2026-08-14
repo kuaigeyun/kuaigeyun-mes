@@ -184,7 +184,7 @@ def apply_cost_rule_list_filters(
     updated_end_date: Optional[str] = None,
     sort_field: Optional[str] = None,
     sort_order: Optional[str] = None,
-    default_sort_col: str = "code",
+    default_sort_col: str = "created_at",
 ) -> Tuple:
     kw = (keyword or "").strip()
     if kw:

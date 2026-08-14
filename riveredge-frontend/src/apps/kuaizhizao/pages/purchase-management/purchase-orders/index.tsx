@@ -858,7 +858,6 @@ const PurchaseOrdersPage: React.FC = () => {
       width: 148,
       uniTableKeepWidth: true,
       sorter: true,
-      defaultSortOrder: 'descend',
       hideInSearch: true,
       render: (_: any, record: PurchaseOrder) => (
         <UniTableStackedPrimaryCell

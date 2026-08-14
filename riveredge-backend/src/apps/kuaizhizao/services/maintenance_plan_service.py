@@ -300,7 +300,7 @@ class MaintenancePlanService:
         order_clause = resolve_equipment_list_order_by(
             order_by,
             MAINTENANCE_PLAN_SORTABLE_FIELDS,
-            "-updated_at",
+            "-created_at",
         )
         plans = await query.offset(skip).limit(limit).order_by(order_clause)
         

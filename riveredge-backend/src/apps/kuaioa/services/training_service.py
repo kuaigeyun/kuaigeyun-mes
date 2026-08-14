@@ -33,7 +33,7 @@ class TrainingPlanService:
             q = q.filter(status=status)
         if keyword:
             q = q.filter(build_keyword_q(keyword, "plan_code", "plan_name", "department_name"))
-        rows = await q.order_by("-updated_at")
+        rows = await q.order_by("-created_at", "-id")
         return [model_to_dict(row) for row in rows]
 
     async def get_plan(self, tenant_id: int, plan_id: int) -> dict[str, Any]:
@@ -104,7 +104,7 @@ class TrainingRecordService:
             q = q.filter(plan_id=plan_id)
         if keyword:
             q = q.filter(build_keyword_q(keyword, "record_code", "training_name", "trainee_name"))
-        rows = await q.order_by("-updated_at")
+        rows = await q.order_by("-created_at", "-id")
         return [model_to_dict(row) for row in rows]
 
     async def get_record(self, tenant_id: int, record_id: int) -> dict[str, Any]:

@@ -864,7 +864,6 @@ const AfterSalesTicketsPage: React.FC = () => {
         resizable: false,
         sorter: true,
         hideInSearch: true,
-        defaultSortOrder: 'descend',
         render: (_, row) =>
           row.registered_at ? formatDateTime(row.registered_at, 'YYYY-MM-DD HH:mm') : '',
       },

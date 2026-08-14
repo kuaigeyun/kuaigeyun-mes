@@ -4,9 +4,10 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Alert, Button, Form, Input, Modal, Progress, Select, Space, Switch, Typography } from 'antd';
+import { App, Alert, Button, Divider, Form, Input, Modal, Progress, Select, Space, Switch, Typography } from 'antd';
 import { Link } from 'react-router-dom';
 import {
+  backfillImageTiers,
   getFileStorageSettings,
   migrateFileStorageToCos,
   saveFileStorageSettings,
@@ -18,6 +19,7 @@ import { MODAL_CONFIG } from '../../../../components/layout-templates/constants'
 export interface FileStorageSettingsModalProps {
   open: boolean;
   onClose: () => void;
+  onImageTiersBackfilled?: () => void;
 }
 
 /** 本轮前端可选的对象存储连接类型（与后端 SUPPORTED_OBJECT_STORAGE_TYPES 对齐） */
@@ -31,13 +33,18 @@ type StorageLocationOption = {
   type?: string;
 };
 
-const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ open, onClose }) => {
+const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({
+  open,
+  onClose,
+  onImageTiersBackfilled,
+}) => {
   const { t } = useTranslation();
   const { message: messageApi, modal } = App.useApp();
   const [form] = Form.useForm<FileStorageSettings & { storage_location?: string }>();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [migrating, setMigrating] = useState(false);
+  const [imageTierBackfillLoading, setImageTierBackfillLoading] = useState(false);
   const [connectionOptions, setConnectionOptions] = useState<StorageLocationOption[]>([]);
   const [migrateProgress, setMigrateProgress] = useState<{
     percent: number;
@@ -246,15 +253,44 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ ope
     });
   };
 
+  const handleBackfillImageTiers = async () => {
+    setImageTierBackfillLoading(true);
+    try {
+      let offset = 0;
+      let done = false;
+      let totalGenerated = 0;
+      while (!done) {
+        const result = await backfillImageTiers({ limit: 50, offset });
+        totalGenerated += result.generated;
+        done = result.done;
+        offset = result.next_offset;
+      }
+      messageApi.success(
+        t('pages.system.files.imageTierBackfillSuccess', { count: totalGenerated }),
+      );
+      onImageTiersBackfilled?.();
+    } catch (error: unknown) {
+      const msg =
+        error instanceof Error ? error.message : t('pages.system.files.imageTierBackfillFailed');
+      messageApi.error(msg);
+    } finally {
+      setImageTierBackfillLoading(false);
+    }
+  };
+
   return (
     <Modal
       title={t('pages.system.files.storageSettingsTitle')}
       open={open}
       onCancel={onClose}
-      footer={null}
       width={MODAL_CONFIG.SMALL_WIDTH}
       destroyOnHidden
       confirmLoading={loading}
+      footer={
+        <Button type="primary" loading={saving} onClick={() => void handleSave()}>
+          {t('pages.system.files.storageSettingsSave')}
+        </Button>
+      }
     >
       <Alert
         type="info"
@@ -300,34 +336,30 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ ope
           <Input placeholder="dev / prod" maxLength={64} allowClear />
         </Form.Item>
 
-        <Form.Item
-          name="delete_local_after_migrate"
-          label={t('pages.system.files.storageDeleteLocalLabel')}
-          valuePropName="checked"
-        >
-          <Switch />
-        </Form.Item>
-
-        <Space wrap style={{ marginBottom: 16 }}>
-          <Button type="primary" loading={saving} onClick={() => void handleSave()}>
-            {t('pages.system.files.storageSettingsSave')}
-          </Button>
+        <Divider />
+        <Typography.Text strong>{t('pages.system.files.storageMigrateSection')}</Typography.Text>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, marginBottom: 16 }}>
+          <Form.Item name="delete_local_after_migrate" valuePropName="checked" noStyle>
+            <Switch />
+          </Form.Item>
+          <Typography.Text>{t('pages.system.files.storageDeleteLocalLabel')}</Typography.Text>
+        </div>
+        <Space wrap style={{ marginBottom: migrateProgress ? 12 : 0 }}>
           <Button
-            disabled={!isObjectStorage || migrating}
+            disabled={!isObjectStorage || migrating || imageTierBackfillLoading}
             loading={migrating}
             onClick={handleMigrate}
           >
             {t('pages.system.files.storageMigrateButton')}
           </Button>
           <Button
-            disabled={!isObjectStorage || migrating}
+            disabled={!isObjectStorage || migrating || imageTierBackfillLoading}
             onClick={() => void runMigrate(true)}
           >
             {t('pages.system.files.storageMigrateDryRun')}
           </Button>
         </Space>
-
-        {migrateProgress && (
+        {migrateProgress ? (
           <div style={{ marginBottom: 8 }}>
             <Progress percent={migrateProgress.percent} status={migrating ? 'active' : undefined} />
             <Typography.Text type="secondary">
@@ -364,7 +396,20 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({ ope
               />
             ) : null}
           </div>
-        )}
+        ) : null}
+
+        <Divider />
+        <Typography.Text strong>{t('pages.system.files.imageTierBackfillButton')}</Typography.Text>
+        <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 12 }}>
+          {t('pages.system.files.imageTierBackfillHint')}
+        </Typography.Paragraph>
+        <Button
+          loading={imageTierBackfillLoading}
+          disabled={migrating}
+          onClick={() => void handleBackfillImageTiers()}
+        >
+          {t('pages.system.files.imageTierBackfillButton')}
+        </Button>
       </Form>
     </Modal>
   );

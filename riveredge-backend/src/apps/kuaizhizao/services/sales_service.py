@@ -407,7 +407,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         total = await query.count()
 
         order_by = filters.get('order_by')
-        order_clause = order_by if order_by else '-updated_at'
+        order_clause = order_by if order_by else '-created_at'
 
         # 获取分页数据
         forecasts = await query.offset(skip).limit(limit).order_by(order_clause, '-id')

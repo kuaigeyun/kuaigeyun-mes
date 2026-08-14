@@ -1747,7 +1747,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             id__in=ids,
             deleted_at__isnull=True,
             parent_work_order_id__isnull=True,
-        ).exclude(status__in=["completed", "cancelled"]).order_by("-updated_at").limit(limit).all()
+        ).exclude(status__in=["completed", "cancelled"]).order_by("-created_at", "-id").limit(limit).all()
         # 进行中 / 已下达优先
         priority = {"in_progress": 0, "released": 1, "confirmed": 2, "paused": 3}
         rows = sorted(
@@ -2192,7 +2192,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         total = await query.count()
 
         # 排序
-        order_clause = order_by if order_by else "-code"
+        order_clause = order_by if order_by else "-created_at"
         work_orders = await query.offset(skip).limit(limit).order_by(order_clause).all()
 
         from apps.kuaizhizao.services.work_order_tree_service import (

@@ -118,7 +118,7 @@ class KbService(AppBaseService[KbSpace]):
         if tag:
             qs = qs.filter(tags__contains=[tag])
         total = await qs.count()
-        rows = await qs.order_by("-updated_at").offset(skip).limit(limit).all()
+        rows = await qs.order_by("-created_at", "-id").offset(skip).limit(limit).all()
         space_name_map = {
             s.id: s.space_name
             for s in await KbSpace.filter(
@@ -204,6 +204,6 @@ class KbService(AppBaseService[KbSpace]):
         if space_id:
             qs = qs.filter(space_id=space_id)
         total = await qs.count()
-        rows = await qs.order_by("-updated_at").limit(limit).all()
+        rows = await qs.order_by("-created_at", "-id").limit(limit).all()
         articles = [await self._build_article_response(tenant_id, r) for r in rows]
         return KbSearchResponse(articles=articles, total=total)

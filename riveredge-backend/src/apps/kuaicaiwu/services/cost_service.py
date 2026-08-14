@@ -1460,7 +1460,7 @@ class CostCalculationService(AppBaseService[CostCalculation]):
                 tenant_id=tenant_id,
                 product_id=product.id,
                 deleted_at__isnull=True,
-            ).order_by("-updated_at").limit(20).values_list("id", flat=True)
+            ).order_by("-created_at", "-id").limit(20).values_list("id", flat=True)
             if recent_wos:
                 records = await ReportingRecord.filter(
                     tenant_id=tenant_id,
@@ -1716,7 +1716,7 @@ class CostCalculationService(AppBaseService[CostCalculation]):
             tenant_id=tenant_id,
             product_id=product.id,
             deleted_at__isnull=True,
-        ).order_by("-updated_at").limit(20).values_list("id", flat=True)
+        ).order_by("-created_at", "-id").limit(20).values_list("id", flat=True)
         if recent_wos:
             records = await ReportingRecord.filter(
                 tenant_id=tenant_id,

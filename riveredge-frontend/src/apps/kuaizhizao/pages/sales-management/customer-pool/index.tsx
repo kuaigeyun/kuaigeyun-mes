@@ -509,7 +509,6 @@ const CustomerPoolPage: React.FC = () => {
         ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         minWidth: 260,
         sorter: true,
-        defaultSortOrder: 'descend',
         hideInSearch: true,
         render: (_, row) => (
           <UniTableStackedPrimaryCell

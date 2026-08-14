@@ -184,7 +184,7 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
             if kw:
                 query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
         total = await query.count()
-        work_orders = await query.offset(skip).limit(limit).order_by("-updated_at")
+        work_orders = await query.offset(skip).limit(limit).order_by("-created_at", "-id")
         wo_ids = [int(wo.id) for wo in work_orders if wo.id is not None]
 
         existing_draft_ids: set[int] = set()

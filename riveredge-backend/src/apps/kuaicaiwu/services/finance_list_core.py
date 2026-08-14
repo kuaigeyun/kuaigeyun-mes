@@ -255,7 +255,7 @@ def apply_finance_invoice_list_filters(
     updated_end_date: Optional[str] = None,
     sort_field: Optional[str] = None,
     sort_order: Optional[str] = None,
-    default_sort_col: str = "invoice_date",
+    default_sort_col: str = "created_at",
 ) -> Tuple:
     fields = keyword_fields or [doc_code_field, partner_name_field, "invoice_number"]
     query = apply_finance_ar_ap_search_filters(
@@ -485,7 +485,7 @@ def apply_finance_bank_account_list_filters(
     updated_end_date: Optional[str] = None,
     sort_field: Optional[str] = None,
     sort_order: Optional[str] = None,
-    default_sort_col: str = "account_code",
+    default_sort_col: str = "created_at",
 ) -> Tuple:
     kw = (keyword or "").strip()
     if kw:
@@ -619,7 +619,7 @@ def apply_finance_bank_transaction_list_filters(
     transaction_date_end: Optional[str] = None,
     sort_field: Optional[str] = None,
     sort_order: Optional[str] = None,
-    default_sort_col: str = "transaction_date",
+    default_sort_col: str = "created_at",
 ) -> Tuple:
     kw = (keyword or "").strip()
     if kw:

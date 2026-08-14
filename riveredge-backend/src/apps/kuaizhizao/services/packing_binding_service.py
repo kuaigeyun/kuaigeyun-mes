@@ -585,7 +585,7 @@ class PackingBindingService(AppBaseService[PackingBinding]):
             deleted_at__isnull=True,
         ).filter(
             Q(review_status='待审核') | Q(status='待出库')
-        ).order_by('-updated_at').limit(limit)
+        ).order_by('-created_at', '-id').limit(limit)
 
         return PackingBindingTaskPoolResponse(
             pending_review=pending_review,

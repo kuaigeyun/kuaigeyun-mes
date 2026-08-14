@@ -165,7 +165,7 @@ def resolve_master_crud_order_clause(
     sort_field: Optional[str],
     sort_order: Optional[str],
     *,
-    default_col: str = "code",
+    default_col: str = "created_at",
 ) -> str:
     key = (sort_field or "").strip()
     if key in MASTER_CRUD_SORT_DB_COLS:
@@ -174,7 +174,7 @@ def resolve_master_crud_order_clause(
         col = MASTER_CRUD_FIELD_ALIASES.get(key, key)
     else:
         col = MASTER_CRUD_FIELD_ALIASES.get(key, key if key in ("code", "name") else default_col)
-    if (sort_order or "asc").lower() == "desc":
+    if (sort_order or "desc").lower() == "desc":
         return f"-{col}"
     return col
 
@@ -192,7 +192,7 @@ def apply_master_crud_list_filters(
     updated_end_date: Optional[str] = None,
     sort_field: Optional[str] = None,
     sort_order: Optional[str] = None,
-    default_sort_col: str = "code",
+    default_sort_col: str = "created_at",
 ) -> Tuple:
     query = apply_master_crud_search_filters(
         query,

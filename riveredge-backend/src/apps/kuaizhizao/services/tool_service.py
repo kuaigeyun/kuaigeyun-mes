@@ -110,7 +110,7 @@ class ToolService:
         order_clause = resolve_equipment_list_order_by(
             order_by,
             TOOL_LEDGER_SORTABLE_FIELDS,
-            "-updated_at",
+            "-created_at",
         )
         items = await query.offset(skip).limit(limit).order_by(order_clause)
         return items, total

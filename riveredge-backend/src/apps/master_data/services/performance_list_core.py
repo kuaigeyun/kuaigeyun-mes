@@ -289,7 +289,7 @@ def apply_hourly_rate_list_filters(
     query = apply_performance_updated_date_range(
         query, start_date=updated_start_date, end_date=updated_end_date,
     )
-    order_clause = resolve_performance_list_order_by(order_by, HOURLY_RATE_SORTABLE_FIELDS, "-updated_at")
+    order_clause = resolve_performance_list_order_by(order_by, HOURLY_RATE_SORTABLE_FIELDS, "-created_at")
     return query, order_clause
 
 

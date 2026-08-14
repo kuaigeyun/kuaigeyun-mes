@@ -6710,7 +6710,6 @@ const WorkOrdersPage: React.FC = () => {
       minWidth: 168,
       fixed: 'left',
       sorter: true,
-      defaultSortOrder: 'descend',
       hideInSearch: false,
       render: (_, record) => <WorkOrderListPrimaryCell record={record} />,
     },

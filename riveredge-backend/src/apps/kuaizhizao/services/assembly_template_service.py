@@ -233,7 +233,7 @@ class AssemblyTemplateService(AppBaseService[AssemblyTemplate]):
             query = query.filter(is_active=is_active)
 
         total = await query.count()
-        rows = await query.order_by("-updated_at").offset(skip).limit(limit)
+        rows = await query.order_by("-created_at", "-id").offset(skip).limit(limit)
         return AssemblyTemplateListResponse(
             items=[AssemblyTemplateResponse.model_validate(r) for r in rows],
             total=total,

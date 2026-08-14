@@ -1103,7 +1103,6 @@ export default function SalesForecastsPage() {
       uniTableKeepWidth: true,
       resizable: false,
       sorter: true,
-      defaultSortOrder: 'descend',
       hideInSearch: true,
       render: (_text, record) => {
         const startDateText = record.start_date ? formatDateTime(record.start_date, 'YYYY-MM-DD') : '-';

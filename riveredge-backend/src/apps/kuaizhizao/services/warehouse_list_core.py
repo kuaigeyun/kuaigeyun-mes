@@ -201,7 +201,7 @@ def apply_warehouse_doc_list_filters(
     search: Optional[str] = None,
     order_by: Optional[str] = None,
     allowed_fields: frozenset,
-    default_order: str = "-updated_at",
+    default_order: str = "-created_at",
     keyword_fields: List[str],
     doc_date_field: Optional[str] = None,
     doc_start_date: Optional[str] = None,
@@ -316,6 +316,6 @@ def apply_delivery_notice_list_filters(
     order_clause = resolve_equipment_list_order_by(
         order_by,
         DELIVERY_NOTICE_SORTABLE_FIELDS,
-        "-updated_at",
+        "-created_at",
     )
     return query, order_clause

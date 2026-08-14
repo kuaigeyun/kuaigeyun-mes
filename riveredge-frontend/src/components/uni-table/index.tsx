@@ -2882,11 +2882,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   }, [proTableBodyScrollYEnabled, statCardsCtx?.tableScrollOffsetPx])
 
   React.useLayoutEffect(() => {
-    if (statCardsCtx?.tableScrollOffsetPx == null) return
-    window.dispatchEvent(new Event('resize'))
-  }, [statCardsCtx?.tableScrollOffsetPx])
-
-  React.useLayoutEffect(() => {
     if (policyScrollYEnabled) {
       setViewportScrollForced(false)
       return
@@ -2903,23 +2898,28 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     const root = containerRef.current
     if (!root) return
 
-    const measure = () => {
-      setViewportScrollForced(measureTableBodyOverflowsViewport(root))
+    // 数据/分页变化时按 natural 再量一次，允许关回。
+    setViewportScrollForced(measureTableBodyOverflowsViewport(root))
+
+    const observeOverflowOn = () => {
+      if (!measureTableBodyOverflowsViewport(root)) return
+      // 已限高后 antd 拆成表头/表体双表，tbody.scrollHeight 不再是内容高。
+      // ResizeObserver 只能开不能关，否则 natural ↔ scroll.y 同步死循环（React #185）。
+      setViewportScrollForced((prev) => (prev ? prev : true))
     }
 
-    measure()
     const ro =
       typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(() => measure())
+        ? new ResizeObserver(() => observeOverflowOn())
         : null
     const tbody = root.querySelector('.ant-table-tbody')
     if (ro && tbody) ro.observe(tbody)
     const tableWrapper = root.querySelector('.ant-table-wrapper')
     if (ro && tableWrapper) ro.observe(tableWrapper)
-    window.addEventListener('resize', measure)
+    window.addEventListener('resize', observeOverflowOn)
     return () => {
       ro?.disconnect()
-      window.removeEventListener('resize', measure)
+      window.removeEventListener('resize', observeOverflowOn)
     }
     // 依赖列结构签名而非 effectiveTableColumns：实测会改列宽并生成新 columns 引用，
     // 若再依赖 columns 会在树表展开时 useLayoutEffect → setState → 同步死循环。

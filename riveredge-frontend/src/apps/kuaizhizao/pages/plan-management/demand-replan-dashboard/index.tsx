@@ -459,7 +459,6 @@ const DemandReplanDashboardPage: React.FC = () => {
             width: 132,
             uniTableKeepWidth: true,
             sorter: true,
-            defaultSortOrder: 'descend',
             hideInSearch: true,
             render: (_, row) =>
               row.created_at ? formatDateTime(row.created_at, 'YYYY-MM-DD HH:mm') : '-',

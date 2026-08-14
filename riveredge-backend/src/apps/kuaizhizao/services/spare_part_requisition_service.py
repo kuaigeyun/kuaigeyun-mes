@@ -174,7 +174,7 @@ class SparePartRequisitionService:
         order_clause = resolve_equipment_list_order_by(
             order_by,
             SPARE_PART_REQUISITION_SORTABLE_FIELDS,
-            "-updated_at",
+            "-created_at",
         )
         rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total

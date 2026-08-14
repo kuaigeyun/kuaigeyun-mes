@@ -1461,7 +1461,7 @@ class QuotationService:
                 query = query.exclude(
                     Q(status="已发送") & ~Q(review_status__in=approved_review)
                 )
-        order_clause = order_by if order_by else "-updated_at"
+        order_clause = order_by if order_by else "-created_at"
 
         if lifecycle_filter:
             query = await self._apply_quotation_lifecycle_query(

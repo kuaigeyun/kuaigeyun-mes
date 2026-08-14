@@ -91,7 +91,7 @@ async def list_line_side_inventory(
         keyword=keyword,
         order_by=order_by,
         allowed_fields=LINE_SIDE_INVENTORY_SORTABLE_FIELDS,
-        default_order="-updated_at",
+        default_order="-created_at",
         keyword_fields=LINE_SIDE_INVENTORY_KEYWORD_FIELDS,
         created_start_date=created_start_date,
         created_end_date=created_end_date,

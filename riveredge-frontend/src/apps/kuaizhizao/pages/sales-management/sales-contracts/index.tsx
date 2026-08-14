@@ -2717,7 +2717,6 @@ const SalesContractsPage: React.FC = () => {
         dataIndex: 'contract_date',
         ...UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS,
         sorter: true,
-        defaultSortOrder: 'descend',
         hideInSearch: true,
         render: (_, record) => (
           <UniTableStackedPrimaryCell

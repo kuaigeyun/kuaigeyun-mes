@@ -747,7 +747,6 @@ const EquipmentPage: React.FC = () => {
       key: 'name_code',
       fixed: 'left',
       sorter: true,
-      defaultSortOrder: 'ascend',
       search: { order: 30 } as ProColumns['search'],
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       render: (_, r) => (

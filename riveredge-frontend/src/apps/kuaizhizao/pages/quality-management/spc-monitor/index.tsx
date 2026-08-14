@@ -91,7 +91,6 @@ const SPCMonitorPage: React.FC = () => {
         width: 132,
         uniTableKeepWidth: true,
         sorter: true,
-        defaultSortOrder: 'descend',
         hideInSearch: true,
         render: (_, row) => formatQualityDateTimeCell(row.sample_time),
       },

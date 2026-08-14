@@ -3053,7 +3053,7 @@ class ReportService:
             return {"data": items, "success": True}
         elif report_type in ["equipment-status-log", "status_log"]:
             from apps.kuaizhizao.models.equipment_status_monitor import EquipmentStatusMonitor
-            items = await EquipmentStatusMonitor.filter(tenant_id=tenant_id).order_by("-updated_at").limit(100).values(
+            items = await EquipmentStatusMonitor.filter(tenant_id=tenant_id).order_by("-created_at", "-id").limit(100).values(
                 "equipment_uuid", "equipment_name", "status", "updated_at",
             )
             uuid_list = [it["equipment_uuid"] for it in items if it.get("equipment_uuid")]

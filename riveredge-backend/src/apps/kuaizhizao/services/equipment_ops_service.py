@@ -1372,7 +1372,7 @@ class EquipmentScrapApplicationService:
         order_clause = resolve_equipment_list_order_by(
             order_by,
             EQUIPMENT_SCRAP_SORTABLE_FIELDS,
-            "-updated_at",
+            "-created_at",
         )
         rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
@@ -1572,7 +1572,7 @@ class EquipmentTransferApplicationService:
         order_clause = resolve_equipment_list_order_by(
             order_by,
             EQUIPMENT_TRANSFER_SORTABLE_FIELDS,
-            "-updated_at",
+            "-created_at",
         )
         rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total

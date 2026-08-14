@@ -2994,7 +2994,6 @@ const SalesOrdersPage: React.FC = () => {
       dataIndex: 'order_date',
       ...UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS,
       sorter: true,
-      defaultSortOrder: 'descend',
       hideInSearch: true,
       render: (_: unknown, record: SalesOrder) => {
         const orderDateText = record.order_date ? formatDateTime(record.order_date, 'YYYY-MM-DD') : '-';

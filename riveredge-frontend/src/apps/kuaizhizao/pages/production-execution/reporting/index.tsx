@@ -1426,7 +1426,6 @@ const ReportingPage: React.FC = () => {
       width: 148,
       uniTableKeepWidth: true,
       sorter: true,
-      defaultSortOrder: 'descend',
       hideInSearch: true,
       render: (_, record) => {
         const operator =

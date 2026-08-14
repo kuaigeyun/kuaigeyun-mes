@@ -956,7 +956,6 @@ const PackingBindingPage: React.FC = () => {
         width: 168,
         uniTableKeepWidth: true,
         sorter: true,
-        defaultSortOrder: 'descend',
         hideInSearch: true,
         render: (_, r) => (
           <UniTableStackedPrimaryCell

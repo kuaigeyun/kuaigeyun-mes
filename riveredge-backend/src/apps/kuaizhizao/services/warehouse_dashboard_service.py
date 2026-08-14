@@ -339,11 +339,11 @@ class WarehouseDashboardService:
             fetch_n = max(limit * 4, 32)
             pr_task = PurchaseReceipt.filter(
                 tenant_id=tenant_id, deleted_at__isnull=True, status="已入库"
-            ).order_by("-updated_at").limit(fetch_n).all()
+            ).order_by("-created_at", "-id").limit(fetch_n).all()
             
             oi_task = OtherInbound.filter(
                 tenant_id=tenant_id, deleted_at__isnull=True, status="已入库"
-            ).order_by("-updated_at").limit(fetch_n).all()
+            ).order_by("-created_at", "-id").limit(fetch_n).all()
 
             pr_list, oi_list = await asyncio.gather(pr_task, oi_task)
             
@@ -390,10 +390,10 @@ class WarehouseDashboardService:
             fetch_n = max(limit * 4, 32)
             sd_task = SalesDelivery.filter(
                 tenant_id=tenant_id, deleted_at__isnull=True, status="已出库"
-            ).order_by("-updated_at").limit(fetch_n).all()
+            ).order_by("-created_at", "-id").limit(fetch_n).all()
             oo_task = OtherOutbound.filter(
                 tenant_id=tenant_id, deleted_at__isnull=True, status="已出库"
-            ).order_by("-updated_at").limit(fetch_n).all()
+            ).order_by("-created_at", "-id").limit(fetch_n).all()
             
             sd_list, oo_list = await asyncio.gather(sd_task, oo_task)
             

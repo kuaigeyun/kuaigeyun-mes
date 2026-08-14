@@ -564,7 +564,7 @@ class PartnerPriceBookService:
             default_col="updated_at",
         )
         if not sort_by:
-            order_expr = "-updated_at"
+            order_expr = "-created_at"
         rows = await query.order_by(order_expr, "-id").offset(skip).limit(limit)
 
         partner_cache: Dict[int, Any] = {}

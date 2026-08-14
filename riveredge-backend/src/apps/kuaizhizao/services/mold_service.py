@@ -164,7 +164,7 @@ class MoldService:
         order_clause = resolve_equipment_list_order_by(
             order_by,
             MOLD_LEDGER_SORTABLE_FIELDS,
-            "-updated_at",
+            "-created_at",
         )
         molds = await query.offset(skip).limit(limit).order_by(order_clause)
         return molds, total

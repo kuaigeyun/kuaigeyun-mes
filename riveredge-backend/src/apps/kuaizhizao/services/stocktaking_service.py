@@ -547,7 +547,7 @@ class StocktakingService(AppBaseService[Stocktaking]):
             keyword=merged_keyword,
             order_by=order_by,
             allowed_fields=STOCKTAKING_SORTABLE_FIELDS,
-            default_order="-updated_at",
+            default_order="-created_at",
             keyword_fields=STOCKTAKING_KEYWORD_FIELDS,
             doc_date_field="stocktaking_date",
             doc_start_date=stocktaking_date_start,

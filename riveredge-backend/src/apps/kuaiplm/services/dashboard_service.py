@@ -222,7 +222,7 @@ class DashboardService:
         ).count()
         fmea_total = await RdFmeaRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True).count()
 
-        recent = await RdProject.filter(tenant_id=tenant_id, deleted_at__isnull=True).order_by("-updated_at").limit(5).all()
+        recent = await RdProject.filter(tenant_id=tenant_id, deleted_at__isnull=True).order_by("-created_at", "-id").limit(5).all()
         recent_ids = [p.id for p in recent]
         recent_gates = await RdProjectGate.filter(
             tenant_id=tenant_id, project_id__in=recent_ids

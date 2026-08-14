@@ -394,7 +394,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 primary = f"-{field}" if descending else field
                 secondary = "-id" if descending else "id"
                 return primary, secondary
-        return "-updated_at", "-id"
+        return "-created_at", "-id"
 
     @staticmethod
     def _sort_requisitions_in_memory(

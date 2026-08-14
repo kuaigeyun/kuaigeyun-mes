@@ -173,7 +173,7 @@ class DisassemblyOrderService(AppBaseService[DisassemblyOrder]):
             keyword=merged_keyword,
             order_by=order_by,
             allowed_fields=DISASSEMBLY_ORDER_SORTABLE_FIELDS,
-            default_order="-updated_at",
+            default_order="-created_at",
             keyword_fields=DISASSEMBLY_ORDER_KEYWORD_FIELDS,
             doc_date_field="disassembly_date",
             doc_start_date=disassembly_date_start,

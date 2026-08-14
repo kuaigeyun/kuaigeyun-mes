@@ -47,7 +47,7 @@ class FormTemplateService:
             q = q.filter(is_active=is_active)
         if keyword:
             q = q.filter(build_keyword_q(keyword, "template_code", "template_name"))
-        rows = await q.order_by("-updated_at")
+        rows = await q.order_by("-created_at", "-id")
         return [model_to_dict(row) for row in rows]
 
     async def get_template(self, tenant_id: int, template_id: int) -> dict[str, Any]:
@@ -121,7 +121,7 @@ class FormRequestService:
             q = q.filter(template_id=template_id)
         if keyword:
             q = q.filter(build_keyword_q(keyword, "request_code", "title", "applicant_name"))
-        rows = await q.order_by("-updated_at")
+        rows = await q.order_by("-created_at", "-id")
         result = []
         for row in rows:
             item = model_to_dict(row)

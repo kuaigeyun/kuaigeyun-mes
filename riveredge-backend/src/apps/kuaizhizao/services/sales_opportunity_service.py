@@ -429,6 +429,6 @@ class SalesOpportunityService:
             query = query.filter(status=status)
 
         total = await query.count()
-        rows = await query.offset(skip).limit(limit).order_by("-updated_at", "-id")
+        rows = await query.offset(skip).limit(limit).order_by("-created_at", "-id")
         items = [SalesOpportunityResponse.model_validate(r) for r in rows]
         return SalesOpportunityListEnvelope(items=items, total=total)

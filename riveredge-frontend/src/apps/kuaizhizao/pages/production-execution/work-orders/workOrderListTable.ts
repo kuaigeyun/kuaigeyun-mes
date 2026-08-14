@@ -166,9 +166,9 @@ export function buildWorkOrderListUniTableQueryKey(
   ] as const
 }
 
-/** 列表默认排序：工单号倒序（与列 defaultSortOrder 及后端 list 默认一致） */
+/** 列表默认排序：创建时间倒序（新建在上；与整站 extractProTableSort 缺省一致） */
 export const WORK_ORDER_LIST_DEFAULT_SORT: Record<string, 'ascend' | 'descend' | null> = {
-  code: 'descend',
+  created_at: 'descend',
 }
 const emptyFilter: Record<string, ReactText[] | null> = {}
 

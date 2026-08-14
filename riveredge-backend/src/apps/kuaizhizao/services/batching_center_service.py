@@ -664,7 +664,7 @@ class BatchingCenterService:
             query = query.filter(work_order_id__in=pid_list)
 
         total = await query.count()
-        orders = await query.order_by("-updated_at").offset(skip).limit(limit).all()
+        orders = await query.order_by("-created_at", "-id").offset(skip).limit(limit).all()
         if not orders:
             return [], total
 
