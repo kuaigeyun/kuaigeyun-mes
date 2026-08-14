@@ -1,1 +1,0 @@
-import{j as e}from"./vendor-gBTVkus8.js";import{N as t}from"./clearSessionQueries-CFD3t5PK.js";function r(){return e.jsx(t,{to:"/apps/haoligo/molds/documents/upkeep",replace:!0})}export{r as default};

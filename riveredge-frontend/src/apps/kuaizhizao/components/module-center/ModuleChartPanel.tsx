@@ -4,7 +4,6 @@ import { BarChartOutlined } from '@ant-design/icons';
 import {
   MODULE_PANEL_TITLE_ICON_SIZE,
   MODULE_PANEL_TITLE_STYLE,
-  MODULE_CENTER_GUTTER,
   modulePanelSurfaceStyle,
 } from './constants';
 
@@ -105,8 +104,7 @@ export function ModuleChartPanel({
     return (
       <div
         style={{
-          breakInside: 'avoid',
-          marginBottom: MODULE_CENTER_GUTTER,
+          width: '100%',
           minWidth: 0,
         }}
       >

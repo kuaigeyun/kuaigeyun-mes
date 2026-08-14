@@ -40,9 +40,11 @@ export function ModuleChartMount({
         const prevWidth = lastWidthRef.current;
         const shouldRemount = prevWidth === 0 || Math.abs(prevWidth - width) >= remountThreshold;
         lastWidthRef.current = width;
-        setDims({ width, height });
+        setDims((prev) =>
+          prev && prev.width === width && prev.height === height ? prev : { width, height },
+        );
         if (shouldRemount) {
-          setMountKey(width);
+          setMountKey((prev) => (prev === width ? prev : width));
         }
       });
     };
