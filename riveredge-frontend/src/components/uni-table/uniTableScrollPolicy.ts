@@ -55,17 +55,22 @@ const VIEWPORT_SCROLL_MEASURE_BOTTOM_GAP_PX = 16
 const VIEWPORT_SCROLL_MIN_AVAILABLE_PX = 80
 
 /**
- * natural-height 模式下实测表体是否超出可视区域（多行单元格、树表展开等）。
+ * 实测表体是否超出可视区域（多行单元格、树表展开等）。
  * 返回 true 时应由 UniTable 强制开启 scroll.y。
  *
- * 仅用于尚未限高的 natural 表。限高后 antd 会拆表，tbody.scrollHeight 失效，
- * 调用方不得据此再关回 natural（会与 ResizeObserver 形成 React #185）。
+ * 限高后 antd 拆成 header/body 两张表：第一张 `.ant-table-tbody` 可能是表头占位，
+ * 必须量 `.ant-table-body` 内的 tbody / scrollHeight。即便量准，调用方也不得
+ * 在已限高时仅凭一次 false 关回 natural（列宽/loading 重跑会形成 React #185）。
  */
 export function measureTableBodyOverflowsViewport(root: HTMLElement | null): boolean {
   if (!root || typeof window === 'undefined') return false
   const tableWrapper = root.querySelector('.ant-table-wrapper')
-  const tbody = root.querySelector('.ant-table-tbody')
-  if (!tableWrapper || !tbody) return false
+  if (!tableWrapper) return false
+
+  const scrollBody = root.querySelector('.ant-table-body') as HTMLElement | null
+  const tbody = (scrollBody?.querySelector('.ant-table-tbody') ??
+    root.querySelector('.ant-table-tbody')) as HTMLElement | null
+  if (!tbody) return false
 
   const pager = root.querySelector('.ant-table-pagination') as HTMLElement | null
   const header = root.querySelector('.ant-table-thead') as HTMLElement | null
@@ -73,6 +78,6 @@ export function measureTableBodyOverflowsViewport(root: HTMLElement | null): boo
     header?.getBoundingClientRect().bottom ?? tableWrapper.getBoundingClientRect().top
   const pagerHeight = pager?.offsetHeight ?? 56
   const available = window.innerHeight - headerBottom - pagerHeight - VIEWPORT_SCROLL_MEASURE_BOTTOM_GAP_PX
-  const content = (tbody as HTMLElement).scrollHeight
+  const content = scrollBody ? scrollBody.scrollHeight : tbody.scrollHeight
   return content > available && available > VIEWPORT_SCROLL_MIN_AVAILABLE_PX
 }

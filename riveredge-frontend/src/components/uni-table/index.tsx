@@ -2764,6 +2764,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   /** 实测表体超出视口时补开 scroll.y（多行单元格、树表展开等） */
   const [viewportScrollForced, setViewportScrollForced] = useState(false)
   const proTableBodyScrollYEnabled = policyScrollYEnabled || viewportScrollForced
+  /** 仅数据/分页/视图变化时允许关回 natural；列宽与 loading 重跑不得当关限高的理由 */
+  const viewportRemeasureKey = `${currentViewType}|${currentPageSize}|${tableData.length}`
+  const viewportRemeasureKeyRef = React.useRef(viewportRemeasureKey)
 
   const isEmptyTable = tableData.length === 0
   const emptyTableHasFixedColumns =
@@ -2882,38 +2885,53 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   }, [proTableBodyScrollYEnabled, statCardsCtx?.tableScrollOffsetPx])
 
   React.useLayoutEffect(() => {
+    const turnOffForced = () => setViewportScrollForced((prev) => (prev ? false : prev))
+    const turnOnForced = () => setViewportScrollForced((prev) => (prev ? prev : true))
+
     if (policyScrollYEnabled) {
-      setViewportScrollForced(false)
+      viewportRemeasureKeyRef.current = viewportRemeasureKey
+      turnOffForced()
       return
     }
     if (tableData.length === 0) {
-      setViewportScrollForced(false)
+      viewportRemeasureKeyRef.current = viewportRemeasureKey
+      turnOffForced()
       return
     }
     if (currentViewType !== 'table' && currentViewType !== 'detailTable') {
-      setViewportScrollForced(false)
+      viewportRemeasureKeyRef.current = viewportRemeasureKey
+      turnOffForced()
       return
     }
 
     const root = containerRef.current
     if (!root) return
 
-    // 数据/分页变化时按 natural 再量一次，允许关回。
-    setViewportScrollForced(measureTableBodyOverflowsViewport(root))
+    // 数据/分页/视图变化才允许关回。列宽、loading、拆表后的二次测量只能开不能关，
+    // 否则 natural ↔ scroll.y 在 useLayoutEffect 里同步振荡（生产 React #185）。
+    const allowTurnOff = viewportRemeasureKeyRef.current !== viewportRemeasureKey
+    viewportRemeasureKeyRef.current = viewportRemeasureKey
+    const overflows = measureTableBodyOverflowsViewport(root)
+    if (overflows) {
+      turnOnForced()
+    } else if (allowTurnOff) {
+      turnOffForced()
+    }
 
     const observeOverflowOn = () => {
       if (!measureTableBodyOverflowsViewport(root)) return
-      // 已限高后 antd 拆成表头/表体双表，tbody.scrollHeight 不再是内容高。
-      // ResizeObserver 只能开不能关，否则 natural ↔ scroll.y 同步死循环（React #185）。
-      setViewportScrollForced((prev) => (prev ? prev : true))
+      turnOnForced()
     }
 
     const ro =
       typeof ResizeObserver !== 'undefined'
         ? new ResizeObserver(() => observeOverflowOn())
         : null
-    const tbody = root.querySelector('.ant-table-tbody')
+    const scrollBody = root.querySelector('.ant-table-body')
+    const tbody = (scrollBody?.querySelector('.ant-table-tbody') ??
+      root.querySelector('.ant-table-tbody')) as Element | null
     if (ro && tbody) ro.observe(tbody)
+    if (ro && scrollBody) ro.observe(scrollBody)
     const tableWrapper = root.querySelector('.ant-table-wrapper')
     if (ro && tableWrapper) ro.observe(tableWrapper)
     window.addEventListener('resize', observeOverflowOn)
@@ -2925,11 +2943,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     // 若再依赖 columns 会在树表展开时 useLayoutEffect → setState → 同步死循环。
   }, [
     policyScrollYEnabled,
-    tableData,
+    viewportRemeasureKey,
     currentViewType,
     columnStructureSig,
     showDelayedLoading,
-    currentPageSize,
   ])
 
   /**
