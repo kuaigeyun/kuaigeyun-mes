@@ -1123,8 +1123,32 @@ function Sync-BackendDeps {
     $script:BackendDepsSynced = $true
 }
 
+function Ensure-SensitiveLexiconPack {
+    $pack = Join-Path $script:BackendDir 'src/core/data/sensitive_words/lexicon.pack'
+    $force = ($env:FORCE_LEXICON_REPACK -eq '1')
+    if (-not $force -and (Test-Path $pack) -and ((Get-Item $pack).Length -gt 0)) {
+        Write-LogInfo '敏感词 lexicon.pack 已存在'
+        return
+    }
+    Write-LogInfo '生成敏感词 lexicon.pack（未入库，须部署机生成）...'
+    $uv = Resolve-Uv
+    Push-Location $script:BackendDir
+    try {
+        $env:PYTHONPATH = Join-Path $script:BackendDir 'src'
+        & $uv run python scripts/pack_sensitive_words.py
+        if ($LASTEXITCODE -ne 0) {
+            throw '生成 lexicon.pack 失败。检查出网或手动执行: cd riveredge-backend; uv run python scripts/pack_sensitive_words.py'
+        }
+    } finally { Pop-Location }
+    if (-not (Test-Path $pack) -or ((Get-Item $pack).Length -le 0)) {
+        throw "lexicon.pack 未生成: $pack"
+    }
+    Write-LogOk '敏感词 lexicon.pack 已就绪'
+}
+
 function Invoke-Migrate {
     Sync-BackendDeps
+    Ensure-SensitiveLexiconPack
     Write-LogInfo '执行数据库迁移...'
     $uv = Resolve-Uv
     Push-Location $script:BackendDir
@@ -1314,6 +1338,7 @@ function Start-ProcessBackground([string]$Name, [string]$FilePath, [string[]]$Ar
 }
 
 function Start-BackendDev {
+    Ensure-SensitiveLexiconPack
     if (Test-BgEnabled) {
         Initialize-BgState
         Start-BgBackendSlot (Get-BgActiveSlot) 'dev'
@@ -1377,6 +1402,7 @@ function Start-FrontendDev {
 }
 
 function Start-BackendProd {
+    Ensure-SensitiveLexiconPack
     if (Test-BgEnabled) {
         Initialize-BgState
         Start-BgBackendSlot (Get-BgActiveSlot) 'prod'

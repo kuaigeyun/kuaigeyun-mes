@@ -2447,10 +2447,34 @@ ensure_playwright_chromium_postinstall() {
     return 0
 }
 
+# 敏感词 lexicon.pack 不入库；部署机须生成，否则 SensitiveWordMiddleware 初始化失败、/health 500。
+ensure_sensitive_lexicon_pack() {
+    local pack="$BACKEND_DIR/src/core/data/sensitive_words/lexicon.pack"
+    if [ "${FORCE_LEXICON_REPACK:-0}" != "1" ] && [ -f "$pack" ] && [ -s "$pack" ]; then
+        log_info "敏感词 lexicon.pack 已存在"
+        return 0
+    fi
+    log_info "生成敏感词 lexicon.pack（未入库，须部署机生成）..."
+    (
+        cd "$BACKEND_DIR"
+        export PYTHONPATH="$BACKEND_DIR/src"
+        "$(resolve_uv)" run python scripts/pack_sensitive_words.py
+    ) || {
+        log_error "生成 lexicon.pack 失败。检查出网或手动执行: cd riveredge-backend && uv run python scripts/pack_sensitive_words.py"
+        return 1
+    }
+    if [ ! -f "$pack" ] || [ ! -s "$pack" ]; then
+        log_error "lexicon.pack 未生成: $pack"
+        return 1
+    fi
+    log_ok "敏感词 lexicon.pack 已就绪"
+}
+
 cmd_migrate() {
     sync_backend_deps
     ensure_postgresql_pgvector || { log_error "pgvector 未就绪，无法执行依赖 vector 的迁移"; exit 1; }
     ensure_vector_extension_created || { log_error "无法在应用库创建 vector 扩展（需要超级用户）"; exit 1; }
+    ensure_sensitive_lexicon_pack || { log_error "敏感词 lexicon.pack 未就绪，后端无法启动"; exit 1; }
     log_info "执行数据库迁移..."
     (
         cd "$BACKEND_DIR"
@@ -2734,6 +2758,7 @@ ensure_linux_caddy_ready() {
 }
 
 start_backend_dev() {
+    ensure_sensitive_lexicon_pack || { log_error "敏感词 lexicon.pack 未就绪，后端无法启动"; exit 1; }
     if bg_enabled; then
         bg_init_state
         bg_start_backend_slot "$(bg_active_slot)" dev || exit 1
@@ -2804,6 +2829,7 @@ start_frontend_dev() {
 }
 
 start_backend_prod() {
+    ensure_sensitive_lexicon_pack || { log_error "敏感词 lexicon.pack 未就绪，后端无法启动"; exit 1; }
     if bg_enabled; then
         bg_init_state
         bg_start_backend_slot "$(bg_active_slot)" prod || exit 1

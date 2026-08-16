@@ -12,7 +12,9 @@
 
 ```bash
 cd riveredge-backend
-python scripts/pack_sensitive_words.py
+uv run python scripts/pack_sensitive_words.py
 ```
+
+`fast-deploy` 的 migrate / 启动后端会在缺失时自动执行上述脚本。也可设 `FORCE_LEXICON_REPACK=1` 强制重建。
 
 生成 `lexicon.pack` 后重启后端。许可文件（`LICENSE.*`）与白名单 `allowlist.txt` 可提交。
