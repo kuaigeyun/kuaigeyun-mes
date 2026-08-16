@@ -1,5 +1,5 @@
 """
-会计科目表模型
+会计科目表模型（对标用友总账科目属性）
 """
 
 from tortoise import fields
@@ -23,14 +23,20 @@ class ChartOfAccount(BaseModel):
     tenant_id = fields.IntField(description="租户ID")
     account_code = fields.CharField(max_length=32, description="科目编码")
     account_name = fields.CharField(max_length=200, description="科目名称")
-    account_type = fields.CharField(
-        max_length=20,
-        description="科目类型 asset/liability/equity/revenue/expense",
-    )
+    # asset/liability/equity/cost/profit_loss（损益）
+    account_type = fields.CharField(max_length=20, description="科目类型")
     parent_id = fields.IntField(null=True, description="上级科目ID")
     level = fields.IntField(default=1, description="科目级次")
     is_leaf = fields.BooleanField(default=True, description="是否末级科目")
     balance_direction = fields.CharField(max_length=10, default="debit", description="余额方向 debit/credit")
+    is_cash_journal = fields.BooleanField(default=False, description="现金日记账")
+    is_bank_journal = fields.BooleanField(default=False, description="银行日记账")
+    is_controlled = fields.BooleanField(default=False, description="受控于子系统")
+    aux_customer = fields.BooleanField(default=False, description="辅助核算-客户")
+    aux_supplier = fields.BooleanField(default=False, description="辅助核算-供应商")
+    aux_department = fields.BooleanField(default=False, description="辅助核算-部门")
+    aux_employee = fields.BooleanField(default=False, description="辅助核算-职员")
+    aux_project = fields.BooleanField(default=False, description="辅助核算-项目")
     is_active = fields.BooleanField(default=True, description="是否启用")
     notes = fields.TextField(null=True, description="备注")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")

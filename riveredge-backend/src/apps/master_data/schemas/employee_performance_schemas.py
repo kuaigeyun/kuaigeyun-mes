@@ -177,9 +177,21 @@ class PerformanceSummaryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
+class PerformanceCalculateResponse(BaseModel):
+    """周期绩效计算结果"""
+    items: List["PerformanceSummaryResponse"] = Field(default_factory=list, description="员工汇总列表")
+    team_only_reporting_count: int = Field(
+        0,
+        description="仅小组报工且未指定操作工的记录数（未计入个人汇总，请用小组分配）",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class PerformanceDetailItem(BaseSchema):
     """绩效明细项（单条报工记录）"""
     reporting_record_id: int = Field(..., description="报工记录ID")
+    work_order_id: Optional[int] = Field(None, description="工单ID")
     work_order_code: str = Field(..., description="工单编码")
     operation_name: str = Field(..., description="工序名称")
     reported_at: datetime = Field(..., description="报工时间")

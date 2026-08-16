@@ -29,5 +29,6 @@ export function useRegisterAiContext(payload: AiContextPayload | null | undefine
     payload?.recordId,
     payload?.recordLabel,
     payload?.capabilityMode,
+    payload?.agentId,
   ]);
 }

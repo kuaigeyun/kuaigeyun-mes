@@ -19,6 +19,8 @@ from .station.station import router as station_router
 from .productions.quality_execution import router as quality_execution_router
 from .productions.quality_improvement import router as quality_improvement_router
 from .productions.quality_management import router as quality_management_router
+from .productions.quality_qms import router as quality_qms_router
+from .productions.quality_fai import router as quality_fai_router
 from .productions.outsource_receipt_api import router as outsource_receipt_router
 from .productions.document_relations_legacy import router as document_relations_legacy_router
 from .productions.production_control_api import router as production_control_router
@@ -34,6 +36,7 @@ from .sales_orders.sales_orders import router as sales_order_router
 from .sales_order_changes.sales_order_changes import router as sales_order_change_router
 from .purchase_order_changes.purchase_order_changes import router as purchase_order_change_router
 from .quotations.quotations import router as quotation_router
+from .sales_reviews.sales_reviews import router as sales_review_router
 from .sales_contracts.sales_contracts import router as sales_contract_router
 from .sales_contracts.sales_contract_terms import router as sales_contract_terms_router
 from .delivery_notices.delivery_notices import router as delivery_notice_router
@@ -47,7 +50,6 @@ from .after_sales.dispatch_orders import router as service_dispatch_router
 from .after_sales.spare_part_requisitions import router as after_sales_spare_part_requisition_router
 from .after_sales.service_settlements import router as service_settlement_router
 from .after_sales.return_visits import router as customer_return_visit_router
-from .after_sales.dashboard import router as after_sales_dashboard_router
 from .install_executions.install_executions import router as install_execution_router
 from .sales_opportunities.sales_opportunities import router as sales_opportunity_router
 from .customer_pool.customer_pool import router as customer_pool_router
@@ -105,6 +107,7 @@ router.include_router(sales_order_router)  # 销售订单管理（独立API）- 
 router.include_router(sales_order_change_router)  # 销售变更单
 router.include_router(purchase_order_change_router)  # 采购变更单
 router.include_router(quotation_router)  # 报价单管理
+router.include_router(sales_review_router)  # 订单评审
 router.include_router(sales_contract_terms_router)  # 条款项/条款组（须在 /{contract_id} 之前）
 router.include_router(sales_contract_router)  # 销售合同
 router.include_router(delivery_notice_router)  # 送货单管理
@@ -120,7 +123,6 @@ router.include_router(service_dispatch_router)  # 服务派工
 router.include_router(after_sales_spare_part_requisition_router)  # 售后备件申领
 router.include_router(service_settlement_router)  # 服务结算
 router.include_router(customer_return_visit_router)  # 客户回访
-router.include_router(after_sales_dashboard_router)  # 售后服务看板
 router.include_router(install_execution_router)  # 安装执行
 router.include_router(sales_opportunity_router)  # 销售商机
 router.include_router(customer_pool_router)  # 客户池（公海管理）
@@ -128,6 +130,8 @@ router.include_router(exceptions_router)
 router.include_router(outsource_receipt_router)
 router.include_router(quality_execution_router)
 router.include_router(quality_improvement_router)
+router.include_router(quality_qms_router)
+router.include_router(quality_fai_router)
 router.include_router(quality_management_router)
 router.include_router(work_orders_router)
 router.include_router(work_order_groups_router)

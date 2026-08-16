@@ -1,5 +1,5 @@
-import React, { useRef, useState, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useRef, useState, useMemo, useCallback, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -74,6 +74,7 @@ interface SpotCheckLine {
 
 interface SpotCheck {
   id?: number;
+  uuid?: string;
   document_no?: string;
   equipment_id?: number;
   equipment_code?: string;
@@ -91,10 +92,13 @@ interface SpotCheck {
 
 const SpotChecksPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
   const actionRef = useRef<ActionType>(null);
+  const urlUuidRef = useRef<string | undefined>(undefined);
+  const deepLinkOpenedRef = useRef(false);
   const formRef = useRef<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
@@ -117,6 +121,33 @@ const SpotChecksPage: React.FC = () => {
     },
     [openDetail],
   );
+
+  useEffect(() => {
+    const uuidFromUrl = searchParams.get('uuid')?.trim() || undefined;
+    urlUuidRef.current = uuidFromUrl;
+    if (!uuidFromUrl) {
+      deepLinkOpenedRef.current = false;
+      actionRef.current?.reload();
+      return;
+    }
+    if (deepLinkOpenedRef.current) {
+      actionRef.current?.reload();
+      return;
+    }
+    deepLinkOpenedRef.current = true;
+    void (async () => {
+      try {
+        const res = await spotChecksApi.list({ uuid: uuidFromUrl, skip: 0, limit: 1 });
+        const { data } = normalizeEquipmentListResponse(res);
+        if (data.length > 0) {
+          handleDetail(data[0] as SpotCheck);
+        }
+      } catch {
+        messageApi.error(t(`${P}.listFailed`));
+      }
+      actionRef.current?.reload();
+    })();
+  }, [searchParams, handleDetail, messageApi, t]);
 
   const loadOptions = async () => {
     const [eqRes, schRes] = await Promise.all([
@@ -413,7 +444,7 @@ const SpotChecksPage: React.FC = () => {
             <Typography.Link
               onClick={() =>
                 navigate(
-                  `${ROUTES.EQUIPMENT_FAULTS}?keyword=${encodeURIComponent(r.fault_report_uuid!)}`,
+                  `${ROUTES.EQUIPMENT_FAULTS}?uuid=${encodeURIComponent(r.fault_report_uuid!)}`,
                 )
               }
             >
@@ -551,7 +582,7 @@ const SpotChecksPage: React.FC = () => {
               onClick={(e) => {
                 e.stopPropagation();
                 navigate(
-                  `${ROUTES.EQUIPMENT_FAULTS}?keyword=${encodeURIComponent(r.fault_report_uuid!)}`,
+                  `${ROUTES.EQUIPMENT_FAULTS}?uuid=${encodeURIComponent(r.fault_report_uuid!)}`,
                 );
               }}
             >
@@ -628,6 +659,7 @@ const SpotChecksPage: React.FC = () => {
                 skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
                 limit: params.pageSize,
                 ...listParams,
+                ...(urlUuidRef.current ? { uuid: urlUuidRef.current } : {}),
               });
               const { data, total } = normalizeEquipmentListResponse(res);
               return { data: data as SpotCheck[], success: true, total };

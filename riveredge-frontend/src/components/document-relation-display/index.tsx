@@ -68,6 +68,14 @@ const DOCUMENT_TYPE_NAMES: Record<string, string> = {
   incoming_inspection: '来料检验',
   accounts_payable: '应付单',
   accounts_receivable: '应收单',
+  after_sales_ticket: '售后工单',
+  install_execution: '安装执行',
+  service_asset: '装机档案',
+  repair_order: '维修单',
+  service_dispatch: '服务派工',
+  spare_part_requisition: '备件申领',
+  service_settlement: '服务结算',
+  customer_return_visit: '客户回访',
 };
 
 /**

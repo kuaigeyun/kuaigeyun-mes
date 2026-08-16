@@ -1,14 +1,10 @@
 import React, { useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { Button, Form, Input, Modal, Select, Switch, message } from 'antd';
+import { Button, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-  UniTableStackedPrimaryCell,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import {
@@ -21,13 +17,13 @@ import {
   renderLogisticsEnabledTag,
   renderLogisticsOwnershipTag,
 } from '../shared/logisticsListPresentation';
-import { createDriver, deleteDriver, listDrivers, updateDriver, type Driver } from '../../../services/logistics';
+import { deleteDriver, listDrivers, type Driver } from '../../../services/logistics';
+import { DriverFormModal } from '../shared/DriverFormModal';
 
 const DriversPage: React.FC = () => {
   const { t } = useTranslation();
   const perms = useResourcePermissions('kuaizhizao:driver');
   const actionRef = useRef<ActionType>();
-  const [form] = Form.useForm();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Driver | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -35,31 +31,12 @@ const DriversPage: React.FC = () => {
 
   const openCreate = () => {
     setEditing(null);
-    form.resetFields();
-    form.setFieldsValue({ ownership: 'internal', is_enabled: true });
     setOpen(true);
   };
 
   const openEdit = (row: Driver) => {
     setEditing(row);
-    form.setFieldsValue(row);
     setOpen(true);
-  };
-
-  const handleSubmit = async () => {
-    const values = await form.validateFields();
-    if (editing) {
-      await updateDriver(editing.id, values);
-      message.success(t('common.updateSuccess'));
-      if (detail?.id === editing.id) {
-        setDetail({ ...detail, ...values });
-      }
-    } else {
-      await createDriver(values);
-      message.success(t('common.createSuccess'));
-    }
-    setOpen(false);
-    actionRef.current?.reload();
   };
 
   const openDetail = (row: Driver) => {
@@ -99,19 +76,20 @@ const DriversPage: React.FC = () => {
           title: t('app.kuaizhizao.logistics.field.driverName'),
           key: 'logistics_driver_stacked',
           dataIndex: 'name',
-          ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+          width: 120,
+          minWidth: 120,
+          uniTableKeepWidth: true,
+          resizable: false,
+          ellipsis: true,
           fixed: 'left',
-          render: (_, row) => (
-            <UniTableStackedPrimaryCell
-              primary={String(row.name ?? '').trim() || '-'}
-              secondary={String(row.code ?? '').trim() || '-'}
-            />
-          ),
         },
         {
           title: t('app.kuaizhizao.logistics.field.code'),
           dataIndex: 'code',
-          hideInTable: true,
+          width: 88,
+          minWidth: 88,
+          uniTableKeepWidth: true,
+          resizable: false,
         },
         {
           title: t('app.kuaizhizao.logistics.field.phone'),
@@ -192,7 +170,7 @@ const DriversPage: React.FC = () => {
       <UniTable<Driver>
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.drivers.v1"
+        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.drivers.v2"
         rowKey="id"
         request={async (params) => {
           const res = await listDrivers({
@@ -226,41 +204,17 @@ const DriversPage: React.FC = () => {
         })}
         basicColumns={basicColumns}
       />
-      <Modal
+      <DriverFormModal
         open={open}
-        title={editing ? t('common.edit') : t('common.create')}
-        onCancel={() => setOpen(false)}
-        onOk={handleSubmit}
-        destroyOnHidden
-      >
-        <Form form={form} layout="vertical">
-          {!editing ? (
-            <Form.Item name="code" label={t('app.kuaizhizao.logistics.field.code')}>
-              <Input placeholder={t('app.kuaizhizao.logistics.placeholder.autoCode')} />
-            </Form.Item>
-          ) : null}
-          <Form.Item name="name" label={t('app.kuaizhizao.logistics.field.driverName')} rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="phone" label={t('app.kuaizhizao.logistics.field.phone')}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="license_number" label={t('app.kuaizhizao.logistics.field.licenseNumber')}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="ownership" label={t('app.kuaizhizao.logistics.field.ownership')}>
-            <Select
-              options={[
-                { label: t('app.kuaizhizao.logistics.option.ownership.internal'), value: 'internal' },
-                { label: t('app.kuaizhizao.logistics.option.ownership.external'), value: 'external' },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="is_enabled" label={t('app.kuaizhizao.logistics.field.enabled')} valuePropName="checked">
-            <Switch />
-          </Form.Item>
-        </Form>
-      </Modal>
+        editing={editing}
+        onClose={() => setOpen(false)}
+        onSuccess={(record) => {
+          if (detail?.id === record.id) {
+            setDetail(record);
+          }
+          actionRef.current?.reload();
+        }}
+      />
     </ListPageTemplate>
   );
 };

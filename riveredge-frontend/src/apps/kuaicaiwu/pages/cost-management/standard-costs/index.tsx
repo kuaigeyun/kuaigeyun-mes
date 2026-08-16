@@ -21,8 +21,10 @@ import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { standardCostService, type StandardCost } from '../../../services/cost/standard-cost';
 import {
   formatCostItemType,
+  formatCurrency,
   formatTargetType,
   getCostItemTypeSelectOptions,
+  getCurrencySelectOptions,
 } from '../../../utils/financeUiLabels';
 import { renderFinanceActiveTag } from '../../../utils/financeListPresentation';
 import {
@@ -131,6 +133,17 @@ const StandardCostsPage: React.FC = () => {
         sorter: true,
       },
       {
+        title: t('app.kuaicaiwu.standardCost.field.currency'),
+        dataIndex: 'currency',
+        width: 88,
+        minWidth: 88,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => formatCurrency(r.currency, t),
+      },
+      {
         title: t('app.kuaicaiwu.standardCost.field.effectiveDate'),
         dataIndex: 'effective_date',
         valueType: 'date',
@@ -148,6 +161,17 @@ const StandardCostsPage: React.FC = () => {
         hideInTable: true,
         order: 12,
         formItemProps: formDateRangeFormItemProps,
+      },
+      {
+        title: t('app.kuaicaiwu.standardCost.field.expiryDate'),
+        dataIndex: 'expiry_date',
+        valueType: 'date',
+        width: 132,
+        minWidth: 132,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
       },
       {
         title: t('app.kuaicaiwu.standardCost.col.status'),
@@ -226,7 +250,7 @@ const StandardCostsPage: React.FC = () => {
       <UniTable<StandardCost>
         actionRef={actionRef}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.standard-costs.list-v1"
+        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.standard-costs.list-v2"
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
@@ -323,6 +347,12 @@ const StandardCostsPage: React.FC = () => {
         <ProFormDigit name="standard_value" label={t('app.kuaicaiwu.standardCost.col.standardValue')} rules={[{ required: true }]} min={0} />
         <ProFormText name="unit" label={t('app.kuaicaiwu.standardCost.col.unit')} />
         <ProFormText name="version" label={t('app.kuaicaiwu.standardCost.col.version')} />
+        <ProFormSelect
+          name="currency"
+          label={t('app.kuaicaiwu.standardCost.field.currency')}
+          options={getCurrencySelectOptions(t)}
+          rules={[{ required: true }]}
+        />
         <ProFormDatePicker name="effective_date" label={t('app.kuaicaiwu.standardCost.field.effectiveDate')} />
         <ProFormDatePicker name="expiry_date" label={t('app.kuaicaiwu.standardCost.field.expiryDate')} />
         <ProFormSwitch name="is_active" label={t('app.kuaicaiwu.standardCost.status.active')} />

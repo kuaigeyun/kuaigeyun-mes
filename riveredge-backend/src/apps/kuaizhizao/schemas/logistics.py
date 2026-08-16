@@ -13,6 +13,7 @@ class LogisticsCarrierBase(BaseModel):
     carrier_type: str = "express"
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
+    service_hotline: Optional[str] = None
     settlement_method: Optional[str] = None
     supplier_id: Optional[int] = None
     remark: Optional[str] = None
@@ -28,6 +29,7 @@ class LogisticsCarrierUpdate(BaseModel):
     carrier_type: Optional[str] = None
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
+    service_hotline: Optional[str] = None
     settlement_method: Optional[str] = None
     supplier_id: Optional[int] = None
     remark: Optional[str] = None
@@ -145,6 +147,8 @@ class FreightOrderCreate(BaseModel):
     vehicle_id: Optional[int] = None
     driver_id: Optional[int] = None
     tracking_number: Optional[str] = None
+    sender_phone: Optional[str] = None
+    recipient_phone: Optional[str] = None
     origin_address: Optional[str] = None
     destination_address: Optional[str] = None
     planned_depart_at: Optional[datetime] = None
@@ -159,6 +163,8 @@ class FreightOrderUpdate(BaseModel):
     vehicle_id: Optional[int] = None
     driver_id: Optional[int] = None
     tracking_number: Optional[str] = None
+    sender_phone: Optional[str] = None
+    recipient_phone: Optional[str] = None
     origin_address: Optional[str] = None
     destination_address: Optional[str] = None
     planned_depart_at: Optional[datetime] = None
@@ -176,6 +182,8 @@ class FreightTrackingEventCreate(BaseModel):
 class FreightTrackingEventResponse(FreightTrackingEventCreate):
     id: int
     freight_order_id: int
+    lng: Optional[float] = None
+    lat: Optional[float] = None
     operator_id: Optional[int] = None
     operator_name: Optional[str] = None
 
@@ -214,8 +222,15 @@ class FreightOrderResponse(BaseModel):
     driver_name: Optional[str] = None
     driver_phone: Optional[str] = None
     tracking_number: Optional[str] = None
+    sender_phone: Optional[str] = None
+    recipient_phone: Optional[str] = None
+    query_phone: Optional[str] = None
     origin_address: Optional[str] = None
     destination_address: Optional[str] = None
+    origin_lng: Optional[float] = None
+    origin_lat: Optional[float] = None
+    destination_lng: Optional[float] = None
+    destination_lat: Optional[float] = None
     planned_depart_at: Optional[datetime] = None
     planned_arrive_at: Optional[datetime] = None
     actual_depart_at: Optional[datetime] = None
@@ -245,6 +260,10 @@ class FreightPullCandidate(BaseModel):
     business_direction: str
     address: Optional[str] = None
     tracking_number: Optional[str] = None
+    sender_phone: Optional[str] = None
+    recipient_phone: Optional[str] = None
+    pullable: bool = True
+    blocked_reason: Optional[str] = None
 
 
 class FreightPullCandidateListResponse(BaseModel):
@@ -309,6 +328,25 @@ class FreightBillListResponse(BaseModel):
 class PaginatedCarrierList(BaseModel):
     items: List[LogisticsCarrierResponse]
     total: int
+
+
+class CarrierPresetItem(BaseModel):
+    code: str
+    name: str
+    carrier_type: str
+    service_hotline: Optional[str] = None
+    exists: bool = False
+
+
+class LoadCarrierPresetRequest(BaseModel):
+    codes: Optional[List[str]] = Field(None, description="要加载的预设承运商编码，不传则加载全部")
+
+
+class LoadCarrierPresetResponse(BaseModel):
+    created: int
+    skipped: int
+    updated: int = 0
+    message: str
 
 
 class PaginatedVehicleList(BaseModel):

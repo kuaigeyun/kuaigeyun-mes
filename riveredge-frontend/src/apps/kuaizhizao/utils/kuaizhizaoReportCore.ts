@@ -1,5 +1,11 @@
 import type { StatCard } from '../../../components/layout-templates';
 import type { UniReportExecuteResult } from '../../../components/uni-report';
+import { extractReportProTableSort } from '../../../utils/tableQueryKey';
+import {
+  serializeReportColumnFilters,
+  parseReportColumnFilters,
+} from '../../../components/uni-report/applyUniReportColumnQuery';
+import { resolveProductionReportFormParams } from './productionExecutionReportCore';
 import {
   getSalesReport,
   getInventoryReport,
@@ -29,7 +35,6 @@ export type ReportTypeRoute = {
   api: KuaizhizaoReportDomain;
   backendType: string;
   templateId?: string;
-  dateRangeKeys?: string[];
 };
 
 export const REPORT_TYPE_ROUTES: Record<string, ReportTypeRoute> = {
@@ -49,6 +54,7 @@ export const REPORT_TYPE_ROUTES: Record<string, ReportTypeRoute> = {
   inventory_summary: { api: 'inventory', backendType: 'inventory_summary', templateId: 'inventoryLedger' },
   inventory_ledger: { api: 'warehouse', backendType: 'inventory_ledger', templateId: 'inventoryLedger' },
   slow_moving: { api: 'warehouse', backendType: 'slow_moving', templateId: 'queryTable' },
+  fifo_exception: { api: 'warehouse', backendType: 'fifo_exception', templateId: 'queryTable' },
   stocktaking_history: { api: 'warehouse', backendType: 'stocktaking', templateId: 'queryTable' },
   transfer_tracking: { api: 'warehouse', backendType: 'transfer', templateId: 'queryTable' },
 
@@ -98,7 +104,8 @@ export function camelToKebab(name: string): string {
 }
 
 export function permissionResourceFromPersistenceId(columnPersistenceId: string): string {
-  const m = columnPersistenceId.match(/pages\.([^.]+)\.reports(?:\.([\w-]+))?(?:\.(\w+))?$/);
+  const persistenceId = columnPersistenceId.replace(/-v\d+$/, '');
+  const m = persistenceId.match(/pages\.([^.]+)\.reports(?:\.([\w-]+))?(?:\.(\w+))?$/);
   if (!m) return '';
   const moduleSeg = m[1];
   const pageSeg = m[3] === 'index' ? m[2] : m[3] || m[2] || '';
@@ -136,16 +143,89 @@ export function resolveReportRoute(reportType: string, domainHint?: KuaizhizaoRe
 
 function normalizeResponse(res: {
   data?: unknown[];
+  items?: unknown[];
   success?: boolean;
   total?: number;
   summary?: Record<string, number>;
 }): UniReportExecuteResult {
-  const data = Array.isArray(res?.data) ? res.data : [];
+  const data = Array.isArray(res?.data) ? res.data : Array.isArray(res?.items) ? res.items : [];
   return {
     data: data as Record<string, unknown>[],
     success: res?.success ?? true,
     total: typeof res?.total === 'number' ? res.total : data.length,
     summary: res?.summary,
+  };
+}
+
+/** 快制造报表统一请求参数：期间 / 分页 / 列排序 / 列筛选 / 生产域表单字段 */
+export function buildKuaizhizaoReportRequestParams(
+  params: Record<string, unknown>,
+  sort?: Record<string, unknown>,
+  searchFormValues?: Record<string, unknown>,
+  options?: { domainHint?: KuaizhizaoReportDomain },
+): Record<string, unknown> {
+  const { skip, limit } = salesReportPageParams(params);
+  const { date_start, date_end } = parseSalesReportDateRange(searchFormValues);
+  const { sortBy, sortOrder } = extractReportProTableSort(sort ?? {});
+  const order_by =
+    sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+  const columnFiltersRaw = searchFormValues?.column_filters;
+  const column_filters =
+    typeof columnFiltersRaw === 'string'
+      ? columnFiltersRaw
+      : serializeReportColumnFilters(parseReportColumnFilters(columnFiltersRaw));
+  const productionFields =
+    options?.domainHint === 'production'
+      ? resolveProductionReportFormParams(searchFormValues)
+      : {};
+  const fuzzyKeyword =
+    typeof searchFormValues?.keyword === 'string' ? searchFormValues.keyword.trim() : undefined;
+  return {
+    skip,
+    limit,
+    date_start,
+    date_end,
+    ...(order_by ? { order_by } : {}),
+    ...(column_filters ? { column_filters } : {}),
+    ...(fuzzyKeyword ? { keyword: fuzzyKeyword } : {}),
+    ...productionFields,
+  };
+}
+
+/** 模具/工装报表 API 使用 date_from/date_to 参数名 */
+export function mapLegacyReportDateQuery(query: Record<string, unknown>): Record<string, unknown> {
+  const { date_start, date_end, skip, limit, ...rest } = query;
+  return {
+    skip,
+    limit,
+    ...(date_start ? { date_from: String(date_start).slice(0, 10) } : {}),
+    ...(date_end ? { date_to: String(date_end).slice(0, 10) } : {}),
+    ...rest,
+  };
+}
+
+/** 模具/工装等自定义 API 仍走同一套报表查询参数 */
+export function createKuaizhizaoCustomReportRequest<T extends Record<string, unknown>>(
+  fetcher: (query: Record<string, unknown>) => Promise<{
+    items?: T[];
+    data?: T[];
+    total?: number;
+    summary?: Record<string, number>;
+  }>,
+  options?: {
+    mapQuery?: (query: Record<string, unknown>) => Record<string, unknown>;
+  },
+) {
+  return async (
+    params: Record<string, unknown>,
+    sort?: Record<string, unknown>,
+    _filter?: Record<string, unknown>,
+    searchFormValues?: Record<string, unknown>,
+  ) => {
+    const query = buildKuaizhizaoReportRequestParams(params, sort, searchFormValues);
+    const apiParams = options?.mapQuery ? options.mapQuery(query) : query;
+    const res = await fetcher(apiParams);
+    return normalizeResponse(res) as UniReportExecuteResult;
   };
 }
 
@@ -155,26 +235,30 @@ export async function fetchKuaizhizaoReport(
   searchFormValues?: Record<string, unknown>,
   options?: {
     domainHint?: KuaizhizaoReportDomain;
-    dateRangeKeys?: string[];
     customerKeywordField?: string;
-    order_by?: string;
-    keyword?: string;
-    status?: string;
-    order_code?: string;
-    product_name?: string;
-    supplier_name?: string;
-    work_order_code?: string;
+    sort?: Record<string, unknown>;
   },
 ): Promise<UniReportExecuteResult> {
   const route = resolveReportRoute(reportType, options?.domainHint);
-  const dateKeys = options?.dateRangeKeys ?? route.dateRangeKeys ?? ['date_range', 'dateRange'];
-  const { date_start, date_end } = parseSalesReportDateRange(searchFormValues, dateKeys);
-  const { skip, limit } = salesReportPageParams(params);
+  const query = buildKuaizhizaoReportRequestParams(params, options?.sort, searchFormValues, {
+    domainHint: options?.domainHint ?? route.api,
+  });
+  const { skip, limit, date_start, date_end, order_by, column_filters, keyword, status, order_code, product_name, supplier_name, work_order_code } =
+    query as Record<string, string | number | undefined>;
   const customerField = options?.customerKeywordField ?? 'customer_name';
   const customer_keyword = searchFormValues?.[customerField] as string | undefined;
-  const fuzzyKeyword =
-    options?.keyword ??
-    (typeof searchFormValues?.keyword === 'string' ? searchFormValues.keyword.trim() : undefined);
+  const formStatus =
+    typeof searchFormValues?.status === 'string' && searchFormValues.status.trim()
+      ? searchFormValues.status.trim()
+      : undefined;
+  const demand_type =
+    typeof searchFormValues?.demand_type === 'string' && searchFormValues.demand_type.trim()
+      ? searchFormValues.demand_type.trim()
+      : undefined;
+  const formSupplier =
+    typeof searchFormValues?.supplier_name === 'string' && searchFormValues.supplier_name.trim()
+      ? searchFormValues.supplier_name.trim()
+      : undefined;
   const warehouseIdRaw = searchFormValues?.warehouse_id;
   const materialIdRaw = searchFormValues?.material_id;
   const warehouse_id =
@@ -200,14 +284,16 @@ export async function fetchKuaizhizaoReport(
     skip,
     limit,
     ...(customer_keyword ? { customer_keyword } : {}),
-    ...(fuzzyKeyword ? { keyword: fuzzyKeyword } : {}),
+    ...(keyword ? { keyword } : {}),
     ...(Object.keys(filters).length ? { filters } : {}),
-    ...(options?.order_by ? { order_by: options.order_by } : {}),
-    ...(options?.status ? { status: options.status } : {}),
-    ...(options?.order_code ? { order_code: options.order_code } : {}),
-    ...(options?.product_name ? { product_name: options.product_name } : {}),
-    ...(options?.supplier_name ? { supplier_name: options.supplier_name } : {}),
-    ...(options?.work_order_code ? { work_order_code: options.work_order_code } : {}),
+    ...(order_by ? { order_by } : {}),
+    ...(column_filters ? { column_filters } : {}),
+    ...(status || formStatus ? { status: status ?? formStatus } : {}),
+    ...(demand_type ? { demand_type } : {}),
+    ...(order_code ? { order_code } : {}),
+    ...(product_name ? { product_name } : {}),
+    ...(supplier_name || formSupplier ? { supplier_name: supplier_name ?? formSupplier } : {}),
+    ...(work_order_code ? { work_order_code } : {}),
   };
 
   switch (route.api) {

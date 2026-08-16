@@ -21,6 +21,9 @@ export interface SalesInvoice {
   updated_by_name?: string;
   receivable_id?: number | null;
   receivable_code?: string | null;
+  partner_tax_no?: string | null;
+  partner_bank_info?: string | null;
+  partner_address_phone?: string | null;
 }
 
 export interface SalesInvoiceListParams {

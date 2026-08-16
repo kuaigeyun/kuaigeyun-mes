@@ -340,6 +340,9 @@ async def list_suppliers(
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     category: Optional[str] = Query(None, description="供应商分类（过滤）"),
     is_active: Optional[bool] = Query(None, alias="isActive", description="是否启用"),
+    qualification_status: Optional[str] = Query(
+        None, alias="qualificationStatus", description="准入状态"
+    ),
     keyword: Optional[str] = Query(None, description="搜索关键词（编码、名称、联系人等）"),
     code: Optional[str] = Query(None, description="供应商编码（模糊匹配）"),
     name: Optional[str] = Query(None, description="供应商名称（模糊匹配）"),
@@ -372,6 +375,7 @@ async def list_suppliers(
         code,
         name,
         buyer_id,
+        qualification_status,
         sort_by,
         sort_order,
         created_start_date,
@@ -433,6 +437,28 @@ async def update_supplier(
     """
     try:
         return await SupplyChainService.update_supplier(tenant_id, supplier_uuid, data, current_user=current_user)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/suppliers/{supplier_uuid}/recalculate-rating",
+    summary="Recalculate supplier rating from delivery and IQC",
+    dependencies=[Depends(require_master_data_module_access("supply-chain:supplier"))],
+)
+async def recalculate_supplier_rating(
+    supplier_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    lookback_days: int = 90,
+):
+    """按近 N 天交期达成率与来料合格率重算评级并回写主数据。"""
+    try:
+        return await SupplyChainService.recalculate_supplier_rating(
+            tenant_id, supplier_uuid, lookback_days=lookback_days
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:

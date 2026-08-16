@@ -78,6 +78,11 @@ export interface UniPullQueryModalProps<T extends object> {
   /** 表格下方补充说明 */
   footerHint?: ReactNode;
   tableScroll?: TableProps<T>['scroll'];
+
+  /** 已选行（跨页预览与确认）；不传则仅能展示当前页选中 */
+  selectedRows?: T[];
+  /** 已选预览展示文案；不传则按常见单号字段推断 */
+  getRowLabel?: (record: T) => string;
 }
 
 export interface UseUniPullQueryOptions<T extends object> {

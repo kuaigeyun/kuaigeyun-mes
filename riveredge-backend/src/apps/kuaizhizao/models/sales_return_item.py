@@ -20,8 +20,9 @@ class SalesReturnItem(BaseModel):
     tenant_id = fields.IntField(description="租户ID")
     return_id = fields.IntField(description="退货单ID")
     
-    # 关联原销售出库单明细
+    # 关联原销售出库单明细 / 销售订单行（跨单取单按行占用）
     sales_delivery_item_id = fields.IntField(null=True, description="销售出库单明细ID")
+    sales_order_item_id = fields.IntField(null=True, description="销售订单明细ID")
     
     material_id = fields.IntField(description="物料ID")
     material_code = fields.CharField(max_length=50, description="物料编码")
@@ -57,6 +58,7 @@ class SalesReturnItem(BaseModel):
         indexes = [
             ("tenant_id", "return_id"),
             ("sales_delivery_item_id",),  # 关联销售出库单明细索引
+            ("sales_order_item_id",),
             ("material_id",),
             ("location_id",),
             ("batch_number",),

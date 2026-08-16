@@ -880,6 +880,7 @@ class EquipmentSpotCheckService:
         created_start_date: Optional[str] = None,
         created_end_date: Optional[str] = None,
         has_abnormality: Optional[bool] = None,
+        uuid: Optional[str] = None,
     ) -> tuple[List[EquipmentSpotCheck], int]:
         from apps.kuaizhizao.services.equipment_list_core import (
             SPOT_CHECK_SORTABLE_FIELDS,
@@ -896,6 +897,8 @@ class EquipmentSpotCheckService:
             qs = qs.filter(status=status)
         if has_abnormality is not None:
             qs = qs.filter(has_abnormality=has_abnormality)
+        if uuid:
+            qs = qs.filter(uuid=uuid.strip())
         qs = apply_equipment_keyword_filter(
             qs,
             keyword,
@@ -1160,6 +1163,7 @@ class EquipmentRoutePatrolService:
         created_start_date: Optional[str] = None,
         created_end_date: Optional[str] = None,
         has_abnormality: Optional[bool] = None,
+        uuid: Optional[str] = None,
     ) -> tuple[List[EquipmentRoutePatrol], int]:
         from apps.kuaizhizao.services.equipment_list_core import (
             ROUTE_PATROL_SORTABLE_FIELDS,
@@ -1176,6 +1180,8 @@ class EquipmentRoutePatrolService:
             qs = qs.filter(status=status)
         if has_abnormality is not None:
             qs = qs.filter(has_abnormality=has_abnormality)
+        if uuid:
+            qs = qs.filter(uuid=uuid.strip())
         qs = apply_equipment_keyword_filter(
             qs,
             keyword,

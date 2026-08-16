@@ -28,12 +28,19 @@ def _decimal_or_zero(v: Any) -> Decimal:
         return Decimal("0")
 
 
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date
+
+
+def _site_today() -> date:
+    return to_site_date(resolve_business_datetime())
+
+
 def _as_date(value: Any, fallback: Optional[date] = None) -> date:
     if isinstance(value, datetime):
         return value.date()
     if isinstance(value, date):
         return value
-    return fallback or date.today()
+    return fallback or _site_today()
 
 
 async def batch_sum_open_supply_quantities_with_breakdown(
@@ -183,7 +190,7 @@ async def batch_list_open_supply_receipts_by_date(
 
     result: Dict[int, List[Dict[str, Any]]] = {mid: [] for mid in mids}
     mid_set = set(mids)
-    today = date.today()
+    today = _site_today()
 
     from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, REVIEW_STATUS_ALIASES, normalize_status
 

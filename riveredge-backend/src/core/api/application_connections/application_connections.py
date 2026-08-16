@@ -21,6 +21,7 @@ from core.services.integration.integration_config_service import (
     build_integration_response,
 )
 from core.services.integration.wecom_contact_sync_service import WeComContactSyncService
+from core.config.integration_type_spec import APPLICATION_CONNECTOR_TYPES
 from core.api.deps.deps import get_current_tenant
 from core.api.deps.access import require_permission_codes
 from infra.api.deps.deps import get_current_user as soil_get_current_user
@@ -29,24 +30,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/application-connections", tags=["Core - Application Connections"])
 
-APPLICATION_TYPES = (
-    "feishu", "dingtalk", "wecom",
-    "kingdee_galaxy", "kingdee_xingchen", "kingdee_kis_cloud", "kingdee_kis",
-    "yonyou_yonbip", "yonyou_u8", "yonyou_u9", "yonyou_nc",
-    "sap_s4hana", "sap_b1", "oracle_netsuite", "odoo",
-    "inspur_gs", "inspur_ps",
-    "digiwin_t100", "digiwin_yifei", "digiwin_yizhu", "digiwin_yituo", "digiwin_e10",
-    "chanjet_tplus", "grasp_huihuang", "super_erp", "erpnext", "sunlike_erp",
-    "teamcenter", "windchill", "caxa", "sanpin_plm", "sunlike_plm", "sipm", "inteplm",
-    "salesforce", "xiaoshouyi", "fenxiang", "qidian", "supra_crm",
-    "weaver", "seeyon", "landray", "cloudhub", "tongda_oa",
-    "rootcloud", "casicloud", "alicloud_iot", "huaweicloud_iot", "thingsboard", "jetlinks",
-    "flux_wms", "kejian_wms", "digiwin_wms", "openwms",
-    "alicloud_oss", "tencent_cos", "huaweicloud_obs", "aws_s3", "minio", "qiniu_kodo",
-    "nas_webdav", "nas_smb",
-    # AI（OpenAI 兼容；同一 type 可多条不同 model）
-    "deepseek", "openai", "qwen", "zhipu", "moonshot", "siliconflow",
-)
+APPLICATION_TYPES = APPLICATION_CONNECTOR_TYPES
 
 
 def _to_response(ic) -> IntegrationConfigResponse:

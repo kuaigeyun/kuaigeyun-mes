@@ -29,6 +29,11 @@ export function formatPaymentMethod(value: string | null | undefined, t: TFuncti
 /** 与后端收款/付款单 payment_method 存值一致 */
 export const BANK_TRANSFER_PAYMENT_METHOD = '银行转账';
 export const CASH_PAYMENT_METHOD = '现金';
+export const ACCEPTANCE_BILL_PAYMENT_METHOD = '承兑汇票';
+
+export function isAcceptanceBillPaymentMethod(method: string | null | undefined): boolean {
+  return String(method || '').trim() === ACCEPTANCE_BILL_PAYMENT_METHOD;
+}
 
 export function isBankTransferPaymentMethod(method: string | null | undefined): boolean {
   return String(method || '').trim() === BANK_TRANSFER_PAYMENT_METHOD;

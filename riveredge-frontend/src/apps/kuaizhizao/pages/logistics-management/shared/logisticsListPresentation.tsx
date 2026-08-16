@@ -134,6 +134,12 @@ export function logisticsTransportModeLabel(t: TFunction, mode?: string | null):
   return label === key ? code : label;
 }
 
+export function renderLogisticsTransportModeTag(t: TFunction, mode?: string | null) {
+  const code = String(mode ?? '').trim();
+  if (!code) return '-';
+  return <MarkerTag color="processing">{logisticsTransportModeLabel(t, code)}</MarkerTag>;
+}
+
 export function logisticsTrackingEventLabel(t: TFunction, eventType?: string | null): string {
   const code = String(eventType ?? '').trim();
   if (!code) return '-';
@@ -148,6 +154,20 @@ export function logisticsReceiptResultLabel(t: TFunction, result?: string | null
   const key = `app.kuaizhizao.logistics.option.receiptResult.${code}`;
   const label = t(key);
   return label === key ? code : label;
+}
+
+export function renderFreightPullableTag(
+  t: TFunction,
+  row: { pullable?: boolean | null; blocked_reason?: string | null },
+) {
+  if (row.pullable === false) {
+    return (
+      <MarkerTag color="warning">
+        {row.blocked_reason || t('app.kuaizhizao.logistics.message.sourceAlreadyLinked')}
+      </MarkerTag>
+    );
+  }
+  return <MarkerTag color="success">{t('app.kuaizhizao.warehouseOutbound.pull.pullable')}</MarkerTag>;
 }
 
 export function renderLogisticsBusinessDirectionTag(t: TFunction, direction?: string | null) {

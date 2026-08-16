@@ -1,9 +1,12 @@
 import React, { useMemo } from 'react';
-import { Checkbox, Tree, theme } from 'antd';
+import { Checkbox, Tooltip, Tree, theme } from 'antd';
 import { AppstoreOutlined } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
 import type { FunctionGrantAction, FunctionGrantMenuNode } from '../../../../services/role';
-import { resolvePermissionLabel } from '../../../../utils/permissionContract';
+import {
+  isBaselinePermissionCode,
+  resolvePermissionLabel,
+} from '../../../../utils/permissionContract';
 import { translateGrantMenuTitle } from './functionGrantTreeFilters';
 
 function grantActionLabel(
@@ -16,6 +19,12 @@ function grantActionLabel(
 export function codesFromAction(action: FunctionGrantAction): string[] {
   if (action.merged_codes?.length) return action.merged_codes;
   return action.code ? [action.code] : [];
+}
+
+export function isActionBaseline(action: FunctionGrantAction): boolean {
+  if (action.is_baseline) return true;
+  const codes = codesFromAction(action);
+  return codes.length > 0 && codes.every((c) => isBaselinePermissionCode(c));
 }
 
 export function isActionGranted(action: FunctionGrantAction, granted: Set<string>): boolean {
@@ -177,14 +186,36 @@ export const FunctionGrantTree: React.FC<Props> = ({
             <div className="permission-action-row">
               {grantNode.actions.map((item) => {
                 const checked = isActionGranted(item, grantedCodes);
-                return (
-                  <label key={`${grantNode.menu_uuid}:${item.code}`} className="permission-action-chip">
+                const baseline = isActionBaseline(item);
+                const chip = (
+                  <label className="permission-action-chip">
                     <Checkbox
-                      checked={checked}
-                      onChange={(e) => onToggle(codesFromAction(item), e.target.checked)}
+                      checked={checked || baseline}
+                      disabled={baseline}
+                      onChange={(e) => {
+                        if (baseline) return;
+                        onToggle(codesFromAction(item), e.target.checked);
+                      }}
                     />
                     <span style={{ whiteSpace: 'nowrap' }}>{grantActionLabel(item, t)}</span>
                   </label>
+                );
+                if (!baseline) {
+                  return (
+                    <React.Fragment key={`${grantNode.menu_uuid}:${item.code}`}>
+                      {chip}
+                    </React.Fragment>
+                  );
+                }
+                return (
+                  <Tooltip
+                    key={`${grantNode.menu_uuid}:${item.code}`}
+                    title={t('pages.system.roles.baselinePermissionLocked', {
+                      defaultValue: '系统必开权限，不可取消',
+                    })}
+                  >
+                    {chip}
+                  </Tooltip>
                 );
               })}
             </div>

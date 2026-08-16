@@ -2,7 +2,9 @@ import React from 'react';
 import { Tag } from 'antd';
 import type { ProColumns } from '@ant-design/pro-components';
 import type { TFunction } from 'i18next';
-import { MarkerTag } from '../../../../../constants/statusBadges';
+import { MaterialUnitLabel } from '../../../../../components/material-unit-label';
+import { MarkerTag, RE_STATUS_BADGE_DRAFT, resolveStatusTagDisplayProps, StatusTag } from '../../../../../constants/statusBadges';
+import { reportPercent, reportTextEnum } from '../../../utils/reportPresentation';
 
 export const QUALITY_DISPOSAL_I18N: Record<string, string> = {
   return: 'app.kuaizhizao.quality.common.disposal.return',
@@ -42,6 +44,8 @@ export const QUALITY_DOC_STATUS_I18N: Record<string, string> = {
   已完成: 'app.kuaizhizao.quality.common.docStatus.completed',
   已取消: 'app.kuaizhizao.quality.common.docStatus.cancelled',
   待检验: 'app.kuaizhizao.quality.common.docStatus.pendingInspection',
+  已检验: 'app.kuaizhizao.quality.common.status.inspected',
+  已驳回: 'app.kuaizhizao.quality.common.reviewStatus.rejected',
 };
 
 export const QUALITY_REVIEW_STATUS_I18N: Record<string, string> = {
@@ -175,6 +179,45 @@ export function getQualityDispositionValueEnum(t: TFunction): Record<string, str
   );
 }
 
+export function getQualityDefectTypeText(
+  t: TFunction,
+  defectType?: string | null,
+  defectReason?: string | null,
+): string {
+  if (!defectType) return '-';
+  const key = QUALITY_DEFECT_TYPE_I18N[defectType];
+  if (key) return t(key);
+  const reason = String(defectReason ?? '').trim();
+  if (reason && reason !== defectType) return reason;
+  return defectType;
+}
+
+export function getQualityDispositionText(t: TFunction, disposition?: string | null): string {
+  if (!disposition) return '-';
+  const key = QUALITY_DISPOSAL_I18N[disposition];
+  return key ? t(key) : disposition;
+}
+
+const QUALITY_DISPOSITION_MARKER_COLORS: Record<string, string> = {
+  return: 'orange',
+  accept: 'success',
+  quarantine: 'warning',
+  rework: 'processing',
+  scrap: 'error',
+  downgrade: 'purple',
+  other: 'default',
+};
+
+export function renderQualityDispositionMarkerTag(
+  t: TFunction,
+  disposition?: string | null,
+): React.ReactNode {
+  if (!disposition) return '-';
+  const text = getQualityDispositionText(t, disposition);
+  const color = QUALITY_DISPOSITION_MARKER_COLORS[disposition] ?? 'default';
+  return React.createElement(MarkerTag, { color }, text);
+}
+
 export function getQualityReleaseDecisionValueEnum(t: TFunction): Record<string, string> {
   return Object.fromEntries(
     Object.entries(QUALITY_RELEASE_DECISION_I18N).map(([value, key]) => [value, t(key)]),
@@ -274,78 +317,528 @@ export function renderReleaseDecisionTag(t: TFunction, decision?: string | null)
 
 export function renderNcLedgerStatusTag(t: TFunction, status?: string | null): React.ReactNode {
   const text = getQualityNcLedgerStatusText(t, status);
-  const color = status === 'processed' ? 'success' : 'processing';
-  return React.createElement(Tag, { color, variant: 'solid' }, text);
+  const color =
+    status === 'processed' ? 'success' : status === 'cancelled' ? 'default' : RE_STATUS_BADGE_DRAFT;
+  return React.createElement(StatusTag, resolveStatusTagDisplayProps({ text, color }), text);
+}
+
+const QUALITY_EXCEPTION_TYPE_I18N: Record<string, string> = {
+  inspection_failure: 'app.kuaizhizao.productionException.quality.exceptionType.inspectionFailure',
+  process_deviation: 'app.kuaizhizao.productionException.quality.exceptionType.processDeviation',
+  customer_complaint: 'app.kuaizhizao.productionException.quality.exceptionType.customerComplaint',
+};
+
+const QUALITY_EXCEPTION_STATUS_I18N: Record<string, string> = {
+  pending: 'app.kuaizhizao.productionException.status.pending',
+  investigating: 'app.kuaizhizao.productionException.status.investigating',
+  correcting: 'app.kuaizhizao.productionException.status.correcting',
+  closed: 'app.kuaizhizao.productionException.status.closed',
+};
+
+const QUALITY_EXCEPTION_SEVERITY_I18N: Record<string, string> = {
+  minor: 'app.kuaizhizao.productionException.quality.severity.minor',
+  major: 'app.kuaizhizao.productionException.quality.severity.major',
+  critical: 'app.kuaizhizao.productionException.quality.severity.critical',
+};
+
+function reportI18nEnum(t: TFunction, table: Record<string, string>) {
+  return reportTextEnum(
+    Object.fromEntries(Object.entries(table).map(([code, key]) => [code, t(key)])),
+  );
+}
+
+function reportI18nText(t: TFunction, table: Record<string, string>, value: unknown): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '-';
+  const key = table[raw];
+  return key ? t(key) : raw;
+}
+
+function qualityReportUnitColumn(t: TFunction): ProColumns {
+  return {
+    title: t('app.kuaizhizao.reports.unit'),
+    dataIndex: 'unit',
+    width: 80,
+    minWidth: 80,
+    hideInSearch: true,
+    render: (_, row) =>
+      React.createElement(MaterialUnitLabel, {
+        value: (row.unit || row.material_unit) as string | null,
+      }),
+  };
+}
+
+function qualityReportPassRateColumn(t: TFunction): ProColumns {
+  return {
+    title: t('app.kuaizhizao.quality.reports.columns.passRate'),
+    dataIndex: 'pass_rate',
+    width: 90,
+    hideInSearch: true,
+    align: 'right',
+    render: (_, row) => reportPercent(row.pass_rate),
+  };
+}
+
+function qualityInspectionStatusColumn(t: TFunction): ProColumns {
+  const statusEnum = reportI18nEnum(t, QUALITY_DOC_STATUS_I18N);
+  return {
+    title: t('app.kuaizhizao.quality.common.columns.status'),
+    dataIndex: 'status',
+    width: 100,
+    valueEnum: statusEnum,
+    search: { order: 40 } as ProColumns['search'],
+    render: (_, row) => getQualityDocStatusText(t, row.status as string),
+  };
+}
+
+function qualityInspectionResultColumn(t: TFunction): ProColumns {
+  return {
+    title: t('app.kuaizhizao.quality.common.columns.inspectionResult'),
+    dataIndex: 'inspection_result',
+    width: 100,
+    hideInSearch: true,
+    render: (_, row) => getQualityResultText(t, row.inspection_result as string),
+  };
+}
+
+function qualityInspectionQtyColumns(t: TFunction): ProColumns[] {
+  return [
+    {
+      title: t('app.kuaizhizao.quality.common.columns.inspectionQty'),
+      dataIndex: 'sample_qty',
+      valueType: 'digit',
+      width: 100,
+      hideInSearch: true,
+      align: 'right',
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.qualifiedQty'),
+      dataIndex: 'qualified_qty',
+      valueType: 'digit',
+      width: 100,
+      hideInSearch: true,
+      align: 'right',
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'),
+      dataIndex: 'unqualified_qty',
+      valueType: 'digit',
+      width: 110,
+      hideInSearch: true,
+      align: 'right',
+    },
+    qualityReportPassRateColumn(t),
+  ];
 }
 
 export function buildQualityReportIncomingColumns(t: TFunction): ProColumns[] {
   return [
-    { title: t('app.kuaizhizao.quality.common.columns.inspectionCode'), dataIndex: 'inspection_code', width: 150 },
-    { title: t('app.kuaizhizao.quality.common.columns.materialName'), dataIndex: 'material_name', width: 200 },
-    { title: t('app.kuaizhizao.quality.common.columns.batchNo'), dataIndex: 'batch_no', width: 150 },
-    { title: t('app.kuaizhizao.quality.common.columns.inspectionDate'), dataIndex: 'inspection_date', valueType: 'date', width: 120 },
-    { title: t('app.kuaizhizao.quality.common.columns.sampleQty'), dataIndex: 'sample_qty', valueType: 'digit', width: 100 },
-    { title: t('app.kuaizhizao.quality.common.columns.qualifiedQty'), dataIndex: 'qualified_qty', valueType: 'digit', width: 100 },
-    { title: t('app.kuaizhizao.quality.common.columns.passRate'), dataIndex: 'pass_rate', valueType: 'digit', width: 100 },
-    { title: t('app.kuaizhizao.quality.common.columns.status'), dataIndex: 'status', width: 100 },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.inspectionCode'),
+      dataIndex: 'inspection_code',
+      width: 150,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.inspectionDate'),
+      dataIndex: 'inspection_date',
+      valueType: 'date',
+      width: 120,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.supplier'),
+      dataIndex: 'supplier_name',
+      ellipsis: true,
+      width: 140,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.materialCode'),
+      dataIndex: 'material_code',
+      width: 120,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.materialName'),
+      dataIndex: 'material_name',
+      ellipsis: true,
+      width: 160,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.materialSpec'),
+      dataIndex: 'material_spec',
+      ellipsis: true,
+      width: 120,
+      hideInSearch: true,
+    },
+    qualityReportUnitColumn(t),
+    ...qualityInspectionQtyColumns(t),
+    qualityInspectionResultColumn(t),
+    qualityInspectionStatusColumn(t),
+    {
+      title: t('app.kuaizhizao.quality.common.columns.inspector'),
+      dataIndex: 'inspector_name',
+      width: 100,
+      hideInSearch: true,
+    },
   ];
 }
 
 export function buildQualityReportProcessColumns(t: TFunction): ProColumns[] {
   return [
-    { title: t('app.kuaizhizao.quality.common.columns.inspectionCode'), dataIndex: 'inspection_code', width: 150 },
-    { title: t('app.kuaizhizao.quality.common.columns.materialName'), dataIndex: 'material_name', width: 200 },
-    { title: t('app.kuaizhizao.quality.common.columns.workOrderCode'), dataIndex: 'work_order_code', width: 150 },
-    { title: t('app.kuaizhizao.quality.common.columns.inspectionDate'), dataIndex: 'inspection_date', valueType: 'date', width: 120 },
-    { title: t('app.kuaizhizao.quality.common.columns.sampleQty'), dataIndex: 'sample_qty', valueType: 'digit', width: 100 },
-    { title: t('app.kuaizhizao.quality.common.columns.qualifiedQty'), dataIndex: 'qualified_qty', valueType: 'digit', width: 100 },
-    { title: t('app.kuaizhizao.quality.common.columns.passRate'), dataIndex: 'pass_rate', valueType: 'digit', width: 100 },
-    { title: t('app.kuaizhizao.quality.common.columns.status'), dataIndex: 'status', width: 100 },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.inspectionCode'),
+      dataIndex: 'inspection_code',
+      width: 150,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.inspectionDate'),
+      dataIndex: 'inspection_date',
+      valueType: 'date',
+      width: 120,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.workOrderCode'),
+      dataIndex: 'work_order_code',
+      width: 150,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.operationName'),
+      dataIndex: 'operation_name',
+      ellipsis: true,
+      width: 140,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.materialCode'),
+      dataIndex: 'material_code',
+      width: 120,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.materialName'),
+      dataIndex: 'material_name',
+      ellipsis: true,
+      width: 160,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.materialSpec'),
+      dataIndex: 'material_spec',
+      ellipsis: true,
+      width: 120,
+      hideInSearch: true,
+    },
+    qualityReportUnitColumn(t),
+    {
+      title: t('app.kuaizhizao.quality.common.columns.batchNo'),
+      dataIndex: 'batch_no',
+      width: 120,
+      hideInSearch: true,
+    },
+    ...qualityInspectionQtyColumns(t),
+    qualityInspectionResultColumn(t),
+    qualityInspectionStatusColumn(t),
+    {
+      title: t('app.kuaizhizao.quality.common.columns.inspector'),
+      dataIndex: 'inspector_name',
+      width: 100,
+      hideInSearch: true,
+    },
   ];
 }
 
 export function buildQualityReportFinishedColumns(t: TFunction): ProColumns[] {
-  return buildQualityReportIncomingColumns(t);
+  return [
+    {
+      title: t('app.kuaizhizao.quality.common.columns.inspectionCode'),
+      dataIndex: 'inspection_code',
+      width: 150,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.inspectionDate'),
+      dataIndex: 'inspection_date',
+      valueType: 'date',
+      width: 120,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.workOrderCode'),
+      dataIndex: 'work_order_code',
+      width: 150,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.salesOrderCode'),
+      dataIndex: 'sales_order_code',
+      width: 150,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.customer'),
+      dataIndex: 'customer_name',
+      ellipsis: true,
+      width: 140,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.materialCode'),
+      dataIndex: 'material_code',
+      width: 120,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.materialName'),
+      dataIndex: 'material_name',
+      ellipsis: true,
+      width: 160,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.materialSpec'),
+      dataIndex: 'material_spec',
+      ellipsis: true,
+      width: 120,
+      hideInSearch: true,
+    },
+    qualityReportUnitColumn(t),
+    {
+      title: t('app.kuaizhizao.quality.common.columns.batchNo'),
+      dataIndex: 'batch_no',
+      width: 120,
+      hideInSearch: true,
+    },
+    ...qualityInspectionQtyColumns(t),
+    qualityInspectionResultColumn(t),
+    qualityInspectionStatusColumn(t),
+    {
+      title: t('app.kuaizhizao.quality.common.columns.inspector'),
+      dataIndex: 'inspector_name',
+      width: 100,
+      hideInSearch: true,
+    },
+  ];
 }
 
 export function buildQualityReportNonconformingColumns(t: TFunction): ProColumns[] {
-  const disposalEnum = getQualityDispositionValueEnum(t);
+  const disposalEnum = reportI18nEnum(t, QUALITY_DISPOSAL_I18N);
+  const statusEnum = reportI18nEnum(t, QUALITY_NC_LEDGER_STATUS_I18N);
+  const defectEnum = reportI18nEnum(t, QUALITY_DEFECT_TYPE_I18N);
   return [
-    { title: t('app.kuaizhizao.quality.reports.columns.handleCode'), dataIndex: 'handle_code', width: 150 },
-    { title: t('app.kuaizhizao.quality.common.columns.materialName'), dataIndex: 'material_name', width: 200 },
-    { title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'), dataIndex: 'unqualified_qty', valueType: 'digit', width: 100 },
+    {
+      title: t('app.kuaizhizao.quality.reports.columns.handleCode'),
+      dataIndex: 'handle_code',
+      width: 150,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.workOrderCode'),
+      dataIndex: 'work_order_code',
+      width: 150,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.materialCode'),
+      dataIndex: 'material_code',
+      width: 120,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.materialName'),
+      dataIndex: 'material_name',
+      ellipsis: true,
+      width: 160,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.nc.columns.defectType'),
+      dataIndex: 'defect_type',
+      width: 110,
+      hideInSearch: true,
+      valueEnum: defectEnum,
+      render: (_, row) => reportI18nText(t, QUALITY_DEFECT_TYPE_I18N, row.defect_type),
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'),
+      dataIndex: 'unqualified_qty',
+      valueType: 'digit',
+      width: 110,
+      hideInSearch: true,
+      align: 'right',
+    },
     {
       title: t('app.kuaizhizao.quality.reports.columns.disposalMethod'),
       dataIndex: 'disposal_method',
-      width: 120,
+      width: 110,
+      hideInSearch: true,
       valueEnum: disposalEnum,
-      render: (_, row) => {
-        const raw = String(row.disposal_method ?? '').trim();
-        if (!raw) return '-';
-        return disposalEnum[raw] ?? raw;
-      },
+      render: (_, row) => reportI18nText(t, QUALITY_DISPOSAL_I18N, row.disposal_method),
     },
-    { title: t('app.kuaizhizao.quality.reports.columns.disposalDate'), dataIndex: 'disposal_date', valueType: 'date', width: 120 },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.status'),
+      dataIndex: 'status',
+      width: 100,
+      valueEnum: statusEnum,
+      search: { order: 40 } as ProColumns['search'],
+      render: (_, row) => getQualityNcLedgerStatusText(t, row.status as string),
+    },
+    {
+      title: t('app.kuaizhizao.quality.reports.columns.disposalDate'),
+      dataIndex: 'disposal_date',
+      valueType: 'date',
+      width: 120,
+      hideInSearch: true,
+    },
   ];
 }
 
 export function buildQualityReportExceptionColumns(t: TFunction): ProColumns[] {
+  const typeEnum = reportI18nEnum(t, QUALITY_EXCEPTION_TYPE_I18N);
+  const statusEnum = reportI18nEnum(t, QUALITY_EXCEPTION_STATUS_I18N);
+  const severityEnum = reportI18nEnum(t, QUALITY_EXCEPTION_SEVERITY_I18N);
   return [
-    { title: t('app.kuaizhizao.quality.reports.columns.exceptionCode'), dataIndex: 'exception_code', width: 150 },
-    { title: t('app.kuaizhizao.quality.reports.columns.discoveryDate'), dataIndex: 'discovery_date', valueType: 'date', width: 120 },
-    { title: t('app.kuaizhizao.quality.reports.columns.exceptionType'), dataIndex: 'type', width: 120 },
-    { title: t('app.kuaizhizao.quality.reports.columns.reason'), dataIndex: 'reason', ellipsis: true },
-    { title: t('app.kuaizhizao.quality.common.columns.status'), dataIndex: 'status', width: 100 },
+    {
+      title: t('app.kuaizhizao.quality.reports.columns.discoveryDate'),
+      dataIndex: 'discovery_date',
+      valueType: 'date',
+      width: 120,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.reports.columns.exceptionType'),
+      dataIndex: 'type',
+      width: 120,
+      hideInSearch: true,
+      valueEnum: typeEnum,
+      render: (_, row) => reportI18nText(t, QUALITY_EXCEPTION_TYPE_I18N, row.type),
+    },
+    {
+      title: t('app.kuaizhizao.productionException.quality.col.severity'),
+      dataIndex: 'severity',
+      width: 90,
+      hideInSearch: true,
+      valueEnum: severityEnum,
+      render: (_, row) => reportI18nText(t, QUALITY_EXCEPTION_SEVERITY_I18N, row.severity),
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.materialCode'),
+      dataIndex: 'material_code',
+      width: 120,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.materialName'),
+      dataIndex: 'material_name',
+      ellipsis: true,
+      width: 160,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.workOrderCode'),
+      dataIndex: 'work_order_code',
+      width: 150,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.batchNo'),
+      dataIndex: 'batch_no',
+      width: 120,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.reports.columns.reason'),
+      dataIndex: 'reason',
+      ellipsis: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.status'),
+      dataIndex: 'status',
+      width: 100,
+      valueEnum: statusEnum,
+      search: { order: 40 } as ProColumns['search'],
+      render: (_, row) => reportI18nText(t, QUALITY_EXCEPTION_STATUS_I18N, row.status),
+    },
+    {
+      title: t('app.kuaizhizao.productionException.col.responsiblePerson'),
+      dataIndex: 'responsible_person_name',
+      width: 100,
+      hideInSearch: true,
+    },
   ];
 }
 
 export function buildQualityReportRateTrendColumns(t: TFunction): ProColumns[] {
   return [
-    { title: t('app.kuaizhizao.quality.reports.columns.month'), dataIndex: 'month', valueType: 'dateMonth', width: 120 },
-    { title: t('app.kuaizhizao.quality.reports.columns.iqcRate'), dataIndex: 'iqc_rate', valueType: 'percent', width: 120 },
-    { title: t('app.kuaizhizao.quality.reports.columns.ipqcRate'), dataIndex: 'ipqc_rate', valueType: 'percent', width: 120 },
-    { title: t('app.kuaizhizao.quality.reports.columns.fqcRate'), dataIndex: 'fqc_rate', valueType: 'percent', width: 120 },
-    { title: t('app.kuaizhizao.quality.reports.columns.overallRate'), dataIndex: 'overall_rate', valueType: 'percent', width: 120, sorter: true },
+    {
+      title: t('app.kuaizhizao.quality.reports.columns.month'),
+      dataIndex: 'month',
+      width: 100,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.reports.columns.incomingQty'),
+      dataIndex: 'iqc_qty',
+      valueType: 'digit',
+      width: 100,
+      hideInSearch: true,
+      align: 'right',
+    },
+    {
+      title: t('app.kuaizhizao.quality.reports.columns.incomingRate'),
+      dataIndex: 'iqc_rate',
+      width: 110,
+      hideInSearch: true,
+      align: 'right',
+      render: (_, row) => reportPercent(row.iqc_rate),
+    },
+    {
+      title: t('app.kuaizhizao.quality.reports.columns.processQty'),
+      dataIndex: 'ipqc_qty',
+      valueType: 'digit',
+      width: 100,
+      hideInSearch: true,
+      align: 'right',
+    },
+    {
+      title: t('app.kuaizhizao.quality.reports.columns.processRate'),
+      dataIndex: 'ipqc_rate',
+      width: 110,
+      hideInSearch: true,
+      align: 'right',
+      render: (_, row) => reportPercent(row.ipqc_rate),
+    },
+    {
+      title: t('app.kuaizhizao.quality.reports.columns.finishedQty'),
+      dataIndex: 'fqc_qty',
+      valueType: 'digit',
+      width: 100,
+      hideInSearch: true,
+      align: 'right',
+    },
+    {
+      title: t('app.kuaizhizao.quality.reports.columns.finishedRate'),
+      dataIndex: 'fqc_rate',
+      width: 110,
+      hideInSearch: true,
+      align: 'right',
+      render: (_, row) => reportPercent(row.fqc_rate),
+    },
+    {
+      title: t('app.kuaizhizao.quality.reports.columns.overallRate'),
+      dataIndex: 'overall_rate',
+      width: 110,
+      hideInSearch: true,
+      align: 'right',
+      sorter: true,
+      render: (_, row) => reportPercent(row.overall_rate),
+    },
   ];
 }
 

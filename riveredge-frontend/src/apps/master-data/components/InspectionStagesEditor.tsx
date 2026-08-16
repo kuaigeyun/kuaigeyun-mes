@@ -277,7 +277,6 @@ export const InspectionStagesEditor: React.FC<InspectionStagesEditorProps> = ({
         {t('app.master-data.materialForm.inspectionStagesHint')}
       </Typography.Paragraph>
       <Table
-        size="small"
         pagination={false}
         rowKey="stage"
         dataSource={stageRows.map((stage) => ({ stage }))}

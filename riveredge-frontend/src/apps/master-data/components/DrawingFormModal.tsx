@@ -17,6 +17,8 @@ import type { UploadFile } from 'antd/es/upload/interface';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import { drawingApi, type EngineeringDrawing, type EngineeringDrawingCreate } from '../services/drawing';
+import type { DrawingFolder } from '../services/drawingFolder';
+import { FolderTreeSelectField } from '../pages/process/drawings/drawingFolderModals';
 import { materialApi } from '../services/material';
 import { operationApi, processRouteApi, unwrapProcessPagedList } from '../services/process';
 import { uploadMultipleFiles, buildImageUploadFileUrls } from '../../../services/file';
@@ -65,6 +67,8 @@ export interface DrawingFormModalProps {
   onClose: () => void;
   editUuid: string | null;
   onSuccess: (drawing: EngineeringDrawing) => void;
+  folders?: DrawingFolder[];
+  defaultFolderUuid?: string | null;
 }
 
 export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
@@ -72,6 +76,8 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
   onClose,
   editUuid,
   onSuccess,
+  folders = [],
+  defaultFolderUuid,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -128,7 +134,12 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
     if (!open) return;
     loadRelationOptions();
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ revision: 'A', drawingType: 'part' });
+    formRef.current?.setFieldsValue({
+      revision: 'A',
+      drawingType: 'part',
+      securityLevel: 'internal',
+      folderUuid: defaultFolderUuid ?? undefined,
+    });
     resetFieldValues();
 
     if (!editUuid) {
@@ -149,7 +160,12 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
           testGenerateCode({ rule_code: ruleCode })
             .then((res) => {
               setPreviewCode(res.code);
-              formRef.current?.setFieldsValue({ code: res.code, revision: 'A', drawingType: 'part' });
+              formRef.current?.setFieldsValue({
+                code: res.code,
+                revision: 'A',
+                drawingType: 'part',
+                securityLevel: 'internal',
+              });
             })
             .catch(() => setPreviewCode(null));
         } else {
@@ -174,11 +190,13 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
           name: detail.name,
           revision: detail.revision,
           drawingType: detail.drawingType,
+          securityLevel: detail.securityLevel || 'internal',
           mainFile: mainFiles,
           supplementaryFiles: suppFiles,
           materialUuids: detail.materialUuids ?? [],
           processRouteUuids: detail.processRouteUuids ?? [],
           operationUuids: detail.operationUuids ?? [],
+          folderUuid: detail.folderUuid ?? undefined,
           description: detail.description,
         });
         const fieldFormValues = await loadFieldValues(detail.id);
@@ -223,6 +241,8 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
           materialUuids: (standardValues.materialUuids as string[]) ?? [],
           processRouteUuids: (standardValues.processRouteUuids as string[]) ?? [],
           operationUuids: (standardValues.operationUuids as string[]) ?? [],
+          folderUuid: (standardValues.folderUuid as string | undefined) ?? null,
+          securityLevel: standardValues.securityLevel as EngineeringDrawingCreate['securityLevel'],
           description: standardValues.description as string | undefined,
         });
         messageApi.success(t('common.updateSuccess'));
@@ -254,6 +274,8 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
           materialUuids: (standardValues.materialUuids as string[]) ?? undefined,
           processRouteUuids: (standardValues.processRouteUuids as string[]) ?? undefined,
           operationUuids: (standardValues.operationUuids as string[]) ?? undefined,
+          folderUuid: (standardValues.folderUuid as string | undefined) ?? defaultFolderUuid ?? null,
+          securityLevel: (standardValues.securityLevel as EngineeringDrawingCreate['securityLevel']) || 'internal',
           description: standardValues.description as string | undefined,
         });
         await saveCustomFieldValues(created.id, customData);
@@ -290,7 +312,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
       formRef={formRef as React.RefObject<ProFormInstance>}
       layout="vertical"
       grid
-      initialValues={{ revision: 'A', drawingType: 'part' }}
+      initialValues={{ revision: 'A', drawingType: 'part', securityLevel: 'internal' }}
     >
       <ProFormText
         name="code"
@@ -322,6 +344,19 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         rules={[{ required: true }]}
         colProps={{ span: 12 }}
       />
+      <ProFormSelect
+        name="securityLevel"
+        label={t('app.master-data.drawings.securityLevel')}
+        options={[
+          { label: t('app.master-data.drawings.securityLevel.public'), value: 'public' },
+          { label: t('app.master-data.drawings.securityLevel.internal'), value: 'internal' },
+          { label: t('app.master-data.drawings.securityLevel.secret'), value: 'secret' },
+          { label: t('app.master-data.drawings.securityLevel.confidential'), value: 'confidential' },
+        ]}
+        rules={[{ required: true }]}
+        colProps={{ span: 12 }}
+      />
+      <FolderTreeSelectField folders={folders} />
       <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} gridColumns={2} />
       <ProFormUploadDragger
         name="mainFile"

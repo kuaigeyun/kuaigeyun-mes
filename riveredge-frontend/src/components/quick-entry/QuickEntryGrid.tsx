@@ -67,7 +67,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
   renderMenuIcon,
   title,
   isDark = false,
-  iconVariant = 'theme',
+  iconVariant = 'vivid',
 }) => {
   const { t } = useTranslation();
   const { token } = useToken();

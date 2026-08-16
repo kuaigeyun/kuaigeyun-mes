@@ -67,6 +67,9 @@ interface SalesInvoiceDetail {
   notes?: string | null;
   receivable_id?: number | null;
   receivable_code?: string | null;
+  partner_tax_no?: string | null;
+  partner_bank_info?: string | null;
+  partner_address_phone?: string | null;
   original_invoice_id?: number | null;
   red_flush_invoice_id?: number | null;
   void_reason?: string | null;
@@ -419,6 +422,13 @@ const SalesInvoiceDetailPage: React.FC = () => {
       <DetailDrawerSection title={t(`${P}.section.faceAndHeader`)}>
         <ProDescriptions column={2} bordered size="small">
           <ProDescriptions.Item label={t('app.kuaicaiwu.common.customer')}>{data.customer_name}</ProDescriptions.Item>
+          <ProDescriptions.Item label={t(`${P}.col.partnerTaxNo`)}>{data.partner_tax_no || '—'}</ProDescriptions.Item>
+          <ProDescriptions.Item label={t(`${P}.col.partnerBankInfo`)} span={2}>
+            {data.partner_bank_info || '—'}
+          </ProDescriptions.Item>
+          <ProDescriptions.Item label={t(`${P}.col.partnerAddressPhone`)} span={2}>
+            {data.partner_address_phone || '—'}
+          </ProDescriptions.Item>
           <ProDescriptions.Item label={t(`${P}.sourceOrder`)}>{data.sales_order_code || '—'}</ProDescriptions.Item>
           <ProDescriptions.Item label={t('common.status')}>{formatStatusLabel(data.status)}</ProDescriptions.Item>
           <ProDescriptions.Item label={t('app.kuaicaiwu.common.reviewStatus')}>{reviewLabel}</ProDescriptions.Item>

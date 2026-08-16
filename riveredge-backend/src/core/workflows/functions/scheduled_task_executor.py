@@ -63,6 +63,8 @@ async def scheduled_task_executor_function(event: Event) -> Dict[str, Any]:
             result = await _execute_python_script_task(scheduled_task)
         elif scheduled_task.type == "backup":
             result = await _execute_backup_task(tenant_id, scheduled_task)
+        elif scheduled_task.type == "kuaireport_report_subscription":
+            result = await _execute_kuaireport_subscription_task(tenant_id, scheduled_task)
         else:
             result = {"success": False, "error": f"不支持的任务类型: {scheduled_task.type}"}
 
@@ -154,4 +156,19 @@ async def _execute_backup_task(tenant_id: int, scheduled_task: ScheduledTask) ->
         return {"success": True, "backup_uuid": str(backup.uuid), "status": backup.status}
     except Exception as e:
         return {"success": False, "error": f"启动备份任务失败: {str(e)}"}
+
+
+async def _execute_kuaireport_subscription_task(
+    tenant_id: int, scheduled_task: ScheduledTask
+) -> Dict[str, Any]:
+    task_config = scheduled_task.task_config or {}
+    subscription_id = task_config.get("subscription_id")
+    if not subscription_id:
+        return {"success": False, "error": "缺少 subscription_id"}
+    try:
+        from apps.kuaireport.services.subscription_service import SubscriptionService
+
+        return await SubscriptionService().execute_subscription(tenant_id, int(subscription_id))
+    except Exception as e:
+        return {"success": False, "error": f"快报表订阅执行失败: {str(e)}"}
 

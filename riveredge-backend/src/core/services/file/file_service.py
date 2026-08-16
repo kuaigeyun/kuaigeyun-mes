@@ -19,6 +19,8 @@ from core.models.file import File
 from core.schemas.file import FileCreate, FileUpdate
 from core.services.file.image_compress import compress_image_content, effective_storage_extension
 from core.services.file.image_tier_service import ImageTierService
+from core.services.content.sensitive_word_service import SensitiveWordService
+from core.services.content.sensitive_word_ip_guard import SensitiveWordIpGuardService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.config.infra_config import infra_settings as settings
 from core.utils.timezone_utils import resolve_business_datetime
@@ -478,6 +480,33 @@ class FileService:
         return count
     
     @staticmethod
+    async def _assert_upload_texts_clean(
+        *,
+        client_ip: Optional[str],
+        user_id: Optional[int],
+        original_name: str,
+        description: Optional[str],
+        tags: Optional[List[str]],
+    ) -> None:
+        service = SensitiveWordService.instance()
+        guard = SensitiveWordIpGuardService.instance()
+        ip = client_ip or "0.0.0.0"
+        checks = [("original_name", original_name), ("description", description or "")]
+        if tags:
+            checks.extend((f"tags[{index}]", tag) for index, tag in enumerate(tags))
+        for field, value in checks:
+            if not value:
+                continue
+            matched = service.find_sensitive_word(value)
+            if matched:
+                raise await guard.build_validation_error(
+                    ip,
+                    field=field,
+                    matched=matched,
+                    user_id=user_id,
+                )
+
+    @staticmethod
     async def save_uploaded_file(
         tenant_id: int,
         file_content: bytes,
@@ -485,6 +514,8 @@ class FileService:
         category: Optional[str] = None,
         tags: Optional[List[str]] = None,
         description: Optional[str] = None,
+        client_ip: Optional[str] = None,
+        user_id: Optional[int] = None,
     ) -> File:
         """
         保存上传的文件
@@ -501,8 +532,16 @@ class FileService:
             File: 创建的文件对象
             
         Raises:
-            ValidationError: 当文件大小超过限制时抛出
+            ValidationError: 当文件大小超过限制或文件名/描述含不当用语时抛出
         """
+        await FileService._assert_upload_texts_clean(
+            client_ip=client_ip,
+            user_id=user_id,
+            original_name=original_name,
+            description=description,
+            tags=tags,
+        )
+
         # 检查文件大小
         file_size = len(file_content)
         if file_size > FileService.MAX_FILE_SIZE:

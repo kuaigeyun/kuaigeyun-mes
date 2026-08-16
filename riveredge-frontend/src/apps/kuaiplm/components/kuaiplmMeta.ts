@@ -41,6 +41,7 @@ export const KUAIPLM_CHANGE_CATEGORY_I18N: Record<string, string> = {
   bom: 'app.kuaiplm.common.changeCategory.bom',
   route: 'app.kuaiplm.common.changeCategory.route',
   process_route: 'app.kuaiplm.common.changeCategory.route',
+  drawing: 'app.kuaiplm.common.changeCategory.drawing',
 };
 
 export const KUAIPLM_CHANGE_STATUS_I18N: Record<string, string> = {
@@ -68,10 +69,19 @@ export const KUAIPLM_ROUTE_CHANGE_TYPE_I18N: Record<string, string> = {
   other: 'app.kuaiplm.common.routeChangeType.other',
 };
 
+export const KUAIPLM_DRAWING_CHANGE_TYPE_I18N: Record<string, string> = {
+  revision: 'app.kuaiplm.common.drawingChangeType.revision',
+  file_replace: 'app.kuaiplm.common.drawingChangeType.file_replace',
+  obsolete: 'app.kuaiplm.common.drawingChangeType.obsolete',
+  metadata: 'app.kuaiplm.common.drawingChangeType.metadata',
+  other: 'app.kuaiplm.common.drawingChangeType.other',
+};
+
 /** BOM + 工艺路线变更类型码 → i18n（我的任务/审批内容展示共用） */
 export const KUAIPLM_CHANGE_TYPE_I18N: Record<string, string> = {
   ...KUAIPLM_BOM_CHANGE_TYPE_I18N,
   ...KUAIPLM_ROUTE_CHANGE_TYPE_I18N,
+  ...KUAIPLM_DRAWING_CHANGE_TYPE_I18N,
 };
 
 /** 审批任务标题前缀（历史存量中文前缀 → i18n） */
@@ -87,6 +97,10 @@ export const KUAIPLM_APPROVAL_TITLE_PREFIX_I18N: Array<{
     prefix: '工艺路线变更',
     i18nKey: 'app.kuaiplm.common.approvalTitle.routeChange',
   },
+  {
+    prefix: '图纸工程变更',
+    i18nKey: 'app.kuaiplm.common.approvalTitle.drawingChange',
+  },
 ];
 
 export const KUAIPLM_ENGINEERING_LINK_I18N: Record<string, string> = {
@@ -96,6 +110,8 @@ export const KUAIPLM_ENGINEERING_LINK_I18N: Record<string, string> = {
   process_route: 'app.kuaiplm.common.engineeringLink.route',
   sop: 'app.kuaiplm.common.engineeringLink.sop',
   material: 'app.kuaiplm.common.engineeringLink.material',
+  work_order: 'app.kuaiplm.common.engineeringLink.workOrder',
+  requirement: 'app.kuaiplm.common.engineeringLink.requirement',
 };
 
 export const KUAIPLM_KNOWLEDGE_STATUS_I18N: Record<string, string> = {
@@ -241,7 +257,9 @@ export function getKuaiplmChangeTypeText(
   if (bomKey) return t(bomKey);
   const routeKey = KUAIPLM_ROUTE_CHANGE_TYPE_I18N[normalized];
   if (routeKey) return t(routeKey);
-  if (normalized === 'bom' || normalized === 'process_route') {
+  const drawingKey = KUAIPLM_DRAWING_CHANGE_TYPE_I18N[normalized];
+  if (drawingKey) return t(drawingKey);
+  if (normalized === 'bom' || normalized === 'process_route' || normalized === 'drawing') {
     return getKuaiplmChangeCategoryText(t, normalized);
   }
   return changeType;

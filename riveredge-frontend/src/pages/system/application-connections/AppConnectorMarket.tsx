@@ -23,6 +23,8 @@ import {
   RocketOutlined,
   InteractionOutlined,
   ApartmentOutlined,
+  EnvironmentOutlined,
+  CarOutlined,
 } from '@ant-design/icons';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import {
@@ -50,6 +52,8 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   RocketOutlined: <RocketOutlined />,
   InteractionOutlined: <InteractionOutlined />,
   ApartmentOutlined: <ApartmentOutlined />,
+  EnvironmentOutlined: <EnvironmentOutlined />,
+  CarOutlined: <CarOutlined />,
 };
 
 const CATEGORY_KEYS: Record<string, string> = {
@@ -62,6 +66,7 @@ const CATEGORY_KEYS: Record<string, string> = {
   wms: 'categoryWms',
   storage: 'categoryStorage',
   ai: 'categoryAi',
+  other: 'categoryOther',
 };
 
 function toAppConnectorDefinition(c: ConnectorDefinition): AppConnectorDefinition {
@@ -82,6 +87,9 @@ function mergeConnectorDefinitions(apiItems: ConnectorDefinition[]): AppConnecto
   const knownIds = new Set(merged.map((c) => c.id));
   for (const local of APP_CONNECTOR_DEFINITIONS) {
     if (local.category === 'ai' && !knownIds.has(local.id)) {
+      merged.push(local);
+    }
+    if (local.category === 'other' && !knownIds.has(local.id)) {
       merged.push(local);
     }
   }
@@ -120,6 +128,7 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
     { key: 'wms', label: t('pages.system.applicationConnections.categoryWms') },
     { key: 'storage', label: t('pages.system.applicationConnections.categoryStorage') },
     { key: 'ai', label: t('pages.system.applicationConnections.categoryAi') },
+    { key: 'other', label: t('pages.system.applicationConnections.categoryOther') },
   ], [t]);
   const [loading, setLoading] = useState(false);
 

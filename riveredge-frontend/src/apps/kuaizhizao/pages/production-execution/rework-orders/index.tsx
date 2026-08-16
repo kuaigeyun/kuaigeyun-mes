@@ -30,6 +30,7 @@ import {
   UniPullQueryModal,
   filterByPullScope,
   paginatePullRows,
+  renderPullQueryDocStatus,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { DetailDrawerActions, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
@@ -1195,16 +1196,16 @@ const ReworkOrdersPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.quality.common.columns.qualityStatus'),
         dataIndex: 'quality_status',
-        width: 120,
-        align: 'center',
-        render: (v) => v || '-',
+        width: 100,
+        align: 'center' as const,
+        render: (v) => renderPullQueryDocStatus(t, v),
       },
       {
         title: t('app.kuaizhizao.quality.common.columns.inspectionStatus'),
         dataIndex: 'status',
-        width: 120,
-        align: 'center',
-        render: (v) => v || '-',
+        width: 100,
+        align: 'center' as const,
+        render: (v) => renderPullQueryDocStatus(t, v),
       },
       {
         title: t('app.kuaizhizao.quality.common.columns.inspectionTime'),
@@ -1245,9 +1246,9 @@ const ReworkOrdersPage: React.FC = () => {
       {
         title: t('common.status'),
         dataIndex: 'status',
-        width: 120,
-        align: 'center',
-        render: (v) => v || '-',
+        width: 100,
+        align: 'center' as const,
+        render: (v) => renderPullQueryDocStatus(t, v),
       },
     ],
     [t],
@@ -1327,7 +1328,7 @@ const ReworkOrdersPage: React.FC = () => {
         const response = await workOrderApi.list({
           skip: 0,
           limit: 200,
-          keyword: keyword.trim() || undefined,
+          code: keyword.trim() || undefined,
         });
         const list = Array.isArray(response)
           ? response
@@ -1421,6 +1422,7 @@ const ReworkOrdersPage: React.FC = () => {
         confirmLoading={pullFromFinishedGoodsQuery.confirmLoading}
         selectionType={pullFromFinishedGoodsQuery.selectionType}
         selectedRowKeys={pullFromFinishedGoodsQuery.selectedRowKeys}
+        selectedRows={pullFromFinishedGoodsQuery.selectedRows}
         onSelectedRowKeysChange={pullFromFinishedGoodsQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromFinishedGoodsQuery.isRowDisabled}
         searchDraft={pullFromFinishedGoodsQuery.searchDraft}
@@ -1437,7 +1439,6 @@ const ReworkOrdersPage: React.FC = () => {
         scope={pullFromFinishedGoodsQuery.scope}
         onScopeChange={pullFromFinishedGoodsQuery.handleScopeChange}
         okText={t('common.next')}
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />
 
       <UniPullQueryModal<PullReworkWorkOrderCandidate>
@@ -1454,6 +1455,7 @@ const ReworkOrdersPage: React.FC = () => {
         confirmLoading={pullFromWorkOrderQuery.confirmLoading}
         selectionType={pullFromWorkOrderQuery.selectionType}
         selectedRowKeys={pullFromWorkOrderQuery.selectedRowKeys}
+        selectedRows={pullFromWorkOrderQuery.selectedRows}
         onSelectedRowKeysChange={pullFromWorkOrderQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromWorkOrderQuery.isRowDisabled}
         searchDraft={pullFromWorkOrderQuery.searchDraft}
@@ -1470,7 +1472,6 @@ const ReworkOrdersPage: React.FC = () => {
         scope={pullFromWorkOrderQuery.scope}
         onScopeChange={pullFromWorkOrderQuery.handleScopeChange}
         okText={t('common.next')}
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />
 
       <ReworkOrderCreateModal

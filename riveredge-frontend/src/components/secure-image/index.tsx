@@ -14,6 +14,7 @@ import {
   FILE_IMAGE_SIZE_MEDIUM,
   FILE_IMAGE_SIZE_AVATAR,
 } from '../../services/file';
+import { getDashboardSharedFilePreviewUrl } from '../../utils/kuaireportSharedFilePreview';
 import './secure-image.css';
 
 export interface SecureImageProps {
@@ -179,9 +180,6 @@ export const SecureImage: React.FC<SecureImageProps> = ({
 
     const resolveUrl = async (): Promise<string> => {
       if (sharePreviewToken) {
-        const { getDashboardSharedFilePreviewUrl } = await import(
-          '../../apps/kuaireport/services/kuaireport'
-        );
         return getDashboardSharedFilePreviewUrl(
           sharePreviewToken,
           fileUuid,

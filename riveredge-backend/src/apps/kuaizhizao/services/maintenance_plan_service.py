@@ -230,6 +230,7 @@ class MaintenancePlanService:
         created_end_date: Optional[str] = None,
         updated_start_date: Optional[str] = None,
         updated_end_date: Optional[str] = None,
+        uuid: Optional[str] = None,
     ) -> tuple[List[MaintenancePlan], int]:
         """
         获取维护计划列表
@@ -263,6 +264,8 @@ class MaintenancePlanService:
             query = query.filter(plan_type=plan_type)
         if maintenance_type:
             query = query.filter(maintenance_type=maintenance_type)
+        if uuid:
+            query = query.filter(uuid=uuid.strip())
 
         from apps.kuaizhizao.services.equipment_list_core import (
             MAINTENANCE_PLAN_SORTABLE_FIELDS,

@@ -235,22 +235,28 @@ const HolidaysPage: React.FC = () => {
       hideInSearch: true,
       render: (_, record) => (
         <Space>
-          <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-            {t('app.kuaizhizao.performance.common.actions.detail')}
-          </Button>
-          <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-            {t('app.kuaizhizao.performance.common.actions.edit')}
-          </Button>
-          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.holidays.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
-            <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-              {t('app.kuaizhizao.performance.common.actions.delete')}
+          {holidayPerms.canRead ? (
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
+              {t('app.kuaizhizao.performance.common.actions.detail')}
             </Button>
-          </Popconfirm>
+          ) : null}
+          {holidayPerms.canUpdate ? (
+            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
+              {t('app.kuaizhizao.performance.common.actions.edit')}
+            </Button>
+          ) : null}
+          {holidayPerms.canDelete ? (
+            <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.holidays.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+                {t('app.kuaizhizao.performance.common.actions.delete')}
+              </Button>
+            </Popconfirm>
+          ) : null}
         </Space>
       ),
     },
     ], SALES_DOC_LIST_FIELD_RANK);
-  }, [t, customFields]);
+  }, [t, customFields, holidayPerms]);
 
   return (
     <>
@@ -281,7 +287,7 @@ const HolidaysPage: React.FC = () => {
           skipFuzzyPinyinClientFilter
           pinnedTabsField={PERFORMANCE_PINNED_ACTIVE_FIELD}
           pagination={{ defaultPageSize: 20, showSizeChanger: true }}
-          showCreateButton
+          showCreateButton={holidayPerms.canCreate}
           createButtonText={t('app.kuaizhizao.performance.holidays.createButton')}
           onCreate={handleCreate}
           toolBarRender={() =>
@@ -297,10 +303,10 @@ const HolidaysPage: React.FC = () => {
                 ]
               : []
           }
-          enableRowSelection
+          enableRowSelection={holidayPerms.canDelete}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
-          showDeleteButton
+          showDeleteButton={holidayPerms.canDelete}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('common.confirmBatchDeleteContent', { count })}
           deleteButtonText={t('app.kuaizhizao.performance.holidays.messages.deleteBatchButton')}

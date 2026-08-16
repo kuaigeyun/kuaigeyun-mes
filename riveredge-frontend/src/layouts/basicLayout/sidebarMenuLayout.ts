@@ -1,4 +1,5 @@
 import type { MenuDataItem } from '@ant-design/pro-components';
+import { extractAppCodeFromPath } from '../../utils/menuTranslation';
 
 /** 侧栏菜单布局：平铺（默认） / 双列 */
 export type SidebarMenuLayout = 'flat' | 'split';
@@ -27,21 +28,49 @@ const SIDEBAR_SHORT_LABEL_I18N_BY_PATH: Record<string, string> = {
   '/system/dashboard': 'menu.dashboard.short',
 };
 
-/** 一级菜单两字标签：四字菜单取后两字，其余取末两字或全文 */
+function resolveAppCodeForShortLabel(item: MenuDataItem): string | null {
+  const path = typeof item.path === 'string' ? item.path : '';
+  const fromPath = extractAppCodeFromPath(path);
+  if (fromPath) return fromPath;
+  if (path.startsWith('#app-group-')) {
+    const code = path.slice('#app-group-'.length).trim();
+    return code || null;
+  }
+  const key = typeof item.key === 'string' ? item.key : '';
+  if (key.startsWith('app-group-code-')) {
+    const code = key.slice('app-group-code-'.length).trim();
+    return code || null;
+  }
+  return null;
+}
+
+/** 一级菜单短标签：优先 i18n（menu.*.short / app.*.short），中文兜底取末两字 */
 export function toSidebarShortLabel(
   item: MenuDataItem,
   t?: SidebarShortLabelTranslate,
 ): string {
   const path = typeof item.path === 'string' ? item.path : '';
-  if (path && t) {
-    const i18nKey = SIDEBAR_SHORT_LABEL_I18N_BY_PATH[path];
-    if (i18nKey) {
-      const fallback = typeof item.name === 'string' ? item.name : '';
-      return t(i18nKey, { defaultValue: fallback });
+  const fallback = typeof item.name === 'string' ? item.name : '';
+
+  if (t) {
+    if (path) {
+      const i18nKey = SIDEBAR_SHORT_LABEL_I18N_BY_PATH[path];
+      if (i18nKey) {
+        return t(i18nKey, { defaultValue: fallback });
+      }
+    }
+
+    const appCode = resolveAppCodeForShortLabel(item);
+    if (appCode) {
+      const shortKey = `app.${appCode}.short`;
+      const translated = t(shortKey, { defaultValue: '' });
+      if (translated && translated !== shortKey && translated.trim() !== '') {
+        return translated;
+      }
     }
   }
 
-  const text = typeof item.name === 'string' ? item.name.trim() : '';
+  const text = fallback.trim();
   if (!text) return '';
   if (text.length <= 2) return text;
   return text.slice(-2);

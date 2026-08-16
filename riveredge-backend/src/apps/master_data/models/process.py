@@ -521,6 +521,30 @@ class SOP(BaseModel):
     
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
+
+    # 文控：载体与受控状态
+    carrier = fields.CharField(
+        max_length=20,
+        default="electronic",
+        description="载体 electronic=电子 paper=纸质 hybrid=混合",
+    )
+    control_status = fields.CharField(
+        max_length=20,
+        default="draft",
+        description="文控状态 draft/in_review/effective/obsolete",
+    )
+    current_revision = fields.CharField(max_length=20, null=True, description="当前修订号")
+    storage_plant_id = fields.IntField(null=True, description="纸质原件存放厂区ID")
+    storage_location = fields.CharField(max_length=200, null=True, description="纸质存放位置")
+    keeper_name = fields.CharField(max_length=100, null=True, description="纸质保管人")
+    page_count = fields.IntField(null=True, description="纸质页数")
+    paper_size = fields.CharField(max_length=30, null=True, description="纸张规格")
+    change_reason = fields.TextField(null=True, description="变更原因")
+    effective_at = fields.DatetimeField(null=True, description="生效时间")
+    obsolete_at = fields.DatetimeField(null=True, description="作废时间")
+    approved_at = fields.DatetimeField(null=True, description="审核通过时间")
+    approved_by_name = fields.CharField(max_length=100, null=True, description="审核人姓名")
+    qms_document_uuid = fields.CharField(max_length=36, null=True, description="关联质量体系文件UUID")
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
@@ -528,4 +552,77 @@ class SOP(BaseModel):
     def __str__(self):
         """字符串表示"""
         return f"{self.code} - {self.name}"
+
+
+class SopRevision(BaseModel):
+    """SOP 修订履历（每次生效/升版快照）"""
+
+    class Meta:
+        table = "apps_master_data_sop_revisions"
+        table_description = "基础数据管理 - SOP修订履历"
+        indexes = [
+            ("tenant_id",),
+            ("sop_id",),
+            ("revision",),
+        ]
+        unique_together = [("tenant_id", "sop_id", "revision")]
+
+    id = fields.IntField(pk=True, description="主键ID")
+    sop = fields.ForeignKeyField(
+        "models.SOP",
+        related_name="revisions",
+        description="所属SOP",
+    )
+    revision = fields.CharField(max_length=20, description="修订号")
+    carrier = fields.CharField(max_length=20, description="载体快照")
+    content = fields.TextField(null=True, description="内容快照")
+    attachments = fields.JSONField(null=True, description="受控原件快照")
+    flow_config = fields.JSONField(null=True, description="流程配置快照")
+    form_config = fields.JSONField(null=True, description="报工采集项快照")
+    storage_location = fields.CharField(max_length=200, null=True, description="存放位置快照")
+    change_reason = fields.TextField(null=True, description="变更说明")
+    effective_at = fields.DatetimeField(null=True, description="生效时间")
+    obsolete_at = fields.DatetimeField(null=True, description="作废时间")
+    published_by_name = fields.CharField(max_length=100, null=True, description="发布人")
+    deleted_at = fields.DatetimeField(null=True, description="软删除")
+
+
+class SopControlledCopy(BaseModel):
+    """SOP 受控份（纸质发放/回收台账）"""
+
+    class Meta:
+        table = "apps_master_data_sop_controlled_copies"
+        table_description = "基础数据管理 - SOP受控份"
+        indexes = [
+            ("tenant_id",),
+            ("sop_id",),
+            ("status",),
+        ]
+        unique_together = [("tenant_id", "sop_id", "copy_no")]
+
+    id = fields.IntField(pk=True, description="主键ID")
+    sop = fields.ForeignKeyField(
+        "models.SOP",
+        related_name="controlled_copies",
+        description="所属SOP",
+    )
+    copy_no = fields.CharField(max_length=20, description="受控份号")
+    location_type = fields.CharField(
+        max_length=20,
+        description="位置类型 plant/workshop/station/person",
+    )
+    station_id = fields.IntField(null=True, description="工位ID")
+    holder_user_id = fields.IntField(null=True, description="持有人用户ID")
+    location_note = fields.CharField(max_length=200, null=True, description="位置说明")
+    revision = fields.CharField(max_length=20, description="发放时修订号")
+    status = fields.CharField(
+        max_length=20,
+        default="issued",
+        description="issued/pending_retrieve/retrieved/lost",
+    )
+    issued_at = fields.DatetimeField(null=True, description="发放时间")
+    issued_by_name = fields.CharField(max_length=100, null=True, description="发放人")
+    retrieved_at = fields.DatetimeField(null=True, description="回收时间")
+    retrieved_by_name = fields.CharField(max_length=100, null=True, description="回收人")
+    deleted_at = fields.DatetimeField(null=True, description="软删除")
 

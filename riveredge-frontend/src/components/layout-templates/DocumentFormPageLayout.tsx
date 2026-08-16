@@ -1,8 +1,10 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { Card } from 'antd';
 import {
   DOCUMENT_FORM_PAGE_BODY_STYLE,
   DOCUMENT_FORM_PAGE_HEADER_STYLE,
   DOCUMENT_FORM_PAGE_ROOT_STYLE,
+  PAGE_SPACING,
   uniTabsChildPageVerticalInsetStyle,
 } from './constants';
 
@@ -44,7 +46,13 @@ export function DocumentFormPageLayout({
         className="document-form-page-body"
         style={{ ...DOCUMENT_FORM_PAGE_BODY_STYLE, ...bodyStyle }}
       >
-        {children}
+        <Card
+          className="document-form-page-body-card"
+          styles={{ body: { padding: PAGE_SPACING.PADDING } }}
+          style={{ marginBottom: PAGE_SPACING.BLOCK_GAP }}
+        >
+          {children}
+        </Card>
       </div>
     </div>
   );

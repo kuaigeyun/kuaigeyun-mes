@@ -96,6 +96,11 @@ PRESET_APP_CONNECTORS: List[Dict[str, Any]] = [
     {"id": "zhipu", "name": "智谱 GLM", "type": "zhipu", "category": "ai", "description": "智谱开放平台 API（可建多条不同模型）", "icon": "RobotOutlined", "default_config": {"base_url": "https://open.bigmodel.cn/api/paas/v4", "model": "glm-4-flash"}},
     {"id": "moonshot", "name": "月之暗面 Kimi", "type": "moonshot", "category": "ai", "description": "Moonshot OpenAI 兼容 API（可建多条不同模型）", "icon": "RobotOutlined", "default_config": {"base_url": "https://api.moonshot.cn/v1", "model": "moonshot-v1-auto"}},
     {"id": "siliconflow", "name": "硅基流动", "type": "siliconflow", "category": "ai", "description": "SiliconFlow OpenAI 兼容 API（可建多条不同模型）", "icon": "RobotOutlined", "default_config": {"base_url": "https://api.siliconflow.cn/v1", "model": "deepseek-ai/DeepSeek-V3"}},
+    {"id": "amap", "name": "高德地图", "type": "amap", "category": "other", "description": "物流跟踪看板地图与地址地理编码（JS Key + REST Key）", "icon": "EnvironmentOutlined", "default_config": {"js_key": "", "security_code": "", "rest_key": ""}},
+    {"id": "kuaidi100", "name": "快递100", "type": "kuaidi100", "category": "other", "description": "实时快递轨迹查询（授权码 + API Key）", "icon": "CarOutlined", "default_config": {"customer": "", "api_key": ""}},
+    {"id": "kdniao", "name": "快递鸟", "type": "kdniao", "category": "other", "description": "即时查询轨迹（用户 ID + API Key）", "icon": "CarOutlined", "default_config": {"ebusiness_id": "", "api_key": ""}},
+    {"id": "aliyun_market", "name": "阿里云市场", "type": "aliyun_market", "category": "other", "description": "云市场 API（调用地址 + AppCode + 场景）", "icon": "CloudOutlined", "default_config": {"scene": "express_query", "http_method": "POST", "query_url": "", "app_code": ""}},
+    {"id": "tencent_market", "name": "腾讯云市场", "type": "tencent_market", "category": "other", "description": "云市场 API（调用地址 + AppCode + 场景）", "icon": "CloudOutlined", "default_config": {"scene": "express_query", "http_method": "POST", "query_url": "", "app_code": ""}},
 ]
 
 CATEGORIES = [
@@ -109,6 +114,7 @@ CATEGORIES = [
     {"key": "wms", "label": "WMS 仓储"},
     {"key": "storage", "label": "存储"},
     {"key": "ai", "label": "AI"},
+    {"key": "other", "label": "其他"},
 ]
 
 

@@ -161,6 +161,59 @@ export async function createInquiryFromRequisition(
   return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${requisitionId}/push-to-purchase-inquiry`, { method: 'POST', data });
 }
 
+export type PurchaseInquiryPurchasePullLine = {
+  id: number;
+  inquiry_id: number;
+  inquiry_code?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+  required_date?: string | null;
+  awarded_supplier_id?: number | null;
+};
+
+export async function listPurchaseInquiryPurchaseOrderPullLines(params: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  inquiry_id?: number;
+  pullable_only?: boolean;
+}): Promise<{ data: PurchaseInquiryPurchasePullLine[]; total: number }> {
+  return apiRequest('/apps/kuaizhizao/purchase-inquiries/purchase-order-pull-lines', {
+    method: 'GET',
+    params,
+  });
+}
+
+export async function pullPurchaseInquiryFromRequisitionItems(
+  selectedItemIds: number[],
+): Promise<PurchaseInquiry> {
+  return apiRequest('/apps/kuaizhizao/purchase-inquiries/pull-from-requisition-items', {
+    method: 'POST',
+    data: { selected_item_ids: selectedItemIds },
+  });
+}
+
+export async function pullPurchaseOrdersFromInquiryItems(
+  selectedItemIds: number[],
+): Promise<{
+  success: boolean;
+  message: string;
+  purchase_order_id?: number;
+  purchase_order_code?: string;
+  purchase_orders?: Array<{ purchase_order_id: number; purchase_order_code: string; supplier_id: number }>;
+}> {
+  return apiRequest('/apps/kuaizhizao/purchase-orders/pull-from-inquiry-items', {
+    method: 'POST',
+    data: { selected_item_ids: selectedItemIds },
+  });
+}
+
 export async function publishPurchaseInquiry(id: number): Promise<PurchaseInquiry> {
   return apiRequest(`/apps/kuaizhizao/purchase-inquiries/${id}/publish`, { method: 'POST' });
 }

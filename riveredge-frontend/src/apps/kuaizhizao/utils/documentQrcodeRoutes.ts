@@ -4,7 +4,7 @@
  */
 
 export const DOCUMENT_QRCODE_LIST_PATHS: Record<string, string> = {
-  production_picking: '/apps/kuaizhizao/warehouse-management/inbound',
+  production_picking: '/apps/kuaizhizao/warehouse-management/outbound',
   production_return: '/apps/kuaizhizao/warehouse-management/inbound',
   finished_goods_receipt: '/apps/kuaizhizao/warehouse-management/inbound',
   semi_finished_goods_receipt: '/apps/kuaizhizao/warehouse-management/inbound',

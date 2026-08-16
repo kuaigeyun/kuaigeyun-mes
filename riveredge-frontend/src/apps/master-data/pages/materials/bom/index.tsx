@@ -13,7 +13,7 @@ import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntFo
 import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
-import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, HighlightOutlined, MoreOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined, CopyOutlined, PrinterOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, HighlightOutlined, MoreOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined, CopyOutlined, PrinterOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
@@ -36,6 +36,7 @@ import { formatQuantity, formatDateTimeBySiteSetting, todaySiteDateString } from
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates';
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../../../../utils/modalEventIsolation';
 import { bomApi, materialApi } from '../../../services/material';
+import BomInquiryDrawer from './BomInquiryDrawer';
 import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate, BOMBatchImportItem, BOMVersionCreate, BOMVersionCompare, BOMVersionCompareResult, BOMHierarchy, BOMHierarchyItem, BOMQuantityResult, BOMQuantityComponent, BOMRelationImportEntity, BOMRelationImportWriteStrategy, BOMWhereUsedResult } from '../../../types/material';
 import { testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { batchSetFieldValues } from '../../../../../services/customField';
@@ -532,7 +533,9 @@ const BOMPage: React.FC = () => {
   const [whereUsedLoading, setWhereUsedLoading] = useState(false);
   const [whereUsedResult, setWhereUsedResult] = useState<BOMWhereUsedResult | null>(null);
   const [whereUsedRecursive, setWhereUsedRecursive] = useState(false);
+  const [whereUsedTopLevelOnly, setWhereUsedTopLevelOnly] = useState(false);
   const [whereUsedMaterialId, setWhereUsedMaterialId] = useState<number | null>(null);
+  const [inquiryDrawerOpen, setInquiryDrawerOpen] = useState(false);
   
   // 层级结构状态（整合到详情中）
   const [hierarchyLoading, setHierarchyLoading] = useState(false);
@@ -2439,10 +2442,17 @@ const BOMPage: React.FC = () => {
     }
   };
 
-  const loadWhereUsed = async (materialId: number, recursive: boolean) => {
+  const loadWhereUsed = async (
+    materialId: number,
+    recursive: boolean,
+    topLevelOnly = false,
+  ) => {
     setWhereUsedLoading(true);
     try {
-      const result = await bomApi.whereUsed(materialId, { recursive });
+      const result = await bomApi.whereUsed(materialId, {
+        recursive,
+        topLevelOnly: recursive ? topLevelOnly : false,
+      });
       setWhereUsedResult(result);
     } catch (error: any) {
       messageApi.error(error?.message || t('app.master-data.bom.getFailed'));
@@ -2455,14 +2465,23 @@ const BOMPage: React.FC = () => {
   const handleOpenWhereUsed = async (materialId: number) => {
     setWhereUsedMaterialId(materialId);
     setWhereUsedRecursive(false);
+    setWhereUsedTopLevelOnly(false);
     setWhereUsedModalVisible(true);
-    await loadWhereUsed(materialId, false);
+    await loadWhereUsed(materialId, false, false);
   };
 
   const handleWhereUsedRecursiveChange = async (checked: boolean) => {
     setWhereUsedRecursive(checked);
+    if (!checked) setWhereUsedTopLevelOnly(false);
     if (whereUsedMaterialId != null) {
-      await loadWhereUsed(whereUsedMaterialId, checked);
+      await loadWhereUsed(whereUsedMaterialId, checked, checked ? whereUsedTopLevelOnly : false);
+    }
+  };
+
+  const handleWhereUsedTopLevelChange = async (checked: boolean) => {
+    setWhereUsedTopLevelOnly(checked);
+    if (whereUsedMaterialId != null && whereUsedRecursive) {
+      await loadWhereUsed(whereUsedMaterialId, true, checked);
     }
   };
 
@@ -3380,6 +3399,9 @@ const BOMPage: React.FC = () => {
           t('app.master-data.bom.batchDeleteConfirmContent', { count })
         }
         toolBarActionsAfterDelete={[
+          <Button key="bom-inquiry" icon={<SearchOutlined />} onClick={() => setInquiryDrawerOpen(true)}>
+            {t('app.master-data.bom.inquiryTitle')}
+          </Button>,
           ...(bomPerms.canAction?.('audit') || bomPerms.canAction?.('revoke') ? [
           <UniBatchMenuButton
             key="bom-batch-actions"
@@ -4835,12 +4857,21 @@ const BOMPage: React.FC = () => {
         width={900}
       >
         <div style={{ marginBottom: 12 }}>
-          <Checkbox
-            checked={whereUsedRecursive}
-            onChange={(e) => void handleWhereUsedRecursiveChange(e.target.checked)}
-          >
-            {t('app.master-data.bom.whereUsedRecursive')}
-          </Checkbox>
+          <Space wrap>
+            <Checkbox
+              checked={whereUsedRecursive}
+              onChange={(e) => void handleWhereUsedRecursiveChange(e.target.checked)}
+            >
+              {t('app.master-data.bom.whereUsedRecursive')}
+            </Checkbox>
+            <Checkbox
+              checked={whereUsedTopLevelOnly}
+              disabled={!whereUsedRecursive}
+              onChange={(e) => void handleWhereUsedTopLevelChange(e.target.checked)}
+            >
+              {t('app.master-data.bom.whereUsedTopLevelOnly')}
+            </Checkbox>
+          </Space>
         </div>
         <Spin spinning={whereUsedLoading}>
           {!whereUsedLoading && (!whereUsedResult?.items || whereUsedResult.items.length === 0) ? (
@@ -4850,10 +4881,24 @@ const BOMPage: React.FC = () => {
           ) : (
             <Table
               dataSource={whereUsedResult?.items ?? []}
-              rowKey={(row) => `${row.bomUuid}-${row.materialId}-${row.version}`}
+              rowKey={(row) => `${row.bomUuid}-${row.materialId}-${row.version}-${row.level}-${row.path}`}
               pagination={false}
               size="small"
+              scroll={{ x: 900 }}
               columns={[
+                {
+                  title: t('app.master-data.bom.hierarchyLevelLabel'),
+                  dataIndex: 'level',
+                  width: 64,
+                  render: (v) => (v != null ? v : '—'),
+                },
+                {
+                  title: t('app.master-data.bom.whereUsedPath'),
+                  dataIndex: 'path',
+                  ellipsis: true,
+                  width: 220,
+                  render: (v) => v || '—',
+                },
                 {
                   title: t('app.master-data.bom.mainMaterialTitle'),
                   render: (_, row) =>
@@ -4897,6 +4942,8 @@ const BOMPage: React.FC = () => {
           )}
         </Spin>
       </Modal>
+
+      <BomInquiryDrawer open={inquiryDrawerOpen} onClose={() => setInquiryDrawerOpen(false)} />
     </>
   );
 };

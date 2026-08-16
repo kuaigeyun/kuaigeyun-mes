@@ -546,6 +546,7 @@ async def list_bom_where_used(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     recursive: bool = Query(False, description="是否递归追溯到顶层成品"),
     include_obsolete: bool = Query(False, description="是否包含已失效版本"),
+    top_level_only: bool = Query(False, description="仅返回不再作为子件的顶层父物料"),
 ):
     """反查使用该物料作为子件的父物料 BOM。"""
     try:
@@ -554,6 +555,7 @@ async def list_bom_where_used(
             material_id,
             recursive=recursive,
             include_obsolete=include_obsolete,
+            top_level_only=top_level_only,
         )
     except NotFoundError as e:
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

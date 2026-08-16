@@ -1,11 +1,6 @@
 import React from 'react';
 import { Card, Col, Segmented, Spin, theme } from 'antd';
-import { BarChartOutlined } from '@ant-design/icons';
-import {
-  MODULE_PANEL_TITLE_ICON_SIZE,
-  MODULE_PANEL_TITLE_STYLE,
-  modulePanelSurfaceStyle,
-} from './constants';
+import { MODULE_PANEL_TITLE_STYLE, modulePanelSurfaceStyle } from './constants';
 
 export interface ModuleChartPanelProps {
   title: React.ReactNode;
@@ -17,6 +12,8 @@ export interface ModuleChartPanelProps {
   };
   loading?: boolean;
   height?: number;
+  /** ModuleActionMasonry balanced 装箱权重；默认 3 */
+  masonryWeight?: number;
   /** 内容区随子元素高度（如研发看板甘特图），body 留 8px 内边距 */
   fitContent?: boolean;
   children: React.ReactNode;
@@ -31,29 +28,24 @@ export function ModuleChartPanel({
   segmented,
   loading,
   height = 280,
+  masonryWeight: _masonryWeight,
   fitContent = false,
   children,
   lg = 12,
   layout = 'grid',
 }: ModuleChartPanelProps) {
   const { token } = theme.useToken();
-  const titleNode =
-    typeof title === 'string' ? (
-      <span style={{ ...MODULE_PANEL_TITLE_STYLE, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-        <BarChartOutlined style={{ fontSize: MODULE_PANEL_TITLE_ICON_SIZE }} />
-        <span>{title}</span>
-      </span>
-    ) : (
-      title
-    );
-
   const card = (
     <Card
       variant="borderless"
-      className={['module-chart-panel', fitContent ? 'module-chart-panel--fit-content' : '']
+      className={[
+        'module-chart-panel',
+        'detail-drawer-section-title-accent',
+        fitContent ? 'module-chart-panel--fit-content' : '',
+      ]
         .filter(Boolean)
         .join(' ')}
-      title={titleNode}
+      title={title}
       extra={
         segmented ? (
           <Segmented
@@ -123,6 +115,8 @@ export function ModuleChartPanel({
     </Col>
   );
 }
+
+ModuleChartPanel.displayName = 'ModuleChartPanel';
 
 /** 图表区与 actionRow 共用外层 Row 栅格，勿再嵌套 Row */
 export function ModuleChartRow({ children }: { children: React.ReactNode }) {

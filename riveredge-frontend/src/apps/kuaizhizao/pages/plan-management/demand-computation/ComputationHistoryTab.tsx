@@ -27,6 +27,8 @@ import {
   resolveComputationHistoryListParams,
 } from '../../../utils/planListCore';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import { DemandComputationSourceCode } from '../../../../../components/linked-document-code/DemandComputationSourceCode';
+import { UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS } from '../../../../../components/uni-table/stackedPrimaryColumn';
 
 const ComputationHistoryTab: React.FC = () => {
   const { t } = useTranslation();
@@ -130,10 +132,19 @@ const ComputationHistoryTab: React.FC = () => {
       {
         title: t('app.kuaizhizao.demandComputation.colSourceNo'),
         dataIndex: 'demand_code',
-        width: 150,
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         hideInSearch: false,
         sorter: true,
-        ellipsis: true,
+        render: (_: unknown, record: DemandComputation) => (
+          <DemandComputationSourceCode
+            demandCode={record.demand_code}
+            demandType={record.demand_type}
+            demandId={record.demand_id}
+            demandIds={record.demand_ids}
+            sourceId={record.source_id}
+            sourceLabel={record.source_label}
+          />
+        ),
       },
       {
         title: t('app.kuaizhizao.demandComputation.colBusinessMode'),
@@ -345,7 +356,7 @@ const ComputationHistoryTab: React.FC = () => {
           }
         }}
         rowKey="id"
-        columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-computation.ComputationHistoryTab"
+        columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-computation.ComputationHistoryTab-source-label-v1"
         viewTypes={['table']}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter

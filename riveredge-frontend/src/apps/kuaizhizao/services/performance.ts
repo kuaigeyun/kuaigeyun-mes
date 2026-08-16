@@ -33,6 +33,7 @@ import type {
   KPIDefinitionUpdate,
   PerformanceSummary,
   PerformanceDetail,
+  PerformanceCalculateResult,
   PerformanceListResult,
   WorkCalendarConfig,
   WorkCalendarConfigUpdate,
@@ -312,8 +313,17 @@ export const employeePerformanceApi = {
   getDetail: async (params: { period: string; employee_id: number }): Promise<PerformanceDetail> => {
     return api.get(`${PERF_BASE}/details`, { params });
   },
-  calculate: async (period: string): Promise<PerformanceSummary[]> => {
+  getSummary: async (summaryId: number): Promise<PerformanceSummary> => {
+    return api.get(`${PERF_BASE}/summaries/${summaryId}`);
+  },
+  calculate: async (period: string): Promise<PerformanceCalculateResult> => {
     return api.post(`${PERF_BASE}/calculate`, null, { params: { period } });
+  },
+  distributeByWorkGroup: async (
+    workGroupUuid: string,
+    params: { period: string; total_amount: number },
+  ): Promise<PerformanceSummary[]> => {
+    return api.post(`${PERF_BASE}/work-groups/${workGroupUuid}/distribute`, null, { params });
   },
   confirmSummary: async (id: number): Promise<PerformanceSummary> => {
     return api.post(`${PERF_BASE}/summaries/${id}/confirm`);

@@ -1,4 +1,4 @@
-import { kuaioaDelete, kuaioaList, kuaioaPost, kuaioaPut } from './kuaioaApi';
+import { kuaioaDelete, kuaioaGet, kuaioaList, kuaioaPost, kuaioaPut } from './kuaioaApi';
 
 const BASE = '/apps/kuaioa/assets';
 
@@ -24,6 +24,8 @@ export interface FixedAsset {
 
 export const listAssetPurchases = (params?: Record<string, unknown>) =>
   kuaioaList<AssetPurchase>(`${BASE}/purchases`, params);
+export const getAssetPurchase = (id: number) =>
+  kuaioaGet<AssetPurchase>(`${BASE}/purchases/${id}`);
 export const createAssetPurchase = (data: Partial<AssetPurchase>) =>
   kuaioaPost<AssetPurchase>(`${BASE}/purchases`, data);
 export const updateAssetPurchase = (id: number, data: Partial<AssetPurchase>) =>
@@ -38,6 +40,8 @@ export const registerAssetFromPurchase = (id: number) =>
 
 export const listFixedAssets = (params?: Record<string, unknown>) =>
   kuaioaList<FixedAsset>(`${BASE}/registry`, params);
+export const getFixedAsset = (id: number) =>
+  kuaioaGet<FixedAsset>(`${BASE}/registry/${id}`);
 export const createFixedAsset = (data: Partial<FixedAsset>) =>
   kuaioaPost<FixedAsset>(`${BASE}/registry`, data);
 export const updateFixedAsset = (id: number, data: Partial<FixedAsset>) =>

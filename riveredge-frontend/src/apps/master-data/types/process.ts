@@ -316,6 +316,22 @@ export interface SOP {
   bomLoadMode?: string;
   /** 指定 BOM 的 UUID（bom_load_mode=specific_bom 时使用） */
   specificBomUuid?: string | null;
+  carrier?: 'electronic' | 'paper' | 'hybrid';
+  controlStatus?: 'draft' | 'in_review' | 'effective' | 'obsolete';
+  currentRevision?: string;
+  storagePlantId?: number;
+  storageLocation?: string;
+  keeperName?: string;
+  pageCount?: number;
+  paperSize?: string;
+  changeReason?: string;
+  effectiveAt?: string;
+  obsoleteAt?: string;
+  approvedAt?: string;
+  approvedByName?: string;
+  qmsDocumentUuid?: string;
+  issuedCopyCount?: number;
+  pendingRetrieveCopyCount?: number;
   createdAt: string;
   updatedAt: string;
   createdByName?: string;
@@ -338,6 +354,14 @@ export interface SOPCreate {
   routeUuids?: string[];
   bomLoadMode?: string;
   specificBomUuid?: string | null;
+  carrier?: 'electronic' | 'paper' | 'hybrid';
+  storagePlantId?: number;
+  storageLocation?: string;
+  keeperName?: string;
+  pageCount?: number;
+  paperSize?: string;
+  changeReason?: string;
+  qmsDocumentUuid?: string;
 }
 
 export interface SOPUpdate {
@@ -355,6 +379,14 @@ export interface SOPUpdate {
   routeUuids?: string[];
   bomLoadMode?: string;
   specificBomUuid?: string | null;
+  carrier?: 'electronic' | 'paper' | 'hybrid';
+  storagePlantId?: number;
+  storageLocation?: string;
+  keeperName?: string;
+  pageCount?: number;
+  paperSize?: string;
+  changeReason?: string;
+  qmsDocumentUuid?: string;
 }
 
 export interface SOPListParams {
@@ -362,6 +394,8 @@ export interface SOPListParams {
   limit?: number;
   operationId?: number;
   isActive?: boolean;
+  carrier?: string;
+  controlStatus?: string;
   material_uuid?: string;
   material_group_uuid?: string;
   route_uuid?: string;
@@ -379,6 +413,45 @@ export interface SOPListParams {
 export interface SOPListResponse {
   data: SOP[];
   total: number;
+}
+
+export interface SopRevision {
+  id: number;
+  sopId: number;
+  revision: string;
+  carrier: string;
+  changeReason?: string;
+  effectiveAt?: string;
+  obsoleteAt?: string;
+  publishedByName?: string;
+}
+
+export interface SopControlledCopy {
+  id: number;
+  copyNo: string;
+  locationType: string;
+  stationId?: number;
+  locationNote?: string;
+  revision: string;
+  status: string;
+  issuedAt?: string;
+  issuedByName?: string;
+  retrievedAt?: string;
+}
+
+export interface SopPrintData {
+  sopUuid: string;
+  code: string;
+  name: string;
+  revision: string;
+  carrier: string;
+  controlled: boolean;
+  copyNo?: string;
+  watermark: string;
+  storageLocation?: string;
+  content?: string;
+  attachments?: Array<Record<string, unknown>>;
+  steps?: Array<Record<string, unknown>>;
 }
 
 export interface SOPExecution {

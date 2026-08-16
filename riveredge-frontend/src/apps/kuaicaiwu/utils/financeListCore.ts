@@ -14,6 +14,51 @@ export const FINANCE_DOC_PINNED_STATUS_FIELD = 'status';
 
 export const FINANCE_CRUD_PINNED_ACTIVE_FIELD = 'isActive';
 
+export const FINANCE_AGING_BUCKET_VALUES = ['within_30', '31_60', '61_90', 'over_90'] as const;
+
+export type FinanceAgingBucket = (typeof FINANCE_AGING_BUCKET_VALUES)[number];
+
+export function parseFinanceAgingUrlFilters(searchParams: URLSearchParams): {
+  aging_bucket?: FinanceAgingBucket;
+  overdue_only?: boolean;
+} {
+  const rawBucket = searchParams.get('aging_bucket');
+  const aging_bucket = FINANCE_AGING_BUCKET_VALUES.includes(rawBucket as FinanceAgingBucket)
+    ? (rawBucket as FinanceAgingBucket)
+    : undefined;
+  const overdueRaw = searchParams.get('overdue_only');
+  const overdue_only = overdueRaw === 'true' || overdueRaw === '1';
+  return {
+    aging_bucket,
+    overdue_only: overdue_only || undefined,
+  };
+}
+
+export function buildFinanceAgingListQuery(filters: {
+  aging_bucket?: string;
+  overdue_only?: boolean;
+}): string {
+  const params = new URLSearchParams();
+  if (filters.aging_bucket) params.set('aging_bucket', filters.aging_bucket);
+  if (filters.overdue_only) params.set('overdue_only', 'true');
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
+function pickBoolean(search: Record<string, unknown>, key: string): boolean | undefined {
+  const v = search[key];
+  if (v === true || v === 'true' || v === 1 || v === '1') return true;
+  if (v === false || v === 'false' || v === 0 || v === '0') return false;
+  return undefined;
+}
+
+function pickAgingBucket(search: Record<string, unknown>): FinanceAgingBucket | undefined {
+  const v = pickString(search, 'aging_bucket');
+  return v && FINANCE_AGING_BUCKET_VALUES.includes(v as FinanceAgingBucket)
+    ? (v as FinanceAgingBucket)
+    : undefined;
+}
+
 function pickString(search: Record<string, unknown> | null | undefined, key: string) {
   const v = search?.[key];
   return typeof v === 'string' && v.trim() ? v.trim() : undefined;
@@ -232,6 +277,8 @@ function resolveFinanceArApListParams(
     business_date_end,
     due_date_start,
     due_date_end,
+    aging_bucket: pickAgingBucket(s),
+    overdue_only: pickBoolean(s, 'overdue_only'),
   };
 
   if (options) {
@@ -254,23 +301,39 @@ function resolveFinanceArApListParams(
 export function resolveReceivableListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
+  urlFilters?: { aging_bucket?: string; overdue_only?: boolean },
 ) {
-  return resolveFinanceArApListParams(searchFormValues, sort, {
+  const params = resolveFinanceArApListParams(searchFormValues, sort, {
     docCodeField: 'receivable_code',
     partnerIdField: 'customer_id',
     partnerNameField: 'customer_name',
   });
+  if (urlFilters?.aging_bucket && !params.aging_bucket) {
+    params.aging_bucket = urlFilters.aging_bucket;
+  }
+  if (urlFilters?.overdue_only && params.overdue_only !== false) {
+    params.overdue_only = true;
+  }
+  return params;
 }
 
 export function resolvePayableListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
+  urlFilters?: { aging_bucket?: string; overdue_only?: boolean },
 ) {
-  return resolveFinanceArApListParams(searchFormValues, sort, {
+  const params = resolveFinanceArApListParams(searchFormValues, sort, {
     docCodeField: 'payable_code',
     partnerIdField: 'supplier_id',
     partnerNameField: 'supplier_name',
   });
+  if (urlFilters?.aging_bucket && !params.aging_bucket) {
+    params.aging_bucket = urlFilters.aging_bucket;
+  }
+  if (urlFilters?.overdue_only && params.overdue_only !== false) {
+    params.overdue_only = true;
+  }
+  return params;
 }
 
 function resolveFinanceVoucherListParams(
@@ -699,6 +762,34 @@ export function resolveDocumentReconciliationGapListParams(
     if (docCode) params.doc_code = docCode;
   }
 
+  return params;
+}
+
+export function resolveSettlementHistoryListParams(
+  searchFormValues?: Record<string, unknown> | null,
+  sort?: Record<string, unknown>,
+): Record<string, string | number | boolean | undefined> {
+  const s = searchFormValues ?? {};
+  const fuzzyKeyword = pickString(s, 'keyword');
+  const { sort_field, sort_order } = resolveFinanceSort(sort);
+  const { date_start: settlement_date_start, date_end: settlement_date_end } = parseSalesReportDateRange(s, [
+    'settlement_date_range',
+    'settlementDateRange',
+  ]);
+  const businessRaw = pickString(s, 'business_type');
+  const business_type =
+    businessRaw === 'receivable' || businessRaw === 'payable' ? businessRaw : undefined;
+  const partnerId = pickOptionalId(s, 'partner_id');
+
+  const params: Record<string, string | number | boolean | undefined> = {
+    business_type,
+    sort_field,
+    sort_order,
+    settlement_date_start,
+    settlement_date_end,
+  };
+  if (partnerId) params.partner_id = partnerId;
+  if (fuzzyKeyword) params.keyword = fuzzyKeyword;
   return params;
 }
 

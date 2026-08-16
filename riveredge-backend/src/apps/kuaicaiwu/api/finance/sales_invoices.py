@@ -44,6 +44,7 @@ from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.services.business_config_service import BusinessConfigService
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
+from apps.kuaicaiwu.services.tax.tax_period_service import tax_period_from_date
 
 router = APIRouter(prefix="/sales-invoices", tags=["App - Kuaicaiwu - Finance"])
 business_config_service = BusinessConfigService()
@@ -101,6 +102,45 @@ def _derive_sales_invoice_review_status(inv: Invoice) -> str:
     return "待审核"
 
 
+def _join_partner_text(*parts: Optional[str]) -> Optional[str]:
+    joined = " ".join(str(p).strip() for p in parts if p and str(p).strip())
+    return joined or None
+
+
+async def _resolve_sales_invoice_partner_fields(
+    tenant_id: int,
+    customer_id: int,
+    *,
+    partner_tax_no: Optional[str] = None,
+    partner_bank_info: Optional[str] = None,
+    partner_address_phone: Optional[str] = None,
+) -> dict[str, Optional[str]]:
+    tax = str(partner_tax_no or "").strip() or None
+    bank = str(partner_bank_info or "").strip() or None
+    address_phone = str(partner_address_phone or "").strip() or None
+    if tax and bank and address_phone:
+        return {
+            "partner_tax_no": tax,
+            "partner_bank_info": bank,
+            "partner_address_phone": address_phone,
+        }
+    from apps.master_data.models.customer import Customer
+
+    customer = await Customer.get_or_none(tenant_id=tenant_id, id=customer_id, deleted_at__isnull=True)
+    if customer:
+        if not tax:
+            tax = str(customer.tax_registration_no or "").strip() or None
+        if not bank:
+            bank = _join_partner_text(customer.invoice_bank_name, customer.invoice_bank_account)
+        if not address_phone:
+            address_phone = _join_partner_text(customer.invoice_address, customer.invoice_phone)
+    return {
+        "partner_tax_no": tax,
+        "partner_bank_info": bank,
+        "partner_address_phone": address_phone,
+    }
+
+
 async def _serialize(tenant_id: int, user_id: int, obj: Invoice) -> SalesInvoiceResponse:
     """将 Invoice 模型转换为 SalesInvoiceResponse"""
     audit = audit_response_fields(obj)
@@ -110,6 +150,9 @@ async def _serialize(tenant_id: int, user_id: int, obj: Invoice) -> SalesInvoice
         invoice_code=obj.invoice_code,
         customer_id=obj.partner_id,
         customer_name=obj.partner_name,
+        partner_tax_no=getattr(obj, "partner_tax_no", None),
+        partner_bank_info=getattr(obj, "partner_bank_info", None),
+        partner_address_phone=getattr(obj, "partner_address_phone", None),
         sales_order_id=None,
         sales_order_code=obj.source_document_code,
         invoice_number=obj.invoice_number,
@@ -124,6 +167,8 @@ async def _serialize(tenant_id: int, user_id: int, obj: Invoice) -> SalesInvoice
         attachment_path=obj.attachment_uuid,
         attachments=getattr(obj, "attachments", None),
         notes=obj.description,
+        tax_period=getattr(obj, "tax_period", None),
+        invoice_color=getattr(obj, "invoice_color", None),
         original_invoice_id=getattr(obj, "original_invoice_id", None),
         red_flush_invoice_id=getattr(obj, "red_flush_invoice_id", None),
         void_reason=getattr(obj, "void_reason", None),
@@ -308,15 +353,25 @@ async def create_sales_invoice(
                 customer_name = str(pull_preview.get("customer_name") or customer_name or "")
 
         code = await _generate_sales_invoice_code(tenant_id)
+        partner_fields = await _resolve_sales_invoice_partner_fields(
+            tenant_id,
+            customer_id,
+            partner_tax_no=data.partner_tax_no,
+            partner_bank_info=data.partner_bank_info,
+            partner_address_phone=data.partner_address_phone,
+        )
         create_payload = {
             "tenant_id": tenant_id,
             "invoice_code": code,
             "category": "OUT",
             "invoice_number": data.invoice_number,
             "invoice_date": data.invoice_date,
+            "tax_period": tax_period_from_date(data.invoice_date),
+            "invoice_color": "blue",
             "invoice_type": data.invoice_type or "增值税专用发票",
             "partner_id": customer_id,
             "partner_name": customer_name,
+            **partner_fields,
             "tax_rate": data.tax_rate / 100,  # API 百分比 → 落库小数
             "amount_excluding_tax": data.invoice_amount,
             "tax_amount": tax_amount,
@@ -585,6 +640,7 @@ async def update_sales_invoice(
         update_data["invoice_number"] = data.invoice_number
     if data.invoice_date is not None:
         update_data["invoice_date"] = data.invoice_date
+        update_data["tax_period"] = tax_period_from_date(data.invoice_date)
     if data.invoice_type is not None:
         update_data["invoice_type"] = data.invoice_type
     amount_excl = data.invoice_amount if data.invoice_amount is not None else invoice.amount_excluding_tax
@@ -604,6 +660,12 @@ async def update_sales_invoice(
         update_data["description"] = data.notes
     if data.attachments is not None:
         update_data["attachments"] = data.attachments
+    if data.partner_tax_no is not None:
+        update_data["partner_tax_no"] = data.partner_tax_no or None
+    if data.partner_bank_info is not None:
+        update_data["partner_bank_info"] = data.partner_bank_info or None
+    if data.partner_address_phone is not None:
+        update_data["partner_address_phone"] = data.partner_address_phone or None
     if update_data:
         apply_update_audit(update_data, current_user)
         await Invoice.filter(id=id).update(**update_data)
@@ -739,9 +801,14 @@ async def create_red_letter_sales_invoice(
             "category": "OUT",
             "invoice_number": "",
             "invoice_date": orig.invoice_date,
+            "tax_period": tax_period_from_date(orig.invoice_date),
+            "invoice_color": "red",
             "invoice_type": orig.invoice_type or "VAT_SPECIAL",
             "partner_id": orig.partner_id,
             "partner_name": orig.partner_name,
+            "partner_tax_no": getattr(orig, "partner_tax_no", None),
+            "partner_bank_info": getattr(orig, "partner_bank_info", None),
+            "partner_address_phone": getattr(orig, "partner_address_phone", None),
             "tax_rate": orig.tax_rate,
             "amount_excluding_tax": -excl,
             "tax_amount": -tax,

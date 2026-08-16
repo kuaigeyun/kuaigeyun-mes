@@ -700,6 +700,25 @@ class SupplyChainService:
         # 创建供应商（未传 is_active 时默认为启用）
         if create_data.get("is_active") is None:
             create_data["is_active"] = True
+        from apps.master_data.services.supplier_governance import (
+            QUALIFICATION_APPROVED,
+            QUALIFICATION_POTENTIAL,
+            is_supplier_qualification_required,
+        )
+
+        qualification_required = await is_supplier_qualification_required(tenant_id)
+        if qualification_required:
+            if not create_data.get("qualification_status"):
+                create_data["qualification_status"] = QUALIFICATION_POTENTIAL
+        else:
+            # 关闭准入：创建即准入
+            create_data["qualification_status"] = QUALIFICATION_APPROVED
+        if create_data.get("qualifications") is None:
+            create_data["qualifications"] = []
+        # 评级由系统回写，创建时忽略客户端传入
+        create_data.pop("rating_grade", None)
+        create_data.pop("rating_score", None)
+        create_data.pop("rated_at", None)
         # 自动回填采购员姓名
         if create_data.get("buyer_id"):
             buyer = await User.filter(id=create_data["buyer_id"]).first()
@@ -777,6 +796,7 @@ class SupplyChainService:
         code: Optional[str] = None,
         name: Optional[str] = None,
         buyer_id: Optional[int] = None,
+        qualification_status: Optional[str] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
         created_start_date: Optional[str] = None,
@@ -817,6 +837,9 @@ class SupplyChainService:
 
         if buyer_id is not None:
             query = query.filter(buyer_id=buyer_id)
+
+        if qualification_status is not None and str(qualification_status).strip():
+            query = query.filter(qualification_status=str(qualification_status).strip().lower())
 
         query, order_expr = apply_master_crud_list_filters(
             query,
@@ -891,6 +914,10 @@ class SupplyChainService:
         
         # 更新字段（by_alias=False 得到 snake_case 供 ORM 使用）
         update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
+        # 评级由 recalculate 回写，禁止手工改分（允许改等级仅当同时不传 score？本期一律禁止手工写评分字段）
+        update_data.pop("rating_score", None)
+        update_data.pop("rated_at", None)
+        # rating_grade 允许采购手工覆盖（少数场景），保留
 
         if "name" in update_data:
             update_data["name"] = _normalize_partner_name(update_data.get("name"))
@@ -925,6 +952,26 @@ class SupplyChainService:
             raise
         
         return _to_supplier_response(supplier)
+
+    @staticmethod
+    async def recalculate_supplier_rating(
+        tenant_id: int,
+        supplier_uuid: str,
+        *,
+        lookback_days: int = 90,
+    ) -> Dict[str, Any]:
+        from apps.master_data.services.supplier_governance import recalculate_supplier_rating
+
+        supplier = await Supplier.filter(
+            tenant_id=tenant_id,
+            uuid=supplier_uuid,
+            deleted_at__isnull=True,
+        ).first()
+        if not supplier:
+            raise NotFoundError(f"供应商 {supplier_uuid} 不存在")
+        return await recalculate_supplier_rating(
+            tenant_id, supplier, lookback_days=lookback_days
+        )
     
     @staticmethod
     async def delete_supplier(

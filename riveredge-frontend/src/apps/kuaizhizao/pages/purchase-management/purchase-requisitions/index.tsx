@@ -34,9 +34,8 @@ import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import {
   UniPullQueryModal,
-  filterByPullScope,
   isPullableScope,
-  paginatePullRows,
+  renderPullCapabilityTag,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -83,14 +82,16 @@ import {
   convertToPurchaseOrder,
   previewPushToPurchaseOrder,
   previewPushToInquiry,
+  pullPurchaseRequisitionFromDemandComputationItems,
   PurchaseRequisition,
   PurchaseRequisitionItem,
   type DocumentPushPreview,
 } from '../../../services/purchase-requisition';
 import { createInquiryFromRequisition } from '../../../services/purchase-inquiry';
 import {
+  listDemandComputationPurchasePullLines,
   listDemandComputations,
-  pushToPurchaseRequisition,
+  type DemandComputationPurchasePullLine,
 } from '../../../services/demand-computation';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import {
@@ -100,6 +101,7 @@ import {
 } from '../../../utils/purchaseRequisitionLifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { formatPurchaseRequisitionSourceType } from '../../../utils/purchaseRequisitionSourceType';
+import { renderDemandBusinessModeMarkerTag } from '../../../utils/businessMode';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
@@ -121,7 +123,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
-import { formatDateTime, formatNumber, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
+import { formatBusinessDateOnly, formatDateTime, formatNumber, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
@@ -170,14 +172,7 @@ type PurchaseRequisitionItemRow = PurchaseRequisitionItem & {
 const PURCHASE_REQUISITION_LIST_PERSISTENCE_ID =
   'apps.kuaizhizao.pages.purchase-management.purchase-requisitions.v4';
 
-type PullDemandComputationCandidate = {
-  id: number;
-  computation_code?: string;
-  business_mode?: string;
-  computation_status?: string;
-  created_at?: string;
-  updated_at?: string;
-};
+type PullDemandComputationCandidate = DemandComputationPurchasePullLine;
 
 function renderPurchaseRequisitionRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
   return nodes;
@@ -301,6 +296,9 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const [pushInquiryPreviewData, setPushInquiryPreviewData] = useState<DocumentPushPreview | null>(null);
   const [pushInquiryTarget, setPushInquiryTarget] = useState<PurchaseRequisition | null>(null);
   const [pushInquirySelectedItemIds, setPushInquirySelectedItemIds] = useState<number[]>([]);
+  const [pullSourceComputationId, setPullSourceComputationId] = useState<number | undefined>();
+  const pullSourceComputationIdRef = useRef<number | undefined>(undefined);
+  const [pullSourceOptions, setPullSourceOptions] = useState<Array<{ value: number; label: string }>>([]);
 
   const [prTrackingRefreshKey, setPrTrackingRefreshKey] = useState(0);
 
@@ -649,55 +647,76 @@ const PurchaseRequisitionsPage: React.FC = () => {
 
   const pullFromComputationColumns: ProColumns<PullDemandComputationCandidate>[] = useMemo(
     () => [
-      { title: t('app.kuaizhizao.purchaseRequisition.pull.computationCode'), dataIndex: 'computation_code', width: 220, ellipsis: true },
-      { title: t('app.kuaizhizao.purchaseRequisition.pull.businessMode'), dataIndex: 'business_mode', width: 110, align: 'center' },
-      { title: t('app.kuaizhizao.purchaseRequisition.pull.computationStatus'), dataIndex: 'computation_status', width: 110, align: 'center' },
       {
-        title: t('common.createdAt'),
-        dataIndex: 'created_at',
-        width: 180,
-        render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
+        title: t('app.kuaizhizao.purchaseRequisition.pull.computationCode'),
+        dataIndex: 'computation_code',
+        width: 168,
+        ellipsis: true,
       },
       {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        width: 180,
-        render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
+        title: t('app.kuaizhizao.salesOrder.materialName'),
+        dataIndex: 'material_name',
+        ellipsis: true,
+        render: (_, record) => (
+          <MaterialStackedCell
+            material_name={record.material_name}
+            material_code={record.material_code}
+            material_spec={record.material_spec}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseRequisition.pull.businessMode'),
+        dataIndex: 'business_mode',
+        width: 100,
+        align: 'center',
+        render: (v) => renderDemandBusinessModeMarkerTag(t, v),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.quantity'),
+        dataIndex: 'suggested_quantity',
+        width: 100,
+        align: 'right',
+        render: (v) => formatQuantity(v),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.colShippedQty'),
+        dataIndex: 'pushed_quantity',
+        width: 100,
+        align: 'right',
+        render: (v) => formatQuantity(v),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.colShippableQty'),
+        dataIndex: 'remaining_quantity',
+        width: 100,
+        align: 'right',
+        render: (v) => formatQuantity(v),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseRequisition.col.requiredDate'),
+        dataIndex: 'required_date',
+        width: 112,
+        render: (v) => (v ? formatBusinessDateOnly(v) : '-'),
       },
       {
         title: t('app.kuaizhizao.purchaseRequisition.pull.convertStatus'),
         key: 'convert_status',
-        width: 180,
+        width: 100,
         align: 'center',
         render: (_, record) =>
-          record.computation_status === '完成' ? (
-            <Tag color="success">{t('app.kuaizhizao.purchaseRequisition.pull.canCreate')}</Tag>
-          ) : (
-            <Tag color="gold">{t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate')}</Tag>
+          renderPullCapabilityTag(
+            Number(record.remaining_quantity ?? 0) > 0,
+            t('app.kuaizhizao.purchaseRequisition.pull.canCreate'),
+            t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
           ),
       },
     ],
     [t],
   );
 
-  const createRequisitionFromComputation = useCallback(
-    async (computationId: number) => {
-      try {
-        const res = await pushToPurchaseRequisition(computationId);
-        messageApi.success(res?.message || t('app.kuaizhizao.purchaseRequisition.pull.success'));
-        actionRef.current?.reload();
-        invalidateMenuBadgeCounts();
-      } catch (error: any) {
-        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.pull.failed')));
-      }
-    },
-    [invalidateMenuBadgeCounts, messageApi, t],
-  );
-
-  const pullQueryCloseRef = useRef<(() => void) | null>(null);
-
   const isPullComputationSelectable = useCallback(
-    (record: PullDemandComputationCandidate) => record.computation_status === '完成',
+    (record: PullDemandComputationCandidate) => Number(record.remaining_quantity ?? 0) > 0,
     [],
   );
 
@@ -711,51 +730,66 @@ const PurchaseRequisitionsPage: React.FC = () => {
 
   const pullFromComputationQuery = useUniPullQuery<PullDemandComputationCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions: pullDocumentScopeOptions,
     defaultScope: 'pullable',
+    onOpen: () => {
+      pullSourceComputationIdRef.current = undefined;
+      setPullSourceComputationId(undefined);
+      void listDemandComputations({
+        skip: 0,
+        limit: 100,
+        computation_status: '完成',
+        view: 'options',
+      })
+        .then((res) => {
+          setPullSourceOptions(
+            (res?.data ?? [])
+              .filter((row) => row.id != null && row.computation_code)
+              .map((row) => ({ value: row.id!, label: String(row.computation_code) })),
+          );
+        })
+        .catch((error: unknown) => {
+          messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.pull.loadSourceFailed')));
+          setPullSourceOptions([]);
+        });
+    },
     loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
-        const kw = keyword.trim();
-        const listRes = await listDemandComputations({
-          skip: 0,
-          limit: 200,
-          computation_status: isPullableScope(scope) ? '完成' : undefined,
-          computation_code: kw || undefined,
+        const listRes = await listDemandComputationPurchasePullLines({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          keyword: keyword.trim() || undefined,
+          computation_id: pullSourceComputationIdRef.current,
+          pullable_only: isPullableScope(scope),
         });
-        const rows = (listRes?.data || [])
-          .filter((row) => row.id != null)
-          .map(
-            (row) =>
-              ({
-                id: row.id!,
-                computation_code: row.computation_code,
-                business_mode: row.business_mode,
-                computation_status: row.computation_status,
-                created_at: row.created_at,
-                updated_at: row.updated_at,
-              }) as PullDemandComputationCandidate,
-          );
-        const filtered = filterByPullScope(rows, scope, isPullComputationSelectable);
-        return paginatePullRows(filtered, page, pageSize);
-      } catch (error: any) {
+        return { data: listRes?.data ?? [], total: listRes?.total ?? 0 };
+      } catch (error: unknown) {
         messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.pull.failed')));
         return { data: [], total: 0 };
       }
     },
     isRowDisabled: (record) => !isPullComputationSelectable(record),
-    onConfirm: async (keys) => {
-      const selectedId = Number(keys[0]);
-      if (!selectedId || selectedId <= 0) {
-        messageApi.warning(t('app.kuaizhizao.purchaseRequisition.pull.selectComputation'));
+    onConfirm: async (_keys, rows) => {
+      const selectedIds = rows
+        .filter((row) => isPullComputationSelectable(row))
+        .map((row) => Number(row.id))
+        .filter((id) => id > 0);
+      if (!selectedIds.length) {
+        messageApi.warning(t('app.kuaizhizao.purchaseRequisition.pull.selectLinesFirst'));
         return;
       }
-      pullQueryCloseRef.current?.();
-      await createRequisitionFromComputation(selectedId);
+      try {
+        const res = await pullPurchaseRequisitionFromDemandComputationItems(selectedIds);
+        messageApi.success(res?.message || t('app.kuaizhizao.purchaseRequisition.pull.success'));
+        pullFromComputationQuery.closeModal();
+        actionRef.current?.reload();
+        invalidateMenuBadgeCounts();
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.pull.failed')));
+      }
     },
   });
-
-  pullQueryCloseRef.current = pullFromComputationQuery.closeModal;
 
   const mapItemsForApi = (
     validItems: Array<{
@@ -2239,6 +2273,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         confirmLoading={pullFromComputationQuery.confirmLoading}
         selectionType={pullFromComputationQuery.selectionType}
         selectedRowKeys={pullFromComputationQuery.selectedRowKeys}
+        selectedRows={pullFromComputationQuery.selectedRows}
         onSelectedRowKeysChange={pullFromComputationQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromComputationQuery.isRowDisabled}
         searchDraft={pullFromComputationQuery.searchDraft}
@@ -2247,6 +2282,28 @@ const PurchaseRequisitionsPage: React.FC = () => {
         onSearchClear={pullFromComputationQuery.handleSearchClear}
         appliedKeyword={pullFromComputationQuery.appliedKeyword}
         searchPlaceholder={t('app.kuaizhizao.purchaseRequisition.pull.searchPlaceholder')}
+        filterExtra={(
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('app.kuaizhizao.purchaseRequisition.pull.sourceDocPlaceholder')}
+            style={{ width: 220, flexShrink: 0 }}
+            value={pullSourceComputationId}
+            options={pullSourceOptions}
+            onChange={(value) => {
+              const nextId = Number(value);
+              const next = Number.isFinite(nextId) && nextId > 0 ? nextId : undefined;
+              pullSourceComputationIdRef.current = next;
+              setPullSourceComputationId(next);
+              pullFromComputationQuery.handleSelectedRowKeysChange([], []);
+              pullFromComputationQuery.handleSearchApply(pullFromComputationQuery.appliedKeyword);
+            }}
+          />
+        )}
+        getRowLabel={(row) =>
+          [row.computation_code, row.material_code].filter(Boolean).join(' ')
+        }
         page={pullFromComputationQuery.page}
         pageSize={pullFromComputationQuery.pageSize}
         total={pullFromComputationQuery.total}
@@ -2254,14 +2311,13 @@ const PurchaseRequisitionsPage: React.FC = () => {
         scopeOptions={pullFromComputationQuery.scopeOptions}
         scope={pullFromComputationQuery.scope}
         onScopeChange={pullFromComputationQuery.handleScopeChange}
-        okText={t('common.next')}
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        okText={t('app.kuaizhizao.purchaseRequisition.pull.ok')}
       />
 
       <Modal
         title={pushToPurchaseOrderAction.label}
         open={pushPoPreviewOpen}
-        destroyOnClose
+        destroyOnHidden
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         onCancel={resetPushPoPreviewModal}
         okText={pushToPurchaseOrderAction.label}
@@ -2317,7 +2373,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       <Modal
         title={pushToInquiryAction.label}
         open={pushInquiryPreviewOpen}
-        destroyOnClose
+        destroyOnHidden
         width={1100}
         onCancel={resetPushInquiryPreviewModal}
         okText={pushToInquiryAction.label}
@@ -2398,7 +2454,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
           </div>
         ) : null}
       </Modal>
-
 
       <PurchaseRequisitionDetailDrawer
         open={detailVisible}

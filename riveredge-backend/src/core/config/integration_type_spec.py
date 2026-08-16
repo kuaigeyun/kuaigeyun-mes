@@ -19,6 +19,7 @@ LEGACY_INTEGRATION_TYPE_ALIASES: Mapping[str, str] = {
     "inspur": "inspur_gs",
     "dsc": "digiwin_t100",
     "grasp_erp": "grasp_huihuang",
+    "aliyun_express": "aliyun_market",
 }
 
 APPLICATION_CONNECTOR_TYPES: tuple[str, ...] = (
@@ -84,6 +85,11 @@ APPLICATION_CONNECTOR_TYPES: tuple[str, ...] = (
     "qiniu_kodo",
     "nas_webdav",
     "nas_smb",
+    "amap",
+    "kuaidi100",
+    "kdniao",
+    "aliyun_market",
+    "tencent_market",
     "deepseek",
     "openai",
     "qwen",

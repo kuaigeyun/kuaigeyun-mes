@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, AliasChoices
 
 
 class StationAndonCreate(BaseModel):
@@ -55,6 +55,7 @@ class StationAndonResponse(BaseModel):
 
 class StationSopAckCreate(BaseModel):
     sop_uuid: str
+    sop_revision: Optional[str] = Field(None, description="确认时的SOP修订号")
     work_order_id: int
     operation_id: int
     worker_id: Optional[int] = None
@@ -222,6 +223,25 @@ class StationSopDocument(BaseModel):
     uuid: str
     name: Optional[str] = None
     version: Optional[str] = None
+    current_revision: Optional[str] = Field(
+        None,
+        description="现行修订号",
+        validation_alias=AliasChoices("current_revision", "currentRevision"),
+    )
+    carrier: Optional[str] = Field(
+        None,
+        description="载体 electronic/paper/hybrid",
+    )
+    storage_location: Optional[str] = Field(
+        None,
+        description="纸质原件存放位置",
+        validation_alias=AliasChoices("storage_location", "storageLocation"),
+    )
+    station_copy_no: Optional[str] = Field(
+        None,
+        description="本工位受控份号",
+        validation_alias=AliasChoices("station_copy_no", "stationCopyNo"),
+    )
     content: Optional[str] = Field(None, description="备注/富文本；工步正文以 steps 为准")
     steps: List[StationSopStep] = Field(
         default_factory=list,

@@ -1,12 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { App, DatePicker, Form, Input, Modal, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 import type { Customer } from '../../../../master-data/types/supply-chain';
-import type { RepairOrder, RepairOrderPayload } from '../../../services/after-sales-service';
+import {
+  repairOrderApi,
+  serviceAssetApi,
+  type RepairOrder,
+  type RepairOrderPayload,
+  type ServiceAsset,
+} from '../../../services/after-sales-service';
 import { formDateFormItemProps } from '../../../../../utils/formDate';
 import { formatApiErrorDetail } from '../../../../../services/api';
+import { AfterSalesSourceDocumentSelect } from '../shared/AfterSalesSourceDocumentSelect';
 
 const REPAIR_MODES = ['现场', '返厂'];
 const WARRANTY_STATUSES = ['保内', '保外', '待判定'];
@@ -34,6 +41,44 @@ const RepairOrderFormModal: React.FC<RepairOrderFormModalProps> = ({
   const { message: messageApi } = App.useApp();
   const [form] = Form.useForm<RepairOrderPayload & { reported_at_picker?: dayjs.Dayjs }>();
   const [submitting, setSubmitting] = useState(false);
+  const [assets, setAssets] = useState<ServiceAsset[]>([]);
+  const [ticketBlocked, setTicketBlocked] = useState<Record<number, { disabled: boolean; reason: string }>>({});
+  const customerId = Form.useWatch('customer_id', form);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void Promise.all([
+      serviceAssetApi.list({ skip: 0, limit: 100, customer_id: customerId || undefined }),
+      repairOrderApi.list({ skip: 0, limit: 200 }),
+    ])
+      .then(([assetRes, repairRes]) => {
+        if (cancelled) return;
+        setAssets(assetRes.items ?? []);
+        const blocked: Record<number, { disabled: boolean; reason: string }> = {};
+        for (const row of repairRes.items ?? []) {
+          const ticketId = Number(row.after_sales_ticket_id);
+          if (!Number.isFinite(ticketId) || ticketId <= 0) continue;
+          if (editing?.id && row.id === editing.id) continue;
+          blocked[ticketId] = {
+            disabled: true,
+            reason: t('app.kuaizhizao.afterSalesService.repairOrder.ticketAlreadyHasRepair', {
+              code: row.order_code,
+            }),
+          };
+        }
+        setTicketBlocked(blocked);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAssets([]);
+          setTicketBlocked({});
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [customerId, editing?.id, open, t]);
 
   useEffect(() => {
     if (!open) return;
@@ -52,10 +97,21 @@ const RepairOrderFormModal: React.FC<RepairOrderFormModalProps> = ({
     }
   }, [editing, form, open]);
 
+  const assetOptions = useMemo(
+    () =>
+      assets.map((row) => ({
+        value: row.id,
+        label: `${row.asset_code}${row.customer_name ? ` ${row.customer_name}` : ''}`,
+      })),
+    [assets],
+  );
+
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
-      const { reported_at_picker, ...rest } = values;
+      const { reported_at_picker, _ticket_source_type: _ignored, ...rest } = values as typeof values & {
+        _ticket_source_type?: string;
+      };
       setSubmitting(true);
       await onSubmit({
         ...rest,
@@ -83,11 +139,17 @@ const RepairOrderFormModal: React.FC<RepairOrderFormModalProps> = ({
       onCancel={onClose}
       onOk={() => void handleOk()}
       confirmLoading={submitting}
-      destroyOnClose
+      destroyOnHidden
       width={760}
     >
       <Form form={form} layout="vertical">
         <Form.Item name="customer_name" hidden>
+          <Input />
+        </Form.Item>
+        <Form.Item name="after_sales_ticket_code" hidden>
+          <Input />
+        </Form.Item>
+        <Form.Item name="service_asset_code" hidden>
           <Input />
         </Form.Item>
         <Form.Item
@@ -103,6 +165,50 @@ const RepairOrderFormModal: React.FC<RepairOrderFormModalProps> = ({
               form.setFieldsValue({
                 customer_id: c?.id,
                 customer_name: customerDisplayName(c),
+                after_sales_ticket_id: undefined,
+                after_sales_ticket_code: undefined,
+                service_asset_id: undefined,
+                service_asset_code: undefined,
+              });
+            }}
+          />
+        </Form.Item>
+        <AfterSalesSourceDocumentSelect
+          sourceTypeField="_ticket_source_type"
+          sourceIdField="after_sales_ticket_id"
+          sourceCodeField="after_sales_ticket_code"
+          customerId={customerId}
+          allowedTypes={['after_sales_ticket']}
+          typeLabelKeyPrefix="app.kuaizhizao.afterSalesService.repairOrder.field"
+          hideTypeSelect
+          fixedSourceType="after_sales_ticket"
+          optionStateById={ticketBlocked}
+          onPicked={(picked) => {
+            if (!picked) return;
+            form.setFieldsValue({
+              customer_id: picked.customerId,
+              customer_name: picked.customerName,
+              after_sales_ticket_id: picked.value,
+              after_sales_ticket_code: picked.code,
+            });
+          }}
+        />
+        <Form.Item
+          name="service_asset_id"
+          label={t('app.kuaizhizao.afterSalesService.repairOrder.field.assetCode')}
+        >
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            options={assetOptions}
+            onChange={(value: number | undefined) => {
+              const picked = assets.find((row) => row.id === value);
+              form.setFieldsValue({
+                service_asset_id: value,
+                service_asset_code: picked?.asset_code,
+                customer_id: picked?.customer_id ?? form.getFieldValue('customer_id'),
+                customer_name: picked?.customer_name ?? form.getFieldValue('customer_name'),
               });
             }}
           />

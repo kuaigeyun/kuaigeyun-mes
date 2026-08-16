@@ -174,6 +174,7 @@ class AfterSalesTicketResponse(BaseSchema):
     updated_by_name: Optional[str] = Field(None, description="更新人显示名")
     items: List[AfterSalesTicketItemResponse] = Field(default_factory=list, description="明细行")
     item_count: int = Field(0, description="明细行数")
+    existing_repair_order_code: Optional[str] = Field(None, description="已下推维修单号")
     capabilities: Optional[Dict[str, Any]] = Field(None, description="业务态动作能力")
 
 

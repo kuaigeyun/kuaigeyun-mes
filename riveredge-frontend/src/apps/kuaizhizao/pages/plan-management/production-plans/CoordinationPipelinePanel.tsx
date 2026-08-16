@@ -573,7 +573,7 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
   if (listLoading && !activeItems.length && !listErrorMessage) {
     return (
       <div style={{ textAlign: 'center', padding: 48 }}>
-        <Spin tip={t('app.kuaizhizao.coordinationPipeline.loading')}>
+        <Spin description={t('app.kuaizhizao.coordinationPipeline.loading')}>
           <div style={{ minHeight: 24 }} />
         </Spin>
       </div>

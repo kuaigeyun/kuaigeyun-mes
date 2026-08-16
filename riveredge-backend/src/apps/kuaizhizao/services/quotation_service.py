@@ -41,7 +41,7 @@ from apps.kuaizhizao.services.document_action_policy import (
     enrich_quotation_list_capabilities,
 )
 from core.services.authorization.data_scope_service import DataScopeService
-from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat, today_site_str
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat, today_site_str, to_site_date
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 from infra.models.user import User
 from infra.services.business_config_service import BusinessConfigService
@@ -66,6 +66,7 @@ class QuotationService:
         *,
         conversion_downstream_missing: bool = False,
         contract_downstream_missing: bool = False,
+        sales_review_downstream_missing: bool = False,
     ) -> None:
         audit_required = await self._quotation_audit_required(tenant_id)
         assert_quotation_capability(
@@ -74,6 +75,7 @@ class QuotationService:
             audit_required=audit_required,
             conversion_downstream_missing=conversion_downstream_missing,
             contract_downstream_missing=contract_downstream_missing,
+            sales_review_downstream_missing=sales_review_downstream_missing,
         )
 
     @staticmethod
@@ -124,6 +126,51 @@ class QuotationService:
             tenant_id=tenant_id, id=cid, deleted_at__isnull=True
         )
         return contract is None
+
+    @staticmethod
+    async def _quotation_sales_review_downstream_missing(
+        tenant_id: int,
+        quotation: Quotation,
+        alive_review_ids: Optional[Set[int]] = None,
+    ) -> bool:
+        """报价单仍有关联 sales_review_id，但下游订单评审已软删或不存在时返回 True。"""
+        rid = getattr(quotation, "sales_review_id", None)
+        if not rid:
+            return False
+        if alive_review_ids is not None:
+            return int(rid) not in alive_review_ids
+        from apps.kuaizhizao.models.sales_review import SalesReview
+
+        review = await SalesReview.get_or_none(
+            tenant_id=tenant_id, id=int(rid), deleted_at__isnull=True
+        )
+        return review is None
+
+    async def _detach_quotation_if_sales_review_deleted(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+        operator_id: int,
+    ) -> bool:
+        """若下游订单评审已删除，解除报价单上的评审关联。"""
+        q = await Quotation.get_or_none(
+            tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
+        )
+        if not q:
+            return False
+        missing = await QuotationService._quotation_sales_review_downstream_missing(
+            tenant_id, q
+        )
+        if not missing:
+            return False
+        await Quotation.filter(id=quotation_id).update(
+            sales_review_id=None,
+            sales_review_code=None,
+            updated_by=operator_id,
+        )
+        q.sales_review_id = None
+        q.sales_review_code = None
+        return True
 
     async def _detach_quotation_if_contract_deleted(
         self,
@@ -302,6 +349,7 @@ class QuotationService:
             "tax_rate": tax_r,
             "total_amount": amt,
             "variant_attributes": getattr(item_data, "variant_attributes", None),
+            "pricing_snapshot": getattr(item_data, "pricing_snapshot", None),
             "delivery_date": item_data.delivery_date,
             "notes": item_data.notes,
             "is_gift": is_gift,
@@ -449,6 +497,8 @@ class QuotationService:
             "sales_order_code": quotation.sales_order_code,
             "contract_id": getattr(quotation, "contract_id", None),
             "contract_code": getattr(quotation, "contract_code", None),
+            "sales_review_id": getattr(quotation, "sales_review_id", None),
+            "sales_review_code": getattr(quotation, "sales_review_code", None),
             "notes": quotation.notes,
             "is_active": quotation.is_active,
             "created_by": quotation.created_by,
@@ -477,6 +527,7 @@ class QuotationService:
                     is_gift=bool(getattr(it, "is_gift", False)),
                     gift_ref_unit_price=getattr(it, "gift_ref_unit_price", None),
                     variant_attributes=getattr(it, "variant_attributes", None),
+                    pricing_snapshot=getattr(it, "pricing_snapshot", None),
                     delivery_date=it.delivery_date,
                     notes=it.notes,
                     created_at=it.created_at,
@@ -701,6 +752,7 @@ class QuotationService:
                     tax_rate=row["tax_rate"],
                     total_amount=row["total_amount"],
                     variant_attributes=row["variant_attributes"],
+                    pricing_snapshot=row.get("pricing_snapshot"),
                     delivery_date=row["delivery_date"],
                     notes=row["notes"],
                     is_gift=row["is_gift"],
@@ -1173,6 +1225,14 @@ class QuotationService:
             )
             if not quotation:
                 raise NotFoundError(f"报价单不存在: {quotation_id}")
+        if await self._detach_quotation_if_sales_review_deleted(
+            tenant_id, quotation_id, operator_id
+        ):
+            quotation = await Quotation.get_or_none(
+                tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
+            )
+            if not quotation:
+                raise NotFoundError(f"报价单不存在: {quotation_id}")
 
         items = None
         if include_items:
@@ -1186,6 +1246,9 @@ class QuotationService:
             tenant_id, quotation
         )
         contract_missing = await self._quotation_contract_downstream_missing(
+            tenant_id, quotation
+        )
+        review_missing = await self._quotation_sales_review_downstream_missing(
             tenant_id, quotation
         )
         audit_required = await self._quotation_audit_required(tenant_id)
@@ -1209,6 +1272,7 @@ class QuotationService:
             result,
             conversion_downstream_missing=conv_missing,
             contract_downstream_missing=contract_missing,
+            sales_review_downstream_missing=review_missing,
         )
         from core.services.approval.audit_record_enricher import enrich_record
 
@@ -1450,11 +1514,27 @@ class QuotationService:
             query = query.filter(customer_name__icontains=customer_name.strip())
         audit_required = await self._quotation_audit_required(tenant_id)
         if pullable_only:
+            # 与 derive_quotation_capabilities 的 convert_to_* 一致：可加载里不得出现灰行
             normalized_pull_target = (pull_target or "sales_order").strip().lower()
+            query = query.filter(is_latest_in_series=True)
             if normalized_pull_target == "sales_contract":
-                query = query.filter(contract_id__isnull=True)
+                query = query.filter(
+                    contract_id__isnull=True,
+                    sales_order_id__isnull=True,
+                    sales_review_id__isnull=True,
+                )
+            elif normalized_pull_target == "sales_review":
+                query = query.filter(
+                    sales_review_id__isnull=True,
+                    sales_order_id__isnull=True,
+                    contract_id__isnull=True,
+                ).exclude(status="已转订单")
             else:
-                query = query.filter(sales_order_id__isnull=True).exclude(status="已转订单")
+                query = query.filter(
+                    sales_order_id__isnull=True,
+                    contract_id__isnull=True,
+                    sales_review_id__isnull=True,
+                ).exclude(status="已转订单")
             query = query.exclude(status__in=["已拒绝", "草稿", "draft"])
             if audit_required:
                 approved_review = ("APPROVED", "已通过", "审核通过", "通过")
@@ -1501,6 +1581,37 @@ class QuotationService:
                     q.sales_order_code = None
                     q.status = "已接受"
                     missing_by_id[int(q.id)] = False
+        review_missing_by_id: Dict[int, bool] = {}
+        review_ids = [
+            int(q.sales_review_id)
+            for q in quotations
+            if getattr(q, "sales_review_id", None)
+        ]
+        alive_review_ids: Set[int] = set()
+        if review_ids:
+            from apps.kuaizhizao.models.sales_review import SalesReview
+
+            alive_review_ids = {
+                int(rid)
+                for rid in await SalesReview.filter(
+                    tenant_id=tenant_id, id__in=review_ids, deleted_at__isnull=True
+                ).values_list("id", flat=True)
+            }
+        stale_review_q_ids: List[int] = []
+        for q in quotations:
+            qid = int(q.id)
+            rid = getattr(q, "sales_review_id", None)
+            missing = bool(rid) and int(rid) not in alive_review_ids
+            review_missing_by_id[qid] = missing
+            if missing:
+                stale_review_q_ids.append(qid)
+                q.sales_review_id = None
+                q.sales_review_code = None
+                review_missing_by_id[qid] = False
+        if stale_review_q_ids:
+            await Quotation.filter(
+                tenant_id=tenant_id, id__in=stale_review_q_ids
+            ).update(sales_review_id=None, sales_review_code=None)
         data = []
         items_by_quotation: Dict[int, List[QuotationItem]] = {}
         if include_items and quotations:
@@ -1543,6 +1654,7 @@ class QuotationService:
             data,
             conversion_downstream_missing_by_id=missing_by_id,
             contract_downstream_missing_by_id=contract_missing_by_id,
+            sales_review_downstream_missing_by_id=review_missing_by_id,
         )
         return QuotationListResponse(data=data, total=total, success=True)
 
@@ -1648,6 +1760,7 @@ class QuotationService:
                         tax_rate=row["tax_rate"],
                         total_amount=row["total_amount"],
                         variant_attributes=row["variant_attributes"],
+                        pricing_snapshot=row.get("pricing_snapshot"),
                         delivery_date=row["delivery_date"],
                         notes=row["notes"],
                         is_gift=row["is_gift"],
@@ -1855,6 +1968,7 @@ class QuotationService:
                     tax_rate=tax_r,
                     total_amount=amt,
                     variant_attributes=mvar,
+                    pricing_snapshot=getattr(item_data, "pricing_snapshot", None),
                     delivery_date=ddate,
                     notes=nit,
                     is_gift=is_gift,
@@ -1930,6 +2044,9 @@ class QuotationService:
         contract_missing = await self._quotation_contract_downstream_missing(
             tenant_id, quotation
         )
+        review_missing = await self._quotation_sales_review_downstream_missing(
+            tenant_id, quotation
+        )
         items = await QuotationItem.filter(
             tenant_id=tenant_id, quotation_id=quotation_id
         ).order_by("id")
@@ -1945,8 +2062,9 @@ class QuotationService:
             audit_required=audit_required,
             conversion_downstream_missing=conv_missing,
             contract_downstream_missing=contract_missing,
+            sales_review_downstream_missing=review_missing,
         )
-        return quotation, items, conv_missing, contract_missing, caps
+        return quotation, items, conv_missing, contract_missing, review_missing, caps
 
     @staticmethod
     def _build_quotation_push_preview_items(
@@ -1995,7 +2113,7 @@ class QuotationService:
         quotation_id: int,
     ) -> Dict[str, Any]:
         """下推销售订单预览：返回明细数量、已下推、可下推。"""
-        quotation, items, conv_missing, _contract_missing, caps = (
+        quotation, items, conv_missing, _contract_missing, _review_missing, caps = (
             await self._load_quotation_push_context(tenant_id, quotation_id)
         )
         if not items:
@@ -2035,7 +2153,7 @@ class QuotationService:
         quotation_id: int,
     ) -> Dict[str, Any]:
         """下推销售合同预览：返回明细数量、已下推、可下推。"""
-        quotation, items, _conv_missing, contract_missing, caps = (
+        quotation, items, _conv_missing, contract_missing, _review_missing, caps = (
             await self._load_quotation_push_context(tenant_id, quotation_id)
         )
         if not items:
@@ -2088,6 +2206,9 @@ class QuotationService:
         await self._detach_quotation_if_contract_deleted(
             tenant_id, quotation_id, created_by
         )
+        await self._detach_quotation_if_sales_review_deleted(
+            tenant_id, quotation_id, created_by
+        )
         quotation = await Quotation.get_or_none(
             tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
         )
@@ -2099,12 +2220,16 @@ class QuotationService:
         contract_missing = await self._quotation_contract_downstream_missing(
             tenant_id, quotation
         )
+        review_missing = await self._quotation_sales_review_downstream_missing(
+            tenant_id, quotation
+        )
         await self._assert_quotation_capability(
             tenant_id,
             quotation,
             "convert_to_order",
             conversion_downstream_missing=conv_missing,
             contract_downstream_missing=contract_missing,
+            sales_review_downstream_missing=review_missing,
         )
         if quotation.sales_order_id:
             raise BusinessLogicError("该报价单已关联销售订单，无法重复转换")
@@ -2267,3 +2392,205 @@ class QuotationService:
             tenant_id, quotation_id, include_items=True
         )
         return sales_order, quotation_updated
+
+    async def preview_push_quotation_to_sales_review(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+    ) -> Dict[str, Any]:
+        """下推订单评审预览。"""
+        quotation, items, _conv_missing, _contract_missing, review_missing, caps = (
+            await self._load_quotation_push_context(tenant_id, quotation_id)
+        )
+        if not items:
+            raise BusinessLogicError("报价单无明细，无法下推订单评审")
+
+        push_allowed = caps.convert_to_sales_review.allowed
+        already_pushed = bool(getattr(quotation, "sales_review_id", None)) and not review_missing
+        preview_items = self._build_quotation_push_preview_items(
+            items,
+            push_allowed=push_allowed,
+            already_pushed=already_pushed,
+        )
+        if not preview_items:
+            raise BusinessLogicError("报价单无有效明细数量，无法下推订单评审")
+
+        pushable_count = sum(
+            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+        )
+        return {
+            "target_type": "sales_review",
+            "summary": (
+                f"请确认将下推的报价明细（{pushable_count}/{len(preview_items)} 行可下推）"
+                if push_allowed
+                else "当前报价单不可下推订单评审"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": not push_allowed,
+            "blocking_reason": (
+                caps.convert_to_sales_review.reason if not push_allowed else None
+            ),
+            "tip": "确认后将按报价明细创建订单评审草稿；报价单状态不变，后续由订单评审下推销售订单。",
+        }
+
+    async def convert_to_sales_review(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+        created_by: int,
+        selected_item_ids: Optional[List[int]] = None,
+    ):
+        """
+        将报价单转为订单评审。
+
+        创建订单评审及明细，回写报价单 sales_review_id，建立关联；不改变报价单业务状态。
+        返回 (sales_review_response, quotation_response)
+        """
+        await self._detach_quotation_if_downstream_sales_order_deleted(
+            tenant_id, quotation_id, created_by, log_transition=False
+        )
+        await self._detach_quotation_if_contract_deleted(
+            tenant_id, quotation_id, created_by
+        )
+        await self._detach_quotation_if_sales_review_deleted(
+            tenant_id, quotation_id, created_by
+        )
+        quotation = await Quotation.get_or_none(
+            tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
+        )
+        if not quotation:
+            raise NotFoundError(f"报价单不存在: {quotation_id}")
+        conv_missing = await self._quotation_conversion_downstream_missing(
+            tenant_id, quotation
+        )
+        contract_missing = await self._quotation_contract_downstream_missing(
+            tenant_id, quotation
+        )
+        review_missing = await self._quotation_sales_review_downstream_missing(
+            tenant_id, quotation
+        )
+        await self._assert_quotation_capability(
+            tenant_id,
+            quotation,
+            "convert_to_sales_review",
+            conversion_downstream_missing=conv_missing,
+            contract_downstream_missing=contract_missing,
+            sales_review_downstream_missing=review_missing,
+        )
+        if quotation.sales_review_id and not review_missing:
+            raise BusinessLogicError("该报价单已关联订单评审，无法重复转换")
+
+        items = await QuotationItem.filter(
+            tenant_id=tenant_id, quotation_id=quotation_id
+        ).order_by("id")
+        if not items:
+            raise BusinessLogicError("报价单无明细，无法转为订单评审")
+
+        if selected_item_ids is not None:
+            selected_ids = {
+                int(v) for v in selected_item_ids if v is not None and str(v).strip()
+            }
+            if not selected_ids:
+                raise BusinessLogicError("未选择可转换的报价明细")
+            item_map = {int(it.id): it for it in items}
+            missing_ids = sorted([iid for iid in selected_ids if iid not in item_map])
+            if missing_ids:
+                raise BusinessLogicError(f"存在无效的报价明细ID: {missing_ids}")
+            items = [it for it in items if int(it.id) in selected_ids]
+            all_item_ids = {
+                int(it.id)
+                for it in await QuotationItem.filter(
+                    tenant_id=tenant_id, quotation_id=quotation_id
+                )
+            }
+            if selected_ids != all_item_ids:
+                raise BusinessLogicError(
+                    "报价单须整单下推订单评审，请在下推预览中确认全部可下推明细"
+                )
+
+        from apps.kuaizhizao.schemas.sales_review import (
+            SalesReviewCreate,
+            SalesReviewItemCreate,
+        )
+        from apps.kuaizhizao.services.sales_review_service import SalesReviewService
+
+        review_items = [
+            SalesReviewItemCreate(
+                material_id=it.material_id,
+                material_code=it.material_code or "",
+                material_name=it.material_name or "",
+                material_spec=it.material_spec,
+                material_unit=it.material_unit,
+                quantity=it.quote_quantity or Decimal("0"),
+                unit_price=it.unit_price or Decimal("0"),
+                notes=it.notes,
+            )
+            for it in items
+            if (it.quote_quantity or Decimal("0")) > 0
+        ]
+        if not review_items:
+            raise BusinessLogicError("报价单无有效明细数量，无法转为订单评审")
+
+        review_date = to_site_date(resolve_business_datetime())
+        project_name = (quotation.notes or "").strip()[:200] or f"报价 {quotation.quotation_code}"
+        create_data = SalesReviewCreate(
+            customer_id=quotation.customer_id,
+            customer_name=quotation.customer_name,
+            customer_contact=quotation.customer_contact,
+            customer_phone=quotation.customer_phone,
+            project_name=project_name,
+            review_date=review_date,
+            delivery_date=quotation.delivery_date,
+            payment_cycle=quotation.payment_terms,
+            delivery_location=quotation.shipping_address,
+            transport_method=quotation.shipping_method,
+            remarks=quotation.notes,
+            quotation_id=quotation_id,
+            quotation_code=quotation.quotation_code,
+            salesman_id=quotation.salesman_id,
+            salesman_name=quotation.salesman_name,
+            items=review_items,
+        )
+        user = await User.get_or_none(id=created_by)
+        if not user:
+            raise NotFoundError(f"用户不存在: {created_by}")
+        review = await SalesReviewService().create(tenant_id, create_data, user)
+
+        await Quotation.filter(id=quotation_id).update(
+            sales_review_id=review.id,
+            sales_review_code=review.review_code,
+            updated_by=created_by,
+        )
+
+        try:
+            from apps.kuaizhizao.services.document_relation_new_service import (
+                DocumentRelationNewService,
+            )
+            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+            await DocumentRelationNewService().create_relation(
+                tenant_id=tenant_id,
+                relation_data=DocumentRelationCreate(
+                    source_type="quotation",
+                    source_id=quotation_id,
+                    source_code=quotation.quotation_code,
+                    source_name=quotation.quotation_code,
+                    target_type="sales_review",
+                    target_id=review.id,
+                    target_code=review.review_code,
+                    target_name=review.project_name or review.review_code,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc="报价单下推订单评审",
+                ),
+                created_by=created_by,
+            )
+        except BusinessLogicError:
+            pass
+        except Exception as e:
+            logger.warning("建立报价单-订单评审关联失败: %s", e)
+
+        quotation_updated = await self.get_quotation_by_id(
+            tenant_id, quotation_id, include_items=True
+        )
+        return review, quotation_updated

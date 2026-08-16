@@ -112,9 +112,15 @@ def apply_phrase_glossary(text: str | None, glossary: dict[str, str]) -> str:
     return text
 
 
-def to_traditional(text: str, tw_phrases: dict[str, str]) -> str:
-    converted = OPENCC.convert(text)
-    return apply_phrase_glossary(converted, tw_phrases)
+def to_traditional(
+    text: str,
+    tw_phrases: dict[str, str],
+    tw_post: dict[str, str] | None = None,
+) -> str:
+    # 先按简体词条换成台湾用词，再 OpenCC；最后用繁体词条兜住转换残留。
+    pre = apply_phrase_glossary(text, tw_phrases)
+    converted = OPENCC.convert(pre)
+    return apply_phrase_glossary(converted, tw_post or {})
 
 
 def protect_placeholders(text: str) -> tuple[str, list[str]]:
@@ -233,10 +239,16 @@ def write_generated_ts(path: Path, module: str, lang: str, entries: dict[str, st
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
-def build_value_map(lang: str, source_entries: dict[str, str], translator: Translator | None, tw_phrases: dict[str, str]) -> dict[str, str]:
+def build_value_map(
+    lang: str,
+    source_entries: dict[str, str],
+    translator: Translator | None,
+    tw_phrases: dict[str, str],
+    tw_post: dict[str, str] | None = None,
+) -> dict[str, str]:
     unique_values = list(dict.fromkeys(source_entries.values()))
     if lang == "zh-Hant":
-        value_map = {v: to_traditional(v, tw_phrases) for v in unique_values}
+        value_map = {v: to_traditional(v, tw_phrases, tw_post) for v in unique_values}
     else:
         assert translator is not None
         value_map = translator.translate_many(unique_values)
@@ -311,7 +323,13 @@ def transform_login_locale(lang: str, cfg: dict, value_by_source: dict[str, str]
     print(f"  wrote {dst_path.relative_to(ROOT)}")
 
 
-def generate_generated_modules(lang: str, cfg: dict, tw_phrases: dict[str, str], translators: dict[str, Translator]) -> None:
+def generate_generated_modules(
+    lang: str,
+    cfg: dict,
+    tw_phrases: dict[str, str],
+    translators: dict[str, Translator],
+    tw_post: dict[str, str] | None = None,
+) -> None:
     src_gen = cfg["source_generated"]
     for module in GENERATED_MODULES:
         src_path = LOCALES / "generated" / module / f"{src_gen}.ts"
@@ -320,7 +338,7 @@ def generate_generated_modules(lang: str, cfg: dict, tw_phrases: dict[str, str],
             continue
         entries = parse_generated_ts(src_path)
         if lang == "zh-Hant":
-            mapped = {k: to_traditional(v, tw_phrases) for k, v in entries.items()}
+            mapped = {k: to_traditional(v, tw_phrases, tw_post) for k, v in entries.items()}
         else:
             tr = translators[lang]
             unique = list(dict.fromkeys(entries.values()))
@@ -335,6 +353,7 @@ def generate_lang(lang: str, workers: int) -> None:
     cfg = LANG_CONFIG[lang]
     print(f"\n=== {lang} ===")
     tw_phrases = load_json(GLOSSARY_DIR / "zh_tw_phrases.json")
+    tw_post = load_json(GLOSSARY_DIR / "zh_tw_post_glossary.json") if lang == "zh-Hant" else {}
 
     translators: dict[str, Translator] = {}
     if lang != "zh-Hant":
@@ -350,12 +369,12 @@ def generate_lang(lang: str, workers: int) -> None:
     login_entries = parse_locale_entries(LOCALES / cfg["source_login"])
 
     tr = translators.get(lang)
-    main_value_map = build_value_map(lang, main_entries, tr, tw_phrases)
-    login_value_map = build_value_map(lang, login_entries, tr, tw_phrases)
+    main_value_map = build_value_map(lang, main_entries, tr, tw_phrases, tw_post)
+    login_value_map = build_value_map(lang, login_entries, tr, tw_phrases, tw_post)
 
     transform_main_locale(lang, cfg, main_value_map)
     transform_login_locale(lang, cfg, login_value_map)
-    generate_generated_modules(lang, cfg, tw_phrases, translators)
+    generate_generated_modules(lang, cfg, tw_phrases, translators, tw_post)
 
     if tr:
         tr.flush()

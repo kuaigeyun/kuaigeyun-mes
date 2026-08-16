@@ -1,6 +1,7 @@
 import React from 'react';
-import { Tag } from 'antd';
 import type { TFunction } from 'i18next';
+import { renderPullQueryDocStatus } from '../../../../../components/uni-pull-query';
+import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 import { formatQuantity } from '../../../../../utils/format';
 
 export function formatPullPercent(done: unknown, total: unknown): string {
@@ -19,7 +20,7 @@ export function renderLifecycleSubStageTag(
   stageKey: string,
 ): React.ReactNode {
   const stage = subStages?.find((s) => s.key === stageKey);
-  if (!stage?.label) return <Tag>—</Tag>;
+  if (!stage?.label) return '—';
   const color = stage.status === 'done' ? 'success' : stage.status === 'active' ? 'processing' : 'default';
   const suffix =
     stage.status === 'done'
@@ -27,7 +28,7 @@ export function renderLifecycleSubStageTag(
       : stage.status === 'active'
         ? t('app.kuaizhizao.warehouseInbound.pull.lifecycle.active')
         : t('app.kuaizhizao.warehouseInbound.pull.lifecycle.pending');
-  return <Tag color={color}>{`${stage.label} ${suffix}`}</Tag>;
+  return <StatusTag color={color}>{`${stage.label} ${suffix}`}</StatusTag>;
 }
 
 export function renderPullableTag(
@@ -36,7 +37,11 @@ export function renderPullableTag(
   doneLabel?: string,
 ): React.ReactNode {
   if (pullable === false) {
-    return <Tag color="default">{t('app.kuaizhizao.warehouseInbound.pull.noPullableQty')}</Tag>;
+    return <MarkerTag color="default">{t('app.kuaizhizao.warehouseInbound.pull.noPullableQty')}</MarkerTag>;
   }
-  return <Tag color="success">{doneLabel ?? t('app.kuaizhizao.warehouseInbound.pull.pullable')}</Tag>;
+  return <MarkerTag color="success">{doneLabel ?? t('app.kuaizhizao.warehouseInbound.pull.pullable')}</MarkerTag>;
+}
+
+export function renderPullDocStatus(t: TFunction, value: unknown): React.ReactNode {
+  return renderPullQueryDocStatus(t, value);
 }

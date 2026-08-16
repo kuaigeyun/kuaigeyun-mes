@@ -89,6 +89,12 @@ function normalizeMaterialRow(item: Material): Material {
   if (row.variantAttributes === undefined && row.variant_attributes !== undefined) {
     row.variantAttributes = row.variant_attributes
   }
+  if (row.mainCodeEditable === undefined && row.main_code_editable !== undefined) {
+    row.mainCodeEditable = row.main_code_editable
+  }
+  if (row.mainCodeLockReason === undefined && row.main_code_lock_reason !== undefined) {
+    row.mainCodeLockReason = row.main_code_lock_reason
+  }
   return row as Material
 }
 
@@ -1041,7 +1047,7 @@ export const bomApi = {
    */
   whereUsed: async (
     materialId: number,
-    options?: { recursive?: boolean; includeObsolete?: boolean },
+    options?: { recursive?: boolean; includeObsolete?: boolean; topLevelOnly?: boolean },
   ): Promise<BOMWhereUsedResult> => {
     const raw = await api.get<Record<string, any>>(
       `/apps/master-data/materials/bom/component/${materialId}/where-used`,
@@ -1049,6 +1055,7 @@ export const bomApi = {
         params: {
           recursive: options?.recursive ?? false,
           include_obsolete: options?.includeObsolete ?? false,
+          top_level_only: options?.topLevelOnly ?? false,
         },
       },
     );
@@ -1058,6 +1065,7 @@ export const bomApi = {
       componentCode: raw?.component_code ?? raw?.componentCode,
       componentName: raw?.component_name ?? raw?.componentName,
       recursive: !!(raw?.recursive),
+      topLevelOnly: !!(raw?.top_level_only ?? raw?.topLevelOnly),
       total: raw?.total ?? items.length,
       items: items.map((item: any) => ({
         bomId: item.bom_id ?? item.bomId,
@@ -1073,6 +1081,8 @@ export const bomApi = {
         isDefault: !!(item.is_default ?? item.isDefault),
         isObsolete: !!(item.is_obsolete ?? item.isObsolete),
         bomCode: item.bom_code ?? item.bomCode,
+        level: item.level != null ? Number(item.level) : undefined,
+        path: item.path ?? null,
       })),
     };
   },

@@ -42,10 +42,18 @@ def process_file(path: Path, glossary: dict[str, str]) -> int:
 
 
 def main() -> None:
-    targets = {
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--langs", default="zh-Hant,ja-JP,vi-VN")
+    args = parser.parse_args()
+    all_targets = {
+        "zh-Hant": load_json(GLOSSARY_DIR / "zh_tw_post_glossary.json"),
         "ja-JP": load_json(GLOSSARY_DIR / "ja_post_glossary.json"),
         "vi-VN": load_json(GLOSSARY_DIR / "vi_post_glossary.json"),
     }
+    wanted = {x.strip() for x in args.langs.split(",") if x.strip()}
+    targets = {k: v for k, v in all_targets.items() if k in wanted}
     for lang, glossary in targets.items():
         total = 0
         for path in (FRONTEND / "src" / "locales").rglob(f"{lang}*.ts"):

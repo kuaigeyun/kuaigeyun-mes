@@ -130,7 +130,7 @@ const MaintenanceExecutionsPage: React.FC = () => {
             <Typography.Link
               onClick={() =>
                 navigate(
-                  `${ROUTES.EQUIPMENT_FAULTS}?keyword=${encodeURIComponent(r.source_uuid!)}`,
+                  `${ROUTES.EQUIPMENT_FAULTS}?uuid=${encodeURIComponent(r.source_uuid!)}`,
                 )
               }
             >
@@ -248,7 +248,7 @@ const MaintenanceExecutionsPage: React.FC = () => {
               onClick={(e) => {
                 e.stopPropagation();
                 navigate(
-                  `${ROUTES.EQUIPMENT_FAULTS}?keyword=${encodeURIComponent(r.source_uuid!)}`,
+                  `${ROUTES.EQUIPMENT_FAULTS}?uuid=${encodeURIComponent(r.source_uuid!)}`,
                 );
               }}
             >

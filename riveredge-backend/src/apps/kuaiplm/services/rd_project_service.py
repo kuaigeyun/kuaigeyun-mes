@@ -58,7 +58,6 @@ from apps.kuaiplm.schemas.rd_project import (
     RdProjectUpdate,
     RdProjectWorkbenchResponse,
     RelatedArticleSummary,
-    SpawnDeliveryProjectRequest,
 )
 from apps.kuaiplm.services.plm_list_core import (
     RD_PROJECT_SORT_DB_COLS,
@@ -510,17 +509,6 @@ class RdProjectService(AppBaseService[RdProject]):
             )
             return self._to_project_response(project, source_codes, gates_by_project)
 
-    async def spawn_delivery_project(
-        self,
-        tenant_id: int,
-        source_project_id: int,
-        data: SpawnDeliveryProjectRequest,
-        created_by: int,
-    ) -> RdProjectResponse:
-        raise BusinessLogicError(
-            "交付项目已并入研发项目后续门禁，请直接在研发项目中继续量产爬坡及后续阶段"
-        )
-
     async def update_project(
         self, tenant_id: int, project_id: int, data: RdProjectUpdate, updated_by: int
     ) -> RdProjectResponse:
@@ -556,6 +544,37 @@ class RdProjectService(AppBaseService[RdProject]):
 
     # ---------- Gates ----------
 
+    async def _assert_previous_gate_passed(
+        self, tenant_id: int, project_id: int, gate: RdProjectGate
+    ) -> None:
+        gates = await RdProjectGate.filter(
+            tenant_id=tenant_id, project_id=project_id
+        ).order_by("sort_order", "id").all()
+        for item in gates:
+            if item.id == gate.id:
+                return
+            if item.status not in (
+                RdGateStatus.PASSED.value,
+                RdGateStatus.SKIPPED.value,
+            ):
+                raise BusinessLogicError(
+                    f"请先完成上一阶段门：{item.gate_name or item.gate_key}"
+                )
+
+    async def _resolve_current_gate_key_after_pass(
+        self, tenant_id: int, project_id: int
+    ) -> Optional[str]:
+        gates = await RdProjectGate.filter(
+            tenant_id=tenant_id, project_id=project_id
+        ).order_by("sort_order", "id").all()
+        for item in gates:
+            if item.status not in (
+                RdGateStatus.PASSED.value,
+                RdGateStatus.SKIPPED.value,
+            ):
+                return item.gate_key
+        return gates[-1].gate_key if gates else None
+
     async def update_gate(
         self, tenant_id: int, project_id: int, gate_id: int, data: RdProjectGateUpdate, user_id: int
     ) -> RdProjectGateResponse:
@@ -564,6 +583,7 @@ class RdProjectService(AppBaseService[RdProject]):
         if not gate:
             raise NotFoundError(f"阶段门不存在: {gate_id}")
         if data.status == RdGateStatus.PASSED.value:
+            await self._assert_previous_gate_passed(tenant_id, project_id, gate)
             await self._assert_gate_deliverables_ready(tenant_id, project_id, gate_id)
         update_fields = {}
         for field in (
@@ -580,8 +600,9 @@ class RdProjectService(AppBaseService[RdProject]):
         if data.status == RdGateStatus.PASSED.value:
             project = await RdProject.get(id=project_id)
             user_info = await self.get_user_info(user_id)
+            next_gate_key = await self._resolve_current_gate_key_after_pass(tenant_id, project_id)
             await project.update_from_dict({
-                "current_gate_key": gate.gate_key,
+                "current_gate_key": next_gate_key,
                 "updated_by": user_id,
                 "updated_by_name": user_info["name"],
             }).save()

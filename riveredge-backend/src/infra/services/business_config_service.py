@@ -235,6 +235,7 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
     "parameters.sales.contract_expiry_alert_days": {"type": "number", "min": 1, "max": 365},
     "parameters.sales.contract_auto_close_on_full_release": {"type": "boolean"},
     "parameters.sales.contract_milestone_required": {"type": "boolean"},
+    "parameters.sales.sales_review": {"type": "object"},
     "parameters.automation.push_default_mode": {
         "type": "select",
         "options": [
@@ -248,6 +249,23 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
             },
         ],
     },
+    "parameters.warehouse.fifo_mode": {
+        "type": "select",
+        "options": [
+            {
+                "value": "batch_id",
+                "labelKey": "pages.system.configCenter.param.warehouse_fifo_mode_opt_batch_id",
+            },
+            {
+                "value": "production_date",
+                "labelKey": "pages.system.configCenter.param.warehouse_fifo_mode_opt_production_date",
+            },
+            {
+                "value": "expiry_date",
+                "labelKey": "pages.system.configCenter.param.warehouse_fifo_mode_opt_expiry_date",
+            },
+        ],
+    },
 }
 
 
@@ -258,6 +276,7 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
 # 流程设置：企业流程控制（流转、领料确认等；单据是否人工审核由「审批流程 ApprovalProcess」单独管理）
 PROCESS_KEYS = {
     "parameters.procurement.require_purchase_requisition",
+    "parameters.procurement.require_supplier_qualification",
     "parameters.work_order.picking_issue_strategy",
     "parameters.work_order.picking_confirm_warehouse_only",
     "parameters.work_order.picking_confirm_allowed_role_codes",
@@ -290,6 +309,7 @@ PARAMETER_KEYS = {
     "parameters.warehouse.serial_management",
     "parameters.warehouse.multi_unit",
     "parameters.warehouse.fifo",
+    "parameters.warehouse.fifo_mode",
     "parameters.warehouse.lifo",
     "parameters.warehouse.location_management",
     "parameters.warehouse.auto_outbound",
@@ -323,6 +343,7 @@ PARAMETER_KEYS = {
     "parameters.sales.contract_expiry_alert_days",
     "parameters.sales.contract_auto_close_on_full_release",
     "parameters.sales.contract_milestone_required",
+    "parameters.sales.sales_review",
     "parameters.automation.push_default_mode",
 }
 
@@ -333,6 +354,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.common.price_decimal_places",
     "parameters.common.amount_decimal_places",
     "parameters.procurement.require_purchase_requisition",
+    "parameters.procurement.require_supplier_qualification",
     "parameters.work_order.picking_issue_strategy",
     "parameters.work_order.picking_confirm_warehouse_only",
     "parameters.work_order.picking_confirm_allowed_role_codes",
@@ -356,6 +378,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.warehouse.batch_management",
     "parameters.warehouse.serial_management",
     "parameters.warehouse.fifo",
+    "parameters.warehouse.fifo_mode",
     "parameters.warehouse.lifo",
     "parameters.warehouse.location_management",
     "parameters.warehouse.auto_outbound",
@@ -389,6 +412,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.sales.contract_expiry_alert_days",
     "parameters.sales.contract_auto_close_on_full_release",
     "parameters.sales.contract_milestone_required",
+    "parameters.sales.sales_review",
     "parameters.automation.push_default_mode",
 }
 
@@ -480,6 +504,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "serial_management": True,
         "multi_unit": True,
         "fifo": True,
+        "fifo_mode": "batch_id",
         "lifo": False,
         "location_management": False,
         "auto_outbound": True,
@@ -507,6 +532,9 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "contract_expiry_alert_days": 30,
         "contract_auto_close_on_full_release": True,
         "contract_milestone_required": False,
+        "sales_review": {
+            "dept_bindings": {},
+        },
     },
     "purchase": {
         "auto_approval": False,
@@ -517,6 +545,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
     },
     "procurement": {
         "require_purchase_requisition": False,
+        "require_supplier_qualification": False,
     },
     "planning": {
         "auto_push_sales_to_computation_on_approve": False,

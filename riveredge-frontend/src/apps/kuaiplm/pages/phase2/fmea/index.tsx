@@ -25,7 +25,9 @@ import {
   updateFmeaRecord,
   type RdFmeaRecord,
 } from '../../../services/phase2';
+import Phase2ProjectSelect from '../../../components/Phase2ProjectSelect';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { testGenerateCode } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
@@ -46,9 +48,28 @@ import {
 
 const PAGE_CODE = 'kuaiplm-fmea';
 
+function parseRiskItemsInput(raw: unknown, invalidMessage: string): unknown[] | undefined {
+  if (raw == null || raw === '') return undefined;
+  if (Array.isArray(raw)) return raw;
+  try {
+    const parsed = JSON.parse(String(raw));
+    if (!Array.isArray(parsed)) throw new Error('invalid');
+    return parsed;
+  } catch {
+    throw new Error(invalidMessage);
+  }
+}
+
+function formatRiskItemsForForm(record?: RdFmeaRecord | null): string {
+  if (!record?.risk_items) return '';
+  if (typeof record.risk_items === 'string') return record.risk_items;
+  return JSON.stringify(record.risk_items, null, 2);
+}
+
 const FmeaPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
+  const perms = useResourcePermissions('kuaiplm.fmea');
   const [searchParams] = useSearchParams();
   const filterProjectId = searchParams.get('project_id')
     ? Number(searchParams.get('project_id'))
@@ -168,6 +189,13 @@ const FmeaPage: React.FC = () => {
         hideInSearch: true,
       },
       {
+        title: t('app.kuaiplm.phase2.requirements.columns.project'),
+        dataIndex: 'project_name',
+        width: 140,
+        hideInSearch: true,
+        ellipsis: true,
+      },
+      {
         title: t('app.kuaiplm.phase2.fmea.columns.type'),
         dataIndex: 'fmea_type',
         width: 100,
@@ -281,7 +309,7 @@ const FmeaPage: React.FC = () => {
             return { data: [], total: 0, success: false };
           }
         }}
-        showCreateButton
+        showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaiplm.phase2.fmea.createButton') + NEW_SHORTCUT_HINT}
         onCreate={handleCreate}
         showDeleteButton
@@ -321,10 +349,20 @@ const FmeaPage: React.FC = () => {
           setPreviewCode(null);
         }}
         onFinish={async (values) => {
-          await createFmeaRecord({
-            ...values,
-            project_id: filterProjectId,
-          });
+          try {
+            const { risk_items_json, ...rest } = values as Record<string, unknown>;
+            await createFmeaRecord({
+              ...rest,
+              project_id: (rest.project_id as number | undefined) ?? filterProjectId,
+              risk_items: parseRiskItemsInput(
+                risk_items_json,
+                t('app.kuaiplm.phase2.fmea.form.riskItemsInvalid'),
+              ),
+            });
+          } catch (error: unknown) {
+            messageApi.error(error instanceof Error ? error.message : t('common.saveFailed'));
+            return;
+          }
           messageApi.success(t('common.createSuccess'));
           setCreateOpen(false);
           setPreviewCode(null);
@@ -343,6 +381,7 @@ const FmeaPage: React.FC = () => {
           }
         />
         <ProFormText name="title" label={t('app.kuaiplm.phase2.fmea.form.title')} rules={[{ required: true }]} />
+        <Phase2ProjectSelect initialValue={filterProjectId} />
         <ProFormSelect
           name="fmea_type"
           label={t('app.kuaiplm.phase2.fmea.form.fmeaType')}
@@ -353,7 +392,12 @@ const FmeaPage: React.FC = () => {
         />
         <ProFormText name="material_code" label={t('app.kuaiplm.phase2.fmea.form.materialCode')} />
         <ProFormText name="material_name" label={t('app.kuaiplm.phase2.fmea.form.materialName')} />
-        <ProFormTextArea name="description" label={t('app.kuaiplm.phase2.fmea.form.description')} />
+        <ProFormTextArea
+          name="risk_items_json"
+          label={t('app.kuaiplm.phase2.fmea.form.riskItems')}
+          extra={t('app.kuaiplm.phase2.fmea.form.riskItemsHint')}
+          fieldProps={{ rows: 6 }}
+        />
       </FormModalTemplate>
 
       <FormModalTemplate
@@ -361,16 +405,33 @@ const FmeaPage: React.FC = () => {
         open={!!editingRecord}
         onClose={() => setEditingRecord(null)}
         isEdit
-        initialValues={editingRecord || {}}
+        initialValues={
+          editingRecord
+            ? { ...editingRecord, risk_items_json: formatRiskItemsForForm(editingRecord) }
+            : {}
+        }
         onFinish={async (values) => {
           if (!editingRecord?.id) return;
-          await updateFmeaRecord(editingRecord.id, values);
+          try {
+            const { risk_items_json, ...rest } = values as Record<string, unknown>;
+            await updateFmeaRecord(editingRecord.id, {
+              ...rest,
+              risk_items: parseRiskItemsInput(
+                risk_items_json,
+                t('app.kuaiplm.phase2.fmea.form.riskItemsInvalid'),
+              ),
+            });
+          } catch (error: unknown) {
+            messageApi.error(error instanceof Error ? error.message : t('common.saveFailed'));
+            return;
+          }
           messageApi.success(t('common.updateSuccess'));
           setEditingRecord(null);
           actionRef.current?.reload();
         }}
       >
         <ProFormText name="title" label={t('app.kuaiplm.phase2.fmea.form.title')} rules={[{ required: true }]} />
+        <Phase2ProjectSelect />
         <ProFormSelect
           name="fmea_type"
           label={t('app.kuaiplm.phase2.fmea.form.fmeaType')}
@@ -386,7 +447,11 @@ const FmeaPage: React.FC = () => {
         />
         <ProFormText name="material_code" label={t('app.kuaiplm.phase2.fmea.form.materialCode')} />
         <ProFormText name="material_name" label={t('app.kuaiplm.phase2.fmea.form.materialName')} />
-        <ProFormTextArea name="description" label={t('app.kuaiplm.phase2.fmea.form.description')} />
+        <ProFormTextArea
+          name="risk_items_json"
+          label={t('app.kuaiplm.phase2.fmea.form.riskItems')}
+          fieldProps={{ rows: 6 }}
+        />
       </FormModalTemplate>
 
       <FormModalTemplate
@@ -394,7 +459,11 @@ const FmeaPage: React.FC = () => {
         open={!!detailRecord}
         onClose={() => setDetailRecord(null)}
         readOnly
-        initialValues={detailRecord || {}}
+        initialValues={
+          detailRecord
+            ? { ...detailRecord, risk_items_json: formatRiskItemsForForm(detailRecord) }
+            : {}
+        }
         onFinish={async () => {}}
       >
         <ProFormText name="fmea_code" label={t('app.kuaiplm.phase2.fmea.columns.code')} />

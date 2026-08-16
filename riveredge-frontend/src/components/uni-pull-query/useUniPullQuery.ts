@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { isPullableScope } from './pullScope';
 import type { UniPullQueryLoadParams, UseUniPullQueryOptions } from './types';
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -43,6 +44,8 @@ export function useUniPullQuery<T extends object>(options: UseUniPullQueryOption
   const [total, setTotal] = useState(0);
   const [dataSource, setDataSource] = useState<T[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const selectedRowsByKeyRef = useRef<Map<React.Key, T>>(new Map());
+  const [selectedRowsVersion, setSelectedRowsVersion] = useState(0);
 
   const fetchSeqRef = useRef(0);
   const hasScope = scopeOptions != null && scopeOptions.length > 0;
@@ -66,8 +69,17 @@ export function useUniPullQuery<T extends object>(options: UseUniPullQueryOption
         if (seq !== fetchSeqRef.current) {
           return;
         }
-        setDataSource(result.data);
-        setTotal(result.total);
+        let nextData = result.data;
+        let nextTotal = result.total;
+        if (hasScope && isRowDisabled && isPullableScope(params.scope)) {
+          const visible = nextData.filter((row) => !isRowDisabled(row));
+          if (visible.length !== nextData.length) {
+            nextTotal = Math.max(0, nextTotal - (nextData.length - visible.length));
+            nextData = visible;
+          }
+        }
+        setDataSource(nextData);
+        setTotal(nextTotal);
       } catch {
         if (seq !== fetchSeqRef.current) {
           return;
@@ -80,7 +92,7 @@ export function useUniPullQuery<T extends object>(options: UseUniPullQueryOption
         }
       }
     },
-    [loadData],
+    [hasScope, isRowDisabled, loadData],
   );
 
   const reloadCurrent = useCallback(() => {
@@ -94,6 +106,8 @@ export function useUniPullQuery<T extends object>(options: UseUniPullQueryOption
     setPage(1);
     setTotal(0);
     setSelectedRowKeys([]);
+    selectedRowsByKeyRef.current = new Map();
+    setSelectedRowsVersion((v) => v + 1);
     setDataSource([]);
     setOpen(true);
     onOpen?.();
@@ -134,6 +148,8 @@ export function useUniPullQuery<T extends object>(options: UseUniPullQueryOption
       setScope(nextScope);
       setPage(1);
       setSelectedRowKeys([]);
+      selectedRowsByKeyRef.current = new Map();
+      setSelectedRowsVersion((v) => v + 1);
       void load({
         keyword: appliedKeyword,
         page: 1,
@@ -152,15 +168,41 @@ export function useUniPullQuery<T extends object>(options: UseUniPullQueryOption
     [appliedKeyword, buildLoadParams, load],
   );
 
-  const handleSelectedRowKeysChange = useCallback((keys: React.Key[], rows: T[]) => {
-    setSelectedRowKeys(keys);
-    void rows;
-  }, []);
+  const handleSelectedRowKeysChange = useCallback(
+    (keys: React.Key[], rows: T[]) => {
+      const next = new Map(selectedRowsByKeyRef.current);
+      const keySet = new Set(keys);
+      for (const existing of [...next.keys()]) {
+        if (!keySet.has(existing)) next.delete(existing);
+      }
+      for (const row of rows) {
+        next.set(resolveRowKey(row, rowKey), row);
+      }
+      selectedRowsByKeyRef.current = next;
+      setSelectedRowKeys(keys);
+      setSelectedRowsVersion((v) => v + 1);
+    },
+    [rowKey],
+  );
+
+  const removeSelectedKey = useCallback(
+    (key: React.Key) => {
+      const nextKeys = selectedRowKeys.filter((item) => item !== key);
+      const next = new Map(selectedRowsByKeyRef.current);
+      next.delete(key);
+      selectedRowsByKeyRef.current = next;
+      setSelectedRowKeys(nextKeys);
+      setSelectedRowsVersion((v) => v + 1);
+    },
+    [selectedRowKeys],
+  );
 
   const selectedRows = useMemo(
     () =>
-      dataSource.filter((row) => selectedRowKeys.includes(resolveRowKey(row, rowKey))),
-    [dataSource, rowKey, selectedRowKeys],
+      selectedRowKeys
+        .map((key) => selectedRowsByKeyRef.current.get(key))
+        .filter((row): row is T => row != null),
+    [selectedRowKeys, selectedRowsVersion],
   );
 
   const hasDisabledSelection = useMemo(
@@ -201,6 +243,7 @@ export function useUniPullQuery<T extends object>(options: UseUniPullQueryOption
     handleSearchClear,
     handlePageChange,
     handleSelectedRowKeysChange,
+    removeSelectedKey,
     handleConfirm,
     selectionType,
     isRowDisabled,

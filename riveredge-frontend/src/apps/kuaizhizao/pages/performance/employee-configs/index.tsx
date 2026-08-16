@@ -48,12 +48,16 @@ import {
   resolveEmployeeConfigListParams,
 } from '../../../utils/performanceListCore';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+
+const CONFIG_RESOURCE = 'kuaizhizao:performance-employee-configs';
 
 const EmployeeConfigsPage: React.FC = () => {
   const { t } = useTranslation();
   const { token } = AntdTheme.useToken();
   const detailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
+  const configPerms = useResourcePermissions(CONFIG_RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
   const [modalVisible, setModalVisible] = useState(false);
@@ -269,22 +273,28 @@ const EmployeeConfigsPage: React.FC = () => {
         hideInSearch: true,
         render: (_, record) => (
           <Space>
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-              {t('app.kuaizhizao.performance.common.actions.detail')}
-            </Button>
-            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-              {t('app.kuaizhizao.performance.common.actions.edit')}
-            </Button>
-            <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.employeeConfigs.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
-              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                {t('app.kuaizhizao.performance.common.actions.delete')}
+            {configPerms.canRead ? (
+              <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
+                {t('app.kuaizhizao.performance.common.actions.detail')}
               </Button>
-            </Popconfirm>
+            ) : null}
+            {configPerms.canUpdate ? (
+              <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
+                {t('app.kuaizhizao.performance.common.actions.edit')}
+              </Button>
+            ) : null}
+            {configPerms.canDelete ? (
+              <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.employeeConfigs.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+                <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                  {t('app.kuaizhizao.performance.common.actions.delete')}
+                </Button>
+              </Popconfirm>
+            ) : null}
           </Space>
         ),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [t, calcModeOptions],
+    [t, calcModeOptions, configPerms],
   );
 
   return (
@@ -316,8 +326,8 @@ const EmployeeConfigsPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          enableRowSelection={true}
-          showDeleteButton={true}
+          enableRowSelection={configPerms.canDelete}
+          showDeleteButton={configPerms.canDelete}
           onDelete={async (keys) => {
             try {
               for (const id of keys) {
@@ -330,7 +340,7 @@ const EmployeeConfigsPage: React.FC = () => {
             }
           }}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.performance.employeeConfigs.messages.deleteBatchConfirm', { count })}
-          showCreateButton
+          showCreateButton={configPerms.canCreate}
           createButtonText={t('app.kuaizhizao.performance.employeeConfigs.createButton')}
           onCreate={handleCreate}
         />
@@ -425,7 +435,7 @@ const EmployeeConfigsPage: React.FC = () => {
         }}
         detail={detail}
         detailColumns={detailColumns}
-        extra={buildDetailDrawerEditExtra(t, Boolean(detail), () => {
+        extra={buildDetailDrawerEditExtra(t, Boolean(detail && configPerms.canUpdate), () => {
           if (!detail) return;
           setEditId(detail.id);
           setModalVisible(true);

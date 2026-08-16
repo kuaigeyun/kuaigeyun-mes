@@ -5,6 +5,209 @@
 import { apiRequest } from '../../../services/api';
 import type { SalesReturnListParams, SalesReturnListResult } from './sales-return';
 
+export type PurchaseReturnPullLine = {
+  id: number;
+  order_id: number;
+  order_code?: string;
+  supplier_id?: number;
+  supplier_name?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+  required_date?: string | null;
+};
+
+export type SalesReturnOrderPullLine = {
+  id: number;
+  sales_order_id: number;
+  order_code?: string;
+  customer_id?: number;
+  customer_name?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+  required_date?: string | null;
+};
+
+export type PurchaseReceiptOrderPullLine = {
+  id: number;
+  order_id: number;
+  order_code?: string;
+  supplier_id?: number;
+  supplier_name?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+  required_date?: string | null;
+};
+
+export type PurchaseReceiptNoticePullLine = {
+  id: number;
+  notice_id: number;
+  notice_code?: string;
+  purchase_order_id?: number;
+  purchase_order_code?: string;
+  supplier_id?: number;
+  supplier_name?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+};
+
+export type SalesDeliveryOrderPullLine = {
+  id: number;
+  sales_order_id: number;
+  order_code?: string;
+  customer_id?: number;
+  customer_name?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+  required_date?: string | null;
+};
+
+export type SalesDeliveryNoticePullLine = {
+  id: number;
+  notice_id: number;
+  notice_code?: string;
+  sales_order_id?: number;
+  sales_order_code?: string;
+  customer_id?: number;
+  customer_name?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+};
+
+export type WorkOrderFinishedGoodsPullLine = {
+  id: number;
+  work_order_id: number;
+  work_order_code?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+};
+
+export type ProductionReturnPullLine = {
+  id: number;
+  work_order_id: number;
+  work_order_code?: string;
+  picking_id?: number;
+  picking_code?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+};
+
+export type WorkOrderPickingPullLine = {
+  id: number;
+  work_order_id: number;
+  work_order_code?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+};
+
+export type OutsourceIssuePullLine = {
+  id: number;
+  outsource_work_order_id: number;
+  outsource_work_order_code?: string;
+  supplier_name?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+};
+
+export type OutsourceInboundPullLine = {
+  id: number;
+  outsource_work_order_id: number;
+  outsource_work_order_code?: string;
+  supplier_name?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+  pull_type?: string;
+};
+
+type PullCreateResult = {
+  success: boolean;
+  message: string;
+};
+
+export type SalesReturnDeliveryPullLine = {
+  id: number;
+  sales_delivery_id: number;
+  delivery_code?: string;
+  sales_order_id?: number | null;
+  sales_order_code?: string | null;
+  customer_id?: number;
+  customer_name?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+  required_date?: string | null;
+};
+
 /** 销售出库确认前 OQC ensure 结果 */
 export interface EnsureOqcForSalesDeliveryLineSummary {
   delivery_item_id: number;
@@ -82,6 +285,19 @@ export const warehouseApi = {
     /** 获取仓库主动备料提醒列表 */
     getMaterialPrepReminders: async (params?: { skip?: number; limit?: number }) =>
       apiRequest('/apps/kuaizhizao/production-pickings/material-prep-reminders', { method: 'GET', params }),
+    listWorkOrderPullLines: async (params: {
+      skip?: number;
+      limit?: number;
+      keyword?: string;
+      work_order_id?: number;
+      pullable_only?: boolean;
+    }): Promise<{ data: WorkOrderPickingPullLine[]; total: number }> =>
+      apiRequest('/apps/kuaizhizao/production-pickings/work-order-pull-lines', { method: 'GET', params }),
+    pullFromWorkOrderItems: async (selectedItemIds: number[]): Promise<PullCreateResult> =>
+      apiRequest('/apps/kuaizhizao/production-pickings/pull-from-work-order-items', {
+        method: 'POST',
+        data: { selected_item_ids: selectedItemIds },
+      }),
   },
   productionReturn: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/production-returns', { method: 'GET', params }),
@@ -96,6 +312,19 @@ export const warehouseApi = {
       apiRequest('/apps/kuaizhizao/production-returns/work-order-preview', {
         method: 'GET',
         params: { work_order_id: workOrderId },
+      }),
+    listPickingItemPullLines: async (params: {
+      skip?: number;
+      limit?: number;
+      keyword?: string;
+      work_order_id?: number;
+      pullable_only?: boolean;
+    }): Promise<{ data: ProductionReturnPullLine[]; total: number }> =>
+      apiRequest('/apps/kuaizhizao/production-returns/picking-item-pull-lines', { method: 'GET', params }),
+    pullFromPickingItems: async (selectedItemIds: number[]): Promise<PullCreateResult> =>
+      apiRequest('/apps/kuaizhizao/production-returns/pull-from-picking-items', {
+        method: 'POST',
+        data: { selected_item_ids: selectedItemIds },
       }),
   },
   materialCall: {
@@ -205,6 +434,19 @@ export const warehouseApi = {
         method: 'GET',
         params: { work_order_id: workOrderId },
       }),
+    listWorkOrderPullLines: async (params: {
+      skip?: number;
+      limit?: number;
+      keyword?: string;
+      work_order_id?: number;
+      pullable_only?: boolean;
+    }): Promise<{ data: WorkOrderFinishedGoodsPullLine[]; total: number }> =>
+      apiRequest('/apps/kuaizhizao/finished-goods-receipts/work-order-pull-lines', { method: 'GET', params }),
+    pullFromWorkOrders: async (selectedItemIds: number[]): Promise<PullCreateResult> =>
+      apiRequest('/apps/kuaizhizao/finished-goods-receipts/pull-from-work-orders', {
+        method: 'POST',
+        data: { selected_item_ids: selectedItemIds },
+      }),
   },
   semiFinishedGoodsReceipt: {
     list: async (params?: any) =>
@@ -257,6 +499,54 @@ export const warehouseApi = {
       warehouse_id: number;
       warehouse_name?: string;
     }) => apiRequest('/apps/kuaizhizao/sales-deliveries/pull-from-sales-forecast', { method: 'POST', data }),
+    listSalesOrderPullLines: async (params: {
+      skip?: number;
+      limit?: number;
+      keyword?: string;
+      sales_order_id?: number;
+      pullable_only?: boolean;
+    }): Promise<{ data: SalesDeliveryOrderPullLine[]; total: number }> =>
+      apiRequest('/apps/kuaizhizao/sales-deliveries/sales-order-pull-lines', {
+        method: 'GET',
+        params,
+      }),
+    pullFromSalesOrderItems: async (
+      selectedItemIds: number[],
+    ): Promise<{
+      success: boolean;
+      message: string;
+      delivery_id?: number;
+      delivery_code?: string;
+      deliveries?: Array<{ delivery_id: number; delivery_code: string }>;
+    }> =>
+      apiRequest('/apps/kuaizhizao/sales-deliveries/pull-from-sales-order-items', {
+        method: 'POST',
+        data: { selected_item_ids: selectedItemIds },
+      }),
+    listShipmentNoticePullLines: async (params: {
+      skip?: number;
+      limit?: number;
+      keyword?: string;
+      notice_id?: number;
+      pullable_only?: boolean;
+    }): Promise<{ data: SalesDeliveryNoticePullLine[]; total: number }> =>
+      apiRequest('/apps/kuaizhizao/sales-deliveries/shipment-notice-pull-lines', {
+        method: 'GET',
+        params,
+      }),
+    pullFromShipmentNoticeItems: async (
+      selectedItemIds: number[],
+    ): Promise<{
+      success: boolean;
+      message: string;
+      delivery_id?: number;
+      delivery_code?: string;
+      deliveries?: Array<{ delivery_id: number; delivery_code: string }>;
+    }> =>
+      apiRequest('/apps/kuaizhizao/sales-deliveries/pull-from-shipment-notice-items', {
+        method: 'POST',
+        data: { selected_item_ids: selectedItemIds },
+      }),
   },
   wavePicking: {
     generate: async (data: { picking_ids: number[] }) =>
@@ -302,6 +592,54 @@ export const warehouseApi = {
         method: 'GET',
         params,
       }),
+    listSalesOrderPullLines: async (params: {
+      skip?: number;
+      limit?: number;
+      keyword?: string;
+      sales_order_id?: number;
+      pullable_only?: boolean;
+    }): Promise<{ data: SalesReturnOrderPullLine[]; total: number }> =>
+      apiRequest('/apps/kuaizhizao/sales-returns/sales-order-pull-lines', {
+        method: 'GET',
+        params,
+      }),
+    pullFromSalesOrderItems: async (
+      selectedItemIds: number[],
+    ): Promise<{
+      success: boolean;
+      message: string;
+      return_id?: number;
+      return_code?: string;
+      returns?: Array<{ return_id: number; return_code: string }>;
+    }> =>
+      apiRequest('/apps/kuaizhizao/sales-returns/pull-from-sales-order-items', {
+        method: 'POST',
+        data: { selected_item_ids: selectedItemIds },
+      }),
+    listSalesDeliveryPullLines: async (params: {
+      skip?: number;
+      limit?: number;
+      keyword?: string;
+      sales_delivery_id?: number;
+      pullable_only?: boolean;
+    }): Promise<{ data: SalesReturnDeliveryPullLine[]; total: number }> =>
+      apiRequest('/apps/kuaizhizao/sales-returns/sales-delivery-pull-lines', {
+        method: 'GET',
+        params,
+      }),
+    pullFromSalesDeliveryItems: async (
+      selectedItemIds: number[],
+    ): Promise<{
+      success: boolean;
+      message: string;
+      return_id?: number;
+      return_code?: string;
+      returns?: Array<{ return_id: number; return_code: string }>;
+    }> =>
+      apiRequest('/apps/kuaizhizao/sales-returns/pull-from-sales-delivery-items', {
+        method: 'POST',
+        data: { selected_item_ids: selectedItemIds },
+      }),
   },
   purchaseReturn: {
     list: async (params?: import('./purchase-return').PurchaseReturnListParams): Promise<import('./purchase-return').PurchaseReturnListResult> =>
@@ -330,6 +668,30 @@ export const warehouseApi = {
       warehouse_name?: string;
       return_quantities?: Record<number, number>;
     }) => apiRequest('/apps/kuaizhizao/purchase-returns/pull-from-purchase-order', { method: 'POST', data }),
+    listPurchaseOrderPullLines: async (params: {
+      skip?: number;
+      limit?: number;
+      keyword?: string;
+      order_id?: number;
+      pullable_only?: boolean;
+    }): Promise<{ data: PurchaseReturnPullLine[]; total: number }> =>
+      apiRequest('/apps/kuaizhizao/purchase-returns/purchase-order-pull-lines', {
+        method: 'GET',
+        params,
+      }),
+    pullFromPurchaseOrderItems: async (
+      selectedItemIds: number[],
+    ): Promise<{
+      success: boolean;
+      message: string;
+      return_id?: number;
+      return_code?: string;
+      returns?: Array<{ return_id: number; return_code: string }>;
+    }> =>
+      apiRequest('/apps/kuaizhizao/purchase-returns/pull-from-purchase-order-items', {
+        method: 'POST',
+        data: { selected_item_ids: selectedItemIds },
+      }),
   },
   replenishmentSuggestion: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/replenishment-suggestions', { method: 'GET', params }),
@@ -402,6 +764,54 @@ export const warehouseApi = {
     create: async (data: any) => apiRequest('/apps/kuaizhizao/purchase-receipts', { method: 'POST', data }),
     pullFromReceiptNotice: async (data: { receipt_notice_id: number }) =>
       apiRequest('/apps/kuaizhizao/purchase-receipts/pull-from-receipt-notice', { method: 'POST', data }),
+    listPurchaseOrderPullLines: async (params: {
+      skip?: number;
+      limit?: number;
+      keyword?: string;
+      order_id?: number;
+      pullable_only?: boolean;
+    }): Promise<{ data: PurchaseReceiptOrderPullLine[]; total: number }> =>
+      apiRequest('/apps/kuaizhizao/purchase-receipts/purchase-order-pull-lines', {
+        method: 'GET',
+        params,
+      }),
+    pullFromPurchaseOrderItems: async (
+      selectedItemIds: number[],
+    ): Promise<{
+      success: boolean;
+      message: string;
+      receipt_id?: number;
+      receipt_code?: string;
+      receipts?: Array<{ receipt_id: number; receipt_code: string }>;
+    }> =>
+      apiRequest('/apps/kuaizhizao/purchase-receipts/pull-from-purchase-order-items', {
+        method: 'POST',
+        data: { selected_item_ids: selectedItemIds },
+      }),
+    listReceiptNoticePullLines: async (params: {
+      skip?: number;
+      limit?: number;
+      keyword?: string;
+      notice_id?: number;
+      pullable_only?: boolean;
+    }): Promise<{ data: PurchaseReceiptNoticePullLine[]; total: number }> =>
+      apiRequest('/apps/kuaizhizao/purchase-receipts/receipt-notice-pull-lines', {
+        method: 'GET',
+        params,
+      }),
+    pullFromReceiptNoticeItems: async (
+      selectedItemIds: number[],
+    ): Promise<{
+      success: boolean;
+      message: string;
+      receipt_id?: number;
+      receipt_code?: string;
+      receipts?: Array<{ receipt_id: number; receipt_code: string }>;
+    }> =>
+      apiRequest('/apps/kuaizhizao/purchase-receipts/pull-from-receipt-notice-items', {
+        method: 'POST',
+        data: { selected_item_ids: selectedItemIds },
+      }),
     update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}`, { method: 'PUT', data }),
     /** POST /delete：避免部分环境对 DELETE 返回 405 */
     delete: async (id: string) =>
@@ -442,5 +852,36 @@ export const warehouseApi = {
       apiRequest(`/apps/kuaizhizao/inventory/customer-material-registration/mapping-rules/${id}`, { method: 'PUT', data }),
     delete: async (id: string) =>
       apiRequest(`/apps/kuaizhizao/inventory/customer-material-registration/mapping-rules/${id}`, { method: 'DELETE' }),
+  },
+  outsourceIssue: {
+    listWorkOrderPullLines: async (params: {
+      skip?: number;
+      limit?: number;
+      keyword?: string;
+      outsource_work_order_id?: number;
+      pullable_only?: boolean;
+    }): Promise<{ data: OutsourceIssuePullLine[]; total: number }> =>
+      apiRequest('/apps/kuaizhizao/outsource-issues/work-order-pull-lines', { method: 'GET', params }),
+    pullFromWorkOrderItems: async (selectedItemIds: number[]): Promise<PullCreateResult> =>
+      apiRequest('/apps/kuaizhizao/outsource-issues/pull-from-work-order-items', {
+        method: 'POST',
+        data: { selected_item_ids: selectedItemIds },
+      }),
+  },
+  outsourceInbound: {
+    listPullLines: async (params: {
+      pull_type: string;
+      skip?: number;
+      limit?: number;
+      keyword?: string;
+      outsource_work_order_id?: number;
+      pullable_only?: boolean;
+    }): Promise<{ data: OutsourceInboundPullLine[]; total: number }> =>
+      apiRequest('/apps/kuaizhizao/outsource-inbound/pull-lines', { method: 'GET', params }),
+    pullFromItems: async (selectedItemIds: number[], pullType: string): Promise<PullCreateResult> =>
+      apiRequest('/apps/kuaizhizao/outsource-inbound/pull-from-items', {
+        method: 'POST',
+        data: { selected_item_ids: selectedItemIds, pull_type: pullType },
+      }),
   },
 };

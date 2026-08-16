@@ -1,46 +1,46 @@
+/**
+ * 委外工单查询
+ */
 import React, { useMemo } from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import { buildOutsourceWorkOrderLifecycleValueEnum } from '../../../utils/outsourceWorkOrderLifecycle';
-import { copyableCodeColumn } from '../../../utils/reportCopyableColumn';
 import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
+import {
+  outsourceWorkOrderStatusEnum,
+  reportDocumentStatusText,
+} from '../../../utils/reportPresentation';
 
 const OutsourceOrderQuery: React.FC = () => {
   const { t } = useTranslation();
-  const statusValueEnum = useMemo(() => buildOutsourceWorkOrderLifecycleValueEnum(t), [t]);
   const columns: ProColumns[] = useMemo(
     () => [
       {
-        title: t('app.kuaizhizao.reports.statPeriod'),
-        dataIndex: 'date_range',
-        valueType: 'dateRange',
-        hideInTable: true,
-        formItemProps: formDateRangeFormItemProps,
-        search: { order: 10 } as ProColumns['search'],
-      },
-      {
-        ...copyableCodeColumn(
-          t('app.kuaizhizao.productionExecutionReports.colOutsourceOrderCode'),
-          'order_code',
-          150,
-        ),
+        title: t('app.kuaizhizao.productionExecutionReports.colOutsourceOrderCode'),
+        dataIndex: 'order_code',
+        fixed: 'left',
+        width: 150,
         sorter: true,
         search: { order: 20 } as ProColumns['search'],
       },
       {
         title: t('app.kuaizhizao.productionExecutionReports.colSupplier'),
         dataIndex: 'supplier_name',
-        width: 200,
         ellipsis: true,
+        width: 150,
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
       },
       {
+        title: t('app.kuaizhizao.productionExecutionReports.colProductCode'),
+        dataIndex: 'product_code',
+        width: 120,
+        hideInSearch: true,
+      },
+      {
         title: t('app.kuaizhizao.productionExecutionReports.colProductName'),
         dataIndex: 'product_name',
-        width: 200,
         ellipsis: true,
+        width: 160,
         sorter: true,
         search: { order: 40 } as ProColumns['search'],
       },
@@ -49,38 +49,49 @@ const OutsourceOrderQuery: React.FC = () => {
         dataIndex: 'order_qty',
         valueType: 'digit',
         width: 100,
-        sorter: true,
+        hideInSearch: true,
+        align: 'right',
+      },
+      {
+        title: t('app.kuaizhizao.reports.amount'),
+        dataIndex: 'amount',
+        valueType: 'money',
+        width: 110,
         hideInSearch: true,
       },
       {
-        title: t('common.status'),
+        title: t('app.kuaizhizao.reports.documentStatus'),
         dataIndex: 'status',
         width: 100,
-        valueType: 'select',
-        valueEnum: statusValueEnum,
-        sorter: true,
+        valueEnum: outsourceWorkOrderStatusEnum(t),
         search: { order: 50 } as ProColumns['search'],
+        render: (_, record) => reportDocumentStatusText(t, record.status),
+      },
+      {
+        title: t('app.kuaizhizao.productionExecutionReports.colPlannedEndDate'),
+        dataIndex: 'planned_end_date',
+        valueType: 'date',
+        width: 110,
+        hideInSearch: true,
       },
       {
         title: t('app.kuaizhizao.productionExecutionReports.colOrderDate'),
         dataIndex: 'order_date',
         valueType: 'dateTime',
-        width: 132,
-        uniTableKeepWidth: true,
-        sorter: true,
+        width: 160,
         hideInSearch: true,
       },
     ],
-    [t, statusValueEnum],
+    [t],
   );
 
   return (
     <KuaizhizaoReport
-      columnPersistenceId="apps.kuaizhizao.pages.production-execution.reports.OutsourceOrderQuery"
       title={t('app.kuaizhizao.menu.reports.outsource-order-query')}
       reportType="outsource_query"
-      dateRangeKeys={['date_range', 'dateRange']}
-      rowKey="order_code"
+      summaryFields={['order_qty', 'amount']}
+      columnPersistenceId="apps.kuaizhizao.pages.production-execution.reports.OutsourceOrderQuery-v2"
+      rowKey="id"
       columns={columns}
     />
   );

@@ -5,7 +5,8 @@
 import { api } from '../../../services/api';
 
 export type DrawingType = 'part' | 'assembly' | 'process' | 'other';
-export type DrawingStatus = 'Draft' | 'Released' | 'Obsolete';
+export type DrawingStatus = 'Draft' | 'Editing' | 'Pending' | 'Released' | 'Obsolete';
+export type DrawingSecurityLevel = 'public' | 'internal' | 'secret' | 'confidential';
 
 export interface FileBrief {
   uuid: string;
@@ -109,6 +110,24 @@ export interface EngineeringDrawing {
   updatedAt: string;
   createdByName?: string;
   updatedByName?: string;
+  checkedOutBy?: number | null;
+  checkedOutByName?: string;
+  checkedOutAt?: string;
+  checkoutComment?: string;
+  folderId?: number | null;
+  folderUuid?: string | null;
+  folderName?: string | null;
+  securityLevel?: DrawingSecurityLevel;
+}
+
+export interface EngineeringDrawingPrintData {
+  code: string;
+  name: string;
+  revision: string;
+  securityLevel: DrawingSecurityLevel;
+  watermark: string;
+  previewUrl?: string;
+  fileName?: string;
 }
 
 export interface EngineeringDrawingCreate {
@@ -121,6 +140,8 @@ export interface EngineeringDrawingCreate {
   materialUuids?: string[];
   processRouteUuids?: string[];
   operationUuids?: string[];
+  folderUuid?: string | null;
+  securityLevel?: DrawingSecurityLevel;
   description?: string;
 }
 
@@ -132,6 +153,8 @@ export interface EngineeringDrawingUpdate {
   materialUuids?: string[];
   processRouteUuids?: string[];
   operationUuids?: string[];
+  folderUuid?: string | null;
+  securityLevel?: DrawingSecurityLevel;
   description?: string;
 }
 
@@ -140,10 +163,13 @@ export interface EngineeringDrawingListParams {
   limit?: number;
   status?: DrawingStatus;
   drawingType?: DrawingType;
+  securityLevel?: DrawingSecurityLevel;
   keyword?: string;
   materialUuid?: string;
   processRouteUuid?: string;
   operationUuid?: string;
+  folderUuid?: string;
+  unclassified?: boolean;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
   view?: DrawingListView;
@@ -215,6 +241,50 @@ export const drawingApi = {
     return api.delete(`/apps/master-data/process/drawings/${uuid}`);
   },
 
+  checkout: async (uuid: string, comment?: string): Promise<EngineeringDrawing> => {
+    const res = await api.post<EngineeringDrawing>(`/apps/master-data/process/drawings/${uuid}/checkout`, {
+      comment,
+    });
+    return normalizeDrawing(res);
+  },
+
+  checkin: async (uuid: string): Promise<EngineeringDrawing> => {
+    const res = await api.post<EngineeringDrawing>(`/apps/master-data/process/drawings/${uuid}/checkin`, {});
+    return normalizeDrawing(res);
+  },
+
+  undoCheckout: async (uuid: string): Promise<EngineeringDrawing> => {
+    const res = await api.post<EngineeringDrawing>(`/apps/master-data/process/drawings/${uuid}/undo-checkout`, {});
+    return normalizeDrawing(res);
+  },
+
+  moveFolder: async (uuid: string, folderUuid?: string | null): Promise<EngineeringDrawing> => {
+    const res = await api.post<EngineeringDrawing>(`/apps/master-data/process/drawings/${uuid}/move-folder`, {
+      folderUuid: folderUuid ?? null,
+    });
+    return normalizeDrawing(res);
+  },
+
+  submit: async (uuid: string): Promise<EngineeringDrawing> => {
+    const res = await api.post<EngineeringDrawing>(`/apps/master-data/process/drawings/${uuid}/submit`, {});
+    return normalizeDrawing(res);
+  },
+
+  approve: async (uuid: string): Promise<EngineeringDrawing> => {
+    const res = await api.post<EngineeringDrawing>(`/apps/master-data/process/drawings/${uuid}/approve`, {});
+    return normalizeDrawing(res);
+  },
+
+  reject: async (uuid: string, reason?: string): Promise<EngineeringDrawing> => {
+    const res = await api.post<EngineeringDrawing>(`/apps/master-data/process/drawings/${uuid}/reject`, { reason });
+    return normalizeDrawing(res);
+  },
+
+  revoke: async (uuid: string): Promise<EngineeringDrawing> => {
+    const res = await api.post<EngineeringDrawing>(`/apps/master-data/process/drawings/${uuid}/revoke`, {});
+    return normalizeDrawing(res);
+  },
+
   release: async (uuid: string): Promise<EngineeringDrawing> => {
     const res = await api.post<EngineeringDrawing>(`/apps/master-data/process/drawings/${uuid}/release`, {});
     return normalizeDrawing(res);
@@ -243,6 +313,10 @@ export const drawingApi = {
     return api.get<EngineeringDrawingRevisionsResponse>(
       `/apps/master-data/process/drawings/${uuid}/revisions`,
     );
+  },
+
+  getPrintData: async (uuid: string): Promise<EngineeringDrawingPrintData> => {
+    return api.get<EngineeringDrawingPrintData>(`/apps/master-data/process/drawings/${uuid}/print-data`);
   },
 
   importStepBom: async (

@@ -11,7 +11,7 @@ const PieceRateSalarySummary: React.FC = () => {
     <KuaizhizaoReport
       title={t('app.kuaizhizao.menu.reports.piece-rate-salary-summary')}
       reportType="piece-rate-salary-summary"
-      columnPersistenceId="apps.kuaizhizao.pages.performance.reports.PieceRateSalarySummary"
+      columnPersistenceId="apps.kuaizhizao.pages.performance.reports.PieceRateSalarySummary-v2"
       columns={columns}
     />
   );

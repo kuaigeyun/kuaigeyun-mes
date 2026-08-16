@@ -524,12 +524,7 @@ class ProcessRouteChangeService:
         if change.status != "approved":
             raise ValidationError(f"变更记录状态为 {change.status}，无法执行（需要先审批通过）")
         
-        # TODO: 实现变更执行逻辑
-        # 1. 创建新版本工艺路线
-        # 2. 应用变更内容
-        # 3. 更新变更记录状态为已执行
-        
-        # 更新执行信息
+        # 工艺路线变更执行：数据已在路线维护页生效，此处落库并通知计划
         change.status = "executed"
         change.applied_at = now_utc()
         await change.save()

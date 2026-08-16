@@ -37,6 +37,33 @@ async def record_finance_accounting_event(
     payload: Optional[dict[str, Any]] = None,
 ) -> None:
     try:
+        enriched = dict(payload or {})
+        # 从应收/应付补齐辅助核算维度，供总账凭证模板使用
+        if target_doc_type and str(target_doc_type).lower() in {"receivable", "receivables"} and target_doc_id:
+            from apps.kuaicaiwu.models.receivable import Receivable
+
+            row = await Receivable.get_or_none(tenant_id=tenant_id, id=target_doc_id)
+            if row:
+                enriched.setdefault("customer_id", getattr(row, "customer_id", None) or getattr(row, "partner_id", None))
+                enriched.setdefault(
+                    "customer_name",
+                    getattr(row, "customer_name", None) or getattr(row, "partner_name", None),
+                )
+                enriched.setdefault("partner_id", enriched.get("customer_id"))
+                enriched.setdefault("partner_name", enriched.get("customer_name"))
+        if target_doc_type and str(target_doc_type).lower() in {"payable", "payables"} and target_doc_id:
+            from apps.kuaicaiwu.models.payable import Payable
+
+            row = await Payable.get_or_none(tenant_id=tenant_id, id=target_doc_id)
+            if row:
+                enriched.setdefault("supplier_id", getattr(row, "supplier_id", None) or getattr(row, "partner_id", None))
+                enriched.setdefault(
+                    "supplier_name",
+                    getattr(row, "supplier_name", None) or getattr(row, "partner_name", None),
+                )
+                enriched.setdefault("partner_id", enriched.get("supplier_id"))
+                enriched.setdefault("partner_name", enriched.get("supplier_name"))
+
         await AccountingEventService.record_event(
             tenant_id=tenant_id,
             event_type=event_type,
@@ -51,7 +78,7 @@ async def record_finance_accounting_event(
             operator_id=operator_id,
             operator_name=operator_name,
             notes=notes,
-            payload=payload,
+            payload=enriched or None,
         )
     except Exception as e:
         logger.error(

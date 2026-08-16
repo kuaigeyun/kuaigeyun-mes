@@ -10,6 +10,7 @@ export type LogisticsCarrier = {
   carrier_type: string;
   contact_name?: string;
   contact_phone?: string;
+  service_hotline?: string;
   settlement_method?: string;
   supplier_id?: number;
   remark?: string;
@@ -60,6 +61,8 @@ export type FreightTrackingEvent = {
   location?: string;
   remark?: string;
   operator_name?: string;
+  lng?: number | null;
+  lat?: number | null;
 };
 
 export type FreightOrder = {
@@ -76,8 +79,15 @@ export type FreightOrder = {
   driver_name?: string;
   driver_phone?: string;
   tracking_number?: string;
+  sender_phone?: string;
+  recipient_phone?: string;
+  query_phone?: string;
   origin_address?: string;
   destination_address?: string;
+  origin_lng?: number | null;
+  origin_lat?: number | null;
+  destination_lng?: number | null;
+  destination_lat?: number | null;
   planned_depart_at?: string;
   planned_arrive_at?: string;
   actual_depart_at?: string;
@@ -104,6 +114,10 @@ export type FreightPullCandidate = {
   business_direction: string;
   address?: string;
   tracking_number?: string;
+  sender_phone?: string;
+  recipient_phone?: string;
+  pullable?: boolean;
+  blocked_reason?: string | null;
 };
 
 export type FreightBillItem = {
@@ -134,8 +148,27 @@ export type FreightBill = {
 
 type ListParams = { skip?: number; limit?: number; keyword?: string };
 
+export type CarrierPresetItem = {
+  code: string;
+  name: string;
+  carrier_type: string;
+  service_hotline?: string;
+  exists: boolean;
+};
+
 export async function listCarriers(params: ListParams = {}) {
   return apiRequest<{ items: LogisticsCarrier[]; total: number }>(`${BASE}/carriers`, { method: 'GET', params });
+}
+
+export async function listCarrierPresets() {
+  return apiRequest<CarrierPresetItem[]>(`${BASE}/carriers/preset-preview`, { method: 'GET' });
+}
+
+export async function loadCarrierPresets(codes?: string[]) {
+  return apiRequest<{ created: number; skipped: number; updated?: number; message: string }>(`${BASE}/carriers/load-preset`, {
+    method: 'POST',
+    data: codes != null ? { codes } : undefined,
+  });
 }
 
 export async function createCarrier(data: Partial<LogisticsCarrier>) {
@@ -182,8 +215,32 @@ export async function deleteDriver(id: number) {
   return apiRequest<void>(`${BASE}/drivers/${id}`, { method: 'DELETE' });
 }
 
-export async function listFreightOrders(params: ListParams & { status?: string; business_direction?: string } = {}) {
+export async function listFreightOrders(
+  params: ListParams & {
+    status?: string;
+    status_in?: string;
+    business_direction?: string;
+    uuid?: string;
+  } = {},
+) {
   return apiRequest<{ items: FreightOrder[]; total: number }>(`${BASE}/freight-orders`, { method: 'GET', params });
+}
+
+export async function lookupFreightOrderBySource(sourceType: string, sourceId: number) {
+  return apiRequest<FreightOrder>(`${BASE}/freight-orders/lookup-by-source`, {
+    method: 'GET',
+    params: { source_type: sourceType, source_id: sourceId },
+  });
+}
+
+export type AmapMapPublicConfig = {
+  configured: boolean;
+  js_key?: string | null;
+  security_code?: string | null;
+};
+
+export async function getLogisticsMapConfig() {
+  return apiRequest<AmapMapPublicConfig>('/core/logistics/map-config', { method: 'GET' });
 }
 
 export async function getFreightOrder(id: number) {
@@ -201,6 +258,10 @@ export async function listFreightPullCandidates(
 
 export async function createFreightOrder(data: Record<string, unknown>) {
   return apiRequest<FreightOrder>(`${BASE}/freight-orders`, { method: 'POST', data });
+}
+
+export async function updateFreightOrder(id: number, data: Record<string, unknown>) {
+  return apiRequest<FreightOrder>(`${BASE}/freight-orders/${id}`, { method: 'PUT', data });
 }
 
 export async function deleteFreightOrder(id: number) {
@@ -231,6 +292,12 @@ export async function addFreightTrackingEvent(id: number, data: Record<string, u
   return apiRequest<FreightOrder>(`${BASE}/freight-orders/${id}/tracking-events`, { method: 'POST', data });
 }
 
+export async function deleteFreightTrackingEvent(id: number, eventId: number) {
+  return apiRequest<FreightOrder>(`${BASE}/freight-orders/${id}/tracking-events/${eventId}/remove`, {
+    method: 'POST',
+  });
+}
+
 export async function listFreightBills(params: ListParams & { review_status?: string } = {}) {
   return apiRequest<{ items: FreightBill[]; total: number }>(`${BASE}/freight-bills`, { method: 'GET', params });
 }
@@ -243,16 +310,38 @@ export async function deleteFreightBill(id: number) {
   return apiRequest<void>(`${BASE}/freight-bills/${id}`, { method: 'DELETE' });
 }
 
-export async function listPendingFreightOrdersForBill(params: { carrier_id?: number } = {}) {
+export async function listPendingFreightOrdersForBill(
+  params: { carrier_id?: number; keyword?: string; skip?: number; limit?: number } = {},
+) {
   return apiRequest<{ items: FreightOrder[]; total: number }>(`${BASE}/freight-bills/pending-freight-orders`, {
     method: 'GET',
     params,
   });
 }
 
-export async function trackLogistics(carrier: string, trackingNumber: string) {
-  return apiRequest<Record<string, unknown>>('/core/logistics/track', {
+export type LogisticsTrackEvent = {
+  time?: string;
+  status?: string;
+  description?: string;
+  location?: string;
+};
+
+export type LogisticsTrackResult = {
+  success: boolean;
+  carrier?: string;
+  company_code?: string;
+  tracking_number?: string;
+  status?: string;
+  events?: LogisticsTrackEvent[];
+};
+
+export async function trackLogistics(carrier: string, trackingNumber: string, phone?: string) {
+  return apiRequest<LogisticsTrackResult>('/core/logistics/track', {
     method: 'GET',
-    params: { carrier, tracking_number: trackingNumber },
+    params: {
+      carrier,
+      tracking_number: trackingNumber,
+      ...(phone?.trim() ? { phone: phone.trim() } : {}),
+    },
   });
 }

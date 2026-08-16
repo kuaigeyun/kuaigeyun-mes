@@ -24,6 +24,7 @@ import {
   renderAfterSalesStatusTag,
   renderAfterSalesTypeMarker,
 } from '../../shared/afterSalesListPresentation';
+import { LinkedDocumentCode } from '../../../../../../components/linked-document-code';
 import { AfterSalesDocDetailDrawer } from '../../shared/AfterSalesDocDetailDrawer';
 
 const PLACEHOLDER: InstallExecution = {
@@ -69,8 +70,28 @@ export const InstallExecutionDetailDrawer: React.FC<InstallExecutionDetailDrawer
           render: (_, row) => renderAfterSalesTypeMarker(row.supply_source),
         },
         { title: t('app.kuaizhizao.installExecution.field.ownerName'), dataIndex: 'owner_name' },
-        { title: t('app.kuaizhizao.installExecution.field.salesOrder'), dataIndex: 'sales_order_code' },
-        { title: t('app.kuaizhizao.installExecution.field.salesDelivery'), dataIndex: 'sales_delivery_code' },
+        {
+          title: t('app.kuaizhizao.installExecution.field.salesOrder'),
+          dataIndex: 'sales_order_code',
+          render: (_, row) => (
+            <LinkedDocumentCode
+              documentType="sales_order"
+              documentId={row.sales_order_id}
+              code={row.sales_order_code}
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.installExecution.field.salesDelivery'),
+          dataIndex: 'sales_delivery_code',
+          render: (_, row) => (
+            <LinkedDocumentCode
+              documentType="sales_delivery"
+              documentId={row.sales_delivery_id}
+              code={row.sales_delivery_code}
+            />
+          ),
+        },
         {
           title: t('app.kuaizhizao.installExecution.field.siteAddress'),
           dataIndex: 'site_address',
@@ -119,6 +140,7 @@ export const InstallExecutionDetailDrawer: React.FC<InstallExecutionDetailDrawer
       onRetry={onRetry}
       extra={extra}
       zIndex={zIndex}
+      traceDocumentType="install_execution"
       collaborationTitle={t('app.kuaizhizao.installExecution.section.stages')}
       collaboration={
         <>

@@ -192,6 +192,7 @@ async def enrich_quotation_capabilities_on_model(
     *,
     conversion_downstream_missing: bool = False,
     contract_downstream_missing: bool = False,
+    sales_review_downstream_missing: bool = False,
 ) -> T:
     audit_required = await _quotation_audit_required(tenant_id)
     caps = derive_quotation_capabilities(
@@ -199,6 +200,7 @@ async def enrich_quotation_capabilities_on_model(
         audit_required=audit_required,
         conversion_downstream_missing=conversion_downstream_missing,
         contract_downstream_missing=contract_downstream_missing,
+        sales_review_downstream_missing=sales_review_downstream_missing,
     )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
@@ -212,10 +214,12 @@ async def enrich_quotation_list_capabilities(
     *,
     conversion_downstream_missing_by_id: Optional[dict[int, bool]] = None,
     contract_downstream_missing_by_id: Optional[dict[int, bool]] = None,
+    sales_review_downstream_missing_by_id: Optional[dict[int, bool]] = None,
 ) -> List[T]:
     audit_required = await _quotation_audit_required(tenant_id)
     missing_map = conversion_downstream_missing_by_id or {}
     contract_missing_map = contract_downstream_missing_by_id or {}
+    review_missing_map = sales_review_downstream_missing_by_id or {}
     out: List[T] = []
     for q_model, resp in zip(quotations, responses):
         qid = int(getattr(q_model, "id", 0) or 0)
@@ -224,6 +228,7 @@ async def enrich_quotation_list_capabilities(
             audit_required=audit_required,
             conversion_downstream_missing=missing_map.get(qid, False),
             contract_downstream_missing=contract_missing_map.get(qid, False),
+            sales_review_downstream_missing=review_missing_map.get(qid, False),
         )
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))
@@ -238,12 +243,14 @@ def get_quotation_capabilities_from_record(
     audit_required: bool,
     conversion_downstream_missing: bool = False,
     contract_downstream_missing: bool = False,
+    sales_review_downstream_missing: bool = False,
 ) -> QuotationCapabilities:
     return derive_quotation_capabilities(
         quotation,
         audit_required=audit_required,
         conversion_downstream_missing=conversion_downstream_missing,
         contract_downstream_missing=contract_downstream_missing,
+        sales_review_downstream_missing=sales_review_downstream_missing,
     )
 
 
@@ -256,6 +263,7 @@ def enrich_sales_order_capabilities_on_response(
     has_line_work_orders: bool = False,
     computation_pushed_blocks_withdraw: bool = False,
     has_returnable_qty: bool = False,
+    has_pushable_qty: bool = False,
 ) -> T:
     caps = derive_sales_order_capabilities(
         order_model,
@@ -264,6 +272,7 @@ def enrich_sales_order_capabilities_on_response(
         has_line_work_orders=has_line_work_orders,
         computation_pushed_blocks_withdraw=computation_pushed_blocks_withdraw,
         has_returnable_qty=has_returnable_qty,
+        has_pushable_qty=has_pushable_qty,
     )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
@@ -279,12 +288,14 @@ def enrich_sales_order_list_capabilities(
     has_line_work_orders_by_id: Optional[dict[int, bool]] = None,
     computation_blocks_withdraw_by_id: Optional[dict[int, bool]] = None,
     has_returnable_qty_by_id: Optional[dict[int, bool]] = None,
+    has_pushable_qty_by_id: Optional[dict[int, bool]] = None,
 ) -> List[T]:
     pushed_map = pushed_to_computation_by_id or {}
     items_map = has_items_by_id or {}
     wo_map = has_line_work_orders_by_id or {}
     blocks_map = computation_blocks_withdraw_by_id or {}
     returnable_map = has_returnable_qty_by_id or {}
+    pushable_map = has_pushable_qty_by_id or {}
     out: List[T] = []
     for order_model, resp in zip(orders, responses):
         oid = int(getattr(order_model, "id", 0) or 0)
@@ -295,6 +306,7 @@ def enrich_sales_order_list_capabilities(
             has_line_work_orders=wo_map.get(oid, False),
             computation_pushed_blocks_withdraw=blocks_map.get(oid, False),
             has_returnable_qty=returnable_map.get(oid, False),
+            has_pushable_qty=pushable_map.get(oid, False),
         )
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))
@@ -311,6 +323,7 @@ def get_sales_order_capabilities_from_record(
     has_line_work_orders: bool = False,
     computation_pushed_blocks_withdraw: bool = False,
     has_returnable_qty: bool = False,
+    has_pushable_qty: bool = False,
 ) -> SalesOrderCapabilities:
     return derive_sales_order_capabilities(
         order,
@@ -319,6 +332,7 @@ def get_sales_order_capabilities_from_record(
         has_line_work_orders=has_line_work_orders,
         computation_pushed_blocks_withdraw=computation_pushed_blocks_withdraw,
         has_returnable_qty=has_returnable_qty,
+        has_pushable_qty=has_pushable_qty,
     )
 
 
@@ -827,8 +841,7 @@ async def _purchase_order_invoice_by_ids(tenant_id: int, order_ids: List[int]) -
 
 async def _purchase_order_returnable_by_ids(tenant_id: int, order_ids: List[int]) -> dict[int, bool]:
     from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
-    from apps.kuaizhizao.models.purchase_return import PurchaseReturn
-    from apps.kuaizhizao.models.purchase_return_item import PurchaseReturnItem
+    from apps.kuaizhizao.services.warehouse_service import returned_qty_by_purchase_order_item_ids
 
     if not order_ids:
         return {}
@@ -840,34 +853,15 @@ async def _purchase_order_returnable_by_ids(tenant_id: int, order_ids: List[int]
             continue
         received_by_order.setdefault(int(item.order_id), []).append(item)
 
-    return_ids = await PurchaseReturn.filter(
-        tenant_id=tenant_id,
-        purchase_order_id__in=order_ids,
-        deleted_at__isnull=True,
-    ).exclude(status="已取消").values_list("id", "purchase_order_id")
-    returned_by_order_material: dict[int, dict[int, float]] = {}
-    if return_ids:
-        rid_list = [int(r[0]) for r in return_ids]
-        return_items = await PurchaseReturnItem.filter(
-            tenant_id=tenant_id,
-            return_id__in=rid_list,
-        ).all()
-        order_by_return = {int(r[0]): int(r[1]) for r in return_ids}
-        for ri in return_items:
-            oid = order_by_return.get(int(ri.return_id))
-            if oid is None:
-                continue
-            mid = int(ri.material_id)
-            returned_by_order_material.setdefault(oid, {})
-            returned_by_order_material[oid][mid] = (
-                returned_by_order_material[oid].get(mid, 0.0) + float(ri.return_quantity or 0)
-            )
+    returned_by_item = await returned_qty_by_purchase_order_item_ids(
+        tenant_id,
+        [int(item.id) for item in items],
+    )
 
     for oid, order_items in received_by_order.items():
-        returned_map = returned_by_order_material.get(oid, {})
         for item in order_items:
             received = float(item.received_quantity or 0)
-            returned = returned_map.get(int(item.material_id), 0.0)
+            returned = returned_by_item.get(int(item.id), 0.0)
             if max(0.0, received - returned) > 0:
                 result[oid] = True
                 break

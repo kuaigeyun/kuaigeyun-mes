@@ -16,6 +16,7 @@ import { App } from 'antd'
 import { CopyOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
+import { copyTextToClipboard } from '../../utils/clipboard'
 import styles from './copyable-code.module.css'
 
 export interface CopyableCodeProps {
@@ -61,12 +62,10 @@ export const CopyableCode: React.FC<CopyableCodeProps> = ({
     (e: React.MouseEvent) => {
       e.stopPropagation()
       if (!text) return
-      const p = navigator.clipboard?.writeText(text)
-      if (p && typeof p.then === 'function') {
-        p.then(() => message.success(ok), () => message.error(fail))
-      } else {
-        message.success(ok)
-      }
+      void copyTextToClipboard(text).then(
+        () => message.success(ok),
+        () => message.error(fail),
+      )
     },
     [text, message, ok, fail],
   )

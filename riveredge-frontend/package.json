@@ -19,7 +19,8 @@
         "test:e2e": "playwright test",
         "test:e2e:login": "playwright test e2e/login.spec.ts",
         "test:e2e:crawl": "playwright test e2e/menu-crawl.spec.ts --workers=2",
-        "scan:row-action-kind": "node scripts/scan-row-action-kind.mjs"
+        "scan:row-action-kind": "node scripts/scan-row-action-kind.mjs",
+        "scan:unitable-row-cache": "python scripts/scan_unitable_row_cache.py --fail-on high"
     },
     "engines": {
         "node": ">=22.0.0",

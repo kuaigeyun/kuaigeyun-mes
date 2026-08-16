@@ -536,7 +536,7 @@ const ReportingPage: React.FC = () => {
     defaultScope: 'reportable',
     loadData: async ({ keyword, page, pageSize, scope }) => {
       const res = await reportingApi.listPullCandidates({
-        keyword: keyword.trim() || undefined,
+        work_order_code: keyword.trim() || undefined,
         scope: scope === 'all' ? 'all' : 'reportable',
         skip: (page - 1) * pageSize,
         limit: pageSize,
@@ -1942,6 +1942,7 @@ const ReportingPage: React.FC = () => {
         confirmLoading={pullFromWorkOrderQuery.confirmLoading}
         selectionType={pullFromWorkOrderQuery.selectionType}
         selectedRowKeys={pullFromWorkOrderQuery.selectedRowKeys}
+        selectedRows={pullFromWorkOrderQuery.selectedRows}
         onSelectedRowKeysChange={pullFromWorkOrderQuery.handleSelectedRowKeysChange}
         searchDraft={pullFromWorkOrderQuery.searchDraft}
         onSearchDraftChange={pullFromWorkOrderQuery.setSearchDraft}

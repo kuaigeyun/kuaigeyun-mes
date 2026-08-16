@@ -6,6 +6,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from apps.kuaizhizao.schemas.coordination_board import (
     ActiveComputationsResponse,
     ActiveOrdersResponse,
@@ -15,7 +16,11 @@ from apps.kuaizhizao.services.coordination_board_service import CoordinationBoar
 from core.api.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
-router = APIRouter(prefix="/coordination-board", tags=["App - Kuaige Zhizao - Coordination Board"])
+router = APIRouter(
+    prefix="/coordination-board",
+    tags=["App - Kuaige Zhizao - Coordination Board"],
+    dependencies=[Depends(require_kuaizhizao_module_access("demand"))],
+)
 service = CoordinationBoardService()
 
 

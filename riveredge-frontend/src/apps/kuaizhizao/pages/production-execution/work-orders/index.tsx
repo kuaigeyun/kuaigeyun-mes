@@ -128,8 +128,12 @@ import {
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull'
 import {
   UniPullQueryModal,
+  UNI_PULL_QUERY_MAX_FETCH_LIMIT,
   filterByPullScope,
   paginatePullRows,
+  renderPullCapabilityTag,
+  renderPullQueryDocStatus,
+  renderPullQueryReviewStatus,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query'
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push'
@@ -206,6 +210,7 @@ import {
 import { qualityApi } from '../../../services/production'
 import type { PushPreviewResponse } from '../../../services/sales-order'
 import { mapOutsourceOptionsToPullPreview } from '../../../utils/outsourceOrderPullPreview'
+import { renderDemandBusinessModeMarkerTag } from '../../../utils/businessMode'
 import dayjs from 'dayjs'
 import CodeField from '../../../../../components/code-field'
 import { searchUserDisplay, type User } from '../../../../../services/user'
@@ -1490,6 +1495,7 @@ const WorkOrdersPage: React.FC = () => {
   const [computationPullPreviewError, setComputationPullPreviewError] = useState<string | null>(null)
   const [computationPullSourceId, setComputationPullSourceId] = useState<number | null>(null)
   const [computationPullMode, setComputationPullMode] = useState<'draft' | 'confirm'>('draft')
+  const [computationPullSelectedItemIds, setComputationPullSelectedItemIds] = useState<number[]>([])
 
   const [soPullPreviewOpen, setSoPullPreviewOpen] = useState(false)
   const [soPullPreviewLoading, setSoPullPreviewLoading] = useState(false)
@@ -1502,7 +1508,7 @@ const WorkOrdersPage: React.FC = () => {
   const [soPullWorkCenterList, setSoPullWorkCenterList] = useState<WorkCenter[]>([])
   const [soPullWorkCenterLoading, setSoPullWorkCenterLoading] = useState(false)
   const [soPullMode, setSoPullMode] = useState<'draft' | 'confirm'>('draft')
-  const [soPullGranularity, setSoPullGranularity] = useState<'grouped' | 'per_unit'>('grouped')
+  const [soPullGranularity, setSoPullGranularity] = useState<'grouped' | 'peer_group'>('grouped')
 
   const [notifyInboundPreviewOpen, setNotifyInboundPreviewOpen] = useState(false)
   const [notifyInboundPreviewLoading, setNotifyInboundPreviewLoading] = useState(false)
@@ -2610,6 +2616,7 @@ const WorkOrdersPage: React.FC = () => {
     setComputationPullPreviewData(null)
     setComputationPullPreviewError(null)
     setComputationPullMode('draft')
+    setComputationPullSelectedItemIds([])
   }, [])
 
   const openComputationPullPreview = useCallback(
@@ -2621,12 +2628,23 @@ const WorkOrdersPage: React.FC = () => {
       setComputationPullPreviewData(null)
       setComputationPullPreviewError(null)
       setComputationPullMode('draft')
+      setComputationPullSelectedItemIds([])
       try {
         const data = await getPushPreview(computationId, {
           production: 'work_order',
           generate_mode: 'work_order_only',
         })
         setComputationPullPreviewData(data)
+        setComputationPullSelectedItemIds(
+          (data.items || [])
+            .filter(
+              (row) =>
+                (row.target_document === 'work_order' ||
+                  row.target_document === 'outsource_work_order') &&
+                Number(row.max_push_quantity ?? 0) > 0,
+            )
+            .map((row) => Number(row.item_id)),
+        )
       } catch (e: any) {
         setComputationPullPreviewError(
           e?.response?.data?.detail || e?.message || t('app.kuaizhizao.workOrder.computationPullPreviewFailed'),
@@ -2647,10 +2665,24 @@ const WorkOrdersPage: React.FC = () => {
     ) {
       return
     }
+    const prodRows = (computationPullPreviewData?.items || []).filter(
+      (row) =>
+        (row.target_document === 'work_order' || row.target_document === 'outsource_work_order') &&
+        Number(row.max_push_quantity ?? 0) > 0,
+    )
+    const selectedIds = computationPullSelectedItemIds.filter((id) =>
+      prodRows.some((row) => Number(row.item_id) === id),
+    )
+    if (prodRows.length > 0 && !selectedIds.length) {
+      messageApi.warning(t('app.kuaizhizao.workOrder.computationPull.selectLinesFirst'))
+      return
+    }
     setComputationPullPreviewConfirming(true)
     try {
       const res = await generateOrdersFromComputation(computationPullSourceId, 'work_order_only', {
         allowDraft: computationPullMode === 'draft',
+        pushMode: computationPullMode,
+        selected_item_ids: prodRows.length > 0 ? selectedIds : undefined,
       })
       const count = Number(res?.work_order_count ?? res?.work_orders?.length ?? 0)
       messageApi.success(
@@ -2682,8 +2714,10 @@ const WorkOrdersPage: React.FC = () => {
   }, [
     computationPullMode,
     computationPullPreviewData?.has_blocking_issues,
+    computationPullPreviewData?.items,
     computationPullPreviewData?.validation_failures?.length,
     computationPullPreviewError,
+    computationPullSelectedItemIds,
     computationPullSourceId,
     messageApi,
     pullFromDemandComputationAction.sourceLabel,
@@ -2924,7 +2958,7 @@ const WorkOrdersPage: React.FC = () => {
       const kw = keyword.trim()
       const listRes = await listDemandComputations({
         skip: 0,
-        limit: 200,
+        limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
         computation_status: '完成',
         computation_code: kw || undefined,
       })
@@ -2995,7 +3029,7 @@ const WorkOrdersPage: React.FC = () => {
         const result = await listSalesOrdersForPull({
           skip: 0,
           limit: 200,
-          keyword: keyword.trim() || undefined,
+          order_code: keyword.trim() || undefined,
         })
         const rows = Array.isArray(result) ? result : (result.data ?? [])
         const candidates = rows.map((row) => ({
@@ -3025,7 +3059,10 @@ const WorkOrdersPage: React.FC = () => {
       }
       const selected = rows[0]
       if (selected?.remaining_push_quantity <= 0 || selected?.capabilities?.push_work_order?.allowed === false) {
-        messageApi.warning(selected?.capabilities?.push_work_order?.reason || '该销售订单当前不可用于创建工单')
+        messageApi.warning(
+          salesOrderCapabilityReasonMessage(selected?.capabilities?.push_work_order?.reason, t) ||
+            t('app.kuaizhizao.workOrder.tagCannotCreate'),
+        )
         return
       }
       pullFromSalesOrderQuery.closeModal()
@@ -7810,8 +7847,20 @@ const WorkOrdersPage: React.FC = () => {
         rowKey="id"
         columns={[
               { title: t('app.kuaizhizao.workOrder.colComputationCode'), dataIndex: 'computation_code', width: 220, ellipsis: true },
-              { title: t('app.kuaizhizao.workOrder.colBusinessMode'), dataIndex: 'business_mode', width: 110, align: 'center' },
-              { title: t('app.kuaizhizao.workOrder.colComputationStatus'), dataIndex: 'computation_status', width: 110, align: 'center' },
+              {
+                title: t('app.kuaizhizao.workOrder.colBusinessMode'),
+                dataIndex: 'business_mode',
+                width: 110,
+                align: 'center',
+                render: (v) => renderDemandBusinessModeMarkerTag(t, v),
+              },
+              {
+                title: t('app.kuaizhizao.workOrder.colComputationStatus'),
+                dataIndex: 'computation_status',
+                width: 110,
+                align: 'center',
+                render: (v) => renderPullQueryDocStatus(t, v),
+              },
               {
                 title: t('app.kuaizhizao.workOrder.colCreatedAt'),
                 dataIndex: 'created_at',
@@ -7830,10 +7879,10 @@ const WorkOrdersPage: React.FC = () => {
                 width: 180,
                 align: 'center',
                 render: (_, record) =>
-                  record.can_push_work_order === false ? (
-                    <Tag color="gold">{record.disabled_reason || t('app.kuaizhizao.workOrder.tagCannotCreate')}</Tag>
-                  ) : (
-                    <Tag color="success">{t('app.kuaizhizao.workOrder.tagCanCreate')}</Tag>
+                  renderPullCapabilityTag(
+                    record.can_push_work_order !== false,
+                    t('app.kuaizhizao.workOrder.tagCanCreate'),
+                    record.disabled_reason || t('app.kuaizhizao.workOrder.tagCannotCreate'),
                   ),
               },
             ]}
@@ -7842,6 +7891,7 @@ const WorkOrdersPage: React.FC = () => {
         confirmLoading={pullFromComputationQuery.confirmLoading}
         selectionType={pullFromComputationQuery.selectionType}
         selectedRowKeys={pullFromComputationQuery.selectedRowKeys}
+        selectedRows={pullFromComputationQuery.selectedRows}
         onSelectedRowKeysChange={pullFromComputationQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromComputationQuery.isRowDisabled}
         searchDraft={pullFromComputationQuery.searchDraft}
@@ -7858,7 +7908,6 @@ const WorkOrdersPage: React.FC = () => {
         scope={pullFromComputationQuery.scope}
         onScopeChange={pullFromComputationQuery.handleScopeChange}
         okText={t('app.kuaizhizao.workOrder.pull.okCreateWorkOrder')}
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />
 
       <UniPullQueryModal<PullSalesOrderCandidate>
@@ -7870,8 +7919,20 @@ const WorkOrdersPage: React.FC = () => {
         columns={[
           { title: t('app.kuaizhizao.salesOrder.orderCode'), dataIndex: 'order_code', width: 180, ellipsis: true },
           { title: t('app.kuaizhizao.quotation.form.customer'), dataIndex: 'customer_name', width: 220, ellipsis: true },
-          { title: t('app.kuaizhizao.salesOrder.status'), dataIndex: 'status', width: 120, align: 'center' },
-          { title: t('app.kuaizhizao.salesOrder.reviewStatus'), dataIndex: 'review_status', width: 120, align: 'center' },
+          {
+            title: t('app.kuaizhizao.salesOrder.status'),
+            dataIndex: 'status',
+            width: 100,
+            align: 'center' as const,
+            render: (v) => renderPullQueryDocStatus(t, v),
+          },
+          {
+            title: t('app.kuaizhizao.salesOrder.reviewStatus'),
+            dataIndex: 'review_status',
+            width: 120,
+            align: 'center' as const,
+            render: (v) => renderPullQueryReviewStatus(t, v),
+          },
           {
             title: t('app.kuaizhizao.salesOrder.deliveryDate'),
             dataIndex: 'delivery_date',
@@ -7897,10 +7958,11 @@ const WorkOrdersPage: React.FC = () => {
             width: 180,
             align: 'center',
             render: (_, record) =>
-              record.remaining_push_quantity <= 0 || record.capabilities?.push_work_order?.allowed === false ? (
-                <Tag color="gold">{record.capabilities?.push_work_order?.reason || '不可创建'}</Tag>
-              ) : (
-                <Tag color="success">{t('app.kuaizhizao.workOrder.tagCanCreate')}</Tag>
+              renderPullCapabilityTag(
+                !(record.remaining_push_quantity <= 0 || record.capabilities?.push_work_order?.allowed === false),
+                t('app.kuaizhizao.workOrder.tagCanCreate'),
+                salesOrderCapabilityReasonMessage(record.capabilities?.push_work_order?.reason, t) ||
+                  t('app.kuaizhizao.workOrder.tagCannotCreate'),
               ),
           },
         ]}
@@ -7909,6 +7971,7 @@ const WorkOrdersPage: React.FC = () => {
         confirmLoading={pullFromSalesOrderQuery.confirmLoading}
         selectionType={pullFromSalesOrderQuery.selectionType}
         selectedRowKeys={pullFromSalesOrderQuery.selectedRowKeys}
+        selectedRows={pullFromSalesOrderQuery.selectedRows}
         onSelectedRowKeysChange={pullFromSalesOrderQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromSalesOrderQuery.isRowDisabled}
         searchDraft={pullFromSalesOrderQuery.searchDraft}
@@ -7925,7 +7988,6 @@ const WorkOrdersPage: React.FC = () => {
         scope={pullFromSalesOrderQuery.scope}
         onScopeChange={pullFromSalesOrderQuery.handleScopeChange}
         okText="创建工单"
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />
 
       <Modal
@@ -7948,7 +8010,21 @@ const WorkOrdersPage: React.FC = () => {
               (row) => Number(row.max_push_quantity ?? 0) > 0,
             ) ||
             (computationPullMode === 'confirm' &&
-              (computationPullPreviewData?.validation_failures?.length ?? 0) > 0),
+              (computationPullPreviewData?.validation_failures?.length ?? 0) > 0) ||
+            (() => {
+              const prodRows = (computationPullPreviewData?.items || []).filter(
+                (row) =>
+                  (row.target_document === 'work_order' ||
+                    row.target_document === 'outsource_work_order') &&
+                  Number(row.max_push_quantity ?? 0) > 0,
+              )
+              return (
+                prodRows.length > 0 &&
+                !computationPullSelectedItemIds.some((id) =>
+                  prodRows.some((row) => Number(row.item_id) === id),
+                )
+              )
+            })(),
         }}
       >
         {computationPullPreviewLoading ? (
@@ -7958,7 +8034,7 @@ const WorkOrdersPage: React.FC = () => {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {computationPullPreviewError ? (
-              <Alert type="error" showIcon message={computationPullPreviewError} />
+              <Alert type="error" showIcon title={computationPullPreviewError} />
             ) : null}
             {computationPullPreviewData ? (
               <>
@@ -7996,6 +8072,17 @@ const WorkOrdersPage: React.FC = () => {
                     rowKey={(row) => `${row.item_id}-${row.target_document ?? 'work_order'}`}
                     pagination={false}
                     scroll={{ x: 1000 }}
+                    rowSelection={{
+                      selectedRowKeys: computationPullSelectedItemIds.map(String),
+                      onChange: (keys) =>
+                        setComputationPullSelectedItemIds(keys.map((k) => Number(k))),
+                      getCheckboxProps: (row) => ({
+                        disabled:
+                          Number(row.max_push_quantity ?? 0) <= 0 ||
+                          (row.target_document !== 'work_order' &&
+                            row.target_document !== 'outsource_work_order'),
+                      }),
+                    }}
                     columns={[
                       { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                       { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
@@ -8111,10 +8198,10 @@ const WorkOrdersPage: React.FC = () => {
                 <ThemedSegmented
                   size="small"
                   value={soPullGranularity}
-                  onChange={(val) => setSoPullGranularity(val as 'grouped' | 'per_unit')}
+                  onChange={(val) => setSoPullGranularity(val as 'grouped' | 'peer_group')}
                   options={[
                     { label: t('app.kuaizhizao.salesOrder.workOrderTypeGrouped'), value: 'grouped' },
-                    { label: t('app.kuaizhizao.salesOrder.workOrderTypePerUnit'), value: 'per_unit' },
+                    { label: t('app.kuaizhizao.salesOrder.workOrderTypePerUnit'), value: 'peer_group' },
                   ]}
                 />
               </Space>

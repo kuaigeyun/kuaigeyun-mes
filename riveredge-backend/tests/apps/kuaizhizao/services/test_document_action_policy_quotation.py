@@ -100,6 +100,8 @@ def test_linked_contract_blocks_convert_order():
     )
     assert not caps.convert_to_order.allowed
     assert caps.convert_to_order.reason == "quotation.convert_order.linked_contract"
+    assert not caps.convert_to_sales_review.allowed
+    assert caps.convert_to_sales_review.reason == "quotation.convert_sales_review.linked_contract"
 
 
 def test_stale_contract_id_allows_convert_when_contract_missing():

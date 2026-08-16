@@ -892,6 +892,14 @@ class InventoryService:
                 cfg = await BusinessConfigService().get_business_config(tenant_id)
                 wh_cfg = cfg.get("parameters", {}).get("warehouse", {})
                 lifo_enabled = bool(wh_cfg.get("lifo", False))
+                from apps.kuaizhizao.services.fifo_policy import (
+                    fifo_mode_label,
+                    normalize_fifo_mode,
+                    pick_blocking_older_batch,
+                    batch_fifo_sort_key,
+                )
+
+                fifo_mode = normalize_fifo_mode(wh_cfg.get("fifo_mode"))
                 material = await Material.get_or_none(
                     tenant_id=tenant_id,
                     id=material_id,
@@ -959,23 +967,23 @@ class InventoryService:
                         
                     # 阶段2：强制先进先出 (FIFO Strict Enforcement) 拦截网
                     if enforce_fifo:
-                        # 检查是否有更早产生的（id 更小），且有库存的批次
-                        older_batch = await MaterialBatch.filter(
+                        siblings = await MaterialBatch.filter(
                             tenant_id=tenant_id,
                             material_id=material_id,
                             deleted_at__isnull=True,
                             status="in_stock",
                             quantity__gt=0,
-                            id__lt=batch.id,
                             **stock_qs_filter,
                         ).filter(
                             InventoryService._main_warehouse_balance_q(main_wh_id)
-                        ).order_by("id").first()
+                        ).all()
+                        older_batch = pick_blocking_older_batch(batch, siblings, fifo_mode)
                         if older_batch:
                             raise BusinessLogicError(
-                                f"【防呆拦截】当前物料不符合先入先出！"
-                                f"系统内仍存在早期旧批次 (批号:{older_batch.batch_no}) 未用完！"
-                                f"请优先领用早期批次以防产品滞留过期。"
+                                f"【防呆拦截】当前物料不符合先入先出"
+                                f"（判定：{fifo_mode_label(fifo_mode)}）！"
+                                f"系统内仍存在应优先领用的批次 (批号:{older_batch.batch_no}) 未用完！"
+                                f"请优先领用该批次以防产品滞留过期。"
                             )
                     # 开启 LIFO 且未开启 FIFO 时，强制优先使用最新批次
                     if lifo_enabled and not enforce_fifo:
@@ -1031,13 +1039,8 @@ class InventoryService:
                         idempotency_key=idempotency_key,
                     )
                 else:
-                    # 默认 FIFO；若开启 LIFO 且未开启 FIFO，则按最新批次扣减
+                    # 默认 FIFO（按 fifo_mode）；若开启 LIFO 且未开启 FIFO，则按最新批次扣减
                     # 同仓优先于历史未归属(warehouse_id=0)
-                    order_keys = (
-                        ("-warehouse_id", "-id")
-                        if (lifo_enabled and not enforce_fifo)
-                        else ("-warehouse_id", "id")
-                    )
                     batches = (
                         await MaterialBatch.filter(
                             tenant_id=tenant_id,
@@ -1050,9 +1053,24 @@ class InventoryService:
                         )
                         .filter(InventoryService._main_warehouse_balance_q(main_wh_id))
                         .select_for_update()
-                        .order_by(*order_keys)
                         .all()
                     )
+                    if lifo_enabled and not enforce_fifo:
+                        batches = sorted(
+                            batches,
+                            key=lambda b: (
+                                0 if int(getattr(b, "warehouse_id", 0) or 0) == int(main_wh_id or 0) else 1,
+                                -int(getattr(b, "id", 0) or 0),
+                            ),
+                        )
+                    else:
+                        batches = sorted(
+                            batches,
+                            key=lambda b: (
+                                0 if int(getattr(b, "warehouse_id", 0) or 0) == int(main_wh_id or 0) else 1,
+                                batch_fifo_sort_key(b, fifo_mode),
+                            ),
+                        )
                     remaining = quantity
                     have_before = sum((b.quantity or Decimal(0)) for b in batches)
                     available_hint = "、".join(

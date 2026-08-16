@@ -8,7 +8,7 @@ Date: 2025-01-14
 """
 
 from datetime import date
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, Query, Path, Body, HTTPException, status
 from loguru import logger
 from tortoise.expressions import Q
@@ -76,6 +76,37 @@ async def create_computation(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建需求计算失败")
 
 
+@router.get(
+    "/purchase-requisition-pull-lines",
+    summary="Open buy lines for purchase requisition pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-demand-computation:read"))],
+)
+async def list_purchase_requisition_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    computation_id: Optional[int] = Query(None, description="来源需求计算单"),
+    pullable_only: bool = Query(True, description="仅剩余可转量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已完成需求计算的开口采购件行，供采购申请跨单取明细。"""
+    try:
+        return await computation_service.list_purchase_requisition_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            computation_id=computation_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("列出采购申请开口行失败")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="列出采购申请开口行失败")
+
+
 @router.get("/statistics", summary="Demand computation statistics (KPI cards)")
 async def get_demand_computation_statistics(
     current_user: User = Depends(get_current_user),
@@ -133,6 +164,56 @@ async def get_demand_computation_statistics(
     }
 
 
+@router.get(
+    "/mrp-exception-inbox",
+    summary="MRP exception inbox for planners",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-demand-computation:read"))],
+)
+async def get_mrp_exception_inbox(
+    computation_id: Optional[int] = Query(None, description="限定某次计算"),
+    code: Optional[str] = Query(None, description="例外码筛选"),
+    severity: Optional[str] = Query(None, description="严重级 error/warning/info"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """聚合已完成计算的 MRP 例外（错误优先），供计划员收件箱。"""
+    try:
+        return await computation_service.get_mrp_exception_inbox(
+            tenant_id=tenant_id,
+            computation_id=computation_id,
+            code=code,
+            severity=severity,
+            skip=skip,
+            limit=limit,
+        )
+    except Exception as e:
+        logger.exception("获取 MRP 例外收件箱失败")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get(
+    "/monitor-summaries",
+    summary="Batch dynamic monitor summaries",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-demand-computation:read"))],
+)
+async def get_monitor_summaries_batch(
+    computation_ids: List[int] = Query(..., description="计算 ID 列表"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """批量返回计算的动态监控摘要（源需求变更/下推逾期），供列表角标。"""
+    try:
+        return await computation_service.get_monitor_summaries_batch(
+            tenant_id=tenant_id,
+            computation_ids=computation_ids,
+        )
+    except Exception as e:
+        logger.exception("批量获取动态监控摘要失败")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 @router.get("", summary="List demand computations")
 async def list_computations(
     demand_id: Optional[int] = Query(None, description="需求ID"),
@@ -153,6 +234,10 @@ async def list_computations(
     order_by: Optional[str] = Query(None, description="排序字段，如 computation_code、-created_at"),
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(20, ge=1, le=100, description="限制数量"),
+    view: Optional[str] = Query(
+        None,
+        description="响应视图：options=选单轻量列表（跳过明细/下推进度/capabilities）",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -183,7 +268,8 @@ async def list_computations(
             created_end_date=created_end_date,
             order_by=safe_order_by,
             skip=skip,
-            limit=limit
+            limit=limit,
+            view=view,
         )
     except Exception as e:
         logger.error(f"获取需求计算列表失败: {e}")
@@ -403,7 +489,12 @@ async def firm_planned_orders(
         )
 
 
-@router.post("/{computation_id:int}/recompute", response_model=DemandComputationResponse, summary="Recompute")
+@router.post(
+    "/{computation_id:int}/recompute",
+    response_model=DemandComputationResponse,
+    summary="Recompute",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-demand-computation:update"))],
+)
 async def recompute_computation(
     computation_id: int = Path(..., description="计算ID"),
     current_user: User = Depends(get_current_user),
@@ -496,7 +587,11 @@ async def get_change_impact(
     return await change_event_service.get_event_impact(tenant_id=tenant_id, event_id=event_id)
 
 
-@router.post("/change-events/{event_id}/replan-task", summary="Ensure replan task for change event")
+@router.post(
+    "/change-events/{event_id}/replan-task",
+    summary="Ensure replan task for change event",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-demand-computation:update"))],
+)
 async def ensure_replan_task_for_event(
     event_id: int = Path(..., description="事件ID"),
     current_user: User = Depends(get_current_user),
@@ -516,7 +611,11 @@ async def ensure_replan_task_for_event(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.post("/replan-tasks/{task_id}/execute", summary="Execute replan task")
+@router.post(
+    "/replan-tasks/{task_id}/execute",
+    summary="Execute replan task",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-demand-computation:update"))],
+)
 async def execute_replan_task(
     task_id: int = Path(..., description="重算任务ID"),
     body: Optional[DemandReplanTaskExecuteRequest] = Body(None),
@@ -740,6 +839,7 @@ async def generate_orders(
     generate_mode: str = Query("all", description="生成粒度：all=全部，work_order_only=仅工单，purchase_only=仅采购，outsource_only=仅委外工单"),
     allow_draft: bool = Query(False, description="兼容：True 时等价于 push_mode=draft"),
     push_mode: Optional[str] = Query(None, description="下推模式：draft=草稿，confirm=正式；缺省读组织配置"),
+    body: Optional[Dict[str, Any]] = Body(default=None, description="可选 selected_item_ids"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -748,15 +848,15 @@ async def generate_orders(
     
     generate_mode: all=全部，work_order_only=仅工单，purchase_only=仅采购
     allow_draft: 验证失败时是否仍生成草稿单
+    body.selected_item_ids: 可选，仅下推所选计算明细（生产/委外件）
     """
-    # #region agent log
     try:
-        with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
-            _f.write(__import__("json").dumps({"location": "demand_computations.py:generate_orders", "message": "api_entry", "data": {"computation_id": computation_id, "generate_mode": generate_mode}, "hypothesisId": "D"}) + "\n")
-    except Exception:
-        pass
-    # #endregion
-    try:
+        b = body or {}
+        selected_item_ids = None
+        if b.get("selected_item_ids") is not None:
+            selected_item_ids = [
+                int(i) for i in (b.get("selected_item_ids") or []) if i is not None
+            ]
         result = await computation_service.generate_work_orders_and_purchase_orders(
             tenant_id=tenant_id,
             computation_id=computation_id,
@@ -764,6 +864,7 @@ async def generate_orders(
             generate_mode=generate_mode,
             allow_draft=allow_draft,
             push_mode=push_mode,
+            selected_item_ids=selected_item_ids,
         )
         return result
     except NotFoundError as e:
@@ -771,13 +872,6 @@ async def generate_orders(
     except BusinessLogicError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        # #region agent log
-        try:
-            with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
-                _f.write(__import__("json").dumps({"location": "demand_computations.py:generate_orders", "message": "api_exception", "data": {"error": str(e), "type": type(e).__name__}, "hypothesisId": "C"}) + "\n")
-        except Exception:
-            pass
-        # #endregion
         logger.exception("生成工单和采购单失败")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -866,6 +960,8 @@ async def push_all(
             purchase=b.get("purchase"),
             include_outsource=b.get("include_outsource", True),
             push_mode=b.get("push_mode"),
+            purchase_requisition_item_ids=b.get("purchase_requisition_item_ids"),
+            production_item_ids=b.get("production_item_ids"),
         )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -900,6 +996,7 @@ async def preview_push_to_purchase_requisition(
 @router.post("/{computation_id:int}/push-to-purchase-requisition", summary="Push to purchase requisition")
 async def push_to_purchase_requisition(
     computation_id: int = Path(..., description="计算ID"),
+    body: Optional[Dict[str, Any]] = Body(default=None, description="可选 selected_item_ids"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -907,12 +1004,19 @@ async def push_to_purchase_requisition(
     try:
         from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPullService
         service = DocumentPushPullService()
+        push_params: Optional[Dict[str, Any]] = None
+        if body and body.get("selected_item_ids") is not None:
+            push_params = {
+                "selected_item_ids": [
+                    int(i) for i in (body.get("selected_item_ids") or []) if i is not None
+                ],
+            }
         result = await service.push_document(
             tenant_id=tenant_id,
             source_type="demand_computation",
             source_id=computation_id,
             target_type="purchase_requisition",
-            push_params=None,
+            push_params=push_params,
             created_by=current_user.id,
         )
         return result
@@ -944,6 +1048,10 @@ async def list_computation_history(
     order_by: Optional[str] = Query(None, description="排序字段，如 computation_code、-created_at"),
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(20, ge=1, le=100, description="限制数量"),
+    view: Optional[str] = Query(
+        None,
+        description="响应视图：options=选单轻量列表（跳过明细/下推进度/capabilities）",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -970,6 +1078,7 @@ async def list_computation_history(
             order_by=safe_order_by,
             skip=skip,
             limit=limit,
+            view=view,
         )
     except Exception:
         logger.exception("查询需求计算历史记录失败")

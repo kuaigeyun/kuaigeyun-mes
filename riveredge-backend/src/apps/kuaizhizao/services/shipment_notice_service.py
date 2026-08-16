@@ -212,8 +212,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         notice: ShipmentNotice,
     ) -> None:
         """
-        P1-S-009: 在通知仓库（提交）前做超发校验。
-        以销售订单明细可发数量（剩余数量）为上限，且扣除其他“已通知”单据已占用数量。
+        通知仓库前超发校验：与下推/取单同一口径（欠发 − 其他通知占用 − 待出库占用）。
         """
         notice_items = await ShipmentNoticeItem.filter(
             tenant_id=tenant_id,
@@ -229,26 +228,15 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         if not order_items:
             raise BusinessLogicError("销售订单明细不存在，无法校验发货通知数量")
 
+        from apps.kuaizhizao.utils.sales_order_push_qty import get_pushable_qty_for_order_items
+
+        pushable_by_item = await get_pushable_qty_for_order_items(
+            tenant_id,
+            int(notice.sales_order_id),
+            order_items,
+            exclude_notice_id=int(notice.id),
+        )
         order_item_by_id = {int(it.id): it for it in order_items}
-
-        reserved_notice_ids = await ShipmentNotice.filter(
-            tenant_id=tenant_id,
-            sales_order_id=notice.sales_order_id,
-            status="已通知",
-            deleted_at__isnull=True,
-        ).exclude(id=notice.id).values_list("id", flat=True)
-
-        reserved_by_item_id: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
-        if reserved_notice_ids:
-            reserved_items = await ShipmentNoticeItem.filter(
-                tenant_id=tenant_id,
-                notice_id__in=list(reserved_notice_ids),
-            ).all()
-            for rit in reserved_items:
-                so_item_id = getattr(rit, "sales_order_item_id", None)
-                if so_item_id is None:
-                    continue
-                reserved_by_item_id[int(so_item_id)] += Decimal(str(rit.notice_quantity or 0))
 
         for n_item in notice_items:
             qty = Decimal(str(n_item.notice_quantity or 0))
@@ -257,22 +245,19 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
 
             so_item_id = getattr(n_item, "sales_order_item_id", None)
             if so_item_id is None:
-                # 无法映射到订单行时，不做超发额度校验（但保留数量>0校验）
                 continue
             so_item_id = int(so_item_id)
             so_item = order_item_by_id.get(so_item_id)
             if not so_item:
                 raise BusinessLogicError(f"发货通知明细缺少有效的订单行关联: {so_item_id}")
 
-            remaining_qty = (
-                Decimal(str(so_item.remaining_quantity))
-                if getattr(so_item, "remaining_quantity", None) is not None
-                else Decimal(str(so_item.order_quantity or 0)) - Decimal(str(so_item.delivered_quantity or 0))
-            )
-            remaining_qty = max(Decimal("0"), remaining_qty)
-            available_qty = max(Decimal("0"), remaining_qty - reserved_by_item_id.get(so_item_id, Decimal("0")))
+            available_qty = pushable_by_item.get(so_item_id, Decimal("0"))
             if qty > available_qty:
-                material_label = (getattr(so_item, "material_code", None) or getattr(so_item, "material_name", None) or str(so_item_id))
+                material_label = (
+                    getattr(so_item, "material_code", None)
+                    or getattr(so_item, "material_name", None)
+                    or str(so_item_id)
+                )
                 raise BusinessLogicError(
                     f"物料 {material_label} 通知数量 {qty} 超过可通知欠发量 {available_qty}"
                 )
@@ -1077,16 +1062,25 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         from apps.kuaizhizao.services.warehouse_service import SalesDeliveryService
         from apps.kuaizhizao.schemas.warehouse import SalesDeliveryCreate, SalesDeliveryItemCreate
 
+        from apps.kuaizhizao.services.warehouse_service import (
+            occupied_sales_delivery_qty_by_notice_item_ids,
+        )
+
+        occupied_by_notice_item = await occupied_sales_delivery_qty_by_notice_item_ids(
+            tenant_id, [int(item.id) for item in notice_items]
+        )
         groups: dict[int, list] = defaultdict(list)
         for item in notice_items:
-            qty = Decimal(str(getattr(item, "notice_quantity", 0) or 0))
+            qty = Decimal(str(getattr(item, "notice_quantity", 0) or 0)) - occupied_by_notice_item.get(
+                int(item.id), Decimal("0")
+            )
             if qty <= Decimal("0"):
                 continue
             wh_id = getattr(item, "warehouse_id", None) or getattr(notice, "warehouse_id", None)
             if wh_id is None:
                 label = getattr(item, "material_code", None) or getattr(item, "material_name", None) or str(item.id)
                 raise ValidationError(f"请为物料 {label} 指定出库仓库")
-            groups[int(wh_id)].append(item)
+            groups[int(wh_id)].append((item, qty))
 
         if not groups:
             raise BusinessLogicError("发货通知单无有效明细，无法通知仓库")
@@ -1098,24 +1092,25 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                 tenant_id=tenant_id,
                 warehouse_id=wh_id,
                 preferred_name=next(
-                    (getattr(item, "warehouse_name", None) for item in group_items if getattr(item, "warehouse_name", None)),
+                    (getattr(item, "warehouse_name", None) for item, _qty in group_items if getattr(item, "warehouse_name", None)),
                     getattr(notice, "warehouse_name", None),
                 ),
             )
             delivery_items = []
-            for item in group_items:
+            for item, qty in group_items:
                 unit_price = getattr(item, "unit_price", None)
-                total_amount = getattr(item, "total_amount", None)
+                total_amount = qty * Decimal(str(unit_price or 0))
                 so_item_id = getattr(item, "sales_order_item_id", None)
                 delivery_items.append(
                     SalesDeliveryItemCreate(
-                        sales_order_item_id=int(so_item_id) if so_item_id else 0,
+                        sales_order_item_id=int(so_item_id) if so_item_id else None,
+                        shipment_notice_item_id=int(item.id),
                         material_id=item.material_id,
                         material_code=item.material_code,
                         material_name=item.material_name,
                         material_spec=getattr(item, "material_spec", None),
                         material_unit=item.material_unit,
-                        delivery_quantity=float(item.notice_quantity),
+                        delivery_quantity=float(qty),
                         unit_price=float(unit_price) if unit_price is not None else 0.0,
                         total_amount=float(total_amount) if total_amount is not None else 0.0,
                         is_gift=bool(getattr(item, "is_gift", False)),

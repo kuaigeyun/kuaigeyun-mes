@@ -30,9 +30,9 @@ from apps.kuaizhizao.schemas.delivery_notice import (
     DeliveryNoticePullPreviewLine,
     DeliveryNoticePullPreviewResponse,
 )
-from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
+from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 from infra.services.business_config_service import BusinessConfigService
-from core.utils.timezone_utils import resolve_business_datetime, today_site_str
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str, to_site_date
 
 
 class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
@@ -71,6 +71,235 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         ).values_list("delivery_id", flat=True)
         with_lines = {int(row) for row in rows if row is not None}
         return {int(delivery_id): int(delivery_id) in with_lines for delivery_id in sales_delivery_ids}
+
+    async def noticed_qty_by_sales_delivery_item_ids(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+    ) -> Dict[int, float]:
+        """已通知量按销售出库明细归属，不能按送货单头表出库单号。"""
+        selected = [int(v) for v in item_ids if v is not None]
+        if not selected:
+            return {}
+        notice_items = await DeliveryNoticeItem.filter(
+            tenant_id=tenant_id,
+            delivery_item_id__in=selected,
+        ).all()
+        notice_ids = {int(row.notice_id) for row in notice_items if row.notice_id is not None}
+        if not notice_ids:
+            return {}
+        active_ids = {
+            int(row)
+            for row in await DeliveryNotice.filter(
+                tenant_id=tenant_id,
+                id__in=list(notice_ids),
+                deleted_at__isnull=True,
+            ).values_list("id", flat=True)
+        }
+        noticed: Dict[int, float] = {}
+        for row in notice_items:
+            if int(row.notice_id) not in active_ids:
+                continue
+            item_id = int(row.delivery_item_id or 0)
+            if item_id <= 0:
+                continue
+            noticed[item_id] = noticed.get(item_id, 0.0) + float(row.notice_quantity or 0)
+        return noticed
+
+    async def list_delivery_notice_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        sales_delivery_id: Optional[int] = None,
+        pullable_only: bool = True,
+    ) -> Dict[str, Any]:
+        """开口销售出库行：可转送货单的剩余明细。"""
+        from apps.kuaizhizao.services.document_action_policy.sales_delivery import (
+            _CANCELLED,
+        )
+
+        delivery_query = SalesDelivery.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if sales_delivery_id is not None:
+            delivery_query = delivery_query.filter(id=int(sales_delivery_id))
+        deliveries = await delivery_query.only(
+            "id",
+            "delivery_code",
+            "status",
+            "customer_id",
+            "customer_name",
+            "delivery_date",
+        )
+        delivery_by_id = {int(row.id): row for row in deliveries}
+        if not delivery_by_id:
+            return {"data": [], "total": 0}
+
+        items = await SalesDeliveryItem.filter(
+            tenant_id=tenant_id,
+            delivery_id__in=list(delivery_by_id.keys()),
+        ).all()
+        noticed_by_item = await self.noticed_qty_by_sales_delivery_item_ids(
+            tenant_id,
+            [int(row.id) for row in items if row.id is not None],
+        )
+        kw = (keyword or "").strip().lower()
+        lines: List[Dict[str, Any]] = []
+        for item in items:
+            delivery = delivery_by_id.get(int(item.delivery_id))
+            if not delivery:
+                continue
+            qty = float(item.delivery_quantity or 0)
+            if qty <= 0:
+                continue
+            pushed = noticed_by_item.get(int(item.id), 0.0)
+            remaining = max(0.0, qty - pushed)
+            status = str(delivery.status or "").strip()
+            selectable = (
+                status not in _CANCELLED
+                and bool(delivery.customer_id)
+                and remaining > 0
+            )
+            if pullable_only and not selectable:
+                continue
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            material_spec = str(item.material_spec or "").strip()
+            if kw:
+                haystack = " ".join([material_code, material_name, material_spec]).lower()
+                if kw not in haystack:
+                    continue
+            lines.append(
+                {
+                    "id": int(item.id),
+                    "sales_delivery_id": int(item.delivery_id),
+                    "delivery_code": delivery.delivery_code,
+                    "customer_id": delivery.customer_id,
+                    "customer_name": delivery.customer_name,
+                    "material_id": item.material_id,
+                    "material_code": material_code,
+                    "material_name": material_name,
+                    "material_spec": material_spec or None,
+                    "unit": item.material_unit or "个",
+                    "suggested_quantity": qty,
+                    "pushed_quantity": pushed,
+                    "remaining_quantity": remaining,
+                    "required_date": str(delivery.delivery_date) if delivery.delivery_date else None,
+                }
+            )
+        lines.sort(
+            key=lambda row: (
+                str(row.get("delivery_code") or ""),
+                str(row.get("material_code") or ""),
+                int(row.get("id") or 0),
+            )
+        )
+        return {"data": lines[skip : skip + limit], "total": len(lines)}
+
+    async def create_delivery_notices_from_sales_delivery_items(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """按销售出库行 id 建送货单，可跨多张出库单；同客户合并一张。"""
+        from apps.kuaizhizao.services.document_action_policy.sales_delivery import (
+            _CANCELLED,
+        )
+
+        selected_ids = [int(v) for v in item_ids if v is not None]
+        if not selected_ids:
+            raise BusinessLogicError("请至少选择一条可通知销售出库明细")
+        items = await SalesDeliveryItem.filter(tenant_id=tenant_id, id__in=selected_ids).all()
+        if not items:
+            raise BusinessLogicError("没有可通知的销售出库行")
+        delivery_ids = sorted({int(row.delivery_id) for row in items})
+        deliveries = await SalesDelivery.filter(
+            tenant_id=tenant_id,
+            id__in=delivery_ids,
+            deleted_at__isnull=True,
+        ).all()
+        delivery_by_id = {int(row.id): row for row in deliveries}
+        if len(delivery_by_id) != len(delivery_ids):
+            raise NotFoundError("销售出库单不存在")
+        noticed_by_item = await self.noticed_qty_by_sales_delivery_item_ids(tenant_id, selected_ids)
+
+        def _max_notice_qty(delivery_item: SalesDeliveryItem) -> float:
+            qty = float(delivery_item.delivery_quantity or 0)
+            pushed = noticed_by_item.get(int(delivery_item.id), 0.0)
+            return max(0.0, qty - pushed)
+
+        for delivery in deliveries:
+            status = str(delivery.status or "").strip()
+            if status in _CANCELLED:
+                raise BusinessLogicError("销售出库单已取消，不可下推送货单")
+            if not delivery.customer_id:
+                raise BusinessLogicError("销售出库单缺少客户，不可下推送货单")
+
+        groups: Dict[int, List[SalesDeliveryItem]] = {}
+        for item in items:
+            groups.setdefault(int(delivery_by_id[int(item.delivery_id)].customer_id or 0), []).append(item)
+
+        notices_out: List[Dict[str, Any]] = []
+        for customer_id, group_items in groups.items():
+            if customer_id <= 0:
+                raise BusinessLogicError("销售出库单缺少客户，不可下推送货单")
+            notice_items: List[DeliveryNoticeItemCreate] = []
+            remaining_items: List[SalesDeliveryItem] = []
+            for item in group_items:
+                qty = _max_notice_qty(item)
+                if qty <= 0:
+                    continue
+                if not item.material_id:
+                    raise ValidationError("销售出库单存在缺失物料ID的明细，无法下推送货单")
+                remaining_items.append(item)
+                notice_items.append(
+                    DeliveryNoticeItemCreate(
+                        material_id=int(item.material_id),
+                        material_code=str(item.material_code or ""),
+                        material_name=str(item.material_name or ""),
+                        material_spec=item.material_spec or "",
+                        material_unit=str(item.material_unit or "个"),
+                        notice_quantity=qty,
+                        unit_price=float(item.unit_price or 0),
+                        delivery_item_id=int(item.id),
+                    )
+                )
+            if not notice_items:
+                raise BusinessLogicError("所选明细已全部通知，无法创建送货单")
+            primary = delivery_by_id[int(remaining_items[0].delivery_id)]
+            planned = getattr(primary, "delivery_date", None) or to_site_date(resolve_business_datetime())
+            created = await self.create_delivery_notice(
+                tenant_id,
+                DeliveryNoticeCreate(
+                    sales_delivery_id=int(primary.id),
+                    sales_delivery_code=str(primary.delivery_code or ""),
+                    sales_order_id=primary.sales_order_id,
+                    sales_order_code=primary.sales_order_code,
+                    customer_id=int(primary.customer_id),
+                    customer_name=str(primary.customer_name or ""),
+                    customer_contact=getattr(primary, "customer_contact", None),
+                    customer_phone=getattr(primary, "customer_phone", None),
+                    planned_delivery_date=planned,
+                    shipping_address=getattr(primary, "shipping_address", None),
+                    items=notice_items,
+                ),
+                created_by,
+            )
+            notices_out.append(
+                {
+                    "notice_id": created.id,
+                    "notice_code": created.notice_code,
+                }
+            )
+        return {
+            "success": True,
+            "message": f"已创建 {len(notices_out)} 张送货单",
+            "notice_id": notices_out[0]["notice_id"] if len(notices_out) == 1 else None,
+            "notice_code": notices_out[0]["notice_code"] if len(notices_out) == 1 else None,
+            "notices": notices_out,
+        }
 
     async def list_delivery_notice_pull_candidates(
         self,
@@ -224,19 +453,19 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
             )
             if not source_delivery:
                 raise BusinessLogicError("销售出库单不存在或已删除，无法创建送货单")
-            has_notice = bool(
-                await DeliveryNotice.filter(
-                    tenant_id=tenant_id,
-                    sales_delivery_id=notice_data.sales_delivery_id,
-                    deleted_at__isnull=True,
-                ).exists()
+            source_items = await SalesDeliveryItem.filter(
+                tenant_id=tenant_id,
+                delivery_id=notice_data.sales_delivery_id,
+                delivery_quantity__gt=0,
+            ).all()
+            noticed_by_item = await self.noticed_qty_by_sales_delivery_item_ids(
+                tenant_id,
+                [int(row.id) for row in source_items if row.id is not None],
             )
-            has_lines = bool(
-                await SalesDeliveryItem.filter(
-                    tenant_id=tenant_id,
-                    delivery_id=notice_data.sales_delivery_id,
-                    delivery_quantity__gt=0,
-                ).exists()
+            has_lines = len(source_items) > 0
+            has_remaining = any(
+                max(0.0, float(row.delivery_quantity or 0) - noticed_by_item.get(int(row.id), 0.0)) > 0
+                for row in source_items
             )
             from apps.kuaizhizao.services.document_action_policy.sales_delivery import (
                 assert_sales_delivery_pull_capability,
@@ -245,8 +474,8 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
             assert_sales_delivery_pull_capability(
                 source_delivery,
                 "push_delivery_notice",
-                has_delivery_notice=has_notice,
-                has_noticeable_lines=has_lines,
+                has_delivery_notice=has_lines and not has_remaining,
+                has_noticeable_lines=has_remaining,
             )
         async with in_transaction():
             today = today_site_str()

@@ -26,6 +26,9 @@ import type {
   SOPUpdate,
   SOPListParams,
   SOPListResponse,
+  SopRevision,
+  SopControlledCopy,
+  SopPrintData,
   SOPExecution,
   SOPExecutionCreate,
   SOPExecutionUpdate,
@@ -453,6 +456,52 @@ export const sopApi = {
    */
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/apps/master-data/process/sop/${uuid}`);
+  },
+
+  submit: async (uuid: string): Promise<SOP> => {
+    return api.post(`/apps/master-data/process/sop/${uuid}/submit`);
+  },
+  approve: async (uuid: string): Promise<SOP> => {
+    return api.post(`/apps/master-data/process/sop/${uuid}/approve`);
+  },
+  reject: async (uuid: string): Promise<SOP> => {
+    return api.post(`/apps/master-data/process/sop/${uuid}/reject`);
+  },
+  revoke: async (uuid: string): Promise<SOP> => {
+    return api.post(`/apps/master-data/process/sop/${uuid}/revoke`);
+  },
+  publish: async (uuid: string): Promise<SOP> => {
+    return api.post(`/apps/master-data/process/sop/${uuid}/publish`);
+  },
+  obsolete: async (uuid: string): Promise<SOP> => {
+    return api.post(`/apps/master-data/process/sop/${uuid}/obsolete`);
+  },
+  revise: async (uuid: string, data?: { changeReason?: string }): Promise<SOP> => {
+    return api.post(`/apps/master-data/process/sop/${uuid}/revise`, data ?? {});
+  },
+  listRevisions: async (uuid: string): Promise<{ data: SopRevision[]; total: number }> => {
+    return api.get(`/apps/master-data/process/sop/${uuid}/revisions`);
+  },
+  listCopies: async (uuid: string): Promise<{ data: SopControlledCopy[]; total: number }> => {
+    return api.get(`/apps/master-data/process/sop/${uuid}/copies`);
+  },
+  dispatchCopy: async (
+    uuid: string,
+    data: { locationType: string; stationId?: number; holderUserId?: number; locationNote?: string },
+  ): Promise<SopControlledCopy> => {
+    return api.post(`/apps/master-data/process/sop/${uuid}/copies/dispatch`, data);
+  },
+  recallCopy: async (
+    uuid: string,
+    data: { copyId: number; markLost?: boolean },
+  ): Promise<SopControlledCopy> => {
+    return api.post(`/apps/master-data/process/sop/${uuid}/copies/recall`, data);
+  },
+  getPrintData: async (
+    uuid: string,
+    params?: { controlled?: boolean; copyId?: number },
+  ): Promise<SopPrintData> => {
+    return api.get(`/apps/master-data/process/sop/${uuid}/print-data`, { params });
   },
 };
 

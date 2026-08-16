@@ -5,19 +5,22 @@ import { rowActionKind } from '../../../../../components/uni-action';
 
 import React, { lazy, startTransition, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Grid, Input, Modal, Popconfirm, Segmented, Space, Spin, Tag, Timeline, Tooltip, theme } from 'antd';
+import { App, Button, Dropdown, Grid, Input, Modal, Popconfirm, Segmented, Space, Spin, Tag, Timeline, Tooltip, theme } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import {
   DeleteOutlined,
   EditOutlined,
   EyeOutlined,
   ExpandOutlined,
+  FilterOutlined,
+  FolderOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   PartitionOutlined,
   PlusOutlined,
+  PrinterOutlined,
 } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -40,6 +43,7 @@ import {
   drawingApi,
   normalizeFileBrief,
   type DrawingListView,
+  type DrawingSecurityLevel,
   type DrawingStatus,
   type DrawingType,
   type EngineeringDrawing,
@@ -49,29 +53,46 @@ import {
 import {
   DRAWING_TREE_ALL_KEY,
   parseDrawingTreeKey,
+  type DrawingPaneMode,
   type DrawingTreeFilter,
   type DrawingTreeNavItem,
 } from './drawingTreeData';
 import {
   DRAWING_NAV_MODES,
   buildDrawingNavTree,
+  buildDrawingVaultTree,
+  folderUuidFromTreeKey,
   inferNavModeFromTreeKey,
+  isVaultTreeKey,
   treeKeyBelongsToMode,
   type DrawingNavMode,
 } from './drawingTreeNav';
+import { drawingFolderApi, type DrawingFolder } from '../../../services/drawingFolder';
+import {
+  DrawingFolderFormModal,
+  DrawingMoveFolderModal,
+} from './drawingFolderModals';
 import { isStepFile } from '../../../../../utils/filePreviewKind';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { MASTER_DATA_LIST_FIELD_RANK } from '../../../utils/masterListCore';
 import { masterCrudCreatedUpdatedColumns } from '../../../utils/masterListCore';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
+import { buildDrawingChangeCreateUrl } from '../../../../kuaiplm/services/master-data-links';
+const DRAWING_PERMISSION = 'master-data:process:drawing';
+
 const STATUS_COLOR: Record<DrawingStatus, string> = {
   Draft: 'default',
+  Editing: 'processing',
+  Pending: 'warning',
   Released: 'success',
-  Obsolete: 'warning',
+  Obsolete: 'error',
 };
 
 function canImportStepBom(record: EngineeringDrawing): boolean {
+  if (record.status !== 'Editing') return false;
   if (record.drawingType !== 'assembly') return false;
   if (!record.file) return false;
   return isStepFile({
@@ -209,6 +230,54 @@ const DrawingsPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { message: messageApi } = App.useApp();
+  const currentUser = useCurrentUser();
+  const { canCreate, canUpdate, canDelete, canPrint, canAction } = useResourcePermissions(DRAWING_PERMISSION);
+  const changePerms = useResourcePermissions('kuaiplm.change');
+  const canSubmit = !!canAction?.('submit');
+  const canApprove = !!canAction?.('approve');
+  const canReject = !!canAction?.('reject');
+  const canRevoke = !!canAction?.('revoke');
+  const canObsolete = !!canAction?.('obsolete');
+
+  const openDrawingPrint = useCallback(async (record: EngineeringDrawing) => {
+    try {
+      const data = await drawingApi.getPrintData(record.uuid);
+      const escapeHtml = (value: string) =>
+        value
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${escapeHtml(data.code)}</title>
+<style>
+body{font-family:sans-serif;padding:24px;}
+.watermark{position:fixed;top:40%;left:10%;font-size:48px;color:rgba(200,0,0,.15);transform:rotate(-25deg);pointer-events:none;z-index:0;}
+.content{position:relative;z-index:1;}
+h1{font-size:20px;margin:0 0 8px;}
+.meta{color:#666;font-size:13px;margin-bottom:16px;}
+img{max-width:100%;}
+</style></head><body>
+<div class="watermark">${escapeHtml(data.watermark)}</div>
+<div class="content">
+<h1>${escapeHtml(data.name)}</h1>
+<div class="meta">${escapeHtml(`${data.code}-${data.revision}`)} ${escapeHtml(t(`app.master-data.drawings.securityLevel.${data.securityLevel}`))}</div>
+${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml(data.fileName || data.code)}"/>` : ''}
+</div>
+<script>window.onload=function(){window.print();}</script>
+</body></html>`;
+      const w = window.open('', '_blank');
+      if (!w) return;
+      w.document.write(html);
+      w.document.close();
+    } catch (e) {
+      messageApi.error(getApiErrorMessage(e) || t('common.operationFailed'));
+    }
+  }, [messageApi, t]);
+  const isCheckoutOwner = useCallback(
+    (record: EngineeringDrawing) =>
+      record.status === 'Editing' && record.checkedOutBy != null && record.checkedOutBy === currentUser?.id,
+    [currentUser?.id],
+  );
   const screens = Grid.useBreakpoint();
   const showInlinePreview = !!screens.lg;
 
@@ -216,6 +285,7 @@ const DrawingsPage: React.FC = () => {
   const treeFilterRef = useRef<DrawingTreeFilter>({});
 
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
+  const [paneMode, setPaneMode] = useState<DrawingPaneMode>('vault');
   const [navMode, setNavMode] = useState<DrawingNavMode>('type');
   const [treeSearch, setTreeSearch] = useState('');
   const [selectedTreeKeys, setSelectedTreeKeys] = useState<React.Key[]>([DRAWING_TREE_ALL_KEY]);
@@ -224,7 +294,26 @@ const DrawingsPage: React.FC = () => {
   const [routesNav, setRoutesNav] = useState<DrawingTreeNavItem[]>([]);
   const [materialsLoaded, setMaterialsLoaded] = useState(false);
   const [routesLoaded, setRoutesLoaded] = useState(false);
+  const [folders, setFolders] = useState<DrawingFolder[]>([]);
   const [treeFilter, setTreeFilter] = useState<DrawingTreeFilter>({});
+  const [folderForm, setFolderForm] = useState<{
+    open: boolean;
+    mode: 'create' | 'rename';
+    parentUuid?: string | null;
+    folderUuid?: string | null;
+    initialName?: string;
+  }>({ open: false, mode: 'create' });
+  const [moveFolder, setMoveFolder] = useState<{
+    open: boolean;
+    drawingUuid: string | null;
+    currentFolderUuid?: string | null;
+  }>({ open: false, drawingUuid: null });
+  const [folderCtx, setFolderCtx] = useState<{
+    x: number;
+    y: number;
+    uuid: string;
+    name: string;
+  } | null>(null);
 
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detail, setDetail] = useState<EngineeringDrawing | null>(null);
@@ -303,15 +392,48 @@ const DrawingsPage: React.FC = () => {
     }
   }, [routesLoaded]);
 
+  const loadFolders = useCallback(async () => {
+    setTreeLoading(true);
+    try {
+      setFolders(await drawingFolderApi.tree());
+    } catch {
+      setFolders([]);
+    } finally {
+      setTreeLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    if (navMode === 'material') void loadMaterialsNav();
-    if (navMode === 'route') void loadRoutesNav();
-  }, [navMode, loadMaterialsNav, loadRoutesNav]);
+    void loadFolders();
+  }, [loadFolders]);
+
+  useEffect(() => {
+    if (paneMode === 'filter' && navMode === 'material') void loadMaterialsNav();
+    if (paneMode === 'filter' && navMode === 'route') void loadRoutesNav();
+  }, [paneMode, navMode, loadMaterialsNav, loadRoutesNav]);
 
   const treeData: DataNode[] = useMemo(
-    () => buildDrawingNavTree(navMode, t, materialsNav, routesNav, treeSearch),
-    [navMode, t, materialsNav, routesNav, treeSearch],
+    () =>
+      paneMode === 'vault'
+        ? buildDrawingVaultTree(t, folders, treeSearch)
+        : buildDrawingNavTree(navMode, t, materialsNav, routesNav, treeSearch),
+    [paneMode, t, folders, treeSearch, navMode, materialsNav, routesNav],
   );
+
+  const handlePaneModeChange = useCallback((mode: DrawingPaneMode) => {
+    setPaneMode(mode);
+    setTreeSearch('');
+    const currentKey = String(selectedTreeKeys[0] ?? DRAWING_TREE_ALL_KEY);
+    const keep = mode === 'vault' ? isVaultTreeKey(currentKey) : !isVaultTreeKey(currentKey) || currentKey === DRAWING_TREE_ALL_KEY;
+    if (!keep) {
+      setSelectedTreeKeys([DRAWING_TREE_ALL_KEY]);
+      treeFilterRef.current = {};
+      startTransition(() => {
+        setTreeFilter({});
+        actionRef.current?.reload();
+      });
+    }
+  }, [selectedTreeKeys]);
 
   const handleNavModeChange = useCallback((mode: DrawingNavMode) => {
     setNavMode(mode);
@@ -326,6 +448,21 @@ const DrawingsPage: React.FC = () => {
       });
     }
   }, [selectedTreeKeys]);
+
+  const paneModeBar = useMemo(
+    () => (
+      <Segmented
+        block
+        value={paneMode}
+        onChange={(value) => handlePaneModeChange(value as DrawingPaneMode)}
+        options={[
+          { label: t('app.master-data.drawings.tree.vault'), value: 'vault', icon: <FolderOutlined /> },
+          { label: t('app.master-data.drawings.tree.filter'), value: 'filter', icon: <FilterOutlined /> },
+        ]}
+      />
+    ),
+    [paneMode, t, handlePaneModeChange],
+  );
 
   const navModeBar = useMemo(
     () => (
@@ -350,6 +487,19 @@ const DrawingsPage: React.FC = () => {
     ),
     [navMode, t, handleNavModeChange],
   );
+
+  const openCreateFolder = useCallback((parentUuid?: string | null) => {
+    setFolderForm({ open: true, mode: 'create', parentUuid: parentUuid ?? null });
+  }, []);
+
+  const folderTreeActions = useMemo(() => {
+    if (paneMode !== 'vault' || !canCreate) return null;
+    return (
+      <Button type="primary" block icon={<PlusOutlined />} onClick={() => openCreateFolder(folderUuidFromTreeKey(String(selectedTreeKeys[0] ?? '')))}>
+        {t('app.master-data.drawings.folder.create')}
+      </Button>
+    );
+  }, [paneMode, canCreate, openCreateFolder, selectedTreeKeys, t]);
 
   const handleTreeSelect = useCallback(
     (keys: React.Key[]) => {
@@ -441,17 +591,102 @@ const DrawingsPage: React.FC = () => {
     setModalVisible(true);
   }, []);
 
-  useNewShortcut(handleCreate);
+  const defaultCreateFolderUuid = treeFilter.folderUuid ?? null;
 
-  const handleRelease = async (record: EngineeringDrawing) => {
+  useNewShortcut(() => {
+    if (canCreate) handleCreate();
+  });
+
+  const reloadAfterAction = (record: EngineeringDrawing) => {
+    actionRef.current?.reload();
+    if (detail?.uuid === record.uuid) void loadDetail(record.uuid);
+  };
+
+  const handleCheckout = async (record: EngineeringDrawing) => {
+    try {
+      await drawingApi.checkout(record.uuid);
+      messageApi.success(t('app.master-data.drawings.checkoutSuccess'));
+      reloadAfterAction(record);
+    } catch (error) {
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+    }
+  };
+
+  const handleCheckin = async (record: EngineeringDrawing) => {
+    try {
+      await drawingApi.checkin(record.uuid);
+      messageApi.success(t('app.master-data.drawings.checkinSuccess'));
+      reloadAfterAction(record);
+    } catch (error) {
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+    }
+  };
+
+  const handleUndoCheckout = async (record: EngineeringDrawing) => {
     getAntdModal().confirm({
-      title: t('app.master-data.drawings.release'),
-      content: t('app.master-data.drawings.releaseConfirm'),
+      title: t('app.master-data.drawings.undoCheckout'),
+      content: t('app.master-data.drawings.undoCheckoutConfirm'),
       onOk: async () => {
-        await drawingApi.release(record.uuid);
-        messageApi.success(t('app.master-data.drawings.releaseSuccess'));
-        actionRef.current?.reload();
-        if (detail?.uuid === record.uuid) loadDetail(record.uuid);
+        await drawingApi.undoCheckout(record.uuid);
+        messageApi.success(t('app.master-data.drawings.undoCheckoutSuccess'));
+        reloadAfterAction(record);
+      },
+    });
+  };
+
+  const handleSubmit = async (record: EngineeringDrawing) => {
+    getAntdModal().confirm({
+      title: t('app.master-data.drawings.submit'),
+      content: t('app.master-data.drawings.submitConfirm'),
+      onOk: async () => {
+        await drawingApi.submit(record.uuid);
+        messageApi.success(t('app.master-data.drawings.submitSuccess'));
+        reloadAfterAction(record);
+      },
+    });
+  };
+
+  const handleApprove = async (record: EngineeringDrawing) => {
+    getAntdModal().confirm({
+      title: t('app.master-data.drawings.approve'),
+      content: t('app.master-data.drawings.approveConfirm'),
+      onOk: async () => {
+        await drawingApi.approve(record.uuid);
+        messageApi.success(t('app.master-data.drawings.approveSuccess'));
+        reloadAfterAction(record);
+      },
+    });
+  };
+
+  const handleReject = async (record: EngineeringDrawing) => {
+    let reason = '';
+    getAntdModal().confirm({
+      title: t('app.master-data.drawings.reject'),
+      content: (
+        <Input.TextArea
+          rows={3}
+          placeholder={t('app.master-data.drawings.rejectReason')}
+          onChange={(e) => {
+            reason = e.target.value;
+          }}
+        />
+      ),
+      onOk: async () => {
+        await drawingApi.reject(record.uuid, reason);
+        messageApi.success(t('app.master-data.drawings.rejectSuccess'));
+        reloadAfterAction(record);
+      },
+    });
+  };
+
+  const handleRevoke = async (record: EngineeringDrawing) => {
+    getAntdModal().confirm({
+      title: t('app.master-data.drawings.revoke'),
+      content: t('app.master-data.drawings.revokeConfirm'),
+      onOk: async () => {
+        await drawingApi.revoke(record.uuid);
+        messageApi.success(t('app.master-data.drawings.revokeSuccess'));
+        reloadAfterAction(record);
       },
     });
   };
@@ -551,53 +786,125 @@ const DrawingsPage: React.FC = () => {
 
   const renderLifecycleActions = useCallback(
     (record: EngineeringDrawing, compact = false) => (
-      <Space size={0} style={{ whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
+      <Space size={compact ? 8 : 0} style={{ whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
+        {canUpdate ? (
+          <Button
+            key="moveFolder"
+            {...rowActionKind('update')}
+            onClick={() =>
+              setMoveFolder({
+                open: true,
+                drawingUuid: record.uuid,
+                currentFolderUuid: record.folderUuid ?? null,
+              })
+            }
+          >
+            {t('app.master-data.drawings.folder.move')}
+          </Button>
+        ) : null}
         {record.status === 'Draft' && (
           <>
-            <Button
-              key="edit"
-              {...rowActionKind('update')}
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => {
-                setEditUuid(record.uuid);
-                setModalVisible(true);
-              }}
-            >
-              {t('common.edit')}
-            </Button>
-            <Button key="release" {...rowActionKind('release')} onClick={() => handleRelease(record)}>
-              {t('app.master-data.drawings.release')}
-            </Button>
-            <Popconfirm
-              key="delete"
-              {...rowActionKind('delete')}
-              title={t('common.confirmDelete')}
-              onConfirm={() => handleDeleteDrawing(record)}
-            >
-              <Button
-                type={compact ? 'default' : 'link'}
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {t('common.delete')}
+            {canUpdate ? (
+              <Button key="checkout" {...rowActionKind('update')} onClick={() => handleCheckout(record)}>
+                {t('app.master-data.drawings.checkout')}
               </Button>
-            </Popconfirm>
+            ) : null}
+            {canSubmit ? (
+              <Button key="submit" {...rowActionKind('submit')} onClick={() => handleSubmit(record)}>
+                {t('app.master-data.drawings.submit')}
+              </Button>
+            ) : null}
+            {canDelete ? (
+              <Popconfirm
+                key="delete"
+                {...rowActionKind('delete')}
+                title={t('common.confirmDelete')}
+                onConfirm={() => handleDeleteDrawing(record)}
+              >
+                <Button
+                  type={compact ? 'default' : 'link'}
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('common.delete')}
+                </Button>
+              </Popconfirm>
+            ) : null}
+          </>
+        )}
+        {record.status === 'Editing' && isCheckoutOwner(record) && (
+          <>
+            {canUpdate ? (
+              <Button
+                key="edit"
+                {...rowActionKind('update')}
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => {
+                  setEditUuid(record.uuid);
+                  setModalVisible(true);
+                }}
+              >
+                {t('common.edit')}
+              </Button>
+            ) : null}
+            {canUpdate ? (
+              <Button key="checkin" {...rowActionKind('update')} onClick={() => handleCheckin(record)}>
+                {t('app.master-data.drawings.checkin')}
+              </Button>
+            ) : null}
+            {canUpdate ? (
+              <Button key="undoCheckout" {...rowActionKind('update')} onClick={() => handleUndoCheckout(record)}>
+                {t('app.master-data.drawings.undoCheckout')}
+              </Button>
+            ) : null}
+          </>
+        )}
+        {record.status === 'Pending' && (
+          <>
+            {canApprove ? (
+              <Button key="approve" {...rowActionKind('approve')} onClick={() => handleApprove(record)}>
+                {t('app.master-data.drawings.approve')}
+              </Button>
+            ) : null}
+            {canReject ? (
+              <Button key="reject" {...rowActionKind('reject')} onClick={() => handleReject(record)}>
+                {t('app.master-data.drawings.reject')}
+              </Button>
+            ) : null}
+            {canRevoke ? (
+              <Button key="revoke" {...rowActionKind('revoke')} onClick={() => handleRevoke(record)}>
+                {t('app.master-data.drawings.revoke')}
+              </Button>
+            ) : null}
           </>
         )}
         {record.status === 'Released' && (
           <>
-            <Button key="create" {...rowActionKind('create')} onClick={() => handleRevision(record)}>
-              {t('app.master-data.drawings.newRevision')}
-            </Button>
-            <Button key="obsolete" {...rowActionKind('obsolete')} onClick={() => handleObsolete(record)}>
-              {t('app.master-data.drawings.obsolete')}
-            </Button>
+            {changePerms.canCreate ? (
+              <Button
+                key="engineeringChange"
+                {...rowActionKind('create')}
+                onClick={() => navigate(buildDrawingChangeCreateUrl(record.uuid))}
+              >
+                {t('app.master-data.drawings.engineeringChange')}
+              </Button>
+            ) : null}
+            {canCreate ? (
+              <Button key="create" {...rowActionKind('create')} onClick={() => handleRevision(record)}>
+                {t('app.master-data.drawings.newRevision')}
+              </Button>
+            ) : null}
+            {canObsolete ? (
+              <Button key="obsolete" {...rowActionKind('obsolete')} onClick={() => handleObsolete(record)}>
+                {t('app.master-data.drawings.obsolete')}
+              </Button>
+            ) : null}
           </>
         )}
-        {record.status === 'Obsolete' && (
+        {record.status === 'Obsolete' && canDelete && (
           <Popconfirm
             key="delete"
             {...rowActionKind('delete')}
@@ -615,6 +922,11 @@ const DrawingsPage: React.FC = () => {
             </Button>
           </Popconfirm>
         )}
+        {canPrint ? (
+          <Button key="print" {...rowActionKind('print')} icon={<PrinterOutlined />} onClick={() => void openDrawingPrint(record)}>
+            {t('app.master-data.drawings.print')}
+          </Button>
+        ) : null}
         {!compact && record.file && !showInlinePreview && (
           <Button key="preview" {...rowActionKind('read')} onClick={() => openPreview(record.file)}>
             {t('app.master-data.drawings.preview')}
@@ -622,7 +934,26 @@ const DrawingsPage: React.FC = () => {
         )}
       </Space>
     ),
-    [t, showInlinePreview, handleDeleteDrawing, handleRelease, handleObsolete, handleRevision],
+    [
+      t,
+      showInlinePreview,
+      canUpdate,
+      canDelete,
+      canSubmit,
+      canApprove,
+      canReject,
+      canRevoke,
+      canCreate,
+      canObsolete,
+      canPrint,
+      openDrawingPrint,
+      changePerms.canCreate,
+      navigate,
+      isCheckoutOwner,
+      handleDeleteDrawing,
+      handleObsolete,
+      handleRevision,
+    ],
   );
 
   const detailColumns: ProDescriptionsItemProps<EngineeringDrawing>[] = useMemo(
@@ -631,9 +962,24 @@ const DrawingsPage: React.FC = () => {
       { title: t('app.master-data.drawings.name'), dataIndex: 'name' },
       { title: t('app.master-data.drawings.revision'), dataIndex: 'revision' },
       {
+        title: t('app.master-data.drawings.folder'),
+        dataIndex: 'folderName',
+        render: (_, r) => r.folderName || t('app.master-data.drawings.tree.unclassified'),
+      },
+      {
         title: t('app.master-data.drawings.type'),
         dataIndex: 'drawingType',
         render: (_, r) => typeLabel(r.drawingType),
+      },
+      {
+        title: t('app.master-data.drawings.securityLevel'),
+        dataIndex: 'securityLevel',
+        render: (_, r) =>
+          r.securityLevel ? (
+            <MarkerTag color="geekblue">{t(`app.master-data.drawings.securityLevel.${r.securityLevel}`)}</MarkerTag>
+          ) : (
+            '-'
+          ),
       },
       {
         title: t('app.master-data.drawings.status'),
@@ -732,6 +1078,11 @@ const DrawingsPage: React.FC = () => {
         render: (_, r) => formatAssociationLabels(r.operations),
       },
       { title: t('app.master-data.drawings.description'), dataIndex: 'description' },
+      {
+        title: t('app.master-data.drawings.checkedOutBy'),
+        dataIndex: 'checkedOutByName',
+        render: (_, r) => r.checkedOutByName || '-',
+      },
       { title: t('app.master-data.drawings.releasedAt'), dataIndex: 'releasedAt', valueType: 'dateTime' },
       { title: t('app.master-data.drawings.obsoleteReason'), dataIndex: 'obsoleteReason' },
       { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
@@ -762,6 +1113,14 @@ const DrawingsPage: React.FC = () => {
         width: 64,
       },
       {
+        title: t('app.master-data.drawings.folder'),
+        dataIndex: 'folderName',
+        search: false,
+        width: 120,
+        ellipsis: true,
+        render: (_, record) => record.folderName || t('app.master-data.drawings.tree.unclassified'),
+      },
+      {
         title: t('app.master-data.drawings.type'),
         dataIndex: 'drawingType',
         width: 88,
@@ -774,16 +1133,43 @@ const DrawingsPage: React.FC = () => {
         },
       },
       {
+        title: t('app.master-data.drawings.securityLevel'),
+        dataIndex: 'securityLevel',
+        width: 88,
+        valueType: 'select',
+        valueEnum: {
+          public: { text: t('app.master-data.drawings.securityLevel.public') },
+          internal: { text: t('app.master-data.drawings.securityLevel.internal') },
+          secret: { text: t('app.master-data.drawings.securityLevel.secret') },
+          confidential: { text: t('app.master-data.drawings.securityLevel.confidential') },
+        },
+        render: (_, r) =>
+          r.securityLevel ? (
+            <MarkerTag color="geekblue">{t(`app.master-data.drawings.securityLevel.${r.securityLevel}`)}</MarkerTag>
+          ) : (
+            '-'
+          ),
+      },
+      {
         title: t('app.master-data.drawings.status'),
         dataIndex: 'status',
         width: 88,
         valueType: 'select',
         valueEnum: {
           Draft: { text: t('app.master-data.drawings.status.Draft') },
+          Editing: { text: t('app.master-data.drawings.status.Editing') },
+          Pending: { text: t('app.master-data.drawings.status.Pending') },
           Released: { text: t('app.master-data.drawings.status.Released') },
           Obsolete: { text: t('app.master-data.drawings.status.Obsolete') },
         },
         render: (_, r) => <Tag color={STATUS_COLOR[r.status]} variant="solid">{statusLabel(r.status)}</Tag>,
+      },
+      {
+        title: t('app.master-data.drawings.checkedOutBy'),
+        dataIndex: 'checkedOutByName',
+        search: false,
+        width: 100,
+        render: (_, r) => r.checkedOutByName || '-',
       },
       {
         title: t('app.master-data.drawings.linkedBom'),
@@ -860,14 +1246,17 @@ const DrawingsPage: React.FC = () => {
   const tableQueryKey = useMemo(
     () => [
       'apps.master-data.pages.process.drawings',
+      paneMode,
       navMode,
       listView,
       treeFilter.drawingType ?? '',
       treeFilter.status ?? '',
       treeFilter.materialUuid ?? '',
       treeFilter.processRouteUuid ?? '',
+      treeFilter.folderUuid ?? '',
+      treeFilter.unclassified ? '1' : '',
     ],
-    [navMode, listView, treeFilter],
+    [paneMode, navMode, listView, treeFilter],
   );
 
   const tableScrollOffsetPx =
@@ -895,7 +1284,8 @@ const DrawingsPage: React.FC = () => {
         <UniTable<EngineeringDrawing>
           actionRef={actionRef}
           rowKey="uuid"
-          columnPersistenceId="apps.master-data.pages.process.drawings.status-v2"
+          columnPersistenceId="apps.master-data.pages.process.drawings.folder-v2"
+          permissionResource={DRAWING_PERMISSION}
           tanstackQuery={{ queryKeyPrefix: tableQueryKey }}
           columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
           headerTitle={t('app.master-data.menu.process.drawings')}
@@ -932,8 +1322,11 @@ const DrawingsPage: React.FC = () => {
                 keyword: params.keyword as string | undefined,
                 status: (params.status as DrawingStatus | undefined) ?? tf.status,
                 drawingType: (params.drawingType as DrawingType | undefined) ?? tf.drawingType,
+                securityLevel: params.securityLevel as DrawingSecurityLevel | undefined,
                 materialUuid: tf.materialUuid,
                 processRouteUuid: tf.processRouteUuid,
+                folderUuid: tf.folderUuid,
+                unclassified: tf.unclassified,
                 view: listView,
               });
               const enriched = meta?.purpose === 'prefetch'
@@ -997,7 +1390,7 @@ const DrawingsPage: React.FC = () => {
             onChange: setTreeSearch,
             allowClear: true,
           },
-          actions: [navModeBar],
+          actions: [paneModeBar, paneMode === 'filter' ? navModeBar : folderTreeActions].filter(Boolean),
           tree: {
             treeData,
             selectedKeys: selectedTreeKeys,
@@ -1007,6 +1400,18 @@ const DrawingsPage: React.FC = () => {
             loading: treeLoading,
             loadingTip: t('app.master-data.drawings.tree.loadingNav'),
             className: 'drawing-nav-tree',
+            onRightClick: ({ event, node }) => {
+              event.preventDefault();
+              if (paneMode !== 'vault' || !(canUpdate || canDelete || canCreate)) return;
+              const folderUuid = folderUuidFromTreeKey(String(node.key));
+              if (!folderUuid) return;
+              setFolderCtx({
+                x: event.clientX,
+                y: event.clientY,
+                uuid: folderUuid,
+                name: String(node.title ?? ''),
+              });
+            },
           },
         }}
         rightPanel={{
@@ -1059,6 +1464,14 @@ const DrawingsPage: React.FC = () => {
           detail ? (
             <DetailDrawerActions
               items={[
+                {
+                  key: 'whereUsed',
+                  render: (
+                    <Link to={`/apps/master-data/process/drawing-where-used?drawingUuid=${detail.uuid}`}>
+                      {t('app.master-data.menu.process.drawing-where-used')}
+                    </Link>
+                  ),
+                },
                 {
                   key: 'lifecycle',
                   render: renderLifecycleActions(detail, true),
@@ -1117,9 +1530,105 @@ const DrawingsPage: React.FC = () => {
         }
       />
 
+      {folderCtx ? (
+        <Dropdown
+          open
+          trigger={['click']}
+          onOpenChange={(open) => {
+            if (!open) setFolderCtx(null);
+          }}
+          menu={{
+            items: [
+              canCreate
+                ? {
+                    key: 'child',
+                    label: t('app.master-data.drawings.folder.createChild'),
+                    onClick: () => {
+                      setFolderForm({ open: true, mode: 'create', parentUuid: folderCtx.uuid });
+                      setFolderCtx(null);
+                    },
+                  }
+                : null,
+              canUpdate
+                ? {
+                    key: 'rename',
+                    label: t('app.master-data.drawings.folder.rename'),
+                    onClick: () => {
+                      setFolderForm({
+                        open: true,
+                        mode: 'rename',
+                        folderUuid: folderCtx.uuid,
+                        initialName: folderCtx.name,
+                      });
+                      setFolderCtx(null);
+                    },
+                  }
+                : null,
+              canDelete
+                ? {
+                key: 'delete',
+                danger: true,
+                label: t('app.master-data.drawings.folder.delete'),
+                onClick: () => {
+                  const target = folderCtx;
+                  setFolderCtx(null);
+                  getAntdModal().confirm({
+                    title: t('app.master-data.drawings.folder.delete'),
+                    content: t('app.master-data.drawings.folder.deleteConfirm'),
+                    okButtonProps: { danger: true },
+                    onOk: async () => {
+                      await drawingFolderApi.delete(target.uuid);
+                      messageApi.success(t('common.deleteSuccess'));
+                      if (treeFilter.folderUuid === target.uuid) {
+                        setSelectedTreeKeys([DRAWING_TREE_ALL_KEY]);
+                        treeFilterRef.current = {};
+                        setTreeFilter({});
+                        actionRef.current?.reload();
+                      }
+                      await loadFolders();
+                    },
+                  });
+                },
+              }
+                : null,
+            ],
+          }}
+        >
+          <span style={{ position: 'fixed', left: folderCtx.x, top: folderCtx.y, width: 1, height: 1 }} />
+        </Dropdown>
+      ) : null}
+
+      <DrawingFolderFormModal
+        open={folderForm.open}
+        mode={folderForm.mode}
+        parentUuid={folderForm.parentUuid}
+        folderUuid={folderForm.folderUuid}
+        initialName={folderForm.initialName}
+        onClose={() => setFolderForm((prev) => ({ ...prev, open: false }))}
+        onSuccess={() => {
+          void loadFolders();
+        }}
+      />
+
+      <DrawingMoveFolderModal
+        open={moveFolder.open}
+        drawingUuid={moveFolder.drawingUuid}
+        folders={folders}
+        currentFolderUuid={moveFolder.currentFolderUuid}
+        onClose={() => setMoveFolder({ open: false, drawingUuid: null })}
+        onSuccess={() => {
+          actionRef.current?.reload();
+          if (detail?.uuid && detail.uuid === moveFolder.drawingUuid) {
+            void loadDetail(detail.uuid);
+          }
+        }}
+      />
+
       <DrawingFormModal
         open={modalVisible}
         editUuid={editUuid}
+        defaultFolderUuid={defaultCreateFolderUuid}
+        folders={folders}
         onClose={() => {
           setModalVisible(false);
           setEditUuid(null);

@@ -6,6 +6,7 @@ import {
   orderedAgingRows,
   type AgingBucketData,
 } from '../utils/financeUiLabels';
+import { buildFinanceAgingListQuery } from '../utils/financeListCore';
 
 const FinancePie = lazy(async () => {
   const { Pie } = await import('@ant-design/charts');
@@ -56,10 +57,22 @@ const FinanceAgingPanel: React.FC<FinanceAgingPanelProps> = ({ data, detailPath,
         {rows.map((row) => (
           <Col xs={12} sm={6} key={row.bucket}>
             <div
+              role="button"
+              tabIndex={0}
+              onClick={() =>
+                onOpenDetail(`${detailPath}${buildFinanceAgingListQuery({ aging_bucket: row.bucket })}`)
+              }
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onOpenDetail(`${detailPath}${buildFinanceAgingListQuery({ aging_bucket: row.bucket })}`);
+                }
+              }}
               style={{
                 padding: '8px 10px',
                 borderRadius: 8,
                 background: 'var(--ant-color-fill-quaternary)',
+                cursor: 'pointer',
               }}
             >
               <Statistic

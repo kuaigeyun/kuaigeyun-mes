@@ -9,11 +9,12 @@ Date: 2026-02-22
 
 import uuid
 from datetime import date
-from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, Path, HTTPException as FastAPIHTTPException, status as http_status
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, Body, Depends, Query, Path, HTTPException as FastAPIHTTPException, status as http_status
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_permission_codes
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 
@@ -136,6 +137,44 @@ async def get_receipt_notice_statistics(
 ):
     """收货通知单 KPI：按 status GROUP BY COUNT。"""
     return await receipt_notice_service.get_receipt_notice_statistics(tenant_id)
+
+
+@router.post(
+    "/pull-from-purchase-order-items",
+    summary="Create receipt notices from purchase order lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:receipt-notice:create"))],
+)
+async def pull_from_purchase_order_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """从多张采购订单的开口行创建收货通知（同供应商合并）。"""
+    from apps.kuaizhizao.services.purchase_service import PurchaseService
+
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="请至少选择一条可通知采购订单明细")
+    try:
+        selected_ids = [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    try:
+        return await PurchaseService().create_receipt_notices_from_po_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.exception("从采购订单开口行创建收货通知失败")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="从采购订单开口行创建收货通知失败",
+        )
 
 
 # 固定子路径需注册在 /{notice_id} 之前，避免个别 ASGI/匹配顺序下误配

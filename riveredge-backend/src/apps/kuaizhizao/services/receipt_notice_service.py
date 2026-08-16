@@ -604,9 +604,16 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             default_loc_by_wh[warehouse_id] = (loc_id, loc_code)
             return loc_id, loc_code
 
+        from apps.kuaizhizao.services.warehouse_service import (
+            occupied_purchase_receipt_qty_by_notice_item_ids,
+        )
+
+        occupied_by_notice_item = await occupied_purchase_receipt_qty_by_notice_item_ids(
+            tenant_id, [int(ni.id) for ni in notice_items]
+        )
         receipt_items: List[PurchaseReceiptItemCreate] = []
         for ni in notice_items:
-            qty = Decimal(str(ni.notice_quantity or 0))
+            qty = Decimal(str(ni.notice_quantity or 0)) - occupied_by_notice_item.get(int(ni.id), Decimal("0"))
             if qty <= 0:
                 continue
 
@@ -634,6 +641,7 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
 
             item_kwargs = dict(
                 purchase_order_item_id=po_line_id,
+                receipt_notice_item_id=int(ni.id),
                 material_id=int(ni.material_id),
                 material_code=str(ni.material_code or ""),
                 material_name=str(ni.material_name or ""),

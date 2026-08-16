@@ -6,4 +6,8 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaioa.models.training",
     "apps.kuaioa.models.license",
     "apps.kuaioa.models.asset",
+    "apps.kuaioa.models.leave",
+    "apps.kuaioa.models.announcement",
+    "apps.kuaioa.models.seal",
+    "apps.kuaioa.models.collaboration",
 ]

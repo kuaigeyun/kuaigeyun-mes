@@ -18,6 +18,7 @@ import json
 from typing import Dict, Any
 
 from infra.infrastructure.http import get_http_client
+from infra.utils.client_ip import get_client_ip
 
 from tortoise import Tortoise
 from tortoise.queryset import Q
@@ -815,6 +816,14 @@ class AuthService:
         if is_infra_admin and tenant_id is None:
             final_tenant_id = None
 
+        if request:
+            from core.services.content.sensitive_word_ip_guard import SensitiveWordIpGuardService
+
+            await SensitiveWordIpGuardService.instance().ensure_ip_allowed(
+                get_client_ip(request),
+                user_id=user.id,
+            )
+
         # 1. 设置组织上下文
         if final_tenant_id is not None:
             from infra.domain.tenant_context import set_current_tenant_id
@@ -1191,6 +1200,14 @@ class AuthService:
                     user_id=guest_user.id,
                 )
             
+            if request:
+                from core.services.content.sensitive_word_ip_guard import SensitiveWordIpGuardService
+
+                await SensitiveWordIpGuardService.instance().ensure_ip_allowed(
+                    get_client_ip(request),
+                    user_id=guest_user.id,
+                )
+
             # 3. 生成 Token（包含 tenant_id）
             logger.info(f"开始生成 Token: user_id={guest_user.id}, username={guest_user.username}, tenant_id={default_tenant.id}")
             access_token = create_token_for_user(

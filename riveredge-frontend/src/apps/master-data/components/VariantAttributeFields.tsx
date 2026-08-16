@@ -55,26 +55,24 @@ export const VariantAttributeFields: React.FC<VariantAttributeFieldsProps> = ({
             {def.attribute_type === 'enum' ? (
               <Select
                 allowClear
-                size="small"
                 mode={!singleValueOnly && def.allow_multiple ? 'multiple' : undefined}
                 placeholder={t('app.master-data.materialForm.selectAttr', { name: def.display_name })}
                 options={def.enum_values?.map((v) => ({ label: v, value: v }))}
               />
             ) : def.attribute_type === 'number' ? (
-              <InputNumber style={{ width: '100%' }} size="small" />
+              <InputNumber style={{ width: '100%' }} />
             ) : def.attribute_type === 'boolean' ? (
               <Select
                 allowClear
-                size="small"
                 options={[
                   { label: t('app.master-data.bom.yes'), value: true },
                   { label: t('app.master-data.bom.no'), value: false },
                 ]}
               />
             ) : def.attribute_type === 'date' ? (
-              <Input type="date" size="small" />
+              <Input type="date" />
             ) : (
-              <Input size="small" maxLength={def.validation_rules?.max_length} />
+              <Input maxLength={def.validation_rules?.max_length} />
             )}
           </Form.Item>
         </Col>

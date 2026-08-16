@@ -427,7 +427,7 @@ class WorkOrderGroupService(AppBaseService):
         tenant_id: int,
         *,
         work_order_ids: List[int],
-        root_work_order_id: int,
+        root_work_order_id: Optional[int],
         created_by: int,
         remarks: Optional[str] = None,
     ) -> Dict[str, Any]:

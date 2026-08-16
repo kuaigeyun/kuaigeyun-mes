@@ -7,6 +7,7 @@ from typing import Any, Optional
 from apps.kuaioa.models.license import KuaioaLicense
 from apps.kuaioa.schemas.license import LicenseCreate, LicenseUpdate
 from apps.kuaioa.services.kuaioa_list_core import (
+    apply_create_audit_by_user_id,
     build_keyword_q,
     generate_daily_code,
     model_to_dict,
@@ -50,22 +51,22 @@ class LicenseRegistryService:
         license_code = await generate_daily_code(
             KuaioaLicense, tenant_id, "LC", code_field="license_code"
         )
-        row = await KuaioaLicense.create(
-            tenant_id=tenant_id,
-            license_code=license_code,
-            license_name=data.license_name.strip(),
-            license_type=data.license_type,
-            issuing_authority=data.issuing_authority,
-            holder_name=data.holder_name,
-            issue_date=parse_optional_date(data.issue_date),
-            expiry_date=parse_optional_date(data.expiry_date),
-            reminder_days=data.reminder_days,
-            file_uuid=data.file_uuid,
-            notes=data.notes,
-            status="valid",
-            created_by=user_id,
-            updated_by=user_id,
-        )
+        create_payload: dict[str, Any] = {
+            "tenant_id": tenant_id,
+            "license_code": license_code,
+            "license_name": data.license_name.strip(),
+            "license_type": data.license_type,
+            "issuing_authority": data.issuing_authority,
+            "holder_name": data.holder_name,
+            "issue_date": parse_optional_date(data.issue_date),
+            "expiry_date": parse_optional_date(data.expiry_date),
+            "reminder_days": data.reminder_days,
+            "file_uuid": data.file_uuid,
+            "notes": data.notes,
+            "status": "valid",
+        }
+        await apply_create_audit_by_user_id(create_payload, user_id)
+        row = await KuaioaLicense.create(**create_payload)
         return model_to_dict(row)
 
     async def update_license(
@@ -82,7 +83,7 @@ class LicenseRegistryService:
                 payload[key] = parse_optional_date(payload[key])
         for key, value in payload.items():
             setattr(row, key, value)
-        touch_updated(row, user_id)
+        await touch_updated(row, user_id)
         await row.save()
         return model_to_dict(row)
 
@@ -93,7 +94,7 @@ class LicenseRegistryService:
         if not row:
             raise NotFoundError("证照不存在")
         row.deleted_at = resolve_business_datetime()
-        touch_updated(row, user_id)
+        await touch_updated(row, user_id)
         await row.save()
 
     async def list_expiring(self, tenant_id: int, within_days: int = 30) -> list[dict[str, Any]]:

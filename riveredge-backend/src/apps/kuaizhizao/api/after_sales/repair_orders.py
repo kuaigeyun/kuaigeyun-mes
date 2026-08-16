@@ -60,6 +60,7 @@ async def list_orders(
     status_filter: Optional[str] = Query(None, alias="status"),
     warranty_status: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None),
+    after_sales_ticket_id: Optional[int] = Query(None),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await _service.list_orders(
@@ -70,6 +71,7 @@ async def list_orders(
         status=status_filter,
         warranty_status=warranty_status,
         keyword=keyword,
+        after_sales_ticket_id=after_sales_ticket_id,
     )
 
 

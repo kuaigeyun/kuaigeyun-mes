@@ -9,8 +9,8 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useRef, useState, useMemo, useCallback, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
 import {
@@ -139,12 +139,16 @@ interface MaintenancePlan {
 
 const MaintenancePlansPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = AntdTheme.useToken();
   const planDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const urlUuidRef = useRef<string | undefined>(undefined);
+  const urlEquipmentUuidRef = useRef<string | undefined>(undefined);
+  const deepLinkOpenedRef = useRef(false);
 
   // Modal 相关状态（创建/编辑维护计划）
   const [modalVisible, setModalVisible] = useState(false);
@@ -254,6 +258,40 @@ const MaintenancePlansPage: React.FC = () => {
     },
     [messageApi, openDetail, t],
   );
+
+  useEffect(() => {
+    const uuidFromUrl = searchParams.get('uuid')?.trim() || undefined;
+    const equipmentUuidFromUrl = searchParams.get('equipment_uuid')?.trim() || undefined;
+    urlUuidRef.current = uuidFromUrl;
+    urlEquipmentUuidRef.current = equipmentUuidFromUrl;
+    if (!uuidFromUrl && !equipmentUuidFromUrl) {
+      deepLinkOpenedRef.current = false;
+      actionRef.current?.reload();
+      return;
+    }
+    if (uuidFromUrl) {
+      if (deepLinkOpenedRef.current) {
+        actionRef.current?.reload();
+        return;
+      }
+      deepLinkOpenedRef.current = true;
+      void (async () => {
+        try {
+          const response = await maintenancePlanApi.list({ uuid: uuidFromUrl, skip: 0, limit: 1 });
+          const { data } = normalizeEquipmentListResponse(response);
+          if (data.length > 0) {
+            handleDetail(data[0] as MaintenancePlan);
+          }
+        } catch {
+          messageApi.error(t(`${P}.listFailed`));
+        }
+        actionRef.current?.reload();
+      })();
+      return;
+    }
+    deepLinkOpenedRef.current = true;
+    actionRef.current?.reload();
+  }, [searchParams, handleDetail, messageApi, t]);
 
   /**
    * 处理批量删除维护计划（keys 为 uuid 数组）
@@ -731,6 +769,8 @@ const MaintenancePlansPage: React.FC = () => {
                 skip: (params.current! - 1) * params.pageSize!,
                 limit: params.pageSize,
                 ...listParams,
+                ...(urlUuidRef.current ? { uuid: urlUuidRef.current } : {}),
+                ...(urlEquipmentUuidRef.current ? { equipment_uuid: urlEquipmentUuidRef.current } : {}),
               });
               const { data, total } = normalizeEquipmentListResponse(response);
               return {

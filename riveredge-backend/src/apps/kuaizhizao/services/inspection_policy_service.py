@@ -22,6 +22,7 @@ class QualityEffectiveConfig(TypedDict):
     module_enabled: Dict[str, bool]
     auto_create: Dict[str, bool]
     gate: Dict[str, bool]
+    fai: Dict[str, bool]
 
 
 MATERIAL_INSPECTION_STAGE_KEYS = ("iqc", "fqc", "oqc")
@@ -96,6 +97,10 @@ async def get_quality_effective_config(tenant_id: int) -> QualityEffectiveConfig
                 q.get("require_fqc_before_finished_goods_receipt", False)
             ),
             "require_oqc_before_outbound": bool(stages.get("oqc_enabled", True)),
+            "require_fai_before_mass_reporting": bool(q.get("require_fai_before_mass_reporting", False)),
+        },
+        "fai": {
+            "auto_create_fai_on_work_order": bool(q.get("auto_create_fai_on_work_order", False)),
         },
     }
 

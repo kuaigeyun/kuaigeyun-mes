@@ -13,7 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Space, Tag, notification, Descriptions, Typography, Empty, Spin, theme as AntdTheme } from 'antd';
-import { CheckOutlined, EyeOutlined, CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons';
+import { CheckOutlined, EyeOutlined, CheckCircleOutlined, ReloadOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { FormModalTemplate, DetailDrawerTemplate, DRAWER_CONFIG, MultiTabListPageTemplate, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
@@ -33,6 +33,7 @@ import {
   normalizeEquipmentListResponse,
   resolveReminderListParams,
 } from '../../../utils/equipmentListCore';
+import { ROUTES } from '../../../constants/routes';
 
 const P = 'app.kuaizhizao.maintenanceReminder';
 
@@ -124,6 +125,21 @@ const MaintenanceRemindersPage: React.FC = () => {
 
     return () => clearInterval(interval);
   }, []);
+
+  /**
+   * 跳转到保养计划执行
+   */
+  const handleGoExecute = (record: MaintenanceReminder) => {
+    if (record.maintenance_plan_uuid) {
+      navigate(`${ROUTES.MAINTENANCE_PLANS}?uuid=${encodeURIComponent(record.maintenance_plan_uuid)}`);
+      return;
+    }
+    if (record.equipment_uuid) {
+      navigate(`${ROUTES.MAINTENANCE_PLANS}?equipment_uuid=${encodeURIComponent(record.equipment_uuid)}`);
+      return;
+    }
+    navigate(ROUTES.MAINTENANCE_PLANS);
+  };
 
   /**
    * 处理标记为已读
@@ -444,6 +460,12 @@ const MaintenanceRemindersPage: React.FC = () => {
                   {t(`${P}.action.markHandled`)}
                 </Button>
               )}
+              <Button key="execute" {...rowActionKind('update')}
+                icon={<PlayCircleOutlined />}
+                onClick={() => handleGoExecute(record)}
+              >
+                {t(`${P}.action.goExecute`)}
+              </Button>
             </Space>
           ),
         },

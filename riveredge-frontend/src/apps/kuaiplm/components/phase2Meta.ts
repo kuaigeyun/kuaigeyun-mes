@@ -37,6 +37,9 @@ export const PHASE2_PRIORITY_I18N: Record<string, string> = {
 };
 
 export const PHASE2_REVIEW_TYPE_I18N: Record<string, string> = {
+  preliminary: 'app.kuaiplm.phase2.designReviews.type.preliminary',
+  detailed: 'app.kuaiplm.phase2.designReviews.type.detailed',
+  trial: 'app.kuaiplm.phase2.designReviews.type.trial',
   初步设计: 'app.kuaiplm.phase2.designReviews.type.preliminary',
   详细设计: 'app.kuaiplm.phase2.designReviews.type.detailed',
   试制评审: 'app.kuaiplm.phase2.designReviews.type.trial',
@@ -68,6 +71,9 @@ const PHASE2_PRIORITY_MARKER_COLOR: Record<string, string> = {
 };
 
 const PHASE2_REVIEW_TYPE_MARKER_COLOR: Record<string, string> = {
+  preliminary: 'geekblue',
+  detailed: 'purple',
+  trial: 'cyan',
   初步设计: 'geekblue',
   详细设计: 'purple',
   试制评审: 'cyan',

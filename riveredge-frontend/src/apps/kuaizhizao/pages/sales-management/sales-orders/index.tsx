@@ -103,7 +103,14 @@ import {
   type StatCard,
 } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  UNI_PULL_QUERY_MAX_FETCH_LIMIT,
+  pagePullCandidates,
+  renderPullQueryDocStatus,
+  renderPullQueryReviewStatus,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import { UniAuditBatchMenuButton, UniBatchButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
@@ -153,6 +160,7 @@ import {
   pushSalesOrderToSalesReturn,
   pullSalesOrderFromQuotation,
   pullSalesOrderFromSalesContract,
+  pullSalesOrderFromSalesReview,
   withdrawSalesOrderFromComputation,
   createSalesOrderReminder,
   bulkDeleteSalesOrders,
@@ -172,6 +180,7 @@ import {
 } from '../../../services/sales-order';
 import { listQuotations, type Quotation, type QuotationCapabilities } from '../../../services/quotation';
 import { salesContractApi, type SalesContract, type SalesContractCapabilities } from '../../../services/sales-contract';
+import { salesReviewApi, type SalesReviewListItem } from '../../../services/sales-review';
 import { bankAccountService, type BankAccount } from '../../../../kuaicaiwu/services/finance/bank-account';
 import { formatBankAccountOptionLabel } from '../../../../kuaicaiwu/utils/financeSharedOptions';
 import { formatApiErrorDetail } from '../../../../../services/api';
@@ -181,6 +190,7 @@ import {
   useSalesOrderCapabilities,
   salesOrderBatchCloseAllowed,
   salesOrderCapabilityReasonMessage,
+  salesContractCapabilityReasonMessage,
 } from '../../../../../hooks/useDocumentCapabilities';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
@@ -302,11 +312,25 @@ type PullSalesContractCandidate = {
   capabilities?: SalesContractCapabilities;
 };
 
+type PullSalesReviewCandidate = {
+  id: number;
+  review_code: string;
+  customer_name?: string;
+  project_name?: string;
+  status?: string;
+  delivery_date?: string;
+  total_amount?: number;
+  sales_order_code?: string;
+};
+
 const isPullQuotationSelectable = (record: PullQuotationCandidate): boolean =>
   quotationCapabilityAllowed(record as Quotation, 'convert_to_order');
 
 const isPullSalesContractSelectable = (record: PullSalesContractCandidate): boolean =>
   record.capabilities?.push_to_sales_order?.allowed === true;
+
+const isPullSalesReviewSelectable = (record: PullSalesReviewCandidate): boolean =>
+  record.status === 'passed' && !record.sales_order_code;
 
 const toSafeNumber = (value: unknown): number => {
   const n = Number(value);
@@ -473,6 +497,7 @@ const SalesOrdersPage: React.FC = () => {
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const pullFromQuotationAction = resolveKuaizhizaoDocumentAction(t, 'sales_order.pull_from_quotation');
   const pullFromSalesContractAction = resolveKuaizhizaoDocumentAction(t, 'sales_order.pull_from_sales_contract');
+  const pullFromSalesReviewAction = resolveKuaizhizaoDocumentAction(t, 'sales_order.pull_from_sales_review');
   const pushToDemandComputationAction = resolveKuaizhizaoDocumentAction(t, 'demand_computation.pull_from_sales_order');
   const pushToWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_sales_order');
   const pushToSalesInvoiceAction = resolveKuaizhizaoDocumentAction(t, 'sales_invoice.pull_from_sales_order');
@@ -1468,7 +1493,7 @@ const SalesOrdersPage: React.FC = () => {
   const [workCenterList, setWorkCenterList] = useState<WorkCenter[]>([]);
   const [workCenterListLoading, setWorkCenterListLoading] = useState(false);
   const [workOrderPushMode, setWorkOrderPushMode] = useState<'draft' | 'confirm'>('draft');
-  const [workOrderGranularity, setWorkOrderGranularity] = useState<'grouped' | 'per_unit'>('grouped');
+  const [workOrderGranularity, setWorkOrderGranularity] = useState<'grouped' | 'peer_group'>('grouped');
   const [pushShipmentNoticeWarehouseOptions, setPushShipmentNoticeWarehouseOptions] = useState<Array<{ label: string; value: number }>>([]);
   const [pushShipmentNoticeLineWh, setPushShipmentNoticeLineWh] = useState<Record<number, number>>({});
   const [pushReturnLineBatch, setPushReturnLineBatch] = useState<Record<number, string>>({});
@@ -2032,16 +2057,12 @@ const SalesOrdersPage: React.FC = () => {
     loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const result = await listQuotations({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
           keyword: keyword.trim() || undefined,
-          pullable_only: scope === 'pullable',
         });
         const rows: Quotation[] = Array.isArray(result) ? result : result.data || [];
-        return {
-          data: mapPullQuotationRows(rows),
-          total: Array.isArray(result) ? rows.length : Number(result.total ?? rows.length),
-        };
+        return pagePullCandidates(mapPullQuotationRows(rows), scope, page, pageSize, isPullQuotationSelectable);
       } catch (error: any) {
         messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.loadQuotationsFailed')));
         return { data: [], total: 0 };
@@ -2124,16 +2145,12 @@ const SalesOrdersPage: React.FC = () => {
     loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const result = await salesContractApi.list({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
           keyword: keyword.trim() || undefined,
-          pullable_only: scope === 'pullable',
         });
         const rows = mapPullSalesContractRows(result.items || []);
-        return {
-          data: rows,
-          total: Number(result.total ?? rows.length),
-        };
+        return pagePullCandidates(rows, scope, page, pageSize, isPullSalesContractSelectable);
       } catch (error: any) {
         messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.pullContract.loadFailed')));
         return { data: [], total: 0 };
@@ -2147,7 +2164,10 @@ const SalesOrdersPage: React.FC = () => {
         return;
       }
       if (selected && !isPullSalesContractSelectable(selected)) {
-        messageApi.warning(selected.capabilities?.push_to_sales_order?.reason || t('app.kuaizhizao.salesOrder.pullContract.notAllowed'));
+        messageApi.warning(
+          salesContractCapabilityReasonMessage(selected.capabilities?.push_to_sales_order?.reason, t) ||
+            t('app.kuaizhizao.salesOrder.pullContract.notAllowed'),
+        );
         return;
       }
       try {
@@ -2171,6 +2191,94 @@ const SalesOrdersPage: React.FC = () => {
             t('app.kuaizhizao.salesOrder.pullCreateFailed', {
               source: pullFromSalesContractAction.sourceLabel,
               target: pullFromSalesContractAction.targetLabel,
+            }),
+          ),
+        );
+        throw error;
+      }
+    },
+  });
+
+  const mapPullSalesReviewRows = useCallback((rows: SalesReviewListItem[]): PullSalesReviewCandidate[] => {
+    return rows
+      .filter((row) => row.id && row.review_code)
+      .map((row) => ({
+        id: Number(row.id),
+        review_code: String(row.review_code),
+        customer_name: row.customer_name || '',
+        project_name: row.project_name || '',
+        status: row.status || '',
+        delivery_date: row.delivery_date || '',
+        total_amount: row.total_amount != null ? Number(row.total_amount) : undefined,
+        sales_order_code: row.sales_order_code || '',
+      }));
+  }, []);
+
+  const pullFromSalesReviewScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
+  const pullFromSalesReviewQuery = useUniPullQuery<PullSalesReviewCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    scopeOptions: pullFromSalesReviewScopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (record) => !isPullSalesReviewSelectable(record),
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      try {
+        const result = await salesReviewApi.list({
+          skip: 0,
+          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
+          keyword: keyword.trim() || undefined,
+        });
+        const rows = mapPullSalesReviewRows(result.items || []);
+        return pagePullCandidates(rows, scope, page, pageSize, isPullSalesReviewSelectable);
+      } catch (error: any) {
+        messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesReview.loadFailed')));
+        return { data: [], total: 0 };
+      }
+    },
+    onConfirm: async (keys, rows) => {
+      const selectedId = Number(keys[0]);
+      const selected = rows[0];
+      if (!selectedId || selectedId <= 0) {
+        messageApi.warning(t('app.kuaizhizao.salesOrder.selectSalesReviewFirst', { defaultValue: '请先选择订单评审' }));
+        return;
+      }
+      if (selected && !isPullSalesReviewSelectable(selected)) {
+        messageApi.warning(
+          selected.sales_order_code
+            ? t('app.kuaizhizao.salesOrder.alreadyCreated', { code: selected.sales_order_code })
+            : t('app.kuaizhizao.salesOrder.pullSalesReviewNotAllowed', { defaultValue: '当前订单评审不可创建销售订单' }),
+        );
+        return;
+      }
+      try {
+        const result = await pullSalesOrderFromSalesReview(selectedId);
+        messageApi.success(
+          result?.message ||
+            t('app.kuaizhizao.salesOrder.createdFromQuotation', {
+              code: result?.sales_order?.order_code || result?.sales_order_code || '',
+            }),
+        );
+        pullFromSalesReviewQuery.closeModal();
+        invalidateMenuBadge();
+        actionRef.current?.reload();
+        const orderId = result?.sales_order?.id ?? result?.sales_order_id;
+        if (orderId) {
+          refreshDrawerOrder(orderId);
+        }
+      } catch (error: any) {
+        messageApi.error(
+          salesOrderCatchMessage(
+            error,
+            t('app.kuaizhizao.salesOrder.pullCreateFailed', {
+              source: pullFromSalesReviewAction.sourceLabel,
+              target: pullFromSalesReviewAction.targetLabel,
             }),
           ),
         );
@@ -2214,24 +2322,15 @@ const SalesOrdersPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesOrder.status'),
         dataIndex: 'status',
-        width: 120,
-        render: (v: string) => {
-          let color: string = 'blue';
-          if (v === '已转订单') color = 'gold';
-          else if (v === '已接受') color = 'green';
-          else if (v === '已拒绝') color = 'red';
-          return <Tag color={color}>{v || t('app.kuaizhizao.salesOrder.unknownStatus')}</Tag>;
-        },
+        width: 100,
+        align: 'center' as const,
+        render: (v) => renderPullQueryDocStatus(t, v),
       },
       {
         title: t('app.kuaizhizao.salesOrder.reviewStatus'),
         dataIndex: 'review_status',
         width: 100,
-        render: (v: string) => {
-          const approved = v === 'APPROVED' || v === '已通过' || v === '审核通过';
-          const rejected = v === 'REJECTED' || v === '已驳回';
-          return <Tag color={approved ? 'green' : rejected ? 'red' : 'default'}>{v || '-'}</Tag>;
-        },
+        render: (v) => renderPullQueryReviewStatus(t, v),
       },
       {
         title: t('app.kuaizhizao.salesOrder.salesman'),
@@ -2249,7 +2348,7 @@ const SalesOrdersPage: React.FC = () => {
           }
           if (record.status === '已转订单' || record.sales_order_id) {
             return t('app.kuaizhizao.salesOrder.alreadyCreated', {
-              code: record.sales_order_code || record.sales_order_id || '-',
+              code: record.sales_order_code || '-',
             });
           }
           const reason = quotationCapabilityReasonMessage(
@@ -2298,18 +2397,15 @@ const SalesOrdersPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesOrder.status'),
         dataIndex: 'status',
-        width: 120,
-        render: (v: string) => <Tag color={v?.includes('关闭') ? 'default' : 'blue'}>{v || '-'}</Tag>,
+        width: 100,
+        align: 'center' as const,
+        render: (v) => renderPullQueryDocStatus(t, v),
       },
       {
         title: t('app.kuaizhizao.salesOrder.reviewStatus'),
         dataIndex: 'review_status',
         width: 100,
-        render: (v: string) => {
-          const approved = v === 'APPROVED' || v === '已通过' || v === '审核通过';
-          const rejected = v === 'REJECTED' || v === '已驳回';
-          return <Tag color={approved ? 'green' : rejected ? 'red' : 'default'}>{v || '-'}</Tag>;
-        },
+        render: (v) => renderPullQueryReviewStatus(t, v),
       },
       {
         title: t('app.kuaizhizao.salesOrder.salesman'),
@@ -2324,7 +2420,62 @@ const SalesOrdersPage: React.FC = () => {
         render: (_: unknown, record: PullSalesContractCandidate) =>
           isPullSalesContractSelectable(record)
             ? t('app.kuaizhizao.salesOrder.canCreate')
-            : record.capabilities?.push_to_sales_order?.reason || t('app.kuaizhizao.salesOrder.pullContract.notAllowed'),
+            : salesContractCapabilityReasonMessage(record.capabilities?.push_to_sales_order?.reason, t) ||
+              t('app.kuaizhizao.salesOrder.pullContract.notAllowed'),
+      },
+    ],
+    [t],
+  );
+
+  const pullSalesReviewColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.salesReview.colReviewCode'), dataIndex: 'review_code', width: 180 },
+      {
+        title: t('app.kuaizhizao.salesOrder.customerName'),
+        dataIndex: 'customer_name',
+        width: 180,
+        ellipsis: true,
+        render: (v: string) => v || '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesReview.colProjectName'),
+        dataIndex: 'project_name',
+        width: 180,
+        ellipsis: true,
+        render: (v: string) => v || '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesReview.colDeliveryDate'),
+        dataIndex: 'delivery_date',
+        width: 120,
+        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
+        dataIndex: 'total_amount',
+        width: 130,
+        align: 'right' as const,
+        render: (v: number | undefined) =>
+          v != null
+            ? Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : '-',
+      },
+      {
+        title: t('app.kuaizhizao.salesReview.colStatus'),
+        dataIndex: 'status',
+        width: 100,
+        align: 'center' as const,
+        render: (v) => renderPullQueryDocStatus(t, v),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.duplicateGuardHint'),
+        width: 260,
+        render: (_: unknown, record: PullSalesReviewCandidate) =>
+          isPullSalesReviewSelectable(record)
+            ? t('app.kuaizhizao.salesOrder.canCreate')
+            : record.sales_order_code
+              ? t('app.kuaizhizao.salesOrder.alreadyCreated', { code: record.sales_order_code })
+              : t('app.kuaizhizao.salesOrder.pullSalesReviewNotAllowed'),
       },
     ],
     [t],
@@ -2338,6 +2489,10 @@ const SalesOrdersPage: React.FC = () => {
   const selectedPullSalesContractNotPullable = !!(
     selectedPullSalesContract && !isPullSalesContractSelectable(selectedPullSalesContract)
   );
+  const selectedPullSalesReview = pullFromSalesReviewQuery.selectedRows[0];
+  const selectedPullSalesReviewNotPullable = !!(
+    selectedPullSalesReview && !isPullSalesReviewSelectable(selectedPullSalesReview)
+  );
 
   /** 打开“从报价单创建销售订单”弹窗 */
   const handlePullFromQuotation = () => {
@@ -2346,6 +2501,10 @@ const SalesOrdersPage: React.FC = () => {
 
   const handlePullFromSalesContract = () => {
     pullFromSalesContractQuery.openModal();
+  };
+
+  const handlePullFromSalesReview = () => {
+    pullFromSalesReviewQuery.openModal();
   };
 
   /** 打开提醒弹窗 */
@@ -2922,6 +3081,11 @@ const SalesOrdersPage: React.FC = () => {
             actionKey: 'sales_order.pull_from_sales_contract',
             onClick: handlePullFromSalesContract,
           },
+          {
+            key: 'pull-from-sales-review',
+            actionKey: 'sales_order.pull_from_sales_review',
+            onClick: handlePullFromSalesReview,
+          },
         ])}
       />,
       <UniPushToolbarButton
@@ -2935,6 +3099,7 @@ const SalesOrdersPage: React.FC = () => {
       handleCreate,
       handlePullFromSalesContract,
       handlePullFromQuotation,
+      handlePullFromSalesReview,
       salesOrderToolbarPushDisabledReason,
       selectedOrderForToolbar,
       selectedRowKeys,
@@ -4875,6 +5040,7 @@ const SalesOrdersPage: React.FC = () => {
         confirmLoading={pullFromQuotationQuery.confirmLoading}
         selectionType={pullFromQuotationQuery.selectionType}
         selectedRowKeys={pullFromQuotationQuery.selectedRowKeys}
+        selectedRows={pullFromQuotationQuery.selectedRows}
         onSelectedRowKeysChange={pullFromQuotationQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromQuotationQuery.isRowDisabled}
         searchDraft={pullFromQuotationQuery.searchDraft}
@@ -4945,6 +5111,7 @@ const SalesOrdersPage: React.FC = () => {
         confirmLoading={pullFromSalesContractQuery.confirmLoading}
         selectionType={pullFromSalesContractQuery.selectionType}
         selectedRowKeys={pullFromSalesContractQuery.selectedRowKeys}
+        selectedRows={pullFromSalesContractQuery.selectedRows}
         onSelectedRowKeysChange={pullFromSalesContractQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromSalesContractQuery.isRowDisabled}
         searchDraft={pullFromSalesContractQuery.searchDraft}
@@ -4974,9 +5141,78 @@ const SalesOrdersPage: React.FC = () => {
               <Alert
                 type="warning"
                 showIcon
+                title={
+                  salesContractCapabilityReasonMessage(
+                    selectedPullSalesContract.capabilities?.push_to_sales_order?.reason,
+                    t,
+                  ) || t('app.kuaizhizao.salesOrder.pullContract.notAllowed')
+                }
+              />
+            )
+            : undefined
+        }
+      />
+
+      <UniPullQueryModal<PullSalesReviewCandidate>
+        title={pullFromSalesReviewAction.label}
+        open={pullFromSalesReviewQuery.open}
+        zIndex={elevatedModalZIndex}
+        onCancel={pullFromSalesReviewQuery.closeModal}
+        onOk={pullFromSalesReviewQuery.handleConfirm}
+        okText={t('app.kuaizhizao.salesOrder.create')}
+        rowKey="id"
+        columns={pullSalesReviewColumns}
+        dataSource={pullFromSalesReviewQuery.dataSource}
+        loading={pullFromSalesReviewQuery.loading}
+        confirmLoading={pullFromSalesReviewQuery.confirmLoading}
+        selectionType={pullFromSalesReviewQuery.selectionType}
+        selectedRowKeys={pullFromSalesReviewQuery.selectedRowKeys}
+        selectedRows={pullFromSalesReviewQuery.selectedRows}
+        onSelectedRowKeysChange={pullFromSalesReviewQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromSalesReviewQuery.isRowDisabled}
+        searchDraft={pullFromSalesReviewQuery.searchDraft}
+        onSearchDraftChange={pullFromSalesReviewQuery.setSearchDraft}
+        onSearchApply={pullFromSalesReviewQuery.handleSearchApply}
+        onSearchClear={pullFromSalesReviewQuery.handleSearchClear}
+        appliedKeyword={pullFromSalesReviewQuery.appliedKeyword}
+        page={pullFromSalesReviewQuery.page}
+        pageSize={pullFromSalesReviewQuery.pageSize}
+        total={pullFromSalesReviewQuery.total}
+        onPageChange={pullFromSalesReviewQuery.handlePageChange}
+        scopeOptions={pullFromSalesReviewQuery.scopeOptions}
+        scope={pullFromSalesReviewQuery.scope}
+        onScopeChange={pullFromSalesReviewQuery.handleScopeChange}
+        searchPlaceholder={t('app.kuaizhizao.salesReview.keywordPlaceholder')}
+        emptyText={t('components.uniPullQuery.empty')}
+        emptySearchText={t('components.uniPullQuery.emptySearch')}
+        okButtonProps={{
+          disabled:
+            pullFromSalesReviewQuery.selectedRowKeys.length === 0 ||
+            selectedPullSalesReviewNotPullable ||
+            pullFromSalesReviewQuery.loading,
+        }}
+        alert={
+          selectedPullSalesReviewNotPullable && selectedPullSalesReview
+            ? (
+              <Alert
+                type="warning"
+                showIcon
                 message={
-                  selectedPullSalesContract.capabilities?.push_to_sales_order?.reason ||
-                  t('app.kuaizhizao.salesOrder.pullContract.notAllowed')
+                  selectedPullSalesReview.sales_order_code
+                    ? t('app.kuaizhizao.salesOrder.pullDuplicateAlert', {
+                        source: pullFromSalesReviewAction.sourceLabel,
+                        target: pullFromSalesReviewAction.targetLabel,
+                      })
+                    : t('app.kuaizhizao.salesOrder.pullSalesReviewNotAllowed', {
+                        defaultValue: '当前订单评审不可创建销售订单',
+                      })
+                }
+                description={
+                  selectedPullSalesReview.sales_order_code
+                    ? t('app.kuaizhizao.salesOrder.linkedSalesOrder', {
+                        code: selectedPullSalesReview.sales_order_code,
+                      })
+                    : undefined
                 }
               />
             )
@@ -5114,10 +5350,10 @@ const SalesOrdersPage: React.FC = () => {
                   <Segmented
                     size="middle"
                     value={workOrderGranularity}
-                    onChange={(val) => setWorkOrderGranularity(val as 'grouped' | 'per_unit')}
+                    onChange={(val) => setWorkOrderGranularity(val as 'grouped' | 'peer_group')}
                     options={[
                       { label: t('app.kuaizhizao.salesOrder.workOrderTypeGrouped'), value: 'grouped' },
-                      { label: t('app.kuaizhizao.salesOrder.workOrderTypePerUnit'), value: 'per_unit' },
+                      { label: t('app.kuaizhizao.salesOrder.workOrderTypePerUnit'), value: 'peer_group' },
                     ]}
                   />
                 </Space>

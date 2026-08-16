@@ -142,6 +142,36 @@ async def pull_sales_order_from_quotation(
         )
 
 
+@router.post("/pull-from-sales-review", response_model=Dict[str, Any], summary="Build sales order from sales review")
+async def pull_sales_order_from_sales_review(
+    sales_review_id: int = Body(..., embed=True, description="订单评审ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await sales_order_service.pull_sales_order_from_sales_review(
+            tenant_id=tenant_id,
+            sales_review_id=sales_review_id,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/pull-from-sales-review", tenant_id
+        )
+    except (BusinessLogicError, ValidationError) as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/pull-from-sales-review", tenant_id
+        )
+    except Exception as e:
+        logger.error(f"从订单评审加载生成销售订单失败: {e}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "从订单评审加载生成销售订单失败",
+            "/sales-orders/pull-from-sales-review",
+            tenant_id,
+        )
+
+
 @router.post("/pull-from-sales-contract", response_model=Dict[str, Any], summary="Build sales order from sales contract")
 async def pull_sales_order_from_sales_contract(
     body: Dict[str, Any] = Body(..., description="contract_id 必填；selected_item_ids/release_lines 可选"),
@@ -249,6 +279,42 @@ SALES_ORDER_SORTABLE_FIELDS = frozenset({
     "salesman_name", "contract_code",
     "created_at", "updated_at",
 })
+
+
+@router.get(
+    "/shipment-notice-pull-lines",
+    summary="Open sales order lines for shipment notice pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:sales-order:read"))],
+)
+async def list_shipment_notice_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    sales_order_id: Optional[int] = Query(None, description="来源销售订单"),
+    pullable_only: bool = Query(True, description="仅剩余可通知量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """开口销售订单行，供发货通知跨单取明细。"""
+    try:
+        return await sales_order_service.list_shipment_notice_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            sales_order_id=sales_order_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/shipment-notice-pull-lines", tenant_id)
+    except Exception:
+        logger.exception("列出发货通知开口销售行失败")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "列出发货通知开口销售行失败",
+            "/sales-orders/shipment-notice-pull-lines",
+            tenant_id,
+        )
 
 
 @router.get("/statistics", summary="Sales order statistics (KPI cards)")
@@ -513,7 +579,7 @@ async def list_sales_orders(
     ),
     pull_target: Optional[str] = Query(
         None,
-        description="加载目标：sales_order_change / after_sales_ticket / sales_return；与 pullable_only 组合使用",
+        description="加载目标：sales_order_change / after_sales_ticket / sales_return / shipment_notice / sales_delivery / demand_computation；与 pullable_only 组合使用",
     ),
     view: Optional[str] = Query(
         None,
@@ -955,7 +1021,7 @@ async def push_sales_order_to_work_order(
     sales_order_id: int = Path(..., description="销售订单ID"),
     body: Optional[Dict[str, Any]] = Body(
         default=None,
-        description="可选：push_mode=draft|confirm，work_order_granularity=grouped|per_unit，selected_item_ids=[1,2]，selected_quantities={\"1\": 2}，selected_work_centers={\"1\": 3}",
+        description="可选：push_mode=draft|confirm，work_order_granularity=grouped|peer_group，selected_item_ids=[1,2]，selected_quantities={\"1\": 2}，selected_work_centers={\"1\": 3}",
     ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),

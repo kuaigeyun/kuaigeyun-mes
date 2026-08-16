@@ -546,6 +546,18 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     allowManualEdit: true,
   },
   {
+    pageCode: 'kuaizhizao-sales-review',
+    pageName: '订单评审',
+    pagePath: '/apps/kuaizhizao/sales-management/sales-reviews',
+    codeField: 'review_code',
+    codeFieldLabel: '评审单编码',
+    module: '快格轻制造',
+    moduleIcon: 'tool',
+    autoGenerate: true,
+    ruleCode: 'SALES_REVIEW_CODE',
+    allowManualEdit: true,
+  },
+  {
     pageCode: 'kuaizhizao-sales-contract',
     pageName: '销售合同',
     pagePath: '/apps/kuaizhizao/sales-management/sales-contracts',

@@ -13,7 +13,13 @@ import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  UNI_PULL_QUERY_MAX_FETCH_LIMIT,
+  pagePullCandidates,
+  renderPullQueryDocStatus,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -322,19 +328,14 @@ const SalesOrderChangesPage: React.FC = () => {
     loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const result = await listSalesOrders({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
           keyword: keyword.trim() || undefined,
           include_items: false,
-          pullable_only: scope === 'pullable',
-          pull_target: 'sales_order_change',
           view: 'options',
         });
         const rows = mapPullSalesOrderRows(result.data || []);
-        return {
-          data: rows,
-          total: Number(result.total ?? rows.length),
-        };
+        return pagePullCandidates(rows, scope, page, pageSize, isPullSalesOrderSelectable);
       } catch (error: any) {
         message.error(error?.message ?? t('app.kuaizhizao.orderChange.loadSalesOrdersFailed'));
         return { data: [], total: 0 };
@@ -391,7 +392,8 @@ const SalesOrderChangesPage: React.FC = () => {
         title: t('common.status'),
         dataIndex: 'status',
         width: 100,
-        render: (value: string) => value || '-',
+        align: 'center' as const,
+        render: (v) => renderPullQueryDocStatus(t, v),
       },
     ],
     [t],
@@ -901,6 +903,7 @@ const SalesOrderChangesPage: React.FC = () => {
         confirmLoading={pullFromSalesOrderQuery.confirmLoading}
         selectionType={pullFromSalesOrderQuery.selectionType}
         selectedRowKeys={pullFromSalesOrderQuery.selectedRowKeys}
+        selectedRows={pullFromSalesOrderQuery.selectedRows}
         onSelectedRowKeysChange={pullFromSalesOrderQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromSalesOrderQuery.isRowDisabled}
         searchDraft={pullFromSalesOrderQuery.searchDraft}

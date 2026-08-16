@@ -244,6 +244,14 @@ async def list_demands(
     created_end_date: Optional[date] = Query(None, description="创建日期止"),
     order_by: Optional[str] = Query(None, description="排序字段，如 demand_code、-created_at"),
     include_items: bool = Query(False, description="是否包含明细"),
+    pullable_only: Optional[bool] = Query(
+        None,
+        description="仅可加载建单；需配合 pull_target",
+    ),
+    pull_target: Optional[str] = Query(
+        None,
+        description="加载目标：demand_computation；与 pullable_only 组合使用",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -290,6 +298,10 @@ async def list_demands(
             filters['order_by'] = safe_order_by
         if include_items:
             filters['include_items'] = True
+        if pullable_only is not None:
+            filters['pullable_only'] = pullable_only
+        if pull_target and str(pull_target).strip():
+            filters['pull_target'] = str(pull_target).strip()
         
         result = await demand_service.list_demands(
             tenant_id=tenant_id,

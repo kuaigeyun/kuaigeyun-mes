@@ -153,16 +153,29 @@ export const qualityApi = {
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/revoke-conduct`, { method: 'POST' }),
     approve: async (id: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/approve`, { method: 'POST', data }),
-    pushToPurchaseReturn: async (id: string) =>
-      apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/push-to-purchase-return`, { method: 'POST' }),
+    pushToPurchaseReturn: async (id: string, data?: { quantity?: number }) =>
+      apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/push-to-purchase-return`, {
+        method: 'POST',
+        data: data?.quantity != null ? { quantity: data.quantity } : undefined,
+      }),
     previewPushToPurchaseReturn: async (id: string) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/push-to-purchase-return/preview`, { method: 'GET' }),
-    listPurchaseReceiptPullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
+    listPurchaseReceiptPullCandidates: async (params?: {
+      skip?: number;
+      limit?: number;
+      keyword?: string;
+      receipt_code?: string;
+    }) =>
       apiRequest<{ data: Array<Record<string, unknown>>; total: number; success: boolean }>(
         '/apps/kuaizhizao/incoming-inspections/pull-candidates/purchase-receipts',
         { method: 'GET', params },
       ),
-    listCustomerMaterialPullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
+    listCustomerMaterialPullCandidates: async (params?: {
+      skip?: number;
+      limit?: number;
+      keyword?: string;
+      registration_code?: string;
+    }) =>
       apiRequest<{ data: Array<Record<string, unknown>>; total: number; success: boolean }>(
         '/apps/kuaizhizao/incoming-inspections/pull-candidates/customer-material-registrations',
         { method: 'GET', params },
@@ -175,8 +188,11 @@ export const qualityApi = {
       apiRequest(`/apps/kuaizhizao/incoming-inspections/from-customer-material/${registrationId}/pull-preview`, {
         method: 'GET',
       }),
-    createFromPurchaseReceipt: async (purchaseReceiptId: string) =>
-      apiRequest(`/apps/kuaizhizao/incoming-inspections/from-purchase-receipt/${purchaseReceiptId}`, { method: 'POST' }),
+    createFromPurchaseReceipt: async (purchaseReceiptId: string, selectedItemIds?: number[]) =>
+      apiRequest(`/apps/kuaizhizao/incoming-inspections/from-purchase-receipt/${purchaseReceiptId}`, {
+        method: 'POST',
+        data: selectedItemIds?.length ? { selected_item_ids: selectedItemIds } : undefined,
+      }),
     ensureForPurchaseReceipt: async (purchaseReceiptId: string) =>
       apiRequest<EnsureIqcForPurchaseReceiptResult>(
         `/apps/kuaizhizao/incoming-inspections/ensure-for-purchase-receipt/${purchaseReceiptId}`,
@@ -187,8 +203,11 @@ export const qualityApi = {
         `/apps/kuaizhizao/incoming-inspections/ensure-for-customer-material-registration/${registrationId}`,
         { method: 'POST' },
       ),
-    createFromCustomerMaterial: async (registrationId: string) =>
-      apiRequest(`/apps/kuaizhizao/incoming-inspections/from-customer-material/${registrationId}`, { method: 'POST' }),
+    createFromCustomerMaterial: async (registrationId: string, selectedItemIds?: number[]) =>
+      apiRequest(`/apps/kuaizhizao/incoming-inspections/from-customer-material/${registrationId}`, {
+        method: 'POST',
+        data: selectedItemIds?.length ? { selected_item_ids: selectedItemIds } : undefined,
+      }),
     createDefect: async (inspectionId: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${inspectionId}/create-defect`, { method: 'POST', data }),
     import: async (data: any[][]) =>
@@ -215,7 +234,7 @@ export const qualityApi = {
         `/apps/kuaizhizao/process-inspections/from-work-order?work_order_id=${workOrderId}&operation_id=${operationId}`,
         { method: 'POST' }
       ),
-    listWorkOrderPullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
+    listWorkOrderPullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string; code?: string }) =>
       apiRequest<{ data: Array<Record<string, unknown>>; total: number; success: boolean }>(
         '/apps/kuaizhizao/process-inspections/pull-candidates/work-orders',
         { method: 'GET', params },
@@ -256,7 +275,7 @@ export const qualityApi = {
         `/apps/kuaizhizao/finished-goods-inspections/${id}/push-to-rework/preview`,
         { method: 'GET' },
       ),
-    listWorkOrderPullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
+    listWorkOrderPullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string; code?: string }) =>
       apiRequest<{ data: Array<Record<string, unknown>>; total: number; success: boolean }>(
         '/apps/kuaizhizao/finished-goods-inspections/pull-candidates/work-orders',
         { method: 'GET', params },

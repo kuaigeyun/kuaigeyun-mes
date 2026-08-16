@@ -1,4 +1,4 @@
-import { kuaioaDelete, kuaioaList, kuaioaPost, kuaioaPut } from './kuaioaApi';
+import { kuaioaDelete, kuaioaGet, kuaioaList, kuaioaPost, kuaioaPut } from './kuaioaApi';
 
 const BASE = '/apps/kuaioa/forms';
 
@@ -9,8 +9,9 @@ export interface FormTemplate {
   template_name: string;
   category: string;
   description?: string | null;
-  fields_schema?: unknown[];
+  fields_schema?: unknown;
   is_active: boolean;
+  show_in_menu?: boolean;
 }
 
 export interface FormRequest {
@@ -38,8 +39,17 @@ export const updateFormTemplate = (id: number, data: Partial<FormTemplate>) =>
 
 export const deleteFormTemplate = (id: number) => kuaioaDelete(`${BASE}/templates/${id}`);
 
+export const getFormTemplate = (id: number) =>
+  kuaioaGet<FormTemplate>(`${BASE}/templates/${id}`);
+
+export const getFormTemplateByCode = (templateCode: string) =>
+  kuaioaGet<FormTemplate>(`${BASE}/templates/by-code/${encodeURIComponent(templateCode)}`);
+
 export const listFormRequests = (params?: Record<string, unknown>) =>
   kuaioaList<FormRequest>(`${BASE}/requests`, params);
+
+export const getFormRequest = (id: number) =>
+  kuaioaGet<FormRequest>(`${BASE}/requests/${id}`);
 
 export const createFormRequest = (data: Partial<FormRequest>) =>
   kuaioaPost<FormRequest>(`${BASE}/requests`, data);

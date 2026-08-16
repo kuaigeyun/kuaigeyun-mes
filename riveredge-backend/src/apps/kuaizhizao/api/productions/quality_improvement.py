@@ -355,6 +355,23 @@ async def list_nonconforming_ledger(
     )
 
 
+@router.get(
+    "/nonconforming-ledger/{defect_id}",
+    response_model=DefectRecordResponse,
+    summary="Get nonconforming ledger",
+)
+async def get_nonconforming_ledger(
+    defect_id: int = Path(..., description="不合格品台账ID"),
+    _auth=_NC_READ,
+    tenant_id: int = Depends(get_current_tenant),
+) -> DefectRecordResponse:
+    _ = _auth
+    return await defect_record_service.get_defect_record(
+        tenant_id=tenant_id,
+        defect_id=defect_id,
+    )
+
+
 @router.put("/nonconforming-ledger/{defect_id}/disposition", response_model=DefectRecordResponse, summary="Update NC disposition")
 async def update_nonconforming_disposition(
     payload: NonconformingDispositionUpdate,
@@ -426,6 +443,7 @@ async def list_oqc_shipment_notice_pull_candidates(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     keyword: Optional[str] = Query(None),
+    notice_code: Optional[str] = Query(None, description="发货通知单号（模糊）"),
     _auth=_OQC_READ,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -435,6 +453,7 @@ async def list_oqc_shipment_notice_pull_candidates(
         skip=skip,
         limit=limit,
         keyword=keyword,
+        notice_code=notice_code,
     )
 
 
@@ -446,6 +465,7 @@ async def list_oqc_sales_delivery_pull_candidates(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     keyword: Optional[str] = Query(None),
+    delivery_code: Optional[str] = Query(None, description="销售出库单号（模糊）"),
     _auth=_OQC_READ,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -455,6 +475,7 @@ async def list_oqc_sales_delivery_pull_candidates(
         skip=skip,
         limit=limit,
         keyword=keyword,
+        delivery_code=delivery_code,
     )
 
 

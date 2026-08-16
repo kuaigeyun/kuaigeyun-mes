@@ -3,7 +3,7 @@ export const INBOUND_LIST_PATH = '/apps/kuaizhizao/warehouse-management/inbound'
 export const inboundPoEntryPath = (poId: number) =>
   `${INBOUND_LIST_PATH}/entry/purchase-order/${poId}`;
 
-/** 收货通知取单：当前统一跳转采购订单入库录入页 */
+/** 收货通知取单录入页 */
 export const inboundReceiptNoticeEntryPath = (noticeId: number) =>
   `${INBOUND_LIST_PATH}/entry/receipt-notice/${noticeId}`;
 

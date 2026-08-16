@@ -1,10 +1,10 @@
 import React from 'react';
 import type { TableColumnsType } from 'antd';
-import { Tag } from 'antd';
 import type { TFunction } from 'i18next';
+import { renderPullCapabilityTag } from '../../../../../components/uni-pull-query';
+import { renderPullQueryDocStatus } from '../../../../../components/uni-pull-query';
 import { MaterialStackedCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { formatDateTimeBySiteSetting, formatQuantity } from '../../../../../utils/format';
-import { translateLifecycleStageByKey } from '../../../../../utils/globalLifecycleI18n';
 import {
   oqcInspectionCapabilityReasonMessage,
   qualityInspectionCapabilityReasonMessage,
@@ -27,10 +27,8 @@ function renderDash(value: unknown): string {
   return text || '—';
 }
 
-function renderDocStatus(t: TFunction, value: unknown): string {
-  const raw = String(value ?? '').trim();
-  if (!raw) return '—';
-  return translateLifecycleStageByKey(t, raw, raw) || '—';
+function renderDocStatus(t: TFunction, value: unknown): React.ReactNode {
+  return renderPullQueryDocStatus(t, value);
 }
 
 function renderPushableLines(
@@ -55,17 +53,14 @@ function buildPullStatusColumn<T extends { capabilities?: Record<string, PullCap
   return {
     title: t('app.kuaizhizao.quality.pullQuery.pullStatus'),
     key: 'pull_status',
-    width: 160,
+    width: 112,
     align: 'center',
     render: (_: unknown, record: T) => {
       const cap = record.capabilities?.[capabilityKey];
-      if (cap?.allowed === true) {
-        return <Tag color="success">{t('app.kuaizhizao.quality.pullQuery.canPull')}</Tag>;
-      }
-      return (
-        <Tag color="gold">
-          {reasonMessage(cap?.reason, t) || t('app.kuaizhizao.workOrder.tagCannotCreate')}
-        </Tag>
+      return renderPullCapabilityTag(
+        cap?.allowed === true,
+        t('app.kuaizhizao.quality.pullQuery.canPull'),
+        reasonMessage(cap?.reason, t) || t('app.kuaizhizao.workOrder.tagCannotCreate'),
       );
     },
   };
@@ -81,7 +76,7 @@ export function buildIncomingPurchaseReceiptPullColumns(t: TFunction): TableColu
     {
       title: t('app.kuaizhizao.quality.pullQuery.receiptCode'),
       dataIndex: 'receipt_code',
-      width: 160,
+      width: 168,
       ellipsis: true,
       render: (v: unknown) => renderDash(v),
     },
@@ -95,14 +90,13 @@ export function buildIncomingPurchaseReceiptPullColumns(t: TFunction): TableColu
     {
       title: t('app.kuaizhizao.quality.pullQuery.supplier'),
       dataIndex: 'supplier_name',
-      width: 160,
       ellipsis: true,
       render: (v: unknown) => renderDash(v),
     },
     {
       title: t('app.kuaizhizao.quality.pullQuery.material'),
       key: 'material_summary',
-      width: 220,
+      width: 160,
       ellipsis: true,
       render: (_: unknown, r) => renderDash(r.material_summary),
     },
@@ -123,7 +117,7 @@ export function buildIncomingPurchaseReceiptPullColumns(t: TFunction): TableColu
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
-      width: 168,
+      width: 112,
       render: (v: unknown) => (v ? formatDateTimeBySiteSetting(String(v)) : '—'),
     },
     buildPullStatusColumn(t, 'pull_incoming_inspection', qualityInspectionCapabilityReasonMessage),
@@ -265,7 +259,7 @@ export function buildProcessWorkOrderPullColumns(t: TFunction): TableColumnsType
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
-      width: 168,
+      width: 112,
       render: (v: unknown) => (v ? formatDateTimeBySiteSetting(String(v)) : '—'),
     },
     buildPullStatusColumn(t, 'pull_process_inspection', qualityInspectionCapabilityReasonMessage),
@@ -338,7 +332,7 @@ export function buildFinishedWorkOrderPullColumns(t: TFunction): TableColumnsTyp
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
-      width: 168,
+      width: 112,
       render: (v: unknown) => (v ? formatDateTimeBySiteSetting(String(v)) : '—'),
     },
     buildPullStatusColumn(t, 'pull_finished_goods_inspection', qualityInspectionCapabilityReasonMessage),
@@ -389,7 +383,7 @@ export function buildOqcShipmentNoticePullColumns(t: TFunction): TableColumnsTyp
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
-      width: 168,
+      width: 112,
       render: (v: unknown) => (v ? formatDateTimeBySiteSetting(String(v)) : '—'),
     },
     buildPullStatusColumn(t, 'pull_oqc_inspection', oqcInspectionCapabilityReasonMessage),
@@ -440,7 +434,7 @@ export function buildOqcSalesDeliveryPullColumns(t: TFunction): TableColumnsType
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at',
-      width: 168,
+      width: 112,
       render: (v: unknown) => (v ? formatDateTimeBySiteSetting(String(v)) : '—'),
     },
     buildPullStatusColumn(t, 'pull_oqc_inspection', oqcInspectionCapabilityReasonMessage),

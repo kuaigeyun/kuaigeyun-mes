@@ -112,6 +112,7 @@ export const ServiceSettlementDetailDrawer: React.FC<ServiceSettlementDetailDraw
       onRetry={onRetry}
       extra={extra}
       zIndex={zIndex}
+      traceDocumentType="service_settlement"
       linesTitle={t('app.kuaizhizao.afterSalesService.common.itemsTitle')}
       lines={
         items.length > 0 ? (

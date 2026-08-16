@@ -12,9 +12,9 @@ const NonconformingSummary: React.FC = () => {
     <KuaizhizaoReport
       title={t('app.kuaizhizao.menu.reports.nonconforming-summary')}
       reportType={QUALITY_REPORT_TYPES.NONCONFORMING_SUMMARY}
-      columnPersistenceId="apps.kuaizhizao.pages.quality-management.reports.NonconformingSummary"
+      columnPersistenceId="apps.kuaizhizao.pages.quality-management.reports.NonconformingSummary-v2"
       summaryFields={['unqualified_qty']}
-      rowKey="handle_code"
+      rowKey="id"
       columns={columns}
     />
   );

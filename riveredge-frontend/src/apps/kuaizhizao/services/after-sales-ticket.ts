@@ -17,6 +17,7 @@ export interface AfterSalesTicketCapabilities {
   delete?: ActionCapability;
   close?: ActionCapability;
   push_sales_return?: ActionCapability;
+  push_repair_order?: ActionCapability;
 }
 
 export interface AfterSalesTicketItem {
@@ -65,6 +66,7 @@ export interface AfterSalesTicket {
   updated_by_name?: string | null;
   items?: AfterSalesTicketItem[];
   item_count?: number;
+  existing_repair_order_code?: string | null;
   capabilities?: AfterSalesTicketCapabilities;
 }
 
@@ -200,6 +202,21 @@ export const afterSalesTicketApi = {
   previewPushToSalesReturn: async (id: number): Promise<AfterSalesTicketPushPreview> =>
     apiRequest(`/apps/kuaizhizao/after-sales-tickets/${id}/push-to-sales-return/preview`, {
       method: 'GET',
+    }),
+
+  pushToRepairOrder: async (
+    id: number,
+    data?: { fault_description?: string; service_asset_id?: number | null },
+  ): Promise<{
+    success: boolean;
+    message: string;
+    ticket_id: number;
+    repair_order_id: number;
+    repair_order_code: string;
+  }> =>
+    apiRequest(`/apps/kuaizhizao/after-sales-tickets/${id}/push-to-repair-order`, {
+      method: 'POST',
+      data: data ?? {},
     }),
 
   pushToSalesReturn: async (

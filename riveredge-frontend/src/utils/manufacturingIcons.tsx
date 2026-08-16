@@ -594,6 +594,7 @@ export const ManufacturingIcons = {
   experiment: getLucideIcon('FlaskConical'), // LIMS/PDM 实验/研发（使用已有的 FlaskConical）
   calculator: getLucideIcon('Calculator'), // 成本管理/MRP - 使用计算器图标（通用，不含货币符号）
   wallet: getLucideIcon('Wallet'), // 财务管理 - 使用钱包图标
+  audit: getLucideIcon('FileCheck'), // 税务管理（进项认证/台账，不用带货币符号的 Receipt）
   scanLine: getLucideIcon('ScanLine'),
   banknote: getLucideIcon('Banknote'),
   pieChart: getLucideIcon('PieChart'),

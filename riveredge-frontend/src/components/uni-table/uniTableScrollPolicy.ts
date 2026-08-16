@@ -7,6 +7,8 @@
  * - `layout-templates/constants.ts`（`getListPageTableScrollOffsetPx` 视口扣减）
  */
 
+import { LIST_PAGE_TABLE_SCROLL } from '../layout-templates/constants'
+
 export interface UniTableScrollPolicyInput {
   /** 白名单：页面显式传入 scroll.y 时由页面接管 */
   allowCustomScrollY: boolean
@@ -106,7 +108,7 @@ export function measureFillViewportTableBodyScrollY(root: HTMLElement | null): n
 
   return Math.max(
     VIEWPORT_SCROLL_MIN_AVAILABLE_PX,
-    Math.floor(total - chrome - FILL_VIEWPORT_SCROLL_GAP_PX),
+    Math.floor(total - chrome - FILL_VIEWPORT_SCROLL_GAP_PX - LIST_PAGE_TABLE_SCROLL.RESOLUTION_SLACK_PX),
   )
 }
 

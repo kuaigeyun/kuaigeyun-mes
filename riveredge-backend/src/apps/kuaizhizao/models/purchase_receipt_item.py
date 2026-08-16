@@ -22,6 +22,7 @@ class PurchaseReceiptItem(BaseModel):
 
     # 采购订单明细关联
     purchase_order_item_id = fields.IntField(description="采购订单明细ID")
+    receipt_notice_item_id = fields.IntField(null=True, description="收货通知明细ID")
 
     material_id = fields.IntField(description="物料ID")
     material_code = fields.CharField(max_length=50, description="物料编码")
@@ -69,4 +70,5 @@ class PurchaseReceiptItem(BaseModel):
             ("tenant_id", "receipt_id"),
             ("material_id",),
             ("location_id",),
+            ("receipt_notice_item_id",),
         ]

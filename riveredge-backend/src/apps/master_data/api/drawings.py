@@ -10,20 +10,24 @@ from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, Q
 from apps.master_data.schemas.drawing_schemas import (
     DrawingStepBomImportRequest,
     DrawingStepBomImportResponse,
+    EngineeringDrawingCheckoutRequest,
     EngineeringDrawingCreate,
     EngineeringDrawingListResponse,
     EngineeringDrawingObsoleteRequest,
+    EngineeringDrawingPrintDataResponse,
+    EngineeringDrawingRejectRequest,
     EngineeringDrawingResponse,
     EngineeringDrawingRevisionCreate,
     EngineeringDrawingRevisionsResponse,
     EngineeringDrawingUpdate,
 )
+from apps.master_data.schemas.drawing_folder_schemas import DrawingMoveFolderRequest
 from apps.master_data.services.drawing_service import DrawingService
 from apps.master_data.services.drawing_step_bom_service import DrawingStepBomService
 from apps.master_data.api._master_data_route_access import require_master_data_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.services.business.code_generation_service import CodeGenerationService
-from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.exceptions.exceptions import AuthorizationError, NotFoundError, ValidationError
 from infra.models.user import User
 from loguru import logger
 
@@ -52,6 +56,7 @@ def _http_exception(status_code: int, message: str, route: str = "/process/drawi
 @router.get("/by-context", response_model=list[EngineeringDrawingResponse], response_model_by_alias=True, summary="List released drawings by context")
 async def list_drawings_by_context(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
     material_uuid: Optional[str] = Query(None, alias="materialUuid"),
     process_route_uuid: Optional[str] = Query(None, alias="processRouteUuid"),
     operation_uuid: Optional[str] = Query(None, alias="operationUuid"),
@@ -62,20 +67,25 @@ async def list_drawings_by_context(
         material_uuid=material_uuid,
         process_route_uuid=process_route_uuid,
         operation_uuid=operation_uuid,
+        current_user=current_user,
     )
 
 
 @router.get("", response_model=EngineeringDrawingListResponse, response_model_by_alias=True, summary="List engineering drawings")
 async def list_drawings(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=200),
     status: Optional[str] = Query(None),
     drawing_type: Optional[str] = Query(None, alias="drawingType"),
+    security_level: Optional[str] = Query(None, alias="securityLevel"),
     keyword: Optional[str] = Query(None),
     material_uuid: Optional[str] = Query(None, alias="materialUuid"),
     process_route_uuid: Optional[str] = Query(None, alias="processRouteUuid"),
     operation_uuid: Optional[str] = Query(None, alias="operationUuid"),
+    folder_uuid: Optional[str] = Query(None, alias="folderUuid"),
+    unclassified: bool = Query(False),
     sort_by: Optional[str] = Query(None, alias="sortBy"),
     sort_order: Optional[str] = Query(None, alias="sortOrder"),
     view: str = Query("current", description="current=现行有效版, all=全部修订版"),
@@ -86,13 +96,17 @@ async def list_drawings(
         limit=limit,
         status=status,
         drawing_type=drawing_type,
+        security_level=security_level,
         keyword=keyword,
         material_uuid=material_uuid,
         process_route_uuid=process_route_uuid,
         operation_uuid=operation_uuid,
+        folder_uuid=folder_uuid,
+        unclassified=unclassified,
         sort_by=sort_by,
         sort_order=sort_order,
         view=view,
+        current_user=current_user,
     )
     return EngineeringDrawingListResponse(data=items, total=total)
 
@@ -113,10 +127,15 @@ async def create_drawing(
 async def list_drawing_revisions(
     drawing_uuid: str,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ):
     try:
-        code, revisions = await DrawingService.list_revisions(tenant_id, drawing_uuid)
+        code, revisions = await DrawingService.list_revisions(
+            tenant_id, drawing_uuid, current_user=current_user
+        )
         return EngineeringDrawingRevisionsResponse(code=code, revisions=revisions)
+    except AuthorizationError as e:
+        raise _http_exception(status.HTTP_403_FORBIDDEN, str(e))
     except NotFoundError as e:
         raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
 
@@ -125,9 +144,12 @@ async def list_drawing_revisions(
 async def get_drawing(
     drawing_uuid: str,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ):
     try:
-        return await DrawingService.get_drawing(tenant_id, drawing_uuid)
+        return await DrawingService.get_drawing(tenant_id, drawing_uuid, current_user=current_user)
+    except AuthorizationError as e:
+        raise _http_exception(status.HTTP_403_FORBIDDEN, str(e))
     except NotFoundError as e:
         raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
 
@@ -162,6 +184,27 @@ async def delete_drawing(
         raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
 
 
+@router.get(
+    "/{drawing_uuid}/print-data",
+    response_model=EngineeringDrawingPrintDataResponse,
+    response_model_by_alias=True,
+    summary="Drawing print data with watermark",
+)
+async def get_drawing_print_data(
+    drawing_uuid: str,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    try:
+        return await DrawingService.get_print_data(tenant_id, drawing_uuid, current_user)
+    except AuthorizationError as e:
+        raise _http_exception(status.HTTP_403_FORBIDDEN, str(e))
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+
 @router.post("/{drawing_uuid}/release", response_model=EngineeringDrawingResponse, response_model_by_alias=True, summary="Release drawing")
 async def release_drawing(
     drawing_uuid: str,
@@ -169,7 +212,9 @@ async def release_drawing(
     current_user: Annotated[User, Depends(get_current_user)],
 ):
     try:
-        return await DrawingService.release_drawing(tenant_id, drawing_uuid, released_by=current_user.id)
+        return await DrawingService.release_drawing(
+            tenant_id, drawing_uuid, released_by=current_user.id, current_user=current_user
+        )
     except NotFoundError as e:
         raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
     except ValidationError as e:
@@ -212,9 +257,136 @@ async def import_step_bom(
     drawing_uuid: str,
     body: DrawingStepBomImportRequest,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ):
     try:
-        return await DrawingStepBomService.import_step_bom(tenant_id, drawing_uuid, body)
+        return await DrawingStepBomService.import_step_bom(
+            tenant_id, drawing_uuid, body, current_user=current_user
+        )
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+
+@router.post("/{drawing_uuid}/checkout", response_model=EngineeringDrawingResponse, response_model_by_alias=True, summary="Checkout drawing")
+async def checkout_drawing(
+    drawing_uuid: str,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    body: EngineeringDrawingCheckoutRequest | None = None,
+):
+    try:
+        return await DrawingService.checkout_drawing(
+            tenant_id, drawing_uuid, current_user, comment=(body.comment if body else None)
+        )
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+
+@router.post("/{drawing_uuid}/checkin", response_model=EngineeringDrawingResponse, response_model_by_alias=True, summary="Checkin drawing")
+async def checkin_drawing(
+    drawing_uuid: str,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    try:
+        return await DrawingService.checkin_drawing(tenant_id, drawing_uuid, current_user)
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+
+@router.post("/{drawing_uuid}/undo-checkout", response_model=EngineeringDrawingResponse, response_model_by_alias=True, summary="Undo drawing checkout")
+async def undo_checkout_drawing(
+    drawing_uuid: str,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    try:
+        return await DrawingService.undo_checkout_drawing(tenant_id, drawing_uuid, current_user)
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+
+@router.post("/{drawing_uuid}/move-folder", response_model=EngineeringDrawingResponse, response_model_by_alias=True, summary="Move drawing to vault folder")
+async def move_drawing_folder(
+    drawing_uuid: str,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    body: DrawingMoveFolderRequest | None = None,
+):
+    try:
+        return await DrawingService.move_folder(
+            tenant_id,
+            drawing_uuid,
+            body.folder_uuid if body else None,
+            current_user,
+        )
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+
+@router.post("/{drawing_uuid}/submit", response_model=EngineeringDrawingResponse, response_model_by_alias=True, summary="Submit drawing for review")
+async def submit_drawing(
+    drawing_uuid: str,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    try:
+        return await DrawingService.submit_drawing(tenant_id, drawing_uuid, current_user)
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+
+@router.post("/{drawing_uuid}/approve", response_model=EngineeringDrawingResponse, response_model_by_alias=True, summary="Approve pending drawing")
+async def approve_drawing(
+    drawing_uuid: str,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    try:
+        return await DrawingService.approve_drawing(tenant_id, drawing_uuid, current_user)
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+
+@router.post("/{drawing_uuid}/reject", response_model=EngineeringDrawingResponse, response_model_by_alias=True, summary="Reject pending drawing")
+async def reject_drawing(
+    drawing_uuid: str,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    body: EngineeringDrawingRejectRequest | None = None,
+):
+    try:
+        return await DrawingService.reject_drawing(
+            tenant_id, drawing_uuid, current_user, reason=(body.reason if body else None)
+        )
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+
+@router.post("/{drawing_uuid}/revoke", response_model=EngineeringDrawingResponse, response_model_by_alias=True, summary="Revoke pending drawing")
+async def revoke_drawing(
+    drawing_uuid: str,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    try:
+        return await DrawingService.revoke_drawing(tenant_id, drawing_uuid, current_user)
     except NotFoundError as e:
         raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
     except ValidationError as e:

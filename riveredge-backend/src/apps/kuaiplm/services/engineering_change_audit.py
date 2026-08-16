@@ -1,4 +1,4 @@
-"""工程变更统一审核辅助（BOM / 工艺路线）。"""
+"""工程变更统一审核辅助（BOM / 工艺路线 / 图纸）。"""
 
 from __future__ import annotations
 
@@ -6,11 +6,12 @@ from typing import Any, Literal, Optional
 
 from loguru import logger
 
-ChangeCategory = Literal["bom", "process_route"]
+ChangeCategory = Literal["bom", "process_route", "drawing"]
 
 AUDIT_NODE_BY_CATEGORY: dict[ChangeCategory, str] = {
     "bom": "bom_change",
     "process_route": "process_route_change",
+    "drawing": "drawing_change",
 }
 
 ECN_ALLOWED_STATUSES = frozenset(
@@ -49,6 +50,14 @@ _ROUTE_CHANGE_TYPE_LABELS = {
     "other": "其他",
 }
 
+_DRAWING_CHANGE_TYPE_LABELS = {
+    "revision": "升版",
+    "file_replace": "更换文件",
+    "obsolete": "作废",
+    "metadata": "元数据变更",
+    "other": "其他",
+}
+
 
 def _change_type_label(category: ChangeCategory, change_type: str) -> str:
     code = (change_type or "").strip()
@@ -56,6 +65,8 @@ def _change_type_label(category: ChangeCategory, change_type: str) -> str:
         return ""
     if category == "bom":
         return _BOM_CHANGE_TYPE_LABELS.get(code, code)
+    if category == "drawing":
+        return _DRAWING_CHANGE_TYPE_LABELS.get(code, code)
     return _ROUTE_CHANGE_TYPE_LABELS.get(code, code)
 
 
@@ -68,11 +79,11 @@ def _approval_title(category: ChangeCategory, change: Any) -> str:
             or str(getattr(change, "uuid", ""))
         )
         return f"BOM 工程变更: {code}"
+    if category == "drawing":
+        code = getattr(change, "drawing_code", None) or str(getattr(change, "uuid", ""))
+        return f"图纸工程变更: {code}"
     route = getattr(change, "process_route", None)
-    code = (
-        getattr(route, "code", None)
-        or str(getattr(change, "uuid", ""))
-    )
+    code = getattr(route, "code", None) or str(getattr(change, "uuid", ""))
     return f"工艺路线变更: {code}"
 
 
@@ -110,7 +121,11 @@ async def start_change_approval_flow(
     if not instance:
         from infra.exceptions.exceptions import ValidationError
 
-        label = "BOM 工程变更" if category == "bom" else "工艺路线变更"
+        label = {
+            "bom": "BOM 工程变更",
+            "process_route": "工艺路线变更",
+            "drawing": "图纸工程变更",
+        }[category]
         raise ValidationError(
             f"{label}审核已开启但未找到可用的审批流程，请在配置中心检查 {entity_type} 审批流程是否已激活"
         )

@@ -18,9 +18,10 @@ class AiBusinessContext(BaseModel):
         default=None,
         description=(
             "扩展字段。约定键：capability_mode（ask|query|guide，默认 ask）、"
-            "preset_prompt（中枢卡片带入的首条用户问题）"
+            "agent_id（智能体库 id）、preset_prompt（中枢卡片带入的首条用户问题）"
         ),
     )
+    agent_id: Optional[str] = Field(default=None, description="智能体库 id")
 
     def to_broker_dict(self) -> Dict[str, Any]:
         payload: Dict[str, Any] = {}
@@ -32,6 +33,8 @@ class AiBusinessContext(BaseModel):
             payload["record_id"] = self.record_id
         if self.record_uuid:
             payload["record_uuid"] = self.record_uuid
+        if self.agent_id:
+            payload["agent_id"] = self.agent_id
         if self.extra:
             payload.update(self.extra)
         return payload

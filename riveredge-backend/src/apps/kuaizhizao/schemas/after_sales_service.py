@@ -498,17 +498,3 @@ class CustomerReturnVisitListEnvelope(BaseSchema):
     items: List[CustomerReturnVisitResponse] = Field(default_factory=list, description="当前页数据")
     total: int = Field(0, description="总条数")
 
-
-# --- 看板 ---
-
-class AfterSalesDashboardResponse(BaseSchema):
-    ticket_count: int = Field(0, description="售后工单数")
-    open_ticket_count: int = Field(0, description="未关闭工单数")
-    repair_order_count: int = Field(0, description="维修单数")
-    open_repair_order_count: int = Field(0, description="未关闭维修单数")
-    dispatch_total: int = Field(0, description="派工单总数（不含已取消）")
-    dispatch_completed: int = Field(0, description="已完工派工单数")
-    dispatch_completion_rate: Optional[Decimal] = Field(None, description="派工完成率")
-    return_visit_count: int = Field(0, description="回访记录数")
-    average_satisfaction: Optional[Decimal] = Field(None, description="平均满意度")
-    service_asset_count: int = Field(0, description="装机档案数")

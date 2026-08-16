@@ -313,7 +313,7 @@ export const OutsourceOrdersTable: React.FC = () => {
       while (workOrders.length < maxRows) {
         const res = await workOrderApi.list({
           status: 'in_progress',
-          keyword: normalizedKeyword || undefined,
+          code: normalizedKeyword || undefined,
           skip,
           limit: chunkSize,
         });
@@ -1158,6 +1158,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         confirmLoading={pullFromWorkOrderQuery.confirmLoading}
         selectionType={pullFromWorkOrderQuery.selectionType}
         selectedRowKeys={pullFromWorkOrderQuery.selectedRowKeys}
+        selectedRows={pullFromWorkOrderQuery.selectedRows}
         onSelectedRowKeysChange={pullFromWorkOrderQuery.handleSelectedRowKeysChange}
         searchDraft={pullFromWorkOrderQuery.searchDraft}
         onSearchDraftChange={pullFromWorkOrderQuery.setSearchDraft}
@@ -1173,7 +1174,6 @@ export const OutsourceOrdersTable: React.FC = () => {
         scope={pullFromWorkOrderQuery.scope}
         onScopeChange={pullFromWorkOrderQuery.handleScopeChange}
         okText={t('common.next')}
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       />
 
       <FormModalTemplate

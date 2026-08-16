@@ -73,8 +73,8 @@ import {
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
-import { getDemandBusinessModeTagColor, buildDemandBusinessModeValueEnum } from '../../../utils/businessMode';
-import { getDemandTypeTagProps, normalizeDemandTypeKey } from '../../../utils/demandType';
+import { getDemandBusinessModeTagColor, buildDemandBusinessModeValueEnum, translateDemandBusinessMode } from '../../../utils/businessMode';
+import { getDemandTypeTagProps, translateDemandType } from '../../../utils/demandType';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import dayjs from 'dayjs';
 import { formatDateTime as formatDateTimeValue, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
@@ -138,24 +138,12 @@ const DemandManagementPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
 
   const formatDemandTypeLabel = useCallback(
-    (v: string | undefined | null) => {
-      const k = normalizeDemandTypeKey(v);
-      if (k === 'sales_forecast') return t('app.kuaizhizao.salesForecast.title');
-      if (k === 'sales_order') return t('app.kuaizhizao.salesOrder.entityName');
-      if (k === 'demand_plan') return t('app.kuaizhizao.demandManagement.demandTypePlan');
-      return v?.trim() || '-';
-    },
+    (v: string | undefined | null) => translateDemandType(t, v),
     [t]
   );
 
   const formatBusinessModeLabel = useCallback(
-    (mode: string | undefined | null) => {
-      const m = (mode ?? '').trim();
-      if (m === 'MTS') return t('app.kuaizhizao.demandManagement.businessModeMts');
-      if (m === 'MTO') return t('app.kuaizhizao.demandManagement.businessModeMto');
-      if (m === 'ATO') return t('app.kuaizhizao.demandManagement.businessModeAto');
-      return m || '-';
-    },
+    (mode: string | undefined | null) => translateDemandBusinessMode(t, mode),
     [t]
   );
 
@@ -181,7 +169,8 @@ const DemandManagementPage: React.FC = () => {
   const { token } = AntdTheme.useToken();
   const demandDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
-  const demandRowsByIdRef = useRef<Map<number, Demand>>(new Map());
+  /** 列表当前页数据（唯一源：UniTable onTableDataChange，与表格展示一致） */
+  const [tableDemands, setTableDemands] = useState<Demand[]>([]);
   const formRef = useRef<any>(null);
   const tableSearchFormRef = useRef<any>(null);
 
@@ -221,9 +210,9 @@ const DemandManagementPage: React.FC = () => {
   const selectedDemandsForBatch = useMemo(
     () =>
       selectedRowKeys
-        .map((key) => demandRowsByIdRef.current.get(Number(key)))
+        .map((key) => tableDemands.find((row) => Number(row.id) === Number(key)))
         .filter((row): row is Demand => row != null),
-    [selectedRowKeys],
+    [selectedRowKeys, tableDemands],
   );
   const selectedDemandForPush = useMemo(() => {
     if (selectedRowKeys.length !== 1) return null;
@@ -328,7 +317,7 @@ const DemandManagementPage: React.FC = () => {
     const allowedKeys = keys.filter((k) => {
       const id = Number(k);
       if (isNaN(id)) return false;
-      const row = demandRowsByIdRef.current.get(id);
+      const row = tableDemands.find((d) => Number(d.id) === id);
       if (!row) return true;
       if (row.demand_type !== 'demand_plan') return false;
       return isDemandDraft(row) || isDemandPendingReview(row);
@@ -420,11 +409,7 @@ const DemandManagementPage: React.FC = () => {
       .filter((row) => Number(row.max_push_quantity ?? 0) > 0)
       .map((row) => Number(row.item_id));
     if (!pushableIds.length) {
-      messageApi.warning(t('app.kuaizhizao.demandManagement.pushPreviewSelectAtLeastOne'));
-      return;
-    }
-    if (pushSelectedItemIds.length !== pushableIds.length || !pushableIds.every((id) => pushSelectedItemIds.includes(id))) {
-      messageApi.warning(t('app.kuaizhizao.demandManagement.pushPreviewRequiresAllLines'));
+      messageApi.warning(t('app.kuaizhizao.demandManagement.pushPreviewNoLines'));
       return;
     }
     setPushPreviewConfirming(true);
@@ -442,7 +427,6 @@ const DemandManagementPage: React.FC = () => {
     messageApi,
     pushPreviewData,
     pushPreviewDemandId,
-    pushSelectedItemIds,
     refreshDemandAfterPush,
     resetPushPreviewModal,
     t,
@@ -989,10 +973,8 @@ const DemandManagementPage: React.FC = () => {
 
             try {
               const response = await listDemands(apiParams);
+              // 行缓存唯一真源：onTableDataChange（prefetch 会走本 request，禁止在此覆盖）
               const rows = response.data || [];
-              demandRowsByIdRef.current = new Map(
-                rows.filter((d: Demand) => d.id != null).map((d: Demand) => [d.id as number, d])
-              );
               return {
                 data: rows,
                 success: response.success !== false,
@@ -1008,6 +990,7 @@ const DemandManagementPage: React.FC = () => {
             }
           }}
           rowKey="id"
+          onTableDataChange={setTableDemands}
           showAdvancedSearch={true}
           skipFuzzyPinyinClientFilter
           pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
@@ -1438,24 +1421,6 @@ const DemandManagementPage: React.FC = () => {
                 pagination={false}
                 scroll={{ x: 960 }}
                 columns={[
-                  {
-                    title: t('common.select'),
-                    dataIndex: 'item_id',
-                    width: 64,
-                    render: (_: unknown, row) => {
-                      const itemId = Number(row.item_id);
-                      const maxQty = Number(row.max_push_quantity ?? 0);
-                      const disabled = !Number.isFinite(maxQty) || maxQty <= 0 || !!pushPreviewData.has_blocking_issues;
-                      const selectionLocked = true;
-                      return (
-                        <Switch
-                          size="small"
-                          disabled={disabled || selectionLocked}
-                          checked={pushSelectedItemIds.includes(itemId)}
-                        />
-                      );
-                    },
-                  },
                   { title: t('app.kuaizhizao.quotation.colMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
                   { title: t('app.kuaizhizao.quotation.colMaterialName'), dataIndex: 'material_name', width: 140, ellipsis: true },
                   { title: t('app.kuaizhizao.demandComputation.colRequiredQty'), dataIndex: 'quantity', width: 88, align: 'right' , render: formatQuantity },

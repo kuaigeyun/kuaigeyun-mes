@@ -30,3 +30,8 @@ export async function kuaioaPut<T>(path: string, body?: unknown): Promise<T> {
 export async function kuaioaDelete(path: string): Promise<void> {
   await apiRequest(path, { method: 'DELETE' });
 }
+
+export async function kuaioaGet<T>(path: string): Promise<T> {
+  const res = await apiRequest(path, { method: 'GET' });
+  return ((res as Record<string, unknown>)?.data ?? res) as T;
+}

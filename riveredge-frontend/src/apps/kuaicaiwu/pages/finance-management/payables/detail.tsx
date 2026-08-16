@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 
 import { ProDescriptions } from '@ant-design/pro-components';
 
-import { Button, message, Statistic, Row, Col, Spin, Empty, Typography, Space } from 'antd';
+import { Button, Statistic, Row, Col, Spin, Empty, Typography, Space } from 'antd';
 
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 
 import { useTranslation } from 'react-i18next';
+
+import { useLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 
 import { payableService } from '../../../services/finance/payable';
 
@@ -55,6 +57,8 @@ const PAYABLE_RESOURCE = 'kuaicaiwu:payable';
 const PayableDetail: React.FC = () => {
 
   const { t } = useTranslation();
+
+  const linked = useLinkedDocumentDetail();
 
   const payablePerms = useResourcePermissions(PAYABLE_RESOURCE);
 
@@ -426,11 +430,7 @@ const PayableDetail: React.FC = () => {
 
                   data={documentTracking.data}
 
-                  onDocumentClick={(docType, docId) =>
-
-                    message.info(t('app.kuaicaiwu.common.openLinkedDoc', { docType, docId }))
-
-                  }
+                  onDocumentClick={(docType, docId) => linked.openLinkedDocumentDetail(docType, docId)}
 
                 />
 

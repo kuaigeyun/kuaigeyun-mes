@@ -26,3 +26,5 @@ export const updateComplianceLicense = (id: number, data: Partial<ComplianceLice
   kuaioaPut<ComplianceLicense>(`${BASE}/${id}`, data);
 
 export const deleteComplianceLicense = (id: number) => kuaioaDelete(`${BASE}/${id}`);
+
+export const getComplianceLicense = (id: number) => kuaioaGet<ComplianceLicense>(`${BASE}/${id}`);

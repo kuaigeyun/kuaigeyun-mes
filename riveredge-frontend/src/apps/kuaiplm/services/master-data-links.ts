@@ -59,12 +59,87 @@ export function openMasterDataInNewTab(target: MasterDataLinkTarget): boolean {
   return true;
 }
 
-export function buildBomChangeCreateUrl(): string {
+export function buildBomChangeCreateUrl(materialId?: number | string | null): string {
+  if (materialId != null) {
+    return `${BASE}/process/engineering-bom/designer?materialId=${materialId}`;
+  }
   return `${BASE}/process/engineering-bom`;
+}
+
+export function buildWorkOrderUrl(targetId?: number | string | null, targetCode?: string | null): string {
+  const base = '/apps/kuaizhizao/production-execution/work-orders';
+  if (targetCode) {
+    return `${base}?keyword=${encodeURIComponent(targetCode)}`;
+  }
+  if (targetId != null) {
+    return `${base}?keyword=${encodeURIComponent(String(targetId))}`;
+  }
+  return base;
+}
+
+export function buildRequirementUrl(projectId?: number | string | null, requirementId?: number | string | null): string {
+  const params = new URLSearchParams();
+  if (projectId != null) params.set('project_id', String(projectId));
+  if (requirementId != null) params.set('highlight', String(requirementId));
+  const qs = params.toString();
+  return `/apps/kuaiplm/phase2/requirements${qs ? `?${qs}` : ''}`;
+}
+
+export interface ProjectLinkTarget {
+  link_type: string;
+  target_type?: string | null;
+  target_uuid?: string | null;
+  target_id?: number | string | null;
+  target_code?: string | null;
+  version?: string | null;
+  material_id?: number | string | null;
+  project_id?: number | string | null;
+}
+
+export function buildProjectLinkUrl(target: ProjectLinkTarget): string | null {
+  const linkType = String(target.link_type || target.target_type || '').toLowerCase();
+  if (linkType === 'work_order') {
+    return buildWorkOrderUrl(target.target_id, target.target_code);
+  }
+  if (linkType === 'requirement') {
+    return buildRequirementUrl(target.project_id, target.target_id);
+  }
+  if (linkType === 'design_review') {
+    const params = new URLSearchParams();
+    if (target.project_id != null) params.set('project_id', String(target.project_id));
+    const qs = params.toString();
+    return `/apps/kuaiplm/phase2/design-reviews${qs ? `?${qs}` : ''}`;
+  }
+  if (linkType === 'fmea') {
+    const params = new URLSearchParams();
+    if (target.project_id != null) params.set('project_id', String(target.project_id));
+    const qs = params.toString();
+    return `/apps/kuaiplm/phase2/fmea${qs ? `?${qs}` : ''}`;
+  }
+  return buildMasterDataUrl({
+    link_type: linkType as EngineeringLinkType,
+    target_uuid: target.target_uuid,
+    target_id: target.target_id,
+    version: target.version,
+    material_id: target.material_id,
+  });
+}
+
+export function openProjectLinkInNewTab(target: ProjectLinkTarget): boolean {
+  const url = buildProjectLinkUrl(target);
+  if (!url) return false;
+  window.open(url, '_blank', 'noopener,noreferrer');
+  return true;
 }
 
 export function buildRouteChangeCreateUrl(): string {
   return `${BASE}/process/routes`;
+}
+
+export function buildDrawingChangeCreateUrl(drawingUuid?: string | null): string {
+  const params = new URLSearchParams({ create: 'drawing' });
+  if (drawingUuid) params.set('drawingUuid', drawingUuid);
+  return `/apps/kuaiplm/change-management?${params.toString()}`;
 }
 
 export function buildPurchaseInquiryUrl(inquiryId: number | string): string {

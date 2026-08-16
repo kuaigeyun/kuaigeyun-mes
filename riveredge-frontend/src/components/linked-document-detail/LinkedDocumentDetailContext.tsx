@@ -21,6 +21,8 @@ import { PurchaseRequisitionLinkedDetailDrawer } from './drawers/PurchaseRequisi
 import { DemandComputationLinkedDetailDrawer } from './drawers/DemandComputationLinkedDetailDrawer';
 import { WorkOrderLinkedDetailDrawer } from './drawers/WorkOrderLinkedDetailDrawer';
 import { FreightOrderLinkedDetailDrawer } from './drawers/FreightOrderLinkedDetailDrawer';
+import { ReportingRecordLinkedDetailDrawer } from './drawers/ReportingRecordLinkedDetailDrawer';
+import { PerformanceSummaryLinkedDetailDrawer } from './drawers/PerformanceSummaryLinkedDetailDrawer';
 
 /** 高于列表详情抽屉与报价单内嵌关联抽屉（常见 base+50） */
 const LINKED_DRAWER_Z_OFFSET = 60;
@@ -158,6 +160,41 @@ function LinkedDocumentDetailHost({
       return (
         <FreightOrderLinkedDetailDrawer
           open
+          documentId={documentId}
+          onClose={onClose}
+          zIndex={zIndex}
+        />
+      );
+    case 'reporting_record':
+      return (
+        <ReportingRecordLinkedDetailDrawer
+          open
+          documentId={documentId}
+          onClose={onClose}
+          zIndex={zIndex}
+        />
+      );
+    case 'performance_summary':
+      return (
+        <PerformanceSummaryLinkedDetailDrawer
+          open
+          documentId={documentId}
+          onClose={onClose}
+          zIndex={zIndex}
+        />
+      );
+    case 'after_sales_ticket':
+    case 'install_execution':
+    case 'service_asset':
+    case 'repair_order':
+    case 'service_dispatch':
+    case 'spare_part_requisition':
+    case 'service_settlement':
+    case 'customer_return_visit':
+      return (
+        <AfterSalesLinkedDetailDrawer
+          open
+          documentType={documentType}
           documentId={documentId}
           onClose={onClose}
           zIndex={zIndex}

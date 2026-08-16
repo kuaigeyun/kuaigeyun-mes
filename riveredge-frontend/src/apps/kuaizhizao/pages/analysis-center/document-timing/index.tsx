@@ -232,7 +232,6 @@ const DocumentTimingPage: React.FC = () => {
               },
             });
             const data = Array.isArray(result) ? result : [];
-            lastRowsRef.current = data;
             return {
               data,
               success: true,
@@ -247,6 +246,9 @@ const DocumentTimingPage: React.FC = () => {
           }
         }}
         showAdvancedSearch
+        onTableDataChange={(rows) => {
+          lastRowsRef.current = rows;
+        }}
       />
 
       <DocumentTimingDetailDrawer

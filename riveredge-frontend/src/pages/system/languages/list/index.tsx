@@ -732,8 +732,8 @@ const LanguageListPage: React.FC = () => {
           extra={t('field.language.codeExtra')}
           options={[
             { label: t('field.language.codeZhCN'), value: 'zh-CN' },
-            { label: t('field.language.codeEnUS'), value: 'en-US' },
             { label: t('field.language.codeZhTW'), value: 'zh-Hant' },
+            { label: t('field.language.codeEnUS'), value: 'en-US' },
             { label: t('field.language.codeJaJP'), value: 'ja-JP' },
             { label: t('field.language.codeViVN'), value: 'vi-VN' },
           ]}

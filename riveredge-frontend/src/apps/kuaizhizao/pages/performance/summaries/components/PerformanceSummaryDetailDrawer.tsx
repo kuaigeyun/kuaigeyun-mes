@@ -17,6 +17,7 @@ import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle'
 import { DocumentTrackingTimelineBody } from '../../../../../../components/document-tracking-panel';
 import type { UseDocumentTrackingResult } from '../../../../../../components/document-tracking-panel/useDocumentTracking';
 import { formatDateTimeBySiteSetting } from '../../../../../../utils/format';
+import { LinkedDocumentCode } from '../../../../../../components/linked-document-code';
 import { alignDescriptionColumns } from '../../../sales-management/shared/documentFieldAlignment';
 import { getPerformanceSummaryLifecycle } from '../../../../utils/performanceLifecycle';
 import { renderSummaryStatusTag } from '../../components/performanceMeta';
@@ -30,6 +31,12 @@ const PLACEHOLDER: PerformanceDetail = {
   period: '',
   items: [],
 };
+
+function reportingItemDisplayCode(row: PerformanceDetailItem): string {
+  const op = String(row.operation_name ?? '').trim();
+  if (op) return `${op}-${row.reporting_record_id}`;
+  return `BG${row.reporting_record_id}`;
+}
 
 export type PerformanceSummaryDetailDrawerProps = {
   open: boolean;
@@ -220,8 +227,25 @@ export const PerformanceSummaryDetailDrawer: React.FC<PerformanceSummaryDetailDr
                 {
                   title: t('app.kuaizhizao.performance.summaries.columns.reportingRecord'),
                   dataIndex: 'reporting_record_id',
+                  render: (_, row) => (
+                    <LinkedDocumentCode
+                      documentType="reporting_record"
+                      documentId={row.reporting_record_id}
+                      code={reportingItemDisplayCode(row)}
+                    />
+                  ),
                 },
-                { title: t('app.kuaizhizao.performance.summaries.columns.workOrder'), dataIndex: 'work_order_code' },
+                {
+                  title: t('app.kuaizhizao.performance.summaries.columns.workOrder'),
+                  dataIndex: 'work_order_code',
+                  render: (_, row) => (
+                    <LinkedDocumentCode
+                      documentType="work_order"
+                      documentId={row.work_order_id}
+                      code={row.work_order_code}
+                    />
+                  ),
+                },
                 { title: t('app.kuaizhizao.performance.summaries.columns.operation'), dataIndex: 'operation_name' },
                 {
                   title: t('app.kuaizhizao.performance.summaries.columns.reportedAt'),

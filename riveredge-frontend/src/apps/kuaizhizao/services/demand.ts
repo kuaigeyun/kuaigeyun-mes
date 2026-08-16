@@ -155,6 +155,10 @@ export interface DemandListParams {
   created_end_date?: string;
   order_by?: string;
   include_items?: boolean;
+  /** 仅可加载建单；需配合 pull_target */
+  pullable_only?: boolean;
+  /** 加载建需求计算 */
+  pull_target?: 'demand_computation';
 }
 
 /**

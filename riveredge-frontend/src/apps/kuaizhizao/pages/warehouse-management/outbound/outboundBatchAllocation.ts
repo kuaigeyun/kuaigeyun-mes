@@ -25,7 +25,11 @@ export function allocateBatchQuantitiesFifo(
   options: InventoryPickOption[],
   previous?: OutboundBatchAllocation[],
 ): OutboundBatchAllocation[] {
-  const nos = selectedBatchNos.map((b) => String(b ?? '').trim()).filter(Boolean);
+  const order = new Map(options.map((o, i) => [String(o.value ?? '').trim(), i] as const));
+  const nos = selectedBatchNos
+    .map((b) => String(b ?? '').trim())
+    .filter(Boolean)
+    .sort((a, b) => (order.get(a) ?? 9999) - (order.get(b) ?? 9999));
   if (!nos.length) return [];
 
   const avail = new Map<string, number>();

@@ -161,7 +161,14 @@ import {
 import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  UNI_PULL_QUERY_MAX_FETCH_LIMIT,
+  pagePullCandidates,
+  renderPullQueryDocStatus,
+  renderPullQueryReviewStatus,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 
@@ -1365,17 +1372,12 @@ const SalesContractsPage: React.FC = () => {
     loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const result = await listQuotations({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
           keyword: keyword.trim() || undefined,
-          pullable_only: scope === 'pullable',
-          pull_target: 'sales_contract',
         });
         const rows: Quotation[] = Array.isArray(result) ? result : result.data || [];
-        return {
-          data: mapPullQuotationRows(rows),
-          total: Array.isArray(result) ? rows.length : Number(result.total ?? rows.length),
-        };
+        return pagePullCandidates(mapPullQuotationRows(rows), scope, page, pageSize, isPullQuotationSelectable);
       } catch (error: any) {
         messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.salesOrder.loadQuotationsFailed')));
         return { data: [], total: 0 };
@@ -1458,24 +1460,15 @@ const SalesContractsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesOrder.status'),
         dataIndex: 'status',
-        width: 120,
-        render: (v: string) => {
-          let color: string = 'blue';
-          if (v === '已转订单') color = 'gold';
-          else if (v === '已接受') color = 'green';
-          else if (v === '已拒绝') color = 'red';
-          return <Tag color={color}>{v || t('app.kuaizhizao.salesOrder.unknownStatus')}</Tag>;
-        },
+        width: 100,
+        align: 'center' as const,
+        render: (v) => renderPullQueryDocStatus(t, v),
       },
       {
         title: t('app.kuaizhizao.salesOrder.reviewStatus'),
         dataIndex: 'review_status',
         width: 120,
-        render: (v: string) => {
-          const approved = v === 'APPROVED' || v === '已通过' || v === '审核通过';
-          const rejected = v === 'REJECTED' || v === '已驳回';
-          return <Tag color={approved ? 'green' : rejected ? 'red' : 'default'}>{v || '-'}</Tag>;
-        },
+        render: (v) => renderPullQueryReviewStatus(t, v),
       },
       {
         title: t('app.kuaizhizao.salesOrder.salesman'),
@@ -1493,7 +1486,7 @@ const SalesContractsPage: React.FC = () => {
           }
           if (record.contract_id) {
             return t('app.kuaizhizao.salesOrder.alreadyCreated', {
-              code: record.contract_code || record.contract_id || '-',
+              code: record.contract_code || '-',
             });
           }
           const reason = quotationCapabilityReasonMessage(
@@ -4234,6 +4227,7 @@ const SalesContractsPage: React.FC = () => {
         confirmLoading={pullFromQuotationQuery.confirmLoading}
         selectionType={pullFromQuotationQuery.selectionType}
         selectedRowKeys={pullFromQuotationQuery.selectedRowKeys}
+        selectedRows={pullFromQuotationQuery.selectedRows}
         onSelectedRowKeysChange={pullFromQuotationQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromQuotationQuery.isRowDisabled}
         searchDraft={pullFromQuotationQuery.searchDraft}

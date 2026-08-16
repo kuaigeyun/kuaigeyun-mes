@@ -45,6 +45,19 @@ async def create_asset_purchase(
     return {"data": row, "success": True}
 
 
+@router.get("/purchases/{purchase_id}", summary="Get asset purchase")
+async def get_asset_purchase(
+    purchase_id: int = Path(..., ge=1),
+    _auth=Depends(require_access("kuaioa.asset-purchase", "read", required_permissions=["kuaioa:asset-purchase:read"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        row = await purchase_service.get_purchase(tenant_id, purchase_id)
+        return {"data": row, "success": True}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"message": str(e)})
+
+
 @router.put("/purchases/{purchase_id}", summary="Update asset purchase")
 async def update_asset_purchase(
     data: AssetPurchaseUpdate,
@@ -141,6 +154,19 @@ async def create_asset(
 ):
     row = await asset_service.create_asset(tenant_id, data, current_user.id)
     return {"data": row, "success": True}
+
+
+@router.get("/registry/{asset_id}", summary="Get fixed asset")
+async def get_asset(
+    asset_id: int = Path(..., ge=1),
+    _auth=Depends(require_access("kuaioa.asset", "read", required_permissions=["kuaioa:asset:read"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        row = await asset_service.get_asset(tenant_id, asset_id)
+        return {"data": row, "success": True}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"message": str(e)})
 
 
 @router.put("/registry/{asset_id}", summary="Update fixed asset")

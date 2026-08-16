@@ -30,6 +30,12 @@ import {
   Modal,
   Dropdown,
   theme as AntdTheme,
+  Alert,
+  Empty,
+  Spin,
+  Table,
+  Typography,
+  InputNumber,
 } from 'antd';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
@@ -37,8 +43,7 @@ import { CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, EyeOutlined, 
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import {
   UniPullQueryModal,
-  filterByPullScope,
-  paginatePullRows,
+  isPullableScope,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import {
@@ -106,6 +111,8 @@ import {
 } from '../../../utils/qualityInspectionListCore';
 import dayjs from 'dayjs';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
+import { formatQuantity } from '../../../../../utils/format';
+import type { PushPreviewResponse } from '../../../services/sales-order';
 import {
   InspectionConductQuantityFields,
   InspectionDefectQuantityField,
@@ -147,6 +154,7 @@ import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { importExcelMatrixInChunks } from '../../../../../utils/chunkedBulkImport';
 import { todaySiteDateString } from '../../../../../utils/format';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 const INCOMING_RESOURCE = 'kuaizhizao:quality-management-incoming-inspection';
 const INCOMING_INSPECTION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_incoming_inspections';
 const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
@@ -361,11 +369,96 @@ const IncomingInspectionPage: React.FC = () => {
   // 创建不合格品记录Modal状态
   const [createDefectModalVisible, setCreateDefectModalVisible] = useState(false);
   const [currentDefectInspection, setCurrentDefectInspection] = useState<IncomingInspection | null>(null);
-  const pullFromPurchaseReceiptCloseRef = useRef<(() => void) | null>(null);
-  const pullFromCustomerMaterialCloseRef = useRef<(() => void) | null>(null);
   const defectFormRef = useRef<any>(null);
 
-  // 统计数据（从接口获取）
+  const [pushReturnPreviewOpen, setPushReturnPreviewOpen] = useState(false);
+  const [pushReturnPreviewLoading, setPushReturnPreviewLoading] = useState(false);
+  const [pushReturnPreviewConfirming, setPushReturnPreviewConfirming] = useState(false);
+  const [pushReturnPreviewSourceId, setPushReturnPreviewSourceId] = useState<number | null>(null);
+  const [pushReturnPreviewData, setPushReturnPreviewData] = useState<PushPreviewResponse | null>(null);
+  const [pushReturnPreviewQuantity, setPushReturnPreviewQuantity] = useState(0);
+  const resetPushReturnPreview = () => {
+    setPushReturnPreviewOpen(false);
+    setPushReturnPreviewSourceId(null);
+    setPushReturnPreviewData(null);
+    setPushReturnPreviewQuantity(0);
+  };
+
+  const openPushReturnPreview = async (record: IncomingInspection) => {
+    if (!record.id) return;
+    setPushReturnPreviewOpen(true);
+    setPushReturnPreviewLoading(true);
+    setPushReturnPreviewConfirming(false);
+    setPushReturnPreviewSourceId(record.id);
+    setPushReturnPreviewData(null);
+    setPushReturnPreviewQuantity(0);
+    try {
+      const data = await qualityApi.incomingInspection.previewPushToPurchaseReturn(String(record.id));
+      setPushReturnPreviewData(data as PushPreviewResponse);
+      const line = data.items?.[0];
+      const defaultQty = Number(line?.max_push_quantity ?? 0);
+      setPushReturnPreviewQuantity(Number.isFinite(defaultQty) && defaultQty > 0 ? defaultQty : 0);
+    } catch (error: any) {
+      messageApi.error(
+        qualityInspectionCapabilityReasonMessage(error?.message, t) ||
+          error?.message ||
+          t('app.kuaizhizao.quality.common.messages.pushPurchaseReturnFailed'),
+      );
+      resetPushReturnPreview();
+    } finally {
+      setPushReturnPreviewLoading(false);
+    }
+  };
+
+  const handlePushReturnPreviewConfirm = async () => {
+    if (!pushReturnPreviewSourceId || !pushReturnPreviewData || pushReturnPreviewData.has_blocking_issues) return;
+    const maxQty = Number(pushReturnPreviewData.items?.[0]?.max_push_quantity ?? 0);
+    const qty = Number(pushReturnPreviewQuantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      messageApi.warning(
+        t('app.kuaizhizao.salesOrder.pushQtyInvalid', {
+          code: pushReturnPreviewData.items?.[0]?.material_code || pushReturnPreviewSourceId,
+        }),
+      );
+      return;
+    }
+    if (qty > maxQty) {
+      messageApi.warning(
+        t('app.kuaizhizao.salesOrder.pushQtyExceedsRemaining', {
+          code: pushReturnPreviewData.items?.[0]?.material_code || pushReturnPreviewSourceId,
+        }),
+      );
+      return;
+    }
+    setPushReturnPreviewConfirming(true);
+    try {
+      const result = await qualityApi.incomingInspection.pushToPurchaseReturn(String(pushReturnPreviewSourceId), {
+        quantity: qty,
+      });
+      const returnCode = (result as { return_code?: string })?.return_code;
+      messageApi.success(
+        returnCode
+          ? t('app.kuaizhizao.quality.common.messages.pushPurchaseReturnSuccess', { code: returnCode })
+          : t('app.kuaizhizao.quality.common.messages.pushPurchaseReturnSuccess', { code: '-' }),
+      );
+      resetPushReturnPreview();
+      invalidateStats();
+      actionRef.current?.reload();
+      if (inspectionDetail?.id === pushReturnPreviewSourceId) {
+        const detail = await qualityApi.incomingInspection.get(String(pushReturnPreviewSourceId));
+        setInspectionDetail(detail as IncomingInspection);
+      }
+    } catch (error: any) {
+      messageApi.error(
+        qualityInspectionCapabilityReasonMessage(error?.message, t) ||
+          error?.message ||
+          t('app.kuaizhizao.quality.common.messages.pushPurchaseReturnFailed'),
+      );
+    } finally {
+      setPushReturnPreviewConfirming(false);
+    }
+  };
+
   const { data: statsData } = useQuery({
     queryKey: ['incoming-inspection-statistics'],
     queryFn: () => qualityApi.incomingInspection.statistics(),
@@ -565,29 +658,6 @@ const IncomingInspectionPage: React.FC = () => {
     [t],
   );
 
-  const createIncomingFromPullSource = async (
-    kind: 'purchase_receipt' | 'customer_material',
-    sourceId: number,
-  ) => {
-    try {
-      if (kind === 'purchase_receipt') {
-        await qualityApi.incomingInspection.createFromPurchaseReceipt(String(sourceId));
-        messageApi.success(t('app.kuaizhizao.quality.incoming.messages.createSuccess'));
-      } else {
-        await qualityApi.incomingInspection.createFromCustomerMaterial(String(sourceId));
-        messageApi.success(t('app.kuaizhizao.quality.incoming.messages.createFromCustomerMaterialSuccess'));
-      }
-      invalidateStats();
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(
-        qualityInspectionCapabilityReasonMessage(error?.message, t) ||
-          error?.message ||
-          t('app.kuaizhizao.quality.incoming.messages.createFailed'),
-      );
-    }
-  };
-
   const isPullIncomingInspectionSelectable = useCallback(
     (row: PullSourceCandidate) => row.capabilities?.pull_incoming_inspection?.allowed !== false,
     [],
@@ -603,69 +673,109 @@ const IncomingInspectionPage: React.FC = () => {
 
   const pullFromPurchaseReceiptQuery = useUniPullQuery<PullSourceCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions: pullQueryScopeOptions,
     defaultScope: 'pullable',
     loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
+        const trimmed = keyword.trim();
         const res = await qualityApi.incomingInspection.listPurchaseReceiptPullCandidates({
-          skip: 0,
-          limit: 100,
-          keyword: keyword.trim() || undefined,
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          receipt_code: trimmed || undefined,
         });
         const rows = (res.data || []) as PullSourceCandidate[];
-        const filtered = filterByPullScope(rows, scope, isPullIncomingInspectionSelectable);
-        return paginatePullRows(filtered, page, pageSize);
+        const filtered = isPullableScope(scope)
+          ? rows.filter((row) => isPullIncomingInspectionSelectable(row))
+          : rows;
+        return { data: filtered, total: Number(res.total ?? filtered.length) };
       } catch {
         messageApi.error(t('app.kuaizhizao.quality.incoming.messages.loadReceiptFailed'));
         return { data: [], total: 0 };
       }
     },
     isRowDisabled: (row) => !isPullIncomingInspectionSelectable(row),
-    onConfirm: async (keys, rows) => {
-      const selected = rows.find((x) => String(x.id) === String(keys[0]));
-      if (!selected?.id) {
+    onConfirm: async (_keys, rows) => {
+      const selectedIds = rows
+        .filter((row) => isPullIncomingInspectionSelectable(row))
+        .map((row) => Number(row.id))
+        .filter((id) => id > 0);
+      if (!selectedIds.length) {
         messageApi.warning(t('app.kuaizhizao.quality.incoming.form.selectReceipt'));
         return;
       }
-      pullFromPurchaseReceiptCloseRef.current?.();
-      await createIncomingFromPullSource('purchase_receipt', selected.id);
+      try {
+        let count = 0;
+        for (const receiptId of selectedIds) {
+          const created = await qualityApi.incomingInspection.createFromPurchaseReceipt(String(receiptId));
+          count += Array.isArray(created) ? created.length : 0;
+        }
+        if (!count) {
+          messageApi.warning(t('app.kuaizhizao.quality.incoming.messages.createFailed'));
+          return;
+        }
+        messageApi.success(t('app.kuaizhizao.quality.incoming.messages.createSuccess'));
+        pullFromPurchaseReceiptQuery.closeModal();
+        invalidateStats();
+        actionRef.current?.reload();
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.quality.incoming.messages.createFailed')));
+      }
     },
   });
-  pullFromPurchaseReceiptCloseRef.current = pullFromPurchaseReceiptQuery.closeModal;
 
   const pullFromCustomerMaterialQuery = useUniPullQuery<PullSourceCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions: pullQueryScopeOptions,
     defaultScope: 'pullable',
     loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
+        const trimmed = keyword.trim();
         const res = await qualityApi.incomingInspection.listCustomerMaterialPullCandidates({
-          skip: 0,
-          limit: 100,
-          keyword: keyword.trim() || undefined,
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          registration_code: trimmed || undefined,
         });
         const rows = (res.data || []) as PullSourceCandidate[];
-        const filtered = filterByPullScope(rows, scope, isPullIncomingInspectionSelectable);
-        return paginatePullRows(filtered, page, pageSize);
+        const filtered = isPullableScope(scope)
+          ? rows.filter((row) => isPullIncomingInspectionSelectable(row))
+          : rows;
+        return { data: filtered, total: Number(res.total ?? filtered.length) };
       } catch {
         messageApi.error(t('app.kuaizhizao.quality.incoming.messages.loadCustomerMaterialFailed'));
         return { data: [], total: 0 };
       }
     },
     isRowDisabled: (row) => !isPullIncomingInspectionSelectable(row),
-    onConfirm: async (keys, rows) => {
-      const selected = rows.find((x) => String(x.id) === String(keys[0]));
-      if (!selected?.id) {
+    onConfirm: async (_keys, rows) => {
+      const selectedIds = rows
+        .filter((row) => isPullIncomingInspectionSelectable(row))
+        .map((row) => Number(row.id))
+        .filter((id) => id > 0);
+      if (!selectedIds.length) {
         messageApi.warning(t('app.kuaizhizao.quality.incoming.form.selectCustomerMaterial'));
         return;
       }
-      pullFromCustomerMaterialCloseRef.current?.();
-      await createIncomingFromPullSource('customer_material', selected.id);
+      try {
+        let count = 0;
+        for (const registrationId of selectedIds) {
+          const created = await qualityApi.incomingInspection.createFromCustomerMaterial(String(registrationId));
+          count += Array.isArray(created) ? created.length : 0;
+        }
+        if (!count) {
+          messageApi.warning(t('app.kuaizhizao.quality.incoming.messages.createFailed'));
+          return;
+        }
+        messageApi.success(t('app.kuaizhizao.quality.incoming.messages.createFromCustomerMaterialSuccess'));
+        pullFromCustomerMaterialQuery.closeModal();
+        invalidateStats();
+        actionRef.current?.reload();
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.quality.incoming.messages.createFailed')));
+      }
     },
   });
-  pullFromCustomerMaterialCloseRef.current = pullFromCustomerMaterialQuery.closeModal;
   useNewShortcut(pullFromPurchaseReceiptQuery.openModal);
 
   // 处理创建不合格品记录
@@ -728,28 +838,7 @@ const IncomingInspectionPage: React.FC = () => {
   };
 
   const pushPurchaseReturnDirect = async (record: IncomingInspection) => {
-    if (!record.id) return;
-    try {
-      const result = await qualityApi.incomingInspection.pushToPurchaseReturn(String(record.id));
-      const returnCode = (result as { return_code?: string })?.return_code;
-      messageApi.success(
-        returnCode
-          ? t('app.kuaizhizao.quality.common.messages.pushPurchaseReturnSuccess', { code: returnCode })
-          : t('app.kuaizhizao.quality.common.messages.pushPurchaseReturnSuccess', { code: '-' }),
-      );
-      invalidateStats();
-      actionRef.current?.reload();
-      if (inspectionDetail?.id === record.id) {
-        const detail = await qualityApi.incomingInspection.get(String(record.id));
-        setInspectionDetail(detail as IncomingInspection);
-      }
-    } catch (error: any) {
-      messageApi.error(
-        qualityInspectionCapabilityReasonMessage(error?.message, t) ||
-          error?.message ||
-          t('app.kuaizhizao.quality.common.messages.pushPurchaseReturnFailed'),
-      );
-    }
+    await openPushReturnPreview(record);
   };
 
   const selectedIncomingForToolbar = useMemo(() => {
@@ -1418,6 +1507,7 @@ const IncomingInspectionPage: React.FC = () => {
         confirmLoading={pullFromCustomerMaterialQuery.confirmLoading}
         selectionType={pullFromCustomerMaterialQuery.selectionType}
         selectedRowKeys={pullFromCustomerMaterialQuery.selectedRowKeys}
+        selectedRows={pullFromCustomerMaterialQuery.selectedRows}
         onSelectedRowKeysChange={pullFromCustomerMaterialQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromCustomerMaterialQuery.isRowDisabled}
         searchDraft={pullFromCustomerMaterialQuery.searchDraft}
@@ -1425,7 +1515,9 @@ const IncomingInspectionPage: React.FC = () => {
         onSearchApply={pullFromCustomerMaterialQuery.handleSearchApply}
         onSearchClear={pullFromCustomerMaterialQuery.handleSearchClear}
         appliedKeyword={pullFromCustomerMaterialQuery.appliedKeyword}
-        searchPlaceholder={t('components.uniPullQuery.searchPlaceholder')}
+        searchPlaceholder={t('app.kuaizhizao.quality.pullQuery.registrationCode')}
+        getRowLabel={(row) => row.registration_code || String(row.id)}
+        okText={t('app.kuaizhizao.quality.incoming.pull.ok')}
         page={pullFromCustomerMaterialQuery.page}
         pageSize={pullFromCustomerMaterialQuery.pageSize}
         total={pullFromCustomerMaterialQuery.total}
@@ -1447,6 +1539,7 @@ const IncomingInspectionPage: React.FC = () => {
         confirmLoading={pullFromPurchaseReceiptQuery.confirmLoading}
         selectionType={pullFromPurchaseReceiptQuery.selectionType}
         selectedRowKeys={pullFromPurchaseReceiptQuery.selectedRowKeys}
+        selectedRows={pullFromPurchaseReceiptQuery.selectedRows}
         onSelectedRowKeysChange={pullFromPurchaseReceiptQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromPurchaseReceiptQuery.isRowDisabled}
         searchDraft={pullFromPurchaseReceiptQuery.searchDraft}
@@ -1454,7 +1547,9 @@ const IncomingInspectionPage: React.FC = () => {
         onSearchApply={pullFromPurchaseReceiptQuery.handleSearchApply}
         onSearchClear={pullFromPurchaseReceiptQuery.handleSearchClear}
         appliedKeyword={pullFromPurchaseReceiptQuery.appliedKeyword}
-        searchPlaceholder={t('components.uniPullQuery.searchPlaceholder')}
+        searchPlaceholder={t('app.kuaizhizao.quality.incoming.form.receiptCode')}
+        getRowLabel={(row) => row.receipt_code || String(row.id)}
+        okText={t('app.kuaizhizao.quality.incoming.pull.ok')}
         page={pullFromPurchaseReceiptQuery.page}
         pageSize={pullFromPurchaseReceiptQuery.pageSize}
         total={pullFromPurchaseReceiptQuery.total}
@@ -1463,6 +1558,88 @@ const IncomingInspectionPage: React.FC = () => {
         scope={pullFromPurchaseReceiptQuery.scope}
         onScopeChange={pullFromPurchaseReceiptQuery.handleScopeChange}
       />
+
+      <Modal
+        title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
+        open={pushReturnPreviewOpen}
+        destroyOnHidden
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        onCancel={resetPushReturnPreview}
+        okText={t('app.kuaizhizao.salesOrder.confirmPush')}
+        cancelText={t('common.cancel')}
+        confirmLoading={pushReturnPreviewConfirming}
+        onOk={() => void handlePushReturnPreviewConfirm()}
+        okButtonProps={{
+          disabled:
+            pushReturnPreviewLoading ||
+            !pushReturnPreviewData ||
+            !!pushReturnPreviewData?.has_blocking_issues ||
+            !(pushReturnPreviewData?.items || []).some((row) => Number(row.max_push_quantity ?? 0) > 0) ||
+            !(Number(pushReturnPreviewQuantity) > 0),
+        }}
+      >
+        {pushReturnPreviewLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin description={t('app.kuaizhizao.salesOrder.loadingPreview')} />
+          </div>
+        ) : pushReturnPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pushReturnPreviewData.summary}</p>
+            {pushReturnPreviewData.has_blocking_issues && pushReturnPreviewData.blocking_reason ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                title={qualityInspectionCapabilityReasonMessage(
+                  pushReturnPreviewData.blocking_reason,
+                  t,
+                )}
+              />
+            ) : null}
+            {pushReturnPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pushReturnPreviewData.items}
+                rowKey={(row) => String(row.item_id)}
+                pagination={false}
+                scroll={{ x: 920 }}
+                columns={[
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
+                  {
+                    title: t('app.kuaizhizao.salesOrder.colPushQty'),
+                    width: 130,
+                    render: (_: unknown, row: PushPreviewResponse['items'][number]) => {
+                      const maxQty = Number(row.max_push_quantity ?? 0);
+                      return (
+                        <InputNumber
+                          min={0}
+                          max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
+                          precision={2}
+                          style={{ width: '100%' }}
+                          disabled={!(maxQty > 0)}
+                          value={pushReturnPreviewQuantity}
+                          onChange={(val) => setPushReturnPreviewQuantity(Number(val ?? 0))}
+                        />
+                      );
+                    },
+                  },
+                ]}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseReturn.pull.previewNoLines')} />
+            )}
+            {pushReturnPreviewData.tip ? (
+              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+                {pushReturnPreviewData.tip}
+              </Typography.Paragraph>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
 
       {/* 创建不合格品记录Modal */}
       <FormModalTemplate

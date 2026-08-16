@@ -1,0 +1,139 @@
+/* Puck CSS Modules 类名为哈希形式，用属性选择器匹配。高度契约对齐看板设计器，外观保持办公浅色。 */
+
+.oa-form-puck-editor {
+  height: 560px;
+  min-height: 480px;
+  border: 1px solid var(--ant-color-border, #d9d9d9);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.oa-form-puck-editor__toolbar {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--ant-color-border, #f0f0f0);
+  background: var(--ant-color-fill-quaternary, #fafafa);
+  color: rgba(0, 0, 0, 0.65);
+  font-size: 12px;
+}
+
+/* 覆盖 Puck 默认 100dvh，避免撑破 FormModal */
+.oa-form-puck-editor [class^='_Puck_']:not([class*='-']),
+.oa-form-puck-editor .Puck {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+}
+
+.oa-form-puck-editor .Puck > *:not([class*='Puck-portal']) {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden;
+}
+
+.oa-form-puck-editor [class*='PuckLayout']:not([class*='PuckLayout-inner']) {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden;
+}
+
+.oa-form-puck-editor [class*='PuckLayout-inner'] {
+  display: grid !important;
+  flex: 1 1 0 !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  grid-template-areas: 'header header header' 'left editor right' !important;
+  grid-template-rows: min-content minmax(0, 1fr) !important;
+  --puck-frame-width: minmax(0, 1fr) !important;
+  overflow: hidden;
+}
+
+.oa-form-puck-editor [class*='PuckCanvas_']:not([class*='PuckCanvas-inner']):not([class*='PuckCanvas-root']):not([class*='PuckCanvas-loader']):not([class*='PuckCanvas-controls']) {
+  grid-area: editor;
+  min-height: 0 !important;
+  overflow: auto;
+}
+
+.oa-form-puck-editor [class*='PuckCanvas-loader'] {
+  display: none;
+}
+
+.oa-form-puck-canvas {
+  box-sizing: border-box;
+  min-height: 360px;
+  padding: 16px 12px 24px;
+  background: #fff;
+}
+
+.oa-form-puck-field {
+  box-sizing: border-box;
+  padding: 0 4px 12px;
+}
+
+.oa-form-puck-field__label {
+  margin-bottom: 6px;
+  color: rgba(0, 0, 0, 0.88);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.oa-form-puck-field__req {
+  margin-right: 4px;
+  color: #ff4d4f;
+}
+
+.oa-form-puck-editor--page {
+  height: 100%;
+  min-height: 0;
+}
+
+.oa-form-designer-toolbar {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--ant-color-border, #f0f0f0);
+  background: var(--ant-color-fill-quaternary, #fafafa);
+}
+
+.oa-form-designer-toolbar__left,
+.oa-form-designer-toolbar__right,
+.oa-form-designer-toolbar__center {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.oa-form-designer-toolbar__left {
+  flex: 1;
+  gap: 4px;
+}
+
+.oa-form-designer-toolbar__name {
+  max-width: 320px;
+  font-weight: 600;
+}
+
+.oa-form-puck-editor--page [class^='_Puck_']:not([class*='-']),
+.oa-form-puck-editor--page .Puck {
+  height: 100% !important;
+}

@@ -27,7 +27,7 @@ export type { MultiTabListPageTemplateProps, TabItem } from './MultiTabListPageT
 export { useMultiTabPageContainerHeight } from './useMultiTabPageContainerHeight'
 
 // 表单 Modal 模板
-export { FormModalTemplate } from './FormModalTemplate'
+export { FormModalTemplate, FormModalGridBlock } from './FormModalTemplate'
 export type { FormModalTemplateProps } from './FormModalTemplate'
 
 // 独立新建/编辑页布局

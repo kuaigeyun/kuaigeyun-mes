@@ -32,12 +32,16 @@ import {
   resolveShiftListParams,
 } from '../../../utils/performanceListCore';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+
+const SHIFT_RESOURCE = 'kuaizhizao:performance-shifts';
 
 const ShiftsPage: React.FC = () => {
   const { t } = useTranslation();
   const { token } = AntdTheme.useToken();
   const detailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
+  const shiftPerms = useResourcePermissions(SHIFT_RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
@@ -192,42 +196,48 @@ const ShiftsPage: React.FC = () => {
         hideInSearch: true,
         render: (_, record) => (
           <Space>
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-              {t('app.kuaizhizao.performance.common.actions.detail')}
-            </Button>
-            <Button
-              key="edit"
-              {...rowActionKind('update')}
-              onClick={() => {
-                setEditUuid(record.uuid);
-                setModalVisible(true);
-              }}
-            >
-              {t('app.kuaizhizao.performance.common.actions.edit')}
-            </Button>
-            <Popconfirm
-              key="delete"
-              {...rowActionKind('delete')}
-              title={t('app.kuaizhizao.performance.shifts.messages.deleteConfirm')}
-              onConfirm={async () => {
-                try {
-                  await shiftApi.delete(record.uuid);
-                  messageApi.success(t('app.kuaizhizao.performance.common.messages.deleteSuccess'));
-                  actionRef.current?.reload();
-                } catch (e: any) {
-                  messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
-                }
-              }}
-            >
-              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                {t('app.kuaizhizao.performance.common.actions.delete')}
+            {shiftPerms.canRead ? (
+              <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
+                {t('app.kuaizhizao.performance.common.actions.detail')}
               </Button>
-            </Popconfirm>
+            ) : null}
+            {shiftPerms.canUpdate ? (
+              <Button
+                key="edit"
+                {...rowActionKind('update')}
+                onClick={() => {
+                  setEditUuid(record.uuid);
+                  setModalVisible(true);
+                }}
+              >
+                {t('app.kuaizhizao.performance.common.actions.edit')}
+              </Button>
+            ) : null}
+            {shiftPerms.canDelete ? (
+              <Popconfirm
+                key="delete"
+                {...rowActionKind('delete')}
+                title={t('app.kuaizhizao.performance.shifts.messages.deleteConfirm')}
+                onConfirm={async () => {
+                  try {
+                    await shiftApi.delete(record.uuid);
+                    messageApi.success(t('app.kuaizhizao.performance.common.messages.deleteSuccess'));
+                    actionRef.current?.reload();
+                  } catch (e: any) {
+                    messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
+                  }
+                }}
+              >
+                <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                  {t('app.kuaizhizao.performance.common.actions.delete')}
+                </Button>
+              </Popconfirm>
+            ) : null}
           </Space>
         ),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [t, messageApi],
+    [t, messageApi, shiftPerms],
   );
 
   return (
@@ -239,16 +249,16 @@ const ShiftsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}
-          showCreateButton
+          showCreateButton={shiftPerms.canCreate}
           createButtonText={t('app.kuaizhizao.performance.shifts.createButton')}
           onCreate={() => {
             setEditUuid(null);
             setModalVisible(true);
           }}
-          enableRowSelection
+          enableRowSelection={shiftPerms.canDelete}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
-          showDeleteButton
+          showDeleteButton={shiftPerms.canDelete}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.performance.shifts.messages.deleteBatchConfirm', { count })}
           showAdvancedSearch
@@ -293,7 +303,7 @@ const ShiftsPage: React.FC = () => {
         }}
         detail={shiftDetail}
         detailColumns={detailColumns}
-        extra={buildDetailDrawerEditExtra(t, Boolean(shiftDetail), () => {
+        extra={buildDetailDrawerEditExtra(t, Boolean(shiftDetail && shiftPerms.canUpdate), () => {
           if (!shiftDetail) return;
           setEditUuid(shiftDetail.uuid);
           setModalVisible(true);

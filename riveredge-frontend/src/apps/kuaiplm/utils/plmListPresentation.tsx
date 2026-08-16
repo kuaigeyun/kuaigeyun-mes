@@ -23,6 +23,7 @@ const CHANGE_CATEGORY_MARKER_COLOR: Record<string, string> = {
   bom: 'blue',
   route: 'purple',
   process_route: 'purple',
+  drawing: 'cyan',
 };
 
 export function renderPlmChangeCategoryMarker(t: TFunction, category?: string | null) {

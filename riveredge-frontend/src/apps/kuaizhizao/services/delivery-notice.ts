@@ -47,10 +47,51 @@ export type DeliveryNoticePullCandidate = {
   };
 };
 
+export type DeliveryNoticePullLine = {
+  id: number;
+  sales_delivery_id: number;
+  delivery_code?: string;
+  customer_id?: number;
+  customer_name?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+  required_date?: string | null;
+};
+
 export const deliveryNoticeApi = {
   list: async (params?: any) => apiRequest('/apps/kuaizhizao/delivery-notices', { method: 'GET', params }),
   listPullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
     apiRequest('/apps/kuaizhizao/delivery-notices/pull-candidates', { method: 'GET', params }),
+  listSalesDeliveryPullLines: async (params: {
+    skip?: number;
+    limit?: number;
+    keyword?: string;
+    sales_delivery_id?: number;
+    pullable_only?: boolean;
+  }): Promise<{ data: DeliveryNoticePullLine[]; total: number }> =>
+    apiRequest('/apps/kuaizhizao/delivery-notices/sales-delivery-pull-lines', {
+      method: 'GET',
+      params,
+    }),
+  pullFromSalesDeliveryItems: async (
+    selectedItemIds: number[],
+  ): Promise<{
+    success: boolean;
+    message: string;
+    notice_id?: number;
+    notice_code?: string;
+    notices?: Array<{ notice_id: number; notice_code: string }>;
+  }> =>
+    apiRequest('/apps/kuaizhizao/delivery-notices/pull-from-sales-delivery-items', {
+      method: 'POST',
+      data: { selected_item_ids: selectedItemIds },
+    }),
   previewFromSalesDelivery: async (salesDeliveryId: number): Promise<DeliveryNoticePullPreview> =>
     apiRequest('/apps/kuaizhizao/delivery-notices/sales-delivery-preview', {
       method: 'GET',

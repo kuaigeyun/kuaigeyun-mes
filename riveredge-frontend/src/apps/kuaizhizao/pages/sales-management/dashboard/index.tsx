@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { Table, Tag, Typography, Progress, Button, theme } from 'antd';
+import { Table, Typography, Progress, Button, theme } from 'antd';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   FileTextOutlined,
@@ -34,6 +34,7 @@ import { canViewKuaizhizaoPricing } from '../../../../../utils/kuaizhizaoPricing
 import { useUserFieldMasks } from '../../../../../hooks/useUserFieldMasks';
 import { resolveAmountFieldVisibility } from '../../../../../utils/fieldMaskPermission';
 import { getStatusDisplay } from '../../../constants/documentStatus';
+import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 import { formatDateTime } from '../../../../../utils/format';
 import {
   ModuleCenterLayout,
@@ -43,9 +44,13 @@ import {
   ModuleActionMasonry,
   ModuleTodoList,
   ModuleChartPanel,
+  ModuleFeedList,
   ModuleTrendLine,
   isModuleDashboardPlain,
   resolveModuleRankBadgeStyle,
+  showMasonryCard,
+  masonryWeightFromRows,
+  resolveMasonryEmptyFallback,
 } from '../../../components/module-center';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 
@@ -279,7 +284,7 @@ const SalesDashboard: React.FC = () => {
             value={s?.total_amount != null ? Number(s.total_amount) : null}
             prefix=""
             suffix=""
-            style={{ fontSize: 26, fontWeight: 700, color: '#fff' }}
+            style={{ fontSize: 26, fontWeight: 700 }}
           />
         ),
         icon: <RiseOutlined style={{ fontSize: 24, color: '#fff' }} />,
@@ -360,7 +365,7 @@ const SalesDashboard: React.FC = () => {
         width: 80,
         render: (status: string) => {
           const { text, color } = getStatusDisplay(status);
-          return <Tag color={color}>{text}</Tag>;
+          return <StatusTag color={color}>{text}</StatusTag>;
         },
       },
     ],
@@ -404,9 +409,9 @@ const SalesDashboard: React.FC = () => {
             >
               {formatDateTime(date, 'MM-DD')}
               {isDeliveryOverdue(record.delivery_date) ? (
-                <Tag color="error" style={{ marginInlineEnd: 0 }}>
+                <MarkerTag color="error" style={{ marginInlineEnd: 0 }}>
                   {t('app.kuaizhizao.salesDashboard.deliveryOverdue')}
-                </Tag>
+                </MarkerTag>
               ) : null}
             </span>
           ) : (
@@ -451,303 +456,330 @@ const SalesDashboard: React.FC = () => {
     [isDark, isPlain, token],
   );
 
+  const overdueDeliveryOrders = useMemo(
+    () => pendingDeliveryOrders.filter((o) => isDeliveryOverdue(o.delivery_date)),
+    [pendingDeliveryOrders],
+  );
+
+  const hasTrendData = useMemo(
+    () => trendData.some((d) => d.revenue > 0 || d.quantity > 0),
+    [trendData],
+  );
+
+  const hasRankingData = topProducts.length > 0 || topCustomers.length > 0;
+
+  const followUpTodayItems = useMemo(
+    () =>
+      pendingFollowUps.slice(0, 5).map((item) => ({
+        id: item.id,
+        title: item.customer_name,
+        subtitle: item.content || t('app.kuaizhizao.salesDashboard.noFollowUpContent'),
+        tag: {
+          label: t('app.kuaizhizao.salesDashboard.pendingFollowUp'),
+          color:
+            item.next_follow_up_at && dayjs(item.next_follow_up_at).isBefore(dayjs(), 'day')
+              ? 'error'
+              : 'warning',
+        },
+        action: (
+          <Text type="secondary" style={{ fontSize: 10 }}>
+            {t('app.kuaizhizao.salesDashboard.plannedFollowUp', {
+              date: formatDateTime(item.next_follow_up_at, 'YYYY-MM-DD'),
+            })}
+            {' '}
+            <Button
+              type="link"
+              size="small"
+              icon={<PlusOutlined />}
+              onClick={() => navigate('/apps/kuaizhizao/sales-management/customer-follow-ups')}
+              style={{ fontSize: 11, height: 20, padding: 0 }}
+            >
+              {t('app.kuaizhizao.salesDashboard.goFollowUp')}
+            </Button>
+          </Text>
+        ),
+      })),
+    [navigate, pendingFollowUps, t],
+  );
+
+  const recentFollowUpItems = useMemo(
+    () =>
+      recentFollowUps.map((item) => ({
+        id: item.id,
+        title: item.customer_name,
+        subtitle: item.content || t('app.kuaizhizao.salesDashboard.noFollowUpRecord'),
+        meta: (
+          <Text type="secondary" style={{ fontSize: 10, flexShrink: 0 }}>
+            {formatDateTime(item.occurred_at || item.created_at, 'MM-DD HH:mm')}
+          </Text>
+        ),
+      })),
+    [recentFollowUps, t],
+  );
+
+  const contractAlertFeedItems = useMemo(
+    () =>
+      contractAlerts.slice(0, 4).map((item) => ({
+        id: `${item.alert_type}-${item.contract_id}`,
+        title: item.contract_code,
+        subtitle: (
+          <>
+            <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+              {item.customer_name}
+            </Text>
+            <Text type={item.severity === 'high' ? 'danger' : 'secondary'} style={{ fontSize: 12 }}>
+              {item.message}
+            </Text>
+          </>
+        ),
+        tag: {
+          label:
+            item.alert_type === 'expiry'
+              ? t('app.kuaizhizao.salesDashboard.alertExpiry')
+              : item.alert_type === 'low_balance'
+                ? t('app.kuaizhizao.salesDashboard.alertLowBalance')
+                : t('app.kuaizhizao.salesDashboard.alertMilestone'),
+          color: item.severity === 'high' ? 'error' : 'warning',
+        },
+        onClick: () =>
+          navigate('/apps/kuaizhizao/sales-management/sales-contracts', {
+            state: { openContractId: item.contract_id },
+          }),
+      })),
+    [contractAlerts, navigate, t],
+  );
+
   const contractPanelLoading = contractAlertsLoading || frameworkLoading;
   const hasContractContent = contractAlerts.length > 0 || frameworkContracts.length > 0;
+
+  const masonryLoading =
+    todosLoading ||
+    ordersLoading ||
+    pendingFollowUpsLoading ||
+    followUpsLoading ||
+    quotationsLoading ||
+    contractPanelLoading ||
+    trendLoading ||
+    topProductsLoading;
+  const masonryEmptyFallback = resolveMasonryEmptyFallback(masonryLoading, [
+    todos.length > 0,
+    pendingDeliveryOrders.length > 0,
+    overdueDeliveryOrders.length > 0,
+    pendingFollowUps.length > 0,
+    recentFollowUps.length > 0,
+    pendingQuotations.length > 0,
+    hasContractContent,
+    hasTrendData,
+    hasRankingData,
+  ]);
 
   return (
     <ModuleCenterLayout
       loading={summaryLoading && !s}
       kpiRow={<ModuleKpiRow items={kpis} colProps={{ xs: 24, sm: 12, lg: 6 }} />}
       shortcutRow={
-        <ModuleShortcutGrid
-          items={moduleShortcuts}
-          colProps={{ xs: 12, sm: 8, md: 4, lg: 4 }}
-          fillByItemCount
-        />
+        <ModuleShortcutGrid items={moduleShortcuts} />
       }
       actionRow={
         <ModuleActionMasonry>
-          <ModuleActionPanel
-            layout="masonry"
-            title={t('app.kuaizhizao.salesDashboard.todosTitle')}
-            loading={todosLoading}
-            extra={
-              <a onClick={() => navigate('/apps/kuaizhizao/sales-management/shipment-notices')}>
-                {t('app.kuaizhizao.salesDashboard.viewAll')}
-              </a>
-            }
-          >
-            <ModuleTodoList items={todos} emptyText={t('app.kuaizhizao.salesDashboard.noTodos')} />
-          </ModuleActionPanel>
+          {showMasonryCard(todosLoading, todos.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.salesDashboard.todosTitle')}
+              loading={todosLoading}
+              masonryWeight={masonryWeightFromRows(todos.length)}
+              extra={
+                <a onClick={() => navigate('/apps/kuaizhizao/sales-management/shipment-notices')}>
+                  {t('app.kuaizhizao.salesDashboard.viewAll')}
+                </a>
+              }
+            >
+              <ModuleTodoList items={todos} emptyText={t('app.kuaizhizao.salesDashboard.noTodos')} />
+            </ModuleActionPanel>
+          ) : null}
 
-          <ModuleActionPanel
-            layout="masonry"
-            title={t('app.kuaizhizao.salesDashboard.followUpTodayTitle')}
-            loading={pendingFollowUpsLoading}
-            extra={
-              <a onClick={() => navigate('/apps/kuaizhizao/sales-management/customer-follow-ups')}>
-                {t('app.kuaizhizao.salesDashboard.viewAll')}
-              </a>
-            }
-          >
-            {pendingFollowUps.length === 0 ? (
-              <ModuleTodoList items={[]} emptyText={t('app.kuaizhizao.salesDashboard.noFollowUpToday')} />
-            ) : (
-              <div className="dashboard-feed-list">
-                {pendingFollowUps.slice(0, 5).map((item) => (
-                  <div
-                    key={item.id}
-                    style={{
-                      padding: '8px 10px',
-                      borderRadius: 6,
-                      marginBottom: 6,
-                      border: `1px solid ${token.colorBorderSecondary}`,
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
-                      <Text strong ellipsis style={{ fontSize: 12, flex: 1 }}>
-                        {item.customer_name}
-                      </Text>
-                      <Tag
-                        color={item.next_follow_up_at && dayjs(item.next_follow_up_at).isBefore(dayjs(), 'day') ? 'error' : 'warning'}
-                        style={{ margin: 0, fontSize: 10 }}
-                      >
-                        {t('app.kuaizhizao.salesDashboard.pendingFollowUp')}
-                      </Tag>
-                    </div>
-                    <Paragraph type="secondary" ellipsis={{ rows: 1 }} style={{ fontSize: 11, margin: '4px 0' }}>
-                      {item.content || t('app.kuaizhizao.salesDashboard.noFollowUpContent')}
-                    </Paragraph>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text type="secondary" style={{ fontSize: 10 }}>
-                        {t('app.kuaizhizao.salesDashboard.plannedFollowUp', {
-                          date: formatDateTime(item.next_follow_up_at, 'YYYY-MM-DD'),
-                        })}
-                      </Text>
-                      <Button
-                        type="link"
-                        size="small"
-                        icon={<PlusOutlined />}
-                        onClick={() => navigate('/apps/kuaizhizao/sales-management/customer-follow-ups')}
-                        style={{ fontSize: 11, height: 20, padding: 0 }}
-                      >
-                        {t('app.kuaizhizao.salesDashboard.goFollowUp')}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </ModuleActionPanel>
+          {showMasonryCard(ordersLoading, pendingDeliveryOrders.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.salesDashboard.deliveryTrackingTitle')}
+              loading={ordersLoading}
+              masonryWeight={masonryWeightFromRows(Math.min(pendingDeliveryOrders.length, 8))}
+              extra={
+                <a onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-orders')}>
+                  {t('app.kuaizhizao.salesDashboard.viewAll')}
+                </a>
+              }
+            >
+              <Table
+                size="small"
+                tableLayout="fixed"
+                dataSource={pendingDeliveryOrders.slice(0, 8)}
+                pagination={false}
+                rowKey="id"
+                columns={deliveryColumns}
+              />
+            </ModuleActionPanel>
+          ) : null}
 
-          <ModuleActionPanel
-            layout="masonry"
-            title={t('app.kuaizhizao.salesDashboard.pendingQuotationsTitle')}
-            loading={quotationsLoading}
-            extra={
-              <a onClick={() => navigate('/apps/kuaizhizao/sales-management/quotations')}>
-                {t('app.kuaizhizao.salesDashboard.viewAll')}
-              </a>
-            }
-          >
-            <Table
-              size="small"
-              dataSource={pendingQuotations.slice(0, 6)}
-              pagination={false}
-              rowKey="id"
-              columns={quotationColumns}
-              locale={{ emptyText: t('app.kuaizhizao.salesDashboard.noPendingQuotations') }}
-            />
-          </ModuleActionPanel>
+          {showMasonryCard(ordersLoading, overdueDeliveryOrders.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.salesDashboard.overdueShipmentsTitle')}
+              loading={ordersLoading}
+              masonryWeight={masonryWeightFromRows(Math.min(overdueDeliveryOrders.length, 8))}
+              extra={
+                <a onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-orders')}>
+                  {t('app.kuaizhizao.salesDashboard.viewAll')}
+                </a>
+              }
+            >
+              <Table
+                size="small"
+                tableLayout="fixed"
+                dataSource={overdueDeliveryOrders.slice(0, 8)}
+                pagination={false}
+                rowKey="id"
+                columns={deliveryColumns}
+              />
+            </ModuleActionPanel>
+          ) : null}
 
-          <ModuleActionPanel
-            layout="masonry"
-            title={t('app.kuaizhizao.salesDashboard.deliveryTrackingTitle')}
-            loading={ordersLoading}
-            extra={
-              <a onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-orders')}>
-                {t('app.kuaizhizao.salesDashboard.viewAll')}
-              </a>
-            }
-          >
-            <Table
-              size="small"
-              tableLayout="fixed"
-              dataSource={pendingDeliveryOrders.slice(0, 8)}
-              pagination={false}
-              rowKey="id"
-              columns={deliveryColumns}
-              locale={{ emptyText: t('app.kuaizhizao.salesDashboard.noPendingDelivery') }}
-            />
-          </ModuleActionPanel>
+          {showMasonryCard(pendingFollowUpsLoading, pendingFollowUps.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.salesDashboard.followUpTodayTitle')}
+              loading={pendingFollowUpsLoading}
+              masonryWeight={masonryWeightFromRows(followUpTodayItems.length)}
+              extra={
+                <a onClick={() => navigate('/apps/kuaizhizao/sales-management/customer-follow-ups')}>
+                  {t('app.kuaizhizao.salesDashboard.viewAll')}
+                </a>
+              }
+            >
+              <ModuleFeedList items={followUpTodayItems} emptyText={t('common.noData')} />
+            </ModuleActionPanel>
+          ) : null}
 
-          <ModuleActionPanel
-            layout="masonry"
-            title={t('app.kuaizhizao.salesDashboard.recentFollowUpTitle')}
-            loading={followUpsLoading}
-            extra={
-              <a onClick={() => navigate('/apps/kuaizhizao/sales-management/customer-follow-ups')}>
-                {t('app.kuaizhizao.salesDashboard.viewAll')}
-              </a>
-            }
-          >
-            {recentFollowUps.length === 0 ? (
-              <ModuleTodoList items={[]} emptyText={t('app.kuaizhizao.salesDashboard.noRecentFollowUp')} />
-            ) : (
-              <div className="dashboard-feed-list">
-                {recentFollowUps.map((item) => (
-                  <div
-                    key={item.id}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      gap: 8,
-                      padding: '6px 0',
-                      borderBottom: `1px solid ${token.colorBorderSecondary}`,
-                    }}
-                  >
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <Text strong ellipsis style={{ fontSize: 12, display: 'block' }}>
-                        {item.customer_name}
-                      </Text>
-                      <Paragraph
-                        ellipsis={{ rows: 1 }}
-                        style={{ fontSize: 11, margin: '2px 0 0', color: token.colorTextSecondary }}
-                      >
-                        {item.content || t('app.kuaizhizao.salesDashboard.noFollowUpRecord')}
-                      </Paragraph>
-                    </div>
-                    <Text type="secondary" style={{ fontSize: 10, flexShrink: 0 }}>
-                      {formatDateTime(item.occurred_at || item.created_at, 'MM-DD HH:mm')}
-                    </Text>
-                  </div>
-                ))}
-              </div>
-            )}
-          </ModuleActionPanel>
+          {showMasonryCard(followUpsLoading, recentFollowUps.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.salesDashboard.recentFollowUpTitle')}
+              loading={followUpsLoading}
+              masonryWeight={masonryWeightFromRows(recentFollowUpItems.length)}
+              extra={
+                <a onClick={() => navigate('/apps/kuaizhizao/sales-management/customer-follow-ups')}>
+                  {t('app.kuaizhizao.salesDashboard.viewAll')}
+                </a>
+              }
+            >
+              <ModuleFeedList items={recentFollowUpItems} emptyText={t('common.noData')} />
+            </ModuleActionPanel>
+          ) : null}
 
-          {(hasContractContent || contractPanelLoading) && (
+          {showMasonryCard(quotationsLoading, pendingQuotations.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.salesDashboard.pendingQuotationsTitle')}
+              loading={quotationsLoading}
+              masonryWeight={masonryWeightFromRows(Math.min(pendingQuotations.length, 6))}
+              extra={
+                <a onClick={() => navigate('/apps/kuaizhizao/sales-management/quotations')}>
+                  {t('app.kuaizhizao.salesDashboard.viewAll')}
+                </a>
+              }
+            >
+              <Table
+                size="small"
+                tableLayout="fixed"
+                dataSource={pendingQuotations.slice(0, 6)}
+                pagination={false}
+                rowKey="id"
+                columns={quotationColumns}
+              />
+            </ModuleActionPanel>
+          ) : null}
+
+          {showMasonryCard(contractPanelLoading, hasContractContent, masonryEmptyFallback) ? (
             <ModuleActionPanel
               layout="masonry"
               title={t('app.kuaizhizao.salesDashboard.contractPanelTitle')}
               loading={contractPanelLoading}
+              masonryWeight={masonryWeightFromRows(
+                contractAlertFeedItems.length + Math.min(frameworkContracts.length, 4),
+              )}
               extra={
                 <a onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-contracts')}>
                   {t('app.kuaizhizao.salesDashboard.viewAll')}
                 </a>
               }
             >
-              {!hasContractContent ? (
-                <ModuleTodoList items={[]} emptyText={t('app.kuaizhizao.salesDashboard.noContractAlerts')} />
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {contractAlerts.slice(0, 4).map((item) => (
-                    <div
-                      key={`${item.alert_type}-${item.contract_id}`}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() =>
+              <ModuleFeedList items={contractAlertFeedItems} emptyText={t('common.noData')} />
+              {frameworkContracts.slice(0, 4).map((item) => {
+                const pct =
+                  Number(item.total_amount) > 0
+                    ? Math.round((Number(item.released_amount) / Number(item.total_amount)) * 100)
+                    : 0;
+                return (
+                  <div
+                    key={item.contract_id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() =>
+                      navigate('/apps/kuaizhizao/sales-management/sales-contracts', {
+                        state: { openContractId: item.contract_id },
+                      })
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
                         navigate('/apps/kuaizhizao/sales-management/sales-contracts', {
                           state: { openContractId: item.contract_id },
-                        })
+                        });
                       }
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          navigate('/apps/kuaizhizao/sales-management/sales-contracts', {
-                            state: { openContractId: item.contract_id },
-                          });
-                        }
-                      }}
-                      style={{
-                        padding: '8px 10px',
-                        borderRadius: 6,
-                        border: `1px solid ${token.colorBorderSecondary}`,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                        <Text strong>{item.contract_code}</Text>
-                        <Tag color={item.severity === 'high' ? 'error' : 'warning'}>
-                          {item.alert_type === 'expiry'
-                            ? t('app.kuaizhizao.salesDashboard.alertExpiry')
-                            : item.alert_type === 'low_balance'
-                              ? t('app.kuaizhizao.salesDashboard.alertLowBalance')
-                              : t('app.kuaizhizao.salesDashboard.alertMilestone')}
-                        </Tag>
-                      </div>
-                      <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
-                        {item.customer_name}
-                      </Text>
-                      <Text type={item.severity === 'high' ? 'danger' : 'secondary'} style={{ fontSize: 12 }}>
-                        {item.message}
+                    }}
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: 6,
+                      marginBottom: 6,
+                      border: `1px solid ${token.colorBorderSecondary}`,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text strong ellipsis>{item.contract_code}</Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {t('app.kuaizhizao.salesDashboard.remainingAmount', {
+                          amount: Number(item.remaining_amount).toLocaleString(),
+                        })}
                       </Text>
                     </div>
-                  ))}
-                  {frameworkContracts.slice(0, 4).map((item) => {
-                    const pct =
-                      Number(item.total_amount) > 0
-                        ? Math.round((Number(item.released_amount) / Number(item.total_amount)) * 100)
-                        : 0;
-                    return (
-                      <div
-                        key={item.contract_id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() =>
-                          navigate('/apps/kuaizhizao/sales-management/sales-contracts', {
-                            state: { openContractId: item.contract_id },
-                          })
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            navigate('/apps/kuaizhizao/sales-management/sales-contracts', {
-                              state: { openContractId: item.contract_id },
-                            });
-                          }
-                        }}
-                        style={{
-                          padding: '8px 10px',
-                          borderRadius: 6,
-                          border: `1px solid ${token.colorBorderSecondary}`,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <Text strong ellipsis>{item.contract_code}</Text>
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            {t('app.kuaizhizao.salesDashboard.remainingAmount', {
-                              amount: Number(item.remaining_amount).toLocaleString(),
-                            })}
-                          </Text>
-                        </div>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          {item.customer_name}
-                        </Text>
-                        <Progress percent={pct} size="small" style={{ marginTop: 4 }} />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {item.customer_name}
+                    </Text>
+                    <Progress percent={pct} size="small" style={{ marginTop: 4 }} />
+                  </div>
+                );
+              })}
             </ModuleActionPanel>
-          )}
+          ) : null}
 
-          <ModuleChartPanel
-            layout="masonry"
-            title={t('app.kuaizhizao.salesDashboard.trendTitle')}
-            loading={trendLoading}
-            segmented={{
-              value: trendType,
-              options: [
-                ...(showMoney
-                  ? [{ label: t('app.kuaizhizao.salesDashboard.trendRevenue'), value: 'revenue' }]
-                  : []),
-                { label: t('app.kuaizhizao.salesDashboard.trendQuantity'), value: 'quantity' },
-              ],
-              onChange: (v) => setTrendType(v as 'revenue' | 'quantity'),
-            }}
-          >
-            <ModuleTrendLine
+          {showMasonryCard(trendLoading, hasTrendData, masonryEmptyFallback) ? (
+            <ModuleChartPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.salesDashboard.trendTitle')}
+              loading={trendLoading}
+              masonryWeight={3}
+              segmented={{
+                value: trendType,
+                options: [
+                  ...(showMoney
+                    ? [{ label: t('app.kuaizhizao.salesDashboard.trendRevenue'), value: 'revenue' }]
+                    : []),
+                  { label: t('app.kuaizhizao.salesDashboard.trendQuantity'), value: 'quantity' },
+                ],
+                onChange: (v) => setTrendType(v as 'revenue' | 'quantity'),
+              }}
+            >
+              <ModuleTrendLine
                 data={trendData}
                 xField="month"
                 yField={trendType}
@@ -755,71 +787,67 @@ const SalesDashboard: React.FC = () => {
                 autoFit
                 style={{ stroke: isPlain || trendType === 'revenue' ? '#1890ff' : '#52c41a', lineWidth: 2 }}
               />
-          </ModuleChartPanel>
+            </ModuleChartPanel>
+          ) : null}
 
-          <ModuleChartPanel
-            layout="masonry"
-            title={t('app.kuaizhizao.salesDashboard.rankingTitle')}
-            loading={topProductsLoading}
-            segmented={{
-              value: rankType,
-              options: [
-                { label: t('app.kuaizhizao.salesDashboard.rankProducts'), value: 'products' },
-                { label: t('app.kuaizhizao.salesDashboard.rankCustomers'), value: 'customers' },
-              ],
-              onChange: (v) => setRankType(v as 'products' | 'customers'),
-            }}
-          >
-            <div style={{ padding: '4px 0' }}>
-              {rankType === 'products' ? (
-                topProducts.length === 0 ? (
-                  <ModuleTodoList items={[]} emptyText={t('app.kuaizhizao.salesDashboard.noProductRank')} />
-                ) : (
-                  topProducts.map((item, idx) => (
-                    <div key={item.material_name} style={{ display: 'flex', alignItems: 'center', marginBottom: 14, gap: 12 }}>
-                      {renderRankBadge(idx + 1)}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <Text strong ellipsis style={{ fontSize: 13 }}>{item.material_name}</Text>
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            {t('app.kuaizhizao.salesDashboard.piecesUnit', { count: item.quantity })}
-                          </Text>
+          {showMasonryCard(topProductsLoading, hasRankingData, masonryEmptyFallback) ? (
+            <ModuleChartPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.salesDashboard.rankingTitle')}
+              loading={topProductsLoading}
+              masonryWeight={3}
+              segmented={{
+                value: rankType,
+                options: [
+                  { label: t('app.kuaizhizao.salesDashboard.rankProducts'), value: 'products' },
+                  { label: t('app.kuaizhizao.salesDashboard.rankCustomers'), value: 'customers' },
+                ],
+                onChange: (v) => setRankType(v as 'products' | 'customers'),
+              }}
+            >
+              <div style={{ padding: '4px 0' }}>
+                {rankType === 'products'
+                  ? topProducts.map((item, idx) => (
+                      <div key={item.material_name} style={{ display: 'flex', alignItems: 'center', marginBottom: 14, gap: 12 }}>
+                        {renderRankBadge(idx + 1)}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <Text strong ellipsis style={{ fontSize: 13 }}>{item.material_name}</Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              {t('app.kuaizhizao.salesDashboard.piecesUnit', { count: item.quantity })}
+                            </Text>
+                          </div>
+                          <Progress
+                            percent={Math.min(100, Math.round((item.quantity / Math.max(...topProducts.map((p) => p.quantity || 1))) * 100))}
+                            showInfo={false}
+                            size={[100, 6]}
+                          />
                         </div>
-                        <Progress
-                          percent={Math.min(100, Math.round((item.quantity / Math.max(...topProducts.map((p) => p.quantity || 1))) * 100))}
-                          showInfo={false}
-                          size={[100, 6]}
-                        />
                       </div>
-                    </div>
-                  ))
-                )
-              ) : topCustomers.length === 0 ? (
-                <ModuleTodoList items={[]} emptyText={t('app.kuaizhizao.salesDashboard.noCustomerRank')} />
-              ) : (
-                topCustomers.map((item, idx) => (
-                  <div key={item.name} style={{ display: 'flex', alignItems: 'center', marginBottom: 14, gap: 12 }}>
-                    {renderRankBadge(idx + 1)}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text strong ellipsis style={{ fontSize: 13 }}>{item.name}</Text>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          {t('app.kuaizhizao.salesDashboard.orderCountUnit', { count: item.orderCount })}
-                          {' | '}
-                          <AmountDisplay resource={SO} fieldName="amount" value={item.amount} />
-                        </Text>
+                    ))
+                  : topCustomers.map((item, idx) => (
+                      <div key={item.name} style={{ display: 'flex', alignItems: 'center', marginBottom: 14, gap: 12 }}>
+                        {renderRankBadge(idx + 1)}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <Text strong ellipsis style={{ fontSize: 13 }}>{item.name}</Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              {t('app.kuaizhizao.salesDashboard.orderCountUnit', { count: item.orderCount })}
+                              {' | '}
+                              <AmountDisplay resource={SO} fieldName="amount" value={item.amount} />
+                            </Text>
+                          </div>
+                          <Progress
+                            percent={Math.min(100, Math.round((item.amount / Math.max(...topCustomers.map((c) => c.amount || 1))) * 100))}
+                            showInfo={false}
+                            size={[100, 6]}
+                          />
+                        </div>
                       </div>
-                      <Progress
-                        percent={Math.min(100, Math.round((item.amount / Math.max(...topCustomers.map((c) => c.amount || 1))) * 100))}
-                        showInfo={false}
-                        size={[100, 6]}
-                      />
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </ModuleChartPanel>
+                    ))}
+              </div>
+            </ModuleChartPanel>
+          ) : null}
         </ModuleActionMasonry>
       }
     />

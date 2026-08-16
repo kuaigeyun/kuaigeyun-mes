@@ -8,8 +8,9 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Tag, Alert, Input, theme, Space, Collapse, Spin } from 'antd';
-import { SearchOutlined, DatabaseOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Alert, theme, Space, Collapse, Spin } from 'antd';
+import { DatabaseOutlined } from '@ant-design/icons';
+import { TwoColumnLayout } from '../../../../components/layout-templates';
 import {
   createCodeRule,
   updateCodeRule,
@@ -607,43 +608,18 @@ const CodeRuleListPage: React.FC = () => {
   const enabledTagText = t('pages.system.codeRules.enabled');
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        width: '100%',
-        height: '100%',
-        border: `1px solid ${token.colorBorder}`,
-        borderRadius: token.borderRadiusLG || token.borderRadius,
-        overflow: 'hidden',
-      }}
-    >
-      {/* 左侧功能页面列表：固定宽度不参与收缩，由右侧区域伸缩 */}
-      <div
-        style={{
-          width: '300px',
-          minWidth: '300px',
-          flexShrink: 0,
-          borderRight: `1px solid ${token.colorBorder}`,
-          backgroundColor: token.colorFillAlter || '#fafafa',
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-        }}
-      >
-        {/* 搜索栏 */}
-        <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
-          <Input
-            placeholder={t('pages.system.codeRules.searchPagePlaceholder')}
-            prefix={<SearchOutlined />}
-            value={pageSearchValue}
-            onChange={(e) => setPageSearchValue(e.target.value)}
-            allowClear
-            size="middle"
-          />
-        </div>
-        {/* 恢复全部、启用全部 按钮 */}
-        <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
-          <div style={{ display: 'flex', gap: 8 }}>
+    <TwoColumnLayout
+      leftPanel={{
+        width: 300,
+        minWidth: 300,
+        search: {
+          placeholder: t('pages.system.codeRules.searchPagePlaceholder'),
+          value: pageSearchValue,
+          onChange: setPageSearchValue,
+          allowClear: true,
+        },
+        actions: [
+          <div key="left-batch-actions" style={{ display: 'flex', gap: 8 }}>
             {trialRunMode && (
             <Button
               type="primary"
@@ -709,11 +685,10 @@ const CodeRuleListPage: React.FC = () => {
             >
               {t('pages.system.codeRules.enableAll')}
             </Button>
-          </div>
-        </div>
-
-        {/* 功能页面列表 */}
-        <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '8px' }}>
+          </div>,
+        ],
+        leftContent: (
+        <div style={{ padding: 8 }}>
           {pageConfigsLoading ? (
             <div style={{ textAlign: 'center', padding: '40px' }}>
               <Spin size="large" />
@@ -794,19 +769,12 @@ const CodeRuleListPage: React.FC = () => {
             </>
           )}
         </div>
-      </div>
-
-      {/* 右侧配置区域：占据剩余空间，不足时可收缩并滚动 */}
-      <div
-        style={{
-          flex: 1,
-          minWidth: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: token.colorBgContainer,
-        }}
-      >
-        {selectedPage ? (
+        ),
+      }}
+      rightPanel={{
+        contentPadding: 0,
+        contentBackgroundColor: token.colorBgContainer,
+        content: selectedPage ? (
           <>
             {/* 统一头部标题与操作工具栏 */}
             <div
@@ -958,9 +926,9 @@ const CodeRuleListPage: React.FC = () => {
           >
             {t('pages.system.codeRules.selectPageHint')}
           </div>
-        )}
-      </div>
-    </div>
+        ),
+      }}
+    />
   );
 };
 

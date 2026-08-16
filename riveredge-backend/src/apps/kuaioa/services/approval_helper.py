@@ -9,6 +9,11 @@ from loguru import logger
 
 AUDIT_NODE_FORM_REQUEST = "kuaioa_form_request"
 AUDIT_NODE_ASSET_PURCHASE = "kuaioa_asset_purchase"
+AUDIT_NODE_LEAVE = "kuaioa_leave"
+AUDIT_NODE_SEAL = "kuaioa_seal"
+AUDIT_NODE_SPECIAL_PRICE = "kuaioa_special_price"
+AUDIT_NODE_CONCESSION = "kuaioa_concession"
+AUDIT_NODE_PROCESS_DEVIATION = "kuaioa_process_deviation"
 
 
 async def is_audit_required(tenant_id: int, node_key: str) -> bool:

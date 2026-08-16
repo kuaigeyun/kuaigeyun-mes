@@ -7,6 +7,9 @@
 
 角色 UI「审核」合并 approve + audit + reject（REVIEW_ACTIONS），
 不得用 update/create 等替代审核、打印、完修等业务动作。
+
+基线权限（个人中心等）：见 PermissionRegistryService.BASELINE_PERMISSION_CODES，
+创建角色 / 预设分配 / 矩阵保存时强制授予，矩阵 UI 不可取消。
 """
 
 from __future__ import annotations

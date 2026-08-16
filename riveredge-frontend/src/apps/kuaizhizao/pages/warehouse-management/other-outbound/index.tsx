@@ -31,7 +31,7 @@ import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-sele
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import CodeField from '../../../../../components/code-field';
-import { DictionaryLabel } from '../../../../../components/dictionary-label';
+import { MaterialUnitLabel } from '../../../../../components/material-unit-label';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { detailDrawerDescriptionItems, detailDrawerBasicColumn, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
@@ -772,7 +772,7 @@ const OtherOutboundPage: React.FC = () => {
                     title: t('app.kuaizhizao.warehouseOutbound.col.unit'),
                     dataIndex: 'material_unit',
                     width: 60,
-                    render: (val) => <DictionaryLabel dictionaryCode="unit" value={val} />,
+                    render: (val) => <MaterialUnitLabel value={val} />,
                   },
                   { title: t('app.kuaizhizao.warehouseOutbound.col.deliveryQty'), dataIndex: 'outbound_quantity', width: 100, align: 'right' },
                   { title: t('app.kuaizhizao.warehouseOutbound.field.unitPrice'), dataIndex: 'unit_price', width: 100, align: 'right' },

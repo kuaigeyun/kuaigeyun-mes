@@ -13,6 +13,7 @@ import {
   ProFormText,
   ProFormTextArea,
   ProFormSwitch,
+  ProFormSelect,
   ProFormDependency,
   ProFormInstance,
 } from '@ant-design/pro-components';
@@ -41,12 +42,15 @@ import {
   InteractionOutlined,
   ApartmentOutlined,
   SyncOutlined,
+  EnvironmentOutlined,
+  CarOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import {
   DetailDrawerActions,
   ListPageTemplate,
   FormModalTemplate,
+  FormModalGridBlock,
   MODAL_CONFIG,
 } from '../../../../components/layout-templates';
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
@@ -144,6 +148,11 @@ const TYPE_COLORS: Record<string, { color: string; icon: React.ReactNode }> = {
   zhipu: { color: 'purple', icon: <RocketOutlined /> },
   moonshot: { color: 'cyan', icon: <RocketOutlined /> },
   siliconflow: { color: 'geekblue', icon: <RocketOutlined /> },
+  amap: { color: 'green', icon: <EnvironmentOutlined /> },
+  kuaidi100: { color: 'orange', icon: <CarOutlined /> },
+  kdniao: { color: 'cyan', icon: <CarOutlined /> },
+  aliyun_market: { color: 'orange', icon: <CloudOutlined /> },
+  tencent_market: { color: 'blue', icon: <CloudOutlined /> },
 };
 
 
@@ -161,6 +170,10 @@ const SENSITIVE_KEYS = [
   'secret_key',
   'api_key',
   'api_secret',
+  'rest_key',
+  'security_code',
+  'js_key',
+  'app_code',
 ];
 
 const ApplicationConnectionsListPage: React.FC = () => {
@@ -280,6 +293,11 @@ const ApplicationConnectionsListPage: React.FC = () => {
       delete config.api_key_configured;
       if (config.api_key === '****') {
         config.api_key = '';
+      }
+      for (const key of ['rest_key', 'security_code', 'js_key', 'app_code'] as const) {
+        if (config[key] === '****') {
+          config[key] = '';
+        }
       }
       setFormInitialValues({
         name: detail.name,
@@ -475,6 +493,9 @@ const ApplicationConnectionsListPage: React.FC = () => {
       const config = { ...restConfig };
       if (config.api_key === '****') {
         delete config.api_key;
+      }
+      if (config.app_code === '****') {
+        delete config.app_code;
       }
       if (isEdit && currentUuid) {
         await updateApplicationConnection(currentUuid, {
@@ -896,6 +917,174 @@ const ApplicationConnectionsListPage: React.FC = () => {
             <ProFormText name="port" label="Port" initialValue={445} colProps={{ span: 12 }} />
           </>
         );
+      case 'aliyun_market':
+      case 'tencent_market':
+        return (
+          <>
+            <FormModalGridBlock>
+              <Alert
+                title={t('pages.system.applicationConnections.cloudMarketHint')}
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+            </FormModalGridBlock>
+            <ProFormSelect
+              name="scene"
+              label={t('pages.system.applicationConnections.cloudMarketScene')}
+              rules={[{ required: true }]}
+              colProps={{ span: 12 }}
+              extra={t('pages.system.applicationConnections.cloudMarketSceneExtra')}
+              options={[
+                {
+                  value: 'express_query',
+                  label: t('pages.system.applicationConnections.cloudMarketSceneExpressQuery'),
+                },
+              ]}
+            />
+            <ProFormSelect
+              name="http_method"
+              label={t('pages.system.applicationConnections.cloudMarketMethod')}
+              rules={[{ required: true }]}
+              colProps={{ span: 12 }}
+              extra={t('pages.system.applicationConnections.cloudMarketMethodExtra')}
+              options={[
+                { value: 'POST', label: 'POST' },
+                { value: 'GET', label: 'GET' },
+              ]}
+            />
+            <ProFormText
+              name="query_url"
+              label={t('pages.system.applicationConnections.cloudMarketQueryUrl')}
+              rules={[
+                { required: true },
+                { pattern: /^https:\/\//, message: t('pages.system.applicationConnections.cloudMarketQueryUrlPattern') },
+              ]}
+              colProps={{ span: 24 }}
+              extra={t('pages.system.applicationConnections.cloudMarketQueryUrlExtra')}
+              placeholder={t('pages.system.applicationConnections.cloudMarketQueryUrlPlaceholder')}
+            />
+            <ProFormText.Password
+              name="app_code"
+              label={t('pages.system.applicationConnections.cloudMarketAppCode')}
+              rules={isEdit ? [] : [{ required: true }]}
+              colProps={{ span: 24 }}
+              extra={t('pages.system.applicationConnections.cloudMarketAppCodeExtra')}
+              placeholder={
+                isEdit
+                  ? t('pages.system.siteSettings.integrationsDeepseekApiKeyPlaceholderConfigured')
+                  : undefined
+              }
+              fieldProps={{ autoComplete: 'new-password' }}
+            />
+          </>
+        );
+      case 'kdniao':
+        return (
+          <>
+            <FormModalGridBlock>
+              <Alert
+                title={t('pages.system.applicationConnections.kdniaoHint')}
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+            </FormModalGridBlock>
+            <ProFormText
+              name="ebusiness_id"
+              label={t('pages.system.applicationConnections.kdniaoEbusinessId')}
+              rules={[{ required: true }]}
+              colProps={{ span: 24 }}
+              extra={t('pages.system.applicationConnections.kdniaoEbusinessIdExtra')}
+            />
+            <ProFormText.Password
+              name="api_key"
+              label={t('pages.system.applicationConnections.kdniaoApiKey')}
+              rules={isEdit ? [] : [{ required: true }]}
+              colProps={{ span: 24 }}
+              extra={t('pages.system.applicationConnections.kdniaoApiKeyExtra')}
+              placeholder={
+                isEdit
+                  ? t('pages.system.siteSettings.integrationsDeepseekApiKeyPlaceholderConfigured')
+                  : undefined
+              }
+              fieldProps={{ autoComplete: 'new-password' }}
+            />
+          </>
+        );
+      case 'kuaidi100':
+        return (
+          <>
+            <FormModalGridBlock>
+              <Alert
+                title={t('pages.system.applicationConnections.kuaidi100Hint')}
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+            </FormModalGridBlock>
+            <ProFormText
+              name="customer"
+              label={t('pages.system.applicationConnections.kuaidi100Customer')}
+              rules={[{ required: true }]}
+              colProps={{ span: 24 }}
+              extra={t('pages.system.applicationConnections.kuaidi100CustomerExtra')}
+            />
+            <ProFormText.Password
+              name="api_key"
+              label={t('pages.system.applicationConnections.kuaidi100ApiKey')}
+              rules={isEdit ? [] : [{ required: true }]}
+              colProps={{ span: 24 }}
+              extra={t('pages.system.applicationConnections.kuaidi100ApiKeyExtra')}
+              placeholder={
+                isEdit
+                  ? t('pages.system.siteSettings.integrationsDeepseekApiKeyPlaceholderConfigured')
+                  : undefined
+              }
+              fieldProps={{ autoComplete: 'new-password' }}
+            />
+          </>
+        );
+      case 'amap':
+        return (
+          <>
+            <FormModalGridBlock>
+              <Alert
+                title={t('pages.system.applicationConnections.amapHint')}
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+            </FormModalGridBlock>
+            <ProFormText
+              name="js_key"
+              label={t('pages.system.applicationConnections.amapJsKey')}
+              rules={[{ required: true }]}
+              colProps={{ span: 24 }}
+              extra={t('pages.system.applicationConnections.amapJsKeyExtra')}
+            />
+            <ProFormText.Password
+              name="security_code"
+              label={t('pages.system.applicationConnections.amapSecurityCode')}
+              colProps={{ span: 24 }}
+              extra={t('pages.system.applicationConnections.amapSecurityCodeExtra')}
+              fieldProps={{ autoComplete: 'new-password' }}
+            />
+            <ProFormText.Password
+              name="rest_key"
+              label={t('pages.system.applicationConnections.amapRestKey')}
+              rules={isEdit ? [] : [{ required: true }]}
+              colProps={{ span: 24 }}
+              extra={t('pages.system.applicationConnections.amapRestKeyExtra')}
+              placeholder={
+                isEdit
+                  ? t('pages.system.siteSettings.integrationsDeepseekApiKeyPlaceholderConfigured')
+                  : undefined
+              }
+              fieldProps={{ autoComplete: 'new-password' }}
+            />
+          </>
+        );
       case 'deepseek':
       case 'openai':
       case 'qwen':
@@ -932,7 +1121,11 @@ const ApplicationConnectionsListPage: React.FC = () => {
           </>
         );
       default:
-        return <Alert title={t('pages.system.applicationConnections.noVisualForm', { type })} type="info" />;
+        return (
+          <FormModalGridBlock>
+            <Alert title={t('pages.system.applicationConnections.noVisualForm', { type })} type="info" />
+          </FormModalGridBlock>
+        );
     }
   };
 
@@ -951,7 +1144,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
       'rootcloud', 'casicloud', 'alicloud_iot', 'huaweicloud_iot', 'thingsboard', 'jetlinks',
       'flux_wms', 'kejian_wms', 'digiwin_wms', 'openwms',
       'alicloud_oss', 'tencent_cos', 'huaweicloud_obs', 'aws_s3', 'minio', 'qiniu_kodo',
-      'nas_webdav', 'nas_smb',
+      'nas_webdav', 'nas_smb', 'amap', 'kuaidi100', 'kdniao', 'aliyun_market', 'tencent_market',
       'deepseek', 'openai', 'qwen', 'zhipu', 'moonshot', 'siliconflow',
     ].includes(type);
   };
@@ -1292,7 +1485,20 @@ const ApplicationConnectionsListPage: React.FC = () => {
       </ListPageTemplate>
 
       <FormModalTemplate
-        title={isEdit ? t('pages.system.applicationConnections.editModalTitle') : t('pages.system.applicationConnections.createModalTitle')}
+        title={
+          <Space size={8} align="center">
+            <span>
+              {isEdit
+                ? t('pages.system.applicationConnections.editModalTitle')
+                : t('pages.system.applicationConnections.createModalTitle')}
+            </span>
+            {formInitialValues?.type ? (
+              <MarkerTag color={getTypeInfo(String(formInitialValues.type)).color}>
+                {getTypeInfo(String(formInitialValues.type)).text}
+              </MarkerTag>
+            ) : null}
+          </Space>
+        }
         open={modalVisible}
         onClose={() => { setModalVisible(false); setFormInitialValues(undefined); }}
         onFinish={handleSubmit}
@@ -1320,7 +1526,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
           </ProFormDependency>
         }
       >
-        <ProFormText name="type" label={t('pages.system.applicationConnections.columnType')} disabled colProps={{ span: 12 }} />
+        <ProFormText name="type" hidden />
         <ProFormText
           name="code"
           label={t('pages.system.applicationConnections.columnCode')}

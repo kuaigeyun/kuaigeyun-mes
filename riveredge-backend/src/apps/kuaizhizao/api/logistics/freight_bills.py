@@ -22,11 +22,14 @@ router = APIRouter(
 @router.get("/pending-freight-orders")
 async def list_pending_freight_orders(
     carrier_id: Optional[int] = Query(None),
+    keyword: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    return await service.list_pending_freight_orders(tenant_id, carrier_id=carrier_id, skip=skip, limit=limit)
+    return await service.list_pending_freight_orders(
+        tenant_id, carrier_id=carrier_id, keyword=keyword, skip=skip, limit=limit
+    )
 
 
 @router.get("", response_model=FreightBillListResponse)

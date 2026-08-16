@@ -601,6 +601,16 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if not work_order:
                 raise NotFoundError(f"工单不存在: {reporting_data.work_order_id}")
 
+            from apps.kuaizhizao.services.inspection_policy_service import get_quality_effective_config
+            from apps.kuaizhizao.services.quality_fai_service import FaiOrderService
+
+            _fai_cfg = await get_quality_effective_config(tenant_id)
+            await FaiOrderService().assert_mass_reporting_allowed(
+                tenant_id,
+                int(reporting_data.work_order_id),
+                gate_enabled=bool(_fai_cfg.get("gate", {}).get("require_fai_before_mass_reporting")),
+            )
+
             team_id_val = getattr(reporting_data, "team_id", None)
             worker_id_raw = getattr(reporting_data, "worker_id", None)
             worker_id_int: Optional[int] = None
@@ -1073,6 +1083,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
         tenant_id: int,
         *,
         keyword: Optional[str] = None,
+        work_order_code: Optional[str] = None,
         scope: str = "reportable",
         skip: int = 0,
         limit: int = 20,
@@ -1098,6 +1109,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
         from apps.kuaizhizao.services.work_order_service import WORK_ORDER_IN_PROGRESS_STATUS
 
         kw = (keyword or "").strip()
+        wo_code = (work_order_code or "").strip()
         max_work_orders = 1000
 
         wo_query = WorkOrder.filter(
@@ -1105,7 +1117,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
             deleted_at__isnull=True,
             status__in=list(WORK_ORDER_IN_PROGRESS_STATUS),
         )
-        if kw:
+        if wo_code:
+            wo_query = wo_query.filter(code__icontains=wo_code)
+        elif kw:
             op_wo_ids = await WorkOrderOperation.filter(
                 tenant_id=tenant_id,
                 deleted_at__isnull=True,

@@ -48,7 +48,8 @@ import ImageCropper from '../../../components/image-cropper';
 import { SiteLogoPickerModal } from '../../../components/site-logo-picker/SiteLogoPickerModal';
 import { LogoThemeColorModal } from '../../../components/logo-theme-color/LogoThemeColorModal';
 import { getSiteSettingsDictCache, setSiteSettingsDictCache } from '../../../utils/siteSettingsDictCache';
-import { cacheTenantDefaultLanguage } from '../../../utils/localeBootstrap';
+import { cacheTenantDefaultLanguage, normalizeUiLanguage } from '../../../utils/localeBootstrap';
+import { LANGUAGE_MAP } from '../../../config/i18n';
 import {
   mapCurrencyDictionaryOptions,
   mapTimezoneDictionaryOptions,
@@ -566,8 +567,10 @@ const SiteSettingsPage: React.FC = () => {
       try {
         const langResponse = await getLanguageList({ is_active: true });
         if (langResponse && langResponse.items) {
-          const options = langResponse.items.map(lang => ({
-             label: lang.native_name || lang.name,
+          const options = langResponse.items
+            .filter((lang) => Boolean(normalizeUiLanguage(lang.code)))
+            .map(lang => ({
+             label: LANGUAGE_MAP[lang.code] || lang.name || lang.native_name,
              value: lang.code,
              key: lang.uuid || lang.code
           }));

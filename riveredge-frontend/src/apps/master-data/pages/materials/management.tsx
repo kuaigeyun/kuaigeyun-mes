@@ -8,7 +8,7 @@ import { rowActionKind } from '../../../../components/uni-action';
 
 import React, { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useSearchParams, useLocation } from 'react-router-dom'
+import { useSearchParams, useLocation, useNavigate } from 'react-router-dom'
 import {
   App,
   Button,
@@ -24,6 +24,8 @@ import {
   Select,
   TreeSelect,
   Alert,
+  Result,
+  Spin,
   Segmented,
   Card,
   Row,
@@ -37,6 +39,7 @@ import {
   Tabs,
 } from 'antd'
 import {
+  ArrowLeftOutlined,
   EditOutlined,
   DeleteOutlined,
   PlusOutlined,
@@ -101,13 +104,16 @@ import type { ImportPrecheckResult } from '../../../../components/uni-import/uni
 import { usePagePermissionResource } from '../../../../hooks/usePagePermissionResource'
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions'
 import { UniBatchSplitToolbar } from '../../../../components/uni-batch'
-import { TwoColumnLayout, FormModalTemplate } from '../../../../components/layout-templates'
+import { TwoColumnLayout, DocumentFormPageLayout } from '../../../../components/layout-templates'
+import { useLeaveFormTab, navigateClosingTab, uniTabKey } from '../../../../components/uni-tabs/navigateClosingTab'
+import { setCustomPageTitle, removeCustomPageTitle } from '../../../../utils/customPageTitle'
 import { getApiErrorMessage } from '../../../../utils/errorHandler'
 import { buildDetailDrawerEditExtra } from '../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail'
 import { MasterDataDetailDrawer } from '../shared/masterDataDetailDrawer'
 import {
   MODAL_CONFIG,
   LIST_PAGE_TABLE_SCROLL,
+  DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
 } from '../../../../components/layout-templates/constants'
 import { MaterialForm } from '../../components/MaterialForm'
 import { MaterialGroupFormModal } from '../../components/MaterialGroupFormModal'
@@ -497,6 +503,86 @@ type StandardPartFlatRow = {
   texture?: string
 }
 
+const MATERIAL_LIST_PATH = '/apps/master-data/materials'
+const MATERIAL_CREATE_PATH = `${MATERIAL_LIST_PATH}/new`
+const materialEditPath = (uuid: string) => `${MATERIAL_LIST_PATH}/${uuid}/edit`
+
+function buildMaterialEditFormValues(material: Material): Record<string, unknown> {
+  return {
+    mainCode: material.mainCode ?? (material as any).main_code,
+    name: material.name,
+    groupId: material.groupId ?? (material as any).group_id,
+    sourceType:
+      (material as any).sourceType ??
+      (material as any).source_type ??
+      undefined,
+    specification: material.specification,
+    baseUnit: material.baseUnit ?? (material as any).base_unit,
+    units: material.units ?? (material as any).units ?? undefined,
+    batchManaged: material.batchManaged ?? (material as any).batch_managed,
+    defaultBatchRuleId:
+      (material as any).defaultBatchRuleId ?? (material as any).default_batch_rule_id,
+    serialManaged:
+      (material as any).serialManaged ?? (material as any).serial_managed ?? false,
+    defaultSerialRuleId:
+      (material as any).defaultSerialRuleId ?? (material as any).default_serial_rule_id,
+    variantManaged: material.variantManaged ?? (material as any).variant_managed,
+    description: material.description,
+    brand: material.brand,
+    model: material.model,
+    texture: material.texture ?? (material as any).texture,
+    weight: Number(material.weight ?? (material as any).weight ?? 0) || undefined,
+    volume: Number(material.volume ?? (material as any).volume ?? 0) || undefined,
+    barcode: material.barcode ?? (material as any).barcode,
+    shelfLifeManaged:
+      material.shelfLifeManaged ?? (material as any).shelf_life_managed ?? false,
+    shelfLifeDays: material.shelfLifeDays ?? (material as any).shelf_life_days,
+    referenceCost: material.referenceCost ?? (material as any).reference_cost,
+    countryOfOrigin: material.countryOfOrigin ?? (material as any).country_of_origin,
+    customsCode: material.customsCode ?? (material as any).customs_code,
+    isGiftable: material.isGiftable ?? (material as any).is_giftable ?? false,
+    isActive: material.isActive ?? (material as any).is_active,
+    inspectionMode:
+      (material as any).inspectionMode ?? (material as any).inspection_mode ?? 'none',
+    inspectionStages: normalizeStagesInput(
+      (material as any).inspectionStages ??
+        (material as any).inspection_stages ??
+        stagesFromLegacy(
+          (material as any).inspectionMode ?? (material as any).inspection_mode,
+          (material as any).defaultInspectionPlanId ??
+            (material as any).default_inspection_plan_id,
+        ),
+    ),
+    defaultInspectionPlanId:
+      (material as any).defaultInspectionPlanId ??
+      (material as any).default_inspection_plan_id ??
+      undefined,
+    overReportMode:
+      (material as any).overReportMode ?? (material as any).over_report_mode ?? 'none',
+    overReportValue:
+      Number(
+        (material as any).overReportValue ?? (material as any).over_report_value ?? 0,
+      ) || 0,
+  }
+}
+
+function buildMaterialCreateFormValues(groupId?: number | null): Record<string, unknown> {
+  return {
+    groupId: groupId || undefined,
+    isActive: true,
+    batchManaged: false,
+    serialManaged: false,
+    variantManaged: false,
+    sourceType: undefined,
+    baseUnit: DEFAULT_MATERIAL_BASE_UNIT,
+    inspectionMode: 'none',
+    inspectionStages: stagesFromLegacy('none'),
+    overReportMode: 'none',
+    overReportValue: 0,
+    isGiftable: false,
+  }
+}
+
 /**
  * 物料管理合并页面组件
  */
@@ -509,6 +595,15 @@ const MaterialsManagementPage: React.FC = () => {
   const { token } = theme.useToken()
   const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
+  const navigate = useNavigate()
+  const isCreatePage = /\/materials\/new$/.test(location.pathname.replace(/\/$/, ''))
+  const editRouteMatch = location.pathname.match(/\/materials\/([^/]+)\/edit$/)
+  const editRouteUuid = editRouteMatch?.[1] ? decodeURIComponent(editRouteMatch[1]) : null
+  const isEditPage = Boolean(editRouteUuid)
+  const isFormPage = isCreatePage || isEditPage
+  const leaveMaterialFormPage = useLeaveFormTab(MATERIAL_LIST_PATH)
+  const formPageInitializedRef = useRef(false)
+  const [formPageError, setFormPageError] = useState<string | null>(null)
   const pagePermissionResource = usePagePermissionResource(location.pathname)
   const { canImport } = useResourcePermissions(pagePermissionResource)
 
@@ -591,9 +686,7 @@ const MaterialsManagementPage: React.FC = () => {
   /** 新建分组时预填的父分组 ID（右键「新建子分组」） */
   const [groupParentIdPreset, setGroupParentIdPreset] = useState<number | undefined>(undefined)
 
-  const [materialModalVisible, setMaterialModalVisible] = useState(false)
   const [materialRestoreInitialValues, setMaterialRestoreInitialValues] = useState<Record<string, any> | null>(null)
-  const [materialIsEdit, setMaterialIsEdit] = useState(false)
   const [materialFormLoading, setMaterialFormLoading] = useState(false)
   const [materialDrawerVisible, setMaterialDrawerVisible] = useState(false)
   const [currentMaterial, setCurrentMaterial] = useState<Material | null>(null)
@@ -844,18 +937,11 @@ const MaterialsManagementPage: React.FC = () => {
   }, [])
 
   const handleEditMaterial = useCallback(
-    async (record: Material) => {
-      try {
-        setMaterialIsEdit(true)
-        // 获取物料详情
-        const detail = await materialApi.get(record.uuid)
-        setCurrentMaterial(detail)
-        setMaterialModalVisible(true)
-      } catch (error: any) {
-        messageApi.error(error.message || t('app.master-data.materials.getDetailFailed'))
-      }
+    (record: Material) => {
+      if (!record.uuid) return
+      navigate(materialEditPath(record.uuid))
     },
-    [messageApi, t]
+    [navigate],
   )
 
   const loadMaterialDetail = useCallback(
@@ -896,9 +982,9 @@ const MaterialsManagementPage: React.FC = () => {
 
   const handleOpenMaterialForEdit = useCallback(
     (uuid: string) => {
-      void handleEditMaterial({ uuid } as Material)
+      navigate(materialEditPath(uuid))
     },
-    [handleEditMaterial],
+    [navigate],
   )
 
   const healthCheckGroupId = useMemo(() => {
@@ -1029,6 +1115,24 @@ const MaterialsManagementPage: React.FC = () => {
     }
   }, [messageApi, convertToTreeData, collectAllKeys, t])
 
+  useEffect(() => {
+    if (isFormPage) return
+    const state = location.state as {
+      reloadMaterials?: boolean
+      openFabricationWizard?: FabricationMaterialRef
+    } | null
+    if (!state?.reloadMaterials && !state?.openFabricationWizard) return
+    if (state.reloadMaterials) {
+      actionRef.current?.reload()
+      void loadMaterialGroups()
+    }
+    if (state.openFabricationWizard) {
+      setFabricationWizardMaterial(state.openFabricationWizard)
+      setFabricationWizardOpen(true)
+    }
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: {} })
+  }, [isFormPage, location.state, location.pathname, location.search, navigate, loadMaterialGroups])
+
   /**
    * 加载基础单位选项（单位主数据）与属性定义
    */
@@ -1054,27 +1158,18 @@ const MaterialsManagementPage: React.FC = () => {
     }
   }, [])
 
-  // 恢复暂存的物料表单（从悬浮按钮返回时：URL 带 restore=1 + sessionStorage 有数据）
+  // 暂存表单返回：打开独立新建标签，由建单页读取 sessionStorage
   useEffect(() => {
+    if (isFormPage) return
     const state = getSuspendedModal()
     const isRestoreUrl = searchParams.get('restore') === '1'
-    const isMaterialsPath = location.pathname.endsWith('/materials') && !location.pathname.includes('/materials/')
+    const isMaterialsPath =
+      location.pathname.replace(/\/$/, '').endsWith('/materials') &&
+      !/\/materials\/.+/.test(location.pathname)
     if (state?.formData && (isRestoreUrl || (isMaterialsPath && state.returnPath?.endsWith('/materials')))) {
-      // 使用 setTimeout 避免在 Effect 中同步触发 setState 警告
-      setTimeout(() => {
-        setMaterialRestoreInitialValues(state.formData)
-        setMaterialModalVisible(true)
-        setMaterialIsEdit(false)
-        setCurrentMaterial(null)
-        clearSuspendedModal()
-        if (isRestoreUrl) {
-          const next = new window.URLSearchParams(searchParams)
-          next.delete('restore')
-          setSearchParams(next, { replace: true })
-        }
-      }, 0)
+      navigate(MATERIAL_CREATE_PATH, { replace: isRestoreUrl })
     }
-  }, [location.pathname, searchParams, setSearchParams])
+  }, [isFormPage, location.pathname, navigate, searchParams])
 
   // 点击外部关闭右键菜单
   useEffect(() => {
@@ -1154,6 +1249,7 @@ const MaterialsManagementPage: React.FC = () => {
    * 处理URL参数（从二维码扫描跳转过来时自动打开详情）
    */
   useEffect(() => {
+    if (isFormPage) return
     const materialUuid = searchParams.get('materialUuid')
     const action = searchParams.get('action')
 
@@ -1164,12 +1260,10 @@ const MaterialsManagementPage: React.FC = () => {
       setSearchParams({}, { replace: true })
     }
     if (materialUuid && action === 'edit') {
-      // 自动打开物料编辑（从BOM设计器等页面快捷跳转）
-      handleEditMaterial({ uuid: materialUuid } as Material)
-      setSearchParams({}, { replace: true })
+      navigate(materialEditPath(materialUuid), { replace: true })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, setSearchParams, handleViewMaterial, handleEditMaterial])
+  }, [isFormPage, searchParams, setSearchParams, handleViewMaterial, navigate])
 
   /**
    * 处理分组搜索
@@ -1268,15 +1362,67 @@ const MaterialsManagementPage: React.FC = () => {
   /**
    * 物料相关操作
    */
-  const handleCreateMaterial = useCallback(async () => {
-    setMaterialIsEdit(false)
-    setCurrentMaterial(null)
-    setMaterialModalVisible(true)
-    // 注意：编号生成逻辑已移至 MaterialForm 组件内部
-  }, [])
+  const handleCreateMaterial = useCallback(() => {
+    const gid = selectedGroupIdRef.current
+    const qs = gid != null && gid > 0 ? `?groupId=${gid}` : ''
+    navigate(`${MATERIAL_CREATE_PATH}${qs}`)
+  }, [navigate])
 
   // Alt+N 绑定到新建物料（与新建分组区分，仅新建物料响应快捷键）
-  useNewShortcut(handleCreateMaterial)
+  useNewShortcut(isFormPage ? undefined : handleCreateMaterial)
+
+  useEffect(() => {
+    if (!isFormPage) {
+      formPageInitializedRef.current = false
+      return
+    }
+    const title = isCreatePage
+      ? t('app.master-data.menu.materials.management.new')
+      : t('app.master-data.menu.materials.management.edit')
+    const params = new URLSearchParams(location.search || '')
+    params.delete('_refresh')
+    const cleanSearch = params.toString()
+    const tabKey = location.pathname + (cleanSearch ? `?${cleanSearch}` : '')
+    setCustomPageTitle(location.pathname, title)
+    setCustomPageTitle(tabKey, title)
+    window.dispatchEvent(
+      new CustomEvent('riveredge:update-tab-title', {
+        detail: { key: tabKey, path: location.pathname, title },
+      }),
+    )
+    return () => {
+      removeCustomPageTitle(location.pathname)
+      removeCustomPageTitle(tabKey)
+    }
+  }, [isFormPage, isCreatePage, location.pathname, location.search, t])
+
+  useEffect(() => {
+    if (!isFormPage || formPageInitializedRef.current) return
+    formPageInitializedRef.current = true
+    setFormPageError(null)
+    if (isCreatePage) {
+      const suspended = getSuspendedModal()
+      if (suspended?.formData) {
+        setMaterialRestoreInitialValues(suspended.formData)
+        clearSuspendedModal()
+      }
+      setCurrentMaterial(null)
+      return
+    }
+    if (!editRouteUuid) return
+    void (async () => {
+      try {
+        setMaterialFormLoading(true)
+        const detail = await materialApi.get(editRouteUuid)
+        setCurrentMaterial(detail)
+      } catch (error) {
+        setCurrentMaterial(null)
+        setFormPageError(getApiErrorMessage(error, t('app.master-data.materials.getDetailFailed')))
+      } finally {
+        setMaterialFormLoading(false)
+      }
+    })()
+  }, [isFormPage, isCreatePage, editRouteUuid, t])
 
   const handleGroupSelect: TreeProps['onSelect'] = selectedKeys => {
     if (selectedKeys.length > 0) {
@@ -3405,45 +3551,47 @@ const MaterialsManagementPage: React.FC = () => {
     }
   }
 
-  const maybeOpenFabricationWizard = async (saved: Material, formValues: Record<string, unknown>) => {
-    if (!isFabricationFromValues(formValues) || !saved.id) return
+  const resolveFabricationWizardMaterial = async (
+    saved: Material,
+    formValues: Record<string, unknown>,
+  ): Promise<FabricationMaterialRef | null> => {
+    if (!isFabricationFromValues(formValues) || !saved.id) return null
     try {
       const needsSetup = await fabricationMaterialNeedsRawMaterialSetup(saved.id)
-      if (needsSetup) {
-        setFabricationWizardMaterial(toFabricationMaterialRef(saved))
-        setFabricationWizardOpen(true)
-      }
+      return needsSetup ? toFabricationMaterialRef(saved) : null
     } catch {
-      // 检查失败时不阻断主流程
+      return null
     }
   }
 
   const handleMaterialSubmit = async (values: any) => {
+    const editingUuid = currentMaterial?.uuid || editRouteUuid
     try {
       setMaterialFormLoading(true)
 
-      if (materialIsEdit && currentMaterial) {
-        const result = await materialApi.update(currentMaterial.uuid, values as MaterialUpdate)
-        const refreshed = await materialApi.get(currentMaterial.uuid)
+      let saved: Material
+      if (isEditPage && editingUuid) {
+        await materialApi.update(editingUuid, values as MaterialUpdate)
+        saved = await materialApi.get(editingUuid)
         messageApi.success(t('common.updateSuccess'))
-        
-        setMaterialModalVisible(false)
-        await loadMaterialGroups()
-        actionRef.current?.reload()
-        await maybeOpenFabricationWizard(refreshed, values)
-        return result
       } else {
-        const result = await materialApi.create(values as MaterialCreate)
+        saved = await materialApi.create(values as MaterialCreate)
         messageApi.success(t('common.createSuccess'))
-        
-        setMaterialModalVisible(false)
-        await loadMaterialGroups()
-        actionRef.current?.reload()
-        await maybeOpenFabricationWizard(result, values)
-        return result
       }
+
+      const wizardMaterial = await resolveFabricationWizardMaterial(saved, values)
+      navigateClosingTab(
+        navigate,
+        MATERIAL_LIST_PATH,
+        uniTabKey(location.pathname, location.search),
+        {
+          reloadMaterials: true,
+          ...(wizardMaterial ? { openFabricationWizard: wizardMaterial } : {}),
+        },
+      )
+      return saved
     } catch (error: any) {
-      messageApi.error(error.message || (materialIsEdit ? t('common.updateFailed') : t('common.createFailed')))
+      messageApi.error(error.message || (isEditPage ? t('common.updateFailed') : t('common.createFailed')))
       throw error
     } finally {
       setMaterialFormLoading(false)
@@ -3934,6 +4082,93 @@ const MaterialsManagementPage: React.FC = () => {
       handleDeleteMaterial,
     ]
   )
+
+  if (isFormPage) {
+    const createGroupIdRaw = searchParams.get('groupId')
+    const createGroupId = createGroupIdRaw != null ? Number(createGroupIdRaw) : NaN
+    const formPageTitle = isCreatePage
+      ? t('app.master-data.menu.materials.management.new')
+      : t('app.master-data.menu.materials.management.edit')
+    const retryFormPage = () => {
+      formPageInitializedRef.current = false
+      setFormPageError(null)
+      if (editRouteUuid) {
+        void (async () => {
+          formPageInitializedRef.current = true
+          try {
+            setMaterialFormLoading(true)
+            const detail = await materialApi.get(editRouteUuid)
+            setCurrentMaterial(detail)
+          } catch (error) {
+            setCurrentMaterial(null)
+            setFormPageError(getApiErrorMessage(error, t('app.master-data.materials.getDetailFailed')))
+          } finally {
+            setMaterialFormLoading(false)
+          }
+        })()
+      }
+    }
+    if (isEditPage && (materialFormLoading || formPageError || !currentMaterial)) {
+      return (
+        <DocumentFormPageLayout
+          header={
+            <Space align="center" size={8}>
+              <Button
+                type="text"
+                icon={<ArrowLeftOutlined />}
+                aria-label={t('common.back')}
+                onClick={leaveMaterialFormPage}
+              />
+              <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+                {formPageTitle}
+              </Typography.Title>
+            </Space>
+          }
+        >
+          {formPageError ? (
+            <Result
+              status="error"
+              title={formPageError}
+              extra={
+                <Button type="primary" onClick={retryFormPage}>
+                  {t('common.retry', { defaultValue: '重试' })}
+                </Button>
+              }
+            />
+          ) : (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+              <Spin />
+            </div>
+          )}
+        </DocumentFormPageLayout>
+      )
+    }
+    return (
+      <MaterialForm
+        asPage
+        open
+        onClose={leaveMaterialFormPage}
+        onFinish={handleMaterialSubmit}
+        isEdit={isEditPage}
+        material={currentMaterial || undefined}
+        materialGroups={materialGroups}
+        onMaterialGroupsChange={loadMaterialGroups}
+        loading={materialFormLoading}
+        onOpenExistingMaterial={handleOpenMaterialForEdit}
+        initialValues={
+          materialRestoreInitialValues
+            ?? (isCreatePage ? getSuspendedModal()?.formData : undefined)
+            ?? (isEditPage && currentMaterial
+              ? buildMaterialEditFormValues(currentMaterial)
+              : buildMaterialCreateFormValues(
+                  Number.isFinite(createGroupId) && createGroupId > 0
+                    ? createGroupId
+                    : selectedGroupId,
+                ))
+        }
+      />
+    )
+  }
 
   return (
     <>
@@ -5009,119 +5244,6 @@ const MaterialsManagementPage: React.FC = () => {
         group={currentGroup}
         parentIdPreset={groupParentIdPreset}
         materialGroups={materialGroups}
-      />
-
-      {/* 物料创建/编辑 Modal - 使用新的多标签页表单组件 */}
-      <MaterialForm
-        key={materialRestoreInitialValues ? 'restore' : (materialIsEdit ? `edit-${currentMaterial?.id}` : 'create')}
-        open={materialModalVisible}
-        onClose={() => {
-          setMaterialModalVisible(false)
-          setMaterialRestoreInitialValues(null)
-        }}
-        onFinish={handleMaterialSubmit}
-        isEdit={materialIsEdit}
-        material={currentMaterial || undefined}
-        materialGroups={materialGroups}
-        onMaterialGroupsChange={loadMaterialGroups}
-        loading={materialFormLoading}
-        suspendedModalReturnPath="/apps/master-data/materials"
-        onOpenExistingMaterial={(uuid) => {
-          setMaterialModalVisible(false)
-          setMaterialRestoreInitialValues(null)
-          void handleOpenMaterialForEdit(uuid)
-        }}
-        initialValues={
-          materialRestoreInitialValues
-            ? materialRestoreInitialValues
-            : materialIsEdit && currentMaterial
-            ? {
-                // 兼容后端 snake_case：编辑时 API 返回 main_code 等，表单需要 mainCode
-                mainCode: currentMaterial.mainCode ?? (currentMaterial as any).main_code,
-                name: currentMaterial.name,
-                groupId: currentMaterial.groupId ?? (currentMaterial as any).group_id,
-                sourceType:
-                  (currentMaterial as any).sourceType ??
-                  (currentMaterial as any).source_type ??
-                  undefined,
-                specification: currentMaterial.specification,
-                baseUnit: currentMaterial.baseUnit ?? (currentMaterial as any).base_unit,
-                units: currentMaterial.units ?? (currentMaterial as any).units ?? undefined,
-                batchManaged:
-                  currentMaterial.batchManaged ?? (currentMaterial as any).batch_managed,
-                defaultBatchRuleId:
-                  (currentMaterial as any).defaultBatchRuleId ?? (currentMaterial as any).default_batch_rule_id,
-                serialManaged:
-                  (currentMaterial as any).serialManaged ?? (currentMaterial as any).serial_managed ?? false,
-                defaultSerialRuleId:
-                  (currentMaterial as any).defaultSerialRuleId ?? (currentMaterial as any).default_serial_rule_id,
-                variantManaged:
-                  currentMaterial.variantManaged ?? (currentMaterial as any).variant_managed,
-                description: currentMaterial.description,
-                brand: currentMaterial.brand,
-                model: currentMaterial.model,
-                texture: currentMaterial.texture ?? (currentMaterial as any).texture,
-                weight: Number(currentMaterial.weight ?? (currentMaterial as any).weight ?? 0) || undefined,
-                volume: Number(currentMaterial.volume ?? (currentMaterial as any).volume ?? 0) || undefined,
-                barcode: currentMaterial.barcode ?? (currentMaterial as any).barcode,
-                shelfLifeManaged:
-                  currentMaterial.shelfLifeManaged ??
-                  (currentMaterial as any).shelf_life_managed ??
-                  false,
-                shelfLifeDays:
-                  currentMaterial.shelfLifeDays ?? (currentMaterial as any).shelf_life_days,
-                referenceCost:
-                  currentMaterial.referenceCost ?? (currentMaterial as any).reference_cost,
-                countryOfOrigin:
-                  currentMaterial.countryOfOrigin ?? (currentMaterial as any).country_of_origin,
-                customsCode: currentMaterial.customsCode ?? (currentMaterial as any).customs_code,
-                isGiftable:
-                  currentMaterial.isGiftable ?? (currentMaterial as any).is_giftable ?? false,
-                isActive: currentMaterial.isActive ?? (currentMaterial as any).is_active,
-                inspectionMode:
-                  (currentMaterial as any).inspectionMode ??
-                  (currentMaterial as any).inspection_mode ??
-                  'none',
-                inspectionStages: normalizeStagesInput(
-                  (currentMaterial as any).inspectionStages ??
-                    (currentMaterial as any).inspection_stages ??
-                    stagesFromLegacy(
-                      (currentMaterial as any).inspectionMode ??
-                        (currentMaterial as any).inspection_mode,
-                      (currentMaterial as any).defaultInspectionPlanId ??
-                        (currentMaterial as any).default_inspection_plan_id,
-                    ),
-                ),
-                defaultInspectionPlanId:
-                  (currentMaterial as any).defaultInspectionPlanId ??
-                  (currentMaterial as any).default_inspection_plan_id ??
-                  undefined,
-                overReportMode:
-                  (currentMaterial as any).overReportMode ??
-                  (currentMaterial as any).over_report_mode ??
-                  'none',
-                overReportValue:
-                  Number(
-                    (currentMaterial as any).overReportValue ??
-                      (currentMaterial as any).over_report_value ??
-                      0
-                  ) || 0,
-              }
-            : {
-                groupId: selectedGroupId || undefined,
-                isActive: true,
-                batchManaged: false,
-                serialManaged: false,
-                variantManaged: false,
-                sourceType: undefined,
-                baseUnit: DEFAULT_MATERIAL_BASE_UNIT,
-                inspectionMode: 'none',
-                inspectionStages: stagesFromLegacy('none'),
-                overReportMode: 'none',
-                overReportValue: 0,
-                isGiftable: false,
-              }
-        }
       />
 
       <MasterDataDetailDrawer

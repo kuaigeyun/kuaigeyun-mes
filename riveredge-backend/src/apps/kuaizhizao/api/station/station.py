@@ -227,6 +227,7 @@ async def get_station_operation_documents(
             tenant_id=tenant_id,
             work_order_id=work_order_id,
             operation_id=operation_id,
+            current_user=current_user,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

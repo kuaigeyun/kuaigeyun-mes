@@ -6,6 +6,7 @@
 import React, { useMemo } from 'react';
 import { Button, Descriptions, Result } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import {
   DetailDrawerTemplate,
@@ -20,9 +21,12 @@ import {
   formatPaymentMethod,
   formatPaymentSettlementType,
   formatReceiptSettlementType,
+  isAcceptanceBillPaymentMethod,
 } from '../../../utils/financeSharedOptions';
 import type { PaymentVoucher } from '../../../services/finance/payment';
 import type { ReceiptVoucher } from '../../../services/finance/receipt';
+import type { FinanceNote } from '../../../services/finance/note';
+import { formatNoteBillType } from '../../../utils/financeUiLabels';
 
 export type FinanceVoucherKind = 'receipt' | 'payment';
 export type FinanceVoucherDetail = ReceiptVoucher | PaymentVoucher;
@@ -70,6 +74,8 @@ export type FinanceVoucherDetailDrawerProps = {
   extra?: React.ReactNode;
   zIndex?: number;
   bankAccountLabel: string;
+  linkedNote?: FinanceNote | null;
+  linkedNotePath?: string;
 };
 
 export const FinanceVoucherDetailDrawer: React.FC<FinanceVoucherDetailDrawerProps> = ({
@@ -83,8 +89,11 @@ export const FinanceVoucherDetailDrawer: React.FC<FinanceVoucherDetailDrawerProp
   extra,
   zIndex,
   bankAccountLabel,
+  linkedNote,
+  linkedNotePath,
 }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const isReceipt = kind === 'receipt';
   const prefix = isReceipt ? 'app.kuaicaiwu.receipt' : 'app.kuaicaiwu.payment';
 
@@ -110,6 +119,56 @@ export const FinanceVoucherDetailDrawer: React.FC<FinanceVoucherDetailDrawerProp
           dataIndex: 'payment_method',
           render: (_, row) => formatPaymentMethod(row.payment_method, t),
         },
+        ...(isAcceptanceBillPaymentMethod(effective.payment_method)
+          ? [
+              {
+                title: t('app.kuaicaiwu.common.referenceNumber'),
+                dataIndex: 'bank_account',
+                key: 'reference_number',
+                render: (_: unknown, row: FinanceVoucherDetail) => row.bank_account || '—',
+              } as ProDescriptionsItemProps<FinanceVoucherDetail>,
+              ...(linkedNote
+                ? [
+                    {
+                      title: t('app.kuaicaiwu.notes.linkField'),
+                      key: 'linked_note',
+                      render: () =>
+                        linkedNotePath ? (
+                          <a
+                            onClick={() =>
+                              navigate(
+                                `${linkedNotePath}?keyword=${encodeURIComponent(linkedNote.bill_no)}`,
+                              )
+                            }
+                          >
+                            {linkedNote.bill_no} ({linkedNote.note_code})
+                          </a>
+                        ) : (
+                          `${linkedNote.bill_no} (${linkedNote.note_code})`
+                        ),
+                    } as ProDescriptionsItemProps<FinanceVoucherDetail>,
+                    {
+                      title: t('app.kuaicaiwu.notes.col.billType'),
+                      key: 'linked_note_type',
+                      render: () => formatNoteBillType(linkedNote.bill_type, t),
+                    } as ProDescriptionsItemProps<FinanceVoucherDetail>,
+                  ]
+                : []),
+            ]
+          : [
+              {
+                title: t('app.kuaicaiwu.receipt.detail.bankAccount'),
+                dataIndex: 'bank_account_id',
+                key: 'bank_account',
+                render: () => bankAccountLabel || '—',
+              } as ProDescriptionsItemProps<FinanceVoucherDetail>,
+              {
+                title: t('app.kuaicaiwu.receipt.detail.accountNote'),
+                dataIndex: 'bank_account',
+                key: 'bank_account_note',
+                render: (_: unknown, row: FinanceVoucherDetail) => row.bank_account || '—',
+              } as ProDescriptionsItemProps<FinanceVoucherDetail>,
+            ]),
         {
           title: t(`${prefix}.settlementType.label`),
           dataIndex: 'settlement_type',
@@ -134,25 +193,13 @@ export const FinanceVoucherDetailDrawer: React.FC<FinanceVoucherDetailDrawerProp
           render: (_, row) => formatMoney(row.unsettled_amount),
         },
         {
-          title: t('app.kuaicaiwu.receipt.detail.bankAccount'),
-          dataIndex: 'bank_account_id',
-          key: 'bank_account',
-          render: () => bankAccountLabel || '—',
-        },
-        {
-          title: t('app.kuaicaiwu.receipt.detail.accountNote'),
-          dataIndex: 'bank_account',
-          key: 'bank_account_note',
-          render: (_, row) => row.bank_account || '—',
-        },
-        {
           title: t('app.kuaicaiwu.common.notes'),
           dataIndex: 'notes',
           span: 3,
         },
         { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
       ] as ProDescriptionsItemProps<FinanceVoucherDetail>[]),
-    [bankAccountLabel, isReceipt, prefix, t],
+    [bankAccountLabel, effective.payment_method, isReceipt, linkedNote, linkedNotePath, navigate, prefix, t],
   );
 
   const lifecycle = getFinanceVoucherLifecycle(effective as unknown as Record<string, unknown>, t);

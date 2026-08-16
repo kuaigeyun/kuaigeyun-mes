@@ -23,7 +23,7 @@ def resolve_kuaicaiwu_module_action(
         return "approve"
     if "/reject" in p:
         return "reject"
-    if "/audit" in p or "/review" in p:
+    if "/audit" in p or "/review" in p or "/unreview" in p:
         return "audit"
     if "/unapprove" in p:
         return "revoke"
@@ -45,8 +45,31 @@ def resolve_kuaicaiwu_module_action(
             return "submit"
         if any(k in p for k in ("/revoke", "/cancel", "/withdraw")):
             return "revoke"
-        if any(k in p for k in ("/execute", "/confirm", "/post", "/calculate", "/settlement", "/monthly-settlement", "/realtime-refresh")):
+        if any(
+            k in p
+            for k in (
+                "/execute",
+                "/confirm",
+                "/post",
+                "/unpost",
+                "/calculate",
+                "/settlement",
+                "/monthly-settlement",
+                "/realtime-refresh",
+                "/period-close",
+                "/reopen",
+                "/finish-init",
+                "/carry-profit-loss",
+                "/seed",
+                "/sync-enterprise",
+                "/match",
+                "/generate-from-events",
+                "/run",
+            )
+        ):
             return "execute"
+        if "/obsolete" in p:
+            return "obsolete"
         return "create"
     raise ValueError(f"Kuaicaiwu: unsupported HTTP method {method!r} for path {path!r}")
 

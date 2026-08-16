@@ -13,6 +13,7 @@ from apps.kuaioa.services.approval_helper import (
     is_audit_required,
     start_approval,
 )
+from apps.common.audit_actor import apply_create_audit
 from apps.kuaioa.services.kuaioa_list_core import (
     build_keyword_q,
     generate_daily_code,
@@ -57,22 +58,24 @@ class AssetPurchaseService:
         purchase_code = await generate_daily_code(
             KuaioaAssetPurchase, tenant_id, "AP", code_field="purchase_code"
         )
-        row = await KuaioaAssetPurchase.create(
-            tenant_id=tenant_id,
-            purchase_code=purchase_code,
-            title=data.title.strip(),
-            asset_category=data.asset_category,
-            quantity=data.quantity,
-            estimated_amount=data.estimated_amount,
-            currency=data.currency,
-            applicant_id=user.id,
-            applicant_name=getattr(user, "name", None) or getattr(user, "username", None),
-            department_name=data.department_name,
-            purpose=data.purpose,
-            status="draft",
-            created_by=user.id,
-            updated_by=user.id,
-        )
+        create_payload: dict[str, Any] = {
+            "tenant_id": tenant_id,
+            "purchase_code": purchase_code,
+            "title": data.title.strip(),
+            "asset_category": data.asset_category,
+            "quantity": data.quantity,
+            "estimated_amount": data.estimated_amount,
+            "currency": data.currency,
+            "applicant_id": data.applicant_id or user.id,
+            "applicant_name": data.applicant_name
+            or getattr(user, "name", None)
+            or getattr(user, "username", None),
+            "department_name": data.department_name,
+            "purpose": data.purpose,
+            "status": "draft",
+        }
+        apply_create_audit(create_payload, user)
+        row = await KuaioaAssetPurchase.create(**create_payload)
         return model_to_dict(row)
 
     async def update_purchase(
@@ -88,7 +91,7 @@ class AssetPurchaseService:
         payload = data.model_dump(exclude_unset=True)
         for key, value in payload.items():
             setattr(row, key, value)
-        touch_updated(row, user_id)
+        await touch_updated(row, user_id)
         await row.save()
         return model_to_dict(row)
 
@@ -101,7 +104,7 @@ class AssetPurchaseService:
         if row.status not in {"draft", "cancelled"}:
             raise BusinessLogicError("仅草稿或已撤销状态可删除")
         row.deleted_at = resolve_business_datetime()
-        touch_updated(row, user_id)
+        await touch_updated(row, user_id)
         await row.save()
 
     async def submit_purchase(
@@ -116,7 +119,7 @@ class AssetPurchaseService:
             raise BusinessLogicError("当前状态不可提交")
         row.status = "pending"
         row.submitted_at = resolve_business_datetime()
-        touch_updated(row, user_id)
+        await touch_updated(row, user_id)
         await row.save()
         if await is_audit_required(tenant_id, AUDIT_NODE_ASSET_PURCHASE):
             await start_approval(
@@ -131,7 +134,7 @@ class AssetPurchaseService:
             )
         else:
             row.status = "approved"
-            touch_updated(row, user_id)
+            await touch_updated(row, user_id)
             await row.save()
         return await self.get_purchase(tenant_id, purchase_id)
 
@@ -146,7 +149,7 @@ class AssetPurchaseService:
         if row.status != "pending":
             raise BusinessLogicError("仅待审批状态可撤销")
         row.status = "cancelled"
-        touch_updated(row, user_id)
+        await touch_updated(row, user_id)
         await row.save()
         await cancel_approval(
             tenant_id,
@@ -167,20 +170,26 @@ class AssetPurchaseService:
         if purchase.status != "approved":
             raise BusinessLogicError("仅已批准的采买申请可建卡")
         asset_service = AssetRegistryService()
-        return await asset_service.create_asset(
-            tenant_id,
-            AssetCreate(
-                asset_name=purchase.title,
-                asset_category=purchase.asset_category,
-                purchase_id=purchase.id,
-                purchase_amount=purchase.estimated_amount,
-                purchase_date=to_site_date(resolve_business_datetime()).isoformat(),
-                custodian_id=purchase.applicant_id,
-                custodian_name=purchase.applicant_name,
-                department_name=purchase.department_name,
-            ),
-            user_id,
-        )
+        quantity = max(1, int(purchase.quantity or 1))
+        created: list[dict[str, Any]] = []
+        for index in range(quantity):
+            asset_name = purchase.title if quantity == 1 else f"{purchase.title}-{index + 1}"
+            item = await asset_service.create_asset(
+                tenant_id,
+                AssetCreate(
+                    asset_name=asset_name,
+                    asset_category=purchase.asset_category,
+                    purchase_id=purchase.id,
+                    purchase_amount=purchase.estimated_amount,
+                    purchase_date=to_site_date(resolve_business_datetime()).isoformat(),
+                    custodian_id=purchase.applicant_id,
+                    custodian_name=purchase.applicant_name,
+                    department_name=purchase.department_name,
+                ),
+                user_id,
+            )
+            created.append(item)
+        return {"assets": created, "count": len(created), "asset": created[0] if created else None}
 
 
 class AssetRegistryService:
@@ -209,23 +218,28 @@ class AssetRegistryService:
         asset_code = await generate_daily_code(
             KuaioaAsset, tenant_id, "FA", code_field="asset_code"
         )
-        row = await KuaioaAsset.create(
-            tenant_id=tenant_id,
-            asset_code=asset_code,
-            asset_name=data.asset_name.strip(),
-            asset_category=data.asset_category,
-            purchase_id=data.purchase_id,
-            purchase_amount=data.purchase_amount,
-            purchase_date=parse_optional_date(data.purchase_date),
-            custodian_id=data.custodian_id,
-            custodian_name=data.custodian_name,
-            department_name=data.department_name,
-            location=data.location,
-            notes=data.notes,
-            status="in_stock",
-            created_by=user_id,
-            updated_by=user_id,
-        )
+        create_payload: dict[str, Any] = {
+            "tenant_id": tenant_id,
+            "asset_code": asset_code,
+            "asset_name": data.asset_name.strip(),
+            "asset_category": data.asset_category,
+            "purchase_id": data.purchase_id,
+            "purchase_amount": data.purchase_amount,
+            "purchase_date": parse_optional_date(data.purchase_date),
+            "custodian_id": data.custodian_id,
+            "custodian_name": data.custodian_name,
+            "department_name": data.department_name,
+            "location": data.location,
+            "notes": data.notes,
+            "status": "in_stock",
+        }
+        user = await User.get_or_none(id=user_id)
+        if user:
+            apply_create_audit(create_payload, user)
+        else:
+            create_payload["created_by"] = user_id
+            create_payload["updated_by"] = user_id
+        row = await KuaioaAsset.create(**create_payload)
         return model_to_dict(row)
 
     async def update_asset(
@@ -241,7 +255,7 @@ class AssetRegistryService:
             payload["purchase_date"] = parse_optional_date(payload["purchase_date"])
         for key, value in payload.items():
             setattr(row, key, value)
-        touch_updated(row, user_id)
+        await touch_updated(row, user_id)
         await row.save()
         return model_to_dict(row)
 
@@ -252,7 +266,7 @@ class AssetRegistryService:
         if not row:
             raise NotFoundError("固定资产不存在")
         row.deleted_at = resolve_business_datetime()
-        touch_updated(row, user_id)
+        await touch_updated(row, user_id)
         await row.save()
 
     async def assign_asset(
@@ -266,7 +280,7 @@ class AssetRegistryService:
         row.custodian_id = custodian_id
         row.custodian_name = custodian_name
         row.status = "in_use"
-        touch_updated(row, user_id)
+        await touch_updated(row, user_id)
         await row.save()
         return model_to_dict(row)
 
@@ -276,8 +290,10 @@ class AssetRegistryService:
         )
         if not row:
             raise NotFoundError("固定资产不存在")
+        row.custodian_id = None
+        row.custodian_name = None
         row.status = "in_stock"
-        touch_updated(row, user_id)
+        await touch_updated(row, user_id)
         await row.save()
         return model_to_dict(row)
 
@@ -288,7 +304,7 @@ class AssetRegistryService:
         if not row:
             raise NotFoundError("固定资产不存在")
         row.status = "scrapped"
-        touch_updated(row, user_id)
+        await touch_updated(row, user_id)
         await row.save()
         return model_to_dict(row)
 
@@ -302,5 +318,5 @@ async def apply_asset_purchase_decision(
     if not row:
         return
     row.status = "approved" if approved else "rejected"
-    touch_updated(row, user_id)
+    await touch_updated(row, user_id)
     await row.save()

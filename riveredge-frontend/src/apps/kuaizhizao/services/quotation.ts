@@ -26,6 +26,7 @@ export interface QuotationCapabilities {
   cancel_customer_confirm: ActionCapability;
   convert_to_order: ActionCapability;
   convert_to_contract: ActionCapability;
+  convert_to_sales_review: ActionCapability;
   revoke_push: ActionCapability;
   reopen: ActionCapability;
   create_revision: ActionCapability;
@@ -51,6 +52,7 @@ export interface QuotationItem {
   gift_ref_unit_price?: number;
   delivery_date?: string;
   notes?: string;
+  pricing_snapshot?: Record<string, unknown> | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -90,6 +92,8 @@ export interface Quotation {
   sales_order_code?: string;
   contract_id?: number;
   contract_code?: string;
+  sales_review_id?: number;
+  sales_review_code?: string;
   /** 报价系列编码（首版通常与 quotation_code 相同） */
   quotation_series_code?: string;
   root_quotation_id?: number;
@@ -135,8 +139,8 @@ export interface QuotationListParams {
   list_scope?: 'all' | 'mine' | 'department';
   /** 仅可加载建销售订单：未关联销售订单且非已转订单 */
   pullable_only?: boolean;
-  /** 加载目标单据类型：销售订单 / 销售合同 */
-  pull_target?: 'sales_order' | 'sales_contract';
+  /** 加载目标单据类型：销售订单 / 销售合同 / 订单评审 */
+  pull_target?: 'sales_order' | 'sales_contract' | 'sales_review';
   /** 明细表格视图：附带报价明细 */
   include_items?: boolean;
 }
@@ -288,7 +292,7 @@ export interface QuotationPushPreviewItem {
 }
 
 export interface QuotationPushPreviewResponse {
-  target_type: 'sales_order' | 'sales_contract';
+  target_type: 'sales_order' | 'sales_contract' | 'sales_review';
   summary: string;
   items: QuotationPushPreviewItem[];
   has_blocking_issues?: boolean;
@@ -314,11 +318,30 @@ export async function previewPushQuotationToSalesContract(
   );
 }
 
+export async function previewPushQuotationToSalesReview(
+  quotationId: number,
+): Promise<QuotationPushPreviewResponse> {
+  return apiRequest<QuotationPushPreviewResponse>(
+    `/apps/kuaizhizao/quotations/${quotationId}/push-to-sales-review/preview`,
+    { method: 'GET' },
+  );
+}
+
 export async function convertQuotationToOrder(
   quotationId: number,
   options?: { selected_item_ids?: number[] },
 ): Promise<ConvertToOrderResponse> {
   return apiRequest<ConvertToOrderResponse>(`/apps/kuaizhizao/quotations/${quotationId}/convert-to-order`, {
+    method: 'POST',
+    data: options?.selected_item_ids?.length ? { selected_item_ids: options.selected_item_ids } : undefined,
+  });
+}
+
+export async function convertQuotationToSalesReview(
+  quotationId: number,
+  options?: { selected_item_ids?: number[] },
+): Promise<{ sales_review?: { id?: number; review_code?: string }; quotation?: Quotation }> {
+  return apiRequest(`/apps/kuaizhizao/quotations/${quotationId}/convert-to-sales-review`, {
     method: 'POST',
     data: options?.selected_item_ids?.length ? { selected_item_ids: options.selected_item_ids } : undefined,
   });

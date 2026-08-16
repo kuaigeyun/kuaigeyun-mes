@@ -12,6 +12,7 @@ class FormTemplateCreate(BaseModel):
     description: Optional[str] = None
     fields_schema: List[Any] = Field(default_factory=list)
     is_active: bool = True
+    show_in_menu: bool = False
 
 
 class FormTemplateUpdate(BaseModel):
@@ -20,6 +21,7 @@ class FormTemplateUpdate(BaseModel):
     description: Optional[str] = None
     fields_schema: Optional[List[Any]] = None
     is_active: Optional[bool] = None
+    show_in_menu: Optional[bool] = None
 
 
 class FormRequestCreate(BaseModel):

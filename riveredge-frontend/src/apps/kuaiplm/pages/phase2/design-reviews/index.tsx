@@ -7,11 +7,13 @@ import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react'
 import {
   ActionType,
   ProColumns,
+  ProFormDatePicker,
   ProFormInstance,
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
+import dayjs from 'dayjs';
 import { useSearchParams } from 'react-router-dom';
 import { App, Button, Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -25,7 +27,10 @@ import {
   updateDesignReview,
   type RdDesignReview,
 } from '../../../services/phase2';
+import { materialApi } from '../../../master-data/services/material';
+import Phase2ProjectSelect from '../../../components/Phase2ProjectSelect';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { formatDateTime } from '../../../../../utils/format';
 import { testGenerateCode } from '../../../../../services/codeRule';
@@ -47,9 +52,16 @@ import {
 
 const PAGE_CODE = 'kuaiplm-design-review';
 
+const reviewTypeOptions = (t: (key: string) => string) => [
+  { value: 'preliminary', label: t('app.kuaiplm.phase2.designReviews.type.preliminary') },
+  { value: 'detailed', label: t('app.kuaiplm.phase2.designReviews.type.detailed') },
+  { value: 'trial', label: t('app.kuaiplm.phase2.designReviews.type.trial') },
+];
+
 const DesignReviewsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
+  const perms = useResourcePermissions('kuaiplm.design-review');
   const [searchParams] = useSearchParams();
   const filterProjectId = searchParams.get('project_id')
     ? Number(searchParams.get('project_id'))
@@ -169,6 +181,13 @@ const DesignReviewsPage: React.FC = () => {
         sorter: true,
         ellipsis: true,
         hideInSearch: true,
+      },
+      {
+        title: t('app.kuaiplm.phase2.requirements.columns.project'),
+        dataIndex: 'project_name',
+        width: 140,
+        hideInSearch: true,
+        ellipsis: true,
       },
       {
         title: t('app.kuaiplm.phase2.designReviews.columns.type'),
@@ -298,7 +317,7 @@ const DesignReviewsPage: React.FC = () => {
             return { data: [], total: 0, success: false };
           }
         }}
-        showCreateButton
+        showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaiplm.phase2.designReviews.createButton') + NEW_SHORTCUT_HINT}
         onCreate={handleCreate}
         showDeleteButton
@@ -340,9 +359,11 @@ const DesignReviewsPage: React.FC = () => {
           setPreviewCode(null);
         }}
         onFinish={async (values) => {
+          const { review_date: reviewDate, _material_pick, ...rest } = values as Record<string, unknown>;
           await createDesignReview({
-            ...values,
-            project_id: filterProjectId,
+            ...rest,
+            project_id: (rest.project_id as number | undefined) ?? filterProjectId,
+            review_date: reviewDate ? dayjs(reviewDate as string).format('YYYY-MM-DD') : undefined,
           });
           messageApi.success(t('common.createSuccess'));
           setCreateOpen(false);
@@ -362,17 +383,53 @@ const DesignReviewsPage: React.FC = () => {
           }
         />
         <ProFormText name="title" label={t('app.kuaiplm.phase2.designReviews.form.title')} rules={[{ required: true }]} />
+        <Phase2ProjectSelect initialValue={filterProjectId} />
         <ProFormSelect
           name="review_type"
           label={t('app.kuaiplm.phase2.designReviews.form.reviewType')}
-          options={[
-            { value: '初步设计', label: t('app.kuaiplm.phase2.designReviews.type.preliminary') },
-            { value: '详细设计', label: t('app.kuaiplm.phase2.designReviews.type.detailed') },
-            { value: '试制评审', label: t('app.kuaiplm.phase2.designReviews.type.trial') },
-          ]}
+          options={reviewTypeOptions(t)}
         />
+        <ProFormSelect
+          name="_material_pick"
+          label={t('app.kuaiplm.phase2.designReviews.form.material')}
+          showSearch
+          debounceTime={300}
+          request={async ({ keyWords }) => {
+            const res = await materialApi.list({
+              keyword: keyWords?.trim() || undefined,
+              limit: 50,
+              isActive: true,
+            });
+            const items = Array.isArray(res) ? res : (res as { items?: unknown[] }).items ?? [];
+            return items.map((item: any) => ({
+              value: item.id,
+              label: `${item.main_code ?? item.code ?? item.id} - ${item.name ?? ''}`.trim(),
+              material: item,
+            }));
+          }}
+          fieldProps={{
+            onChange: (_value, option) => {
+              const material = (option as { material?: { id?: number; main_code?: string; name?: string } })
+                ?.material;
+              if (!material) return;
+              createFormRef.current?.setFieldsValue({
+                material_id: material.id,
+                material_code: material.main_code,
+                material_name: material.name,
+              });
+            },
+          }}
+        />
+        <ProFormText name="material_id" hidden />
+        <ProFormText name="material_code" hidden />
+        <ProFormText name="material_name" hidden />
         <ProFormText name="reviewer_name" label={t('app.kuaiplm.phase2.designReviews.form.reviewer')} />
-        <ProFormTextArea name="conclusion" label={t('app.kuaiplm.phase2.designReviews.form.conclusion')} />
+        <ProFormDatePicker
+          name="review_date"
+          label={t('app.kuaiplm.phase2.designReviews.columns.scheduledAt')}
+          width="md"
+        />
+        <ProFormTextArea name="review_notes" label={t('app.kuaiplm.phase2.designReviews.form.conclusion')} />
       </FormModalTemplate>
 
       <FormModalTemplate
@@ -380,32 +437,47 @@ const DesignReviewsPage: React.FC = () => {
         open={!!editingRecord}
         onClose={() => setEditingRecord(null)}
         isEdit
-        initialValues={editingRecord || {}}
+        initialValues={
+          editingRecord
+            ? {
+                ...editingRecord,
+                review_date: editingRecord.review_date ? dayjs(editingRecord.review_date) : undefined,
+              }
+            : {}
+        }
         onFinish={async (values) => {
           if (!editingRecord?.id) return;
-          await updateDesignReview(editingRecord.id, values);
+          const { review_date: reviewDate, _material_pick, ...rest } = values as Record<string, unknown>;
+          await updateDesignReview(editingRecord.id, {
+            ...rest,
+            review_date: reviewDate ? dayjs(reviewDate as string).format('YYYY-MM-DD') : undefined,
+          });
           messageApi.success(t('common.updateSuccess'));
           setEditingRecord(null);
           actionRef.current?.reload();
         }}
       >
         <ProFormText name="title" label={t('app.kuaiplm.phase2.designReviews.form.title')} rules={[{ required: true }]} />
+        <Phase2ProjectSelect />
         <ProFormSelect
           name="review_type"
           label={t('app.kuaiplm.phase2.designReviews.form.reviewType')}
-          options={[
-            { value: '初步设计', label: t('app.kuaiplm.phase2.designReviews.type.preliminary') },
-            { value: '详细设计', label: t('app.kuaiplm.phase2.designReviews.type.detailed') },
-            { value: '试制评审', label: t('app.kuaiplm.phase2.designReviews.type.trial') },
-          ]}
+          options={reviewTypeOptions(t)}
         />
         <ProFormSelect
           name="status"
           label={t('app.kuaiplm.phase2.designReviews.form.status')}
           options={designReviewStatusOptions}
         />
+        <ProFormText name="material_code" label={t('app.kuaiplm.phase2.designReviews.form.materialCode')} />
+        <ProFormText name="material_name" label={t('app.kuaiplm.phase2.designReviews.form.materialName')} />
         <ProFormText name="reviewer_name" label={t('app.kuaiplm.phase2.designReviews.form.reviewer')} />
-        <ProFormTextArea name="conclusion" label={t('app.kuaiplm.phase2.designReviews.form.conclusion')} />
+        <ProFormDatePicker
+          name="review_date"
+          label={t('app.kuaiplm.phase2.designReviews.columns.scheduledAt')}
+          width="md"
+        />
+        <ProFormTextArea name="review_notes" label={t('app.kuaiplm.phase2.designReviews.form.conclusion')} />
       </FormModalTemplate>
 
       <FormModalTemplate
@@ -413,7 +485,14 @@ const DesignReviewsPage: React.FC = () => {
         open={!!detailRecord}
         onClose={() => setDetailRecord(null)}
         readOnly
-        initialValues={detailRecord || {}}
+        initialValues={
+          detailRecord
+            ? {
+                ...detailRecord,
+                review_date: detailRecord.review_date ? dayjs(detailRecord.review_date) : undefined,
+              }
+            : {}
+        }
         onFinish={async () => {}}
       >
         <ProFormText name="review_code" label={t('app.kuaiplm.phase2.designReviews.columns.code')} />
@@ -421,11 +500,7 @@ const DesignReviewsPage: React.FC = () => {
         <ProFormSelect
           name="review_type"
           label={t('app.kuaiplm.phase2.designReviews.form.reviewType')}
-          options={[
-            { value: '初步设计', label: t('app.kuaiplm.phase2.designReviews.type.preliminary') },
-            { value: '详细设计', label: t('app.kuaiplm.phase2.designReviews.type.detailed') },
-            { value: '试制评审', label: t('app.kuaiplm.phase2.designReviews.type.trial') },
-          ]}
+          options={reviewTypeOptions(t)}
         />
         <ProFormSelect
           name="status"
@@ -433,7 +508,12 @@ const DesignReviewsPage: React.FC = () => {
           options={designReviewStatusOptions}
         />
         <ProFormText name="reviewer_name" label={t('app.kuaiplm.phase2.designReviews.form.reviewer')} />
-        <ProFormTextArea name="conclusion" label={t('app.kuaiplm.phase2.designReviews.form.conclusion')} />
+        <ProFormDatePicker
+          name="review_date"
+          label={t('app.kuaiplm.phase2.designReviews.columns.scheduledAt')}
+          width="md"
+        />
+        <ProFormTextArea name="review_notes" label={t('app.kuaiplm.phase2.designReviews.form.conclusion')} />
       </FormModalTemplate>
     </ListPageTemplate>
   );

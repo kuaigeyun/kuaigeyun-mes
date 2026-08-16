@@ -1,16 +1,21 @@
 /**
- * 图纸管理左栏导航树：类型 / 状态 / 物料 / 工艺路线
+ * 图纸管理左栏：仓库树 + 类型/状态/物料/工艺筛选
  */
 
 import type { DrawingStatus, DrawingType } from '../../../services/drawing';
 
 export const DRAWING_TREE_ALL_KEY = 'all';
+export const DRAWING_TREE_UNCLASSIFIED_KEY = 'folder:unclassified';
+
+export type DrawingPaneMode = 'vault' | 'filter';
 
 export type DrawingTreeFilter = {
   drawingType?: DrawingType;
   status?: DrawingStatus;
   materialUuid?: string;
   processRouteUuid?: string;
+  folderUuid?: string;
+  unclassified?: boolean;
 };
 
 export type DrawingTreeNavItem = {
@@ -22,6 +27,12 @@ export type DrawingTreeNavItem = {
 export function parseDrawingTreeKey(key: string): DrawingTreeFilter {
   if (!key || key === DRAWING_TREE_ALL_KEY || key.startsWith('group:')) {
     return {};
+  }
+  if (key === DRAWING_TREE_UNCLASSIFIED_KEY) {
+    return { unclassified: true };
+  }
+  if (key.startsWith('folder:')) {
+    return { folderUuid: key.slice(7) };
   }
   if (key.startsWith('type:')) {
     return { drawingType: key.slice(5) as DrawingType };
@@ -37,4 +48,3 @@ export function parseDrawingTreeKey(key: string): DrawingTreeFilter {
   }
   return {};
 }
-

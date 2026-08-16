@@ -545,6 +545,10 @@ app.add_middleware(DocsBasicAuthMiddleware)
 from starlette.middleware.gzip import GZipMiddleware
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
+# 敏感词拦截须在异常中间件内侧，便于统一包装；命中时中间件自身返回 422。
+from core.middleware.sensitive_word_middleware import SensitiveWordMiddleware
+app.add_middleware(SensitiveWordMiddleware)
+
 # 注册统一异常处理中间件（应该在其他中间件之前注册）
 from core.middleware.exception_handler_middleware import ExceptionHandlerMiddleware
 app.add_middleware(ExceptionHandlerMiddleware)

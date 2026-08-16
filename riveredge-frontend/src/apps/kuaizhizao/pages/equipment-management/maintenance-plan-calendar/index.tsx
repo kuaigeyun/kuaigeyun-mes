@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Calendar, Card, List, Tag, Typography } from 'antd';
+import { Calendar, Card, List, Typography, theme } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { StatusTag } from '../../../../../constants/statusBadges';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { maintenancePlanApi } from '../../../services/equipment';
 
@@ -29,6 +30,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 const MaintenancePlanCalendarPage: React.FC = () => {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   useResourcePermissions(RESOURCE);
   const [plans, setPlans] = useState<MaintenancePlanItem[]>([]);
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
@@ -89,16 +91,39 @@ const MaintenancePlanCalendarPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <Card title={t(`${P}.title`)} loading={loading}>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 480px', minWidth: 320 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'stretch',
+            gap: 16,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div
+            style={{
+              flex: '2 1 480px',
+              minWidth: 320,
+              paddingRight: 4,
+            }}
+          >
             <Calendar
               value={selectedDate}
               onSelect={setSelectedDate}
               cellRender={(current, info) => (info.type === 'date' ? dateCellRender(current) : info.originNode)}
             />
           </div>
-          <div style={{ flex: '1 1 280px', minWidth: 260 }}>
-            <Typography.Title level={5}>
+          <div
+            style={{
+              flex: '1 1 280px',
+              minWidth: 260,
+              maxWidth: 420,
+              padding: 16,
+              background: token.colorFillAlter,
+              border: `1px solid ${token.colorBorderSecondary}`,
+              borderRadius: token.borderRadiusLG,
+            }}
+          >
+            <Typography.Title level={5} style={{ marginTop: 0 }}>
               {t(`${P}.selectedDate`, { date: selectedDate.format('YYYY-MM-DD') })}
             </Typography.Title>
             <List
@@ -110,7 +135,7 @@ const MaintenancePlanCalendarPage: React.FC = () => {
                     title={
                       <>
                         {item.plan_no ?? item.plan_name}{' '}
-                        <Tag color={STATUS_COLOR[item.status ?? ''] ?? 'default'}>{item.status}</Tag>
+                        <StatusTag color={STATUS_COLOR[item.status ?? ''] ?? 'default'}>{item.status}</StatusTag>
                       </>
                     }
                     description={`${item.equipment_name ?? '-'} - ${item.plan_name ?? ''}`}

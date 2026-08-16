@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, Query, Path, Body
 from fastapi.responses import JSONResponse, HTMLResponse, Response
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_permission_codes
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.models.user import User as CurrentUser
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
@@ -238,6 +239,40 @@ async def get_purchase_order_statistics(
 
 
 @router.get(
+    "/purchase-orders/receipt-notice-pull-lines",
+    summary="Open purchase order lines for receipt notice pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-order:read"))],
+)
+async def list_receipt_notice_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    order_id: Optional[int] = Query(None, description="来源采购订单"),
+    pullable_only: bool = Query(True, description="仅剩余可通知量大于 0"),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """开口采购订单行，供收货通知跨单取明细。"""
+    try:
+        return await PurchaseService().list_receipt_notice_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            order_id=order_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.exception("列出收货通知开口采购行失败")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="列出收货通知开口采购行失败",
+        )
+
+
+@router.get(
     "/purchase-orders/receipt-pull-candidates",
     response_model=PurchaseReceiptPullCandidateListResponse,
     summary="List purchase orders for inbound pull modal",
@@ -257,6 +292,71 @@ async def list_purchase_receipt_pull_candidates(
         limit=limit,
         current_user=current_user,
     )
+
+
+@router.post(
+    "/purchase-orders/pull-from-requisition-items",
+    summary="Create purchase orders from requisition lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-order:create"))],
+)
+async def pull_purchase_orders_from_requisition_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """从多张采购申请的开口行创建采购订单（同供应商合并）。"""
+    from apps.kuaizhizao.schemas.purchase_requisition import PullFromRequisitionItemsRequest
+    from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
+
+    data = PullFromRequisitionItemsRequest(**request)
+    try:
+        return await PurchaseRequisitionService().convert_selected_items_to_purchase_orders(
+            tenant_id=tenant_id,
+            item_ids=data.selected_item_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.exception("从采购申请开口行创建采购订单失败")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="从采购申请开口行创建采购订单失败",
+        )
+
+
+@router.post(
+    "/purchase-orders/pull-from-inquiry-items",
+    summary="Create purchase orders from inquiry lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-order:create"))],
+)
+async def pull_purchase_orders_from_inquiry_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """从多张询价单的已定标开口行创建采购订单（同供应商合并）。"""
+    from apps.kuaizhizao.schemas.purchase_inquiry import PullFromInquiryItemsRequest
+
+    data = PullFromInquiryItemsRequest(**request)
+    try:
+        return await PurchaseInquiryService().convert_selected_items_to_purchase_orders(
+            tenant_id=tenant_id,
+            item_ids=data.selected_item_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.exception("从询价开口行创建采购订单失败")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="从询价开口行创建采购订单失败",
+        )
 
 
 @router.post("/purchase-orders/pull-from-inquiry", summary="Build purchase order from inquiry")

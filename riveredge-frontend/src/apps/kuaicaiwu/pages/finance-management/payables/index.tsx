@@ -22,7 +22,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -51,8 +51,10 @@ import {
   FINANCE_DOC_PINNED_STATUS_FIELD,
   financeDocCodePartnerSearchColumns,
   financeDocCreatedUpdatedColumns,
+  parseFinanceAgingUrlFilters,
   resolvePayableListParams,
 } from '../../../utils/financeListCore';
+import { formatAgingBucket } from '../../../utils/financeUiLabels';
 import type { PayableListParams } from '../../../types/finance/payable';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
@@ -67,6 +69,7 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import { LinkedDocumentCode } from '../../../../../components/linked-document-code/LinkedDocumentCode';
 import MergeFinanceDocsModal, {
   type MergeFinanceMode,
   type MergeFinanceSourceRow,
@@ -102,6 +105,8 @@ const PayableList: React.FC = () => {
     const { message: messageApi } = App.useApp();
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const urlAgingFilters = useMemo(() => parseFinanceAgingUrlFilters(searchParams), [searchParams]);
     const pullFromPurchaseOrderAction = getKuaicaiwuDocumentAction('payable.pull_from_purchase_order');
     const pullFromPurchaseReceiptAction = getKuaicaiwuDocumentAction('payable.pull_from_purchase_receipt');
 
@@ -124,6 +129,21 @@ const PayableList: React.FC = () => {
         setSelectedRowKeys([]);
         actionRef.current?.reload();
     };
+
+    useEffect(() => {
+        actionRef.current?.reload();
+    }, [urlAgingFilters.aging_bucket, urlAgingFilters.overdue_only]);
+
+    const agingFilterDescription = useMemo(() => {
+        const parts: string[] = [];
+        if (urlAgingFilters.aging_bucket) {
+            parts.push(formatAgingBucket(urlAgingFilters.aging_bucket, t));
+        }
+        if (urlAgingFilters.overdue_only) {
+            parts.push(t('app.kuaicaiwu.financeUi.aging.overdueOnly'));
+        }
+        return parts.join(' / ');
+    }, [t, urlAgingFilters.aging_bucket, urlAgingFilters.overdue_only]);
 
     const openMergeModal = (mode: MergeFinanceMode) => {
         const selected = selectedRecordsForBatch;
@@ -544,6 +564,33 @@ const PayableList: React.FC = () => {
             hideInTable: true,
         },
         {
+            title: t(`${P}.col.sourceCode`),
+            dataIndex: 'source_code',
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            render: (_, record) => (
+                <LinkedDocumentCode
+                    documentType={record.source_type}
+                    documentId={record.source_id}
+                    code={record.source_code}
+                />
+            ),
+        },
+        {
+            title: t(`${P}.col.paymentTerms`),
+            dataIndex: 'payment_terms',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            ellipsis: true,
+            render: (_, record) => record.payment_terms || '-',
+        },
+        {
             title: t(`${P}.col.invoiceStatus`),
             key: 'invoice_status',
             dataIndex: 'invoice_status',
@@ -804,14 +851,26 @@ const PayableList: React.FC = () => {
 
     return (
         <ListPageTemplate>
+            {(urlAgingFilters.aging_bucket || urlAgingFilters.overdue_only) ? (
+                <Alert
+                    type="info"
+                    showIcon
+                    closable
+                    style={{ marginBottom: 16 }}
+                    title={t('app.kuaicaiwu.financeUi.aging.listFilterActive', {
+                        filter: agingFilterDescription,
+                    })}
+                    onClose={() => setSearchParams({})}
+                />
+            ) : null}
             <UniTable<Payable>
                 headerTitle={t(`${P}.pageTitle`)}
                 actionRef={actionRef}
                 columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payables.list-v1"
+                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payables.list-v2"
                 request={async (params, sort, _filter, searchFormValues) => {
                     const { current, pageSize } = params;
-                    const listParams = resolvePayableListParams(searchFormValues, sort);
+                    const listParams = resolvePayableListParams(searchFormValues, sort, urlAgingFilters);
                     lastListParamsRef.current = listParams;
                     const apiParams: PayableListParams = {
                         skip: ((current || 1) - 1) * (pageSize || 20),
@@ -1019,6 +1078,7 @@ const PayableList: React.FC = () => {
                 confirmLoading={pullFromPurchaseOrderQuery.confirmLoading}
                 selectionType={pullFromPurchaseOrderQuery.selectionType}
                 selectedRowKeys={pullFromPurchaseOrderQuery.selectedRowKeys}
+                selectedRows={pullFromPurchaseOrderQuery.selectedRows}
                 onSelectedRowKeysChange={pullFromPurchaseOrderQuery.handleSelectedRowKeysChange}
                 isRowDisabled={pullFromPurchaseOrderQuery.isRowDisabled}
                 searchDraft={pullFromPurchaseOrderQuery.searchDraft}
@@ -1051,6 +1111,7 @@ const PayableList: React.FC = () => {
                 confirmLoading={pullFromPurchaseReceiptQuery.confirmLoading}
                 selectionType={pullFromPurchaseReceiptQuery.selectionType}
                 selectedRowKeys={pullFromPurchaseReceiptQuery.selectedRowKeys}
+                selectedRows={pullFromPurchaseReceiptQuery.selectedRows}
                 onSelectedRowKeysChange={pullFromPurchaseReceiptQuery.handleSelectedRowKeysChange}
                 isRowDisabled={pullFromPurchaseReceiptQuery.isRowDisabled}
                 searchDraft={pullFromPurchaseReceiptQuery.searchDraft}

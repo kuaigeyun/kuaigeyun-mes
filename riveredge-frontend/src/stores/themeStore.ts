@@ -24,6 +24,7 @@ const DEFAULT_CONFIG = {
   siderBgColor: '',
   headerBgColor: '',
   tabsBgColor: '',
+  tabBgColor: '',
   themeStyle: 'vivid' as ThemeStyle,
 };
 
@@ -40,6 +41,8 @@ export interface ThemeConfig {
   siderBgColor?: string;
   headerBgColor?: string;
   tabsBgColor?: string;
+  /** 激活标签与标签内容区背景 */
+  tabBgColor?: string;
   themeStyle?: ThemeStyle;
 }
 
@@ -58,6 +61,7 @@ export interface ResolvedTheme {
   siderBgColor: string;
   headerBgColor: string;
   tabsBgColor: string;
+  tabBgColor: string;
 }
 
 export function normalizeThemeStyle(value: unknown): ThemeStyle {
@@ -92,6 +96,7 @@ export function normalizeThemeConfig(c: Partial<ThemeConfig> | Record<string, un
     siderBgColor: typeof src.siderBgColor === 'string' ? src.siderBgColor : '',
     headerBgColor: typeof src.headerBgColor === 'string' ? src.headerBgColor : '',
     tabsBgColor: typeof src.tabsBgColor === 'string' ? src.tabsBgColor : '',
+    tabBgColor: typeof src.tabBgColor === 'string' ? src.tabBgColor : '',
   };
 }
 
@@ -105,6 +110,7 @@ export function hasCloudThemeConfig(cfg: Partial<ThemeConfig> | null | undefined
     'siderBgColor',
     'headerBgColor',
     'tabsBgColor',
+    'tabBgColor',
     'themeStyle',
   ];
   return keys.some((k) => {
@@ -224,6 +230,7 @@ function computeResolved(themeMode: ThemeMode, config: ThemeConfig): ResolvedThe
     siderBgColor: isPlain ? '' : isDark ? '' : (config.siderBgColor || '').trim(),
     headerBgColor: isPlain ? '' : (config.headerBgColor || '').trim(),
     tabsBgColor: isPlain ? '' : (config.tabsBgColor || '').trim(),
+    tabBgColor: isPlain ? '' : (config.tabBgColor || '').trim(),
   };
 }
 

@@ -1,5 +1,5 @@
 """
-成本中心 KPI API（快财务）
+财务中心成本摘要 API（快财务）
 """
 
 from datetime import datetime
@@ -17,7 +17,7 @@ from core.utils.timezone_utils import resolve_business_datetime
 router = APIRouter(
     prefix="/cost",
     tags=["App - Kuaicaiwu - Cost Center"],
-    dependencies=[Depends(require_kuaicaiwu_module_access("cost-management-dashboard"))],
+    dependencies=[Depends(require_kuaicaiwu_module_access("finance-dashboard"))],
 )
 
 

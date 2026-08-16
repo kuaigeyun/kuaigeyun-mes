@@ -150,6 +150,38 @@ def _apply_quality_inspection_list_filters(
     if created_end is not None:
         query = query.filter(created_at__lte=datetime.combine(created_end, dt_time.max))
     return query
+
+
+def _customer_material_line_item_id(item: Any) -> int:
+    raw_id = getattr(item, "id", None)
+    if raw_id is not None and int(raw_id) > 0:
+        return int(raw_id)
+    line_id = getattr(item, "line_id", None)
+    if line_id is not None:
+        return int(line_id)
+    mid = getattr(item, "material_id", None)
+    if mid is not None:
+        return int(mid)
+    return 0
+
+
+def _filter_items_by_selected_item_ids(
+    items: List[Any],
+    selected_item_ids: Optional[List[int]],
+    *,
+    id_getter,
+) -> List[Any]:
+    if selected_item_ids is None:
+        return items
+    selected = {int(i) for i in selected_item_ids if i is not None}
+    if not selected:
+        raise BusinessLogicError("请至少选择一条明细")
+    filtered = [item for item in items if id_getter(item) in selected]
+    if not filtered:
+        raise BusinessLogicError("所选明细均不可加载，请重新选择")
+    return filtered
+
+
 from datetime import timedelta
 from decimal import Decimal
 
@@ -1214,8 +1246,15 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             "tip": "确认后将按可下推数量生成采购退货单；删除待退货单后，可下推数量自动回退。",
         }
 
-    async def push_to_purchase_return(self, tenant_id: int, inspection_id: int, created_by: int) -> dict:
-        """来料检验不合格 -> 一键生成采购退货单"""
+    async def push_to_purchase_return(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        created_by: int,
+        *,
+        quantity: Optional[float] = None,
+    ) -> dict:
+        """来料检验不合格 -> 按可下推数量生成采购退货单"""
         from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
             assert_quality_inspection_capability,
         )
@@ -1236,6 +1275,15 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             max_push = max(0.0, unqualified - pushed)
             if max_push <= 0:
                 raise BusinessLogicError("不合格数量已全部下推采购退货，无可下推数量")
+
+            if quantity is None:
+                push_qty = max_push
+            else:
+                push_qty = float(quantity)
+            if push_qty <= 0:
+                raise BusinessLogicError("退货数量必须大于 0")
+            if push_qty > max_push:
+                raise BusinessLogicError(f"退货数量不能超过可下推数量 {max_push}")
 
             from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
             from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
@@ -1264,7 +1312,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             ).order_by("id").first()
 
             unit_price = float(receipt_item.unit_price or 0) if receipt_item else 0.0
-            total_amount = float(max_push) * unit_price
+            total_amount = float(push_qty) * unit_price
 
             supplier_id = inspection.supplier_id or receipt.supplier_id
             supplier_name = str(inspection.supplier_name or receipt.supplier_name or "").strip()
@@ -1284,7 +1332,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 material_name=inspection.material_name,
                 material_spec=getattr(inspection, "material_spec", None),
                 material_unit=inspection.material_unit or "个",
-                return_quantity=max_push,
+                return_quantity=push_qty,
                 unit_price=unit_price,
                 total_amount=total_amount,
                 notes=defect_reason,
@@ -1453,8 +1501,15 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         receipt: Any,
         receipt_items: List[Any],
         created_by: int,
+        *,
+        selected_item_ids: Optional[List[int]] = None,
     ) -> List[IncomingInspectionResponse]:
         """为采购入库单明细补齐缺失的来料检验单（已有则跳过，不拆单）。"""
+        receipt_items = _filter_items_by_selected_item_ids(
+            receipt_items,
+            selected_item_ids,
+            id_getter=lambda item: int(item.id),
+        )
         purchase_receipt_id = int(receipt.id)
         initial_review_fields = await _quality_inspection_initial_review_fields(
             tenant_id, "incoming_inspection"
@@ -1701,8 +1756,15 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         registration: Any,
         registration_items: List[Any],
         created_by: int,
+        *,
+        selected_item_ids: Optional[List[int]] = None,
     ) -> List[IncomingInspectionResponse]:
         """为代工来料明细补齐缺失的来料检验单（已有则跳过）。"""
+        registration_items = _filter_items_by_selected_item_ids(
+            registration_items,
+            selected_item_ids,
+            id_getter=_customer_material_line_item_id,
+        )
         from apps.master_data.models.material import Material
 
         registration_id = int(registration.id)
@@ -2177,6 +2239,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         skip: int = 0,
         limit: int = 20,
         keyword: Optional[str] = None,
+        receipt_code: Optional[str] = None,
     ) -> Dict[str, Any]:
         """来料检验加载：采购入库单候选列表（含 capabilities）。"""
         from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
@@ -2192,7 +2255,10 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             status__in=list(_PURCHASE_RECEIPT_IQC_ELIGIBLE_STATUSES),
         )
         kw = str(keyword or "").strip()
-        if kw:
+        rc = str(receipt_code or "").strip()
+        if rc:
+            query = query.filter(receipt_code__icontains=rc)
+        elif kw:
             query = query.filter(
                 Q(receipt_code__icontains=kw) | Q(supplier_name__icontains=kw)
             )
@@ -2266,6 +2332,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         skip: int = 0,
         limit: int = 20,
         keyword: Optional[str] = None,
+        registration_code: Optional[str] = None,
     ) -> Dict[str, Any]:
         """来料检验加载：代工来料单候选列表（含 capabilities）。"""
         from apps.kuaizhizao.models.customer_material_registration import CustomerMaterialRegistration
@@ -2284,7 +2351,10 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             deleted_at__isnull=True,
         )
         kw = str(keyword or "").strip()
-        if kw:
+        reg_code = str(registration_code or "").strip()
+        if reg_code:
+            query = query.filter(registration_code__icontains=reg_code)
+        elif kw:
             query = query.filter(
                 Q(registration_code__icontains=kw) | Q(customer_name__icontains=kw)
             )
@@ -2378,7 +2448,9 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         self,
         tenant_id: int,
         purchase_receipt_id: int,
-        created_by: int
+        created_by: int,
+        *,
+        selected_item_ids: Optional[List[int]] = None,
     ) -> List[IncomingInspectionResponse]:
         """
         从采购入库单创建来料检验单
@@ -2413,6 +2485,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 receipt=receipt,
                 receipt_items=receipt_items,
                 created_by=created_by,
+                selected_item_ids=selected_item_ids,
             )
 
             if not inspections:
@@ -2427,6 +2500,8 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         tenant_id: int,
         registration_id: int,
         created_by: int,
+        *,
+        selected_item_ids: Optional[List[int]] = None,
     ) -> List[IncomingInspectionResponse]:
         """从代工来料单创建来料检验单"""
         await _require_iqc_stage_enabled(tenant_id)
@@ -2457,6 +2532,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 registration=registration,
                 registration_items=lines,
                 created_by=created_by,
+                selected_item_ids=selected_item_ids,
             )
             if not inspections:
                 raise BusinessLogicError(
@@ -3561,6 +3637,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
         skip: int = 0,
         limit: int = 20,
         keyword: Optional[str] = None,
+        code: Optional[str] = None,
     ) -> Dict[str, Any]:
         from apps.kuaizhizao.models.work_order import WorkOrder
         from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
@@ -3578,8 +3655,11 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             status__in=list(self._PI_PULL_ELIGIBLE_WO_STATUSES),
             deleted_at__isnull=True,
         )
+        wo_code = str(code or "").strip()
         kw = str(keyword or "").strip()
-        if kw:
+        if wo_code:
+            query = query.filter(code__icontains=wo_code)
+        elif kw:
             query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
         total = await query.count()
         work_orders = await query.offset(skip).limit(limit).order_by("-created_at")
@@ -4917,6 +4997,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         skip: int = 0,
         limit: int = 20,
         keyword: Optional[str] = None,
+        code: Optional[str] = None,
     ) -> Dict[str, Any]:
         """成品检验加载：工单候选列表（含 capabilities）。"""
         from apps.kuaizhizao.models.work_order import WorkOrder
@@ -4931,8 +5012,11 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             status__in=list(self._FGI_PULL_ELIGIBLE_WO_STATUSES),
             deleted_at__isnull=True,
         )
+        wo_code = str(code or "").strip()
         kw = str(keyword or "").strip()
-        if kw:
+        if wo_code:
+            query = query.filter(code__icontains=wo_code)
+        elif kw:
             query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
         total = await query.count()
         work_orders = await query.offset(skip).limit(limit).order_by("-created_at")

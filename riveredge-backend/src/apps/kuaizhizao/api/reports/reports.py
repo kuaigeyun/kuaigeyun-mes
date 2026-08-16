@@ -18,6 +18,7 @@ from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError
 
 from apps.kuaizhizao.services.report_service import ReportService
+from apps.kuaizhizao.services.report_enhancements import REPORT_LIST_MAX_LIMIT
 
 # 初始化服务实例
 report_service = ReportService()
@@ -26,12 +27,40 @@ report_service = ReportService()
 router = APIRouter(prefix="/reports", tags=["App - Kuaige Zhizao - Reports"])
 
 
-async def _execute_report(coro):
+def _report_finalize_kwargs(
+    *,
+    order_by: Optional[str] = None,
+    column_filters: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+) -> Dict[str, Any]:
+    return {
+        "order_by": order_by,
+        "column_filters": column_filters,
+        "skip": skip,
+        "limit": limit,
+    }
+
+
+async def _execute_report(
+    coro,
+    *,
+    order_by: Optional[str] = None,
+    column_filters: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+):
     """统一执行报表查询并序列化响应，异常写入日志便于排查 500。"""
     try:
         result = await coro
         if isinstance(result, dict):
-            return report_service._wrap_report_payload(result)
+            return report_service.apply_report_list_query(
+                result,
+                order_by=order_by,
+                column_filters=column_filters,
+                skip=skip,
+                limit=limit,
+            )
         return result
     except ValidationError:
         raise
@@ -100,6 +129,11 @@ async def get_inventory_report(
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
     date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    keyword: Optional[str] = Query(None, description="关键词（物料编码/名称/仓库）"),
+    skip: int = Query(0, ge=0, description="分页偏移"),
+    limit: int = Query(100, ge=1, le=REPORT_LIST_MAX_LIMIT, description="分页条数"),
+    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
+    column_filters: Optional[str] = Query(None, description="列筛选 JSON"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
@@ -139,7 +173,16 @@ async def get_inventory_report(
             date_start=date_start_dt,
             date_end=date_end_dt,
             warehouse_id=warehouse_id,
-        )
+            keyword=keyword,
+            skip=skip,
+            limit=limit,
+        ),
+        **_report_finalize_kwargs(
+            order_by=order_by,
+            column_filters=column_filters,
+            skip=skip,
+            limit=limit,
+        ),
     )
 
 
@@ -205,7 +248,7 @@ async def get_inventory_material_balances(
     keyword: Optional[str] = Query(None, description="关键词（物料编码/名称/仓库）"),
     order_by: Optional[str] = Query(None, description="排序字段"),
     current: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=500, description="每页条数"),
+    page_size: int = Query(20, ge=1, le=REPORT_LIST_MAX_LIMIT, description="每页条数"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
@@ -256,7 +299,7 @@ async def get_inventory_batch_lines(
     keyword: Optional[str] = Query(None, description="关键词"),
     order_by: Optional[str] = Query(None, description="排序字段"),
     current: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=500, description="每页条数"),
+    page_size: int = Query(20, ge=1, le=REPORT_LIST_MAX_LIMIT, description="每页条数"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
@@ -312,7 +355,9 @@ async def get_sales_report(
     customer_id: Optional[int] = Query(None, description="客户ID"),
     customer_keyword: Optional[str] = Query(None, description="客户名称模糊筛选（用于客户业绩汇总等）"),
     skip: int = Query(0, ge=0, description="分页偏移"),
-    limit: int = Query(100, ge=1, le=500, description="分页条数"),
+    limit: int = Query(100, ge=1, le=REPORT_LIST_MAX_LIMIT, description="分页条数"),
+    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
+    column_filters: Optional[str] = Query(None, description="列筛选 JSON"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
@@ -356,7 +401,13 @@ async def get_sales_report(
             limit=limit,
             customer_keyword=customer_keyword,
             current_user=current_user,
-        )
+        ),
+        **_report_finalize_kwargs(
+            order_by=order_by,
+            column_filters=column_filters,
+            skip=skip,
+            limit=limit,
+        ),
     )
     
 @router.get("/plans", summary="Planning report")
@@ -364,6 +415,13 @@ async def get_plan_report(
     report_type: str = Query("fulfillment", description="报表类型"),
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
     date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    skip: int = Query(0, ge=0, description="分页偏移"),
+    limit: int = Query(100, ge=1, le=REPORT_LIST_MAX_LIMIT, description="分页条数"),
+    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
+    column_filters: Optional[str] = Query(None, description="列筛选 JSON"),
+    status: Optional[str] = Query(None, description="状态筛选"),
+    demand_type: Optional[str] = Query(None, description="需求类型"),
+    customer_keyword: Optional[str] = Query(None, description="客户名称模糊筛选"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
@@ -385,8 +443,19 @@ async def get_plan_report(
             report_type=report_type,
             date_start=date_start_dt,
             date_end=date_end_dt,
+            skip=skip,
+            limit=limit,
+            status=status,
+            demand_type=demand_type,
+            customer_keyword=customer_keyword,
             current_user=current_user,
-        )
+        ),
+        **_report_finalize_kwargs(
+            order_by=order_by,
+            column_filters=column_filters,
+            skip=skip,
+            limit=limit,
+        ),
     )
 
 @router.get("/purchases", summary="Purchase report")
@@ -395,7 +464,11 @@ async def get_purchase_report(
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
     date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
     skip: int = Query(0, ge=0, description="分页偏移"),
-    limit: int = Query(100, ge=1, le=500, description="分页条数"),
+    limit: int = Query(100, ge=1, le=REPORT_LIST_MAX_LIMIT, description="分页条数"),
+    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
+    column_filters: Optional[str] = Query(None, description="列筛选 JSON"),
+    status: Optional[str] = Query(None, description="状态筛选"),
+    supplier_name: Optional[str] = Query(None, description="供应商名称模糊筛选"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
@@ -419,8 +492,16 @@ async def get_purchase_report(
             date_end=date_end_dt,
             skip=skip,
             limit=limit,
+            status=status,
+            supplier_name=supplier_name,
             current_user=current_user,
-        )
+        ),
+        **_report_finalize_kwargs(
+            order_by=order_by,
+            column_filters=column_filters,
+            skip=skip,
+            limit=limit,
+        ),
     )
 
 @router.get("/quality", summary="Quality report")
@@ -429,7 +510,11 @@ async def get_quality_report(
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
     date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
     skip: int = Query(0, ge=0, description="分页偏移"),
-    limit: int = Query(100, ge=1, le=500, description="分页条数"),
+    limit: int = Query(100, ge=1, le=REPORT_LIST_MAX_LIMIT, description="分页条数"),
+    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
+    column_filters: Optional[str] = Query(None, description="列筛选 JSON"),
+    status: Optional[str] = Query(None, description="单据状态"),
+    keyword: Optional[str] = Query(None, description="单号或物料关键字"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
@@ -453,7 +538,15 @@ async def get_quality_report(
             date_end=date_end_dt,
             skip=skip,
             limit=limit,
-        )
+            status=status,
+            keyword=keyword,
+        ),
+        **_report_finalize_kwargs(
+            order_by=order_by,
+            column_filters=column_filters,
+            skip=skip,
+            limit=limit,
+        ),
     )
 
 @router.get("/equipment", summary="Equipment report")
@@ -461,6 +554,10 @@ async def get_equipment_report(
     report_type: str = Query("maintenance", description="报表类型"),
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
     date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    skip: int = Query(0, ge=0, description="分页偏移"),
+    limit: int = Query(100, ge=1, le=REPORT_LIST_MAX_LIMIT, description="分页条数"),
+    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
+    column_filters: Optional[str] = Query(None, description="列筛选 JSON"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
@@ -482,7 +579,15 @@ async def get_equipment_report(
             report_type=report_type,
             date_start=date_start_dt,
             date_end=date_end_dt,
-        )
+            skip=skip,
+            limit=limit,
+        ),
+        **_report_finalize_kwargs(
+            order_by=order_by,
+            column_filters=column_filters,
+            skip=skip,
+            limit=limit,
+        ),
     )
 
 @router.get("/warehouse", summary="Warehouse reports")
@@ -494,7 +599,9 @@ async def get_warehouse_report(
     material_id: Optional[int] = Query(None, description="物料ID"),
     keyword: Optional[str] = Query(None, description="关键词（物料编码/名称/单号/仓库）"),
     skip: int = Query(0, ge=0, description="分页偏移"),
-    limit: int = Query(100, ge=1, le=500, description="分页条数"),
+    limit: int = Query(100, ge=1, le=REPORT_LIST_MAX_LIMIT, description="分页条数"),
+    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
+    column_filters: Optional[str] = Query(None, description="列筛选 JSON"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
@@ -521,7 +628,13 @@ async def get_warehouse_report(
             keyword=keyword,
             skip=skip,
             limit=limit,
-        )
+        ),
+        **_report_finalize_kwargs(
+            order_by=order_by,
+            column_filters=column_filters,
+            skip=skip,
+            limit=limit,
+        ),
     )
 
 @router.get("/performance", summary="Performance report")
@@ -529,6 +642,10 @@ async def get_performance_report(
     report_type: str = Query("employee-efficiency-ranking", description="报表类型"),
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
     date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    skip: int = Query(0, ge=0, description="分页偏移"),
+    limit: int = Query(100, ge=1, le=REPORT_LIST_MAX_LIMIT, description="分页条数"),
+    order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
+    column_filters: Optional[str] = Query(None, description="列筛选 JSON"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
@@ -550,7 +667,13 @@ async def get_performance_report(
             report_type=report_type,
             date_start=date_start_dt,
             date_end=date_end_dt,
-        )
+        ),
+        **_report_finalize_kwargs(
+            order_by=order_by,
+            column_filters=column_filters,
+            skip=skip,
+            limit=limit,
+        ),
     )
 
 
@@ -561,9 +684,10 @@ async def get_production_report(
     date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
     work_center_id: Optional[int] = Query(None, description="工作中心ID"),
     skip: int = Query(0, ge=0, description="分页偏移"),
-    limit: int = Query(100, ge=1, le=500, description="分页条数"),
+    limit: int = Query(100, ge=1, le=REPORT_LIST_MAX_LIMIT, description="分页条数"),
     keyword: Optional[str] = Query(None, description="模糊搜索"),
     order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
+    column_filters: Optional[str] = Query(None, description="列筛选 JSON"),
     status: Optional[str] = Query(None, description="状态筛选"),
     order_code: Optional[str] = Query(None, description="单号模糊筛选"),
     product_name: Optional[str] = Query(None, description="产品名称模糊筛选"),
@@ -600,7 +724,13 @@ async def get_production_report(
             product_name=product_name,
             supplier_name=supplier_name,
             work_order_code=work_order_code,
-        )
+        ),
+        **_report_finalize_kwargs(
+            order_by=order_by,
+            column_filters=column_filters,
+            skip=skip,
+            limit=limit,
+        ),
     )
 
 

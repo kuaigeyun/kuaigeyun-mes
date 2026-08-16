@@ -2901,35 +2901,6 @@ async def get_equipment_trend(
     return {"items": items}
 
 
-@router.get("/performance-summary", summary="Performance center summary")
-@cache_by_kwargs(namespace="dashboard:performance_summary", ttl=60)
-async def get_performance_summary(
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """绩效中心 KPI：待确认汇总、本月已确认、技能配置数。"""
-    from apps.master_data.models.performance import Skill
-    from apps.master_data.models.employee_performance import PerformanceSummary
-
-    pending = await PerformanceSummary.filter(
-        tenant_id=tenant_id,
-        status="calculated",
-        deleted_at__isnull=True,
-    ).count()
-    confirmed = await PerformanceSummary.filter(
-        tenant_id=tenant_id,
-        status__in=["confirmed", "已确认"],
-        deleted_at__isnull=True,
-    ).count()
-    skills = await Skill.filter(tenant_id=tenant_id, deleted_at__isnull=True).count()
-
-    return {
-        "pending_summaries": pending,
-        "confirmed_summaries": confirmed,
-        "skill_records": skills,
-    }
-
-
 async def get_dashboard(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),

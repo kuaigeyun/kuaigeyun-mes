@@ -6,7 +6,8 @@ import { apiRequest } from '../../../services/api';
 
 const KUAIPLM_CHANGES = '/apps/kuaiplm/changes';
 
-export type ChangeDeskCategory = 'bom' | 'route';
+export type ChangeDeskCategory = 'bom' | 'route' | 'drawing';
+export type DeskApiChangeType = 'bom' | 'process_route' | 'drawing';
 
 export interface UnifiedChangeRow {
   id?: string | number;
@@ -32,7 +33,9 @@ export interface UnifiedChangeRow {
 }
 
 function auditNodeKeyForRow(row: UnifiedChangeRow): string {
-  return row.change_category === 'route' ? 'process_route_change' : 'bom_change';
+  if (row.change_category === 'route') return 'process_route_change';
+  if (row.change_category === 'drawing') return 'drawing_change';
+  return 'bom_change';
 }
 
 export interface ChangeListParams {
@@ -62,7 +65,11 @@ function unwrapList<T>(res: unknown): { items: T[]; total: number } {
 function mapDeskItem(row: Record<string, unknown>): UnifiedChangeRow {
   const categoryRaw = String(row.category ?? row.change_type ?? '');
   const changeCategory: ChangeDeskCategory =
-    categoryRaw === 'process_route' || categoryRaw === 'route' ? 'route' : 'bom';
+    categoryRaw === 'process_route' || categoryRaw === 'route'
+      ? 'route'
+      : categoryRaw === 'drawing'
+        ? 'drawing'
+        : 'bom';
   const extra = (row.extra ?? {}) as Record<string, unknown>;
   const detailChangeType = row.category
     ? String(row.change_type ?? '')
@@ -87,10 +94,15 @@ function mapDeskItem(row: Record<string, unknown>): UnifiedChangeRow {
   };
 }
 
-function deskChangeType(category?: ChangeDeskCategory): string | undefined {
+function deskChangeType(category?: ChangeDeskCategory): DeskApiChangeType | undefined {
   if (category === 'bom') return 'bom';
   if (category === 'route') return 'process_route';
+  if (category === 'drawing') return 'drawing';
   return undefined;
+}
+
+export function deskApiChangeType(category: ChangeDeskCategory): DeskApiChangeType {
+  return deskChangeType(category) ?? 'bom';
 }
 
 async function listFromChangeDesk(params?: ChangeListParams, category?: ChangeDeskCategory) {
@@ -130,25 +142,44 @@ export async function listRouteChanges(params?: ChangeListParams) {
   return listFromChangeDesk(params, 'route');
 }
 
+export async function listDrawingChanges(params?: ChangeListParams) {
+  return listFromChangeDesk(params, 'drawing');
+}
+
+export async function createDrawingChange(data: {
+  drawing_uuid: string;
+  drawing_change_type: string;
+  change_reason?: string;
+  change_content?: Record<string, unknown>;
+}) {
+  return apiRequest(`${KUAIPLM_CHANGES}`, {
+    method: 'POST',
+    data: { change_type: 'drawing', ...data },
+  });
+}
+
+export async function getDrawingChange(changeUuid: string) {
+  return apiRequest<Record<string, unknown>>(`${KUAIPLM_CHANGES}/${changeUuid}`, {
+    method: 'GET',
+    params: { change_type: 'drawing' },
+  });
+}
+
 export async function approveChange(
   category: ChangeDeskCategory,
   changeUuid: string,
   comment?: string,
 ) {
-  return approveChangeViaDesk(
-    changeUuid,
-    category === 'bom' ? 'bom' : 'process_route',
-    comment,
-  );
+  return approveChangeViaDesk(changeUuid, deskApiChangeType(category), comment);
 }
 
 export async function executeChange(category: ChangeDeskCategory, changeUuid: string) {
-  return executeChangeViaDesk(changeUuid, category === 'bom' ? 'bom' : 'process_route');
+  return executeChangeViaDesk(changeUuid, deskApiChangeType(category));
 }
 
 export async function approveChangeViaDesk(
   changeUuid: string,
-  changeType: 'bom' | 'process_route',
+  changeType: DeskApiChangeType,
   comment?: string,
 ) {
   return apiRequest(`${KUAIPLM_CHANGES}/${changeUuid}/approve`, {
@@ -159,7 +190,7 @@ export async function approveChangeViaDesk(
 
 export async function executeChangeViaDesk(
   changeUuid: string,
-  changeType: 'bom' | 'process_route',
+  changeType: DeskApiChangeType,
 ) {
   return apiRequest(`${KUAIPLM_CHANGES}/${changeUuid}/execute`, {
     method: 'POST',
@@ -169,7 +200,7 @@ export async function executeChangeViaDesk(
 
 export async function deleteChangeViaDesk(
   changeUuid: string,
-  changeType: 'bom' | 'process_route',
+  changeType: DeskApiChangeType,
 ) {
   return apiRequest(`${KUAIPLM_CHANGES}/${changeUuid}`, {
     method: 'DELETE',
@@ -178,7 +209,7 @@ export async function deleteChangeViaDesk(
 }
 
 export async function batchApproveChanges(
-  items: Array<{ change_uuid: string; change_type: 'bom' | 'process_route' }>,
+  items: Array<{ change_uuid: string; change_type: DeskApiChangeType }>,
   approved = true,
   approval_comment?: string,
 ) {
@@ -193,7 +224,7 @@ export async function batchApproveChanges(
 }
 
 export async function batchExecuteChanges(
-  items: Array<{ change_uuid: string; change_type: 'bom' | 'process_route' }>,
+  items: Array<{ change_uuid: string; change_type: DeskApiChangeType }>,
 ) {
   return apiRequest<{
     success_count: number;
@@ -206,7 +237,7 @@ export async function batchExecuteChanges(
 }
 
 export async function batchDeleteChanges(
-  items: Array<{ change_uuid: string; change_type: 'bom' | 'process_route' }>,
+  items: Array<{ change_uuid: string; change_type: DeskApiChangeType }>,
 ) {
   return apiRequest<{
     success_count: number;

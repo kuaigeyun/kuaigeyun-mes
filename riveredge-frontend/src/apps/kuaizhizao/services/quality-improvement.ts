@@ -57,13 +57,19 @@ export interface DefectLedgerItem {
   work_order_code?: string;
   operation_name?: string;
   product_name?: string;
+  product_code?: string;
   product_id?: number;
+  material_code?: string;
   defect_quantity: number;
   defect_type: string;
   defect_reason: string;
   disposition: string;
+  remarks?: string;
   status: string;
   created_at?: string;
+  updated_at?: string;
+  created_by_name?: string;
+  updated_by_name?: string;
   downgrade_material_id?: number;
   downgrade_material_code?: string;
   downgrade_material_name?: string;
@@ -183,6 +189,8 @@ export const qualityImprovementApi = {
         '/apps/kuaizhizao/nonconforming-ledger',
         { method: 'GET', params },
       ),
+    getById: async (id: number) =>
+      apiRequest<DefectLedgerItem>(`/apps/kuaizhizao/nonconforming-ledger/${id}`, { method: 'GET' }),
     updateDisposition: async (
       id: number,
       data: {
@@ -220,12 +228,22 @@ export const qualityImprovementApi = {
         method: 'POST',
         data: lineIds?.length ? { line_ids: lineIds } : {},
       }),
-    listShipmentNoticePullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
+    listShipmentNoticePullCandidates: async (params?: {
+      skip?: number;
+      limit?: number;
+      keyword?: string;
+      notice_code?: string;
+    }) =>
       apiRequest<{ data: Array<Record<string, unknown>>; total: number; success: boolean }>(
         '/apps/kuaizhizao/oqc-inspections/pull-candidates/shipment-notices',
         { method: 'GET', params },
       ),
-    listSalesDeliveryPullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
+    listSalesDeliveryPullCandidates: async (params?: {
+      skip?: number;
+      limit?: number;
+      keyword?: string;
+      delivery_code?: string;
+    }) =>
       apiRequest<{ data: Array<Record<string, unknown>>; total: number; success: boolean }>(
         '/apps/kuaizhizao/oqc-inspections/pull-candidates/sales-deliveries',
         { method: 'GET', params },

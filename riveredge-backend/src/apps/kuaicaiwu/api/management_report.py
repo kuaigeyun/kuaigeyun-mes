@@ -32,7 +32,10 @@ async def get_finance_summary(
     tenant_id = current_user.tenant_id
     today = date.today()
 
-    r_pending, p_pending, r_overdue, p_overdue, pipeline = await asyncio.gather(
+    from apps.kuaicaiwu.services.finance_note_service import FinanceNoteService
+
+    note_service = FinanceNoteService()
+    r_pending, p_pending, r_overdue, p_overdue, pipeline, expiring_notes = await asyncio.gather(
         Receipt.filter(tenant_id=tenant_id, status="Draft", deleted_at__isnull=True).count(),
         Payment.filter(tenant_id=tenant_id, status="Draft", deleted_at__isnull=True).count(),
         Receivable.filter(
@@ -48,6 +51,7 @@ async def get_finance_summary(
             deleted_at__isnull=True,
         ).count(),
         aggregation_service.get_pipeline_summary(tenant_id),
+        note_service.count_expiring(tenant_id, within_days=30),
     )
 
     return {
@@ -56,6 +60,7 @@ async def get_finance_summary(
         "overdue_receivables": r_overdue,
         "overdue_payables": p_overdue,
         **pipeline,
+        **expiring_notes,
     }
 
 

@@ -1080,6 +1080,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         skip: int = 0,
         limit: int = 20,
         keyword: Optional[str] = None,
+        notice_code: Optional[str] = None,
     ) -> Dict[str, Any]:
         from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
         from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
@@ -1095,7 +1096,10 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
             deleted_at__isnull=True,
         )
         kw = str(keyword or "").strip()
-        if kw:
+        nc = str(notice_code or "").strip()
+        if nc:
+            query = query.filter(notice_code__icontains=nc)
+        elif kw:
             query = query.filter(
                 Q(notice_code__icontains=kw) | Q(customer_name__icontains=kw)
             )
@@ -1171,6 +1175,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         skip: int = 0,
         limit: int = 20,
         keyword: Optional[str] = None,
+        delivery_code: Optional[str] = None,
     ) -> Dict[str, Any]:
         from apps.kuaizhizao.models.sales_delivery import SalesDelivery
         from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
@@ -1186,7 +1191,10 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
             deleted_at__isnull=True,
         )
         kw = str(keyword or "").strip()
-        if kw:
+        dc = str(delivery_code or "").strip()
+        if dc:
+            query = query.filter(delivery_code__icontains=dc)
+        elif kw:
             query = query.filter(
                 Q(delivery_code__icontains=kw) | Q(customer_name__icontains=kw)
             )

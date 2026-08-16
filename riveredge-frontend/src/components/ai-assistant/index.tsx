@@ -19,6 +19,7 @@ import {
 } from '../../services/deepseekChat'
 import { useChatIntegrationStatus } from '../../hooks/useChatIntegrationStatus'
 import { useAiContext, toAiContextApiPayload } from '../../contexts/AiContext'
+import { executeAiAction } from '../../apps/kuaiai/services/catalog'
 import assistAnimation from '../../../static/lottie/assist.json'
 import welcomeAnimation from '../../../static/lottie/welcome.json'
 import AiAssistantMarkdown from './AiAssistantMarkdown'
@@ -191,6 +192,13 @@ function buildKuaiChatRequest(model: string) {
   })
 }
 
+function extractConfirmToken(text: string): string | null {
+  const jsonMatch = text.match(/"confirm_token"\s*:\s*"([^"]+)"/)
+  if (jsonMatch?.[1]) return jsonMatch[1]
+  const bareMatch = text.match(/confirm_token[:：]\s*([A-Za-z0-9_-]{16,})/)
+  return bareMatch?.[1] ?? null
+}
+
 function renderAiBubbleContent(content: unknown) {
   const text = typeof content === 'string' ? content : ''
   if (!text.trim()) return null
@@ -208,6 +216,7 @@ type AIAssistantDialogUIProps = {
   welcomeHint?: React.ReactNode
   modelName?: string
   contextBadge?: string | null
+  onConfirmAction?: (confirmToken: string) => void
 }
 
 const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
@@ -221,6 +230,7 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
   welcomeHint,
   modelName,
   contextBadge,
+  onConfirmAction,
 }) => {
   const { t } = useTranslation()
   const promptItems = usePromptItems()
@@ -390,8 +400,19 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
                     if (info?.status === 'loading') return null
                     const lastUser = info?.extraInfo?.lastUserMessage ?? ''
                     const text = typeof content === 'string' ? content : ''
+                    const confirmToken = extractConfirmToken(text)
                     return (
                       <div className="ai-qa-bubble-actions">
+                        {confirmToken && onConfirmAction ? (
+                          <Button
+                            type="link"
+                            size="small"
+                            className="ai-qa-bubble-action"
+                            onClick={() => onConfirmAction(confirmToken)}
+                          >
+                            {t('ui.aiAssistant.confirmAction')}
+                          </Button>
+                        ) : null}
                         <span
                           role="button"
                           tabIndex={0}
@@ -546,6 +567,18 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({ open, onClo
     )
   }
 
+  const handleConfirmAction = useCallback(
+    async (confirmToken: string) => {
+      try {
+        const result = await executeAiAction(confirmToken)
+        message.success(String(result.message || t('ui.aiAssistant.actionExecuted')))
+      } catch (error: unknown) {
+        message.error(error instanceof Error ? error.message : t('ui.aiAssistant.actionFailed'))
+      }
+    },
+    [t],
+  )
+
   useEffect(() => {
     if (!open || !pendingAssistant?.prompt || chat.isRequesting) return
     const prompt = pendingAssistant.prompt.trim()
@@ -572,6 +605,7 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({ open, onClo
       onNewChat={handleNewChat}
       modelName={model}
       contextBadge={contextBadge}
+      onConfirmAction={(token) => void handleConfirmAction(token)}
     />
   )
 }

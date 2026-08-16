@@ -12,15 +12,21 @@ import {
   BranchesOutlined,
   BuildOutlined,
   CheckCircleOutlined,
+  ClockCircleOutlined,
   EditOutlined,
+  LockOutlined,
   FileOutlined,
+  FolderOutlined,
+  InboxOutlined,
   ProductOutlined,
   StopOutlined,
   ToolOutlined,
 } from '@ant-design/icons';
 import type { DrawingStatus, DrawingType } from '../../../services/drawing';
+import type { DrawingFolder } from '../../../services/drawingFolder';
 import {
   DRAWING_TREE_ALL_KEY,
+  DRAWING_TREE_UNCLASSIFIED_KEY,
   type DrawingTreeNavItem,
 } from './drawingTreeData';
 
@@ -38,7 +44,7 @@ export const DRAWING_NAV_MODES: {
 ];
 
 const DRAWING_TYPES: DrawingType[] = ['part', 'assembly', 'process', 'other'];
-const DRAWING_STATUSES: DrawingStatus[] = ['Draft', 'Released', 'Obsolete'];
+const DRAWING_STATUSES: DrawingStatus[] = ['Draft', 'Editing', 'Pending', 'Released', 'Obsolete'];
 
 const TYPE_ICONS: Record<DrawingType, React.ReactNode> = {
   part: <BlockOutlined />,
@@ -49,6 +55,8 @@ const TYPE_ICONS: Record<DrawingType, React.ReactNode> = {
 
 const STATUS_ICONS: Record<DrawingStatus, React.ReactNode> = {
   Draft: <EditOutlined />,
+  Editing: <LockOutlined />,
+  Pending: <ClockCircleOutlined />,
   Released: <CheckCircleOutlined />,
   Obsolete: <StopOutlined />,
 };
@@ -66,6 +74,15 @@ export function treeKeyBelongsToMode(key: string, mode: DrawingNavMode): boolean
   if (mode === 'material') return key.startsWith('material:');
   if (mode === 'route') return key.startsWith('route:');
   return false;
+}
+
+export function isVaultTreeKey(key: string): boolean {
+  return !key || key === DRAWING_TREE_ALL_KEY || key.startsWith('folder:');
+}
+
+export function folderUuidFromTreeKey(key: string): string | null {
+  if (!key.startsWith('folder:') || key === DRAWING_TREE_UNCLASSIFIED_KEY) return null;
+  return key.slice(7);
 }
 
 export function inferNavModeFromTreeKey(key: string): DrawingNavMode | null {
@@ -174,6 +191,61 @@ export function buildDrawingNavTree(
           key: DRAWING_TREE_ALL_KEY,
           title: allLabel,
           icon: <AppstoreOutlined />,
+          isLeaf: true,
+        },
+      ];
+}
+
+function mapFolderNodes(folders: DrawingFolder[], search: string): DataNode[] {
+  return folders
+    .map((folder) => {
+      const children = mapFolderNodes(folder.children ?? [], search);
+      const selfMatch = matchSearch(folder.name, search);
+      if (!selfMatch && !children.length) return null;
+      return {
+        key: `folder:${folder.uuid}`,
+        title: folder.name,
+        icon: <FolderOutlined />,
+        isLeaf: !children.length,
+        children: children.length ? children : undefined,
+      } as DataNode;
+    })
+    .filter((node): node is DataNode => node != null);
+}
+
+export function buildDrawingVaultTree(
+  t: TFunction,
+  folders: DrawingFolder[],
+  search = '',
+): DataNode[] {
+  const allLabel = t('app.master-data.drawings.tree.all');
+  const unclassifiedLabel = t('app.master-data.drawings.tree.unclassified');
+  const nodes: DataNode[] = [];
+
+  if (matchSearch(allLabel, search)) {
+    nodes.push({
+      key: DRAWING_TREE_ALL_KEY,
+      title: allLabel,
+      icon: <InboxOutlined />,
+      isLeaf: true,
+    });
+  }
+  if (matchSearch(unclassifiedLabel, search)) {
+    nodes.push({
+      key: DRAWING_TREE_UNCLASSIFIED_KEY,
+      title: unclassifiedLabel,
+      icon: <FileOutlined />,
+      isLeaf: true,
+    });
+  }
+  nodes.push(...mapFolderNodes(folders, search));
+  return nodes.length
+    ? nodes
+    : [
+        {
+          key: DRAWING_TREE_ALL_KEY,
+          title: allLabel,
+          icon: <InboxOutlined />,
           isLeaf: true,
         },
       ];

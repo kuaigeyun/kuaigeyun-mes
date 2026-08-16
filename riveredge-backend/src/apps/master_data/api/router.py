@@ -12,7 +12,13 @@ from apps.master_data.api.warehouse import router as warehouse_router
 from apps.master_data.api.material import router as material_router
 from apps.master_data.api.batch_serial_rules import router as batch_serial_rules_router
 from apps.master_data.api.units import router as units_router
+from apps.master_data.api.material_market_prices import router as material_market_prices_router
 from apps.master_data.api.process import router as process_router
+from apps.master_data.api.drawing_folders import router as drawing_folders_router
+from apps.master_data.api.drawing_where_used import router as drawing_where_used_router
+from apps.master_data.api.drawing_distributions import router as drawing_distributions_router
+from apps.master_data.api.drawing_loans import clearance_router as drawing_clearances_router
+from apps.master_data.api.drawing_loans import loan_router as drawing_loans_router
 from apps.master_data.api.drawings import router as drawings_router
 from apps.master_data.api.supply_chain import router as supply_chain_router
 from apps.master_data.api.partner_price_book import router as partner_price_book_router
@@ -33,8 +39,14 @@ router.include_router(factory_router)
 router.include_router(warehouse_router)
 router.include_router(batch_serial_rules_router)
 router.include_router(units_router)
+router.include_router(material_market_prices_router)
 router.include_router(material_router)
 router.include_router(process_router)
+router.include_router(drawing_where_used_router)
+router.include_router(drawing_distributions_router)
+router.include_router(drawing_clearances_router)
+router.include_router(drawing_loans_router)
+router.include_router(drawing_folders_router)
 router.include_router(drawings_router)
 router.include_router(supply_chain_router)
 router.include_router(partner_price_book_router)

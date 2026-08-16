@@ -1603,6 +1603,22 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         )
 
         await dispatch_work_order_readiness_refresh(tenant_id, work_order_id_created)
+        try:
+            from apps.kuaizhizao.services.inspection_policy_service import get_quality_effective_config
+            from apps.kuaizhizao.services.quality_fai_service import FaiOrderService
+
+            cfg = await get_quality_effective_config(tenant_id)
+            await FaiOrderService().maybe_create_for_work_order(
+                tenant_id,
+                work_order_id=work_order_id_created,
+                work_order_code=response.code or "",
+                material_id=response.product_id,
+                material_code=response.product_code,
+                material_name=response.product_name,
+                enabled=bool(cfg.get("fai", {}).get("auto_create_fai_on_work_order")),
+            )
+        except Exception as fai_err:
+            logger.warning(f"工单创建后自动建 FAI 失败: {fai_err}")
         return response
 
     async def get_work_order_by_id(
@@ -2661,10 +2677,19 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 update=WorkOrderTrackingService.tracking_fields_for_response(work_order)
             )
 
-        needs_score_recalc = any(
-            f in update_data and update_data.get(f) != old_score_values.get(f)
-            for f in score_recalc_fields
-        )
+        needs_score_recalc = False
+        for f in score_recalc_fields:
+            if f not in update_data:
+                continue
+            new_value = update_data.get(f)
+            old_value = old_score_values.get(f)
+            if f in ("planned_start_date", "planned_end_date"):
+                changed = not _business_datetimes_equal(new_value, old_value)
+            else:
+                changed = new_value != old_value
+            if changed:
+                needs_score_recalc = True
+                break
         if needs_score_recalc:
             from apps.kuaizhizao.workflows.functions.work_order_score_workflow import (
                 dispatch_work_order_score_recalc,
@@ -3443,6 +3468,30 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 tenant_id=tenant_id,
                 id=work_order_id
             ).update(deleted_at=now)
+
+            # 合同直推工单删除后回滚释放态（与销售订单删除 → rollback_release 对称）
+            from apps.kuaizhizao.models.document_relation import DocumentRelation
+            from apps.kuaizhizao.models.sales_contract import SalesContract
+            from apps.kuaizhizao.services.sales_contract_service import SalesContractService
+
+            upstream_contract_ids = await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="sales_contract",
+                target_type="work_order",
+                target_id=work_order_id,
+                relation_mode="push",
+            ).values_list("source_id", flat=True)
+            if upstream_contract_ids:
+                contract_svc = SalesContractService()
+                operator_id = work_order.updated_by or work_order.created_by
+                for cid in {int(x) for x in upstream_contract_ids if x is not None}:
+                    contract = await SalesContract.get_or_none(
+                        tenant_id=tenant_id, id=cid, deleted_at__isnull=True
+                    )
+                    if contract:
+                        await contract_svc._normalize_contract_release_after_downstream_removed(
+                            contract, operator_id=operator_id
+                        )
 
             if split_parent_id is not None:
                 await self._remove_split_document_relation(

@@ -11,7 +11,8 @@ from typing import List, Optional, Tuple
 from tortoise.transactions import in_transaction
 
 from apps.common.base_service import AppBaseService
-from apps.kuaiplm.models import RdDesignReview, RdFmeaRecord, RdRequirement
+from apps.kuaiplm.models import RdDesignReview, RdFmeaRecord, RdRequirement, RdProject, RdProjectLink
+from apps.kuaiplm.constants.rd_project import RdProjectLinkType
 from apps.kuaiplm.schemas.phase2 import (
     RdDesignReviewCreate,
     RdDesignReviewResponse,
@@ -36,6 +37,60 @@ from apps.kuaiplm.services.plm_list_core import (
 class Phase2Service(AppBaseService[RdRequirement]):
     def __init__(self):
         super().__init__(RdRequirement)
+
+    async def _load_projects_map(
+        self, tenant_id: int, project_ids: set[int]
+    ) -> dict[int, RdProject]:
+        if not project_ids:
+            return {}
+        rows = await RdProject.filter(tenant_id=tenant_id, id__in=list(project_ids)).all()
+        return {int(row.id): row for row in rows}
+
+    def _with_project_fields(self, response, project_map: dict[int, RdProject]):
+        if not response.project_id:
+            return response
+        project = project_map.get(int(response.project_id))
+        if not project:
+            return response
+        return response.model_copy(
+            update={
+                "project_code": project.project_code,
+                "project_name": project.project_name,
+            }
+        )
+
+    async def _ensure_project_link(
+        self,
+        tenant_id: int,
+        project_id: Optional[int],
+        *,
+        link_type: str,
+        target_type: str,
+        target_id: int,
+        target_code: Optional[str],
+        target_name: Optional[str],
+        created_by: int,
+    ) -> None:
+        if not project_id:
+            return
+        exists = await RdProjectLink.filter(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            target_type=target_type,
+            target_id=target_id,
+        ).exists()
+        if exists:
+            return
+        await RdProjectLink.create(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            link_type=link_type,
+            target_type=target_type,
+            target_id=target_id,
+            target_code=target_code,
+            target_name=target_name,
+            created_by=created_by,
+        )
 
     async def _generate_requirement_code(self, tenant_id: int) -> str:
         return await self.generate_code(tenant_id, "RD_REQUIREMENT_CODE", prefix="YFXQ")
@@ -92,7 +147,13 @@ class Phase2Service(AppBaseService[RdRequirement]):
         )
         total = await qs.count()
         rows = await qs.order_by(order_expr).offset(skip).limit(limit).all()
-        return [RdRequirementResponse.model_validate(r) for r in rows], total
+        project_map = await self._load_projects_map(
+            tenant_id, {int(r.project_id) for r in rows if r.project_id}
+        )
+        return [
+            self._with_project_fields(RdRequirementResponse.model_validate(r), project_map)
+            for r in rows
+        ], total
 
     async def create_requirement(
         self, tenant_id: int, data: RdRequirementCreate, created_by: int
@@ -116,6 +177,17 @@ class Phase2Service(AppBaseService[RdRequirement]):
             updated_by=created_by,
             updated_by_name=user_info["name"],
         )
+        if data.project_id:
+            await self._ensure_project_link(
+                tenant_id,
+                data.project_id,
+                link_type=RdProjectLinkType.REQUIREMENT.value,
+                target_type="requirement",
+                target_id=int(row.id),
+                target_code=code,
+                target_name=data.title,
+                created_by=created_by,
+            )
         return RdRequirementResponse.model_validate(row)
 
     async def update_requirement(
@@ -199,7 +271,13 @@ class Phase2Service(AppBaseService[RdRequirement]):
         )
         total = await qs.count()
         rows = await qs.order_by(order_expr).offset(skip).limit(limit).all()
-        return [RdDesignReviewResponse.model_validate(r) for r in rows], total
+        project_map = await self._load_projects_map(
+            tenant_id, {int(r.project_id) for r in rows if r.project_id}
+        )
+        return [
+            self._with_project_fields(RdDesignReviewResponse.model_validate(r), project_map)
+            for r in rows
+        ], total
 
     async def create_design_review(
         self, tenant_id: int, data: RdDesignReviewCreate, created_by: int
@@ -227,6 +305,17 @@ class Phase2Service(AppBaseService[RdRequirement]):
             updated_by=created_by,
             updated_by_name=user_info["name"],
         )
+        if data.project_id:
+            await self._ensure_project_link(
+                tenant_id,
+                data.project_id,
+                link_type=RdProjectLinkType.OTHER.value,
+                target_type="design_review",
+                target_id=int(row.id),
+                target_code=code,
+                target_name=data.title,
+                created_by=created_by,
+            )
         return RdDesignReviewResponse.model_validate(row)
 
     async def update_design_review(
@@ -314,7 +403,13 @@ class Phase2Service(AppBaseService[RdRequirement]):
         )
         total = await qs.count()
         rows = await qs.order_by(order_expr).offset(skip).limit(limit).all()
-        return [RdFmeaRecordResponse.model_validate(r) for r in rows], total
+        project_map = await self._load_projects_map(
+            tenant_id, {int(r.project_id) for r in rows if r.project_id}
+        )
+        return [
+            self._with_project_fields(RdFmeaRecordResponse.model_validate(r), project_map)
+            for r in rows
+        ], total
 
     async def create_fmea_record(
         self, tenant_id: int, data: RdFmeaRecordCreate, created_by: int
@@ -337,6 +432,17 @@ class Phase2Service(AppBaseService[RdRequirement]):
             updated_by=created_by,
             updated_by_name=user_info["name"],
         )
+        if data.project_id:
+            await self._ensure_project_link(
+                tenant_id,
+                data.project_id,
+                link_type=RdProjectLinkType.OTHER.value,
+                target_type="fmea",
+                target_id=int(row.id),
+                target_code=code,
+                target_name=data.title,
+                created_by=created_by,
+            )
         return RdFmeaRecordResponse.model_validate(row)
 
     async def update_fmea_record(

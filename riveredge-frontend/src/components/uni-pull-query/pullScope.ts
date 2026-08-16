@@ -32,3 +32,14 @@ export function paginatePullRows<T>(
     total: rows.length,
   };
 }
+
+/** 可加载列表与勾选门禁的唯一入口：先按 isPullable 过滤，再分页 */
+export function pagePullCandidates<T>(
+  rows: T[],
+  scope: string | undefined,
+  page: number,
+  pageSize: number,
+  isPullable: (row: T) => boolean,
+): { data: T[]; total: number } {
+  return paginatePullRows(filterByPullScope(rows, scope, isPullable), page, pageSize);
+}

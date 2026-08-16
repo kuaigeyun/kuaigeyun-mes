@@ -1,16 +1,13 @@
 import React, { useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { Button, Form, Input, Modal, Select, Switch, message } from 'antd';
+import { App, Button, Modal, Table, Typography, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-  UniTableStackedPrimaryCell,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import {
   alignDescriptionColumns,
@@ -23,65 +20,76 @@ import {
   renderLogisticsEnabledTag,
 } from '../shared/logisticsListPresentation';
 import {
-  createCarrier,
   deleteCarrier,
+  listCarrierPresets,
   listCarriers,
-  updateCarrier,
+  loadCarrierPresets,
+  type CarrierPresetItem,
   type LogisticsCarrier,
 } from '../../../services/logistics';
-
-const SETTLEMENT_METHOD_OPTIONS: Array<{ value: string; labelKey: string }> = [
-  { value: 'cash', labelKey: 'field.partner.settlementMethod.cash' },
-  { value: 'bank_transfer', labelKey: 'field.partner.settlementMethod.bankTransfer' },
-  { value: 'bank_acceptance', labelKey: 'field.partner.settlementMethod.bankAcceptance' },
-  { value: 'commercial_acceptance', labelKey: 'field.partner.settlementMethod.commercialAcceptance' },
-  { value: 'monthly', labelKey: 'field.partner.settlementMethod.monthly' },
-  { value: 'prepaid', labelKey: 'field.partner.settlementMethod.prepaid' },
-  { value: 'other', labelKey: 'field.partner.settlementMethod.other' },
-];
+import { CarrierFormModal, LOGISTICS_SETTLEMENT_METHOD_OPTIONS } from '../shared/CarrierFormModal';
 
 const CarriersPage: React.FC = () => {
   const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions('kuaizhizao:logistics-carrier');
   const actionRef = useRef<ActionType>();
-  const [form] = Form.useForm();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<LogisticsCarrier | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<LogisticsCarrier | null>(null);
+  const [presetOpen, setPresetOpen] = useState(false);
+  const [presetLoading, setPresetLoading] = useState(false);
+  const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
+  const [presetList, setPresetList] = useState<CarrierPresetItem[]>([]);
+  const [selectedPresetCodes, setSelectedPresetCodes] = useState<string[]>([]);
 
   const openCreate = () => {
     setEditing(null);
-    form.resetFields();
-    form.setFieldsValue({ carrier_type: 'express', is_enabled: true });
     setOpen(true);
   };
 
   const openEdit = (row: LogisticsCarrier) => {
     setEditing(row);
-    form.setFieldsValue(row);
     setOpen(true);
-  };
-
-  const handleSubmit = async () => {
-    const values = await form.validateFields();
-    if (editing) {
-      await updateCarrier(editing.id, values);
-      message.success(t('common.updateSuccess'));
-      if (detail?.id === editing.id) {
-        setDetail({ ...detail, ...values });
-      }
-    } else {
-      await createCarrier(values);
-      message.success(t('common.createSuccess'));
-    }
-    setOpen(false);
-    actionRef.current?.reload();
   };
 
   const openDetail = (row: LogisticsCarrier) => {
     setDetail(row);
     setDetailOpen(true);
+  };
+
+  const openLoadCommonCarriers = async () => {
+    setPresetLoading(true);
+    try {
+      const list = await listCarrierPresets();
+      setPresetList(list);
+      setSelectedPresetCodes(list.filter((item) => !item.exists).map((item) => item.code));
+      setPresetOpen(true);
+    } catch (error) {
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+    } finally {
+      setPresetLoading(false);
+    }
+  };
+
+  const confirmLoadCommonCarriers = async () => {
+    setPresetConfirmLoading(true);
+    try {
+      const res = await loadCarrierPresets(selectedPresetCodes);
+      messageApi.success(
+        t('app.kuaizhizao.logistics.message.loadCommonCarriersSuccess', {
+          created: res.created,
+          skipped: res.skipped,
+        }),
+      );
+      setPresetOpen(false);
+      actionRef.current?.reload();
+    } catch (error) {
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+    } finally {
+      setPresetConfirmLoading(false);
+    }
   };
 
   const basicColumns = useMemo(
@@ -97,13 +105,14 @@ const CarriersPage: React.FC = () => {
           },
           { title: t('app.kuaizhizao.logistics.field.contactName'), dataIndex: 'contact_name' },
           { title: t('app.kuaizhizao.logistics.field.contactPhone'), dataIndex: 'contact_phone' },
+          { title: t('app.kuaizhizao.logistics.field.serviceHotline'), dataIndex: 'service_hotline' },
           {
             title: t('app.kuaizhizao.logistics.field.settlementMethod'),
             dataIndex: 'settlement_method',
             render: (_, record) => {
               const code = String(record.settlement_method ?? '').trim();
               if (!code) return '-';
-              const opt = SETTLEMENT_METHOD_OPTIONS.find((item) => item.value === code);
+              const opt = LOGISTICS_SETTLEMENT_METHOD_OPTIONS.find((item) => item.value === code);
               return opt ? t(opt.labelKey) : code;
             },
           },
@@ -126,19 +135,20 @@ const CarriersPage: React.FC = () => {
           title: t('app.kuaizhizao.logistics.field.name'),
           key: 'logistics_carrier_stacked',
           dataIndex: 'name',
-          ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+          width: 160,
+          minWidth: 160,
+          uniTableKeepWidth: true,
+          resizable: false,
+          ellipsis: true,
           fixed: 'left',
-          render: (_, row) => (
-            <UniTableStackedPrimaryCell
-              primary={String(row.name ?? '').trim() || '-'}
-              secondary={String(row.code ?? '').trim() || '-'}
-            />
-          ),
         },
         {
           title: t('app.kuaizhizao.logistics.field.code'),
           dataIndex: 'code',
-          hideInTable: true,
+          width: 88,
+          minWidth: 88,
+          uniTableKeepWidth: true,
+          resizable: false,
         },
         {
           title: t('app.kuaizhizao.logistics.field.carrierType'),
@@ -150,25 +160,40 @@ const CarriersPage: React.FC = () => {
           render: (_, row) => renderLogisticsCarrierTypeTag(t, row.carrier_type),
         },
         {
-          title: t('app.kuaizhizao.logistics.field.contactName'),
-          dataIndex: 'contact_name',
-          width: 148,
-          minWidth: 148,
+          title: t('app.kuaizhizao.logistics.field.serviceHotline'),
+          dataIndex: 'service_hotline',
+          width: 132,
+          minWidth: 132,
           uniTableKeepWidth: true,
           resizable: false,
-          render: (_, row) => (
-            <UniTableStackedPrimaryCell
-              primary={String(row.contact_name ?? '').trim() || '-'}
-              secondary={String(row.contact_phone ?? '').trim() || '-'}
-              secondaryCopyable={Boolean(String(row.contact_phone ?? '').trim())}
-              primaryBold={false}
-            />
-          ),
+          render: (_, row) => {
+            const hotline = String(row.service_hotline ?? '').trim();
+            if (!hotline) return '-';
+            return <Typography.Text copyable={{ text: hotline }}>{hotline}</Typography.Text>;
+          },
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.contactName'),
+          dataIndex: 'contact_name',
+          width: 120,
+          minWidth: 120,
+          uniTableKeepWidth: true,
+          resizable: false,
+          ellipsis: true,
+          render: (_, row) => String(row.contact_name ?? '').trim() || '-',
         },
         {
           title: t('app.kuaizhizao.logistics.field.contactPhone'),
           dataIndex: 'contact_phone',
-          hideInTable: true,
+          width: 132,
+          minWidth: 132,
+          uniTableKeepWidth: true,
+          resizable: false,
+          render: (_, row) => {
+            const phone = String(row.contact_phone ?? '').trim();
+            if (!phone) return '-';
+            return <Typography.Text copyable={{ text: phone }}>{phone}</Typography.Text>;
+          },
         },
         {
           title: t('app.kuaizhizao.logistics.field.enabled'),
@@ -231,7 +256,7 @@ const CarriersPage: React.FC = () => {
       <UniTable<LogisticsCarrier>
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.carriers.v1"
+        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.carriers.v3"
         rowKey="id"
         request={async (params) => {
           const res = await listCarriers({
@@ -251,6 +276,15 @@ const CarriersPage: React.FC = () => {
           message.success(t('common.batchDeleteSuccess', { count: keys.length }));
           actionRef.current?.reload();
         }}
+        toolBarActionsAfterDelete={
+          perms.canCreate
+            ? [
+                <Button key="loadCommonCarriers" loading={presetLoading} onClick={() => void openLoadCommonCarriers()}>
+                  {t('app.kuaizhizao.logistics.action.loadCommonCarriers')}
+                </Button>,
+              ]
+            : []
+        }
       />
       <LogisticsMasterDetailDrawer
         open={detailOpen}
@@ -265,61 +299,86 @@ const CarriersPage: React.FC = () => {
         })}
         basicColumns={basicColumns}
       />
-      <Modal
+      <CarrierFormModal
         open={open}
-        title={editing ? t('common.edit') : t('common.create')}
-        onCancel={() => setOpen(false)}
-        onOk={handleSubmit}
+        editing={editing}
+        onClose={() => setOpen(false)}
+        onSuccess={(record) => {
+          if (detail?.id === record.id) {
+            setDetail(record);
+          }
+          actionRef.current?.reload();
+        }}
+      />
+      <Modal
+        title={t('app.kuaizhizao.logistics.action.loadCommonCarriers')}
+        open={presetOpen}
+        onCancel={() => setPresetOpen(false)}
+        width={640}
         destroyOnHidden
+        footer={[
+          <Button key="cancel" onClick={() => setPresetOpen(false)}>
+            {t('common.cancel')}
+          </Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            loading={presetConfirmLoading}
+            disabled={selectedPresetCodes.length === 0}
+            onClick={() => void confirmLoadCommonCarriers()}
+          >
+            {t('common.confirm')}
+          </Button>,
+        ]}
       >
-        <Form form={form} layout="vertical">
-          {!editing ? (
-            <Form.Item name="code" label={t('app.kuaizhizao.logistics.field.code')}>
-              <Input placeholder={t('app.kuaizhizao.logistics.placeholder.autoCode')} />
-            </Form.Item>
-          ) : null}
-          <Form.Item name="name" label={t('app.kuaizhizao.logistics.field.name')} rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="carrier_type" label={t('app.kuaizhizao.logistics.field.carrierType')}>
-            <Select
-              options={[
-                { label: t('app.kuaizhizao.logistics.option.carrierType.express'), value: 'express' },
-                { label: t('app.kuaizhizao.logistics.option.carrierType.truck'), value: 'truck' },
-                { label: t('app.kuaizhizao.logistics.option.carrierType.ltl'), value: 'ltl' },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="contact_name" label={t('app.kuaizhizao.logistics.field.contactName')}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="contact_phone" label={t('app.kuaizhizao.logistics.field.contactPhone')}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="supplier_id" label={t('app.kuaizhizao.logistics.field.supplier')}>
-            <SupplierSelectDropdown
-              hostResource="kuaizhizao:logistics-carrier"
-              allowClear
-              placeholder={t('app.kuaizhizao.logistics.placeholder.selectSupplier')}
-              style={{ width: '100%' }}
-            />
-          </Form.Item>
-          <Form.Item name="settlement_method" label={t('app.kuaizhizao.logistics.field.settlementMethod')}>
-            <Select
-              allowClear
-              options={SETTLEMENT_METHOD_OPTIONS.map((item) => ({
-                value: item.value,
-                label: t(item.labelKey),
-              }))}
-            />
-          </Form.Item>
-          <Form.Item name="remark" label={t('common.remark')}>
-            <Input.TextArea rows={2} />
-          </Form.Item>
-          <Form.Item name="is_enabled" label={t('app.kuaizhizao.logistics.field.enabled')} valuePropName="checked">
-            <Switch />
-          </Form.Item>
-        </Form>
+        <p style={{ marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
+          {t('app.kuaizhizao.logistics.action.loadCommonCarriersDesc')}
+        </p>
+        <Table<CarrierPresetItem>
+          size="small"
+          rowKey="code"
+          dataSource={presetList}
+          pagination={false}
+          scroll={{ y: 280 }}
+          rowSelection={{
+            selectedRowKeys: selectedPresetCodes,
+            onChange: (keys) => setSelectedPresetCodes(keys.map(String)),
+          }}
+          columns={[
+            {
+              title: t('app.kuaizhizao.logistics.field.name'),
+              dataIndex: 'name',
+            },
+            {
+              title: t('app.kuaizhizao.logistics.field.code'),
+              dataIndex: 'code',
+              width: 80,
+            },
+            {
+              title: t('app.kuaizhizao.logistics.field.carrierType'),
+              dataIndex: 'carrier_type',
+              width: 96,
+              render: (_, row) => renderLogisticsCarrierTypeTag(t, row.carrier_type),
+            },
+            {
+              title: t('app.kuaizhizao.logistics.field.serviceHotline'),
+              dataIndex: 'service_hotline',
+              width: 120,
+              render: (_, row) => row.service_hotline || '-',
+            },
+            {
+              title: t('app.kuaizhizao.logistics.field.alreadyExists'),
+              dataIndex: 'exists',
+              width: 88,
+              render: (_, row) =>
+                row.exists ? (
+                  <MarkerTag color="default">{t('app.kuaizhizao.logistics.field.alreadyExists')}</MarkerTag>
+                ) : (
+                  '-'
+                ),
+            },
+          ]}
+        />
       </Modal>
     </ListPageTemplate>
   );

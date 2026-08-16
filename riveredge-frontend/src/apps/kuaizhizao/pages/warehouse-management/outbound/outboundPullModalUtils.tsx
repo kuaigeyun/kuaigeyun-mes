@@ -1,4 +1,5 @@
-import { Tag } from 'antd';
+import { renderPullQueryDocStatus } from '../../../../../components/uni-pull-query';
+import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 import type { TFunction } from 'i18next';
 
 export function formatPullPercent(done: number, total: number): string {
@@ -8,10 +9,18 @@ export function formatPullPercent(done: number, total: number): string {
 }
 
 export function renderPullableTag(t: TFunction, pullable: boolean) {
-  return pullable ? <Tag color="success">{t('app.kuaizhizao.warehouseOutbound.pull.pullable')}</Tag> : <Tag>{t('app.kuaizhizao.warehouseOutbound.pull.notPullable')}</Tag>;
+  return pullable ? (
+    <MarkerTag color="success">{t('app.kuaizhizao.warehouseOutbound.pull.pullable')}</MarkerTag>
+  ) : (
+    <MarkerTag color="default">{t('app.kuaizhizao.warehouseOutbound.pull.notPullable')}</MarkerTag>
+  );
 }
 
 export function renderLifecycleSubStageTag(label?: string) {
   if (!label) return null;
-  return <Tag color="processing">{label}</Tag>;
+  return <StatusTag color="processing">{label}</StatusTag>;
+}
+
+export function renderPullDocStatus(t: TFunction, value: unknown) {
+  return renderPullQueryDocStatus(t, value);
 }

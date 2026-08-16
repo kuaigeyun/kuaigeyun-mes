@@ -86,7 +86,7 @@ export interface ListPageTemplateProps {
   tableScrollLayout?: ListPageTableScrollLayout;
   /**
    * 表格上方自定义区域（标题、指标卡等）额外占用的视口扣减（px）。
-   * 与 `tableScrollLayout` / `statCards` 的自动扣减叠加，用于报表页自绘指标区等场景。
+   * 与 `tableScrollLayout` / `statCards` 的自动扣减叠加。报表限高不走此字段。
    */
   tableScrollOffsetExtraPx?: number;
 }

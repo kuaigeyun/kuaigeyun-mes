@@ -1,7 +1,10 @@
 import dayjs from 'dayjs';
-import { formatDateTime } from '../../../utils/format';
+import { message } from 'antd';
+import { formatDateTime, todaySiteDateString } from '../../../utils/format';
+import { getApiErrorMessage } from '../../../utils/errorHandler';
 import type { Material } from '../types/material';
 import { materialApi } from '../services/material';
+import { materialMarketPriceApi } from '../services/material-market-price';
 import { customerPriceBookApi, supplierPriceBookApi } from '../services/partner-price-book';
 import type { PartnerPriceResolveResult } from '../types/partner-price-book';
 import { parseVariantAttributesValue } from '../components/VariantAttributeFields';
@@ -105,6 +108,31 @@ export function getMaterialDefaultPurchasePrice(material: Material | Record<stri
   return raw;
 }
 
+export function getMaterialSalePriceMethod(
+  material: Material | Record<string, unknown>,
+): 'fixed' | 'market' {
+  const defaults = (material as any).defaults ?? {};
+  const raw = defaults.salePriceMethod ?? defaults.sale_price_method;
+  return raw === 'market' ? 'market' : 'fixed';
+}
+
+export async function resolveMaterialMarketSalePrice(
+  material: Material | Record<string, unknown>,
+  asOf?: string | dayjs.Dayjs,
+): Promise<{ unitPrice: number; taxRate: number; snapshot?: Record<string, unknown> | null }> {
+  const uuid = String((material as any).uuid ?? '').trim();
+  if (!uuid) {
+    throw new Error('未维护该日原料行情，请到原料行情录入');
+  }
+  const priceDate = formatAsOf(asOf) || todaySiteDateString();
+  const resolved = await materialMarketPriceApi.resolveSale(uuid, priceDate);
+  return {
+    unitPrice: Number(resolved.unitPrice) || 0,
+    taxRate: Number(resolved.taxRate) || getMaterialDefaultTaxRate(material),
+    snapshot: resolved.snapshot ?? null,
+  };
+}
+
 export function getMaterialDefaultTaxRate(material: Material | Record<string, unknown>): number {
   const defaults = (material as any).defaults ?? {};
   const finance = defaults.finance ?? defaults.Finance;
@@ -134,6 +162,8 @@ export async function resolveMaterialForPricing(
   const uuid = String((full as any).uuid ?? (material as any).uuid ?? '').trim();
   // 列表常缺 defaults：销价与采购价都拿不到时才拉详情（避免仅缺采购价的销售料反复打详情）
   const needsDetail =
+    (full as any).defaults == null ||
+    getMaterialSalePriceMethod(full) === 'market' ||
     (getMaterialDefaultSalePrice(full) <= 0 && getMaterialDefaultPurchasePrice(full) <= 0) ||
     getMaterialDefaultTaxRate(full) <= 0;
   if (uuid && needsDetail) {
@@ -269,6 +299,7 @@ export type ResolvedSalesMaterialLinePricing = {
   material: Material | Record<string, unknown>;
   unitPrice: number;
   taxRate: number;
+  pricingSnapshot?: Record<string, unknown> | null;
 };
 
 /** 批量选料：客户价本 + 物料默认价税（与单行 applySalesDocumentLineMaterialPricing 一致） */
@@ -319,16 +350,25 @@ export async function resolveSalesDocumentMaterialLinesPricing(
     }
   }
 
-  return enriched.map((full, idx) => {
-    const id = Number((full as Material).id ?? (materials[idx] as Material).id);
-    const resolved = resolveMap.get(id);
-    const taxRate = pickResolvedTaxRate(resolved) ?? getMaterialDefaultTaxRate(full);
-    let unitPrice = pickSaleUnitPrice(full, resolved);
-    if (pt === 'tax_inclusive' && unitPrice > 0) {
-      unitPrice = convertUnitPriceByPriceType(unitPrice, taxRate, 'tax_exclusive', 'tax_inclusive');
-    }
-    return { material: full, unitPrice, taxRate };
-  });
+  return Promise.all(
+    enriched.map(async (full, idx) => {
+      const id = Number((full as Material).id ?? (materials[idx] as Material).id);
+      const resolved = resolveMap.get(id);
+      let taxRate = pickResolvedTaxRate(resolved) ?? getMaterialDefaultTaxRate(full);
+      let unitPrice = pickSaleUnitPrice(full, resolved);
+      let pricingSnapshot: Record<string, unknown> | null = null;
+      if (!(resolved?.found) && getMaterialSalePriceMethod(full) === 'market') {
+        const market = await resolveMaterialMarketSalePrice(full, asOf);
+        unitPrice = market.unitPrice;
+        taxRate = market.taxRate;
+        pricingSnapshot = market.snapshot ?? null;
+      }
+      if (pt === 'tax_inclusive' && unitPrice > 0) {
+        unitPrice = convertUnitPriceByPriceType(unitPrice, taxRate, 'tax_exclusive', 'tax_inclusive');
+      }
+      return { material: full, unitPrice, taxRate, pricingSnapshot };
+    }),
+  );
 }
 
 export async function resolveOrderLineSalePrice(
@@ -337,23 +377,39 @@ export async function resolveOrderLineSalePrice(
   variantAttributes: unknown,
   material: Material | Record<string, unknown> | undefined,
   asOf?: string | dayjs.Dayjs,
-): Promise<{ unitPrice: number; taxRate: number; resolved?: PartnerPriceResolveResult }> {
+): Promise<{
+  unitPrice: number;
+  taxRate: number;
+  resolved?: PartnerPriceResolveResult;
+  snapshot?: Record<string, unknown> | null;
+}> {
   const attrs = parseVariantAttributesValue(variantAttributes);
   const taxR = material != null ? getMaterialDefaultTaxRate(material) : 0;
-  if (!customerId || !materialId) {
+  const fallbackMarket = async () => {
+    if (material && getMaterialSalePriceMethod(material) === 'market') {
+      const market = await resolveMaterialMarketSalePrice(material, asOf);
+      return { unitPrice: market.unitPrice, taxRate: market.taxRate, snapshot: market.snapshot ?? null };
+    }
     return {
       unitPrice: material ? getMaterialDefaultSalePrice(material) : 0,
       taxRate: taxR,
+      snapshot: null,
     };
+  };
+  if (!customerId || !materialId) {
+    return fallbackMarket();
   }
   try {
     const resolved = await resolveCustomerSalePrice(customerId, materialId, asOf, attrs);
-    const taxRate = pickResolvedTaxRate(resolved) ?? taxR;
-    const unitPrice = pickSaleUnitPrice(material ?? {}, resolved);
-    return { unitPrice, taxRate, resolved };
+    if (resolved?.found) {
+      const taxRate = pickResolvedTaxRate(resolved) ?? taxR;
+      const unitPrice = pickSaleUnitPrice(material ?? {}, resolved);
+      return { unitPrice, taxRate, resolved, snapshot: null };
+    }
   } catch {
-    return { unitPrice: material ? getMaterialDefaultSalePrice(material) : 0, taxRate: taxR };
+    /* 无价目表则走物料取价 */
   }
+  return fallbackMarket();
 }
 
 const toSafeNumber = (value: unknown): number => {
@@ -410,24 +466,35 @@ export async function applySalesDocumentLineMaterialPricing(
       : dayjs();
   const pt = String(form.getFieldValue('price_type') ?? 'tax_exclusive');
   const materialId = Number((full as Material).id ?? (material as Record<string, unknown>).id);
-  const { unitPrice, taxRate } = await resolveOrderLineSalePrice(
-    customerId ? Number(customerId) : undefined,
-    Number.isFinite(materialId) ? materialId : undefined,
-    undefined,
-    full,
-    asOf,
-  );
+  let unitPrice = 0;
+  let taxRate = getMaterialDefaultTaxRate(full);
+  let snapshot: Record<string, unknown> | null = null;
+  try {
+    const resolved = await resolveOrderLineSalePrice(
+      customerId ? Number(customerId) : undefined,
+      Number.isFinite(materialId) ? materialId : undefined,
+      undefined,
+      full,
+      asOf,
+    );
+    unitPrice = resolved.unitPrice;
+    taxRate = resolved.taxRate;
+    snapshot = resolved.snapshot ?? null;
+  } catch (e: unknown) {
+    message.error(getApiErrorMessage(e, '未维护该日原料行情，请到原料行情录入'));
+  }
   let up = unitPrice;
   if (pt === 'tax_inclusive' && up > 0) {
     up = convertUnitPriceByPriceType(up, taxRate, 'tax_exclusive', 'tax_inclusive');
   }
   const items = [...normalizeFormListItems<Record<string, unknown>>(form.getFieldValue('items'))];
   if (!items[index]) return;
-  items[index] = { ...items[index], unit_price: up, tax_rate: taxRate };
+  items[index] = { ...items[index], unit_price: up, tax_rate: taxRate, pricing_snapshot: snapshot ?? null };
   form.setFieldsValue({ items });
   // 嵌套字段显式写入，避免 Form.List 行内 InputNumber 与 store 不同步
   form.setFieldValue?.(['items', index, 'unit_price'], up);
   form.setFieldValue?.(['items', index, 'tax_rate'], taxRate);
+  form.setFieldValue?.(['items', index, 'pricing_snapshot'], snapshot ?? null);
 }
 
 export type ResolvedPurchaseMaterialLinePricing = {

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Form, Input, InputNumber, Modal, Select } from 'antd';
 import { DatePicker } from 'antd';
@@ -56,6 +56,36 @@ const ReturnVisitsPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm<CustomerReturnVisitPayload & { visited_at_picker?: dayjs.Dayjs }>();
   const customerId = Form.useWatch('customer_id', form);
+  const sourceType = Form.useWatch('source_type', form) as string | undefined;
+  const [blockedSources, setBlockedSources] = useState<Record<number, { disabled: boolean; reason: string }>>({});
+
+  useEffect(() => {
+    if (!modalOpen) return;
+    let cancelled = false;
+    void customerReturnVisitApi
+      .list({ skip: 0, limit: 200 })
+      .then((res) => {
+        if (cancelled) return;
+        const blocked: Record<number, { disabled: boolean; reason: string }> = {};
+        for (const row of res.items ?? []) {
+          if (sourceType && row.source_type !== sourceType) continue;
+          if (editing?.id && row.id === editing.id) continue;
+          blocked[row.source_id] = {
+            disabled: true,
+            reason: t('app.kuaizhizao.afterSalesService.returnVisit.sourceAlreadyVisited', {
+              code: row.visit_code,
+            }),
+          };
+        }
+        setBlockedSources(blocked);
+      })
+      .catch(() => {
+        if (!cancelled) setBlockedSources({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editing?.id, modalOpen, sourceType, t]);
 
   const openCreate = () => {
     setEditing(null);
@@ -282,6 +312,7 @@ const ReturnVisitsPage: React.FC = () => {
             customerId={customerId}
             allowedTypes={['after_sales_ticket', 'repair_order']}
             typeLabelKeyPrefix="app.kuaizhizao.afterSalesService.returnVisit.field"
+            optionStateById={blockedSources}
           />
           <Form.Item name="visit_method" label={t('app.kuaizhizao.afterSalesService.returnVisit.field.visitMethod')}>
             <Select options={VISIT_METHODS.map((value) => ({ value, label: value }))} />

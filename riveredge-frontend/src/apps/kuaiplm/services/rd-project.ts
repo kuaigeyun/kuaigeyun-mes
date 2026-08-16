@@ -213,20 +213,14 @@ export async function deleteRdProject(id: number | string) {
   return apiRequest<void>(`${BASE}/${id}`, { method: 'DELETE' });
 }
 
-export async function spawnDeliveryProject(
-  projectId: number | string,
-  data?: { project_name?: string; project_code?: string; owner_id?: number; owner_name?: string },
-) {
-  return apiRequest<RdProject>(`${BASE}/${projectId}/spawn-delivery`, { method: 'POST', data: data ?? {} });
-}
-
 export async function pushTrialWorkOrder(
   projectId: number | string,
-  data?: { quantity?: number; notes?: string },
+  data?: { quantity?: number; remarks?: string; notes?: string },
 ) {
+  const { notes, remarks, ...rest } = data ?? {};
   return apiRequest<{ work_order_id?: number; work_order_code?: string }>(
     `${BASE}/${projectId}/push-trial-work-order`,
-    { method: 'POST', data: data ?? {} },
+    { method: 'POST', data: { ...rest, remarks: remarks ?? notes } },
   );
 }
 

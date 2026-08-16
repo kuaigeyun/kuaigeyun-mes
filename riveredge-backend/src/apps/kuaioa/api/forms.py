@@ -44,10 +44,36 @@ async def create_form_template(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        row = await template_service.create_template(tenant_id, data, current_user.id)
+        row = await template_service.create_template(tenant_id, data, current_user)
         return {"data": row, "success": True}
     except BusinessLogicError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"message": str(e)})
+
+
+@router.get("/templates/by-code/{template_code}", summary="Get form template by code")
+async def get_form_template_by_code(
+    template_code: str = Path(..., min_length=1, max_length=50),
+    _auth=Depends(require_access("kuaioa.form-request", "read", required_permissions=["kuaioa:form-request:read"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        row = await template_service.get_template_by_code(tenant_id, template_code)
+        return {"data": row, "success": True}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"message": str(e)})
+
+
+@router.get("/templates/{template_id}", summary="Get form template")
+async def get_form_template(
+    template_id: int = Path(..., ge=1),
+    _auth=Depends(require_access("kuaioa.form-template", "read", required_permissions=["kuaioa:form-template:read"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        row = await template_service.get_template(tenant_id, template_id)
+        return {"data": row, "success": True}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"message": str(e)})
 
 
 @router.put("/templates/{template_id}", summary="Update form template")
@@ -59,7 +85,7 @@ async def update_form_template(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        row = await template_service.update_template(tenant_id, template_id, data, current_user.id)
+        row = await template_service.update_template(tenant_id, template_id, data, current_user)
         return {"data": row, "success": True}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"message": str(e)})
@@ -73,7 +99,7 @@ async def delete_form_template(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        await template_service.delete_template(tenant_id, template_id, current_user.id)
+        await template_service.delete_template(tenant_id, template_id, current_user)
         return {"success": True}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"message": str(e)})
@@ -126,7 +152,7 @@ async def update_form_request(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        row = await request_service.update_request(tenant_id, request_id, data, current_user.id)
+        row = await request_service.update_request(tenant_id, request_id, data, current_user)
         return {"data": row, "success": True}
     except (NotFoundError, BusinessLogicError) as e:
         code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_409_CONFLICT
@@ -141,7 +167,7 @@ async def delete_form_request(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        await request_service.delete_request(tenant_id, request_id, current_user.id)
+        await request_service.delete_request(tenant_id, request_id, current_user)
         return {"success": True}
     except (NotFoundError, BusinessLogicError) as e:
         code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_409_CONFLICT

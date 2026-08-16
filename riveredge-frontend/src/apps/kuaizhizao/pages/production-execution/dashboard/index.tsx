@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useCallback, useMemo, useState } from 'react';
-import { Badge, Empty, Table, Tag, Typography, Timeline } from 'antd';
+import { Table, Tag } from 'antd';
 import {
   FormOutlined,
   InteractionOutlined,
@@ -24,12 +24,19 @@ import {
   ModuleActionPanel,
   ModuleActionMasonry,
   ModuleTodoList,
+  ModuleBroadcastList,
   ModuleChartPanel,
   ModuleTrendLine,
+  showMasonryCard,
+  masonryWeightFromRows,
+  resolveMasonryEmptyFallback,
+} from '../../../components/module-center';
+import type {
+  ModuleBroadcastItem,
+  ModuleKpiDef,
+  ModuleShortcutDef,
 } from '../../../components/module-center';
 import { translateWorkOrderLifecycleStatus } from '../../../utils/workOrderLifecycle';
-
-const { Text } = Typography;
 
 const MfgStatusPie = lazy(async () => {
   const { Pie } = await import('@ant-design/charts');
@@ -37,6 +44,7 @@ const MfgStatusPie = lazy(async () => {
 });
 
 const WIP_STATUSES = new Set(['released', 'in_progress', '已下达', '执行中', 'RELEASED', 'IN_PROGRESS']);
+const PENDING_SCHEDULING_STATUSES = new Set(['draft', '草稿', 'DRAFT', 'pending', '待排产', '待下达']);
 const COMPLETED_STATUSES = new Set(['completed', 'cancelled', '已完成', '已取消', 'COMPLETED', 'CANCELLED']);
 
 type WorkOrderRow = {
@@ -49,17 +57,6 @@ type WorkOrderRow = {
   completed_quantity?: number;
   status?: string;
   planned_end_date?: string;
-};
-
-type ProductionBroadcastItem = {
-  id: string;
-  operator_name?: string;
-  process_name?: string;
-  product_name?: string;
-  work_order_no?: string;
-  qualified_quantity?: number;
-  unqualified_quantity?: number;
-  created_at?: string;
 };
 
 function unwrapWorkOrderList(res: unknown): WorkOrderRow[] {
@@ -142,7 +139,18 @@ const ManufacturingDashboard: React.FC = () => {
         .slice(0, 6),
     [allWorkOrders],
   );
-  const recentBroadcast = ((broadcast as { items?: ProductionBroadcastItem[] })?.items || []) as ProductionBroadcastItem[];
+  const pendingSchedulingOrders = useMemo(
+    () =>
+      allWorkOrders
+        .filter(
+          (row) =>
+            isDashboardWorkOrderRow(row) &&
+            PENDING_SCHEDULING_STATUSES.has(String(row.status ?? '')),
+        )
+        .slice(0, 6),
+    [allWorkOrders],
+  );
+  const recentBroadcast = ((broadcast as { items?: ModuleBroadcastItem[] })?.items || []) as ModuleBroadcastItem[];
   const todos = todosData?.items || [];
 
   const kpis: ModuleKpiDef[] = useMemo(
@@ -272,6 +280,9 @@ const ManufacturingDashboard: React.FC = () => {
     }));
   }, [trendData, trendType]);
 
+  const hasTrendData = trendChartData.some((d) => Number(d.value) > 0);
+  const hasStatusChartData = statusChartData.some((d) => Number(d.count) > 0);
+
   const openWorkOrder = useCallback(
     (id: number) => {
       navigate(`/apps/kuaizhizao/production-execution/work-orders/${id}`);
@@ -333,46 +344,17 @@ const ManufacturingDashboard: React.FC = () => {
     [t, workOrderStackedColumn],
   );
 
-  const broadcastTimelineItems = useMemo(
-    () =>
-      recentBroadcast.slice(0, 5).map((item) => ({
-        key: item.id,
-        color: (item.unqualified_quantity ?? 0) > 0 ? 'red' : 'green',
-        children: (
-          <>
-            <Text style={{ fontSize: 12 }}>
-              <Text strong>{item.operator_name || '—'}</Text>
-              {t('app.kuaizhizao.productionExecutionDashboard.broadcastReportAt')}
-              <Text style={{ color: '#1890ff' }}>{item.process_name || '-'}</Text>
-              {t('app.kuaizhizao.productionExecutionDashboard.broadcastReportDone')}
-            </Text>
-            <div style={{ marginTop: 4 }}>
-              <Text type="secondary" style={{ fontSize: 11 }}>
-                {t('app.kuaizhizao.productionExecutionDashboard.broadcastWorkOrder')}: {item.work_order_no || '-'}
-                {' - '}
-                {t('app.kuaizhizao.productionExecutionDashboard.broadcastProduct')}: {item.product_name || '-'}
-              </Text>
-            </div>
-            <div style={{ marginTop: 4 }}>
-              <Badge status="success" text={`${t('app.kuaizhizao.productionExecutionDashboard.broadcastQualified')}: ${item.qualified_quantity ?? 0}`} />
-              {(item.unqualified_quantity ?? 0) > 0 && (
-                <Badge
-                  status="error"
-                  text={`${t('app.kuaizhizao.productionExecutionDashboard.broadcastUnqualified')}: ${item.unqualified_quantity}`}
-                  style={{ marginLeft: 12 }}
-                />
-              )}
-            </div>
-            <div>
-              <Text type="secondary" style={{ fontSize: 11 }}>
-                {item.created_at ? formatDateTime(item.created_at, 'MM-DD HH:mm') : ''}
-              </Text>
-            </div>
-          </>
-        ),
-      })),
-    [recentBroadcast, t],
-  );
+  const masonryLoading =
+    todosLoading || ordersLoading || broadcastLoading || trendLoading || summaryLoading;
+  const masonryEmptyFallback = resolveMasonryEmptyFallback(masonryLoading, [
+    todos.length > 0,
+    pendingSchedulingOrders.length > 0,
+    wipOrders.length > 0,
+    overdueOrders.length > 0,
+    recentBroadcast.length > 0,
+    hasTrendData,
+    hasStatusChartData,
+  ]);
 
   return (
     <ModuleCenterLayout
@@ -381,114 +363,116 @@ const ManufacturingDashboard: React.FC = () => {
       shortcutRow={<ModuleShortcutGrid items={shortcuts} />}
       actionRow={
         <ModuleActionMasonry>
-          <ModuleActionPanel
-            layout="masonry"
-            title={t('app.kuaizhizao.productionExecutionDashboard.todosTitle')}
-            loading={todosLoading}
-          >
-            <ModuleTodoList
-              items={todos}
-              emptyText={t('app.kuaizhizao.productionExecutionDashboard.noTodos')}
-            />
-          </ModuleActionPanel>
-          <ModuleActionPanel
-            layout="masonry"
-            title={t('app.kuaizhizao.productionExecutionDashboard.wipOrdersTitle')}
-            loading={ordersLoading}
-            extra={
-              <a onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}>
-                {t('app.kuaizhizao.productionExecutionDashboard.all')}
-              </a>
-            }
-          >
-            <Table
-              size="small"
-              dataSource={wipOrders}
-              pagination={false}
-              rowKey="id"
-              columns={orderColumns}
-              locale={{ emptyText: t('app.kuaizhizao.workOrder.emptyNoWip') }}
-            />
-          </ModuleActionPanel>
-          <ModuleActionPanel
-            layout="masonry"
-            title={t('app.kuaizhizao.productionExecutionDashboard.broadcastTitle')}
-            loading={broadcastLoading}
-          >
-            {broadcastTimelineItems.length === 0 ? (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={t('app.kuaizhizao.productionExecutionDashboard.emptyBroadcast')}
+          {showMasonryCard(todosLoading, todos.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel layout="masonry" title={t('app.kuaizhizao.productionExecutionDashboard.todosTitle')} loading={todosLoading} masonryWeight={masonryWeightFromRows(todos.length)}>
+              <ModuleTodoList items={todos} emptyText={t('app.kuaizhizao.productionExecutionDashboard.noTodos')} />
+            </ModuleActionPanel>
+          ) : null}
+          {showMasonryCard(ordersLoading, pendingSchedulingOrders.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.productionExecutionDashboard.pendingSchedulingTitle')}
+              loading={ordersLoading}
+              masonryWeight={masonryWeightFromRows(pendingSchedulingOrders.length)}
+              extra={
+                <a onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=draft')}>
+                  {t('app.kuaizhizao.productionExecutionDashboard.all')}
+                </a>
+              }
+            >
+              <Table tableLayout="fixed" size="small" dataSource={pendingSchedulingOrders} pagination={false} rowKey="id" columns={orderColumns} />
+            </ModuleActionPanel>
+          ) : null}
+          {showMasonryCard(ordersLoading, wipOrders.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.productionExecutionDashboard.wipOrdersTitle')}
+              loading={ordersLoading}
+              masonryWeight={masonryWeightFromRows(wipOrders.length)}
+              extra={
+                <a onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}>
+                  {t('app.kuaizhizao.productionExecutionDashboard.all')}
+                </a>
+              }
+            >
+              <Table tableLayout="fixed" size="small" dataSource={wipOrders} pagination={false} rowKey="id" columns={orderColumns} />
+            </ModuleActionPanel>
+          ) : null}
+          {showMasonryCard(ordersLoading, overdueOrders.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.productionExecutionDashboard.overdueOrdersTitle')}
+              loading={ordersLoading}
+              masonryWeight={masonryWeightFromRows(overdueOrders.length)}
+              extra={
+                <a onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}>
+                  {t('app.kuaizhizao.productionExecutionDashboard.all')}
+                </a>
+              }
+            >
+              <Table tableLayout="fixed" size="small" dataSource={overdueOrders} pagination={false} rowKey="id" columns={overdueColumns} />
+            </ModuleActionPanel>
+          ) : null}
+          {showMasonryCard(broadcastLoading, recentBroadcast.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.productionExecutionDashboard.broadcastTitle')}
+              loading={broadcastLoading}
+              masonryWeight={masonryWeightFromRows(Math.min(recentBroadcast.length, 8))}
+              extra={
+                <a onClick={() => navigate('/apps/kuaizhizao/production-execution/reporting')}>
+                  {t('app.kuaizhizao.productionExecutionDashboard.all')}
+                </a>
+              }
+            >
+              <ModuleBroadcastList
+                items={recentBroadcast}
+                emptyText={t('app.kuaizhizao.productionExecutionDashboard.emptyBroadcast')}
+                onItemClick={(item) => {
+                  const workOrder = (item.work_order_no || '').trim();
+                  navigate(
+                    workOrder
+                      ? `/apps/kuaizhizao/production-execution/reporting?work_order=${encodeURIComponent(workOrder)}`
+                      : '/apps/kuaizhizao/production-execution/reporting',
+                  );
+                }}
               />
-            ) : (
-              <Timeline items={broadcastTimelineItems} />
-            )}
-          </ModuleActionPanel>
-          <ModuleActionPanel
-            layout="masonry"
-            title={t('app.kuaizhizao.productionExecutionDashboard.overdueOrdersTitle')}
-            loading={ordersLoading}
-            extra={
-              <a onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}>
-                {t('app.kuaizhizao.productionExecutionDashboard.all')}
-              </a>
-            }
-          >
-            <Table
-              size="small"
-              dataSource={overdueOrders}
-              pagination={false}
-              rowKey="id"
-              columns={overdueColumns}
-              locale={{ emptyText: t('app.kuaizhizao.productionExecutionDashboard.emptyOverdue') }}
-            />
-          </ModuleActionPanel>
-          <ModuleChartPanel
-            layout="masonry"
-            title={t('app.kuaizhizao.productionExecutionDashboard.trendTitle')}
-            loading={trendLoading}
-            segmented={{
-              value: trendType,
-              options: [
-                {
-                  label: t('app.kuaizhizao.productionExecutionDashboard.trendOutput'),
-                  value: 'output',
-                },
-                {
-                  label: t('app.kuaizhizao.productionExecutionDashboard.trendQualified'),
-                  value: 'qualified',
-                },
-              ],
-              onChange: (v) => setTrendType(v as 'output' | 'qualified'),
-            }}
-          >
-            <ModuleTrendLine
-                data={trendChartData}
-                xField="date"
-                yField="value"
-                height={240}
-                autoFit
-                style={{ lineWidth: 2 }}
-              />
-          </ModuleChartPanel>
-          <ModuleChartPanel
-            layout="masonry"
-            title={t('app.kuaizhizao.productionExecutionDashboard.statusDistributionTitle')}
-            loading={summaryLoading}
-          >
-            <Suspense fallback={null}>
-              <MfgStatusPie
-                data={statusChartData}
-                angleField="count"
-                colorField="status"
-                radius={0.8}
-                innerRadius={0.6}
-                height={240}
-                autoFit
-                legend={{ color: { position: 'bottom' } }}
-              />
-            </Suspense>
-          </ModuleChartPanel>
+            </ModuleActionPanel>
+          ) : null}
+          {showMasonryCard(trendLoading, hasTrendData, masonryEmptyFallback) ? (
+            <ModuleChartPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.productionExecutionDashboard.trendTitle')}
+              loading={trendLoading}
+              masonryWeight={3}
+              segmented={{
+                value: trendType,
+                options: [
+                  { label: t('app.kuaizhizao.productionExecutionDashboard.trendOutput'), value: 'output' },
+                  { label: t('app.kuaizhizao.productionExecutionDashboard.trendQualified'), value: 'qualified' },
+                ],
+                onChange: (v) => setTrendType(v as 'output' | 'qualified'),
+              }}
+            >
+              <ModuleTrendLine data={trendChartData} xField="date" yField="value" height={240} autoFit style={{ lineWidth: 2 }} />
+            </ModuleChartPanel>
+          ) : null}
+          {showMasonryCard(summaryLoading, hasStatusChartData, masonryEmptyFallback) ? (
+            <ModuleChartPanel layout="masonry" title={t('app.kuaizhizao.productionExecutionDashboard.statusDistributionTitle')} loading={summaryLoading} masonryWeight={3}>
+              <Suspense fallback={null}>
+                <MfgStatusPie
+                  data={statusChartData}
+                  angleField="count"
+                  colorField="status"
+                  radius={0.8}
+                  innerRadius={0.6}
+                  height={240}
+                  autoFit
+                  legend={{ color: { position: 'bottom' } }}
+                />
+              </Suspense>
+            </ModuleChartPanel>
+          ) : null}
         </ModuleActionMasonry>
       }
     />

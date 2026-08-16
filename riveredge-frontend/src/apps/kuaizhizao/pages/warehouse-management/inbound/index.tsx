@@ -6,7 +6,7 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProForm, ProFormItem, type ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, InputNumber, Input, Typography, Select, Spin, Descriptions, Empty, Upload, theme as AntdTheme } from 'antd';
@@ -80,6 +80,13 @@ import type {
 } from './inboundPullEntryTypes';
 import { fetchInboundHubList } from './inboundListAggregate';
 import { fetchInboundHubDetail } from './inboundHubDetail';
+import {
+  filterInboundHubRowsByDeepLink,
+  inboundHubDeepLinkStub,
+  parseInboundHubDeepLink,
+  resolveInboundDeepLinkId,
+  type InboundHubDeepLinkFilter,
+} from './inboundHubDeepLink';
 import { fetchPurchaseReceiptIqcEnsure } from './inboundPurchaseIqcGate';
 import { PurchaseReceiptIqcReviewModal } from './PurchaseReceiptIqcReviewModal';
 import { fetchCustomerMaterialIqcEnsure } from './inboundCustomerMaterialIqcGate';
@@ -437,6 +444,7 @@ const InboundPage: React.FC = () => {
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const { token } = AntdTheme.useToken();
   const inboundDetailDrawerZIndex = token.zIndexPopupBase;
@@ -482,6 +490,8 @@ const InboundPage: React.FC = () => {
   const packingBindingPerms = useResourcePermissions('kuaizhizao:production-execution-packing-binding');
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const handledDirectConfirmKeyRef = useRef<string | null>(null);
+  const inboundDeepLinkRef = useRef<InboundHubDeepLinkFilter | null>(null);
+  const inboundDeepLinkOpenedRef = useRef(false);
 
   const {
     customFields: purchaseReceiptListCustomFields,
@@ -1092,6 +1102,35 @@ const InboundPage: React.FC = () => {
       dc.purchaseReceiptHandoff,
     );
   }, [location.state, location.pathname, location.search, navigate]);
+
+  useEffect(() => {
+    const filter = parseInboundHubDeepLink(searchParams);
+    inboundDeepLinkRef.current = filter;
+    if (!filter) {
+      inboundDeepLinkOpenedRef.current = false;
+      actionRef.current?.reload();
+      return;
+    }
+    if (filter.receiptType !== receiptTypeFilterRef.current) {
+      handleReceiptTypeFilterChange(filter.receiptType);
+    }
+    if (inboundDeepLinkOpenedRef.current) {
+      actionRef.current?.reload();
+      return;
+    }
+    inboundDeepLinkOpenedRef.current = true;
+    void (async () => {
+      try {
+        const id = await resolveInboundDeepLinkId(filter);
+        if (id) {
+          await handleDetail(inboundHubDeepLinkStub({ ...filter, id }));
+        }
+      } catch {
+        messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.loadListFailed'));
+      }
+      actionRef.current?.reload();
+    })();
+  }, [searchParams, handleReceiptTypeFilterChange, messageApi, t]);
 
   const submitConfirmPreview = async () => {
     const order = purchaseConfirmPreviewDetail;
@@ -2029,7 +2068,12 @@ const InboundPage: React.FC = () => {
               },
               currentUser,
             );
-            return result;
+            const filtered = filterInboundHubRowsByDeepLink(result.data, inboundDeepLinkRef.current);
+            return {
+              ...result,
+              data: filtered,
+              total: inboundDeepLinkRef.current ? filtered.length : result.total,
+            };
           } catch {
             messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.loadListFailed'));
             return { data: [], success: false, total: 0 };

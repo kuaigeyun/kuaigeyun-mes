@@ -56,6 +56,10 @@ import { convertUnitPriceByPriceType } from '../../../utils/resolve-partner-mate
 import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import {
   renderMasterActiveTag,
   renderMasterTypeMarker,
 } from '../../../utils/masterListPresentation';
@@ -465,32 +469,43 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         partnerOptions,
       ),
       {
-        title: isCustomer ? t('field.customer.code', '客户') : t('field.supplier.code', '供应商'),
-        dataIndex: 'partnerName',
-        width: 160,
-        minWidth: 160,
-        uniTableKeepWidth: true,
-        resizable: false,
-        ellipsis: true,
+        title: isCustomer
+          ? t('field.customer.code', '客户编号')
+          : t('field.supplier.code', '供应商编号'),
+        dataIndex: 'partnerCode',
+        key: 'partnerName',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         hideInSearch: true,
         sorter: true,
-        render: (_, r) => `${r.partnerCode ?? ''} ${r.partnerName ?? ''}`.trim() || '—',
+        render: (_, r) => (
+          <UniTableStackedPrimaryCell
+            primary={r.partnerName ?? ''}
+            secondary={r.partnerCode ?? ''}
+            skipLinkedDocumentLink
+          />
+        ),
       },
       {
-        title: t('app.master-data.materialForm.mainCode', '内部物料'),
-        dataIndex: 'materialName',
-        width: 160,
-        minWidth: 160,
-        uniTableKeepWidth: true,
-        resizable: false,
-        ellipsis: true,
-        render: (_, r) => `${r.materialCode ?? ''} ${r.materialName ?? ''}`.trim() || '—',
+        title: t('app.master-data.materialForm.mainCode', '物料主编号'),
+        dataIndex: 'materialCode',
+        key: 'price_book_material_stacked',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => (
+          <UniTableStackedPrimaryCell
+            primary={r.materialName ?? ''}
+            secondary={r.materialCode ?? ''}
+            skipLinkedDocumentLink
+          />
+        ),
       },
       {
         title: isCustomer
           ? t('app.master-data.priceBook.customerMaterialCode')
           : t('app.master-data.priceBook.supplierMaterialCode'),
         dataIndex: 'partnerMaterialCode',
+        key: 'partnerMaterialCode',
         width: 120,
         minWidth: 120,
         uniTableKeepWidth: true,
@@ -502,6 +517,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
           ? t('app.master-data.priceBook.customerMaterialName')
           : t('app.master-data.priceBook.supplierMaterialName'),
         dataIndex: 'partnerMaterialName',
+        key: 'partnerMaterialName',
         width: 120,
         minWidth: 120,
         uniTableKeepWidth: true,
@@ -638,7 +654,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-          columnPersistenceId={`apps.master-data.pages.supply-chain.partner-price-books.${partnerType}.list-v1`}
+          columnPersistenceId={`apps.master-data.pages.supply-chain.partner-price-books.${partnerType}.list-v3`}
           headerTitle={pageTitle}
           showCreateButton
           createButtonText={createButtonLabel}

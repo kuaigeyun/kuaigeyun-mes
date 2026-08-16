@@ -114,6 +114,10 @@ export function resolveSopListParams(
       if (materialGroupUuid) extra.material_group_uuid = materialGroupUuid;
       const routeUuid = pickOptionalString(search, 'route_uuid');
       if (routeUuid) extra.route_uuid = routeUuid;
+      const carrier = pickOptionalString(search, 'carrier');
+      if (carrier) extra.carrier = carrier;
+      const controlStatus = pickOptionalString(search, 'controlStatus');
+      if (controlStatus) extra.control_status = controlStatus;
       return extra;
     },
   });

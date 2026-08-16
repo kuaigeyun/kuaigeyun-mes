@@ -73,13 +73,7 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
   const [expandedRowKeys, setExpandedRowKeys] = useState<React.Key[]>([]);
 
   const milestoneOptions = useMemo(
-    () => [
-      { label: t('app.kuaiplm.gateTemplates.milestoneRole.none'), value: 'none' as GateMilestoneRole },
-      {
-        label: t('app.kuaiplm.gateTemplates.milestoneRole.spawnDelivery'),
-        value: 'spawn_delivery' as GateMilestoneRole,
-      },
-    ],
+    () => [{ label: t('app.kuaiplm.gateTemplates.milestoneRole.none'), value: 'none' as GateMilestoneRole }],
     [t],
   );
 
@@ -262,7 +256,7 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
         gate_key: stage.gate_key,
         gate_name: stage.gate_name,
         sort_order: stage.sort_order || idx + 1,
-        milestone_role: stage.milestone_role || 'none',
+        milestone_role: stage.milestone_role === 'spawn_delivery' ? 'none' : stage.milestone_role || 'none',
         deliverables: (stage.deliverables ?? []).map((d, dIdx) => ({
           name: d.name,
           deliverable_type: d.deliverable_type,

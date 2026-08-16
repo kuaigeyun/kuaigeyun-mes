@@ -153,6 +153,11 @@ function tabPathname(tabKey: string): string {
  */
 const REDIRECT_ONLY_TAB_PATH_PATTERNS: RegExp[] = [
   /^\/apps\/kuaiplm\/knowledge-base\/detail\/[^/]+$/,
+  /^\/apps\/kuaicaiwu\/cost-management\/dashboard$/,
+  /^\/apps\/kuaicaiwu\/management-dashboard$/,
+  /^\/apps\/kuaizhizao\/cost-management\/dashboard$/,
+  /^\/apps\/kuaizhizao\/performance\/dashboard$/,
+  /^\/apps\/kuaizhizao\/after-sales-service\/dashboard$/,
 ];
 
 function shouldSkipTabPath(pathOrKey: string): boolean {
@@ -378,6 +383,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
   // 从 themeStore 订阅标签栏背景色（单一数据源，无需事件监听）
   const storeTabsBgColor = useThemeStore((s) => s.resolved.tabsBgColor);
+  const storeTabBgColor = useThemeStore((s) => s.resolved.tabBgColor);
   const storeIsDark = useThemeStore((s) => s.resolved.isDark);
 
   /**
@@ -1256,6 +1262,12 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     return storeTabsBgColor || token.colorBgContainer;
   }, [storeTabsBgColor, token.colorBgContainer, storeIsDark]);
 
+  /** 激活标签与内容区：自定义标签背景，空则回落系统内容区底色 */
+  const tabFillColor = useMemo(() => {
+    if (storeIsDark) return token.colorBgLayout;
+    return storeTabBgColor || token.colorBgLayout;
+  }, [storeTabBgColor, token.colorBgLayout, storeIsDark]);
+
   // 根据标签栏背景色计算文字颜色
   const tabsTextColor = useMemo(() => {
     if (storeIsDark) return 'var(--ant-colorText)';
@@ -1349,17 +1361,17 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         }
         .uni-tabs-container .ant-tabs-nav-wrap {
           border-bottom: none !important;
+          /* 横向滚动；上下给外圆角留出，避免 auto 把另一轴也裁成 hidden */
           overflow-x: auto !important;
-          /* 不设置 overflow-y，避免与 overflow-x: auto 冲突导致 visible 被计算为 auto */
-          height: 38px !important;
-          /* 移除 clip-path: none，允许 Ant Design 原生阴影显示 */
+          overflow-y: visible !important;
+          height: auto !important;
+          min-height: 38px !important;
           padding-bottom: 0 !important;
           margin-bottom: 0 !important;
           box-sizing: border-box !important;
-          position: relative; /* 为阴影定位提供参考 */
-          /* 隐藏滚动条且不占用高度 */
-          scrollbar-width: none !important; /* Firefox */
-          -ms-overflow-style: none !important; /* IE/Edge */
+          position: relative;
+          scrollbar-width: none !important;
+          -ms-overflow-style: none !important;
         }
         /* 隐藏 Chrome/Safari/Webkit 滚动条且不占用高度 */
         .uni-tabs-container .ant-tabs-nav-wrap::-webkit-scrollbar {
@@ -1377,6 +1389,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           border-bottom: none !important;
           margin-bottom: 0 !important;
           padding-bottom: 0 !important;
+          padding-left: ${tabRadius}px !important;
+          padding-right: ${tabRadius}px !important;
           overflow: visible !important;
           height: 38px !important;
           display: flex !important;
@@ -1393,11 +1407,12 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           display: none !important;
           border-bottom: none !important;
         }
-        /* Chrome 式标签：未激活透明，透出总栏背景；激活态用内容区实色 */
+        /* Chrome 式标签：未激活透明，透出总栏背景；激活态用内容区实色。
+         * 未激活也预留 1px 透明边框 + 与激活态相同的盒模型，避免切换时被撑开、整排文字抖动。 */
         .uni-tabs-container .ant-tabs-tab {
           margin: 0 !important;
-          padding: 6px 16px 8px !important;
-          border: none !important;
+          padding: 6px 16px !important;
+          border: 1px solid transparent !important;
           border-bottom: none !important;
           background: transparent !important;
           border-top-left-radius: ${tabRadius}px !important;
@@ -1419,9 +1434,34 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           line-height: 22px !important;
         }
         .uni-tabs-container .ant-tabs-tab-remove {
-          display: flex !important;
+          display: inline-flex !important;
           align-items: center !important;
+          justify-content: center !important;
+          width: 16px !important;
+          min-width: 16px !important;
+          height: 22px !important;
+          margin: 0 0 0 8px !important;
+          padding: 0 !important;
+          flex: none !important;
           line-height: 22px !important;
+          font-size: 12px !important;
+          transform: none !important;
+          transition: color 0.15s ease !important;
+        }
+        .uni-tabs-container .ant-tabs-tab-remove:hover,
+        .uni-tabs-container .ant-tabs-tab-remove:active,
+        .uni-tabs-container .ant-tabs-tab-remove:focus {
+          width: 16px !important;
+          height: 22px !important;
+          margin: 0 0 0 8px !important;
+          padding: 0 !important;
+          transform: none !important;
+        }
+        .uni-tabs-container .ant-tabs-tab-remove .anticon,
+        .uni-tabs-container .ant-tabs-tab-remove .anticon svg {
+          width: 12px !important;
+          height: 12px !important;
+          font-size: 12px !important;
         }
         /* 未激活标签：使用竖线分隔 */
         .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active) {
@@ -1439,8 +1479,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           z-index: 1;
           opacity: 1 !important;
         }
-        /* 最后一个标签不需要右侧竖线 */
-        .uni-tabs-container .ant-tabs-tab:last-child::after {
+        /* 最后一个未激活标签不需要右侧竖线；激活态要用 ::after 画外圆角 */
+        .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active):last-child::after {
           display: none !important;
         }
         .uni-tabs-container .ant-tabs-content-holder {
@@ -1453,75 +1493,101 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         }
         /* 激活标签背景色与内容区一致，仿 Chrome 浏览器样式 - 使用主题背景色 */
         /* 参考：https://juejin.cn/post/6986827061461516324 */
-        .uni-tabs-container .ant-tabs-tab-active {
-          background: var(--ant-colorBgLayout) !important;
+        .uni-tabs-container .ant-tabs-nav-list > .ant-tabs-tab.ant-tabs-tab-active {
+          --uni-tab-line: var(--ant-colorBorder, var(--ant-color-border, #d9d9d9));
+          --uni-tab-fill: ${tabFillColor};
+          background: var(--uni-tab-fill) !important;
+          border-color: var(--uni-tab-line) !important;
           border-bottom: none !important;
-          border-top-left-radius: ${tabRadius}px !important;
-          border-top-right-radius: ${tabRadius}px !important;
-          border-bottom-left-radius: 0 !important;
-          border-bottom-right-radius: 0 !important;
-          position: relative;
-          z-index: 2;
-          margin-bottom: 0px !important;
-          margin-top: 0 !important;
-          overflow: visible !important;
-          /* Chrome 式外圆角效果 - 强制显示圆角，防止被父容器裁剪 */
-          border-radius: ${tabRadius}px ${tabRadius}px 0 0 !important;
-          padding: 6px 16px 8px !important;
-          height: 36px !important;
-          box-sizing: border-box !important;
-          display: flex !important;
-          align-items: center !important;
-          box-shadow: inset 0 3px 6px -3px rgba(0, 0, 0, 0.12) !important;
+          z-index: 3;
+          /* 高度与未激活相同，只向下投影 1px 盖住总栏底线，不抬高顶边、不挤文字 */
+          box-shadow: 0 1px 0 var(--uni-tab-fill) !important;
         }
-        /* Chrome 式反向圆角 - 使用伪元素实现左右两侧的内凹圆角 */
+        /* 前一个未激活标签的竖分割线会顶到激活标签左缘，由激活标签盖住 */
+        .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active):has(+ .ant-tabs-tab-active)::after {
+          display: none !important;
+        }
+        /*
+         * 外圆角衔接采用三层叠加（自下而上）：
+         * ① 标签自身直角框线正常绘制（左右边框直通到底，不做局部擦除）；
+         * ② ::before/::after 各叠一个 radius 见方的同色方块打底，盖住直角框线底段
+         *    （从边框列向标签内侧延伸，宽于 1px，避免亚像素错位露出直线）；
+         * ③ .uni-tab-outer-corner 最外层叠外圆角弧线，与侧边框、总栏底线衔接。
+         */
         .uni-tabs-container .ant-tabs-tab-active::before,
         .uni-tabs-container .ant-tabs-tab-active::after {
+          content: '';
           position: absolute;
           bottom: 0;
-          content: '';
-          width: ${tabCornerDiameter}px;
-          height: ${tabCornerDiameter}px;
-          border-radius: 100%;
-          box-shadow: 0 0 0 40px var(--ant-colorBgLayout);
+          width: ${tabRadius}px;
+          height: ${tabRadius}px;
+          background: var(--uni-tab-fill);
+          border: none !important;
+          box-shadow: none !important;
           pointer-events: none;
-          z-index: -1;
-          /* 确保伪元素不被父容器裁剪 */
+          z-index: 5;
+          display: block !important;
+        }
+        .uni-tabs-container .ant-tabs-tab-active::before { left: -1px; }
+        .uni-tabs-container .ant-tabs-tab-active::after { right: -1px; }
+        /*
+         * 三层叠加③：最外层外圆角（禁止 SVG）。
+         * 外层节点是 radius 见方的裁剪方窗（overflow hidden、无圆角），内层 arc 节点
+         * 用 border + border-radius 画凹弧、用 spread 阴影填弧外侧月牙并盖住总栏底线。
+         * 不能用 radial-gradient 当填充：background 会被节点自身 border-radius 裁掉，
+         * 月牙区域永远填不上，非整数 DPR 下弧线与填充之间会露白。
+         * z-index 必须高于打底方块（5），否则弧线顶端与侧边框同列的一段被方块抹掉。
+         */
+        .uni-tabs-container .uni-tab-outer-corner {
+          display: none;
+          position: absolute;
+          bottom: 0;
+          width: ${tabRadius}px;
+          height: ${tabRadius}px;
+          pointer-events: none;
+          z-index: 6;
+          overflow: hidden;
+        }
+        .uni-tabs-container .ant-tabs-tab-active .uni-tab-outer-corner {
+          display: block;
+        }
+        .uni-tabs-container .ant-tabs-tab-active .uni-tab-outer-corner--left {
+          left: -${tabRadius}px;
+        }
+        .uni-tabs-container .ant-tabs-tab-active .uni-tab-outer-corner--right {
+          right: -${tabRadius}px;
+        }
+        .uni-tabs-container .uni-tab-outer-corner .uni-tab-outer-corner-arc {
+          position: absolute;
+          inset: 0;
+          box-sizing: border-box;
+          border-style: solid;
+          border-color: var(--uni-tab-line);
+          border-width: 0;
+          box-shadow: 0 0 0 ${tabRadius}px var(--uni-tab-fill);
+        }
+        .uni-tabs-container .uni-tab-outer-corner--left .uni-tab-outer-corner-arc {
+          border-right-width: 1px;
+          border-bottom-width: 1px;
+          border-bottom-right-radius: ${tabRadius}px;
+        }
+        .uni-tabs-container .uni-tab-outer-corner--right .uni-tab-outer-corner-arc {
+          border-left-width: 1px;
+          border-bottom-width: 1px;
+          border-bottom-left-radius: ${tabRadius}px;
+        }
+        .uni-tabs-container .ant-tabs-tab-btn {
+          position: static !important;
           overflow: visible !important;
-          /* 确保伪元素可以溢出显示 */
-          will-change: transform;
-        }
-        /* 左侧反向圆角 */
-        .uni-tabs-container .ant-tabs-tab-active::before {
-          left: -${tabCornerDiameter}px;
-          clip-path: inset(50% -${tabRadius}px 0 50%);
-        }
-        /* 右侧反向圆角 - 调整 clip-path 确保右侧圆角正确显示 */
-        .uni-tabs-container .ant-tabs-tab-active::after {
-          right: -${tabCornerDiameter}px;
-          clip-path: inset(50% 50% 0 -${tabRadius}px);
-        }
-        /* 第一个标签不需要左侧反向圆角 */
-        .uni-tabs-container .ant-tabs-tab-active:first-child::before {
-          display: none;
-        }
-        /* 最后一个标签不需要右侧反向圆角 */
-        .uni-tabs-container .ant-tabs-tab-active:last-child::after {
-          display: none;
         }
         /* 确保单个标签时也没有底部间距 */
         .uni-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) {
           margin-bottom: 0 !important;
         }
         .uni-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) .ant-tabs-tab-active {
-          margin-bottom: 0px !important;
+          margin-bottom: 0 !important;
         }
-        /* Chrome 式标签：激活标签与内容区无缝融合 */
-        /* 激活标签向左偏移1px，但排除第一个标签，实现标签之间的重叠效果 */
-        .uni-tabs-container .ant-tabs-tab-active:not(:first-child) {
-          margin-left: -1px !important;
-          padding-left: 17px !important;
-        }
+        /* 禁止激活态改 margin/padding：会把后续标签一起挤动，文字抖动 */
         /* ==================== 标签栏文字颜色自动适配（根据背景色亮度反色处理） ==================== */
         /* 未激活标签文字颜色 - 根据标签栏背景色自动适配 */
         .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active) .ant-tabs-tab-btn {
@@ -1535,7 +1601,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         /* Chrome 式效果：激活标签文字颜色 - 激活标签使用内容区背景，文字颜色使用默认主题色 */
         .uni-tabs-container .ant-tabs-tab-active .ant-tabs-tab-btn {
           color: var(--ant-colorText) !important;
-          font-weight: 500 !important;
+          font-weight: normal !important;
         }
         /* 标签关闭按钮颜色 - 根据标签栏背景色自动适配 */
         .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active) .ant-tabs-tab-remove {
@@ -1567,7 +1633,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         }
         /* 标签栏总背景：唯一着色层（支持半透明）；子节点一律透明避免叠色 */
         .uni-tabs-header {
-          background: ${tabsBgColor} !important;
+          background:
+            linear-gradient(var(--ant-colorBorder, var(--ant-color-border, #d9d9d9)), var(--ant-colorBorder, var(--ant-color-border, #d9d9d9))) bottom / 100% 1px no-repeat,
+            ${tabsBgColor} !important;
           flex-shrink: 0;
           padding-bottom: 0;
           margin-bottom: 0px; /* 移除底部间距，由内容区控制 */
@@ -1578,7 +1646,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           border-bottom: none !important;
         }
         div.uni-tabs-header {
-          background: ${tabsBgColor} !important;
+          background:
+            linear-gradient(var(--ant-colorBorder, var(--ant-color-border, #d9d9d9)), var(--ant-colorBorder, var(--ant-color-border, #d9d9d9))) bottom / 100% 1px no-repeat,
+            ${tabsBgColor} !important;
         }
         .uni-tabs-container,
         .uni-tabs-container .ant-tabs-nav,
@@ -1600,7 +1670,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           margin-bottom: 0 !important;
         }
         .uni-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) .ant-tabs-tab-active {
-          margin-bottom: -1px !important;
+          margin-bottom: 0 !important;
         }
         .uni-tabs-content {
           flex: 1 1 auto;
@@ -1609,8 +1679,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           overflow-y: auto;
           overflow-x: hidden;
           position: relative;
-          background: var(--ant-colorBgLayout);
-          margin-top: 16px !important;
+          background: ${tabFillColor};
+          --ant-colorBgLayout: ${tabFillColor};
+          margin-top: ${isFullscreen ? '16px' : '0'} !important;
           margin-right: ${isFullscreen ? '16px' : '0'} !important;
           margin-bottom: ${isFullscreen ? '16px' : '0'} !important;
           margin-left: ${isFullscreen ? '16px' : '0'} !important;
@@ -1618,12 +1689,13 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           padding-bottom: 0 !important;
           box-sizing: border-box !important;
           /* 修复滚动：使用 calc 计算确切的内容区高度（视口 - 顶栏 - 标签栏 - 间距）。
-             全屏时四边等距 16px，因此垂直需扣减 32px。
+             顶距 16px 由内层 page-outer / hmi / board 的 padding 承担，不在此用 margin 挖洞。
+             全屏时四边等距 16px，垂直需扣减 32px。
              min-height 与 height 同步：Safari 26.x beta 在 max-height + flex 子项 min-height:0 组合下
              会把普通页主内容区坍缩为 0（运营看板因有 min-height 保底而正常）。 */
-          height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - 56px - ${isFullscreen ? '32px' : '16px'}) !important;
-          max-height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - 56px - ${isFullscreen ? '32px' : '16px'}) !important;
-          min-height: calc(100vh - var(--header-height, ${isFullscreen ? '0px' : '56px'}) - var(--tabs-height, 56px) - ${isFullscreen ? '32px' : '16px'}) !important;
+          height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - ${isFullscreen ? '56px' : '40px'} - ${isFullscreen ? '32px' : '0px'}) !important;
+          max-height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - ${isFullscreen ? '56px' : '40px'} - ${isFullscreen ? '32px' : '0px'}) !important;
+          min-height: calc(100vh - var(--header-height, ${isFullscreen ? '0px' : '56px'}) - var(--tabs-height, ${isFullscreen ? '56px' : '40px'}) - ${isFullscreen ? '32px' : '0px'}) !important;
           /* 彻底隐藏滚动条且不占用空间 */
           scrollbar-width: none !important;
           -ms-overflow-style: none !important;
@@ -1631,6 +1703,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         /* 工作台：不滚动，边距由内部 DashboardTemplate 控制避免加载抖动 */
         .uni-tabs-content.uni-tabs-content-dashboard {
           overflow: hidden !important;
+          background: transparent !important;
         }
 
         /* 普通业务页：占满内容区高度，避免 Safari 26 flex 子项高度坍缩 */
@@ -1642,7 +1715,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           height: 100%;
           min-height: 0;
           box-sizing: border-box;
-          padding: 0 16px;
+          padding: 16px;
         }
         .uni-tabs-content-page-outer.uni-tabs-content-page-outer--flush {
           padding: 0;
@@ -1668,7 +1741,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           min-height: 0;
           width: 100%;
           box-sizing: border-box;
-          padding: 0 16px;
+          padding: 16px;
         }
         /* HMI 内层：带圆角的框，裁剪内部 HMI，工业风边框 */
         .uni-tabs-content-hmi-inner {
@@ -1693,7 +1766,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           min-height: 0;
           width: 100%;
           box-sizing: border-box;
-          padding: 0 16px;
+          padding: 16px;
         }
         .uni-tabs-content-board-inner {
           flex: 1;
@@ -1993,11 +2066,10 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn-text:hover .anticon {
           color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 1)' : 'var(--ant-colorPrimaryHover)'} !important;
         }
-        /* 标签栏容器 - 允许横向滚动，底部允许溢出显示外圆角 */
+        /* 标签栏容器：外圆角需要溢出可见；横向滚动交给 nav-wrap */
         .uni-tabs-container {
           flex: 1;
-          overflow-x: hidden;
-          overflow-y: hidden;
+          overflow: visible !important;
           position: relative;
           z-index: 1;
         }
@@ -2009,7 +2081,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         }
         .uni-tabs-container .ant-tabs-nav {
           overflow-x: auto;
-          overflow-y: hidden; /* 关键：防止垂直滚动条出现 */
+          overflow-y: visible !important;
           padding-bottom: 0 !important;
           margin-bottom: 0 !important;
           scrollbar-width: none !important; /* Firefox */
@@ -2149,8 +2221,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         className="uni-tabs-wrapper"
         style={{
           '--header-height': isFullscreen ? '0px' : '56px',
-          // tabs header 40px + content margin-top 16px = 56px effective vertical occupancy
-          '--tabs-height': '56px',
+          // 普通页仅标签栏 40px；全屏另加顶距 16px
+          '--tabs-height': isFullscreen ? '56px' : '40px',
           '--content-margin': '16px',
         } as CSSProperties}
       >
@@ -2213,34 +2285,42 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
               items={tabs.map((tab) => ({
                 key: tab.key,
                 label: (
-                  <Dropdown
-                    menu={getTabContextMenu(tab.key)}
-                    trigger={['contextMenu']}
-                  >
-                    <span
-                      onDoubleClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        // 仪表盘标签和固定标签不可双击关闭
-                        if (tab.key !== tenantHomePath && tab.closable && !tab.pinned) {
-                          handleTabClose(tab.key);
-                        }
-                      }}
-                      style={{ userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4 }}
+                  <>
+                    <i className="uni-tab-outer-corner uni-tab-outer-corner--left" aria-hidden="true">
+                      <i className="uni-tab-outer-corner-arc" aria-hidden="true" />
+                    </i>
+                    <Dropdown
+                      menu={getTabContextMenu(tab.key)}
+                      trigger={['contextMenu']}
                     >
-                      {tab.label}
-                      {tab.pinned && (
-                        <PushpinFilled
-                          style={{
-                            fontSize: 12,
-                            color: '#3b82f6',
-                            transform: 'rotate(-45deg)',
-                            flexShrink: 0,
-                          }}
-                        />
-                      )}
-                    </span>
-                  </Dropdown>
+                      <span
+                        onDoubleClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          // 仪表盘标签和固定标签不可双击关闭
+                          if (tab.key !== tenantHomePath && tab.closable && !tab.pinned) {
+                            handleTabClose(tab.key);
+                          }
+                        }}
+                        style={{ userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4 }}
+                      >
+                        {tab.label}
+                        {tab.pinned && (
+                          <PushpinFilled
+                            style={{
+                              fontSize: 12,
+                              color: '#3b82f6',
+                              transform: 'rotate(-45deg)',
+                              flexShrink: 0,
+                            }}
+                          />
+                        )}
+                      </span>
+                    </Dropdown>
+                    <i className="uni-tab-outer-corner uni-tab-outer-corner--right" aria-hidden="true">
+                      <i className="uni-tab-outer-corner-arc" aria-hidden="true" />
+                    </i>
+                  </>
                 ),
                 closable: tab.closable && !tab.pinned, // 固定标签不可关闭
               }))}

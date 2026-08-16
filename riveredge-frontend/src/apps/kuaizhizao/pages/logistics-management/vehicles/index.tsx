@@ -1,14 +1,10 @@
 import React, { useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { Button, Form, Input, InputNumber, Modal, Select, Switch, message } from 'antd';
+import { Button, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-  UniTableStackedPrimaryCell,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import {
@@ -23,13 +19,13 @@ import {
   renderLogisticsOwnershipTag,
   renderVehicleStatusTag,
 } from '../shared/logisticsListPresentation';
-import { createVehicle, deleteVehicle, listVehicles, updateVehicle, type Vehicle } from '../../../services/logistics';
+import { deleteVehicle, listVehicles, type Vehicle } from '../../../services/logistics';
+import { VehicleFormModal } from '../shared/VehicleFormModal';
 
 const VehiclesPage: React.FC = () => {
   const { t } = useTranslation();
   const perms = useResourcePermissions('kuaizhizao:vehicle');
   const actionRef = useRef<ActionType>();
-  const [form] = Form.useForm();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Vehicle | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -37,31 +33,12 @@ const VehiclesPage: React.FC = () => {
 
   const openCreate = () => {
     setEditing(null);
-    form.resetFields();
-    form.setFieldsValue({ ownership: 'internal', status: 'idle', is_enabled: true });
     setOpen(true);
   };
 
   const openEdit = (row: Vehicle) => {
     setEditing(row);
-    form.setFieldsValue(row);
     setOpen(true);
-  };
-
-  const handleSubmit = async () => {
-    const values = await form.validateFields();
-    if (editing) {
-      await updateVehicle(editing.id, values);
-      message.success(t('common.updateSuccess'));
-      if (detail?.id === editing.id) {
-        setDetail({ ...detail, ...values });
-      }
-    } else {
-      await createVehicle(values);
-      message.success(t('common.createSuccess'));
-    }
-    setOpen(false);
-    actionRef.current?.reload();
   };
 
   const openDetail = (row: Vehicle) => {
@@ -108,20 +85,21 @@ const VehiclesPage: React.FC = () => {
         {
           title: t('app.kuaizhizao.logistics.field.plateNumber'),
           dataIndex: 'plate_number',
-          ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+          width: 140,
+          minWidth: 140,
+          uniTableKeepWidth: true,
+          resizable: false,
+          ellipsis: true,
           fixed: 'left',
-          render: (_, row) => (
-            <UniTableStackedPrimaryCell
-              primary={String(row.plate_number ?? '').trim() || '-'}
-              secondary={String(row.vehicle_type ?? '').trim() || '-'}
-              secondaryCopyable={false}
-            />
-          ),
         },
         {
           title: t('app.kuaizhizao.logistics.field.vehicleType'),
           dataIndex: 'vehicle_type',
-          hideInTable: true,
+          width: 96,
+          minWidth: 96,
+          uniTableKeepWidth: true,
+          resizable: false,
+          render: (_, row) => logisticsVehicleTypeLabel(t, row.vehicle_type),
         },
         {
           title: t('app.kuaizhizao.logistics.field.ownership'),
@@ -201,7 +179,7 @@ const VehiclesPage: React.FC = () => {
       <UniTable<Vehicle>
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.vehicles.v1"
+        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.vehicles.v2"
         rowKey="id"
         request={async (params) => {
           const res = await listVehicles({
@@ -237,55 +215,17 @@ const VehiclesPage: React.FC = () => {
         })}
         basicColumns={basicColumns}
       />
-      <Modal
+      <VehicleFormModal
         open={open}
-        title={editing ? t('common.edit') : t('common.create')}
-        onCancel={() => setOpen(false)}
-        onOk={handleSubmit}
-        destroyOnHidden
-      >
-        <Form form={form} layout="vertical">
-          <Form.Item name="plate_number" label={t('app.kuaizhizao.logistics.field.plateNumber')} rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="vehicle_type" label={t('app.kuaizhizao.logistics.field.vehicleType')}>
-            <Select
-              allowClear
-              options={[
-                { value: 'van', label: t('app.kuaizhizao.logistics.option.vehicleType.van') },
-                { value: 'flatbed', label: t('app.kuaizhizao.logistics.option.vehicleType.flatbed') },
-                { value: 'refrigerated', label: t('app.kuaizhizao.logistics.option.vehicleType.refrigerated') },
-                { value: 'trailer', label: t('app.kuaizhizao.logistics.option.vehicleType.trailer') },
-                { value: 'other', label: t('app.kuaizhizao.logistics.option.vehicleType.other') },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="ownership" label={t('app.kuaizhizao.logistics.field.ownership')}>
-            <Select
-              options={[
-                { label: t('app.kuaizhizao.logistics.option.ownership.internal'), value: 'internal' },
-                { label: t('app.kuaizhizao.logistics.option.ownership.external'), value: 'external' },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="load_capacity" label={t('app.kuaizhizao.logistics.field.loadCapacity')}>
-            <InputNumber style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="status" label={t('app.kuaizhizao.logistics.field.status')}>
-            <Select
-              options={[
-                { label: t('app.kuaizhizao.logistics.option.vehicleStatus.idle'), value: 'idle' },
-                { label: t('app.kuaizhizao.logistics.option.vehicleStatus.inTransit'), value: 'in_transit' },
-                { label: t('app.kuaizhizao.logistics.option.vehicleStatus.maintenance'), value: 'maintenance' },
-                { label: t('app.kuaizhizao.logistics.option.vehicleStatus.disabled'), value: 'disabled' },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="is_enabled" label={t('app.kuaizhizao.logistics.field.enabled')} valuePropName="checked">
-            <Switch />
-          </Form.Item>
-        </Form>
-      </Modal>
+        editing={editing}
+        onClose={() => setOpen(false)}
+        onSuccess={(record) => {
+          if (detail?.id === record.id) {
+            setDetail(record);
+          }
+          actionRef.current?.reload();
+        }}
+      />
     </ListPageTemplate>
   );
 };

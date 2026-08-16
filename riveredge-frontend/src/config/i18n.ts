@@ -46,11 +46,15 @@ const LANGUAGE_ALIASES: Record<string, SupportedUiLanguage> = {
   'en-us': 'en-US',
   'zh-hant': 'zh-Hant',
   'zh-tw': 'zh-Hant',
-  ja: 'ja-JP',
-  'ja-jp': 'ja-JP',
-  vi: 'vi-VN',
-  'vi-vn': 'vi-VN',
 };
+
+function resolveRegisteredUiLanguage(languageCode: string): SupportedUiLanguage {
+  return (
+    normalizeUiLanguage(languageCode) ??
+    normalizeUiLanguage(LANGUAGE_ALIASES[languageCode.toLowerCase()] ?? '') ??
+    FALLBACK_LANGUAGE
+  );
+}
 
 /** 最近一次云端租户默认语言（语言管理 is_default / 站点 default_language） */
 let tenantDefaultLanguage: SupportedUiLanguage | null = null;
@@ -59,10 +63,8 @@ let siteLanguageSettings: Record<string, unknown> | null = null;
 
 export const LANGUAGE_MAP: Record<string, string> = {
   'zh-CN': '简体中文',
-  'en-US': 'English',
   'zh-Hant': '繁體中文',
-  'ja-JP': '日本語',
-  'vi-VN': 'Tiếng Việt',
+  'en-US': 'English',
 };
 
 function resolveTenantDefaultFromCloud(
@@ -88,7 +90,8 @@ export function resolveLanguageFromCloud(
   const prefs = userPreferences && typeof userPreferences === 'object' ? userPreferences : {};
   const userLang = prefs.language;
   if (typeof userLang === 'string' && userLang) {
-    return normalizeUiLanguage(userLang) ?? userLang;
+    const registered = normalizeUiLanguage(userLang);
+    if (registered) return registered;
   }
 
   const tenant =
@@ -184,11 +187,7 @@ i18n.changeLanguage = async (language: string) => {
 };
 
 async function applyLanguage(languageCode: string): Promise<void> {
-  const normalizedLanguage =
-    normalizeUiLanguage(languageCode) ??
-    LANGUAGE_ALIASES[languageCode.toLowerCase()] ??
-    languageCode;
-  await i18n.changeLanguage(normalizedLanguage);
+  await i18n.changeLanguage(resolveRegisteredUiLanguage(languageCode));
 }
 
 /** 偏好变更时同步；有个人 language 则覆盖租户默认 */
@@ -196,10 +195,7 @@ export async function syncLanguageFromPreferences(
   preferences: Record<string, unknown> | null | undefined,
 ): Promise<void> {
   const resolvedLanguage = resolveLanguageFromCloud(preferences, siteLanguageSettings, tenantDefaultLanguage);
-  const languageCode =
-    normalizeUiLanguage(resolvedLanguage) ??
-    LANGUAGE_ALIASES[resolvedLanguage.toLowerCase()] ??
-    resolvedLanguage;
+  const languageCode = resolveRegisteredUiLanguage(resolvedLanguage);
   if (i18n.language === languageCode) {
     return;
   }
@@ -277,10 +273,7 @@ export async function initLanguageFromApi(): Promise<void> {
 }
 
 export async function applyLanguageWithPersist(languageCode: string): Promise<void> {
-  const normalizedLanguage =
-    normalizeUiLanguage(languageCode) ??
-    LANGUAGE_ALIASES[languageCode.toLowerCase()] ??
-    languageCode;
+  const normalizedLanguage = resolveRegisteredUiLanguage(languageCode);
 
   const preferenceState = useUserPreferenceStore.getState();
   const currentPrefs = preferenceState.preferences || {};

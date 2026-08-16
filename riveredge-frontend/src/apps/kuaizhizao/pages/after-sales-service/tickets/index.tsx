@@ -17,6 +17,7 @@ import {
   EditOutlined,
   CheckOutlined,
   ExportOutlined,
+  ToolOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
@@ -27,6 +28,8 @@ import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
   paginatePullRows,
+  renderPullQueryDocStatus,
+  renderPullQueryReviewStatus,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import {
@@ -59,7 +62,6 @@ import {
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
-import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { customerApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
 import { listSalesOrders } from '../../../services/sales-order';
 import { warehouseApi } from '../../../services/warehouse-execution';
@@ -76,40 +78,9 @@ import {
 } from '../shared/afterSalesListPresentation';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 
-/** 取单弹窗状态码 → documentStatus.*（与单据跟踪一致） */
-const PULL_STATUS_I18N: Record<string, string> = {
-  DRAFT: 'documentStatus.draft',
-  草稿: 'documentStatus.draft',
-  PENDING_REVIEW: 'documentStatus.pending_review',
-  PENDING: 'documentStatus.pending_review',
-  待审核: 'documentStatus.pending_review',
-  SUBMITTED: 'documentStatus.submitted',
-  已提交: 'documentStatus.submitted',
-  AUDITED: 'documentStatus.audited',
-  已审核: 'documentStatus.audited',
-  APPROVED: 'documentStatus.approved',
-  审核通过: 'documentStatus.approved',
-  已通过: 'documentStatus.approved',
-  REJECTED: 'documentStatus.rejected',
-  已驳回: 'documentStatus.rejected',
-  CONFIRMED: 'documentStatus.confirmed',
-  已确认: 'documentStatus.confirmed',
-  EFFECTIVE: 'documentStatus.effective',
-  已生效: 'documentStatus.effective',
-  IN_PROGRESS: 'documentStatus.in_progress',
-  执行中: 'documentStatus.in_progress',
-  DELIVERED: 'documentStatus.delivered',
-  已交货: 'documentStatus.delivered',
-  COMPLETED: 'documentStatus.completed',
-  已完成: 'documentStatus.completed',
-  CANCELLED: 'documentStatus.cancelled',
-  已取消: 'documentStatus.cancelled',
-  CLOSED: 'documentStatus.closed',
-  已关闭: 'documentStatus.closed',
-};
-
 const AFTER_SALES_TICKET_RESOURCE = 'kuaizhizao:after-sales-ticket';
 const SALES_RETURN_RESOURCE = 'kuaizhizao:sales-return';
+const REPAIR_ORDER_RESOURCE = 'kuaizhizao:repair-order';
 
 
 type PullSalesOrderCandidate = {
@@ -123,6 +94,7 @@ type PullSalesOrderCandidate = {
   total_amount?: number;
   salesman_name?: string;
   updated_at?: string;
+  existing_ticket_codes?: string;
 };
 
 type PullSalesDeliveryCandidate = {
@@ -136,6 +108,7 @@ type PullSalesDeliveryCandidate = {
   delivery_time?: string;
   total_quantity?: number;
   updated_at?: string;
+  existing_ticket_codes?: string;
 };
 
 const AfterSalesTicketsPage: React.FC = () => {
@@ -145,6 +118,7 @@ const AfterSalesTicketsPage: React.FC = () => {
   const detailIdRef = useRef<number | null>(null);
   const perms = useResourcePermissions(AFTER_SALES_TICKET_RESOURCE);
   const salesReturnPerms = useResourcePermissions(SALES_RETURN_RESOURCE);
+  const repairOrderPerms = useResourcePermissions(REPAIR_ORDER_RESOURCE);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<AfterSalesTicket | null>(null);
@@ -344,6 +318,61 @@ const AfterSalesTicketsPage: React.FC = () => {
     [pushSalesReturnDisabledReason],
   );
 
+  const pushRepairDisabledReason = useCallback(
+    (record: AfterSalesTicket | null | undefined): string | undefined => {
+      if (!record) return undefined;
+      if (!perms.canUpdate) return permDeniedTitle;
+      if (!repairOrderPerms.canCreate) return permDeniedTitle;
+      if (!record.capabilities?.push_repair_order?.allowed) {
+        const reason =
+          afterSalesTicketCapabilityReasonMessage(
+            record.capabilities?.push_repair_order?.reason,
+            t,
+          ) || t('app.kuaizhizao.afterSalesTicket.pushRepairFailed');
+        if (record.existing_repair_order_code) {
+          return t('app.kuaizhizao.afterSalesTicket.pushRepairAlreadyExists', {
+            code: record.existing_repair_order_code,
+          });
+        }
+        return reason;
+      }
+      return undefined;
+    },
+    [permDeniedTitle, perms.canUpdate, repairOrderPerms.canCreate, t],
+  );
+
+  const handlePushRepair = useCallback(
+    (record: AfterSalesTicket) => {
+      const blocked = pushRepairDisabledReason(record);
+      if (blocked) {
+        message.warning(blocked);
+        return;
+      }
+      getAntdModal().confirm({
+        title: t('app.kuaizhizao.afterSalesTicket.actionPushRepairOrder'),
+        content: t('app.kuaizhizao.afterSalesTicket.pushRepairConfirm', {
+          code: record.ticket_code,
+        }),
+        onOk: async () => {
+          try {
+            const res = await afterSalesTicketApi.pushToRepairOrder(record.id);
+            message.success(
+              res?.repair_order_code
+                ? `${t('app.kuaizhizao.afterSalesTicket.pushRepairSuccess')}：${res.repair_order_code}`
+                : t('app.kuaizhizao.afterSalesTicket.pushRepairSuccess'),
+            );
+            reloadTable();
+            refreshOpenDetail();
+          } catch (e: any) {
+            message.error(e?.message || t('app.kuaizhizao.afterSalesTicket.pushRepairFailed'));
+            throw e;
+          }
+        },
+      });
+    },
+    [message, pushRepairDisabledReason, refreshOpenDetail, t],
+  );
+
   const selectedTicketForToolbar = useMemo(() => {
     if (selectedRowKeys.length !== 1) return null;
     const id = Number(selectedRowKeys[0]);
@@ -387,20 +416,38 @@ const AfterSalesTicketsPage: React.FC = () => {
 
   const toolbarPushMenuItems = useMemo(() => {
     const record = selectedTicketForToolbar;
-    const itemDisabledReason = pushSalesReturnDisabledReason(record);
+    const returnDisabled = pushSalesReturnDisabledReason(record);
+    const repairDisabled = pushRepairDisabledReason(record);
     return buildUniPushMenuItems([
       {
         key: 'push-sales-return',
         label: t('app.kuaizhizao.afterSalesTicket.actionPushSalesReturn'),
-        disabled: !!itemDisabledReason,
-        title: itemDisabledReason,
+        disabled: !!returnDisabled,
+        title: returnDisabled,
         onClick: () => {
-          if (!record || itemDisabledReason) return;
+          if (!record || returnDisabled) return;
           void openPushSalesReturn(record);
         },
       },
+      {
+        key: 'push-repair-order',
+        label: t('app.kuaizhizao.afterSalesTicket.actionPushRepairOrder'),
+        disabled: !!repairDisabled,
+        title: repairDisabled,
+        onClick: () => {
+          if (!record || repairDisabled) return;
+          handlePushRepair(record);
+        },
+      },
     ]);
-  }, [openPushSalesReturn, pushSalesReturnDisabledReason, selectedTicketForToolbar, t]);
+  }, [
+    handlePushRepair,
+    openPushSalesReturn,
+    pushRepairDisabledReason,
+    pushSalesReturnDisabledReason,
+    selectedTicketForToolbar,
+    t,
+  ]);
 
   const toolbarPushDisabledReason = useMemo(
     () =>
@@ -473,14 +520,25 @@ const AfterSalesTicketsPage: React.FC = () => {
     selectionType: 'radio',
     loadData: async ({ keyword, page, pageSize }) => {
       try {
-        const res = await listSalesOrders({
-          skip: ((page || 1) - 1) * (pageSize || 20),
-          limit: pageSize || 20,
-          keyword: keyword.trim() || undefined,
-          pullable_only: true,
-          pull_target: 'after_sales_ticket',
-          view: 'options',
-        });
+        const [res, ticketRes] = await Promise.all([
+          listSalesOrders({
+            skip: ((page || 1) - 1) * (pageSize || 20),
+            limit: pageSize || 20,
+            keyword: keyword.trim() || undefined,
+            pullable_only: true,
+            pull_target: 'after_sales_ticket',
+            view: 'options',
+          }),
+          afterSalesTicketApi.list({ skip: 0, limit: 200 }),
+        ]);
+        const ticketsByOrderId = new Map<number, string[]>();
+        for (const ticket of ticketRes.items ?? []) {
+          const orderId = Number(ticket.sales_order_id);
+          if (!Number.isFinite(orderId) || orderId <= 0 || !ticket.ticket_code) continue;
+          const codes = ticketsByOrderId.get(orderId) ?? [];
+          codes.push(ticket.ticket_code);
+          ticketsByOrderId.set(orderId, codes);
+        }
         const orders = Array.isArray((res as any)?.data) ? (res as any).data : [];
         const candidates: PullSalesOrderCandidate[] = orders
           .map((order: any) => ({
@@ -494,6 +552,7 @@ const AfterSalesTicketsPage: React.FC = () => {
             total_amount: order.total_amount != null ? Number(order.total_amount) : undefined,
             salesman_name: order.salesman_name,
             updated_at: order.updated_at,
+            existing_ticket_codes: (ticketsByOrderId.get(Number(order.id)) ?? []).join(' '),
           }))
           .filter((o: PullSalesOrderCandidate) => Number.isFinite(o.id) && o.id > 0);
         return { data: candidates, total: Number((res as any)?.total ?? candidates.length) };
@@ -524,11 +583,22 @@ const AfterSalesTicketsPage: React.FC = () => {
     selectionType: 'radio',
     loadData: async ({ keyword, page, pageSize }) => {
       try {
-        const res = await warehouseApi.salesDelivery.list({
-          skip: 0,
-          limit: 200,
-          keyword: keyword.trim() || undefined,
-        });
+        const [res, ticketRes] = await Promise.all([
+          warehouseApi.salesDelivery.list({
+            skip: 0,
+            limit: 200,
+            keyword: keyword.trim() || undefined,
+          }),
+          afterSalesTicketApi.list({ skip: 0, limit: 200 }),
+        ]);
+        const ticketsByDeliveryId = new Map<number, string[]>();
+        for (const ticket of ticketRes.items ?? []) {
+          const deliveryId = Number(ticket.sales_delivery_id);
+          if (!Number.isFinite(deliveryId) || deliveryId <= 0 || !ticket.ticket_code) continue;
+          const codes = ticketsByDeliveryId.get(deliveryId) ?? [];
+          codes.push(ticket.ticket_code);
+          ticketsByDeliveryId.set(deliveryId, codes);
+        }
         const list = (res as { items?: unknown[] })?.items ?? [];
         const candidates: PullSalesDeliveryCandidate[] = list
           .map((row: any) => ({
@@ -542,6 +612,7 @@ const AfterSalesTicketsPage: React.FC = () => {
             delivery_time: row.delivery_time,
             total_quantity: row.total_quantity != null ? Number(row.total_quantity) : undefined,
             updated_at: row.updated_at,
+            existing_ticket_codes: (ticketsByDeliveryId.get(Number(row.id)) ?? []).join(' '),
           }))
           .filter((o: PullSalesDeliveryCandidate) => Number.isFinite(o.id) && o.id > 0);
         return paginatePullRows(candidates, page, pageSize);
@@ -569,17 +640,6 @@ const AfterSalesTicketsPage: React.FC = () => {
     },
   });
 
-  const renderPullStatus = useCallback(
-    (raw?: string) => {
-      const code = String(raw ?? '').trim();
-      if (!code) return '—';
-      const i18nKey = PULL_STATUS_I18N[code] || PULL_STATUS_I18N[code.toUpperCase()];
-      const label = i18nKey ? t(i18nKey) : code;
-      return renderDocumentStatusTag(label, code);
-    },
-    [t],
-  );
-
   const pullSalesOrderColumns: ProColumns<PullSalesOrderCandidate>[] = useMemo(
     () => [
       {
@@ -595,18 +655,25 @@ const AfterSalesTicketsPage: React.FC = () => {
         ellipsis: true,
       },
       {
+        title: t('app.kuaizhizao.afterSalesTicket.existingTickets'),
+        dataIndex: 'existing_ticket_codes',
+        width: 180,
+        ellipsis: true,
+        render: (_, row) => row.existing_ticket_codes || '—',
+      },
+      {
         title: t('app.kuaizhizao.salesReturn.orderStatus'),
         dataIndex: 'status',
-        width: 110,
-        align: 'center',
-        render: (_, row) => renderPullStatus(row.status),
+        width: 100,
+        align: 'center' as const,
+        render: (v) => renderPullQueryDocStatus(t, v),
       },
       {
         title: t('app.kuaizhizao.salesOrder.reviewStatus'),
         dataIndex: 'review_status',
         width: 110,
-        align: 'center',
-        render: (_, row) => renderPullStatus(row.review_status),
+        align: 'center' as const,
+        render: (v) => renderPullQueryReviewStatus(t, v),
       },
       {
         title: t('app.kuaizhizao.salesOrder.orderDate'),
@@ -650,7 +717,7 @@ const AfterSalesTicketsPage: React.FC = () => {
           row.updated_at ? formatDateTime(row.updated_at, 'YYYY-MM-DD HH:mm') : '—',
       },
     ],
-    [renderPullStatus, t],
+    [t],
   );
 
   const pullSalesDeliveryColumns: ProColumns<PullSalesDeliveryCandidate>[] = useMemo(
@@ -675,18 +742,25 @@ const AfterSalesTicketsPage: React.FC = () => {
         render: (_, row) => row.sales_order_code || '—',
       },
       {
+        title: t('app.kuaizhizao.afterSalesTicket.existingTickets'),
+        dataIndex: 'existing_ticket_codes',
+        width: 180,
+        ellipsis: true,
+        render: (_, row) => row.existing_ticket_codes || '—',
+      },
+      {
         title: t('app.kuaizhizao.afterSalesTicket.colStatus'),
         dataIndex: 'status',
-        width: 110,
-        align: 'center',
-        render: (_, row) => renderPullStatus(row.status),
+        width: 100,
+        align: 'center' as const,
+        render: (v) => renderPullQueryDocStatus(t, v),
       },
       {
         title: t('app.kuaizhizao.salesOrder.reviewStatus'),
         dataIndex: 'review_status',
         width: 110,
-        align: 'center',
-        render: (_, row) => renderPullStatus(row.review_status),
+        align: 'center' as const,
+        render: (v) => renderPullQueryReviewStatus(t, v),
       },
       {
         title: t('app.kuaizhizao.afterSalesTicket.fieldWarehouse'),
@@ -718,7 +792,7 @@ const AfterSalesTicketsPage: React.FC = () => {
           row.updated_at ? formatDateTime(row.updated_at, 'YYYY-MM-DD HH:mm') : '—',
       },
     ],
-    [renderPullStatus, t],
+    [t],
   );
 
   const pushLineColumns = useMemo(
@@ -945,7 +1019,8 @@ const AfterSalesTicketsPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           enableRowSelection={
-            perms.canDelete || (perms.canUpdate && salesReturnPerms.canCreate)
+            perms.canDelete ||
+            (perms.canUpdate && (salesReturnPerms.canCreate || repairOrderPerms.canCreate))
           }
           options={{ reload: true, density: true, setting: true }}
           pagination={{ defaultPageSize: 20, showSizeChanger: true }}
@@ -1075,6 +1150,24 @@ const AfterSalesTicketsPage: React.FC = () => {
                 ),
               },
               {
+                key: 'push-repair',
+                visible: Boolean(
+                  detailRecord &&
+                    detailRecord.request_type === '维修' &&
+                    detailRecord.status !== '已关闭',
+                ),
+                render: () => (
+                  <Button
+                    icon={<ToolOutlined />}
+                    disabled={Boolean(pushRepairDisabledReason(detailRecord))}
+                    title={pushRepairDisabledReason(detailRecord)}
+                    onClick={() => handlePushRepair(detailRecord!)}
+                  >
+                    {t('app.kuaizhizao.afterSalesTicket.actionPushRepairOrder')}
+                  </Button>
+                ),
+              },
+              {
                 key: 'close',
                 visible: Boolean(perms.canAction?.('close') && detailRecord && detailRecord.status !== '已关闭'),
                 render: () => (
@@ -1143,6 +1236,7 @@ const AfterSalesTicketsPage: React.FC = () => {
         confirmLoading={pullFromSalesOrderQuery.confirmLoading}
         selectionType={pullFromSalesOrderQuery.selectionType}
         selectedRowKeys={pullFromSalesOrderQuery.selectedRowKeys}
+        selectedRows={pullFromSalesOrderQuery.selectedRows}
         onSelectedRowKeysChange={pullFromSalesOrderQuery.handleSelectedRowKeysChange}
         searchDraft={pullFromSalesOrderQuery.searchDraft}
         onSearchDraftChange={pullFromSalesOrderQuery.setSearchDraft}
@@ -1167,6 +1261,7 @@ const AfterSalesTicketsPage: React.FC = () => {
         confirmLoading={pullFromSalesDeliveryQuery.confirmLoading}
         selectionType={pullFromSalesDeliveryQuery.selectionType}
         selectedRowKeys={pullFromSalesDeliveryQuery.selectedRowKeys}
+        selectedRows={pullFromSalesDeliveryQuery.selectedRows}
         onSelectedRowKeysChange={pullFromSalesDeliveryQuery.handleSelectedRowKeysChange}
         searchDraft={pullFromSalesDeliveryQuery.searchDraft}
         onSearchDraftChange={pullFromSalesDeliveryQuery.setSearchDraft}

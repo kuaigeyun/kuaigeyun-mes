@@ -15,8 +15,6 @@ PRO_APP_CODES: FrozenSet[str] = frozenset(
         "kuaiai",
         "kuaireport",
         "kuaiiot",
-        "kuaiems",
-        "kuaisrm",
     }
 )
 

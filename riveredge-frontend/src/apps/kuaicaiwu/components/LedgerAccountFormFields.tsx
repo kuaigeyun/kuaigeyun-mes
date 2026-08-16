@@ -8,9 +8,12 @@ import type { BankAccount } from '../services/finance/bank-account';
 import {
   filterBankAccountsForPaymentMethod,
   formatBankAccountOptionLabel,
+  isAcceptanceBillPaymentMethod,
   isCashPaymentMethod,
   requiresLedgerAccount,
 } from '../utils/financeSharedOptions';
+import { AcceptanceBillLinkFields } from './AcceptanceBillLinkFields';
+import type { FinanceNoteDirection } from '../services/finance/note';
 
 type Props = {
   accounts: BankAccount[];
@@ -19,6 +22,9 @@ type Props = {
   noteName?: string;
   accountColProps?: { span: number };
   noteColProps?: { span: number };
+  /** 承兑汇票时关联票据台账 */
+  acceptanceNoteDirection?: FinanceNoteDirection;
+  partnerFieldName?: 'customer_id' | 'supplier_id';
 };
 
 function SyncLedgerAccountWithPaymentMethod({ accounts }: { accounts: BankAccount[] }) {
@@ -66,6 +72,8 @@ export const LedgerAccountFormFields: React.FC<Props> = ({
   noteName = 'bank_account',
   accountColProps = { span: 12 },
   noteColProps = { span: 12 },
+  acceptanceNoteDirection,
+  partnerFieldName = 'customer_id',
 }) => {
   const { t } = useTranslation();
 
@@ -74,6 +82,28 @@ export const LedgerAccountFormFields: React.FC<Props> = ({
       <SyncLedgerAccountWithPaymentMethod accounts={accounts} />
       <ProFormDependency name={['payment_method']}>
         {({ payment_method }) => {
+          if (isAcceptanceBillPaymentMethod(payment_method)) {
+            if (acceptanceNoteDirection) {
+              return (
+                <AcceptanceBillLinkFields
+                  direction={acceptanceNoteDirection}
+                  partnerFieldName={partnerFieldName}
+                  noteName={noteName}
+                  colProps={noteColProps}
+                />
+              );
+            }
+            return (
+              <ProFormText
+                name={noteName}
+                label={t('app.kuaicaiwu.common.referenceNumber')}
+                colProps={noteColProps}
+                placeholder={t('app.kuaicaiwu.common.referenceNumberPlaceholder')}
+                rules={[{ required: true, message: t('app.kuaicaiwu.common.referenceNumberRequired') }]}
+              />
+            );
+          }
+
           const filtered = filterBankAccountsForPaymentMethod(accounts, payment_method);
           const options = filtered.map((a) => ({
             label: formatBankAccountOptionLabel(a),
@@ -92,37 +122,39 @@ export const LedgerAccountFormFields: React.FC<Props> = ({
               ? t('app.kuaicaiwu.receipt.bankAccountCashPlaceholder')
               : t('app.kuaicaiwu.receipt.bankAccountPlaceholder'));
           return (
-            <ProFormSelect
-              name="bank_account_id"
-              label={accountLabel}
-              colProps={accountColProps}
-              options={options}
-              placeholder={placeholder}
-              showSearch
-              allowClear={!required}
-              extra={options.length === 0 && required ? emptyHint : undefined}
-              rules={[
-                ({ getFieldValue }) => ({
-                  validator: async (_, value) => {
-                    if (requiresLedgerAccount(getFieldValue('payment_method')) && !value) {
-                      if (isCashPaymentMethod(getFieldValue('payment_method'))) {
-                        throw new Error(t('app.kuaicaiwu.common.bankAccountRequiredForCash'));
+            <>
+              <ProFormSelect
+                name="bank_account_id"
+                label={accountLabel}
+                colProps={accountColProps}
+                options={options}
+                placeholder={placeholder}
+                showSearch
+                allowClear={!required}
+                extra={options.length === 0 && required ? emptyHint : undefined}
+                rules={[
+                  ({ getFieldValue }) => ({
+                    validator: async (_, value) => {
+                      if (requiresLedgerAccount(getFieldValue('payment_method')) && !value) {
+                        if (isCashPaymentMethod(getFieldValue('payment_method'))) {
+                          throw new Error(t('app.kuaicaiwu.common.bankAccountRequiredForCash'));
+                        }
+                        throw new Error(t('app.kuaicaiwu.common.bankAccountRequiredForTransfer'));
                       }
-                      throw new Error(t('app.kuaicaiwu.common.bankAccountRequiredForTransfer'));
-                    }
-                  },
-                }),
-              ]}
-            />
+                    },
+                  }),
+                ]}
+              />
+              <ProFormText
+                name={noteName}
+                label={noteLabel}
+                colProps={noteColProps}
+                placeholder={t('app.kuaicaiwu.receipt.bankAccountNotePlaceholder')}
+              />
+            </>
           );
         }}
       </ProFormDependency>
-      <ProFormText
-        name={noteName}
-        label={noteLabel}
-        colProps={noteColProps}
-        placeholder={t('app.kuaicaiwu.receipt.bankAccountNotePlaceholder')}
-      />
     </>
   );
 };
@@ -136,4 +168,17 @@ export function resolveLedgerAccountNote(
   const acc = accounts.find((a) => a.id === Number(bankAccountId));
   if (!acc) return fallback;
   return acc.account_number || acc.account_name || fallback;
+}
+
+export function resolveFinanceVoucherReferenceNote(
+  accounts: BankAccount[],
+  paymentMethod: string | null | undefined,
+  bankAccountId: unknown,
+  fallback?: string,
+): string | undefined {
+  if (isAcceptanceBillPaymentMethod(paymentMethod)) {
+    const reference = String(fallback ?? '').trim();
+    return reference || undefined;
+  }
+  return resolveLedgerAccountNote(accounts, bankAccountId, fallback);
 }

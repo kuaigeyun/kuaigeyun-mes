@@ -1,5 +1,5 @@
-import React, { useRef, useState, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useRef, useState, useMemo, useCallback, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -71,6 +71,7 @@ interface RoutePatrolLine {
 
 interface RoutePatrol {
   id?: number;
+  uuid?: string;
   document_no?: string;
   route_id?: number;
   route_code?: string;
@@ -86,10 +87,13 @@ interface RoutePatrol {
 
 const RoutePatrolsPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
   const actionRef = useRef<ActionType>(null);
+  const urlUuidRef = useRef<string | undefined>(undefined);
+  const deepLinkOpenedRef = useRef(false);
   const formRef = useRef<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
@@ -110,6 +114,33 @@ const RoutePatrolsPage: React.FC = () => {
     },
     [openDetail],
   );
+
+  useEffect(() => {
+    const uuidFromUrl = searchParams.get('uuid')?.trim() || undefined;
+    urlUuidRef.current = uuidFromUrl;
+    if (!uuidFromUrl) {
+      deepLinkOpenedRef.current = false;
+      actionRef.current?.reload();
+      return;
+    }
+    if (deepLinkOpenedRef.current) {
+      actionRef.current?.reload();
+      return;
+    }
+    deepLinkOpenedRef.current = true;
+    void (async () => {
+      try {
+        const res = await routePatrolsApi.list({ uuid: uuidFromUrl, skip: 0, limit: 1 });
+        const { data } = normalizeEquipmentListResponse(res);
+        if (data.length > 0) {
+          handleDetail(data[0] as RoutePatrol);
+        }
+      } catch {
+        messageApi.error(t(`${P}.listFailed`));
+      }
+      actionRef.current?.reload();
+    })();
+  }, [searchParams, handleDetail, messageApi, t]);
 
   const loadRouteOptions = async () => {
     const res = await patrolRoutesApi.list({ limit: 1000, is_active: true });
@@ -296,7 +327,7 @@ const RoutePatrolsPage: React.FC = () => {
           <Typography.Link
             onClick={() => {
               navigate(
-                `${ROUTES.EQUIPMENT_FAULTS}?keyword=${encodeURIComponent(row.fault_report_uuid!)}`,
+                `${ROUTES.EQUIPMENT_FAULTS}?uuid=${encodeURIComponent(row.fault_report_uuid!)}`,
               );
             }}
           >
@@ -375,7 +406,7 @@ const RoutePatrolsPage: React.FC = () => {
             <Typography.Link
               onClick={() =>
                 navigate(
-                  `${ROUTES.EQUIPMENT_FAULTS}?keyword=${encodeURIComponent(row.fault_report_uuid!)}`,
+                  `${ROUTES.EQUIPMENT_FAULTS}?uuid=${encodeURIComponent(row.fault_report_uuid!)}`,
                 )
               }
             >
@@ -554,6 +585,7 @@ const RoutePatrolsPage: React.FC = () => {
                 skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
                 limit: params.pageSize,
                 ...listParams,
+                ...(urlUuidRef.current ? { uuid: urlUuidRef.current } : {}),
               });
               const { data, total } = normalizeEquipmentListResponse(res);
               return { data: data as RoutePatrol[], success: true, total };

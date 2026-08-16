@@ -6,6 +6,8 @@
 
 import React from 'react';
 import { theme } from 'antd';
+import { useThemeStore } from '../../stores/themeStore';
+import { resolveQuickEntryChipVisualFromGradient } from './quickEntryGradients';
 
 const { useToken } = theme;
 
@@ -49,9 +51,10 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
   onContextDelete,
 }) => {
   const { token } = useToken();
-
-  const bgColor = gradient || token.colorPrimary;
-  const glyphColor = plain ? token.colorPrimary : '#ffffff';
+  const isDark = useThemeStore((s) => s.resolved.isDark);
+  const chip = resolveQuickEntryChipVisualFromGradient(gradient, isDark, token.colorBgContainer);
+  const bgColor = plain ? gradient || token.colorFillTertiary : chip.boxBg;
+  const glyphColor = plain ? token.colorPrimary : chip.accent;
 
   return (
     <div
@@ -82,7 +85,7 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
           flexShrink: 0,
           borderRadius: QUICK_ENTRY_ICON_BORDER_RADIUS,
           background: bgColor,
-          boxShadow: token.boxShadowTertiary,
+          boxShadow: plain ? token.boxShadowTertiary : 'none',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

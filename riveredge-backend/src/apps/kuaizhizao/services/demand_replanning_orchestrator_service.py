@@ -14,6 +14,10 @@ from apps.kuaizhizao.models.demand_impact_record import DemandImpactRecord
 from apps.kuaizhizao.models.demand_replan_task import DemandReplanTask
 from apps.kuaizhizao.models.demand_computation import DemandComputation
 from apps.kuaizhizao.services.demand_computation_service import DemandComputationService
+from apps.kuaizhizao.services.demand_replan_impact_service import (
+    DemandReplanImpactService,
+    RECOMPUTABLE_COMPUTATION_STATUSES,
+)
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
 from core.utils.timezone_utils import resolve_business_datetime
 
@@ -41,7 +45,11 @@ class DemandReplanningOrchestratorService:
             raise NotFoundError(f"变更事件不存在: {event_id}")
 
         impacts = await DemandImpactRecord.filter(tenant_id=tenant_id, event_id=event_id).all()
-        computation_ids = [int(i.impact_id) for i in impacts if i.impact_type == "computation"]
+        raw_computation_ids = [int(i.impact_id) for i in impacts if i.impact_type == "computation"]
+        computation_ids = await DemandReplanImpactService.filter_recomputable_computation_ids(
+            tenant_id,
+            raw_computation_ids,
+        )
         demand_ids = [int(i.impact_id) for i in impacts if i.impact_type == "demand"]
         plan_ids = [int(i.impact_id) for i in impacts if i.impact_type == "plan"]
         material_ids = [int(i.impact_id) for i in impacts if i.impact_type == "material"]
@@ -120,16 +128,22 @@ class DemandReplanningOrchestratorService:
         scope = task.task_scope or {}
         target_ids: List[int]
         if task.mode == "full_regen":
-            target_ids = await DemandComputation.filter(
-                tenant_id=tenant_id,
-                computation_status__in=["完成", "失败"],
-            ).values_list("id", flat=True)
-            target_ids = [int(i) for i in target_ids]
+            target_ids = await DemandReplanImpactService.filter_recomputable_computation_ids(
+                tenant_id,
+                await DemandComputation.filter(
+                    tenant_id=tenant_id,
+                    computation_status__in=list(RECOMPUTABLE_COMPUTATION_STATUSES),
+                ).values_list("id", flat=True),
+            )
         else:
-            target_ids = [int(i) for i in (scope.get("computation_ids") or [])]
+            scope_ids = [int(i) for i in (scope.get("computation_ids") or [])]
+            target_ids = await DemandReplanImpactService.filter_recomputable_computation_ids(
+                tenant_id,
+                scope_ids,
+            )
 
         if not target_ids:
-            err_msg = "未找到可重算的需求计算，请确认上游单据已下推需求计算"
+            err_msg = "未找到可重算的需求计算（须为已完成或失败状态，且上游已下推需求计算）"
             await DemandReplanTask.filter(tenant_id=tenant_id, id=task_id).update(
                 status="failed",
                 finished_at=resolve_business_datetime(),

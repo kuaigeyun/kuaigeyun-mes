@@ -34,7 +34,9 @@ from .finance.partner_statements import router as partner_statements_router
 from .document_reconciliation import router as document_reconciliation_router
 from .bank_accounts import router as bank_accounts_router
 from .prepayments import router as prepayments_router
+from .finance_notes import notes_receivable_router, notes_payable_router
 from .gl import router as gl_router
+from .tax import router as tax_router
 
 router = APIRouter(tags=["App - Kuaicaiwu - Overview"])
 
@@ -64,7 +66,10 @@ router.include_router(partner_statements_router)
 router.include_router(document_reconciliation_router)
 router.include_router(bank_accounts_router)
 router.include_router(prepayments_router)
+router.include_router(notes_receivable_router)
+router.include_router(notes_payable_router)
 router.include_router(gl_router)
+router.include_router(tax_router)
 
 
 @router.get("/health")

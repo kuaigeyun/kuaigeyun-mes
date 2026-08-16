@@ -28,8 +28,10 @@ export interface ThemeConfigOptions {
   siderBgColor?: string;
   /** 头部背景色 */
   headerBgColor?: string;
-  /** 标签页背景色 */
+  /** 标签栏背景色 */
   tabsBgColor?: string;
+  /** 激活标签与内容区背景 */
+  tabBgColor?: string;
 }
 
 /**

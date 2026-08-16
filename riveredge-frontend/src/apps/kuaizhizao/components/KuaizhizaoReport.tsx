@@ -16,8 +16,6 @@ import {
   type KuaizhizaoReportDomain,
   type KuaizhizaoReportStatCards,
 } from '../utils/kuaizhizaoReportCore';
-import { extractProTableSort } from '../../../utils/tableQueryKey';
-import { resolveProductionReportApiParams } from '../utils/productionExecutionReportCore';
 
 export type KuaizhizaoReportProps<T extends Record<string, unknown> = Record<string, unknown>> = {
   title: string;
@@ -29,13 +27,14 @@ export type KuaizhizaoReportProps<T extends Record<string, unknown> = Record<str
   permissionResource?: string;
   templateId?: string;
   summaryFields?: string[];
-  dateRangeKeys?: string[];
   rowKey?: string | keyof T;
   statCards?: KuaizhizaoReportStatCards;
   children?: React.ReactNode;
+  /** 功能区：模糊搜索之前（报表视图切换） */
+  beforeSearchButtons?: React.ReactNode;
   /** keyword 走后端时关闭客户端拼音过滤 */
   skipFuzzyPinyinClientFilter?: boolean;
-  /** 完全自定义请求（覆盖自动路由） */
+  /** 完全自定义请求（须走 createKuaizhizaoCustomReportRequest 或等价参数） */
   request?: (
     params: Record<string, unknown>,
     sort?: Record<string, unknown>,
@@ -53,10 +52,10 @@ export function KuaizhizaoReport<T extends Record<string, unknown> = Record<stri
   permissionResource: permissionResourceProp,
   templateId: templateIdProp,
   summaryFields,
-  dateRangeKeys,
   rowKey = 'id',
   statCards,
   children,
+  beforeSearchButtons,
   skipFuzzyPinyinClientFilter = true,
   request: requestOverride,
 }: KuaizhizaoReportProps<T>) {
@@ -73,27 +72,12 @@ export function KuaizhizaoReport<T extends Record<string, unknown> = Record<stri
       _filter?: Record<string, unknown>,
       searchFormValues?: Record<string, unknown>,
     ) => {
-      const productionParams =
-        domainHint === 'production'
-          ? resolveProductionReportApiParams(searchFormValues, sort)
-          : {};
-      const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
-      const order_by =
-        productionParams.order_by ??
-        (sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined);
       return fetchKuaizhizaoReport(reportType, params, searchFormValues, {
         domainHint,
-        dateRangeKeys,
-        order_by,
-        keyword: productionParams.keyword,
-        status: productionParams.status,
-        order_code: productionParams.order_code,
-        product_name: productionParams.product_name,
-        supplier_name: productionParams.supplier_name,
-        work_order_code: productionParams.work_order_code,
+        sort,
       }) as Promise<{ data: T[]; total: number; success: boolean; summary?: Record<string, number> }>;
     },
-    [reportType, domainHint, dateRangeKeys],
+    [reportType, domainHint],
   );
 
   const exportDomain = route.api === 'plan' ? 'plans' : route.api;
@@ -112,6 +96,8 @@ export function KuaizhizaoReport<T extends Record<string, unknown> = Record<stri
       statCards={statCards as StatCard[] | ((summary: Record<string, number>) => StatCard[])}
       request={requestOverride ?? defaultRequest}
       skipFuzzyPinyinClientFilter={skipFuzzyPinyinClientFilter}
+      beforeSearchButtons={beforeSearchButtons}
+      params={{ reportType }}
     >
       {children}
     </UniReport>

@@ -31,6 +31,18 @@ export type SettlementPreviewItem = {
   max_push_quantity: number;
 };
 
+export type SettlementRecordListParams = {
+  skip?: number;
+  limit?: number;
+  business_type?: 'receivable' | 'payable';
+  partner_id?: number;
+  keyword?: string;
+  settlement_date_start?: string;
+  settlement_date_end?: string;
+  sort_field?: string;
+  sort_order?: 'asc' | 'desc';
+};
+
 export const settlementService = {
   previewReceivableSettle: (receivable_id: number, receipt_id: number) =>
     apiRequest<SettlementPreview>(`${SETTLEMENT_API}/receivable/preview`, {
@@ -57,4 +69,10 @@ export const settlementService = {
       params: { payable_id, payment_id, amount },
     });
   },
+
+  listRecords: (params: SettlementRecordListParams) =>
+    apiRequest<{ items: SettlementRecord[]; total: number }>(`${SETTLEMENT_API}/records`, {
+      method: 'GET',
+      params,
+    }),
 };

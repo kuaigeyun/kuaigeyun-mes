@@ -147,7 +147,7 @@ export const DashboardTemplate: React.FC<DashboardTemplateProps> = ({
         width: '100%',
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: token.colorBgLayout,
+        backgroundColor: 'transparent',
         boxSizing: 'border-box',
         ...style,
       }}

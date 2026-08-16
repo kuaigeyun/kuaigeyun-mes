@@ -22,6 +22,20 @@ class PermissionDefinition:
 class PermissionRegistryService:
     """统一聚合权限定义真源（核心常量 + 应用 manifest）。"""
 
+    # 登录用户基线：默认授予且不可撤销（个人中心自助能力）
+    BASELINE_PERMISSION_CODES: frozenset[str] = frozenset(
+        {
+            "system:user-profile:read",
+            "system:user-profile:update",
+            "system:user-preference:read",
+            "system:user-preference:update",
+            "system:user-message:read",
+            "system:user-message:update",
+            "system:user-task:read",
+            "system:user-task:update",
+        }
+    )
+
     # 顺序即角色矩阵 manifest_index（与 MANIFEST_ACTION_ORDER 一致；调整请用 scripts/reorder_manifest_permissions.py 或手工）
     CORE_PERMISSION_CODES: tuple[str, ...] = (
         "system:entry:read",
@@ -156,6 +170,26 @@ class PermissionRegistryService:
         "system:user-task:read",
         "system:user-task:update",
     )
+
+    @classmethod
+    def is_baseline_permission_code(cls, code: str | None) -> bool:
+        from core.services.authorization.menu_resource_resolver import normalize_permission_code
+
+        norm = normalize_permission_code(code or "")
+        return bool(norm) and norm in cls.BASELINE_PERMISSION_CODES
+
+    @classmethod
+    def merge_baseline_permission_codes(cls, codes: set[str] | None) -> set[str]:
+        """将基线权限并入授权集合（服务端强制，前端不可剥离）。"""
+        from core.services.authorization.menu_resource_resolver import normalize_permission_code
+
+        merged: set[str] = set()
+        for raw in codes or set():
+            norm = normalize_permission_code(raw)
+            if norm:
+                merged.add(norm)
+        merged.update(cls.BASELINE_PERMISSION_CODES)
+        return merged
 
     @classmethod
     async def collect_definitions(cls, tenant_id: int) -> dict[str, PermissionDefinition]:

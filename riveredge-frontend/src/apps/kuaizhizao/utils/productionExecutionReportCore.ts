@@ -1,13 +1,7 @@
-import { extractProTableSort } from '../../../utils/tableQueryKey';
-
-/** 生产执行报表 → 后端 /reports/production 查询参数 */
-export function resolveProductionReportApiParams(
+/** 生产执行报表 → 后端 /reports/production 表单字段（排序走 extractReportProTableSort 统一路径） */
+export function resolveProductionReportFormParams(
   searchFormValues?: Record<string, unknown> | null,
-  sort?: Record<string, unknown>,
 ): Record<string, string | undefined> {
-  const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
-  const order_by =
-    sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
   const s = searchFormValues ?? {};
   const pick = (key: string) => {
     const v = s[key];
@@ -15,7 +9,6 @@ export function resolveProductionReportApiParams(
   };
   const keyword = pick('keyword');
   return {
-    order_by,
     keyword,
     status: typeof s.status === 'string' && s.status ? s.status : undefined,
     order_code: pick('order_code') ?? pick('code'),
@@ -27,4 +20,12 @@ export function resolveProductionReportApiParams(
       pick('code') ??
       pick('outsource_work_order_code'),
   };
+}
+
+/** @deprecated 使用 resolveProductionReportFormParams + extractReportProTableSort */
+export function resolveProductionReportApiParams(
+  searchFormValues?: Record<string, unknown> | null,
+  _sort?: Record<string, unknown>,
+): Record<string, string | undefined> {
+  return resolveProductionReportFormParams(searchFormValues);
 }

@@ -11,14 +11,13 @@ import io
 from datetime import datetime, date
 from decimal import Decimal
 from typing import List, Optional, Dict, Any, Tuple
-
-from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.master_data.models.employee_performance import (
     PerformanceSummary,
     EmployeeKPIScore,
 )
 from apps.master_data.schemas.employee_performance_schemas import (
+    PerformanceCalculateResponse,
     PerformanceSummaryResponse,
     PerformanceDetailItem,
     PerformanceDetailResponse,
@@ -144,6 +143,8 @@ class PerformanceCalcService:
         op_cache: Dict[tuple, Any] = {}
         for r in records:
             wid = r.worker_id
+            if wid is None:
+                continue
             if wid not in result:
                 result[wid] = {
                     "worker_id": wid,
@@ -160,6 +161,20 @@ class PerformanceCalcService:
             result[wid]["total_unqualified"] += r.unqualified_quantity or Decimal("0")
             result[wid]["records"].append(r)
         return result
+
+    @staticmethod
+    async def count_team_only_approved_reporting(tenant_id: int, period: str) -> int:
+        """仅小组报工、未指定操作工的已审核记录数（不计入个人汇总）。"""
+        start_dt, end_dt = site_period_bounds_utc(period)
+        return await ReportingRecord.filter(
+            tenant_id=tenant_id,
+            worker_id__isnull=True,
+            team_id__isnull=False,
+            reported_at__gte=start_dt,
+            reported_at__lt=end_dt,
+            status="approved",
+            deleted_at__isnull=True,
+        ).count()
 
     @staticmethod
     async def calculate_employee_performance(
@@ -284,7 +299,11 @@ class PerformanceCalcService:
         return summary
 
     @staticmethod
-    async def calculate_period(tenant_id: int, period: str, operator: Optional[User] = None) -> List[PerformanceSummaryResponse]:
+    async def calculate_period(
+        tenant_id: int,
+        period: str,
+        operator: Optional[User] = None,
+    ) -> PerformanceCalculateResponse:
         agg = await PerformanceCalcService.aggregate_reporting_by_employee(
             tenant_id, period, status_filter="approved",
         )
@@ -318,7 +337,8 @@ class PerformanceCalcService:
         # 任一员工计薪失败须暴露，禁止静默跳过导致列表残留件数为正、金额为 0
         if errors:
             raise ValidationError("; ".join(errors))
-        return results
+        team_only = await PerformanceCalcService.count_team_only_approved_reporting(tenant_id, period)
+        return PerformanceCalculateResponse(items=results, team_only_reporting_count=team_only)
 
     @staticmethod
     async def refresh_employee_period_from_reporting(
@@ -508,6 +528,17 @@ class PerformanceCalcService:
         return {"items": items, "total": total}
 
     @staticmethod
+    async def get_summary_by_id(tenant_id: int, summary_id: int) -> PerformanceSummaryResponse:
+        summary = await PerformanceSummary.filter(
+            id=summary_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not summary:
+            raise NotFoundError(f"绩效汇总 {summary_id} 不存在")
+        return PerformanceSummaryResponse.model_validate(summary)
+
+    @staticmethod
     async def get_detail(
         tenant_id: int,
         employee_id: int,
@@ -557,6 +588,7 @@ class PerformanceCalcService:
             time_amt = effective_hours * hourly_rate
             items.append(PerformanceDetailItem(
                 reporting_record_id=r.id,
+                work_order_id=int(r.work_order_id) if r.work_order_id else None,
                 work_order_code=r.work_order_code or "",
                 operation_name=r.operation_name or "",
                 reported_at=r.reported_at,

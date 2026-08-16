@@ -12,6 +12,14 @@ import { App, Popconfirm, Button, Tag, Space, Modal, Row, Col, List, Typography,
 import dayjs from 'dayjs';
 import { EditOutlined, DeleteOutlined, PlusOutlined, HighlightOutlined } from '@ant-design/icons';
 import SOPBatchCreateSteps from './SOPBatchCreateSteps';
+import {
+  SopControlPanel,
+  renderSopCarrierTag,
+  renderSopControlStatusTag,
+  sopControlDetailFields,
+} from './SopControlPanel';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
+import { DocumentAttachmentsField } from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { ROW_ACTIONS_INLINE_GAP, rowActionKind } from '../../../../../components/uni-action';
@@ -303,6 +311,13 @@ const SOPPage: React.FC = () => {
         operationId: detail.operationId ?? d.operation_id ?? undefined,
         version: detail.version,
         content: detail.content,
+        carrier: detail.carrier ?? 'electronic',
+        storage_location: detail.storageLocation ?? d.storage_location,
+        keeper_name: detail.keeperName ?? d.keeper_name,
+        page_count: detail.pageCount ?? d.page_count,
+        paper_size: detail.paperSize ?? d.paper_size,
+        change_reason: detail.changeReason ?? d.change_reason,
+        attachments: mapAttachmentsToUploadList(detail.attachments as any),
         isActive: detail.isActive ?? d.is_active ?? true,
         material_group_uuids: d.material_group_uuids ?? d.materialGroupUuids ?? undefined,
         material_uuids: d.material_uuids ?? d.materialUuids ?? undefined,
@@ -425,11 +440,23 @@ const SOPPage: React.FC = () => {
         is_active: standardValues.isActive ?? standardValues.is_active ?? true,
         material_group_uuids: standardValues.material_group_uuids ?? standardValues.materialGroupUuids ?? null,
         material_uuids: standardValues.material_uuids ?? standardValues.materialUuids ?? null,
+        carrier: standardValues.carrier ?? 'electronic',
+        storage_location: standardValues.storage_location ?? standardValues.storageLocation ?? null,
+        keeper_name: standardValues.keeper_name ?? standardValues.keeperName ?? null,
+        page_count: standardValues.page_count ?? standardValues.pageCount ?? null,
+        paper_size: standardValues.paper_size ?? standardValues.paperSize ?? null,
+        change_reason: standardValues.change_reason ?? standardValues.changeReason ?? null,
+        attachments: normalizeDocumentAttachments(standardValues.attachments),
       };
       delete payload.operationId;
       delete payload.isActive;
       delete payload.materialGroupUuids;
       delete payload.materialUuids;
+      delete payload.storageLocation;
+      delete payload.keeperName;
+      delete payload.pageCount;
+      delete payload.paperSize;
+      delete payload.changeReason;
 
       if (isEdit && currentSOPUuid) {
         await sopApi.update(currentSOPUuid, payload as SOPUpdate);
@@ -837,14 +864,11 @@ const SOPPage: React.FC = () => {
         render: (_: unknown, record: SOP) =>
           getOperationName(record?.operationId ?? (record as any)?.operation_id),
       },
-      {
-        title: t('app.master-data.sop.versionLabel'),
-        dataIndex: 'version',
-        render: (_: unknown, record: SOP) => {
-          const v = (record as any)?.version;
-          return v != null && String(v).trim() !== '' ? String(v) : '-';
-        },
-      },
+      { title: t('app.master-data.sop.versionLabel'), dataIndex: 'version' },
+      ...sopControlDetailFields.map((col) => ({
+        ...col,
+        title: col.title,
+      })),
       {
         title: t('app.master-data.sop.remarkLabel'),
         dataIndex: 'content',
@@ -1114,9 +1138,58 @@ const SOPPage: React.FC = () => {
     {
       title: t('app.master-data.sop.versionLabel'),
       dataIndex: 'version',
-      width: 120,
+      width: 100,
       hideInSearch: true,
       sorter: true,
+      render: (_, record) => record.currentRevision ?? record.version ?? '-',
+    },
+    {
+      title: '载体',
+      dataIndex: 'carrier',
+      width: 88,
+      hideInSearch: true,
+      render: (_, record) => renderSopCarrierTag(record.carrier),
+    },
+    {
+      title: '文控状态',
+      dataIndex: 'controlStatus',
+      width: 96,
+      hideInSearch: true,
+      render: (_, record) => renderSopControlStatusTag(record.controlStatus),
+    },
+    {
+      title: '受控份',
+      dataIndex: 'issuedCopyCount',
+      width: 88,
+      hideInSearch: true,
+      render: (_, record) => {
+        const issued = record.issuedCopyCount ?? 0;
+        const pending = record.pendingRetrieveCopyCount ?? 0;
+        return pending > 0 ? `${issued} 待回收${pending}` : String(issued);
+      },
+    },
+    {
+      title: '载体',
+      dataIndex: 'carrier',
+      hideInTable: true,
+      valueType: 'select',
+      valueEnum: {
+        electronic: { text: '电子' },
+        paper: { text: '纸质' },
+        hybrid: { text: '混合' },
+      },
+    },
+    {
+      title: '文控状态',
+      dataIndex: 'controlStatus',
+      hideInTable: true,
+      valueType: 'select',
+      valueEnum: {
+        draft: { text: '草稿' },
+        in_review: { text: '审核中' },
+        effective: { text: '生效' },
+        obsolete: { text: '作废' },
+      },
     },
     {
       title: t('app.master-data.sop.remarkLabel'),
@@ -1159,6 +1232,7 @@ const SOPPage: React.FC = () => {
       valueType: 'option',
       fixed: 'right',
       render: (_, record) => {
+        const carrier = record.carrier ?? 'electronic';
         const goDesigner = () => {
           navigate(`/apps/master-data/process/sop/designer?uuid=${record.uuid}&from=edit`);
         };
@@ -1167,17 +1241,19 @@ const SOPPage: React.FC = () => {
             <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
               {t('field.customField.view')}
             </Button>
-            <Button
-              key="design"
-              type="link"
-              size="small"
-              icon={<HighlightOutlined />}
-              {...rowActionKind('update')}
-              onClick={goDesigner}
-              title={t('app.master-data.sop.designFlowTitle')}
-            >
-              {t('app.master-data.sop.designBtn')}
-            </Button>
+            {carrier !== 'paper' ? (
+              <Button
+                key="design"
+                type="link"
+                size="small"
+                icon={<HighlightOutlined />}
+                {...rowActionKind('update')}
+                onClick={goDesigner}
+                title={t('app.master-data.sop.designFlowTitle')}
+              >
+                {t('app.master-data.sop.designBtn')}
+              </Button>
+            ) : null}
             <Button
               key="edit"
               type="link"
@@ -1329,14 +1405,25 @@ const SOPPage: React.FC = () => {
             />
           ) : undefined
         }
-        linesTitle={t('app.master-data.sop.detailSectionDigital')}
+        linesTitle="文控与受控份"
         lines={
           sopDetail ? (
-            <Descriptions
-              column={2}
-              size="small"
-              items={detailDrawerDescriptionItems(sopDetailDigitalColumns, sopDetail)}
-            />
+            <>
+              <Descriptions
+                column={2}
+                size="small"
+                items={detailDrawerDescriptionItems(sopDetailDigitalColumns, sopDetail)}
+              />
+              <div style={{ marginTop: 16 }}>
+                <SopControlPanel
+                  sop={sopDetail}
+                  onRefresh={() => {
+                    void loadDetail(sopDetail.uuid);
+                    actionRef.current?.reload();
+                  }}
+                />
+              </div>
+            </>
           ) : undefined
         }
         extra={buildDetailDrawerEditExtra(t, Boolean(sopDetail), () => {
@@ -1372,7 +1459,7 @@ const SOPPage: React.FC = () => {
         width={640}
         grid={false}
         formRef={formRef}
-        initialValues={{ isActive: true }}
+        initialValues={{ isActive: true, carrier: 'electronic' }}
       >
         <div style={{ padding: '8px 0', minWidth: 0 }}>
           <Row gutter={[16, 16]}>
@@ -1511,6 +1598,18 @@ const SOPPage: React.FC = () => {
               </ProFormDependency>
             </Col>
             <Col span={12} style={{ minWidth: 0 }}>
+              <SafeProFormSelect
+                name="carrier"
+                label="载体"
+                options={[
+                  { label: '电子', value: 'electronic' },
+                  { label: '纸质', value: 'paper' },
+                  { label: '混合', value: 'hybrid' },
+                ]}
+                rules={[{ required: true, message: '请选择载体' }]}
+              />
+            </Col>
+            <Col span={12} style={{ minWidth: 0 }}>
               <ProFormText
                 name="version"
                 label={t('app.master-data.sop.versionLabel')}
@@ -1518,6 +1617,26 @@ const SOPPage: React.FC = () => {
                 rules={[{ max: 20, message: t('app.master-data.sop.versionMaxLength') }]}
               />
             </Col>
+            <ProFormDependency name={['carrier']}>
+              {({ carrier }) =>
+                carrier === 'paper' || carrier === 'hybrid' ? (
+                  <>
+                    <Col span={12} style={{ minWidth: 0 }}>
+                      <ProFormText name="storage_location" label="存放位置" rules={[{ required: true, message: '请填写存放位置' }]} />
+                    </Col>
+                    <Col span={12} style={{ minWidth: 0 }}>
+                      <ProFormText name="keeper_name" label="保管人" />
+                    </Col>
+                    <Col span={12} style={{ minWidth: 0 }}>
+                      <ProFormText name="page_count" label="页数" fieldProps={{ type: 'number' }} />
+                    </Col>
+                    <Col span={12} style={{ minWidth: 0 }}>
+                      <ProFormText name="paper_size" label="纸张规格" placeholder="如 A4" />
+                    </Col>
+                  </>
+                ) : null
+              }
+            </ProFormDependency>
             <CustomFieldsFormSection
               customFields={sopFormCustomFields}
               customFieldValues={sopFormCustomFieldValues}
@@ -1525,6 +1644,19 @@ const SOPPage: React.FC = () => {
               embedInParentRow
             />
           </Row>
+          <ProFormTextArea
+            name="change_reason"
+            label="变更说明"
+            fieldProps={{ rows: 2, maxLength: 500 }}
+            style={{ marginTop: 16 }}
+          />
+          <ProFormDependency name={['carrier']}>
+            {({ carrier }) =>
+              carrier === 'paper' || carrier === 'hybrid' ? (
+                <DocumentAttachmentsField category="sop_controlled_original" label="受控扫描件" />
+              ) : null
+            }
+          </ProFormDependency>
           <ProFormTextArea
             name="content"
             label={t('app.master-data.sop.remarkLabel')}

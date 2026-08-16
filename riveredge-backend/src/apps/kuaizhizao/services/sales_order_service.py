@@ -899,6 +899,8 @@ class SalesOrderService:
         order: SalesOrder,
         items: Optional[List[SalesOrderItem]],
         demand: Optional[Demand],
+        *,
+        pushable_by_item: Optional[Dict[int, Decimal]] = None,
     ) -> dict[str, bool]:
         item_list = items or []
         has_items = len(item_list) > 0
@@ -908,6 +910,14 @@ class SalesOrderService:
         has_returnable_qty = any(
             Decimal(str(getattr(it, "delivered_quantity", 0) or 0)) > 0 for it in item_list
         )
+        if pushable_by_item is not None:
+            has_pushable_qty = any(q > Decimal("0") for q in pushable_by_item.values())
+        elif item_list:
+            from apps.kuaizhizao.utils.sales_order_push_qty import compute_backorder_qty
+
+            has_pushable_qty = any(compute_backorder_qty(it) > Decimal("0") for it in item_list)
+        else:
+            has_pushable_qty = False
         pushed = bool(demand and getattr(demand, "pushed_to_computation", False))
         if getattr(order, "planning_pushed_to_computation", False):
             pushed = True
@@ -917,6 +927,7 @@ class SalesOrderService:
             "has_line_work_orders": has_line_work_orders,
             "computation_pushed_blocks_withdraw": pushed,
             "has_returnable_qty": has_returnable_qty,
+            "has_pushable_qty": has_pushable_qty,
         }
 
     async def _assert_sales_order_capability_for_order(
@@ -931,7 +942,14 @@ class SalesOrderService:
             items = await SalesOrderItem.filter(
                 tenant_id=tenant_id, sales_order_id=order.id
             ).all()
-        ctx = self._sales_order_capability_context(order, items, demand)
+        from apps.kuaizhizao.utils.sales_order_push_qty import get_pushable_qty_for_order_items
+
+        pushable_by_item = await get_pushable_qty_for_order_items(
+            tenant_id, order.id, items
+        )
+        ctx = self._sales_order_capability_context(
+            order, items, demand, pushable_by_item=pushable_by_item
+        )
         assert_sales_order_capability(order, action, **ctx)
 
     async def _sync_demand_if_exists(self, tenant_id: int, order_id: int, operator_id: int) -> bool:
@@ -1594,6 +1612,11 @@ class SalesOrderService:
         ).get(sales_order_id, {})
 
         audit_enabled = await self.business_config_service.check_audit_required(tenant_id, "sales_order")
+        from apps.kuaizhizao.utils.sales_order_push_qty import get_pushable_qty_for_order_items
+
+        pushable_by_item = await get_pushable_qty_for_order_items(
+            tenant_id, sales_order_id, items
+        )
         return enrich_sales_order_capabilities_on_response(
             order,
             self._order_to_response(
@@ -1611,7 +1634,9 @@ class SalesOrderService:
                 shippable_hint=shippable_map.get(sales_order_id),
                 audit_enabled=audit_enabled,
             ),
-            **self._sales_order_capability_context(order, items, demand),
+            **self._sales_order_capability_context(
+                order, items, demand, pushable_by_item=pushable_by_item
+            ),
         )
 
     async def _sales_order_ids_matching_lifecycle(
@@ -1825,7 +1850,7 @@ class SalesOrderService:
                 )
             )
         # 加载建售后服务：仅已出库（已发货）的销售订单
-        if pullable_only and pull_target_norm == "after_sales_ticket":
+        if pullable_only and pull_target_norm in ("after_sales_ticket", "install_execution"):
             shipped_order_ids = await SalesDelivery.filter(
                 tenant_id=tenant_id,
                 deleted_at__isnull=True,
@@ -1863,6 +1888,61 @@ class SalesOrderService:
                 Q(status__in=audited_statuses)
                 | Q(review_status__in=approved_review)
             )
+
+        if pullable_only and pull_target_norm in ("shipment_notice", "sales_delivery"):
+            pull_audited_statuses = (
+                "AUDITED",
+                "CONFIRMED",
+                "IN_PROGRESS",
+                "已审核",
+                "审核通过",
+                "已确认",
+                "执行中",
+                "进行中",
+            )
+            approved_review = ("APPROVED", "已通过", "审核通过", "通过", "已审核")
+            query = query.filter(
+                Q(status__in=pull_audited_statuses)
+                | Q(review_status__in=approved_review)
+            )
+            pre_ids = await query.values_list("id", flat=True)
+            if pre_ids:
+                from apps.kuaizhizao.utils.sales_order_push_qty import batch_orders_with_pushable_qty
+
+                pre_items = await SalesOrderItem.filter(
+                    tenant_id=tenant_id,
+                    sales_order_id__in=list(pre_ids),
+                ).all()
+                pushable_ids = await batch_orders_with_pushable_qty(tenant_id, pre_items)
+                query = query.filter(
+                    id__in=list(pushable_ids) if pushable_ids else [-1]
+                )
+            else:
+                query = query.filter(id=-1)
+
+        if pullable_only and pull_target_norm == "demand_computation":
+            pull_audited_statuses = (
+                "AUDITED",
+                "CONFIRMED",
+                "IN_PROGRESS",
+                "已审核",
+                "审核通过",
+                "已确认",
+                "执行中",
+                "进行中",
+            )
+            approved_review = ("APPROVED", "已通过", "审核通过", "通过", "已审核")
+            query = query.filter(
+                Q(status__in=pull_audited_statuses)
+                | Q(review_status__in=approved_review)
+            ).filter(planning_pushed_to_computation=False)
+            line_wo_order_ids = await SalesOrderItem.filter(
+                tenant_id=tenant_id,
+                work_order_id__isnull=False,
+            ).exclude(work_order_id=0).distinct().values_list("sales_order_id", flat=True)
+            wo_ids = {int(oid) for oid in line_wo_order_ids if oid}
+            if wo_ids:
+                query = query.exclude(id__in=list(wo_ids))
 
         order_clause = order_by if order_by else "-created_at"
 
@@ -1971,19 +2051,26 @@ class SalesOrderService:
                 tenant_id=tenant_id,
                 sales_order_id__in=order_ids,
             ).values_list(
+                "id",
                 "sales_order_id",
                 "order_quantity",
                 "delivered_quantity",
+                "remaining_quantity",
+                "material_id",
                 "work_order_id",
             )
-            for oid, qty, delivered, work_order_id in items_agg_rows:
+            for iid, oid, qty, delivered, remaining, material_id, work_order_id in items_agg_rows:
                 items_by_order.setdefault(oid, []).append(
                     type(
                         "_AggItem",
                         (),
                         {
+                            "id": iid,
+                            "sales_order_id": oid,
                             "order_quantity": qty,
                             "delivered_quantity": delivered,
+                            "remaining_quantity": remaining,
+                            "material_id": material_id,
                             "work_order_id": work_order_id,
                         },
                     )()
@@ -2065,6 +2152,11 @@ class SalesOrderService:
                 eligible_ship_check_ids.append(order.id)
         shippable_map = await self._batch_shippable_by_order(tenant_id, eligible_ship_check_ids)
 
+        from apps.kuaizhizao.utils.sales_order_push_qty import batch_pushable_qty_by_order_item
+
+        all_list_items = [it for items in items_by_order.values() for it in items]
+        pushable_by_order = await batch_pushable_qty_by_order_item(tenant_id, all_list_items)
+
         # 6. 组装响应
         sales_orders = []
         for order in orders:
@@ -2117,6 +2209,7 @@ class SalesOrderService:
                         order,
                         items,
                         demand_by_order.get(order.id),
+                        pushable_by_item=pushable_by_order.get(order.id),
                     ),
                 )
             )
@@ -3165,7 +3258,7 @@ class SalesOrderService:
             raw_push_mode = await self.business_config_service.get_push_default_mode(tenant_id)
         push_as_confirm = raw_push_mode == "confirm"
         raw_granularity = (work_order_granularity or "").strip().lower()
-        if raw_granularity not in ("grouped", "per_unit"):
+        if raw_granularity not in ("grouped", "peer_group"):
             raw_granularity = "grouped"
 
         from datetime import datetime
@@ -3375,26 +3468,41 @@ class SalesOrderService:
             total_qty_dec = Decimal(str(info["quantity"] or 0))
             if total_qty_dec <= 0:
                 continue
-            if raw_granularity == "per_unit":
-                if total_qty_dec != total_qty_dec.to_integral_value():
-                    raise BusinessLogicError(
-                        f"物料 {info['material_code'] or info['material_name']} 下推数量为 {total_qty_dec}，"
-                        "“单台一个工单”仅支持整数数量"
-                    )
-                unit_count = int(total_qty_dec)
-                for _ in range(unit_count):
-                    await _create_one_work_order(info, Decimal("1"))
-            else:
-                await _create_one_work_order(info, total_qty_dec)
+            await _create_one_work_order(info, total_qty_dec)
 
         if not work_orders:
             raise BusinessLogicError("所选明细的本次下推数量均为 0，无法生成工单")
 
+        work_order_group: Optional[Dict[str, Any]] = None
+        if raw_granularity == "peer_group":
+            if len(work_orders) < 2:
+                raise BusinessLogicError(
+                    "平级组工单至少需要生成 2 张工单，请多选订单明细或改选普通工单"
+                )
+            from apps.kuaizhizao.services.work_order_group_service import WorkOrderGroupService
+
+            wo_ids = [
+                int(w.id if hasattr(w, "id") else w.get("id"))
+                for w in work_orders
+            ]
+            work_order_group = await WorkOrderGroupService().merge_work_orders_into_group(
+                tenant_id=tenant_id,
+                work_order_ids=wo_ids,
+                root_work_order_id=None,
+                created_by=created_by,
+                remarks=f"由销售订单 {order.order_code} 直推平级组",
+            )
+
         return {
             "success": True,
-            "message": f"直推成功，共生成 {len(work_orders)} 个工单（含半成品，采购件自行采购）",
+            "message": (
+                f"直推成功，共生成 {len(work_orders)} 个工单并编入平级组"
+                if work_order_group
+                else f"直推成功，共生成 {len(work_orders)} 个工单（含半成品，采购件自行采购）"
+            ),
             "push_mode": raw_push_mode,
             "work_order_granularity": raw_granularity,
+            "work_order_group": work_order_group,
             "target_documents": [
                 {"type": "work_order", "id": w.id if hasattr(w, "id") else w.get("id"), "code": w.code if hasattr(w, "code") else w.get("code")}
                 for w in work_orders
@@ -3880,6 +3988,38 @@ class SalesOrderService:
             "quotation": quotation.model_dump() if hasattr(quotation, "model_dump") else quotation,
         }
 
+    async def pull_sales_order_from_sales_review(
+        self,
+        tenant_id: int,
+        sales_review_id: int,
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """销售订单域加载建单：从订单评审创建销售订单。"""
+        if sales_review_id <= 0:
+            raise ValidationError("订单评审ID无效")
+
+        from apps.kuaizhizao.services.sales_review_service import SalesReviewService
+        from infra.models.user import User
+
+        user = await User.get_or_none(id=created_by)
+        if not user:
+            raise NotFoundError(f"用户不存在: {created_by}")
+        result = await SalesReviewService().push_to_sales_order(
+            tenant_id, sales_review_id, user
+        )
+        return {
+            "success": True,
+            "message": result.message or "已从订单评审创建销售订单",
+            "source_type": "sales_review",
+            "source_id": sales_review_id,
+            "sales_order_id": result.sales_order_id,
+            "sales_order_code": result.sales_order_code,
+            "sales_order": {
+                "id": result.sales_order_id,
+                "order_code": result.sales_order_code,
+            },
+        }
+
     async def pull_sales_order_from_sales_contract(
         self,
         tenant_id: int,
@@ -4088,6 +4228,12 @@ class SalesOrderService:
                 except Exception:
                     continue
 
+        from apps.kuaizhizao.utils.sales_order_push_qty import get_pushable_qty_for_order_items
+
+        pushable_by_item = await get_pushable_qty_for_order_items(
+            tenant_id, sales_order_id, items
+        )
+
         from apps.kuaizhizao.services.shipment_notice_service import (
             ShipmentNoticeService,
             _resolve_warehouse_name_by_id,
@@ -4120,14 +4266,8 @@ class SalesOrderService:
             total_qty = Decimal("0")
             total_amt = Decimal("0")
             for it in items:
-                # P1-S-009: 发货通知下推应取欠发量，避免把总量重复通知给仓库
-                remaining_qty = (
-                    it.remaining_quantity
-                    if it.remaining_quantity is not None
-                    else ((it.order_quantity or Decimal("0")) - (it.delivered_quantity or Decimal("0")))
-                )
-                remaining_qty = max(Decimal("0"), Decimal(str(remaining_qty)))
                 item_id = int(getattr(it, "id", 0) or 0)
+                remaining_qty = pushable_by_item.get(item_id, Decimal("0"))
                 qty = qty_override.get(item_id, remaining_qty)
                 qty = max(Decimal("0"), Decimal(str(qty)))
                 if qty <= Decimal("0"):
@@ -4135,7 +4275,7 @@ class SalesOrderService:
                 if qty > remaining_qty:
                     raise BusinessLogicError(
                         f"物料 {it.material_code or it.material_name or item_id} 下推数量 {qty} "
-                        f"不能超过欠发数量 {remaining_qty}"
+                        f"不能超过可通知数量 {remaining_qty}"
                     )
 
                 line_wh_id: Optional[int] = None
@@ -4223,6 +4363,223 @@ class SalesOrderService:
             "related_sales_delivery_ids": related_deliveries,
         }
 
+    async def list_shipment_notice_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        sales_order_id: Optional[int] = None,
+        pullable_only: bool = True,
+    ) -> Dict[str, Any]:
+        """开口销售订单行：可转发货通知的剩余明细。"""
+        from apps.kuaizhizao.utils.sales_order_push_qty import batch_pushable_qty_by_order_item
+
+        so_query = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if sales_order_id is not None:
+            so_query = so_query.filter(id=int(sales_order_id))
+        orders = await so_query.only(
+            "id", "order_code", "status", "customer_id", "customer_name"
+        )
+        order_by_id = {int(o.id): o for o in orders}
+        if not order_by_id:
+            return {"data": [], "total": 0}
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id__in=list(order_by_id.keys())
+        ).all()
+        pushable = await batch_pushable_qty_by_order_item(tenant_id, items)
+        kw = (keyword or "").strip().lower()
+        lines: List[Dict[str, Any]] = []
+        for item in items:
+            order = order_by_id.get(int(item.sales_order_id))
+            if not order:
+                continue
+            qty = float(item.order_quantity or 0)
+            if qty <= 0:
+                continue
+            remaining = float(pushable.get(int(order.id), {}).get(int(item.id), Decimal("0")))
+            pushed = max(0.0, qty - remaining)
+            can_push = self._is_audited(order.status) and remaining > 0
+            if pullable_only and not (can_push and remaining > 0):
+                continue
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            material_spec = str(item.material_spec or "").strip()
+            if kw:
+                haystack = " ".join([material_code, material_name, material_spec]).lower()
+                if kw not in haystack:
+                    continue
+            lines.append(
+                {
+                    "id": int(item.id),
+                    "sales_order_id": int(item.sales_order_id),
+                    "order_code": order.order_code,
+                    "customer_id": order.customer_id,
+                    "customer_name": order.customer_name,
+                    "material_id": item.material_id,
+                    "material_code": material_code,
+                    "material_name": material_name,
+                    "material_spec": material_spec or None,
+                    "unit": item.material_unit or "件",
+                    "suggested_quantity": qty,
+                    "pushed_quantity": pushed,
+                    "remaining_quantity": remaining,
+                    "required_date": str(item.required_date) if getattr(item, "required_date", None) else None,
+                }
+            )
+        lines.sort(
+            key=lambda r: (
+                str(r.get("order_code") or ""),
+                str(r.get("material_code") or ""),
+                int(r.get("id") or 0),
+            )
+        )
+        return {"data": lines[skip : skip + limit], "total": len(lines)}
+
+    async def create_shipment_notices_from_sales_order_items(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """按销售订单行 id 建发货通知，可跨多张订单；同客户合并一张。"""
+        from apps.kuaizhizao.utils.sales_order_push_qty import batch_pushable_qty_by_order_item
+        from apps.kuaizhizao.services.shipment_notice_service import (
+            ShipmentNoticeService,
+            _resolve_warehouse_name_by_id,
+        )
+        from apps.master_data.services.material_service import (
+            resolve_primary_default_warehouse_from_material,
+        )
+
+        selected_ids = [int(v) for v in item_ids if v is not None]
+        if not selected_ids:
+            raise BusinessLogicError("请至少选择一条可通知销售订单明细")
+        items = await SalesOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).all()
+        if not items:
+            raise BusinessLogicError("没有可通知的销售订单行")
+        order_ids = sorted({int(i.sales_order_id) for i in items})
+        orders = await SalesOrder.filter(
+            tenant_id=tenant_id, id__in=order_ids, deleted_at__isnull=True
+        ).all()
+        order_by_id = {int(o.id): o for o in orders}
+        if len(order_by_id) != len(order_ids):
+            raise NotFoundError("销售订单不存在")
+        for order in orders:
+            order_items = [i for i in items if int(i.sales_order_id) == int(order.id)]
+            await self._assert_sales_order_capability_for_order(
+                tenant_id, order, "push_shipment_notice", items=order_items
+            )
+        pushable = await batch_pushable_qty_by_order_item(tenant_id, items)
+        groups: Dict[int, List[SalesOrderItem]] = {}
+        for item in items:
+            groups.setdefault(int(order_by_id[int(item.sales_order_id)].customer_id or 0), []).append(item)
+
+        notice_service = ShipmentNoticeService()
+        today = today_site_str()
+        notices_out: List[Dict[str, Any]] = []
+        for _cid, group_items in groups.items():
+            source_order_ids = sorted({int(i.sales_order_id) for i in group_items})
+            primary = order_by_id[source_order_ids[0]]
+            code = await notice_service.generate_code(
+                tenant_id, "SHIPMENT_NOTICE_CODE", prefix=f"SN{today}"
+            )
+            header_wh_id: Optional[int] = None
+            header_wh_name: Optional[str] = None
+            created_lines = 0
+            async with in_transaction():
+                notice = await ShipmentNotice.create(
+                    tenant_id=tenant_id,
+                    notice_code=code,
+                    sales_order_id=primary.id,
+                    sales_order_code=primary.order_code or "",
+                    customer_id=primary.customer_id,
+                    customer_name=primary.customer_name or "",
+                    customer_contact=primary.customer_contact,
+                    customer_phone=primary.customer_phone,
+                    shipping_address=primary.shipping_address,
+                    planned_ship_date=primary.delivery_date,
+                    status="待发货",
+                    notes=primary.notes,
+                    created_by=created_by,
+                    updated_by=created_by,
+                )
+                total_qty = Decimal("0")
+                total_amt = Decimal("0")
+                for it in group_items:
+                    item_id = int(it.id)
+                    remaining_qty = pushable.get(int(it.sales_order_id), {}).get(item_id, Decimal("0"))
+                    qty = max(Decimal("0"), Decimal(str(remaining_qty)))
+                    if qty <= Decimal("0"):
+                        continue
+                    material_wh = await resolve_primary_default_warehouse_from_material(
+                        tenant_id, material_id=int(it.material_id)
+                    ) if it.material_id else None
+                    if not material_wh or not material_wh[0]:
+                        raise ValidationError(
+                            f"请为物料 {it.material_code or it.material_name or item_id} 指定出库仓库"
+                        )
+                    line_wh_id = int(material_wh[0])
+                    line_wh_name = material_wh[1] or await _resolve_warehouse_name_by_id(
+                        tenant_id=tenant_id, warehouse_id=line_wh_id
+                    )
+                    if header_wh_id is None:
+                        header_wh_id = line_wh_id
+                        header_wh_name = line_wh_name
+                    amt = qty * (it.unit_price or Decimal("0"))
+                    await ShipmentNoticeItem.create(
+                        tenant_id=tenant_id,
+                        notice_id=notice.id,
+                        material_id=it.material_id,
+                        material_code=it.material_code or "",
+                        material_name=it.material_name or "",
+                        material_spec=it.material_spec,
+                        material_unit=it.material_unit or "",
+                        notice_quantity=qty,
+                        unit_price=it.unit_price or Decimal("0"),
+                        total_amount=amt,
+                        is_gift=bool(getattr(it, "is_gift", False)),
+                        gift_ref_unit_price=getattr(it, "gift_ref_unit_price", None),
+                        sales_order_item_id=it.id,
+                        warehouse_id=line_wh_id,
+                        warehouse_name=line_wh_name,
+                    )
+                    total_qty += qty
+                    total_amt += amt
+                    created_lines += 1
+                if total_qty <= Decimal("0"):
+                    raise BusinessLogicError("销售订单无欠发明细，无法下推发货通知单")
+                await ShipmentNotice.filter(tenant_id=tenant_id, id=notice.id).update(
+                    total_quantity=total_qty,
+                    total_amount=total_amt,
+                    warehouse_id=header_wh_id,
+                    warehouse_name=header_wh_name,
+                )
+            notified = await notice_service.notify_warehouse(
+                tenant_id=tenant_id,
+                notice_id=notice.id,
+                notified_by=created_by,
+            )
+            notices_out.append({
+                "notice_id": notice.id,
+                "notice_code": code,
+                "status": notified.status,
+            })
+        first = notices_out[0]
+        msg = (
+            f"转单成功，共生成 {len(notices_out)} 张发货通知单"
+            if len(notices_out) > 1
+            else "已生成发货通知单并已通知仓库"
+        )
+        return {
+            "success": True,
+            "message": msg,
+            "notice_id": first["notice_id"],
+            "notice_code": first["notice_code"],
+            "notices": notices_out,
+        }
+
     async def preview_push_sales_order_to_shipment_notice(
         self, tenant_id: int, sales_order_id: int
     ) -> Dict[str, Any]:
@@ -4242,6 +4599,11 @@ class SalesOrderService:
         if not items:
             raise BusinessLogicError("销售订单无明细，无法下推发货通知单")
 
+        from apps.kuaizhizao.utils.sales_order_push_qty import get_pushable_qty_for_order_items
+
+        pushable_by_item = await get_pushable_qty_for_order_items(
+            tenant_id, sales_order_id, items
+        )
         material_fallback = await self._load_material_fallback_for_items(tenant_id, items)
         from apps.master_data.services.material_service import (
             resolve_primary_default_warehouse_from_material,
@@ -4251,12 +4613,8 @@ class SalesOrderService:
         for it in items:
             order_qty = Decimal(str(it.order_quantity or 0))
             delivered_qty = Decimal(str(it.delivered_quantity or 0))
-            remaining_qty = (
-                it.remaining_quantity
-                if it.remaining_quantity is not None
-                else (order_qty - delivered_qty)
-            )
-            remaining_qty = max(Decimal("0"), Decimal(str(remaining_qty)))
+            item_id = int(it.id)
+            max_push_qty = pushable_by_item.get(item_id, Decimal("0"))
             material_code, material_name = self._resolve_item_material_display(it, material_fallback)
             line_wh_id: Optional[int] = None
             line_wh_name: Optional[str] = None
@@ -4275,7 +4633,7 @@ class SalesOrderService:
                     "material_name": material_name,
                     "quantity": float(order_qty),
                     "pushed_quantity": float(delivered_qty),
-                    "max_push_quantity": float(remaining_qty),
+                    "max_push_quantity": float(max_push_qty),
                     "delivery_date": str(it.delivery_date) if it.delivery_date else None,
                     "suggested_action": "发货",
                     "warehouse_id": line_wh_id,
@@ -4298,36 +4656,6 @@ class SalesOrderService:
             "line_warehouse_required": True,
         }
 
-    @staticmethod
-    async def _occupied_delivery_qty_by_material(
-        tenant_id: int, sales_order_id: int
-    ) -> Dict[int, Decimal]:
-        existing_deliveries = await SalesDelivery.filter(
-            tenant_id=tenant_id,
-            sales_order_id=sales_order_id,
-            deleted_at__isnull=True,
-        ).exclude(status__in=["已取消", "cancelled", "CANCELLED"]).values("id", "status")
-        closed_statuses = {"已出库", "已完成", "completed", "COMPLETED", "done", "DONE"}
-        occupying_delivery_ids = [
-            int(d["id"])
-            for d in existing_deliveries
-            if d.get("id") is not None
-            and str(d.get("status") or "").strip() not in closed_statuses
-        ]
-        occupied_qty_by_material: Dict[int, Decimal] = {}
-        if occupying_delivery_ids:
-            occupying_items = await SalesDeliveryItem.filter(
-                tenant_id=tenant_id,
-                delivery_id__in=occupying_delivery_ids,
-            ).values("material_id", "delivery_quantity")
-            for row in occupying_items:
-                mid = int(row.get("material_id") or 0)
-                if mid <= 0:
-                    continue
-                qty = Decimal(str(row.get("delivery_quantity") or 0))
-                occupied_qty_by_material[mid] = occupied_qty_by_material.get(mid, Decimal("0")) + qty
-        return occupied_qty_by_material
-
     async def preview_push_sales_order_to_delivery(
         self, tenant_id: int, sales_order_id: int
     ) -> Dict[str, Any]:
@@ -4347,8 +4675,10 @@ class SalesOrderService:
         if not items:
             raise BusinessLogicError("销售订单无明细，无法下推销售出库")
 
-        occupied_qty_by_material = await self._occupied_delivery_qty_by_material(
-            tenant_id, sales_order_id
+        from apps.kuaizhizao.utils.sales_order_push_qty import get_pushable_qty_for_order_items
+
+        pushable_by_item = await get_pushable_qty_for_order_items(
+            tenant_id, sales_order_id, items
         )
         material_fallback = await self._load_material_fallback_for_items(tenant_id, items)
         from apps.master_data.services.material_service import (
@@ -4360,14 +4690,8 @@ class SalesOrderService:
             if order_qty <= 0:
                 continue
             delivered_qty = Decimal(str(it.delivered_quantity or 0))
-            base_remaining = Decimal(
-                str(it.remaining_quantity if it.remaining_quantity is not None else (order_qty - delivered_qty))
-            )
-            base_remaining = max(Decimal("0"), base_remaining)
-            occupied_qty = occupied_qty_by_material.get(int(it.material_id or 0), Decimal("0"))
-            max_push_qty = base_remaining - occupied_qty
-            if max_push_qty < 0:
-                max_push_qty = Decimal("0")
+            item_id = int(it.id)
+            max_push_qty = pushable_by_item.get(item_id, Decimal("0"))
             material_code, material_name = self._resolve_item_material_display(it, material_fallback)
             line_wh_id: Optional[int] = None
             line_wh_name: Optional[str] = None
@@ -4385,7 +4709,7 @@ class SalesOrderService:
                     "material_code": material_code,
                     "material_name": material_name,
                     "quantity": float(order_qty),
-                    "pushed_quantity": float(delivered_qty + occupied_qty),
+                    "pushed_quantity": float(delivered_qty),
                     "max_push_quantity": float(max_push_qty),
                     "delivery_date": str(it.delivery_date) if it.delivery_date else None,
                     "warehouse_id": line_wh_id,

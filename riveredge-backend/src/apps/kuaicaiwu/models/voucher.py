@@ -8,7 +8,7 @@ from core.models.base import BaseModel
 
 
 class Voucher(BaseModel):
-    """总账记账凭证（草稿/已过账）。"""
+    """总账记账凭证。状态：draft/reviewed/posted/cancelled。"""
 
     class Meta:
         table = "apps_kuaicaiwu_vouchers"
@@ -21,17 +21,22 @@ class Voucher(BaseModel):
 
     id = fields.IntField(pk=True, description="主键ID")
     tenant_id = fields.IntField(description="租户ID")
-    voucher_code = fields.CharField(max_length=50, db_index=True, description="凭证号")  # 租户内未删除唯一，见迁移 463
+    voucher_word = fields.CharField(max_length=10, default="记", description="凭证字")
+    voucher_code = fields.CharField(max_length=50, db_index=True, description="凭证号")
     voucher_date = fields.DateField(description="凭证日期")
     period_year = fields.IntField(description="会计年度")
     period_month = fields.IntField(description="会计月份")
-    status = fields.CharField(max_length=20, default="draft", description="draft/posted/cancelled")
+    status = fields.CharField(max_length=20, default="draft", description="draft/reviewed/posted/cancelled")
     summary = fields.CharField(max_length=500, null=True, description="摘要")
+    attachment_count = fields.IntField(default=0, description="附单据数")
     source_event_id = fields.IntField(null=True, description="来源会计事件ID")
     source_doc_type = fields.CharField(max_length=50, null=True, description="来源单据类型")
     source_doc_id = fields.IntField(null=True, description="来源单据ID")
     total_debit = fields.DecimalField(max_digits=14, decimal_places=2, default=0, description="借方合计")
     total_credit = fields.DecimalField(max_digits=14, decimal_places=2, default=0, description="贷方合计")
+    created_by = fields.IntField(null=True, description="制单人")
+    reviewed_at = fields.DatetimeField(null=True, description="审核时间")
+    reviewed_by = fields.IntField(null=True, description="审核人")
     posted_at = fields.DatetimeField(null=True, description="过账时间")
     posted_by = fields.IntField(null=True, description="过账人")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")

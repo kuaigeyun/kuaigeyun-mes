@@ -16,6 +16,10 @@ class FunctionGrantActionSchema(BaseModel):
     merged_codes: Optional[List[str]] = Field(
         None, description="合并审核等多 code 操作；勾选/取消时一并处理"
     )
+    is_baseline: bool = Field(
+        False,
+        description="基线权限：默认授予且矩阵不可取消（如个人中心）",
+    )
 
 
 class FunctionGrantMenuNodeSchema(BaseModel):

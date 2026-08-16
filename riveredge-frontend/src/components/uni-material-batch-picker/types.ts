@@ -7,7 +7,7 @@ export interface UniMaterialBatchPickerProps {
   onConfirm: (materials: Material[]) => void;
   /** 嵌套在已抬升的表单 Modal 内时传入更高 zIndex */
   zIndex?: number;
-  /** 弹窗宽度，默认 960 */
+  /** 弹窗宽度，默认 1120 */
   width?: number;
   /** 宿主 {app}:{module}，供隐式 display 鉴权 */
   hostResource?: string;

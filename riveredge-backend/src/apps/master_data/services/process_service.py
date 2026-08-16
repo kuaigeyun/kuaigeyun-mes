@@ -37,6 +37,7 @@ from apps.master_data.services.process_preset_catalog import (
     preset_catalog_for_api,
 )
 from apps.master_data.services.master_data_list_core import apply_master_crud_list_filters
+from apps.master_data.services.sop_control_service import SopControlService, enrich_sop_response
 from core.services.business.code_generation_service import CodeGenerationService
 from core.utils.timezone_utils import resolve_business_datetime
 
@@ -1718,6 +1719,11 @@ class ProcessService:
         # 创建SOP（仅传模型字段；dict 已包含 schema 中定义的绑定与融合字段）
         create_data = data.model_dump() if hasattr(data, "model_dump") else data.dict()
         apply_create_audit(create_data, current_user)
+        revision = (create_data.get("version") or "1.0").strip() or "1.0"
+        create_data.setdefault("carrier", "electronic")
+        create_data["control_status"] = "draft"
+        create_data["current_revision"] = revision
+        create_data["version"] = revision
         try:
             sop = await SOP.create(
                 tenant_id=tenant_id,
@@ -1729,7 +1735,7 @@ class ProcessService:
                 raise ValidationError(f"SOP编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
         
-        return SOPResponse.model_validate(sop)
+        return await enrich_sop_response(sop)
     
     @staticmethod
     async def batch_create_sops_from_route(
@@ -1935,10 +1941,14 @@ class ProcessService:
                     "route_uuids": [data.process_route_uuid],
                     "bom_load_mode": bom_mode,
                     "is_active": True,
+                    "carrier": "electronic",
+                    "control_status": "draft",
+                    "current_revision": "1.0",
+                    "version": "1.0",
                 }
                 apply_create_audit(sop_payload, current_user)
                 sop = await SOP.create(tenant_id=tenant_id, **sop_payload)
-                created_sops.append(SOPResponse.model_validate(sop))
+                created_sops.append(await enrich_sop_response(sop))
 
         return created_sops
     
@@ -1969,7 +1979,7 @@ class ProcessService:
         if not sop:
             raise NotFoundError(f"SOP {sop_uuid} 不存在")
         
-        return SOPResponse.model_validate(sop)
+        return await enrich_sop_response(sop)
     
     @staticmethod
     async def list_sops(
@@ -1978,6 +1988,8 @@ class ProcessService:
         limit: int = 100,
         operation_id: Optional[int] = None,
         is_active: Optional[bool] = None,
+        carrier: Optional[str] = None,
+        control_status: Optional[str] = None,
         material_uuid: Optional[str] = None,
         material_group_uuid: Optional[str] = None,
         route_uuid: Optional[str] = None,
@@ -2017,6 +2029,11 @@ class ProcessService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
+
+        if carrier:
+            query = query.filter(carrier=carrier)
+        if control_status:
+            query = query.filter(control_status=control_status)
         
         if material_uuid:
             query = query.filter(material_uuids__contains=[material_uuid])
@@ -2044,7 +2061,10 @@ class ProcessService:
 
         sops = await query.offset(skip).limit(limit).order_by(order_expr).prefetch_related("operation").all()
 
-        return [SOPResponse.model_validate(s) for s in sops], total
+        items: List[SOPResponse] = []
+        for s in sops:
+            items.append(await enrich_sop_response(s))
+        return items, total
     
     @staticmethod
     async def update_sop(
@@ -2076,6 +2096,8 @@ class ProcessService:
         
         if not sop:
             raise NotFoundError(f"SOP {sop_uuid} 不存在")
+        
+        SopControlService.assert_editable(sop)
         
         # 如果更新工序ID，检查工序是否存在
         if data.operation_id is not None and data.operation_id != sop.operation_id:
@@ -2138,7 +2160,7 @@ class ProcessService:
                 raise ValidationError(f"SOP编码 {data.code or sop.code} 已存在（可能已被软删除，请检查）")
             raise
         
-        return SOPResponse.model_validate(sop)
+        return await enrich_sop_response(sop)
     
     @staticmethod
     async def delete_sop(
@@ -2215,6 +2237,7 @@ class ProcessService:
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             is_active=True,
+            control_status="effective",
             material_uuids__contains=[material_uuid],
         )
         sop = await _pick_for_scope(q_material)
@@ -2237,6 +2260,7 @@ class ProcessService:
                     tenant_id=tenant_id,
                     deleted_at__isnull=True,
                     is_active=True,
+                    control_status="effective",
                     material_group_uuids__contains=[group_uuid],
                 )
                 sop2 = await _pick_for_scope(q_group)
@@ -2249,6 +2273,7 @@ class ProcessService:
                 tenant_id=tenant_id,
                 deleted_at__isnull=True,
                 is_active=True,
+                control_status="effective",
                 operation_id=op_id,
             )
             sop3 = await q3.order_by("code").prefetch_related("operation").first()
@@ -2293,6 +2318,7 @@ class ProcessService:
                 tenant_id=tenant_id,
                 deleted_at__isnull=True,
                 is_active=True,
+                control_status="effective",
                 operation_id=op.id,
             )
             sop = await q.order_by("code").prefetch_related("operation").first()

@@ -65,7 +65,7 @@ export function renderOaStatusMarker(
   return <MarkerTag color={resolveOaEnumTagColor(statusEnum, value)}>{text}</MarkerTag>;
 }
 
-/** 通用申请 / 资产采买等审批流程态（右固定 lifecycle） */
+/** 自定义申请 / 资产采买等审批流程态（右固定 lifecycle） */
 export function renderOaApprovalStatusTag(
   statusEnum: Record<string, { text: string; status?: string }> | undefined,
   value?: string | null,

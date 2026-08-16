@@ -24,6 +24,7 @@ import {
   UniPullQueryModal,
   filterByPullScope,
   paginatePullRows,
+  renderPullQueryReviewStatus,
   UNI_PULL_QUERY_MAX_FETCH_LIMIT,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
@@ -45,11 +46,14 @@ import {
   assertBankAccountForPaymentMethod,
   formatBankAccountOptionLabel,
   BANK_TRANSFER_PAYMENT_METHOD,
+  isAcceptanceBillPaymentMethod,
 } from '../../../utils/financeSharedOptions';
 import {
   LedgerAccountFormFields,
-  resolveLedgerAccountNote,
+  resolveFinanceVoucherReferenceNote,
 } from '../../../components/LedgerAccountFormFields';
+import { linkAcceptanceNoteAfterVoucherCreate } from '../../../components/AcceptanceBillLinkFields';
+import { financeNoteService, type FinanceNote } from '../../../services/finance/note';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
@@ -94,6 +98,7 @@ const PaymentsPage: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailRecord, setDetailRecord] = useState<PaymentVoucher | null>(null);
+  const [linkedNote, setLinkedNote] = useState<FinanceNote | null>(null);
   const detailRetryIdRef = useRef<number | null>(null);
   const { message: messageApi } = App.useApp();
   const { t } = useTranslation();
@@ -131,10 +136,17 @@ const PaymentsPage: React.FC = () => {
   const loadDetail = useCallback(async (id: number) => {
     setDetailLoading(true);
     setDetailError(null);
+    setLinkedNote(null);
     try {
-      setDetailRecord(await paymentService.getPayment(id));
+      const record = await paymentService.getPayment(id);
+      setDetailRecord(record);
+      if (isAcceptanceBillPaymentMethod(record.payment_method)) {
+        const noteRes = await financeNoteService.list('payable', { payment_id: id, limit: 1 });
+        setLinkedNote(noteRes.data?.[0] ?? null);
+      }
     } catch (error) {
       setDetailRecord(null);
+      setLinkedNote(null);
       setDetailError(getApiErrorMessage(error, t(`${P}.loadDetailFailed`)));
     } finally {
       setDetailLoading(false);
@@ -152,6 +164,7 @@ const PaymentsPage: React.FC = () => {
   const closeDetail = () => {
     setDetailOpen(false);
     setDetailRecord(null);
+    setLinkedNote(null);
     setDetailError(null);
   };
 
@@ -174,15 +187,36 @@ const PaymentsPage: React.FC = () => {
       payment_date: formatDateTime(values.payment_date || dayjs(), 'YYYY-MM-DD'),
       payment_method: values.payment_method,
       bank_account_id: values.bank_account_id,
-      bank_account: resolveLedgerAccountNote(bankAccounts, values.bank_account_id, values.bank_account),
+      bank_account: resolveFinanceVoucherReferenceNote(
+        bankAccounts,
+        values.payment_method,
+        values.bank_account_id,
+        values.bank_account,
+      ),
       settlement_type: values.settlement_type || 'normal',
       notes: values.notes,
       attachments: normalizeDocumentAttachments(values.attachments),
     };
-    await paymentService.create(data);
-    messageApi.success(t(`${P}.createSuccess`));
-    setCreateModalVisible(false);
-    actionRef.current?.reload();
+    try {
+      const created = await paymentService.create(data);
+      try {
+        await linkAcceptanceNoteAfterVoucherCreate(
+          'payable',
+          values.note_id,
+          created.id,
+          'payment',
+        );
+      } catch (linkError) {
+        messageApi.warning(getApiErrorMessage(linkError, t('app.kuaicaiwu.notes.linkFailed')));
+      }
+      messageApi.success(t(`${P}.createSuccess`));
+      setCreateModalVisible(false);
+      actionRef.current?.reload();
+    } catch (error) {
+      messageApi.error(getApiErrorMessage(error, t('common.createFailed')));
+      return false;
+    }
+    return true;
   };
 
   const resetPullPreview = () => {
@@ -299,7 +333,7 @@ const PaymentsPage: React.FC = () => {
     }
     setPullSubmitting(true);
     try {
-      await paymentService.create({
+      const created = await paymentService.create({
         supplier_id: Number(pullPreviewData.supplier_id || 0),
         supplier_name: pullPreviewData.supplier_name || '',
         source_type: 'payable',
@@ -308,7 +342,12 @@ const PaymentsPage: React.FC = () => {
         payment_date: formatDateTime(values.payment_date || dayjs(), 'YYYY-MM-DD'),
         payment_method: values.payment_method || '银行转账',
         bank_account_id: values.bank_account_id,
-        bank_account: resolveLedgerAccountNote(bankAccounts, values.bank_account_id, values.bank_account),
+        bank_account: resolveFinanceVoucherReferenceNote(
+          bankAccounts,
+          values.payment_method,
+          values.bank_account_id,
+          values.bank_account,
+        ),
         settlement_type: values.settlement_type || 'normal',
         notes:
           String(values.notes ?? '').trim() ||
@@ -318,6 +357,16 @@ const PaymentsPage: React.FC = () => {
           }),
         attachments: normalizeDocumentAttachments(values.attachments),
       });
+      try {
+        await linkAcceptanceNoteAfterVoucherCreate(
+          'payable',
+          values.note_id,
+          created.id,
+          'payment',
+        );
+      } catch (linkError) {
+        messageApi.warning(getApiErrorMessage(linkError, t('app.kuaicaiwu.notes.linkFailed')));
+      }
       messageApi.success(t(`${P}.pullCreateSuccess`, { target: pullFromPayableAction.targetLabel }));
       resetPullPreview();
       actionRef.current?.reload();
@@ -406,7 +455,13 @@ const PaymentsPage: React.FC = () => {
           return text === '-' ? '-' : <MarkerTag color={color}>{text}</MarkerTag>;
         },
       },
-      { title: t('app.kuaicaiwu.common.reviewStatus'), dataIndex: 'review_status', width: 120, align: 'center' as const },
+      {
+        title: t('app.kuaicaiwu.common.reviewStatus'),
+        dataIndex: 'review_status',
+        width: 120,
+        align: 'center' as const,
+        render: (v) => renderPullQueryReviewStatus(t, v),
+      },
       {
         title: t('app.kuaicaiwu.common.dueDate'),
         dataIndex: 'source_date',
@@ -546,6 +601,17 @@ const PaymentsPage: React.FC = () => {
       hideInSearch: true,
       sorter: true,
       render: (_, record) => formatPaymentMethod(record.payment_method, t),
+    },
+    {
+      title: t('app.kuaicaiwu.common.referenceNumber'),
+      dataIndex: 'bank_account',
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      ellipsis: true,
+      render: (_, record) => record.bank_account || '—',
     },
     {
       title: t(`${P}.settlementType`, '结算类型'),
@@ -696,6 +762,7 @@ const PaymentsPage: React.FC = () => {
         confirmLoading={pullFromPayableQuery.confirmLoading}
         selectionType={pullFromPayableQuery.selectionType}
         selectedRowKeys={pullFromPayableQuery.selectedRowKeys}
+        selectedRows={pullFromPayableQuery.selectedRows}
         onSelectedRowKeysChange={pullFromPayableQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromPayableQuery.isRowDisabled}
         searchDraft={pullFromPayableQuery.searchDraft}
@@ -846,6 +913,8 @@ const PaymentsPage: React.FC = () => {
                   accounts={bankAccounts}
                   accountLabel={t(`${P}.outBankAccount`)}
                   noteLabel={t(`${P}.outAccountNote`)}
+                  acceptanceNoteDirection="payable"
+                  partnerFieldName="supplier_id"
                 />
                 <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} colProps={financeColFull} />
                 <DocumentAttachmentsField category="payment_attachments" />
@@ -907,6 +976,8 @@ const PaymentsPage: React.FC = () => {
           accountLabel={t(`${P}.outBankAccount`)}
           noteLabel={t(`${P}.outAccountNote`)}
           noteColProps={financeColFull}
+          acceptanceNoteDirection="payable"
+          partnerFieldName="supplier_id"
         />
         <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} colProps={financeColFull} />
         <DocumentAttachmentsField category="payment_attachments" />
@@ -924,6 +995,8 @@ const PaymentsPage: React.FC = () => {
           if (id != null) void loadDetail(id);
         }}
         bankAccountLabel={resolveBankLabel(detailRecord?.bank_account_id)}
+        linkedNote={linkedNote}
+        linkedNotePath="/apps/kuaicaiwu/finance-management/notes-payable"
         extra={
           detailRecord ? (
             <DetailDrawerActions

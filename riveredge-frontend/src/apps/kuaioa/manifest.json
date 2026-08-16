@@ -2,7 +2,7 @@
   "code": "kuaioa",
   "name": "轻办公",
   "version": "1.0.0",
-  "description": "制造业行政协同与审批办公平台",
+  "description": "制造业行政协同审批与办公流程协同平台",
   "icon": "briefcase",
   "author": "RiverEdge Team",
   "market_category": "base",
@@ -19,26 +19,66 @@
       {
         "title": "app.kuaioa.menu.group.approval",
         "icon": "workflow",
+        "sort_order": 0,
+        "children": [
+          {
+            "title": "app.kuaioa.menu.workbench",
+            "path": "/apps/kuaioa/workbench",
+            "permission": "kuaioa:workbench:read",
+            "sort_order": 0
+          }
+        ]
+      },
+      {
+        "title": "app.kuaioa.menu.group.forms",
+        "icon": "fileText",
         "sort_order": 1,
         "children": [
           {
-            "title": "app.kuaioa.menu.form-templates",
+            "title": "app.kuaioa.menu.form-designer",
             "path": "/apps/kuaioa/approval/form-templates",
+            "icon": "pencil",
             "permission": "kuaioa:form-template:read",
-            "sort_order": 1
+            "sort_order": 0
           },
           {
             "title": "app.kuaioa.menu.form-requests",
             "path": "/apps/kuaioa/approval/form-requests",
+            "icon": "clipboardList",
             "permission": "kuaioa:form-request:read",
+            "sort_order": 1
+          }
+        ]
+      },
+      {
+        "title": "app.kuaioa.menu.group.collaboration",
+        "icon": "factory",
+        "sort_order": 2,
+        "children": [
+          {
+            "title": "app.kuaioa.menu.special-price",
+            "path": "/apps/kuaioa/collaboration/special-price",
+            "permission": "kuaioa:special-price:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaioa.menu.concession",
+            "path": "/apps/kuaioa/collaboration/concession",
+            "permission": "kuaioa:concession:read",
             "sort_order": 2
+          },
+          {
+            "title": "app.kuaioa.menu.process-deviation",
+            "path": "/apps/kuaioa/collaboration/process-deviation",
+            "permission": "kuaioa:process-deviation:read",
+            "sort_order": 3
           }
         ]
       },
       {
         "title": "app.kuaioa.menu.group.hr",
         "icon": "users",
-        "sort_order": 2,
+        "sort_order": 3,
         "children": [
           {
             "title": "app.kuaioa.menu.training-plans",
@@ -69,7 +109,7 @@
       {
         "title": "app.kuaioa.menu.group.compliance",
         "icon": "shield",
-        "sort_order": 3,
+        "sort_order": 4,
         "children": [
           {
             "title": "app.kuaioa.menu.licenses",
@@ -82,7 +122,7 @@
       {
         "title": "app.kuaioa.menu.group.assets",
         "icon": "package",
-        "sort_order": 4,
+        "sort_order": 5,
         "children": [
           {
             "title": "app.kuaioa.menu.asset-purchases",
@@ -101,7 +141,7 @@
       {
         "title": "app.kuaioa.menu.group.admin",
         "icon": "building",
-        "sort_order": 5,
+        "sort_order": 6,
         "children": [
           {
             "title": "app.kuaioa.menu.announcements",
@@ -110,22 +150,10 @@
             "sort_order": 1
           },
           {
-            "title": "app.kuaioa.menu.meetings",
-            "path": "/apps/kuaioa/admin/meetings",
-            "permission": "kuaioa:meeting:read",
-            "sort_order": 2
-          },
-          {
             "title": "app.kuaioa.menu.seal",
             "path": "/apps/kuaioa/admin/seal",
             "permission": "kuaioa:seal:read",
-            "sort_order": 3
-          },
-          {
-            "title": "app.kuaioa.menu.vehicles",
-            "path": "/apps/kuaioa/admin/vehicles",
-            "permission": "kuaioa:vehicle:read",
-            "sort_order": 4
+            "sort_order": 2
           }
         ]
       }
@@ -133,6 +161,7 @@
   },
   "permissions": [
     "kuaioa:entry:read",
+    "kuaioa:workbench:read",
     "kuaioa:form-template:read",
     "kuaioa:form-template:create",
     "kuaioa:form-template:update",
@@ -145,6 +174,30 @@
     "kuaioa:form-request:approve",
     "kuaioa:form-request:reject",
     "kuaioa:form-request:revoke",
+    "kuaioa:special-price:read",
+    "kuaioa:special-price:create",
+    "kuaioa:special-price:update",
+    "kuaioa:special-price:delete",
+    "kuaioa:special-price:submit",
+    "kuaioa:special-price:approve",
+    "kuaioa:special-price:reject",
+    "kuaioa:special-price:revoke",
+    "kuaioa:concession:read",
+    "kuaioa:concession:create",
+    "kuaioa:concession:update",
+    "kuaioa:concession:delete",
+    "kuaioa:concession:submit",
+    "kuaioa:concession:approve",
+    "kuaioa:concession:reject",
+    "kuaioa:concession:revoke",
+    "kuaioa:process-deviation:read",
+    "kuaioa:process-deviation:create",
+    "kuaioa:process-deviation:update",
+    "kuaioa:process-deviation:delete",
+    "kuaioa:process-deviation:submit",
+    "kuaioa:process-deviation:approve",
+    "kuaioa:process-deviation:reject",
+    "kuaioa:process-deviation:revoke",
     "kuaioa:training-plan:read",
     "kuaioa:training-plan:create",
     "kuaioa:training-plan:update",
@@ -158,6 +211,14 @@
     "kuaioa:work-license:update",
     "kuaioa:work-license:delete",
     "kuaioa:work-license:print",
+    "kuaioa:leave:read",
+    "kuaioa:leave:create",
+    "kuaioa:leave:update",
+    "kuaioa:leave:delete",
+    "kuaioa:leave:submit",
+    "kuaioa:leave:approve",
+    "kuaioa:leave:reject",
+    "kuaioa:leave:revoke",
     "kuaioa:license:read",
     "kuaioa:license:create",
     "kuaioa:license:update",
@@ -175,9 +236,79 @@
     "kuaioa:asset:update",
     "kuaioa:asset:delete",
     "kuaioa:announcement:read",
-    "kuaioa:meeting:read",
+    "kuaioa:announcement:create",
+    "kuaioa:announcement:update",
+    "kuaioa:announcement:delete",
+    "kuaioa:announcement:publish",
     "kuaioa:seal:read",
-    "kuaioa:vehicle:read",
-    "kuaioa:leave:read"
+    "kuaioa:seal:create",
+    "kuaioa:seal:update",
+    "kuaioa:seal:delete",
+    "kuaioa:seal:submit",
+    "kuaioa:seal:approve",
+    "kuaioa:seal:reject",
+    "kuaioa:seal:revoke"
+  ],
+  "dependencies": {
+    "riveredge-backend": ">=1.0.0",
+    "riveredge-frontend": ">=1.0.0"
+  },
+  "audit": [
+    {
+      "node_key": "kuaioa_form_request",
+      "entity_type": "kuaioa_form_request",
+      "resource": "kuaioa:form-request",
+      "name": "轻办公自定义申请审核",
+      "template": "simple",
+      "config_category": "common"
+    },
+    {
+      "node_key": "kuaioa_asset_purchase",
+      "entity_type": "kuaioa_asset_purchase",
+      "resource": "kuaioa:asset-purchase",
+      "name": "固定资产采买申请审核",
+      "template": "simple",
+      "config_category": "common"
+    },
+    {
+      "node_key": "kuaioa_leave",
+      "entity_type": "kuaioa_leave",
+      "resource": "kuaioa:leave",
+      "name": "请假出差申请审核",
+      "template": "simple",
+      "config_category": "common"
+    },
+    {
+      "node_key": "kuaioa_seal",
+      "entity_type": "kuaioa_seal",
+      "resource": "kuaioa:seal",
+      "name": "用章申请审核",
+      "template": "simple",
+      "config_category": "common"
+    },
+    {
+      "node_key": "kuaioa_special_price",
+      "entity_type": "kuaioa_special_price",
+      "resource": "kuaioa:special-price",
+      "name": "特价申请审核",
+      "template": "simple",
+      "config_category": "common"
+    },
+    {
+      "node_key": "kuaioa_concession",
+      "entity_type": "kuaioa_concession",
+      "resource": "kuaioa:concession",
+      "name": "让步接收申请审核",
+      "template": "simple",
+      "config_category": "common"
+    },
+    {
+      "node_key": "kuaioa_process_deviation",
+      "entity_type": "kuaioa_process_deviation",
+      "resource": "kuaioa:process-deviation",
+      "name": "工艺偏离申请审核",
+      "template": "simple",
+      "config_category": "common"
+    }
   ]
 }

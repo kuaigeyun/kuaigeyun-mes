@@ -202,11 +202,17 @@ export function inboundDocumentTrackingType(
   | 'finished_goods_receipt'
   | 'semi_finished_goods_receipt'
   | 'production_return'
+  | 'sales_return'
+  | 'material_return'
+  | 'other_inbound'
   | undefined {
   if (order.receipt_type === 'purchase') return 'purchase_receipt';
   if (order.receipt_type === 'finished_goods') return 'finished_goods_receipt';
   if (order.receipt_type === 'semi_finished_goods') return 'semi_finished_goods_receipt';
   if (order.receipt_type === 'production_return') return 'production_return';
+  if (order.receipt_type === 'sales_return') return 'sales_return';
+  if (order.receipt_type === 'material_return') return 'material_return';
+  if (order.receipt_type === 'other_inbound') return 'other_inbound';
   return undefined;
 }
 

@@ -124,6 +124,9 @@ export function supplierDetailToFormValues(d: Supplier): Record<string, unknown>
     creditLimit: optNum(d.creditLimit),
     payableRecognitionOverride: d.payableRecognitionOverride ?? undefined,
     isActive: d.isActive ?? true,
+    qualificationStatus: d.qualificationStatus || 'potential',
+    qualifications: Array.isArray(d.qualifications) ? d.qualifications : [],
+    ratingGrade: d.ratingGrade || undefined,
     ...partnerFormSliceWithoutFinance(d),
   };
 }

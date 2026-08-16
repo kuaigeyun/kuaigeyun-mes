@@ -10,7 +10,7 @@ Date: 2025-01-14
 """
 
 import asyncio
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, Set
 from datetime import datetime, timedelta, date, timezone, time
 from decimal import Decimal, ROUND_CEILING
 from tortoise.transactions import in_transaction
@@ -77,6 +77,7 @@ from core.utils.timezone_utils import (
     resolve_business_datetime,
     today_site_str,
     to_api_isoformat,
+    to_site_date,
 )
 
 # 草稿下推采购单时，无默认供应商的物料归入同一分组（supplier_id=0，名称「待定供应商」）
@@ -714,7 +715,7 @@ def _compute_supply_and_net(
     若 include_reorder_point：当可供应量 < 再订货点时，净需求至少补足到再订货点
     """
     include_safety = computation_params.get("include_safety_stock", True)
-    include_in_transit = computation_params.get("include_in_transit", False)
+    include_in_transit = computation_params.get("include_in_transit", True)
     include_reserved = computation_params.get("include_reserved", False)
     include_reorder = computation_params.get("include_reorder_point", False)
 
@@ -980,6 +981,53 @@ class DemandComputationService(AppBaseService):
             context={"computation_type": computation_type},
         )
     
+    @staticmethod
+    def _resolve_computation_source_label(
+        demand: Optional[Demand],
+        demand_type: Optional[str],
+    ) -> Optional[str]:
+        """来源关联展示名：订单/预测→客户；需求计划→计划名。"""
+        if demand is None:
+            return None
+        dtype = (demand_type or getattr(demand, "demand_type", None) or "").strip()
+        customer = str(getattr(demand, "customer_name", "") or "").strip()
+        plan_name = str(getattr(demand, "demand_name", "") or "").strip()
+        if dtype in ("sales_order", "sales_forecast"):
+            return customer or plan_name or None
+        if dtype == "demand_plan":
+            return plan_name or customer or None
+        return customer or plan_name or None
+
+    def _computation_to_options_response(
+        self,
+        computation: DemandComputation,
+    ) -> DemandComputationResponse:
+        """选单轻量响应：表头字段，跳过明细 / 下推进度 / 来源解析 / capabilities。"""
+        return DemandComputationResponse(
+            id=computation.id,
+            uuid=str(computation.uuid),
+            tenant_id=computation.tenant_id,
+            computation_code=computation.computation_code,
+            demand_id=computation.demand_id,
+            demand_ids=None,
+            demand_code=computation.demand_code or "",
+            demand_type=computation.demand_type or "",
+            business_mode=computation.business_mode,
+            computation_type=computation.computation_type or "MRP",
+            computation_params={},
+            computation_status=computation.computation_status,
+            computation_start_time=computation.computation_start_time,
+            computation_end_time=computation.computation_end_time,
+            computation_summary=None,
+            error_message=None,
+            notes=None,
+            created_at=computation.created_at,
+            updated_at=computation.updated_at,
+            **audit_response_fields(computation),
+            items=[],
+            downstream_push_progress=None,
+        )
+
     async def _build_computation_response(
         self,
         computation: DemandComputation,
@@ -1046,6 +1094,7 @@ class DemandComputationService(AppBaseService):
 
         display_demand_code = computation.demand_code or ""
         first_demand_row: Optional[Demand] = None
+        source_label: Optional[str] = None
         if demand_id_list:
             first_demand_row = await Demand.get_or_none(
                 tenant_id=computation.tenant_id,
@@ -1058,6 +1107,9 @@ class DemandComputationService(AppBaseService):
                     source_id = first_demand_row.id
                 elif dtype in ("sales_order", "sales_forecast") and first_demand_row.source_id:
                     source_id = int(first_demand_row.source_id)
+                source_label = self._resolve_computation_source_label(
+                    first_demand_row, dtype
+                )
 
         # 多来源统一展示：第一个等N个（兼容历史逗号拼接）
         source_count = len(demand_id_list)
@@ -1098,6 +1150,7 @@ class DemandComputationService(AppBaseService):
             updated_at=computation.updated_at,
             **audit_response_fields(computation),
             source_id=source_id,
+            source_label=source_label,
             items=item_responses,
             lifecycle=lifecycle,
             downstream_push_progress=downstream_push_progress,
@@ -1155,7 +1208,8 @@ class DemandComputationService(AppBaseService):
         keyword: Optional[str] = None,
         order_by: Optional[str] = None,
         skip: int = 0,
-        limit: int = 20
+        limit: int = 20,
+        view: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         获取需求计算列表
@@ -1172,6 +1226,7 @@ class DemandComputationService(AppBaseService):
             end_date: 结束日期（可选，YYYY-MM-DD格式）
             skip: 跳过数量
             limit: 限制数量
+            view: options=选单轻量列表（跳过明细/下推进度/capabilities）
             
         Returns:
             Dict: 包含计算列表和总数的字典
@@ -1236,6 +1291,39 @@ class DemandComputationService(AppBaseService):
 
         total = await query.count()
         order_clause = order_by if order_by else "-computation_start_time"
+        is_options_view = (view or "").strip().lower() == "options"
+        if is_options_view:
+            computations = (
+                await query.offset(skip)
+                .limit(limit)
+                .order_by(order_clause)
+                .only(
+                    "id",
+                    "uuid",
+                    "tenant_id",
+                    "computation_code",
+                    "demand_id",
+                    "demand_code",
+                    "demand_type",
+                    "business_mode",
+                    "computation_type",
+                    "computation_status",
+                    "computation_start_time",
+                    "computation_end_time",
+                    "created_at",
+                    "updated_at",
+                    "created_by",
+                    "created_by_name",
+                    "updated_by",
+                    "updated_by_name",
+                )
+            )
+            return {
+                "data": [self._computation_to_options_response(c).model_dump() for c in computations],
+                "total": total,
+                "success": True,
+            }
+
         computations = await query.offset(skip).limit(limit).order_by(order_clause)
 
         page_ids = [int(c.id) for c in computations]
@@ -1738,6 +1826,186 @@ class DemandComputationService(AppBaseService):
             "monitor_time": now
         }
 
+    _MRP_EXCEPTION_CODE_RANK = {
+        "NEW_ORDER": 0,
+        "CANCEL_SUPPLY": 1,
+        "FIRM_FROZEN_SHORTAGE": 2,
+        "FENCE_SHORTAGE": 3,
+        "SHORTAGE_WITHIN_LEAD_TIME": 4,
+        "PAST_DUE_START": 5,
+        "PAST_DUE_SUPPLY": 6,
+        "RESCHEDULE_IN": 10,
+        "RESCHEDULE_OUT": 11,
+        "LATE_VS_DEMAND": 12,
+        "EXCESS_SUPPLY": 13,
+        "BUCKET_RANGE_CLAMPED": 14,
+    }
+
+    @staticmethod
+    def _resolve_supply_document_type(
+        detail: Dict[str, Any],
+        *,
+        document_id: Any = None,
+        document_code: Any = None,
+    ) -> Optional[str]:
+        """从 dated_supply 匹配开放供应单据类型（work_order / purchase_order 等）。"""
+        for row in detail.get("dated_supply") or []:
+            if not isinstance(row, dict):
+                continue
+            st = row.get("source_type")
+            if document_id is not None and row.get("document_id") == document_id:
+                return str(st) if st else None
+            if document_code and str(row.get("document_code") or "") == str(document_code):
+                return str(st) if st else None
+        return None
+
+    @classmethod
+    def _exception_inbox_sort_key(cls, row: Dict[str, Any]) -> tuple:
+        sev = str(row.get("severity") or "")
+        sev_rank = 0 if sev == "error" else (1 if sev == "warning" else 2)
+        code = str(row.get("code") or "")
+        code_rank = cls._MRP_EXCEPTION_CODE_RANK.get(code, 50)
+        comp_end = row.get("computation_end_time")
+        comp_ts = comp_end.timestamp() if isinstance(comp_end, datetime) else 0
+        return (sev_rank, code_rank, -comp_ts)
+
+    async def get_mrp_exception_inbox(
+        self,
+        tenant_id: int,
+        *,
+        computation_id: Optional[int] = None,
+        code: Optional[str] = None,
+        severity: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> Dict[str, Any]:
+        """
+        聚合已完成需求计算的 MRP 例外，供计划员收件箱（错误优先）。
+        """
+        from apps.kuaizhizao.utils.mrp_llc_engine import _normalize_exception
+
+        completed_statuses = ["完成", "completed", "success"]
+        comp_q = DemandComputation.filter(
+            tenant_id=tenant_id,
+            computation_status__in=completed_statuses,
+        )
+        if computation_id is not None:
+            comp_q = comp_q.filter(id=computation_id)
+        computations = await comp_q.order_by("-computation_end_time", "-id").all()
+        if not computations:
+            return {
+                "total": 0,
+                "error_count": 0,
+                "warning_count": 0,
+                "summary_by_code": {},
+                "items": [],
+            }
+
+        comp_by_id = {c.id: c for c in computations}
+        comp_ids = list(comp_by_id.keys())
+        items = await DemandComputationItem.filter(
+            tenant_id=tenant_id,
+            computation_id__in=comp_ids,
+        ).all()
+
+        rows: List[Dict[str, Any]] = []
+        summary_by_code: Dict[str, int] = {}
+        error_count = 0
+        warning_count = 0
+
+        code_filter = str(code).strip() if code else ""
+        severity_filter = str(severity).strip().lower() if severity else ""
+
+        for item in items:
+            comp = comp_by_id.get(item.computation_id)
+            if not comp:
+                continue
+            detail = item.detail_results or {}
+            if not isinstance(detail, dict):
+                continue
+            raw_exceptions = detail.get("exceptions") or []
+            if not isinstance(raw_exceptions, list):
+                continue
+            for idx, raw in enumerate(raw_exceptions):
+                if not isinstance(raw, dict):
+                    continue
+                ex = _normalize_exception(raw)
+                ex_code = str(ex.get("code") or "")
+                if code_filter and ex_code != code_filter:
+                    continue
+                ex_sev = str(ex.get("severity") or "info")
+                if severity_filter and ex_sev != severity_filter:
+                    continue
+                doc_id = ex.get("document_id")
+                doc_code = ex.get("document_code")
+                doc_type = self._resolve_supply_document_type(
+                    detail,
+                    document_id=doc_id,
+                    document_code=doc_code,
+                )
+                if doc_type == "outsource_work_order":
+                    doc_type = "work_order"
+                row = {
+                    "inbox_key": f"{item.computation_id}:{item.id}:{ex_code}:{idx}",
+                    "computation_id": comp.id,
+                    "computation_code": comp.computation_code,
+                    "computation_end_time": comp.computation_end_time,
+                    "item_id": item.id,
+                    "material_id": item.material_id,
+                    "material_code": item.material_code,
+                    "material_name": item.material_name,
+                    "code": ex_code,
+                    "severity": ex_sev,
+                    "message": ex.get("message") or "",
+                    "qty": ex.get("qty"),
+                    "bucket_date": ex.get("bucket_date"),
+                    "document_id": doc_id,
+                    "document_code": doc_code,
+                    "document_source_type": doc_type,
+                }
+                rows.append(row)
+                summary_by_code[ex_code] = summary_by_code.get(ex_code, 0) + 1
+                if ex_sev == "error":
+                    error_count += 1
+                elif ex_sev == "warning":
+                    warning_count += 1
+
+        rows.sort(key=self._exception_inbox_sort_key)
+        total = len(rows)
+        page = rows[skip: skip + limit] if limit > 0 else rows[skip:]
+
+        return {
+            "total": total,
+            "error_count": error_count,
+            "warning_count": warning_count,
+            "summary_by_code": summary_by_code,
+            "items": page,
+        }
+
+    async def get_monitor_summaries_batch(
+        self,
+        tenant_id: int,
+        computation_ids: List[int],
+    ) -> Dict[str, Any]:
+        """批量返回计算的动态监控摘要（列表角标用）。"""
+        ids = [int(i) for i in computation_ids if i is not None]
+        if not ids:
+            return {"summaries": {}}
+        summaries: Dict[str, Dict[str, Any]] = {}
+        for cid in ids:
+            try:
+                monitor = await self.get_computation_dynamic_monitor(tenant_id, cid)
+                summaries[str(cid)] = {
+                    "computation_id": cid,
+                    "has_upstream_change": bool(monitor.get("has_upstream_change")),
+                    "has_downstream_risk": bool(monitor.get("has_downstream_risk")),
+                    "alert_count": len(monitor.get("upstream_alerts") or [])
+                    + len(monitor.get("downstream_alerts") or []),
+                }
+            except NotFoundError:
+                continue
+        return {"summaries": summaries}
+
     async def preview_execute_computation(
         self,
         tenant_id: int,
@@ -2219,9 +2487,13 @@ class DemandComputationService(AppBaseService):
         wh_ids = await _resolve_mrp_warehouse_ids(tenant_id, computation_params)
         bom_max_level = _bom_max_level_from_params(computation_params)
         planning_cutoff = _mrp_planning_cutoff_date(computation_params)
-        schedule_today = date.today()
+        schedule_today = to_site_date(resolve_business_datetime())
         mrp_basis = _mrp_suggestion_basis(computation_params)
         netting_params_for_supply = _netting_params_for_mrp_supply(computation_params)
+        try:
+            planning_fence_days = max(0, int(computation_params.get("planning_fence_days", 7)))
+        except (TypeError, ValueError):
+            planning_fence_days = 7
         try:
             schedule_buffer_days = max(0, int(computation_params.get("schedule_buffer_days") or 0))
         except (TypeError, ValueError):
@@ -2517,10 +2789,11 @@ class DemandComputationService(AppBaseService):
                 )
 
                 receipt_rows = supply_receipts.get(material_id) or []
-                if netting_params_for_supply.get("include_in_transit", False):
+                if netting_params_for_supply.get("include_in_transit", True):
                     receipts_by_date = aggregate_qty_by_date(receipt_rows)
                 else:
                     receipts_by_date = {}
+                open_supplies_for_compare = receipt_rows if receipt_rows else None
 
                 if source_type == SOURCE_TYPE_BUY:
                     lead = int(resolved_source_config.get("purchase_lead_time") or 0)
@@ -2569,6 +2842,8 @@ class DemandComputationService(AppBaseService):
                     firm_planned_orders=firm_orders,
                     frozen=firm_frozen,
                     schedule_direction=schedule_direction,
+                    planning_fence_days=planning_fence_days,
+                    open_supplies=open_supplies_for_compare,
                 )
 
                 planned_qty = float(tp["planned_order_qty"] or 0)
@@ -2602,6 +2877,11 @@ class DemandComputationService(AppBaseService):
                     procurement_start_date = release_date
                     procurement_completion_date = receipt_date
                 elif source_type == SOURCE_TYPE_OUTSOURCE and planned_qty > 0:
+                    suggested_work_order_quantity = Decimal(str(planned_qty))
+                    planned_production = suggested_work_order_quantity
+                    production_start_date = release_date
+                    production_completion_date = receipt_date
+                elif source_type == SOURCE_TYPE_CONFIGURE and planned_qty > 0:
                     suggested_work_order_quantity = Decimal(str(planned_qty))
                     planned_production = suggested_work_order_quantity
                     production_start_date = release_date
@@ -3071,6 +3351,35 @@ class DemandComputationService(AppBaseService):
 
             logger.info(f"需求计算 {computation.computation_code} (id={computation_id}) 已删除")
 
+    def _resolve_production_selected_material_ids(
+        self,
+        items: List[DemandComputationItem],
+        selected_item_ids: Optional[List[int]],
+    ) -> Optional[Set[int]]:
+        """将计算明细 ID 解析为可下推生产/委外物料 ID 集合；未传则不过滤。"""
+        if selected_item_ids is None:
+            return None
+        selected_ids = {int(i) for i in selected_item_ids if i is not None}
+        production_types = (
+            SOURCE_TYPE_MAKE,
+            SOURCE_TYPE_OUTSOURCE,
+            SOURCE_TYPE_CONFIGURE,
+        )
+        selected_material_ids: Set[int] = set()
+        for item in items:
+            if item.id not in selected_ids or item.material_id is None:
+                continue
+            source_type = item.material_source_type
+            if source_type == SOURCE_TYPE_PHANTOM or source_type == SOURCE_TYPE_BUY:
+                continue
+            if source_type in production_types or (
+                not source_type and item.suggested_work_order_quantity
+            ):
+                selected_material_ids.add(int(item.material_id))
+        if not selected_material_ids:
+            raise BusinessLogicError("所选明细均不可下推，请重新选择")
+        return selected_material_ids
+
     async def generate_work_orders_and_purchase_orders(
         self,
         tenant_id: int,
@@ -3079,6 +3388,7 @@ class DemandComputationService(AppBaseService):
         generate_mode: str = "all",
         allow_draft: bool = False,
         push_mode: Optional[str] = None,
+        selected_item_ids: Optional[List[int]] = None,
     ) -> Dict[str, Any]:
         """
         从需求计算结果一键生成工单和采购单
@@ -3090,6 +3400,7 @@ class DemandComputationService(AppBaseService):
             generate_mode: 生成粒度，all=全部，work_order_only=仅工单，purchase_only=仅采购
             allow_draft: 兼容旧参数；未传 push_mode 且为 True 时等价于 draft 模式
             push_mode: draft=草稿下推，confirm=正式下推（自动下达/提交）；缺省读组织配置
+            selected_item_ids: 可选，仅下推所选计算明细（按物料聚合）；未传则下推全部剩余
             
         Returns:
             Dict: 包含生成的工单和采购单信息
@@ -3143,27 +3454,27 @@ class DemandComputationService(AppBaseService):
         if not items:
             raise BusinessLogicError("计算结果明细为空，无法生成工单和采购单")
 
+        selected_material_ids = self._resolve_production_selected_material_ids(
+            items, selected_item_ids
+        )
+
         # 获取已下推且仍存在的单据，用于排除重复下推
         exclusions = await self._get_already_pushed_exclusions(tenant_id, computation_id)
-        already_pushed_wo_material_ids = exclusions["wo_material_ids"] | exclusions["outsource_material_ids"]
+        production_remaining_by_material = self._get_production_remaining_qty_by_material(items, exclusions)
+        outsource_remaining_by_material = self._get_outsource_remaining_qty_by_material(items, exclusions)
         purchase_remaining_by_material = self._get_purchase_remaining_qty_by_material(items, exclusions)
-        
-        # #region agent log
-        try:
-            import json as _json
-            _log_path = r"f:\dev\riveredge\.cursor\debug.log"
-            _items_debug = [{"material_code": i.material_code, "source_type": i.material_source_type, "suggested_wo_qty": getattr(i, "suggested_work_order_quantity", None), "suggested_po_qty": getattr(i, "suggested_purchase_order_quantity", None)} for i in items]
-            with open(_log_path, "a", encoding="utf-8") as _f:
-                _f.write(_json.dumps({"location": "demand_computation_service.py:generate_orders", "message": "items_before_loop", "data": {"computation_id": computation_id, "generate_mode": generate_mode, "items_count": len(items), "items": _items_debug}, "timestamp": __import__("time").time() * 1000, "hypothesisId": "A,B"}) + "\n")
-        except Exception:
-            pass
-        # #endregion
         
         # 【第一阶段：预验证】先验证所有物料，如有错误且未允许草稿则立即失败
         validation_errors = []
         failed_validation_material_ids = set()  # 验证失败的物料ID，allow_draft 时用于创建草稿
         
-        for item in items:
+        items_for_validation = items
+        if selected_material_ids is not None:
+            items_for_validation = [
+                i for i in items if int(i.material_id or 0) in selected_material_ids
+            ]
+
+        for item in items_for_validation:
             source_type = item.material_source_type
             
             # 跳过虚拟件（虚拟件不生成工单和采购单）
@@ -3207,31 +3518,15 @@ class DemandComputationService(AppBaseService):
             if use_group_by_demand_item:
                 group_pushed_keys = await group_svc.collect_pushed_keys(tenant_id, computation_id)
         
-        # 按物料聚合生产类明细（同一物料多行合并为一行，避免重复生成工单）
-        def _build_aggregated_item(group: List[DemandComputationItem]):
-            first = group[0]
-            if len(group) == 1:
-                return first
-            total_qty = sum(float(g.suggested_work_order_quantity or 0) for g in group)
-            start_dates = [g.production_start_date for g in group if g.production_start_date]
-            end_dates = [g.production_completion_date for g in group if g.production_completion_date]
-            return type("_AggregatedItem", (), {
-                "material_id": first.material_id,
-                "material_code": first.material_code,
-                "material_name": first.material_name,
-                "material_spec": first.material_spec,
-                "material_unit": first.material_unit,
-                "material_source_type": first.material_source_type,
-                "material_source_config": first.material_source_config,
-                "suggested_work_order_quantity": Decimal(str(total_qty)),
-                "production_start_date": min(start_dates) if start_dates else None,
-                "production_completion_date": max(end_dates) if end_dates else None,
-            })()
-
-        created_wo_material_ids: set = set(already_pushed_wo_material_ids)  # 已创建/已下推工单的物料ID，避免重复
+        # 按物料聚合生产类明细（工单组模式仍走 WorkOrderGroupService）
+        created_wo_material_ids: set = set()  # 本次循环已生成工单的物料，避免重复
         created_po_material_ids: set = set()  # 本次循环已加入采购分组的物料，避免重复行
 
-        if use_group_by_demand_item and generate_mode in ("all", "work_order_only", "outsource_only"):
+        if (
+            use_group_by_demand_item
+            and generate_mode in ("all", "work_order_only", "outsource_only")
+            and selected_material_ids is None
+        ):
             from apps.kuaizhizao.services.work_order_group_service import WorkOrderGroupService
 
             group_svc = WorkOrderGroupService()
@@ -3257,27 +3552,16 @@ class DemandComputationService(AppBaseService):
             
             # 跳过虚拟件（虚拟件不生成工单和采购单）
             if source_type == SOURCE_TYPE_PHANTOM:
-                # #region agent log
-                try:
-                    with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
-                        _f.write(__import__("json").dumps({"location": "demand_computation_service.py:loop", "message": "skip_phantom", "data": {"material_code": item.material_code}, "hypothesisId": "A"}) + "\n")
-                except Exception:
-                    pass
-                # #endregion
                 logger.debug(f"跳过虚拟件，不生成工单和采购单，物料ID: {item.material_id}")
+                continue
+
+            if selected_material_ids is not None and int(item.material_id or 0) not in selected_material_ids:
                 continue
             
             # 根据 generate_mode 决定是否生成
             if generate_mode == "purchase_only" and source_type in (SOURCE_TYPE_MAKE, SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE):
                 continue
             if generate_mode == "work_order_only" and source_type == SOURCE_TYPE_BUY:
-                # #region agent log
-                try:
-                    with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
-                        _f.write(__import__("json").dumps({"location": "demand_computation_service.py:loop", "message": "skip_buy_work_order_only", "data": {"material_code": item.material_code}, "hypothesisId": "A"}) + "\n")
-                except Exception:
-                    pass
-                # #endregion
                 continue
             if generate_mode == "outsource_only" and source_type != SOURCE_TYPE_OUTSOURCE:
                 continue
@@ -3291,31 +3575,25 @@ class DemandComputationService(AppBaseService):
 
             # 根据物料来源类型生成相应的单据
             if source_type == SOURCE_TYPE_MAKE:
-                # 自制件：生成生产工单（按物料聚合，避免重复）
                 if item.material_id in created_wo_material_ids:
                     continue
-                sq = getattr(item, "suggested_work_order_quantity", None)
-                if not (sq and sq > 0):
-                    # #region agent log
-                    try:
-                        with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
-                            _f.write(__import__("json").dumps({"location": "demand_computation_service.py:loop", "message": "skip_make_no_qty", "data": {"material_code": item.material_code, "suggested_work_order_quantity": sq}, "hypothesisId": "A"}) + "\n")
-                    except Exception:
-                        pass
-                    # #endregion
+                remaining_qty = production_remaining_by_material.get(int(item.material_id or 0), 0.0)
+                if remaining_qty <= 0:
+                    continue
                 if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
-                    same_material = [i for i in items if i.material_id == item.material_id and i.material_source_type == SOURCE_TYPE_MAKE and (float(i.suggested_work_order_quantity or 0) > 0)]
-                    agg_item = _build_aggregated_item(same_material)
                     allow_draft_for_item = allow_draft and item.material_id in failed_validation_material_ids
-                    work_order = await self._create_work_order_from_item(
+                    pushed_wos = await self._push_production_from_item(
                         tenant_id=tenant_id,
                         computation=computation,
-                        item=agg_item,
+                        item=item,
+                        remaining_qty=remaining_qty,
                         created_by=created_by,
                         allow_draft=allow_draft_for_item,
+                        is_outsource=False,
                     )
-                    work_orders.append(work_order)
-                    created_wo_material_ids.add(item.material_id)
+                    work_orders.extend(pushed_wos)
+                    if pushed_wos:
+                        created_wo_material_ids.add(item.material_id)
                     
             elif source_type == SOURCE_TYPE_BUY:
                 # 采购件：正式下推须配置默认供应商；草稿下推允许无供应商（归入待定分组）
@@ -3336,79 +3614,76 @@ class DemandComputationService(AppBaseService):
                     elif allow_draft:
                         group_key = PURCHASE_ORDER_NO_SUPPLIER_GROUP
                     if group_key is not None:
-                        same_material = [
-                            i
-                            for i in items
-                            if i.material_source_type == SOURCE_TYPE_BUY
-                            and i.material_id == item.material_id
-                            and float(i.suggested_purchase_order_quantity or 0) > 0
-                        ]
-                        agg_item = self._build_aggregated_purchase_item(same_material, remaining_qty)
+                        push_lines = self._resolve_purchase_push_lines(item, remaining_qty)
                         if group_key not in purchase_items_by_supplier:
                             purchase_items_by_supplier[group_key] = []
-                        purchase_items_by_supplier[group_key].append(agg_item)
+                        for line in push_lines:
+                            purchase_items_by_supplier[group_key].append(
+                                self._build_purchase_push_item(item, line)
+                            )
                         created_po_material_ids.add(item.material_id)
                     
             elif source_type == SOURCE_TYPE_OUTSOURCE:
-                # 委外件：生成委外工单（按物料聚合，避免重复）
                 if item.material_id in created_wo_material_ids:
                     continue
+                remaining_qty = outsource_remaining_by_material.get(int(item.material_id or 0), 0.0)
+                if remaining_qty <= 0:
+                    continue
                 if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
-                    same_material = [i for i in items if i.material_id == item.material_id and i.material_source_type == SOURCE_TYPE_OUTSOURCE and (float(i.suggested_work_order_quantity or 0) > 0)]
-                    agg_item = _build_aggregated_item(same_material)
                     allow_draft_for_item = allow_draft and item.material_id in failed_validation_material_ids
-                    work_order = await self._create_outsource_work_order_from_item(
+                    pushed_wos = await self._push_production_from_item(
                         tenant_id=tenant_id,
                         computation=computation,
-                        item=agg_item,
+                        item=item,
+                        remaining_qty=remaining_qty,
                         created_by=created_by,
                         allow_draft=allow_draft_for_item,
+                        is_outsource=True,
                     )
-                    outsource_work_orders.append(work_order)
-                    created_wo_material_ids.add(item.material_id)
+                    outsource_work_orders.extend(pushed_wos)
+                    if pushed_wos:
+                        created_wo_material_ids.add(item.material_id)
                     
             elif source_type == SOURCE_TYPE_CONFIGURE:
-                # 配置件：按属性生成生产工单（按物料聚合，避免重复）
                 if item.material_id in created_wo_material_ids:
                     continue
+                remaining_qty = production_remaining_by_material.get(int(item.material_id or 0), 0.0)
+                if remaining_qty <= 0:
+                    continue
                 if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
-                    same_material = [i for i in items if i.material_id == item.material_id and i.material_source_type == SOURCE_TYPE_CONFIGURE and (float(i.suggested_work_order_quantity or 0) > 0)]
-                    agg_item = _build_aggregated_item(same_material)
                     allow_draft_for_item = allow_draft and item.material_id in failed_validation_material_ids
-                    work_order = await self._create_work_order_from_item(
+                    pushed_wos = await self._push_production_from_item(
                         tenant_id=tenant_id,
                         computation=computation,
-                        item=agg_item,
+                        item=item,
+                        remaining_qty=remaining_qty,
                         created_by=created_by,
                         allow_draft=allow_draft_for_item,
+                        is_outsource=False,
                     )
-                    work_orders.append(work_order)
-                    created_wo_material_ids.add(item.material_id)
+                    work_orders.extend(pushed_wos)
+                    if pushed_wos:
+                        created_wo_material_ids.add(item.material_id)
             
             # 兼容旧逻辑：如果没有物料来源类型，根据建议数量生成（向后兼容，按物料聚合）
             elif not source_type:
-                # #region agent log
-                try:
-                    with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
-                        _f.write(__import__("json").dumps({"location": "demand_computation_service.py:loop", "message": "no_source_type_legacy", "data": {"material_code": item.material_code, "suggested_wo_qty": getattr(item, "suggested_work_order_quantity", None)}, "hypothesisId": "B"}) + "\n")
-                except Exception:
-                    pass
-                # #endregion
-                # 如果有建议工单数量，生成工单（按物料聚合）
                 if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
                     if item.material_id not in created_wo_material_ids:
-                        same_material = [i for i in items if not i.material_source_type and i.material_id == item.material_id and (float(i.suggested_work_order_quantity or 0) > 0)]
-                        agg_item = _build_aggregated_item(same_material) if len(same_material) > 1 else item
-                        allow_draft_for_item = allow_draft and item.material_id in failed_validation_material_ids
-                        work_order = await self._create_work_order_from_item(
-                            tenant_id=tenant_id,
-                            computation=computation,
-                            item=agg_item,
-                            created_by=created_by,
-                            allow_draft=allow_draft_for_item,
-                        )
-                        work_orders.append(work_order)
-                        created_wo_material_ids.add(item.material_id)
+                        remaining_qty = production_remaining_by_material.get(int(item.material_id or 0), 0.0)
+                        if remaining_qty > 0:
+                            allow_draft_for_item = allow_draft and item.material_id in failed_validation_material_ids
+                            pushed_wos = await self._push_production_from_item(
+                                tenant_id=tenant_id,
+                                computation=computation,
+                                item=item,
+                                remaining_qty=remaining_qty,
+                                created_by=created_by,
+                                allow_draft=allow_draft_for_item,
+                                is_outsource=False,
+                            )
+                            work_orders.extend(pushed_wos)
+                            if pushed_wos:
+                                created_wo_material_ids.add(item.material_id)
                 
                 # 如果有建议采购订单数量：正式下推须默认供应商，草稿下推允许无供应商
                 if item.material_id not in created_po_material_ids:
@@ -3424,27 +3699,14 @@ class DemandComputationService(AppBaseService):
                         elif allow_draft:
                             group_key = PURCHASE_ORDER_NO_SUPPLIER_GROUP
                         if group_key is not None:
-                            same_material = [
-                                i
-                                for i in items
-                                if not i.material_source_type
-                                and i.material_id == item.material_id
-                                and float(i.suggested_purchase_order_quantity or 0) > 0
-                            ]
-                            agg_item = self._build_aggregated_purchase_item(same_material, remaining_qty)
+                            push_lines = self._resolve_purchase_push_lines(item, remaining_qty)
                             if group_key not in purchase_items_by_supplier:
                                 purchase_items_by_supplier[group_key] = []
-                            purchase_items_by_supplier[group_key].append(agg_item)
+                            for line in push_lines:
+                                purchase_items_by_supplier[group_key].append(
+                                    self._build_purchase_push_item(item, line)
+                                )
                             created_po_material_ids.add(item.material_id)
-            
-            else:
-                # #region agent log
-                try:
-                    with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
-                        _f.write(__import__("json").dumps({"location": "demand_computation_service.py:loop", "message": "unhandled_source_type", "data": {"material_code": item.material_code, "source_type": source_type}, "hypothesisId": "B"}) + "\n")
-                except Exception:
-                    pass
-                # #endregion
         
         # 建立需求计算→工单的追溯关系（支持全链路追溯）
         from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
@@ -3544,13 +3806,10 @@ class DemandComputationService(AppBaseService):
                 if "关联关系已存在" not in str(e):
                     raise
         
-        # #region agent log
-        try:
-            with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
-                _f.write(__import__("json").dumps({"location": "demand_computation_service.py:return", "message": "generate_orders_result", "data": {"work_order_count": len(work_orders), "outsource_work_order_count": len(outsource_work_orders), "purchase_order_count": len(purchase_orders)}, "hypothesisId": "A,C,E"}) + "\n")
-        except Exception:
-            pass
-        # #endregion
+        if selected_material_ids is not None and needs_work_order:
+            if not work_orders and not outsource_work_orders and not work_order_groups:
+                raise BusinessLogicError("所选明细均无可下推剩余数量，请重新选择")
+
         if push_as_confirm:
             await self._apply_push_confirm_to_generated_orders(
                 tenant_id=tenant_id,
@@ -3734,6 +3993,407 @@ class DemandComputationService(AppBaseService):
         return remaining
 
     @staticmethod
+    def _aggregate_production_suggested_qty_by_material(
+        items: List[DemandComputationItem],
+    ) -> Dict[int, float]:
+        """自制/配置件建议工单数量按 material_id 汇总。"""
+        out: Dict[int, float] = {}
+        for item in items:
+            st = item.material_source_type
+            if st not in (SOURCE_TYPE_MAKE, SOURCE_TYPE_CONFIGURE):
+                if st is not None:
+                    continue
+                if not (item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0):
+                    continue
+            elif not (item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0):
+                continue
+            mid = item.material_id
+            if mid is None:
+                continue
+            qty = float(item.suggested_work_order_quantity or 0)
+            if qty <= 0:
+                continue
+            out[int(mid)] = out.get(int(mid), 0.0) + qty
+        return out
+
+    @staticmethod
+    def _aggregate_outsource_suggested_qty_by_material(
+        items: List[DemandComputationItem],
+    ) -> Dict[int, float]:
+        """委外件建议工单数量按 material_id 汇总。"""
+        out: Dict[int, float] = {}
+        for item in items:
+            if item.material_source_type != SOURCE_TYPE_OUTSOURCE:
+                continue
+            mid = item.material_id
+            if mid is None:
+                continue
+            qty = float(item.suggested_work_order_quantity or 0)
+            if qty <= 0:
+                continue
+            out[int(mid)] = out.get(int(mid), 0.0) + qty
+        return out
+
+    @staticmethod
+    def _get_production_remaining_qty_by_material(
+        items: List[DemandComputationItem],
+        exclusions: Dict[str, Any],
+    ) -> Dict[int, float]:
+        """按物料计算剩余可下推生产工单数量（自制/配置/无来源类型）。"""
+        suggested = DemandComputationService._aggregate_production_suggested_qty_by_material(items)
+        wo_pushed = exclusions.get("wo_pushed_qty_by_material_id") or {}
+        remaining: Dict[int, float] = {}
+        for mid, sug in suggested.items():
+            pushed = float(wo_pushed.get(mid, 0.0))
+            rem = max(0.0, sug - pushed)
+            if rem > 0:
+                remaining[mid] = rem
+        return remaining
+
+    @staticmethod
+    def _get_outsource_remaining_qty_by_material(
+        items: List[DemandComputationItem],
+        exclusions: Dict[str, Any],
+    ) -> Dict[int, float]:
+        """按物料计算剩余可下推委外工单数量。"""
+        suggested = DemandComputationService._aggregate_outsource_suggested_qty_by_material(items)
+        outsource_pushed = exclusions.get("outsource_pushed_qty_by_material_id") or {}
+        remaining: Dict[int, float] = {}
+        for mid, sug in suggested.items():
+            pushed = float(outsource_pushed.get(mid, 0.0))
+            rem = max(0.0, sug - pushed)
+            if rem > 0:
+                remaining[mid] = rem
+        return remaining
+
+    @staticmethod
+    def _production_pushed_qty_for_material(
+        material_id: int,
+        suggested: float,
+        exclusions: Dict[str, Any],
+    ) -> float:
+        wo_pushed = exclusions.get("wo_pushed_qty_by_material_id") or {}
+        return min(suggested, float(wo_pushed.get(material_id, 0.0)))
+
+    @staticmethod
+    def _outsource_pushed_qty_for_material(
+        material_id: int,
+        suggested: float,
+        exclusions: Dict[str, Any],
+    ) -> float:
+        outsource_pushed = exclusions.get("outsource_pushed_qty_by_material_id") or {}
+        return min(suggested, float(outsource_pushed.get(material_id, 0.0)))
+
+    @staticmethod
+    def _parse_planned_order_date(value: Any) -> Optional[date]:
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, date):
+            return value
+        if isinstance(value, str) and value.strip():
+            try:
+                return date.fromisoformat(value.strip()[:10])
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _extract_planned_orders_from_item(item: Any) -> List[Dict[str, Any]]:
+        """从 detail_results 读取 MRP 计划订单（按 receipt_date 排序）。"""
+        detail = getattr(item, "detail_results", None) or {}
+        if not isinstance(detail, dict):
+            return []
+        supply = detail.get("supply_calculation") or {}
+        if not isinstance(supply, dict):
+            supply = {}
+        raw = supply.get("planned_orders") or detail.get("planned_orders") or []
+        if not isinstance(raw, list):
+            return []
+        out: List[Dict[str, Any]] = []
+        for po in raw:
+            if not isinstance(po, dict):
+                continue
+            try:
+                qty = float(po.get("qty") or 0)
+            except (TypeError, ValueError):
+                qty = 0.0
+            if qty <= 0:
+                continue
+            receipt = DemandComputationService._parse_planned_order_date(po.get("receipt_date"))
+            release = DemandComputationService._parse_planned_order_date(po.get("release_date"))
+            out.append({
+                "qty": qty,
+                "receipt_date": receipt,
+                "release_date": release,
+                "firm": bool(po.get("firm")),
+            })
+        out.sort(
+            key=lambda row: (
+                row["receipt_date"] or date.max,
+                row["release_date"] or date.max,
+            )
+        )
+        return out
+
+    @staticmethod
+    def _allocate_push_lines_from_planned_orders(
+        planned_orders: List[Dict[str, Any]],
+        remaining_qty: float,
+    ) -> List[Dict[str, Any]]:
+        """按 planned_orders 顺序分配剩余可推数量（每条计划订单对应一张工单/一行采购）。"""
+        if remaining_qty <= 1e-9 or not planned_orders:
+            return []
+        lines: List[Dict[str, Any]] = []
+        left = float(remaining_qty)
+        for po in planned_orders:
+            if left <= 1e-9:
+                break
+            take = min(float(po.get("qty") or 0), left)
+            if take <= 1e-9:
+                continue
+            left -= take
+            lines.append({
+                "qty": take,
+                "start_date": po.get("release_date"),
+                "end_date": po.get("receipt_date"),
+            })
+        return lines
+
+    @staticmethod
+    def _resolve_production_push_lines(item: Any, remaining_qty: float) -> List[Dict[str, Any]]:
+        planned = DemandComputationService._extract_planned_orders_from_item(item)
+        if len(planned) >= 2:
+            lines = DemandComputationService._allocate_push_lines_from_planned_orders(
+                planned, remaining_qty
+            )
+            if lines:
+                return lines
+        if remaining_qty <= 1e-9:
+            return []
+        if len(planned) == 1:
+            po = planned[0]
+            take = min(float(po.get("qty") or 0), remaining_qty)
+            if take <= 1e-9:
+                return []
+            return [{
+                "qty": take,
+                "start_date": po.get("release_date") or getattr(item, "production_start_date", None),
+                "end_date": po.get("receipt_date") or getattr(item, "production_completion_date", None),
+            }]
+        return [{
+            "qty": remaining_qty,
+            "start_date": getattr(item, "production_start_date", None),
+            "end_date": getattr(item, "production_completion_date", None),
+        }]
+
+    @staticmethod
+    def _resolve_purchase_push_lines(item: Any, remaining_qty: float) -> List[Dict[str, Any]]:
+        planned = DemandComputationService._extract_planned_orders_from_item(item)
+        if len(planned) >= 2:
+            lines = DemandComputationService._allocate_push_lines_from_planned_orders(
+                planned, remaining_qty
+            )
+            if lines:
+                return lines
+        if remaining_qty <= 1e-9:
+            return []
+        fallback_end = (
+            getattr(item, "procurement_completion_date", None)
+            or getattr(item, "delivery_date", None)
+        )
+        fallback_start = getattr(item, "procurement_start_date", None)
+        if len(planned) == 1:
+            po = planned[0]
+            take = min(float(po.get("qty") or 0), remaining_qty)
+            if take <= 1e-9:
+                return []
+            return [{
+                "qty": take,
+                "start_date": po.get("release_date") or fallback_start,
+                "end_date": po.get("receipt_date") or fallback_end,
+            }]
+        return [{
+            "qty": remaining_qty,
+            "start_date": fallback_start,
+            "end_date": fallback_end,
+        }]
+
+    @staticmethod
+    def _build_production_push_item(base: Any, line: Dict[str, Any]) -> Any:
+        return type("_ProductionPushItem", (), {
+            "material_id": base.material_id,
+            "material_code": base.material_code,
+            "material_name": base.material_name,
+            "material_spec": base.material_spec,
+            "material_unit": base.material_unit,
+            "material_source_type": base.material_source_type,
+            "material_source_config": base.material_source_config,
+            "suggested_work_order_quantity": Decimal(str(line["qty"])),
+            "production_start_date": line.get("start_date"),
+            "production_completion_date": line.get("end_date"),
+        })()
+
+    @staticmethod
+    def _build_purchase_push_item(base: Any, line: Dict[str, Any]) -> Any:
+        end_date = (
+            line.get("end_date")
+            or getattr(base, "procurement_completion_date", None)
+            or getattr(base, "delivery_date", None)
+        )
+        return type("_PurchasePushItem", (), {
+            "id": getattr(base, "id", None),
+            "material_id": base.material_id,
+            "material_code": base.material_code,
+            "material_name": base.material_name,
+            "material_spec": base.material_spec,
+            "material_unit": base.material_unit,
+            "material_source_type": base.material_source_type,
+            "material_source_config": base.material_source_config,
+            "suggested_purchase_order_quantity": Decimal(str(line["qty"])),
+            "procurement_start_date": line.get("start_date") or getattr(base, "procurement_start_date", None),
+            "procurement_completion_date": end_date,
+            "delivery_date": end_date,
+        })()
+
+    @staticmethod
+    def _append_split_production_preview_rows(
+        *,
+        item: Any,
+        total_qty: float,
+        pushed_qty: float,
+        remaining_qty: float,
+        source_type: Optional[str],
+        target_document: str,
+        preview_items: List[Dict[str, Any]],
+    ) -> None:
+        """多条 planned_orders 时按分日计划拆成多行预览。"""
+        lines = DemandComputationService._resolve_production_push_lines(item, remaining_qty)
+        if len(lines) >= 2:
+            for idx, line in enumerate(lines):
+                line_qty = float(line["qty"])
+                end_d = line.get("end_date")
+                start_d = line.get("start_date")
+                preview_items.append({
+                    "item_id": int(getattr(item, "id", 0) or 0),
+                    "material_id": item.material_id,
+                    "material_code": str(item.material_code or ""),
+                    "material_name": str(item.material_name or ""),
+                    "quantity": line_qty,
+                    "pushed_quantity": 0.0,
+                    "max_push_quantity": line_qty,
+                    "source_type": source_type,
+                    "target_document": target_document,
+                    "planned_release_date": start_d.isoformat() if isinstance(start_d, date) else None,
+                    "planned_receipt_date": end_d.isoformat() if isinstance(end_d, date) else None,
+                    "push_line_index": idx,
+                })
+            return
+        remaining = max(0.0, total_qty - pushed_qty)
+        end_d = lines[0].get("end_date") if lines else getattr(item, "production_completion_date", None)
+        start_d = lines[0].get("start_date") if lines else getattr(item, "production_start_date", None)
+        preview_items.append({
+            "item_id": int(getattr(item, "id", 0) or 0),
+            "material_id": item.material_id,
+            "material_code": str(item.material_code or ""),
+            "material_name": str(item.material_name or ""),
+            "quantity": total_qty,
+            "pushed_quantity": pushed_qty,
+            "max_push_quantity": remaining,
+            "source_type": source_type,
+            "target_document": target_document,
+            "planned_release_date": start_d.isoformat() if isinstance(start_d, date) else None,
+            "planned_receipt_date": end_d.isoformat() if isinstance(end_d, date) else None,
+        })
+
+    @staticmethod
+    def _append_split_purchase_preview_rows(
+        *,
+        item: Any,
+        suggested: float,
+        pushed_qty: float,
+        remaining: float,
+        supplier_id: Any,
+        preview_items: List[Dict[str, Any]],
+    ) -> None:
+        lines = DemandComputationService._resolve_purchase_push_lines(item, remaining)
+        if len(lines) >= 2:
+            for idx, line in enumerate(lines):
+                line_qty = float(line["qty"])
+                end_d = line.get("end_date")
+                start_d = line.get("start_date")
+                preview_items.append({
+                    "item_id": int(getattr(item, "id", 0) or 0),
+                    "material_id": item.material_id,
+                    "material_code": str(item.material_code or ""),
+                    "material_name": str(item.material_name or ""),
+                    "quantity": line_qty,
+                    "pushed_quantity": 0.0,
+                    "max_push_quantity": line_qty,
+                    "target_document": "purchase_order",
+                    "default_supplier_id": supplier_id,
+                    "supplier_pending": not bool(supplier_id),
+                    "planned_release_date": start_d.isoformat() if isinstance(start_d, date) else None,
+                    "planned_receipt_date": end_d.isoformat() if isinstance(end_d, date) else None,
+                    "push_line_index": idx,
+                })
+            return
+        end_d = lines[0].get("end_date") if lines else (
+            getattr(item, "procurement_completion_date", None) or getattr(item, "delivery_date", None)
+        )
+        start_d = lines[0].get("start_date") if lines else getattr(item, "procurement_start_date", None)
+        preview_items.append({
+            "item_id": int(getattr(item, "id", 0) or 0),
+            "material_id": item.material_id,
+            "material_code": str(item.material_code or ""),
+            "material_name": str(item.material_name or ""),
+            "quantity": suggested,
+            "pushed_quantity": pushed_qty,
+            "max_push_quantity": remaining,
+            "target_document": "purchase_order",
+            "default_supplier_id": supplier_id,
+            "supplier_pending": not bool(supplier_id),
+            "planned_release_date": start_d.isoformat() if isinstance(start_d, date) else None,
+            "planned_receipt_date": end_d.isoformat() if isinstance(end_d, date) else None,
+        })
+
+    async def _push_production_from_item(
+        self,
+        *,
+        tenant_id: int,
+        computation: DemandComputation,
+        item: DemandComputationItem,
+        remaining_qty: float,
+        created_by: int,
+        allow_draft: bool,
+        is_outsource: bool,
+    ) -> List[Dict[str, Any]]:
+        """按 planned_orders 拆分下推生产/委外工单。"""
+        lines = self._resolve_production_push_lines(item, remaining_qty)
+        if not lines:
+            return []
+        created: List[Dict[str, Any]] = []
+        for line in lines:
+            push_item = self._build_production_push_item(item, line)
+            if is_outsource:
+                wo = await self._create_outsource_work_order_from_item(
+                    tenant_id=tenant_id,
+                    computation=computation,
+                    item=push_item,
+                    created_by=created_by,
+                    allow_draft=allow_draft,
+                )
+            else:
+                wo = await self._create_work_order_from_item(
+                    tenant_id=tenant_id,
+                    computation=computation,
+                    item=push_item,
+                    created_by=created_by,
+                    allow_draft=allow_draft,
+                )
+            created.append(wo)
+        return created
+
+    @staticmethod
     def _build_aggregated_purchase_item(
         group: List[DemandComputationItem],
         remaining_qty: float,
@@ -3808,6 +4468,8 @@ class DemandComputationService(AppBaseService):
             po_material_ids,  # 兼容：仍有剩余可推数量的物料不在此集合
             po_pushed_qty_by_material_id,
             pr_committed_qty_by_material_id,
+            wo_pushed_qty_by_material_id,
+            outsource_pushed_qty_by_material_id,
             has_purchase_requisition,
         }
         """
@@ -3826,8 +4488,18 @@ class DemandComputationService(AppBaseService):
             source_id=computation_id,
         ).all()
 
+        computation_item_ids = {
+            int(i.id)
+            for i in await DemandComputationItem.filter(
+                tenant_id=tenant_id,
+                computation_id=computation_id,
+            ).only("id")
+        }
+
         wo_material_ids = set()
         outsource_material_ids = set()
+        wo_pushed_qty_by_material_id: Dict[int, float] = {}
+        outsource_pushed_qty_by_material_id: Dict[int, float] = {}
         po_pushed_qty_by_material_id: Dict[int, float] = {}
         pr_committed_qty_by_material_id: Dict[int, float] = {}
         has_purchase_requisition = False
@@ -3838,10 +4510,22 @@ class DemandComputationService(AppBaseService):
                 wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
                 if wo:
                     wo_material_ids.add(wo.product_id)
+                    qty = float(wo.quantity or 0)
+                    if qty > 0:
+                        mid = int(wo.product_id)
+                        wo_pushed_qty_by_material_id[mid] = (
+                            wo_pushed_qty_by_material_id.get(mid, 0.0) + qty
+                        )
             elif tt == "outsource_work_order":
                 owo = await OutsourceWorkOrder.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
                 if owo:
                     outsource_material_ids.add(owo.product_id)
+                    qty = float(owo.quantity or 0)
+                    if qty > 0:
+                        mid = int(owo.product_id)
+                        outsource_pushed_qty_by_material_id[mid] = (
+                            outsource_pushed_qty_by_material_id.get(mid, 0.0) + qty
+                        )
             elif tt == "purchase_order":
                 await self._accumulate_po_pushed_qty_from_order(
                     tenant_id, tid, po_pushed_qty_by_material_id
@@ -3857,6 +4541,9 @@ class DemandComputationService(AppBaseService):
                         requisition_id=tid,
                     ).all()
                     for pri in req_items:
+                        source_item_id = pri.demand_computation_item_id
+                        if source_item_id is None or int(source_item_id) not in computation_item_ids:
+                            continue
                         mid = int(pri.material_id)
                         qty = float(pri.quantity or 0)
                         if qty <= 0:
@@ -3888,6 +4575,8 @@ class DemandComputationService(AppBaseService):
             "po_material_ids": po_material_ids,
             "po_pushed_qty_by_material_id": po_pushed_qty_by_material_id,
             "pr_committed_qty_by_material_id": pr_committed_qty_by_material_id,
+            "wo_pushed_qty_by_material_id": wo_pushed_qty_by_material_id,
+            "outsource_pushed_qty_by_material_id": outsource_pushed_qty_by_material_id,
             "has_purchase_requisition": has_purchase_requisition,
         }
 
@@ -3901,14 +4590,22 @@ class DemandComputationService(AppBaseService):
         if getattr(computation, "computation_status", None) != "完成":
             return 0.0
 
-        wo_material_ids = exclusions.get("wo_material_ids") or set()
-        outsource_material_ids = exclusions.get("outsource_material_ids") or set()
+        wo_pushed = exclusions.get("wo_pushed_qty_by_material_id") or {}
+        outsource_pushed = exclusions.get("outsource_pushed_qty_by_material_id") or {}
         po_pushed = exclusions.get("po_pushed_qty_by_material_id") or {}
         pr_committed = exclusions.get("pr_committed_qty_by_material_id") or {}
 
         pushable = 0.0
         pushed = 0.0
         buy_suggested = self._aggregate_buy_suggested_qty_by_material(items)
+        production_suggested = self._aggregate_production_suggested_qty_by_material(items)
+        outsource_suggested = self._aggregate_outsource_suggested_qty_by_material(items)
+        for mid, qty in production_suggested.items():
+            pushable += qty
+            pushed += min(qty, float(wo_pushed.get(mid, 0.0)))
+        for mid, qty in outsource_suggested.items():
+            pushable += qty
+            pushed += min(qty, float(outsource_pushed.get(mid, 0.0)))
         for item in items:
             st = item.material_source_type
             if st == SOURCE_TYPE_PHANTOM:
@@ -3916,20 +4613,15 @@ class DemandComputationService(AppBaseService):
             mid = item.material_id
             if mid is None:
                 continue
-            if st in (SOURCE_TYPE_MAKE, SOURCE_TYPE_CONFIGURE):
-                qty = float(item.suggested_work_order_quantity or 0)
-                if qty <= 0:
-                    continue
-                pushable += qty
-                if mid in wo_material_ids:
-                    pushed += qty
-            elif st == SOURCE_TYPE_OUTSOURCE:
-                qty = float(item.suggested_work_order_quantity or 0)
-                if qty <= 0:
-                    continue
-                pushable += qty
-                if mid in outsource_material_ids:
-                    pushed += qty
+            if st is not None:
+                continue
+            qty = float(item.suggested_work_order_quantity or 0)
+            if qty <= 0:
+                continue
+            if int(mid) in production_suggested:
+                continue
+            pushable += qty
+            pushed += min(qty, float(wo_pushed.get(int(mid), 0.0)))
 
         for mid, sug in buy_suggested.items():
             pushable += sug
@@ -4039,7 +4731,6 @@ class DemandComputationService(AppBaseService):
             raise BusinessLogicError("只能下推已完成的需求计算")
 
         exclusions = await self._get_already_pushed_exclusions(tenant_id, computation_id)
-        has_existing_pr = exclusions["has_purchase_requisition"]
 
         items = await DemandComputationItem.filter(
             tenant_id=tenant_id,
@@ -4073,9 +4764,7 @@ class DemandComputationService(AppBaseService):
             if suggested <= 0:
                 continue
             pushed_qty = self._purchase_pushed_qty_for_material(mid, suggested, exclusions)
-            remaining = 0.0 if has_existing_pr else remaining_by_material.get(mid, 0.0)
-            if has_existing_pr:
-                pushed_qty = suggested
+            remaining = remaining_by_material.get(mid, 0.0)
 
             material = material_by_id.get(mid)
             material_code = str(item.material_code or "").strip()
@@ -4108,11 +4797,9 @@ class DemandComputationService(AppBaseService):
         pushable_count = sum(
             1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
         )
-        has_blocking = has_existing_pr or pushable_count == 0
+        has_blocking = no_purchase_items or pushable_count == 0
         blocking_reason = None
-        if has_existing_pr:
-            blocking_reason = "demand_computation.push_purchase_requisition.already_pushed"
-        elif no_purchase_items or pushable_count == 0:
+        if no_purchase_items or pushable_count == 0:
             blocking_reason = "demand_computation.push_purchase_requisition.no_purchase_items"
 
         return {
@@ -4122,17 +4809,246 @@ class DemandComputationService(AppBaseService):
             "summary": (
                 f"将生成采购申请，共 {pushable_count} 条采购件明细"
                 if not has_blocking
-                else (
-                    "该需求计算已下推采购申请且仍存在，请勿重复下推"
-                    if has_existing_pr
-                    else "需求计算中无剩余可下推采购件，无法下推采购申请"
-                )
+                else "需求计算中无剩余可下推采购件，无法下推采购申请"
             ),
             "items": preview_items,
             "has_blocking_issues": has_blocking,
             "blocking_reason": blocking_reason,
             "tip": "确认后将按可下推数量生成采购申请；已通过采购订单下推的物料不会重复纳入。",
         }
+
+    async def _get_purchase_exclusions_by_computation(
+        self,
+        tenant_id: int,
+        computation_ids: List[int],
+    ) -> Dict[int, Dict[str, Any]]:
+        """批量取各计算单的采购占用（申请占用 + 订单已下推），供开口行列表使用。"""
+        if not computation_ids:
+            return {}
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+        from apps.kuaizhizao.models.purchase_requisition import (
+            PurchaseRequisition,
+            PurchaseRequisitionItem,
+        )
+
+        result: Dict[int, Dict[str, Any]] = {
+            int(cid): {
+                "po_pushed_qty_by_material_id": {},
+                "pr_committed_qty_by_material_id": {},
+            }
+            for cid in computation_ids
+        }
+        rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="demand_computation",
+            source_id__in=computation_ids,
+        ).all()
+
+        item_rows = await DemandComputationItem.filter(
+            tenant_id=tenant_id,
+            computation_id__in=computation_ids,
+        ).only("id", "computation_id")
+        computation_by_item_id = {int(row.id): int(row.computation_id) for row in item_rows}
+
+        pr_ids = [rel.target_id for rel in rels if rel.target_type == "purchase_requisition"]
+        po_rels = [rel for rel in rels if rel.target_type == "purchase_order"]
+        linked_po_ids = {rel.target_id for rel in po_rels}
+
+        if pr_ids:
+            reqs = await PurchaseRequisition.filter(
+                tenant_id=tenant_id,
+                id__in=pr_ids,
+                deleted_at__isnull=True,
+            ).all()
+            active_pr_ids = {
+                int(req.id)
+                for req in reqs
+                if req.status != DocumentStatus.CANCELLED.value
+            }
+            if active_pr_ids:
+                pr_items = await PurchaseRequisitionItem.filter(
+                    tenant_id=tenant_id,
+                    requisition_id__in=list(active_pr_ids),
+                ).all()
+                for pri in pr_items:
+                    source_item_id = pri.demand_computation_item_id
+                    if source_item_id is None:
+                        continue
+                    cid = computation_by_item_id.get(int(source_item_id))
+                    if cid is None:
+                        continue
+                    mid = int(pri.material_id)
+                    qty = float(pri.quantity or 0)
+                    if qty <= 0:
+                        continue
+                    bucket = result[cid]["pr_committed_qty_by_material_id"]
+                    bucket[mid] = bucket.get(mid, 0.0) + qty
+
+        for rel in po_rels:
+            cid = int(rel.source_id)
+            if cid not in result:
+                continue
+            await self._accumulate_po_pushed_qty_from_order(
+                tenant_id, rel.target_id, result[cid]["po_pushed_qty_by_material_id"]
+            )
+
+        source_pos = await PurchaseOrder.filter(
+            tenant_id=tenant_id,
+            source_type="demand_computation",
+            source_id__in=computation_ids,
+            deleted_at__isnull=True,
+        ).all()
+        for po in source_pos:
+            if po.id in linked_po_ids:
+                continue
+            cid = int(po.source_id)
+            if cid not in result:
+                continue
+            await self._accumulate_po_pushed_qty_from_order(
+                tenant_id, po.id, result[cid]["po_pushed_qty_by_material_id"]
+            )
+        return result
+
+    async def list_purchase_requisition_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        computation_id: Optional[int] = None,
+        pullable_only: bool = True,
+    ) -> Dict[str, Any]:
+        """开口采购件行：已完成计算单中仍有剩余可转量的 Buy 行。"""
+        from apps.master_data.models.material import Material
+
+        computation_query = DemandComputation.filter(
+            tenant_id=tenant_id,
+            computation_status="完成",
+        )
+        if computation_id is not None:
+            computation_query = computation_query.filter(id=int(computation_id))
+        computations = await computation_query.only(
+            "id", "computation_code", "business_mode", "computation_status"
+        )
+        if not computations:
+            return {"data": [], "total": 0}
+
+        computation_by_id = {int(c.id): c for c in computations}
+        items = await DemandComputationItem.filter(
+            tenant_id=tenant_id,
+            computation_id__in=list(computation_by_id.keys()),
+            material_source_type=SOURCE_TYPE_BUY,
+        ).all()
+        buy_items = [
+            i
+            for i in items
+            if i.suggested_purchase_order_quantity and i.suggested_purchase_order_quantity > 0
+        ]
+        if not buy_items:
+            return {"data": [], "total": 0}
+
+        items_by_computation: Dict[int, List[DemandComputationItem]] = {}
+        for item in buy_items:
+            items_by_computation.setdefault(int(item.computation_id), []).append(item)
+
+        exclusions_by_computation = await self._get_purchase_exclusions_by_computation(
+            tenant_id, list(items_by_computation.keys())
+        )
+
+        material_ids = sorted({int(i.material_id) for i in buy_items if i.material_id is not None})
+        material_rows = (
+            await Material.filter(tenant_id=tenant_id, id__in=material_ids).all()
+            if material_ids
+            else []
+        )
+        material_by_id = {m.id: m for m in material_rows}
+
+        kw = (keyword or "").strip().lower()
+        lines: List[Dict[str, Any]] = []
+        for cid, comp_items in items_by_computation.items():
+            computation = computation_by_id.get(cid)
+            if not computation:
+                continue
+            exclusions = exclusions_by_computation.get(cid) or {
+                "po_pushed_qty_by_material_id": {},
+                "pr_committed_qty_by_material_id": {},
+            }
+            remaining_by_material = self._get_purchase_remaining_qty_by_material(
+                comp_items, exclusions
+            )
+            suggested_by_material = self._aggregate_buy_suggested_qty_by_material(comp_items)
+            seen_material_ids: set = set()
+            for item in comp_items:
+                if item.material_id is None or item.material_id in seen_material_ids:
+                    continue
+                seen_material_ids.add(item.material_id)
+                mid = int(item.material_id)
+                suggested = suggested_by_material.get(mid, 0.0)
+                if suggested <= 0:
+                    continue
+                remaining = remaining_by_material.get(mid, 0.0)
+                if pullable_only and remaining <= 0:
+                    continue
+                pushed_qty = self._purchase_pushed_qty_for_material(mid, suggested, exclusions)
+                material = material_by_id.get(mid)
+                material_code = str(item.material_code or "").strip()
+                material_name = str(item.material_name or "").strip()
+                material_spec = str(item.material_spec or "").strip()
+                material_unit = str(item.material_unit or "").strip()
+                if material:
+                    if not material_code:
+                        material_code = str(
+                            getattr(material, "main_code", None)
+                            or getattr(material, "code", None)
+                            or ""
+                        ).strip()
+                    if not material_name:
+                        material_name = str(getattr(material, "name", "") or "").strip()
+                    if not material_spec:
+                        material_spec = str(getattr(material, "specification", "") or "").strip()
+                    if not material_unit:
+                        material_unit = str(getattr(material, "base_unit", "") or "").strip()
+                row = {
+                    "id": int(item.id),
+                    "computation_id": cid,
+                    "computation_code": computation.computation_code,
+                    "business_mode": computation.business_mode,
+                    "material_id": mid,
+                    "material_code": material_code or f"M{mid}",
+                    "material_name": material_name or material_code or f"物料{mid}",
+                    "material_spec": material_spec or None,
+                    "unit": material_unit or "件",
+                    "suggested_quantity": suggested,
+                    "pushed_quantity": pushed_qty,
+                    "remaining_quantity": remaining,
+                    "required_date": str(item.procurement_completion_date)
+                    if item.procurement_completion_date
+                    else None,
+                }
+                if kw:
+                    haystack = " ".join(
+                        [
+                            str(row["material_code"] or ""),
+                            str(row["material_name"] or ""),
+                            str(row["material_spec"] or ""),
+                        ]
+                    ).lower()
+                    if kw not in haystack:
+                        continue
+                lines.append(row)
+
+        lines.sort(
+            key=lambda r: (
+                str(r.get("computation_code") or ""),
+                str(r.get("material_code") or ""),
+                int(r.get("id") or 0),
+            )
+        )
+        total = len(lines)
+        page = lines[skip : skip + limit]
+        return {"data": page, "total": total}
 
     async def _build_work_order_pull_preview_items(
         self,
@@ -4158,12 +5074,13 @@ class DemandComputationService(AppBaseService):
             material_code: str,
             material_name: str,
             quantity: float,
-            pushed: bool,
+            pushed_quantity: float,
             source_type: Optional[str],
             target_document: str,
         ) -> None:
             if quantity <= 0:
                 return
+            remaining = max(0.0, quantity - pushed_quantity)
             preview_items.append(
                 {
                     "item_id": material_id,
@@ -4171,8 +5088,8 @@ class DemandComputationService(AppBaseService):
                     "material_code": material_code or f"M{material_id}",
                     "material_name": material_name or material_code or f"物料{material_id}",
                     "quantity": quantity,
-                    "pushed_quantity": quantity if pushed else 0.0,
-                    "max_push_quantity": 0.0 if pushed else quantity,
+                    "pushed_quantity": pushed_quantity,
+                    "max_push_quantity": remaining,
                     "source_type": source_type,
                     "target_document": target_document,
                 }
@@ -4220,10 +5137,12 @@ class DemandComputationService(AppBaseService):
                     )
                     if qty <= 0:
                         continue
-                    pushed = (int(demand_item_id), mid) in already_pushed_keys or (
+                    pushed_qty = 0.0
+                    if (int(demand_item_id), mid) in already_pushed_keys or (
                         None,
                         mid,
-                    ) in already_pushed_keys
+                    ) in already_pushed_keys:
+                        pushed_qty = qty
                     target = (
                         "outsource_work_order"
                         if st == SOURCE_TYPE_OUTSOURCE
@@ -4234,14 +5153,15 @@ class DemandComputationService(AppBaseService):
                         material_code=str(node.get("material_code") or comp_item.material_code or ""),
                         material_name=str(node.get("material_name") or comp_item.material_name or ""),
                         quantity=qty,
-                        pushed=pushed,
+                        pushed_quantity=pushed_qty,
                         source_type=st,
                         target_document=target,
                     )
             return preview_items
 
         exclusions = await self._get_already_pushed_exclusions(tenant_id, computation.id)
-        already_pushed_materials = exclusions["wo_material_ids"] | exclusions["outsource_material_ids"]
+        production_remaining = self._get_production_remaining_qty_by_material(items, exclusions)
+        outsource_remaining = self._get_outsource_remaining_qty_by_material(items, exclusions)
         seen_keys: set = set()
 
         def _aggregate_qty(group: List[DemandComputationItem]) -> float:
@@ -4264,7 +5184,7 @@ class DemandComputationService(AppBaseService):
 
             if source_type == SOURCE_TYPE_MAKE:
                 key = (item.material_id, SOURCE_TYPE_MAKE)
-                if key in seen_keys or item.material_id in already_pushed_materials:
+                if key in seen_keys:
                     continue
                 group = [
                     i
@@ -4274,19 +5194,22 @@ class DemandComputationService(AppBaseService):
                     and float(i.suggested_work_order_quantity or 0) > 0
                 ]
                 qty = _aggregate_qty(group)
+                mid = int(item.material_id)
+                remaining = production_remaining.get(mid, 0.0)
+                pushed_qty = self._production_pushed_qty_for_material(mid, qty, exclusions)
                 seen_keys.add(key)
-                _append_row(
-                    material_id=int(item.material_id),
-                    material_code=str(item.material_code or ""),
-                    material_name=str(item.material_name or ""),
-                    quantity=qty,
-                    pushed=item.material_id in already_pushed_materials,
+                self._append_split_production_preview_rows(
+                    item=item,
+                    total_qty=qty,
+                    pushed_qty=pushed_qty,
+                    remaining_qty=remaining,
                     source_type=SOURCE_TYPE_MAKE,
                     target_document="work_order",
+                    preview_items=preview_items,
                 )
             elif source_type == SOURCE_TYPE_OUTSOURCE:
                 key = (item.material_id, SOURCE_TYPE_OUTSOURCE)
-                if key in seen_keys or item.material_id in already_pushed_materials:
+                if key in seen_keys:
                     continue
                 group = [
                     i
@@ -4296,19 +5219,22 @@ class DemandComputationService(AppBaseService):
                     and float(i.suggested_work_order_quantity or 0) > 0
                 ]
                 qty = _aggregate_qty(group)
+                mid = int(item.material_id)
+                remaining = outsource_remaining.get(mid, 0.0)
+                pushed_qty = self._outsource_pushed_qty_for_material(mid, qty, exclusions)
                 seen_keys.add(key)
-                _append_row(
-                    material_id=int(item.material_id),
-                    material_code=str(item.material_code or ""),
-                    material_name=str(item.material_name or ""),
-                    quantity=qty,
-                    pushed=item.material_id in already_pushed_materials,
+                self._append_split_production_preview_rows(
+                    item=item,
+                    total_qty=qty,
+                    pushed_qty=pushed_qty,
+                    remaining_qty=remaining,
                     source_type=SOURCE_TYPE_OUTSOURCE,
                     target_document="outsource_work_order",
+                    preview_items=preview_items,
                 )
             elif source_type == SOURCE_TYPE_CONFIGURE:
                 key = (item.material_id, SOURCE_TYPE_CONFIGURE)
-                if key in seen_keys or item.material_id in already_pushed_materials:
+                if key in seen_keys:
                     continue
                 group = [
                     i
@@ -4318,19 +5244,22 @@ class DemandComputationService(AppBaseService):
                     and float(i.suggested_work_order_quantity or 0) > 0
                 ]
                 qty = _aggregate_qty(group)
+                mid = int(item.material_id)
+                remaining = production_remaining.get(mid, 0.0)
+                pushed_qty = self._production_pushed_qty_for_material(mid, qty, exclusions)
                 seen_keys.add(key)
-                _append_row(
-                    material_id=int(item.material_id),
-                    material_code=str(item.material_code or ""),
-                    material_name=str(item.material_name or ""),
-                    quantity=qty,
-                    pushed=item.material_id in already_pushed_materials,
+                self._append_split_production_preview_rows(
+                    item=item,
+                    total_qty=qty,
+                    pushed_qty=pushed_qty,
+                    remaining_qty=remaining,
                     source_type=SOURCE_TYPE_CONFIGURE,
                     target_document="work_order",
+                    preview_items=preview_items,
                 )
             elif not source_type and item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
                 key = (item.material_id, "legacy")
-                if key in seen_keys or item.material_id in already_pushed_materials:
+                if key in seen_keys:
                     continue
                 group = [
                     i
@@ -4340,15 +5269,18 @@ class DemandComputationService(AppBaseService):
                     and float(i.suggested_work_order_quantity or 0) > 0
                 ]
                 qty = _aggregate_qty(group)
+                mid = int(item.material_id)
+                remaining = production_remaining.get(mid, 0.0)
+                pushed_qty = self._production_pushed_qty_for_material(mid, qty, exclusions)
                 seen_keys.add(key)
-                _append_row(
-                    material_id=int(item.material_id),
-                    material_code=str(item.material_code or ""),
-                    material_name=str(item.material_name or ""),
-                    quantity=qty,
-                    pushed=item.material_id in already_pushed_materials,
+                self._append_split_production_preview_rows(
+                    item=item,
+                    total_qty=qty,
+                    pushed_qty=pushed_qty,
+                    remaining_qty=remaining,
                     source_type=None,
                     target_document="work_order",
+                    preview_items=preview_items,
                 )
 
         return preview_items
@@ -4409,19 +5341,13 @@ class DemandComputationService(AppBaseService):
                     ).strip()
                 if not material_name:
                     material_name = str(getattr(material, "name", "") or "").strip()
-            preview_items.append(
-                {
-                    "item_id": int(item.id),
-                    "material_id": item.material_id,
-                    "material_code": material_code or f"M{item.material_id}",
-                    "material_name": material_name or material_code or f"物料{item.material_id}",
-                    "quantity": suggested,
-                    "pushed_quantity": pushed_qty,
-                    "max_push_quantity": remaining,
-                    "target_document": "purchase_order",
-                    "default_supplier_id": supplier_id,
-                    "supplier_pending": not bool(supplier_id),
-                }
+            self._append_split_purchase_preview_rows(
+                item=item,
+                suggested=suggested,
+                pushed_qty=pushed_qty,
+                remaining=remaining,
+                supplier_id=supplier_id,
+                preview_items=preview_items,
             )
 
         pushable_count = sum(
@@ -4536,12 +5462,6 @@ class DemandComputationService(AppBaseService):
                     else:
                         purchase_items_without_supplier += 1
 
-        if outsource_only:
-            outsource_work_order_count = outsource_count
-        elif production == "work_order":
-            work_order_count = make_count
-            outsource_work_order_count = outsource_count
-
         if purchase == "requisition" and (purchase_items_with_supplier > 0 or purchase_items_without_supplier > 0):
             purchase_requisition_count = 1
         elif purchase == "purchase_order":
@@ -4575,8 +5495,8 @@ class DemandComputationService(AppBaseService):
         preview_tip_parts: List[str] = []
         blocking_reasons: List[str] = []
 
-        if production == "work_order" and not outsource_only:
-            mode = generate_mode or "work_order_only"
+        if production == "work_order":
+            mode = "outsource_only" if outsource_only else (generate_mode or "work_order_only")
             wo_items = await self._build_work_order_pull_preview_items(
                 tenant_id,
                 computation,
@@ -4584,16 +5504,28 @@ class DemandComputationService(AppBaseService):
                 generate_mode=mode,
             )
             preview_items.extend(wo_items)
-            pushable_count = sum(
-                1 for row in wo_items if float(row.get("max_push_quantity") or 0) > 0
+            work_order_count = sum(
+                1
+                for row in wo_items
+                if row.get("target_document") == "work_order"
+                and float(row.get("max_push_quantity") or 0) > 0
             )
+            outsource_work_order_count = sum(
+                1
+                for row in wo_items
+                if row.get("target_document") == "outsource_work_order"
+                and float(row.get("max_push_quantity") or 0) > 0
+            )
+            pushable_wo_count = work_order_count + outsource_work_order_count
             preview_summary_parts.append(
-                f"需求计算 {computation.computation_code}：{pushable_count}/{len(wo_items)} 条可下推生成工单"
+                f"需求计算 {computation.computation_code}：{pushable_wo_count}/{len(wo_items)} 条可下推生成工单"
                 if wo_items
                 else f"需求计算 {computation.computation_code} 中无生产件可生成工单"
             )
             preview_tip_parts.append("确认后将按可下推数量生成生产工单/委外工单。")
-            if not pushable_count:
+            if not can_direct_wo and not outsource_only:
+                blocking_reasons.append("demand_computation.push_work_order.requires_production_plan")
+            elif not pushable_wo_count:
                 blocking_reasons.append(
                     "demand_computation.push_work_order.no_pushable_items"
                     if wo_items
@@ -4631,7 +5563,14 @@ class DemandComputationService(AppBaseService):
         pushable_count = sum(
             1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
         )
-        has_blocking_issues = pushable_count == 0 and bool(production or purchase)
+        requires_production_plan = (
+            production == "work_order"
+            and not outsource_only
+            and not can_direct_wo
+        )
+        has_blocking_issues = requires_production_plan or (
+            pushable_count == 0 and bool(production or purchase)
+        )
         blocking_reason = blocking_reasons[0] if has_blocking_issues and blocking_reasons else None
 
         return {
@@ -4663,12 +5602,15 @@ class DemandComputationService(AppBaseService):
         purchase: Optional[str] = None,
         include_outsource: bool = True,
         push_mode: Optional[str] = None,
+        purchase_requisition_item_ids: Optional[List[int]] = None,
+        production_item_ids: Optional[List[int]] = None,
     ) -> Dict[str, Any]:
         """
         一键下推：按配置执行工单、采购申请/采购单、委外工单。
         production: "work_order"|null
         purchase: "requisition"|"purchase_order"|null
         include_outsource: 委外工单是否包含（工单模式会生成委外工单）
+        production_item_ids: 可选，仅下推所选计算明细对应生产/委外件
         """
         computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
         if not computation:
@@ -4697,39 +5639,46 @@ class DemandComputationService(AppBaseService):
                 created_by=created_by,
                 generate_mode="work_order_only",
                 push_mode=resolved_push_mode,
+                selected_item_ids=production_item_ids,
             )
             results["work_orders"] = r.get("work_orders", [])
             results["outsource_work_orders"] = r.get("outsource_work_orders", [])
 
         if purchase == "requisition":
-            exclusions = await self._get_already_pushed_exclusions(tenant_id, computation_id)
-            if not exclusions["has_purchase_requisition"]:
-                from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPullService
+            from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPullService
 
-                push_service = DocumentPushPullService()
-                try:
-                    r = await push_service.push_document(
-                        tenant_id=tenant_id,
-                        source_type="demand_computation",
-                        source_id=computation_id,
-                        target_type="purchase_requisition",
-                        push_params=None,
-                        created_by=created_by,
+            push_params: Optional[Dict[str, Any]] = None
+            if purchase_requisition_item_ids is not None:
+                push_params = {
+                    "selected_item_ids": [
+                        int(i) for i in purchase_requisition_item_ids if i is not None
+                    ],
+                }
+
+            push_service = DocumentPushPullService()
+            try:
+                r = await push_service.push_document(
+                    tenant_id=tenant_id,
+                    source_type="demand_computation",
+                    source_id=computation_id,
+                    target_type="purchase_requisition",
+                    push_params=push_params,
+                    created_by=created_by,
+                )
+                results["purchase_requisition"] = r.get("target_document")
+            except BusinessLogicError as e:
+                msg = str(e)
+                if "无采购件" in msg:
+                    pass
+                else:
+                    wo_done = bool(
+                        results.get("work_orders") or results.get("outsource_work_orders")
                     )
-                    results["purchase_requisition"] = r.get("target_document")
-                except BusinessLogicError as e:
-                    msg = str(e)
-                    if "无采购件" in msg:
-                        pass
-                    else:
-                        wo_done = bool(
-                            results.get("work_orders") or results.get("outsource_work_orders")
-                        )
-                        if wo_done:
-                            raise BusinessLogicError(
-                                f"工单/委外已下推成功，但采购申请失败：{msg}"
-                            ) from e
-                        raise
+                    if wo_done:
+                        raise BusinessLogicError(
+                            f"工单/委外已下推成功，但采购申请失败：{msg}"
+                        ) from e
+                    raise
 
         elif purchase == "purchase_order":
             r = await self.generate_work_orders_and_purchase_orders(
@@ -4835,13 +5784,6 @@ class DemandComputationService(AppBaseService):
                 created_by=created_by,
                 allow_draft=allow_draft,
             )
-            # #region agent log
-            try:
-                with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
-                    _f.write(__import__("json").dumps({"location": "demand_computation_service.py:_create_work_order", "message": "work_order_created", "data": {"id": work_order.id, "code": work_order.code, "material_code": item.material_code}, "hypothesisId": "C,E"}) + "\n")
-            except Exception:
-                pass
-            # #endregion
             return {
                 "id": work_order.id,
                 "code": work_order.code,
@@ -5241,6 +6183,11 @@ class DemandComputationService(AppBaseService):
                 # 计算数量和总价
                 quantity = Decimal(str(item.suggested_purchase_order_quantity or 0))
                 total_price = unit_price * quantity
+                line_required_date = (
+                    item.procurement_completion_date
+                    or item.delivery_date
+                    or delivery_date
+                )
                 
                 # 创建采购订单行
                 item_data: Dict[str, Any] = {
@@ -5255,7 +6202,7 @@ class DemandComputationService(AppBaseService):
                     "unit": item.material_unit,
                     "unit_price": unit_price,
                     "total_price": total_price,
-                    "required_date": delivery_date,
+                    "required_date": line_required_date,
                     "inspection_required": True,
                     "source_type": "demand_computation",
                     "source_id": computation.id,

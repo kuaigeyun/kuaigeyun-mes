@@ -7,8 +7,9 @@
  * Date: 2026-01-15
  */
 
-import React, { useRef, useState, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormSwitch } from '@ant-design/pro-components';
@@ -100,8 +101,11 @@ const granularityLabel = (value: string | undefined, t: (key: string) => string)
 
 const StocktakingPage: React.FC = () => {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const deepLinkOpenedRef = useRef(false);
+  const deepLinkFilterRef = useRef<{ id?: number; uuid?: string }>({});
   const { canCreate, canUpdate, canDelete, canAction } = useResourcePermissions(STOCKTAKING_RESOURCE);
   const canRevoke = canAction?.('revoke') ?? false;
 
@@ -180,22 +184,62 @@ const StocktakingPage: React.FC = () => {
     return detail;
   }, []);
 
-  /**
-   * 处理查看详情
-   */
-  const handleDetail = async (record: Stocktaking) => {
+  const handleDetail = useCallback(async (record: Stocktaking) => {
+    if (record.id == null) return;
     setDetailDrawerVisible(true);
     setDetailLoading(true);
     setCurrentStocktaking(null);
     try {
-      await refreshCurrentDetail(record.id!);
+      await refreshCurrentDetail(record.id);
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaizhizao.stocktaking.msgGetDetailFailed'));
       setDetailDrawerVisible(false);
     } finally {
       setDetailLoading(false);
     }
-  };
+  }, [messageApi, refreshCurrentDetail, t]);
+
+  useEffect(() => {
+    const idRaw = searchParams.get('id')?.trim();
+    const uuidRaw = searchParams.get('uuid')?.trim();
+    deepLinkFilterRef.current = {
+      id: idRaw && Number(idRaw) > 0 ? Number(idRaw) : undefined,
+      uuid: uuidRaw || undefined,
+    };
+    if (!idRaw && !uuidRaw) {
+      deepLinkOpenedRef.current = false;
+      actionRef.current?.reload();
+      return;
+    }
+    if (deepLinkOpenedRef.current) {
+      actionRef.current?.reload();
+      return;
+    }
+    deepLinkOpenedRef.current = true;
+    void (async () => {
+      try {
+        if (idRaw) {
+          const id = Number(idRaw);
+          if (Number.isFinite(id) && id > 0) {
+            await handleDetail({ id });
+            return;
+          }
+        }
+        if (uuidRaw) {
+          const result = await stocktakingApi.list({ keyword: uuidRaw, limit: 100 });
+          const { data } = normalizeWarehouseListResponse(result);
+          const hit = data.find((row: Stocktaking) => String(row.uuid) === uuidRaw);
+          if (hit) {
+            await handleDetail(hit);
+          }
+        }
+      } catch {
+        messageApi.error(t('app.kuaizhizao.stocktaking.msgGetDetailFailed'));
+      } finally {
+        actionRef.current?.reload();
+      }
+    })();
+  }, [searchParams, handleDetail, messageApi, t]);
 
   /**
    * 处理开始盘点
@@ -823,7 +867,18 @@ const StocktakingPage: React.FC = () => {
               status: lifecycleStage ?? listParams.status,
             });
             const { data, total } = normalizeWarehouseListResponse(result);
-            return { data, success: true, total };
+            const deepLink = deepLinkFilterRef.current;
+            let rows = data;
+            if (deepLink.id) {
+              rows = rows.filter((row) => row.id === deepLink.id);
+            } else if (deepLink.uuid) {
+              rows = rows.filter((row) => String(row.uuid) === deepLink.uuid);
+            }
+            return {
+              data: rows,
+              success: true,
+              total: deepLink.id || deepLink.uuid ? rows.length : total,
+            };
           } catch {
             return { data: [], success: false, total: 0 };
           }
@@ -1054,6 +1109,15 @@ const StocktakingPage: React.FC = () => {
           ) : undefined
         }
         collaboration={detailCollaboration}
+        traceDocument={
+          currentStocktaking?.id
+            ? {
+                documentType: 'stocktaking',
+                documentId: currentStocktaking.id,
+                selfDocumentId: currentStocktaking.id,
+              }
+            : undefined
+        }
         linesTitle={t('app.kuaizhizao.stocktaking.detailItemsTitle')}
         lines={
           currentStocktaking ? (

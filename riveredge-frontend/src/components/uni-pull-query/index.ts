@@ -1,5 +1,16 @@
 export { UniPullQueryModal } from './UniPullQueryModal';
+export { renderPullCapabilityTag } from './renderPullCapabilityTag';
+export {
+  renderPullQueryDocStatus,
+  renderPullQueryReviewStatus,
+} from './renderPullQueryDocStatus';
 export { UniPullQueryFilterBar } from './UniPullQueryFilterBar';
+export { UniPullQuerySelectionBar } from './UniPullQuerySelectionBar';
+export type {
+  UniPullQueryCrossPageMode,
+  UniPullQueryPreviewItem,
+  UniPullQuerySelectionBarProps,
+} from './UniPullQuerySelectionBar';
 export { useUniPullQuery } from './useUniPullQuery';
 export {
   UNI_PULL_SCOPE_ALL,
@@ -7,6 +18,7 @@ export {
   UNI_PULL_QUERY_MAX_FETCH_LIMIT,
   filterByPullScope,
   isPullableScope,
+  pagePullCandidates,
   paginatePullRows,
 } from './pullScope';
 export type {

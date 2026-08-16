@@ -1,46 +1,76 @@
 import React, { useMemo } from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
-import { copyableCodeColumn } from '../../../utils/reportCopyableColumn';
 import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
+import { reportDocumentStatusText } from '../../../utils/reportPresentation';
 
 const StocktakingHistory: React.FC = () => {
   const { t } = useTranslation();
   const columns: ProColumns[] = useMemo(
     () => [
-      copyableCodeColumn(
-        t('app.kuaizhizao.warehouseReports.colStocktakingCode'),
-        'order_code',
-        150,
-      ),
       {
-        title: t('app.kuaizhizao.warehouseReports.colWarehouseName'),
-        dataIndex: 'warehouse_name',
+        title: t('app.kuaizhizao.warehouseReports.colStocktakingCode'),
+        dataIndex: 'order_code',
         width: 150,
-      },
-      {
-        title: t('app.kuaizhizao.warehouseReports.colBookQty'),
-        dataIndex: 'book_qty',
-        valueType: 'digit',
-        width: 100,
-      },
-      {
-        title: t('app.kuaizhizao.warehouseReports.colActualQty'),
-        dataIndex: 'actual_qty',
-        valueType: 'digit',
-        width: 100,
-      },
-      {
-        title: t('app.kuaizhizao.warehouseReports.colDiffQty'),
-        dataIndex: 'diff_qty',
-        valueType: 'digit',
-        width: 100,
+        hideInSearch: true,
       },
       {
         title: t('app.kuaizhizao.warehouseReports.colCheckDate'),
         dataIndex: 'check_date',
         valueType: 'date',
         width: 120,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseReports.colWarehouseName'),
+        dataIndex: 'warehouse_name',
+        ellipsis: true,
+        width: 140,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseReports.colMaterialCode'),
+        dataIndex: 'material_code',
+        width: 120,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseReports.colMaterialName'),
+        dataIndex: 'material_name',
+        ellipsis: true,
+        width: 160,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseReports.colBookQty'),
+        dataIndex: 'book_qty',
+        valueType: 'digit',
+        width: 100,
+        hideInSearch: true,
+        align: 'right',
+      },
+      {
+        title: t('app.kuaizhizao.warehouseReports.colActualQty'),
+        dataIndex: 'actual_qty',
+        valueType: 'digit',
+        width: 100,
+        hideInSearch: true,
+        align: 'right',
+      },
+      {
+        title: t('app.kuaizhizao.warehouseReports.colDiffQty'),
+        dataIndex: 'diff_qty',
+        valueType: 'digit',
+        width: 100,
+        hideInSearch: true,
+        align: 'right',
+      },
+      {
+        title: t('common.status'),
+        dataIndex: 'status',
+        width: 100,
+        hideInSearch: true,
+        render: (_, row) => reportDocumentStatusText(t, row.status),
       },
     ],
     [t],
@@ -51,7 +81,9 @@ const StocktakingHistory: React.FC = () => {
       title={t('app.kuaizhizao.menu.reports.stocktaking-history')}
       reportType="stocktaking_history"
       columns={columns}
-      columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.reports.StocktakingHistory"
+      columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.reports.StocktakingHistory-v2"
+      rowKey="id"
+      summaryFields={['book_qty', 'actual_qty', 'diff_qty']}
     />
   );
 };

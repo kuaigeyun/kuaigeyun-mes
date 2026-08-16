@@ -9,7 +9,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 DRAWING_TYPES = {"part", "assembly", "process", "other"}
-DRAWING_STATUSES = {"Draft", "Released", "Obsolete"}
+DRAWING_STATUSES = {"Draft", "Editing", "Pending", "Released", "Obsolete"}
+DRAWING_WORKING_STATUSES = {"Draft", "Editing", "Pending"}
+DRAWING_SECURITY_LEVELS = {"public", "internal", "secret", "confidential"}
 
 
 class AssociatedMaterialBrief(BaseModel):
@@ -87,6 +89,8 @@ class EngineeringDrawingBase(BaseModel):
     material_uuids: Optional[List[str]] = Field(None, alias="materialUuids")
     process_route_uuids: Optional[List[str]] = Field(None, alias="processRouteUuids")
     operation_uuids: Optional[List[str]] = Field(None, alias="operationUuids")
+    folder_uuid: Optional[str] = Field(None, alias="folderUuid")
+    security_level: str = Field("internal", alias="securityLevel", description="密级")
     description: Optional[str] = None
 
     model_config = ConfigDict(populate_by_name=True)
@@ -121,6 +125,14 @@ class EngineeringDrawingBase(BaseModel):
             raise ValueError(f"图纸类型无效，允许: {', '.join(sorted(DRAWING_TYPES))}")
         return val
 
+    @field_validator("security_level")
+    @classmethod
+    def validate_security_level(cls, v: str) -> str:
+        val = (v or "internal").strip().lower()
+        if val not in DRAWING_SECURITY_LEVELS:
+            raise ValueError(f"密级无效，允许: {', '.join(sorted(DRAWING_SECURITY_LEVELS))}")
+        return val
+
 
 class EngineeringDrawingCreate(EngineeringDrawingBase):
     pass
@@ -134,9 +146,21 @@ class EngineeringDrawingUpdate(BaseModel):
     material_uuids: Optional[List[str]] = Field(None, alias="materialUuids")
     process_route_uuids: Optional[List[str]] = Field(None, alias="processRouteUuids")
     operation_uuids: Optional[List[str]] = Field(None, alias="operationUuids")
+    folder_uuid: Optional[str] = Field(None, alias="folderUuid")
+    security_level: Optional[str] = Field(None, alias="securityLevel")
     description: Optional[str] = None
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @field_validator("security_level")
+    @classmethod
+    def validate_security_level(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        val = v.strip().lower()
+        if val not in DRAWING_SECURITY_LEVELS:
+            raise ValueError(f"密级无效，允许: {', '.join(sorted(DRAWING_SECURITY_LEVELS))}")
+        return val
 
 
 class EngineeringDrawingResponse(EngineeringDrawingBase):
@@ -160,6 +184,12 @@ class EngineeringDrawingResponse(EngineeringDrawingBase):
     linked_bom_material_id: Optional[int] = Field(None, alias="linkedBomMaterialId")
     linked_bom_version: Optional[str] = Field(None, alias="linkedBomVersion")
     last_step_bom_import_at: Optional[datetime] = Field(None, alias="lastStepBomImportAt")
+    checked_out_by: Optional[int] = Field(None, alias="checkedOutBy")
+    checked_out_by_name: Optional[str] = Field(None, alias="checkedOutByName")
+    checked_out_at: Optional[datetime] = Field(None, alias="checkedOutAt")
+    checkout_comment: Optional[str] = Field(None, alias="checkoutComment")
+    folder_id: Optional[int] = Field(None, alias="folderId")
+    folder_name: Optional[str] = Field(None, alias="folderName")
     materials: Optional[List[AssociatedMaterialBrief]] = None
     process_routes: Optional[List[AssociatedProcessRouteBrief]] = Field(None, alias="processRoutes")
     operations: Optional[List[AssociatedOperationBrief]] = None
@@ -173,8 +203,32 @@ class EngineeringDrawingListResponse(BaseModel):
     total: int
 
 
+class EngineeringDrawingPrintDataResponse(BaseModel):
+    code: str
+    name: str
+    revision: str
+    security_level: str = Field(..., alias="securityLevel")
+    watermark: str
+    preview_url: Optional[str] = Field(None, alias="previewUrl")
+    file_name: Optional[str] = Field(None, alias="fileName")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class EngineeringDrawingObsoleteRequest(BaseModel):
     reason: Optional[str] = Field(None, max_length=2000, description="作废原因")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class EngineeringDrawingCheckoutRequest(BaseModel):
+    comment: Optional[str] = Field(None, max_length=500, description="检出说明")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class EngineeringDrawingRejectRequest(BaseModel):
+    reason: Optional[str] = Field(None, max_length=2000, description="驳回原因")
 
     model_config = ConfigDict(populate_by_name=True)
 

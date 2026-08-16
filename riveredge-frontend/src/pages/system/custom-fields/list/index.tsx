@@ -17,9 +17,9 @@ import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Badge, Button, Col, Form, Input, Popconfirm, Row, Space, Spin, Tooltip, theme } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag } from '../../utils/systemListPresentation';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SearchOutlined, DatabaseOutlined, MinusCircleOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, DatabaseOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { FormModalTemplate, MODAL_CONFIG, TwoColumnLayout } from '../../../../components/layout-templates';
 import { CustomFieldJsonEditor, CustomFieldJsonModeSegmented, type CustomFieldJsonEditorMode } from '../../../../components/custom-fields/CustomFieldJsonEditor';
 import { CustomFieldFormulaConfigEditor } from '../../../../components/custom-fields/CustomFieldFormulaConfigEditor';
 import { normalizeJsonFieldValue, isFlatJsonObject } from '../../../../components/custom-fields/customFieldJsonUtils';
@@ -1167,46 +1167,19 @@ const CustomFieldListPage: React.FC = () => {
           overflow: 'hidden',
         }}
       >
-        {/* 功能页面自定义字段配置 - 左右结构 */}
-        <div
-          style={{
-            display: 'flex',
-            width: '100%',
-            height: '100%',
-            borderRadius: token.borderRadiusLG || token.borderRadius,
-            overflow: 'hidden',
-            border: `1px solid ${token.colorBorder}`,
-          }}
-        >
-          {/* 左侧功能页面列表：固定宽度不参与收缩，由右侧区域伸缩（与编号规则页一致） */}
-          <div
-            style={{
-              width: '300px',
-              minWidth: '300px',
-              flexShrink: 0,
-              borderRight: `1px solid ${token.colorBorder}`,
-              backgroundColor: token.colorFillAlter || '#fafafa',
-              display: 'flex',
-              flexDirection: 'column',
-              height: '100%',
-              borderTopLeftRadius: token.borderRadiusLG || token.borderRadius,
-              borderBottomLeftRadius: token.borderRadiusLG || token.borderRadius,
-            }}
-          >
-            {/* 搜索栏 */}
-            <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
-              <Input
-                placeholder={t('field.customField.searchPagePlaceholder')}
-                prefix={<SearchOutlined />}
-                value={pageSearchValue}
-                onChange={(e) => setPageSearchValue(e.target.value)}
-                allowClear
-                size="middle"
-              />
-            </div>
-
-            {/* 功能页面列表 */}
-            <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '8px' }}>
+        <TwoColumnLayout
+          style={{ flex: 1, minHeight: 0, width: '100%' }}
+          leftPanel={{
+            width: 300,
+            minWidth: 300,
+            search: {
+              placeholder: t('field.customField.searchPagePlaceholder'),
+              value: pageSearchValue,
+              onChange: setPageSearchValue,
+              allowClear: true,
+            },
+            leftContent: (
+            <div style={{ padding: 8 }}>
               {pageConfigsLoading ? (
                 <div style={{ textAlign: 'center', padding: '40px' }}>
                   <Spin size="large" />
@@ -1303,21 +1276,12 @@ const CustomFieldListPage: React.FC = () => {
                 })
               )}
             </div>
-          </div>
-
-          {/* 右侧配置区域：占据剩余空间，不足时可收缩并滚动（与编号规则页一致） */}
-          <div
-            style={{
-              flex: 1,
-              minWidth: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              backgroundColor: token.colorBgContainer,
-              borderTopRightRadius: token.borderRadiusLG || token.borderRadius,
-              borderBottomRightRadius: token.borderRadiusLG || token.borderRadius,
-            }}
-          >
-            {selectedPage ? (
+            ),
+          }}
+          rightPanel={{
+            contentPadding: 0,
+            contentBackgroundColor: token.colorBgContainer,
+            content: selectedPage ? (
               <>
                 {/* 顶部标题栏 */}
                 <div
@@ -1453,9 +1417,9 @@ const CustomFieldListPage: React.FC = () => {
               >
                 {t('field.customField.selectPageHint')}
               </div>
-            )}
-          </div>
-        </div>
+            ),
+          }}
+        />
       </div>
 
       {/* 创建/编辑字段 Modal */}

@@ -161,6 +161,15 @@ class UserPermissionService:
             permission_codes |= await UserPermissionService._get_all_tenant_permission_codes(
                 tenant_id
             )
+        else:
+            # 有角色的登录用户始终具备个人中心基线（与角色矩阵强制授予一致）
+            from core.services.authorization.permission_registry_service import (
+                PermissionRegistryService,
+            )
+
+            permission_codes = PermissionRegistryService.merge_baseline_permission_codes(
+                permission_codes
+            )
 
         await cache_manager.set("permissions", cache_key, sorted(permission_codes), ttl=1800)
         return permission_codes

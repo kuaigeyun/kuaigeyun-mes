@@ -10,6 +10,11 @@ from core.config.permission_contract import build_permission_code
 
 # 路径片段 → manifest module（master-data 下，不含 app 前缀）
 _PATH_MODULE_RULES: tuple[tuple[str, str], ...] = (
+    ("/process/drawing-where-used", "process:drawing-where-used"),
+    ("/process/drawing-distributions", "process:drawing-distribution"),
+    ("/process/drawing-clearances", "process:drawing-loan"),
+    ("/process/drawing-loans", "process:drawing-loan"),
+    ("/process/drawing-folders", "process:drawing"),
     ("/process/drawings", "process:drawing"),
     ("/defect-types", "process:defect-type"),
     ("/operations", "process:operation"),
@@ -97,6 +102,14 @@ def resolve_master_data_module_action(
             return "submit"
         if any(k in p for k in ("/revoke", "/cancel", "/withdraw")):
             return "revoke"
+        if "/recall" in p:
+            return "recall"
+        if "/complete" in p:
+            return "complete"
+        if "/process/drawings" in p and any(
+            k in p for k in ("/checkout", "/checkin", "/undo-checkout", "/move-folder")
+        ):
+            return "update"
         if any(k in p for k in ("/execute", "/confirm", "/checkin", "/checkout")):
             return "execute"
         if "/revision" in p:

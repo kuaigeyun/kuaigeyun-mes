@@ -262,6 +262,7 @@ class AfterSalesTicketService:
         items: Optional[List[AfterSalesTicketItem]] = None,
         *,
         has_returnable_qty: Optional[bool] = None,
+        existing_repair_order_code: Optional[str] = None,
     ) -> AfterSalesTicketResponse:
         if items is None:
             items = await cls._load_items(row.tenant_id, row.id)
@@ -283,10 +284,15 @@ class AfterSalesTicketService:
                 if need_returnable
                 else False
             )
+        if existing_repair_order_code is None and str(row.request_type or "").strip() == "维修":
+            existing_repair_order_code = await cls._existing_repair_order_code(
+                row.tenant_id, row.id
+            )
         caps = derive_after_sales_ticket_capabilities(
             row,
             has_items=bool(items),
             has_returnable_qty=bool(has_returnable_qty),
+            existing_repair_order_code=existing_repair_order_code,
         )
         base = AfterSalesTicketResponse.model_validate(row)
         return base.model_copy(
@@ -294,9 +300,21 @@ class AfterSalesTicketService:
                 "items": item_resps,
                 "item_count": len(item_resps),
                 "claim_amount": claim,
+                "existing_repair_order_code": existing_repair_order_code,
                 "capabilities": caps.model_dump(),
             }
         )
+
+    @staticmethod
+    async def _existing_repair_order_code(tenant_id: int, ticket_id: int) -> Optional[str]:
+        from apps.kuaizhizao.models.after_sales_service import RepairOrder
+
+        existing = await RepairOrder.filter(
+            tenant_id=tenant_id,
+            after_sales_ticket_id=ticket_id,
+            deleted_at__isnull=True,
+        ).first()
+        return existing.order_code if existing else None
 
     @staticmethod
     async def _create_document_relation(
@@ -579,6 +597,22 @@ class AfterSalesTicketService:
             if await cls._has_returnable_qty(tenant_id, so_id):
                 returnable_so_ids.add(so_id)
 
+        repair_code_by_ticket: dict[int, str] = {}
+        repair_ticket_ids = [
+            r.id for r in rows if str(r.request_type or "").strip() == "维修"
+        ]
+        if repair_ticket_ids:
+            from apps.kuaizhizao.models.after_sales_service import RepairOrder
+
+            repairs = await RepairOrder.filter(
+                tenant_id=tenant_id,
+                after_sales_ticket_id__in=repair_ticket_ids,
+                deleted_at__isnull=True,
+            )
+            for repair in repairs:
+                if repair.after_sales_ticket_id and repair.after_sales_ticket_id not in repair_code_by_ticket:
+                    repair_code_by_ticket[repair.after_sales_ticket_id] = repair.order_code
+
         return AfterSalesTicketListEnvelope(
             items=[
                 await cls._to_response(
@@ -586,6 +620,11 @@ class AfterSalesTicketService:
                     items_by_ticket.get(r.id, []),
                     has_returnable_qty=bool(
                         r.sales_order_id and int(r.sales_order_id) in returnable_so_ids
+                    ),
+                    existing_repair_order_code=(
+                        repair_code_by_ticket.get(r.id, "")
+                        if str(r.request_type or "").strip() == "维修"
+                        else None
                     ),
                 )
                 for r in rows
@@ -861,16 +900,16 @@ class AfterSalesTicketService:
         ).first()
         if not row:
             raise NotFoundError(f"售后服务工单不存在: {ticket_id}")
-        if str(row.request_type or "").strip() != "维修":
-            raise ValidationError("仅维修类型工单可下推维修单")
-        if row.status == "已关闭":
-            raise ValidationError("已关闭的工单不可下推维修单")
-
         existing = await RepairOrder.filter(
             tenant_id=tenant_id,
             after_sales_ticket_id=ticket_id,
             deleted_at__isnull=True,
         ).first()
+        assert_after_sales_ticket_capability(
+            row,
+            "push_repair_order",
+            existing_repair_order_code=existing.order_code if existing else None,
+        )
         if existing:
             raise BusinessLogicError(f"该工单已存在维修单: {existing.order_code}")
 

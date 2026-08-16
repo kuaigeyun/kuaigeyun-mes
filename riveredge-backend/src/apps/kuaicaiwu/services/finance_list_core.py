@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, time as dt_time
+from datetime import date, datetime, time as dt_time, timedelta
 from typing import List, Optional, Tuple
 
 from tortoise.expressions import Q
@@ -11,6 +11,47 @@ from apps.master_data.services.master_data_list_core import (
     apply_master_crud_created_date_range,
     apply_master_crud_updated_date_range,
 )
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date
+
+FINANCE_AGING_BUCKETS = frozenset({"within_30", "31_60", "61_90", "over_90"})
+
+
+def apply_finance_aging_list_filters(
+    query,
+    *,
+    aging_bucket: Optional[str] = None,
+    overdue_only: bool = False,
+):
+    """按账龄区间或逾期筛选 AR/AP 列表（与 get_*_aging_analysis 口径一致）。"""
+    bucket = str(aging_bucket).strip() if aging_bucket else None
+    if bucket and bucket not in FINANCE_AGING_BUCKETS:
+        bucket = None
+    if not bucket and not overdue_only:
+        return query
+
+    query = query.filter(remaining_amount__gt=0)
+    today = to_site_date(resolve_business_datetime())
+
+    if overdue_only:
+        query = query.filter(due_date__lt=today)
+
+    if bucket == "within_30":
+        query = query.filter(due_date__gte=today - timedelta(days=30))
+    elif bucket == "31_60":
+        query = query.filter(
+            due_date__gte=today - timedelta(days=60),
+            due_date__lte=today - timedelta(days=31),
+        )
+    elif bucket == "61_90":
+        query = query.filter(
+            due_date__gte=today - timedelta(days=90),
+            due_date__lte=today - timedelta(days=61),
+        )
+    elif bucket == "over_90":
+        query = query.filter(due_date__lte=today - timedelta(days=91))
+
+    return query
+
 
 FINANCE_AR_AP_SORT_DB_COLS = frozenset({
     "receivable_code",

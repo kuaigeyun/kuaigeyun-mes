@@ -29,7 +29,6 @@ const ReceiptsPage = lazy(() => import('./pages/finance-management/receipts'));
 const PaymentsPage = lazy(() => import('./pages/finance-management/payments'));
 
 // 成本管理页面
-const CostCenterDashboardPage = lazy(() => import('./pages/cost-management/dashboard'));
 const CostRulesPage = lazy(() => import('./pages/cost-management/cost-rules'));
 const CostCalculationsPage = lazy(() => import('./pages/cost-management/cost-calculations'));
 const CostDetailsPage = lazy(() => import('./pages/cost-management/cost-details'));
@@ -40,15 +39,30 @@ const MonthlySettlementPage = lazy(() => import('./pages/cost-management/monthly
 
 // 管理报表
 const FinanceCenterDashboard = lazy(() => import('./pages/finance-management/dashboard'));
-const ManagementDashboard = lazy(() => import('./pages/management-dashboard'));
 const MarginReportPage = lazy(() => import('./pages/management-analysis/margin-report'));
 const SettlementPage = lazy(() => import('./pages/finance-management/settlement'));
 const PartnerStatementsPage = lazy(() => import('./pages/finance-management/partner-statements'));
 const PartnerStatementDetailPage = lazy(() => import('./pages/finance-management/partner-statements/detail'));
 const DocumentReconciliationPage = lazy(() => import('./pages/finance-management/document-reconciliation'));
 const BankAccountsPage = lazy(() => import('./pages/finance-management/bank-accounts'));
+const NotesReceivablePage = lazy(() => import('./pages/finance-management/notes-receivable'));
+const NotesPayablePage = lazy(() => import('./pages/finance-management/notes-payable'));
 const PrepaymentsPage = lazy(() => import('./pages/finance-management/prepayments'));
 const StandardCostsPage = lazy(() => import('./pages/cost-management/standard-costs'));
+
+// 总账管理
+const GlChartOfAccountsPage = lazy(() => import('./pages/gl-management/chart-of-accounts'));
+const GlSettingsPage = lazy(() => import('./pages/gl-management/settings'));
+const GlOpeningBalancesPage = lazy(() => import('./pages/gl-management/opening-balances'));
+const GlVouchersPage = lazy(() => import('./pages/gl-management/vouchers'));
+const GlBooksPage = lazy(() => import('./pages/gl-management/books'));
+const GlFinancialStatementsPage = lazy(() => import('./pages/gl-management/financial-statements'));
+const GlPeriodClosePage = lazy(() => import('./pages/gl-management/period-close'));
+const GlCashierPage = lazy(() => import('./pages/gl-management/cashier'));
+
+const TaxSettingsPage = lazy(() => import('./pages/tax-management/settings'));
+const VatLedgerPage = lazy(() => import('./pages/tax-management/vat-ledger'));
+const InputCertificationPage = lazy(() => import('./pages/tax-management/input-certification'));
 
 const KuaicaiwuApp: React.FC = () => {
   return (
@@ -75,10 +89,15 @@ const KuaicaiwuApp: React.FC = () => {
       />
       <Route path="finance-management/document-reconciliation" element={withPageSuspense(DocumentReconciliationPage)} />
       <Route path="finance-management/bank-accounts" element={withPageSuspense(BankAccountsPage)} />
+      <Route path="finance-management/notes-receivable" element={withPageSuspense(NotesReceivablePage)} />
+      <Route path="finance-management/notes-payable" element={withPageSuspense(NotesPayablePage)} />
       <Route path="finance-management/prepayments" element={withPageSuspense(PrepaymentsPage)} />
 
       {/* 成本管理路由 */}
-      <Route path="cost-management/dashboard" element={withPageSuspense(CostCenterDashboardPage)} />
+      <Route
+        path="cost-management/dashboard"
+        element={<Navigate to="/apps/kuaicaiwu/finance-management/dashboard" replace />}
+      />
       <Route path="cost-management/cost-rules" element={withPageSuspense(CostRulesPage)} />
       <Route path="cost-management/cost-calculations" element={withPageSuspense(CostCalculationsPage)} />
       <Route path="cost-management/cost-details" element={withPageSuspense(CostDetailsPage)} />
@@ -103,8 +122,37 @@ const KuaicaiwuApp: React.FC = () => {
       />
       <Route path="cost-management/monthly-settlement" element={withPageSuspense(MonthlySettlementPage)} />
       <Route path="cost-management/standard-costs" element={withPageSuspense(StandardCostsPage)} />
-      <Route path="management-dashboard" element={withPageSuspense(ManagementDashboard)} />
+      <Route
+        path="management-dashboard"
+        element={<Navigate to="/apps/kuaicaiwu/finance-management/dashboard" replace />}
+      />
       <Route path="management-analysis/margin-report" element={withPageSuspense(MarginReportPage)} />
+
+      {/* 总账管理路由 */}
+      <Route path="gl-management/chart-of-accounts" element={withPageSuspense(GlChartOfAccountsPage)} />
+      <Route path="gl-management/settings" element={withPageSuspense(GlSettingsPage)} />
+      <Route path="gl-management/opening-balances" element={withPageSuspense(GlOpeningBalancesPage)} />
+      <Route path="gl-management/vouchers" element={withPageSuspense(GlVouchersPage)} />
+      <Route path="gl-management/books" element={withPageSuspense(GlBooksPage)} />
+      <Route
+        path="gl-management/financial-statements/balance-sheet"
+        element={withPageSuspense(GlFinancialStatementsPage)}
+      />
+      <Route
+        path="gl-management/financial-statements/income"
+        element={withPageSuspense(GlFinancialStatementsPage)}
+      />
+      <Route
+        path="gl-management/financial-statements/cash-flow"
+        element={withPageSuspense(GlFinancialStatementsPage)}
+      />
+      <Route path="gl-management/period-close" element={withPageSuspense(GlPeriodClosePage)} />
+      <Route path="gl-management/cashier" element={withPageSuspense(GlCashierPage)} />
+
+      {/* 税务管理 */}
+      <Route path="tax-management/settings" element={withPageSuspense(TaxSettingsPage)} />
+      <Route path="tax-management/vat-ledger" element={withPageSuspense(VatLedgerPage)} />
+      <Route path="tax-management/input-certification" element={withPageSuspense(InputCertificationPage)} />
 
       {/* 默认路由 */}
       <Route path="" element={

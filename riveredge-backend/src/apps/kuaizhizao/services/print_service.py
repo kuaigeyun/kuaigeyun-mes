@@ -56,6 +56,8 @@ from apps.kuaizhizao.models.other_inbound_item import OtherInboundItem
 from apps.kuaizhizao.models.other_outbound import OtherOutbound
 from apps.kuaizhizao.models.other_outbound_item import OtherOutboundItem
 from apps.kuaizhizao.models.quotation import Quotation
+from apps.kuaizhizao.models.sales_review import SalesReview
+from apps.kuaizhizao.models.sales_review_item import SalesReviewItem
 from apps.kuaizhizao.models.quotation_item import QuotationItem
 from apps.kuaizhizao.models.sales_contract import SalesContract
 from apps.kuaizhizao.models.sales_contract_item import SalesContractItem
@@ -663,6 +665,7 @@ class DocumentPrintService:
         "other_inbound": "OTHER_INBOUND_PRINT",
         "other_outbound": "OTHER_OUTBOUND_PRINT",
         "quotation": "QUOTATION_PRINT",
+        "sales_review": "SALES_REVIEW_PRINT",
         "sales_contract": "SALES_CONTRACT_PRINT",
         "material_borrow": "MATERIAL_BORROW_PRINT",
         "material_return": "MATERIAL_RETURN_PRINT",
@@ -1144,6 +1147,14 @@ class DocumentPrintService:
                 document_type, document, await self._format_other_outbound_data(document)
             )
         
+        elif document_type == "sales_review":
+            document = await SalesReview.get_or_none(
+                tenant_id=tenant_id, id=document_id, deleted_at__isnull=True
+            )
+            if not document:
+                raise NotFoundError(f"订单评审不存在: {document_id}")
+            return await self._format_sales_review_data(document)
+
         elif document_type == "quotation":
             document = await Quotation.get_or_none(tenant_id=tenant_id, id=document_id, deleted_at__isnull=True)
             if not document:
@@ -1530,6 +1541,57 @@ class DocumentPrintService:
             "receiver_name": receipt.receiver_name,
             "receipt_time": to_api_isoformat(receipt.receipt_time) if receipt.receipt_time else None,
             "created_at": to_api_isoformat(receipt.created_at) if receipt.created_at else None,
+            "items": items_data,
+        }
+
+    async def _format_sales_review_data(self, review: SalesReview) -> Dict[str, Any]:
+        """格式化订单评审打印数据"""
+        items = await SalesReviewItem.filter(
+            tenant_id=review.tenant_id, sales_review_id=review.id
+        ).order_by("line_no").all()
+        items_data = [
+            {
+                "line_no": i.line_no,
+                "material_code": i.material_code,
+                "material_name": i.material_name,
+                "material_spec": i.material_spec,
+                "material_unit": i.material_unit,
+                "quantity": str(i.quantity),
+                "unit_price": str(i.unit_price),
+                "amount": str(i.amount),
+                "tech_requirements": i.tech_requirements,
+                "notes": i.notes,
+            }
+            for i in items
+        ]
+        return {
+            "document_type": "sales_review",
+            "code": review.review_code,
+            "review_code": review.review_code,
+            "customer_name": review.customer_name,
+            "customer_code": review.customer_code,
+            "customer_contact": review.customer_contact,
+            "customer_phone": review.customer_phone,
+            "project_name": review.project_name,
+            "review_date": to_api_isoformat(review.review_date) if review.review_date else None,
+            "delivery_date": to_api_isoformat(review.delivery_date) if review.delivery_date else None,
+            "urgency": review.urgency,
+            "risk_level": review.risk_level,
+            "settlement_method": review.settlement_method,
+            "payment_cycle": review.payment_cycle,
+            "delivery_location": review.delivery_location,
+            "transport_method": review.transport_method,
+            "status": review.status,
+            "review_round": review.review_round,
+            "salesman_name": review.salesman_name,
+            "quotation_code": review.quotation_code,
+            "sales_order_code": review.sales_order_code,
+            "total_quantity": str(review.total_quantity),
+            "total_amount": str(review.total_amount),
+            "sales_opinion": review.sales_opinion,
+            "final_conclusion": review.final_conclusion,
+            "remarks": review.remarks,
+            "created_at": to_api_isoformat(review.created_at) if review.created_at else None,
             "items": items_data,
         }
 

@@ -310,7 +310,7 @@ export interface PushToWorkOrderFromContractPayload {
   selected_item_ids?: number[];
   release_lines?: { item_id: number; release_quantity: number }[];
   push_mode?: 'draft' | 'confirm';
-  work_order_granularity?: 'grouped' | 'per_unit';
+  work_order_granularity?: 'grouped' | 'peer_group';
 }
 
 export interface SalesContractPushPreviewItem {

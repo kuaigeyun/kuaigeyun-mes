@@ -38,6 +38,7 @@ class QuotationItem(BaseModel):
     )
 
     variant_attributes = fields.JSONField(null=True, description="属性组合（临时组合）")
+    pricing_snapshot = fields.JSONField(null=True, description="行情定价取价快照")
 
     # 交货信息
     delivery_date = fields.DateField(null=True, description="预计交货日期")

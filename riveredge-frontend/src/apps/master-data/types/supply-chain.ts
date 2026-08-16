@@ -151,6 +151,13 @@ export interface Supplier extends PartnerInvoiceAndExtendedFields {
   buyerId?: number;
   buyerName?: string;
   isActive: boolean;
+  /** 准入状态 potential/qualifying/approved/suspended/eliminated */
+  qualificationStatus?: string;
+  /** 资质清单 */
+  qualifications?: Array<{ name?: string; expiresAt?: string; remark?: string }>;
+  ratingGrade?: string;
+  ratingScore?: number | string;
+  ratedAt?: string;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -171,6 +178,8 @@ export interface SupplierCreate extends PartnerInvoiceAndExtendedFields {
   buyerId?: number;
   buyerName?: string;
   isActive?: boolean;
+  qualificationStatus?: string;
+  qualifications?: Array<{ name?: string; expiresAt?: string; remark?: string }>;
 }
 
 export interface SupplierUpdate extends PartnerInvoiceAndExtendedFields {
@@ -188,6 +197,9 @@ export interface SupplierUpdate extends PartnerInvoiceAndExtendedFields {
   buyerId?: number;
   buyerName?: string;
   isActive?: boolean;
+  qualificationStatus?: string;
+  qualifications?: Array<{ name?: string; expiresAt?: string; remark?: string }>;
+  ratingGrade?: string;
 }
 
 export interface SupplierListParams {
@@ -195,6 +207,7 @@ export interface SupplierListParams {
   limit?: number;
   category?: string;
   isActive?: boolean;
+  qualificationStatus?: string;
   keyword?: string;
   buyerId?: number;
   code?: string;

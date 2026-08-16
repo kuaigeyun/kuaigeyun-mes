@@ -110,7 +110,24 @@ class Supplier(BaseModel):
     
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
-    
+
+    # 准入与评级（轻 SRM）
+    qualification_status = fields.CharField(
+        max_length=20,
+        default="approved",
+        description="准入状态：potential/qualifying/approved/suspended/eliminated",
+    )
+    qualifications = fields.JSONField(
+        null=True,
+        default=list,
+        description="资质清单 JSON：[{name, expires_at, remark}]",
+    )
+    rating_grade = fields.CharField(max_length=8, null=True, description="评级等级 A/B/C/D")
+    rating_score = fields.DecimalField(
+        max_digits=8, decimal_places=2, null=True, description="综合评分 0-100"
+    )
+    rated_at = fields.DatetimeField(null=True, description="最近评级时间")
+
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
     

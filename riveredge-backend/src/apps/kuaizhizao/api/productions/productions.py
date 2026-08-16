@@ -391,6 +391,14 @@ async def list_sales_forecasts(
     forecast_name: Optional[str] = Query(None, description="预测名称（模糊）"),
     order_by: Optional[str] = Query(None, description="排序字段，如 start_date、-updated_at（前缀-表示降序）"),
     include_items: bool = Query(False, description="是否包含明细"),
+    pullable_only: Optional[bool] = Query(
+        None,
+        description="仅可加载建单；需配合 pull_target",
+    ),
+    pull_target: Optional[str] = Query(
+        None,
+        description="加载目标：demand_computation；与 pullable_only 组合使用",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> SalesForecastListResult:
@@ -421,6 +429,8 @@ async def list_sales_forecasts(
         forecast_name=forecast_name,
         order_by=safe_order_by,
         include_items=include_items,
+        pullable_only=pullable_only,
+        pull_target=pull_target,
     )
     return SalesForecastListResult(**result)
     

@@ -14,6 +14,7 @@ from apps.kuaioa.schemas.training import (
     WorkLicenseUpdate,
 )
 from apps.kuaioa.services.kuaioa_list_core import (
+    apply_create_audit_by_user_id,
     build_keyword_q,
     generate_daily_code,
     model_to_dict,
@@ -50,20 +51,20 @@ class TrainingPlanService:
         plan_code = await generate_daily_code(
             KuaioaTrainingPlan, tenant_id, "TP", code_field="plan_code"
         )
-        row = await KuaioaTrainingPlan.create(
-            tenant_id=tenant_id,
-            plan_code=plan_code,
-            plan_name=data.plan_name.strip(),
-            plan_type=data.plan_type,
-            department_name=data.department_name,
-            planned_start_date=parse_optional_date(data.planned_start_date),
-            planned_end_date=parse_optional_date(data.planned_end_date),
-            description=data.description,
-            reminder_days=data.reminder_days,
-            status="draft",
-            created_by=user_id,
-            updated_by=user_id,
-        )
+        create_payload: dict[str, Any] = {
+            "tenant_id": tenant_id,
+            "plan_code": plan_code,
+            "plan_name": data.plan_name.strip(),
+            "plan_type": data.plan_type,
+            "department_name": data.department_name,
+            "planned_start_date": parse_optional_date(data.planned_start_date),
+            "planned_end_date": parse_optional_date(data.planned_end_date),
+            "description": data.description,
+            "reminder_days": data.reminder_days,
+            "status": "draft",
+        }
+        await apply_create_audit_by_user_id(create_payload, user_id)
+        row = await KuaioaTrainingPlan.create(**create_payload)
         return model_to_dict(row)
 
     async def update_plan(
@@ -80,7 +81,7 @@ class TrainingPlanService:
                 payload[key] = parse_optional_date(payload[key])
         for key, value in payload.items():
             setattr(row, key, value)
-        touch_updated(row, user_id)
+        await touch_updated(row, user_id)
         await row.save()
         return model_to_dict(row)
 
@@ -91,7 +92,7 @@ class TrainingPlanService:
         if not row:
             raise NotFoundError("培训计划不存在")
         row.deleted_at = resolve_business_datetime()
-        touch_updated(row, user_id)
+        await touch_updated(row, user_id)
         await row.save()
 
 
@@ -121,23 +122,23 @@ class TrainingRecordService:
         record_code = await generate_daily_code(
             KuaioaTrainingRecord, tenant_id, "TR", code_field="record_code"
         )
-        row = await KuaioaTrainingRecord.create(
-            tenant_id=tenant_id,
-            record_code=record_code,
-            plan_id=data.plan_id,
-            training_name=data.training_name.strip(),
-            trainee_id=data.trainee_id,
-            trainee_name=data.trainee_name,
-            trainer_name=data.trainer_name,
-            training_date=parse_optional_date(data.training_date),
-            theory_score=data.theory_score,
-            practice_score=data.practice_score,
-            is_passed=data.is_passed,
-            notes=data.notes,
-            status="completed" if data.is_passed else "draft",
-            created_by=user_id,
-            updated_by=user_id,
-        )
+        create_payload: dict[str, Any] = {
+            "tenant_id": tenant_id,
+            "record_code": record_code,
+            "plan_id": data.plan_id,
+            "training_name": data.training_name.strip(),
+            "trainee_id": data.trainee_id,
+            "trainee_name": data.trainee_name,
+            "trainer_name": data.trainer_name,
+            "training_date": parse_optional_date(data.training_date),
+            "theory_score": data.theory_score,
+            "practice_score": data.practice_score,
+            "is_passed": data.is_passed,
+            "notes": data.notes,
+            "status": "completed" if data.is_passed else "draft",
+        }
+        await apply_create_audit_by_user_id(create_payload, user_id)
+        row = await KuaioaTrainingRecord.create(**create_payload)
         if row.is_passed:
             await self._maybe_create_work_license(tenant_id, row, user_id)
         return model_to_dict(row)
@@ -157,7 +158,7 @@ class TrainingRecordService:
             setattr(row, key, value)
         if row.is_passed:
             row.status = "completed"
-        touch_updated(row, user_id)
+        await touch_updated(row, user_id)
         await row.save()
         if row.is_passed:
             await self._maybe_create_work_license(tenant_id, row, user_id)
@@ -170,7 +171,7 @@ class TrainingRecordService:
         if not row:
             raise NotFoundError("培训记录不存在")
         row.deleted_at = resolve_business_datetime()
-        touch_updated(row, user_id)
+        await touch_updated(row, user_id)
         await row.save()
 
     async def _maybe_create_work_license(
@@ -189,18 +190,18 @@ class TrainingRecordService:
         license_code = await generate_daily_code(
             KuaioaWorkLicense, tenant_id, "WL", code_field="license_code"
         )
-        await KuaioaWorkLicense.create(
-            tenant_id=tenant_id,
-            license_code=license_code,
-            license_name=record.training_name,
-            license_type="work",
-            holder_id=record.trainee_id,
-            holder_name=record.trainee_name,
-            issue_date=record.training_date or to_site_date(resolve_business_datetime()),
-            status="active",
-            created_by=user_id,
-            updated_by=user_id,
-        )
+        wl_payload: dict[str, Any] = {
+            "tenant_id": tenant_id,
+            "license_code": license_code,
+            "license_name": record.training_name,
+            "license_type": "work",
+            "holder_id": record.trainee_id,
+            "holder_name": record.trainee_name,
+            "issue_date": record.training_date or to_site_date(resolve_business_datetime()),
+            "status": "active",
+        }
+        await apply_create_audit_by_user_id(wl_payload, user_id)
+        await KuaioaWorkLicense.create(**wl_payload)
 
 
 class WorkLicenseService:
@@ -229,22 +230,22 @@ class WorkLicenseService:
         license_code = await generate_daily_code(
             KuaioaWorkLicense, tenant_id, "WL", code_field="license_code"
         )
-        row = await KuaioaWorkLicense.create(
-            tenant_id=tenant_id,
-            license_code=license_code,
-            license_name=data.license_name.strip(),
-            license_type=data.license_type,
-            holder_id=data.holder_id,
-            holder_name=data.holder_name,
-            department_name=data.department_name,
-            issue_date=parse_optional_date(data.issue_date),
-            expiry_date=parse_optional_date(data.expiry_date),
-            reminder_days=data.reminder_days,
-            notes=data.notes,
-            status="active",
-            created_by=user_id,
-            updated_by=user_id,
-        )
+        create_payload: dict[str, Any] = {
+            "tenant_id": tenant_id,
+            "license_code": license_code,
+            "license_name": data.license_name.strip(),
+            "license_type": data.license_type,
+            "holder_id": data.holder_id,
+            "holder_name": data.holder_name,
+            "department_name": data.department_name,
+            "issue_date": parse_optional_date(data.issue_date),
+            "expiry_date": parse_optional_date(data.expiry_date),
+            "reminder_days": data.reminder_days,
+            "notes": data.notes,
+            "status": "active",
+        }
+        await apply_create_audit_by_user_id(create_payload, user_id)
+        row = await KuaioaWorkLicense.create(**create_payload)
         return model_to_dict(row)
 
     async def update_license(
@@ -261,7 +262,7 @@ class WorkLicenseService:
                 payload[key] = parse_optional_date(payload[key])
         for key, value in payload.items():
             setattr(row, key, value)
-        touch_updated(row, user_id)
+        await touch_updated(row, user_id)
         await row.save()
         return model_to_dict(row)
 
@@ -272,7 +273,7 @@ class WorkLicenseService:
         if not row:
             raise NotFoundError("上岗证不存在")
         row.deleted_at = resolve_business_datetime()
-        touch_updated(row, user_id)
+        await touch_updated(row, user_id)
         await row.save()
 
     async def list_expiring(self, tenant_id: int, within_days: int = 30) -> list[dict[str, Any]]:
@@ -288,7 +289,8 @@ class WorkLicenseService:
             if not row.expiry_date:
                 continue
             delta = (row.expiry_date - today).days
-            if delta <= within_days:
+            reminder = row.reminder_days or within_days
+            if delta <= reminder:
                 item = model_to_dict(row)
                 item["days_until_expiry"] = delta
                 result.append(item)

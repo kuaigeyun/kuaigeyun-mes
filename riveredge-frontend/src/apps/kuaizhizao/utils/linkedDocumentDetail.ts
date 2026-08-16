@@ -19,6 +19,16 @@ export const LINKED_DOCUMENT_DETAIL_TYPES = new Set([
   'demand_computation',
   'work_order',
   'freight_order',
+  'after_sales_ticket',
+  'install_execution',
+  'service_asset',
+  'repair_order',
+  'service_dispatch',
+  'spare_part_requisition',
+  'service_settlement',
+  'customer_return_visit',
+  'reporting_record',
+  'performance_summary',
 ]);
 
 export type LinkedDocumentType =
@@ -32,7 +42,17 @@ export type LinkedDocumentType =
   | 'purchase_requisition'
   | 'demand_computation'
   | 'work_order'
-  | 'freight_order';
+  | 'freight_order'
+  | 'after_sales_ticket'
+  | 'install_execution'
+  | 'service_asset'
+  | 'repair_order'
+  | 'service_dispatch'
+  | 'spare_part_requisition'
+  | 'service_settlement'
+  | 'customer_return_visit'
+  | 'reporting_record'
+  | 'performance_summary';
 
 /** 后端偶发别名 → 标准 snake */
 const LINKED_DOCUMENT_TYPE_ALIASES: Record<string, string> = {
@@ -45,6 +65,16 @@ const LINKED_DOCUMENT_TYPE_ALIASES: Record<string, string> = {
   purchasereceipt: 'purchase_receipt',
   workorder: 'work_order',
   freightorder: 'freight_order',
+  aftersalesticket: 'after_sales_ticket',
+  installexecution: 'install_execution',
+  serviceasset: 'service_asset',
+  repairorder: 'repair_order',
+  servicedispatch: 'service_dispatch',
+  sparepartrequisition: 'spare_part_requisition',
+  servicesettlement: 'service_settlement',
+  customerreturnvisit: 'customer_return_visit',
+  reportingrecord: 'reporting_record',
+  performancesummary: 'performance_summary',
 };
 
 /**

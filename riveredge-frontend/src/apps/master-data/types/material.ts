@@ -182,6 +182,12 @@ export interface Material {
   deletedAt?: string;
   /** 树形列表：属性 SKU 子行 */
   children?: Material[];
+  /** 详情接口：无 BOM/批次/业务单据引用时可改主编号 */
+  mainCodeEditable?: boolean;
+  main_code_editable?: boolean;
+  /** 主编号锁定原因（后端摘要） */
+  mainCodeLockReason?: string;
+  main_code_lock_reason?: string;
 }
 
 // 编号映射类型定义
@@ -234,6 +240,14 @@ export interface MaterialDefaults {
   defaultSalePrice?: number; // 默认销售价格
   /** 默认销售价格价类：tax_inclusive 含税 / tax_exclusive 不含税，新建默认含税 */
   defaultSalePriceType?: 'tax_inclusive' | 'tax_exclusive';
+  /** 取价方式：固定价 / 行情定价 */
+  salePriceMethod?: 'fixed' | 'market';
+  marketBaseQuoteCode?: string;
+  marketBaseQuoteName?: string;
+  marketQtyFactor?: number;
+  marketFixedSalePrice?: number;
+  marketFloatFormula?: string;
+  marketProcessFee?: number;
   defaultSaleUnit?: string; // 默认销售单位
   defaultCustomers?: Array<{
     customerId: number;
@@ -950,6 +964,10 @@ export interface BOMWhereUsedItem {
   isDefault?: boolean;
   isObsolete?: boolean;
   bomCode?: string | null;
+  /** 相对起始物料的层级：直接父件=1 */
+  level?: number;
+  /** 用途路径，如 原料码 > 半成品码 > 成品码 */
+  path?: string | null;
 }
 
 export interface BOMWhereUsedResult {
@@ -957,6 +975,7 @@ export interface BOMWhereUsedResult {
   componentCode?: string | null;
   componentName?: string | null;
   recursive: boolean;
+  topLevelOnly?: boolean;
   items: BOMWhereUsedItem[];
   total: number;
 }

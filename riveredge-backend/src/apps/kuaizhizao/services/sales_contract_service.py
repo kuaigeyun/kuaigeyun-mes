@@ -1071,7 +1071,8 @@ class SalesContractService(AppBaseService[SalesContract]):
             return await WorkOrder.filter(
                 tenant_id=tenant_id, id=tid, deleted_at__isnull=True
             ).exists()
-        return True
+        # 未知下游类型不得假定仍存活，否则会永久挡住释放回滚
+        return False
 
     async def _contract_has_active_downstream(
         self, tenant_id: int, contract_id: int
@@ -1096,6 +1097,14 @@ class SalesContractService(AppBaseService[SalesContract]):
                 return True
         return False
 
+    @staticmethod
+    def _status_after_release_cleared(status: Optional[str]) -> Optional[str]:
+        """无活跃下游且释放已清零时，恢复可撤销审核的生效态（对齐销售订单回滚）。"""
+        st = (status or "").strip()
+        if st in ("执行中", "已完成", "已关闭"):
+            return "已生效"
+        return None
+
     async def _reset_contract_release_state(
         self,
         contract: SalesContract,
@@ -1104,8 +1113,9 @@ class SalesContractService(AppBaseService[SalesContract]):
     ) -> None:
         contract.released_quantity = Decimal("0")
         contract.released_amount = Decimal("0")
-        if (contract.status or "") == "执行中":
-            contract.status = "已生效"
+        reopened = self._status_after_release_cleared(contract.status)
+        if reopened:
+            contract.status = reopened
         if operator_id:
             contract.updated_by = operator_id
         await contract.save(
@@ -1127,20 +1137,20 @@ class SalesContractService(AppBaseService[SalesContract]):
         *,
         operator_id: Optional[int] = None,
     ) -> None:
-        rel_qty = Decimal(str(contract.released_quantity or 0))
-        rel_amt = Decimal(str(contract.released_amount or 0))
-        if rel_qty <= 0 and rel_amt <= 0:
-            if (contract.status or "") == "执行中":
-                contract.status = "已生效"
-                if operator_id:
-                    contract.updated_by = operator_id
-                await contract.save(
-                    update_fields=["status", "updated_by", "updated_at"]
-                )
-            return
         if await self._contract_has_active_downstream(contract.tenant_id, int(contract.id)):
             return
-        await self._reset_contract_release_state(contract, operator_id=operator_id)
+        rel_qty = Decimal(str(contract.released_quantity or 0))
+        rel_amt = Decimal(str(contract.released_amount or 0))
+        if rel_qty > 0 or rel_amt > 0:
+            await self._reset_contract_release_state(contract, operator_id=operator_id)
+            return
+        reopened = self._status_after_release_cleared(contract.status)
+        if not reopened:
+            return
+        contract.status = reopened
+        if operator_id:
+            contract.updated_by = operator_id
+        await contract.save(update_fields=["status", "updated_by", "updated_at"])
 
     async def _reconcile_stale_contract_releases(
         self, tenant_id: int, contracts: List[SalesContract]
@@ -1983,7 +1993,7 @@ class SalesContractService(AppBaseService[SalesContract]):
             raw_push_mode = await self.business_config_service.get_push_default_mode(tenant_id)
         push_as_confirm = raw_push_mode == "confirm"
         raw_granularity = (work_order_granularity or "").strip().lower()
-        if raw_granularity not in ("grouped", "per_unit"):
+        if raw_granularity not in ("grouped", "peer_group"):
             raw_granularity = "grouped"
 
         from datetime import datetime
@@ -2139,20 +2149,30 @@ class SalesContractService(AppBaseService[SalesContract]):
             total_qty_dec = Decimal(str(info["quantity"] or 0))
             if total_qty_dec <= 0:
                 continue
-            if raw_granularity == "per_unit":
-                if total_qty_dec != total_qty_dec.to_integral_value():
-                    raise BusinessLogicError(
-                        f"物料 {info['material_code'] or info['material_name']} 下推数量为 {total_qty_dec}，"
-                        "“单台一个工单”仅支持整数数量"
-                    )
-                unit_count = int(total_qty_dec)
-                for _ in range(unit_count):
-                    await _create_one_work_order(info, Decimal("1"))
-            else:
-                await _create_one_work_order(info, total_qty_dec)
+            await _create_one_work_order(info, total_qty_dec)
 
         if not work_orders:
             raise BusinessLogicError("所选明细的本次下推数量均为 0，无法生成工单")
+
+        work_order_group: Optional[Dict[str, Any]] = None
+        if raw_granularity == "peer_group":
+            if len(work_orders) < 2:
+                raise BusinessLogicError(
+                    "平级组工单至少需要生成 2 张工单，请多选合同明细或改选普通工单"
+                )
+            from apps.kuaizhizao.services.work_order_group_service import WorkOrderGroupService
+
+            wo_ids = [
+                int(w.id if hasattr(w, "id") else w.get("id"))
+                for w in work_orders
+            ]
+            work_order_group = await WorkOrderGroupService().merge_work_orders_into_group(
+                tenant_id=tenant_id,
+                work_order_ids=wo_ids,
+                root_work_order_id=None,
+                created_by=created_by,
+                remarks=f"由销售合同 {contract.contract_code} 直推平级组",
+            )
 
         await self._apply_release_to_contract(
             contract, order_qty, order_amt, item_qty_map, all_items=all_items
@@ -2160,9 +2180,14 @@ class SalesContractService(AppBaseService[SalesContract]):
 
         return {
             "success": True,
-            "message": f"直推成功，共生成 {len(work_orders)} 个工单（含半成品，采购件自行采购）",
+            "message": (
+                f"直推成功，共生成 {len(work_orders)} 个工单并编入平级组"
+                if work_order_group
+                else f"直推成功，共生成 {len(work_orders)} 个工单（含半成品，采购件自行采购）"
+            ),
             "push_mode": raw_push_mode,
             "work_order_granularity": raw_granularity,
+            "work_order_group": work_order_group,
             "target_documents": [
                 {
                     "type": "work_order",

@@ -9,6 +9,34 @@ from tortoise import fields
 from core.models.base import BaseModel
 
 
+class DrawingFolder(BaseModel):
+    """图纸仓库文件夹（层级分类，挂在现有图纸页左树）"""
+
+    class Meta:
+        table = "apps_master_data_drawing_folders"
+        table_description = "基础数据管理 - 图纸仓库文件夹"
+        indexes = [
+            ("tenant_id",),
+            ("uuid",),
+            ("parent_id",),
+            ("sort_order",),
+        ]
+
+    id = fields.IntField(pk=True, description="主键ID")
+    name = fields.CharField(max_length=100, description="文件夹名称")
+    parent_id = fields.IntField(null=True, description="父文件夹ID")
+    sort_order = fields.IntField(default=0, description="排序")
+    is_active = fields.BooleanField(default=True, description="是否启用")
+    deleted_at = fields.DatetimeField(null=True, description="软删除时间")
+    created_by = fields.IntField(null=True, description="创建人ID")
+    created_by_name = fields.CharField(max_length=100, null=True, description="创建人姓名")
+    updated_by = fields.IntField(null=True, description="更新人ID")
+    updated_by_name = fields.CharField(max_length=100, null=True, description="更新人姓名")
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class EngineeringDrawing(BaseModel):
     """工程图纸台账"""
 
@@ -22,6 +50,8 @@ class EngineeringDrawing(BaseModel):
             ("code",),
             ("status",),
             ("drawing_type",),
+            ("folder_id",),
+            ("security_level",),
             ("created_at",),
         ]
 
@@ -38,7 +68,17 @@ class EngineeringDrawing(BaseModel):
     status = fields.CharField(
         max_length=20,
         default="Draft",
-        description="状态：Draft/Released/Obsolete",
+        description="状态：Draft/Editing/Pending/Released/Obsolete",
+    )
+    checked_out_by = fields.IntField(null=True, description="检出人ID")
+    checked_out_by_name = fields.CharField(max_length=100, null=True, description="检出人姓名")
+    checked_out_at = fields.DatetimeField(null=True, description="检出时间")
+    checkout_comment = fields.TextField(null=True, description="检出说明")
+    folder_id = fields.IntField(null=True, description="仓库文件夹ID")
+    security_level = fields.CharField(
+        max_length=20,
+        default="internal",
+        description="密级：public/internal/secret/confidential",
     )
 
     file_uuid = fields.CharField(max_length=36, description="主文件 UUID（core_files）")
@@ -64,3 +104,26 @@ class EngineeringDrawing(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.code}-{self.revision} {self.name}"
+
+
+class DrawingUserClearance(BaseModel):
+    """用户图档密级授权。无行时服务按 public 解释，不在此表兜底。"""
+
+    class Meta:
+        table = "apps_master_data_drawing_user_clearances"
+        table_description = "基础数据管理 - 图档密级授权"
+        unique_together = [("tenant_id", "user_id")]
+        indexes = [("tenant_id",), ("user_id",)]
+
+    id = fields.IntField(pk=True, description="主键ID")
+    user_id = fields.IntField(description="用户ID")
+    user_name = fields.CharField(max_length=100, description="用户姓名")
+    security_level = fields.CharField(
+        max_length=20,
+        description="授权密级：public/internal/secret/confidential",
+    )
+    updated_by = fields.IntField(null=True, description="更新人ID")
+    updated_by_name = fields.CharField(max_length=100, null=True, description="更新人姓名")
+
+    def __str__(self) -> str:
+        return f"{self.user_name}:{self.security_level}"

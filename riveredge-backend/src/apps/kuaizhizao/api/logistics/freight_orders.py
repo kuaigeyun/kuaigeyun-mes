@@ -49,7 +49,9 @@ async def list_freight_orders(
     limit: int = Query(20, ge=1, le=200),
     keyword: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    status_in: Optional[str] = Query(None, description="逗号分隔多状态"),
     business_direction: Optional[str] = Query(None),
+    uuid: Optional[str] = Query(None),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await service.list_orders(
@@ -58,8 +60,26 @@ async def list_freight_orders(
         limit=limit,
         keyword=keyword,
         status=status,
+        status_in=status_in,
         business_direction=business_direction,
+        uuid=uuid,
     )
+
+
+@router.get("/lookup-by-source")
+async def lookup_freight_order_by_source(
+    source_type: str = Query(...),
+    source_id: int = Query(...),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    row = await service.find_order_by_source(
+        tenant_id,
+        source_type=source_type,
+        source_id=source_id,
+    )
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到关联货运单")
+    return row
 
 
 @router.get("/{order_id}")
@@ -198,6 +218,19 @@ async def sign_freight_receipt(
         raise HTTPException(status_code=code, detail=str(e))
 
 
+@router.post("/{order_id}/tracking-events/{event_id}/remove")
+async def delete_tracking_event(
+    order_id: int = Path(...),
+    event_id: int = Path(...),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.delete_tracking_event(tenant_id, order_id, event_id)
+    except (BusinessLogicError, NotFoundError) as e:
+        code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=str(e))
+
+
 @router.post("/{order_id}/tracking-events")
 async def add_tracking_event(
     data: FreightTrackingEventCreate,
@@ -214,8 +247,9 @@ async def add_tracking_event(
             operator_id=current_user.id,
             operator_name=user["name"],
         )
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, NotFoundError) as e:
+        code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=str(e))
 
 
 @router.post("/{order_id}/cancel")

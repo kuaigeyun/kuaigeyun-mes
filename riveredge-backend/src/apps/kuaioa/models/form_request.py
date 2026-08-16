@@ -1,4 +1,4 @@
-"""通用审批申请单模型。"""
+"""自定义审批申请单模型。"""
 
 from tortoise import fields
 
@@ -22,7 +22,7 @@ class KuaioaFormRequest(BaseModel):
 
     class Meta:
         table = "apps_kuaioa_form_requests"
-        table_description = "轻办公 - 通用审批申请单"
+        table_description = "轻办公 - 自定义审批申请单"
         unique_together = (("tenant_id", "request_code"),)
         indexes = [
             ("tenant_id", "status"),

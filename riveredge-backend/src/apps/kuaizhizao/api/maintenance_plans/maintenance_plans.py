@@ -74,6 +74,7 @@ async def list_maintenance_plans(
     created_end_date: Optional[str] = Query(None, description="创建日期止"),
     updated_start_date: Optional[str] = Query(None, description="更新日期起"),
     updated_end_date: Optional[str] = Query(None, description="更新日期止"),
+    uuid: Optional[str] = Query(None, description="维护计划 UUID（精确匹配）"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -99,6 +100,7 @@ async def list_maintenance_plans(
         created_end_date=created_end_date,
         updated_start_date=updated_start_date,
         updated_end_date=updated_end_date,
+        uuid=uuid,
     )
     
     items = [MaintenancePlanService.serialize_plan_response(plan) for plan in plans]

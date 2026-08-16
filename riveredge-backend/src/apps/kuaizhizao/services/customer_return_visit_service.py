@@ -20,7 +20,7 @@ from apps.kuaizhizao.schemas.after_sales_service import (
 )
 from apps.master_data.models.customer import Customer
 from core.utils.timezone_utils import resolve_business_datetime, today_site_str
-from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
 
 
@@ -89,6 +89,14 @@ class CustomerReturnVisitService:
         customer = await cls._load_customer(tenant_id, data.customer_id)
         source_type = (data.source_type or "").strip()
         source_code = await cls._resolve_source_code(tenant_id, source_type, data.source_id)
+        existing = await CustomerReturnVisit.filter(
+            tenant_id=tenant_id,
+            source_type=source_type,
+            source_id=data.source_id,
+            deleted_at__isnull=True,
+        ).first()
+        if existing:
+            raise BusinessLogicError(f"该来源已有回访: {existing.visit_code}")
         visit_method = cls._validate_visit_method(data.visit_method or "电话")
         visited_at = resolve_business_datetime(data.visited_at)
         if data.satisfaction_score is not None and not (1 <= data.satisfaction_score <= 5):

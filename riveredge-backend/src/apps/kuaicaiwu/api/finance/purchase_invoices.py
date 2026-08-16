@@ -219,6 +219,8 @@ async def list_purchase_invoices(
     supplier_name: Optional[str] = Query(None),
     invoice_number: Optional[str] = Query(None),
     review_status: Optional[str] = None,
+    verification_status: Optional[str] = Query(None),
+    tax_period: Optional[str] = Query(None),
     created_start_date: Optional[str] = Query(None),
     created_end_date: Optional[str] = Query(None),
     updated_start_date: Optional[str] = Query(None),
@@ -250,6 +252,8 @@ async def list_purchase_invoices(
         updated_end_date=updated_end_date,
         sort_field=sort_field,
         sort_order=sort_order,
+        verification_status=verification_status,
+        tax_period=tax_period,
     )
     return PurchaseInvoiceListResponse(
         items=invoices,

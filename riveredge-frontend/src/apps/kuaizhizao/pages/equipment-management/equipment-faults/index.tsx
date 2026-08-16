@@ -9,8 +9,8 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useRef, useState, useMemo, useCallback, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -111,6 +111,7 @@ interface EquipmentFault {
 
 const EquipmentFaultsPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = AntdTheme.useToken();
@@ -119,6 +120,8 @@ const EquipmentFaultsPage: React.FC = () => {
   const maintPerms = useResourcePermissions(MAINT_RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const [, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const urlUuidRef = useRef<string | undefined>(undefined);
+  const deepLinkOpenedRef = useRef(false);
 
   // Modal 相关状态（创建/编辑故障记录）
   const [modalVisible, setModalVisible] = useState(false);
@@ -178,11 +181,11 @@ const EquipmentFaultsPage: React.FC = () => {
   const goSourceDocument = (sourceType?: string, sourceUuid?: string) => {
     if (!sourceUuid) return;
     if (sourceType === 'spot_check') {
-      navigate(ROUTES.EQUIPMENT_SPOT_CHECKS);
+      navigate(`${ROUTES.EQUIPMENT_SPOT_CHECKS}?uuid=${encodeURIComponent(sourceUuid)}`);
       return;
     }
     if (sourceType === 'route_patrol') {
-      navigate(ROUTES.EQUIPMENT_ROUTE_PATROLS);
+      navigate(`${ROUTES.EQUIPMENT_ROUTE_PATROLS}?uuid=${encodeURIComponent(sourceUuid)}`);
       return;
     }
   };
@@ -247,6 +250,33 @@ const EquipmentFaultsPage: React.FC = () => {
     },
     [messageApi, openDetail, t],
   );
+
+  useEffect(() => {
+    const uuidFromUrl = searchParams.get('uuid')?.trim() || undefined;
+    urlUuidRef.current = uuidFromUrl;
+    if (!uuidFromUrl) {
+      deepLinkOpenedRef.current = false;
+      actionRef.current?.reload();
+      return;
+    }
+    if (deepLinkOpenedRef.current) {
+      actionRef.current?.reload();
+      return;
+    }
+    deepLinkOpenedRef.current = true;
+    void (async () => {
+      try {
+        const response = await equipmentFaultApi.list({ uuid: uuidFromUrl, skip: 0, limit: 1 });
+        const { data } = normalizeEquipmentListResponse(response);
+        if (data.length > 0) {
+          handleDetail(data[0] as EquipmentFault);
+        }
+      } catch {
+        messageApi.error(t(`${P}.listFailed`));
+      }
+      actionRef.current?.reload();
+    })();
+  }, [searchParams, handleDetail, messageApi, t]);
 
   /**
    * 处理批量删除故障记录（keys 为 uuid 数组）
@@ -744,6 +774,7 @@ const EquipmentFaultsPage: React.FC = () => {
                 skip: (params.current! - 1) * params.pageSize!,
                 limit: params.pageSize,
                 ...listParams,
+                ...(urlUuidRef.current ? { uuid: urlUuidRef.current } : {}),
               });
               const { data, total } = normalizeEquipmentListResponse(response);
               return {

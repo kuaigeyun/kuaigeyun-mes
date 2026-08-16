@@ -712,6 +712,36 @@ async def _dispatch_process_route_change(
     _unsupported("process_route_change", action)
 
 
+async def _dispatch_drawing_change(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.master_data.services.drawing_change_service import DrawingChangeService
+
+    if action == "submit":
+        change = await DrawingChangeService._get_change_or_raise(tenant_id, entity_id)
+        return await DrawingChangeService.submit_change(tenant_id, change.uuid, user_id)
+    if action == "approve":
+        change = await DrawingChangeService._get_change_or_raise(tenant_id, entity_id)
+        return await DrawingChangeService.approve_change(
+            tenant_id, change.uuid, user_id, True, reason
+        )
+    if action == "reject":
+        change = await DrawingChangeService._get_change_or_raise(tenant_id, entity_id)
+        return await DrawingChangeService.approve_change(
+            tenant_id, change.uuid, user_id, False, reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await DrawingChangeService.withdraw_change(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await DrawingChangeService.revoke_change(tenant_id, entity_id, user_id)
+    _unsupported("drawing_change", action)
+
+
 async def _dispatch_freight_bill(
     action: str,
     *,
@@ -786,6 +816,95 @@ async def _dispatch_kuaioa_asset_purchase(
     _unsupported("kuaioa_asset_purchase", action)
 
 
+def _make_kuaioa_dispatch(
+    *,
+    entity_key: str,
+    service_import: str,
+    service_cls: str,
+    get_method: str,
+    submit_method: str,
+    revoke_method: str,
+    decision_import: str,
+    decision_fn: str,
+):
+    async def dispatch(
+        action: str,
+        *,
+        tenant_id: int,
+        entity_id: int,
+        user_id: int,
+        reason: Optional[str],
+    ) -> Any:
+        mod = __import__(service_import, fromlist=[service_cls, decision_fn])
+        svc = getattr(mod, service_cls)()
+        get_fn = getattr(svc, get_method)
+        if action == "submit":
+            return await getattr(svc, submit_method)(tenant_id, entity_id, user_id)
+        if action == "approve":
+            await getattr(mod, decision_fn)(tenant_id, entity_id, True, user_id)
+            return await get_fn(tenant_id, entity_id)
+        if action == "reject":
+            await getattr(mod, decision_fn)(tenant_id, entity_id, False, user_id)
+            return await get_fn(tenant_id, entity_id)
+        if action == "revoke":
+            return await getattr(svc, revoke_method)(tenant_id, entity_id, user_id)
+        _unsupported(entity_key, action)
+
+    return dispatch
+
+
+_dispatch_kuaioa_leave = _make_kuaioa_dispatch(
+    entity_key="kuaioa_leave",
+    service_import="apps.kuaioa.services.leave_service",
+    service_cls="LeaveRequestService",
+    get_method="get_request",
+    submit_method="submit_request",
+    revoke_method="revoke_request",
+    decision_import="apps.kuaioa.services.leave_service",
+    decision_fn="apply_leave_request_decision",
+)
+_dispatch_kuaioa_seal = _make_kuaioa_dispatch(
+    entity_key="kuaioa_seal",
+    service_import="apps.kuaioa.services.seal_service",
+    service_cls="SealRequestService",
+    get_method="get_request",
+    submit_method="submit_request",
+    revoke_method="revoke_request",
+    decision_import="apps.kuaioa.services.seal_service",
+    decision_fn="apply_seal_request_decision",
+)
+_dispatch_kuaioa_special_price = _make_kuaioa_dispatch(
+    entity_key="kuaioa_special_price",
+    service_import="apps.kuaioa.services.collaboration_service",
+    service_cls="SpecialPriceRequestService",
+    get_method="get_request",
+    submit_method="submit_request",
+    revoke_method="revoke_request",
+    decision_import="apps.kuaioa.services.collaboration_service",
+    decision_fn="apply_special_price_decision",
+)
+_dispatch_kuaioa_concession = _make_kuaioa_dispatch(
+    entity_key="kuaioa_concession",
+    service_import="apps.kuaioa.services.collaboration_service",
+    service_cls="ConcessionRequestService",
+    get_method="get_request",
+    submit_method="submit_request",
+    revoke_method="revoke_request",
+    decision_import="apps.kuaioa.services.collaboration_service",
+    decision_fn="apply_concession_decision",
+)
+_dispatch_kuaioa_process_deviation = _make_kuaioa_dispatch(
+    entity_key="kuaioa_process_deviation",
+    service_import="apps.kuaioa.services.collaboration_service",
+    service_cls="ProcessDeviationService",
+    get_method="get_request",
+    submit_method="submit_request",
+    revoke_method="revoke_request",
+    decision_import="apps.kuaioa.services.collaboration_service",
+    decision_fn="apply_process_deviation_decision",
+)
+
+
 HANDLERS: Dict[str, DispatchFn] = {
     "sales_order": _dispatch_sales_order,
     "sales_order_change": _dispatch_sales_order_change,
@@ -813,7 +932,13 @@ HANDLERS: Dict[str, DispatchFn] = {
     "purchase_invoice": _dispatch_purchase_invoice,
     "bom_change": _dispatch_bom_change,
     "process_route_change": _dispatch_process_route_change,
+    "drawing_change": _dispatch_drawing_change,
     "freight_bill": _dispatch_freight_bill,
     "kuaioa_form_request": _dispatch_kuaioa_form_request,
     "kuaioa_asset_purchase": _dispatch_kuaioa_asset_purchase,
+    "kuaioa_leave": _dispatch_kuaioa_leave,
+    "kuaioa_seal": _dispatch_kuaioa_seal,
+    "kuaioa_special_price": _dispatch_kuaioa_special_price,
+    "kuaioa_concession": _dispatch_kuaioa_concession,
+    "kuaioa_process_deviation": _dispatch_kuaioa_process_deviation,
 }

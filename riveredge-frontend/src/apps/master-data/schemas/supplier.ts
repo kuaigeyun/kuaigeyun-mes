@@ -76,6 +76,28 @@ export const supplierFormSchemaBasicTail: FieldConfig[] = [
     labelKey: 'field.supplier.isActive',
     colSpan: 12,
   },
+  {
+    name: 'qualificationStatus',
+    type: 'select',
+    labelKey: 'field.supplier.qualificationStatus',
+    placeholderKey: 'field.supplier.qualificationStatusPlaceholder',
+    colSpan: 12,
+    required: true,
+    options: [
+      { value: 'potential', labelKey: 'field.supplier.qualification.potential' },
+      { value: 'qualifying', labelKey: 'field.supplier.qualification.qualifying' },
+      { value: 'approved', labelKey: 'field.supplier.qualification.approved' },
+      { value: 'suspended', labelKey: 'field.supplier.qualification.suspended' },
+      { value: 'eliminated', labelKey: 'field.supplier.qualification.eliminated' },
+    ],
+  },
+  {
+    name: 'ratingGrade',
+    type: 'text',
+    labelKey: 'field.supplier.ratingGrade',
+    colSpan: 12,
+    fieldProps: { disabled: true, placeholder: '保存后可点「重新评级」' },
+  },
 ];
 
 /** @deprecated 使用 head + 联系人明细 + tail */

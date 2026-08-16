@@ -226,6 +226,7 @@ TORTOISE_ORM = {
                 "core.models.login_log",
                 "core.models.ai_audit_log",
                 "core.models.user_activity",
+                "core.models.cache_entry",
                 # Aerich 模型
                 "aerich.models",
                 # 主数据管理模型
@@ -249,7 +250,10 @@ TORTOISE_ORM = {
                 "apps.master_data.models.product",  # 产品模型
                 "apps.master_data.models.bom_change",  # BOM变更记录
                 "apps.master_data.models.process_route_change",  # 工艺路线变更记录
-                "apps.master_data.models.drawing",  # 工程图纸
+                "apps.master_data.models.drawing",  # 工程图纸 / 仓库 / 密级授权
+                "apps.master_data.models.drawing_change",  # 图纸工程变更
+                "apps.master_data.models.drawing_distribution",  # 图档发放
+                "apps.master_data.models.drawing_loan",  # 图档借阅
                 # 快格轻制造模型
                 "apps.kuaizhizao.models.work_order",  # 工单模型
                 "apps.kuaizhizao.models.work_order_group",  # 工单组模型
@@ -300,6 +304,24 @@ TORTOISE_ORM = {
                 "apps.kuaicaiwu.models.standard_cost",  # 标准成本
                 "apps.kuaicaiwu.models.cost_rule",  # 成本规则
                 "apps.kuaicaiwu.models.cost_calculation",  # 成本核算
+                "apps.kuaicaiwu.models.bank_account",  # 银行账户
+                "apps.kuaicaiwu.models.bank_transaction",  # 银行流水
+                "apps.kuaicaiwu.models.chart_of_account",  # 会计科目
+                "apps.kuaicaiwu.models.voucher",  # 记账凭证
+                "apps.kuaicaiwu.models.voucher_line",  # 凭证分录
+                "apps.kuaicaiwu.models.gl_book_settings",  # 总账账套参数
+                "apps.kuaicaiwu.models.accounting_period",  # 会计期间
+                "apps.kuaicaiwu.models.account_balance",  # 科目余额
+                "apps.kuaicaiwu.models.voucher_summary",  # 摘要库
+                "apps.kuaicaiwu.models.gl_transfer_template",  # 转账模板
+                "apps.kuaicaiwu.models.bank_reconcile_item",  # 银行对账
+                "apps.kuaicaiwu.models.gl_project",  # 总账项目辅助
+                "apps.kuaicaiwu.models.gl_cash_flow_item",  # 现金流量项目
+                "apps.kuaicaiwu.models.gl_accrual_item",  # 摊销预提
+                "apps.kuaicaiwu.models.gl_cheque",  # 支票台账
+                "apps.kuaicaiwu.models.finance_note",  # 应收应付票据
+                "apps.kuaicaiwu.models.gl_tax_settings",  # 税务设置
+                "apps.kuaicaiwu.models.tax_period_record",  # 税务属期
                 # 快研发 kuaiplm
                 "apps.kuaiplm.models.rd_project",
                 "apps.kuaiplm.models.gate_template",
@@ -378,6 +400,7 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.scheduling_config",  # 排程配置模型
                 "apps.kuaizhizao.models.work_order_score",  # 工单综合打分快照
                 "apps.kuaizhizao.models.shipment_notice",  # 发货通知模型
+                "apps.kuaizhizao.models.logistics",  # 承运商/货运单/轨迹
                 "apps.kuaizhizao.models.spare_part",  # 备品备件模型
                 "apps.kuaizhizao.models.state_transition",  # 状态流转规则模型
                 "apps.kuaizhizao.models.stocktaking",  # 库存盘点模型

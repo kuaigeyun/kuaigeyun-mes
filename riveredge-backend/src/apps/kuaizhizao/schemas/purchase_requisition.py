@@ -76,6 +76,16 @@ class PurchaseRequisitionBase(BaseSchema):
     attachments: Optional[list] = None
 
 
+class PullFromDemandComputationItemsRequest(BaseModel):
+    """从需求计算开口行创建采购申请"""
+    selected_item_ids: List[int] = Field(..., min_length=1, description="需求计算明细 id，可跨计算单")
+
+
+class PullFromRequisitionItemsRequest(BaseModel):
+    """从采购申请开口行创建下游单据"""
+    selected_item_ids: List[int] = Field(..., min_length=1, description="采购申请明细 id，可跨申请单")
+
+
 class PurchaseRequisitionCreate(BaseModel):
     """采购申请创建"""
     requisition_code: Optional[str] = None

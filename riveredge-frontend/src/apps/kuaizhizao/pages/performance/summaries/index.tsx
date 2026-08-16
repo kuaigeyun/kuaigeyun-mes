@@ -6,8 +6,8 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, DatePicker, Select, Space, theme as AntdTheme } from 'antd';
-import { CalculatorOutlined, CheckOutlined, RollbackOutlined, DownloadOutlined } from '@ant-design/icons';
+import { App, Button, DatePicker, Select, Space, theme as AntdTheme, Tooltip } from 'antd';
+import { CalculatorOutlined, CheckOutlined, RollbackOutlined, DownloadOutlined, TeamOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -33,6 +33,10 @@ import {
   resolvePerformanceSummaryListParams,
 } from '../../../utils/performanceListCore';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { WorkGroupDistributeModal } from './components/WorkGroupDistributeModal';
+
+const SUMMARY_RESOURCE = 'kuaizhizao:performance-summaries';
 
 const SummariesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -40,6 +44,7 @@ const SummariesPage: React.FC = () => {
   const { token } = AntdTheme.useToken();
   const summaryDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
+  const summaryPerms = useResourcePermissions(SUMMARY_RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const [period, setPeriod] = useState<string>(formatDateTime(dayjs(), 'YYYY-MM'));
   const [employeeId, setEmployeeId] = useState<number | undefined>();
@@ -50,6 +55,7 @@ const SummariesPage: React.FC = () => {
   const [detailError, setDetailError] = useState<string | null>(null);
   const detailRetryKeyRef = useRef<{ period: string; employee_id: number } | null>(null);
   const [calcLoading, setCalcLoading] = useState(false);
+  const [distributeOpen, setDistributeOpen] = useState(false);
   const [summaryTrackingId, setSummaryTrackingId] = useState<number | null>(null);
   const [summaryTrackingRefreshKey, setSummaryTrackingRefreshKey] = useState(0);
 
@@ -102,8 +108,15 @@ const SummariesPage: React.FC = () => {
   const handleCalculate = async () => {
     try {
       setCalcLoading(true);
-      await employeePerformanceApi.calculate(period);
+      const res = await employeePerformanceApi.calculate(period);
       messageApi.success(t('app.kuaizhizao.performance.summaries.messages.calculateSuccess'));
+      if ((res.team_only_reporting_count ?? 0) > 0) {
+        messageApi.warning(
+          t('app.kuaizhizao.performance.summaries.messages.teamOnlyReportingHint', {
+            count: res.team_only_reporting_count,
+          }),
+        );
+      }
       actionRef.current?.reload();
       setSummaryTrackingRefreshKey((k) => k + 1);
     } catch (e: any) {
@@ -296,15 +309,17 @@ const SummariesPage: React.FC = () => {
         hideInSearch: true,
         render: (_, record) => (
           <Space size={0}>
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleViewDetail(record)}>
-              {t('app.kuaizhizao.performance.summaries.actions.detail')}
-            </Button>
-            {record.status === 'calculated' ? (
+            {summaryPerms.canRead ? (
+              <Button key="view" {...rowActionKind('read')} onClick={() => handleViewDetail(record)}>
+                {t('app.kuaizhizao.performance.summaries.actions.detail')}
+              </Button>
+            ) : null}
+            {record.status === 'calculated' && summaryPerms.canAction?.('approve') ? (
               <Button type="link" size="small" icon={<CheckOutlined />} onClick={() => handleConfirm(record)}>
                 {t('app.kuaizhizao.performance.common.actions.confirm')}
               </Button>
             ) : null}
-            {record.status === 'confirmed' ? (
+            {record.status === 'confirmed' && summaryPerms.canAction?.('revoke') ? (
               <Button type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleReopen(record)}>
                 {t('app.kuaizhizao.performance.common.actions.reopen')}
               </Button>
@@ -313,7 +328,7 @@ const SummariesPage: React.FC = () => {
         ),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [t],
+    [t, summaryPerms],
   );
 
   return (
@@ -370,15 +385,28 @@ const SummariesPage: React.FC = () => {
                   actionRef.current?.reload();
                 }}
               />
-              <Button type="primary" icon={<CalculatorOutlined />} loading={calcLoading} onClick={handleCalculate}>
-                {t('app.kuaizhizao.performance.summaries.actions.calculate')}
-              </Button>
-              <Button icon={<CheckOutlined />} loading={calcLoading} onClick={handleBatchConfirm}>
-                {t('app.kuaizhizao.performance.summaries.actions.batchConfirm')}
-              </Button>
-              <Button icon={<DownloadOutlined />} onClick={handleExport}>
-                {t('app.kuaizhizao.performance.summaries.actions.exportConfirmed')}
-              </Button>
+              {summaryPerms.canUpdate ? (
+                <Tooltip title={t('app.kuaizhizao.performance.summaries.hints.calculate')}>
+                  <Button type="primary" icon={<CalculatorOutlined />} loading={calcLoading} onClick={handleCalculate}>
+                    {t('app.kuaizhizao.performance.summaries.actions.calculate')}
+                  </Button>
+                </Tooltip>
+              ) : null}
+              {summaryPerms.canUpdate ? (
+                <Button icon={<TeamOutlined />} onClick={() => setDistributeOpen(true)}>
+                  {t('app.kuaizhizao.performance.summaries.actions.distribute')}
+                </Button>
+              ) : null}
+              {summaryPerms.canAction?.('approve') ? (
+                <Button icon={<CheckOutlined />} loading={calcLoading} onClick={handleBatchConfirm}>
+                  {t('app.kuaizhizao.performance.summaries.actions.batchConfirm')}
+                </Button>
+              ) : null}
+              {summaryPerms.canExport ? (
+                <Button icon={<DownloadOutlined />} onClick={handleExport}>
+                  {t('app.kuaizhizao.performance.summaries.actions.exportConfirmed')}
+                </Button>
+              ) : null}
             </Space>,
           ]}
         />
@@ -401,7 +429,7 @@ const SummariesPage: React.FC = () => {
               items={[
                 {
                   key: 'confirm',
-                  visible: detail.summary.status === 'calculated',
+                  visible: detail.summary.status === 'calculated' && Boolean(summaryPerms.canAction?.('approve')),
                   render: (
                     <Button icon={<CheckOutlined />} onClick={() => void handleConfirm(detail.summary!)}>
                       {t('app.kuaizhizao.performance.common.actions.confirm')}
@@ -410,7 +438,7 @@ const SummariesPage: React.FC = () => {
                 },
                 {
                   key: 'reopen',
-                  visible: detail.summary.status === 'confirmed',
+                  visible: detail.summary.status === 'confirmed' && Boolean(summaryPerms.canAction?.('revoke')),
                   render: (
                     <Button icon={<RollbackOutlined />} onClick={() => void handleReopen(detail.summary!)}>
                       {t('app.kuaizhizao.performance.common.actions.reopen')}
@@ -421,6 +449,13 @@ const SummariesPage: React.FC = () => {
             />
           ) : null
         }
+      />
+
+      <WorkGroupDistributeModal
+        open={distributeOpen}
+        period={period}
+        onClose={() => setDistributeOpen(false)}
+        onSuccess={() => actionRef.current?.reload()}
       />
     </>
   );

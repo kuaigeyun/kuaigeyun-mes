@@ -20,10 +20,15 @@ import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stacke
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
 import { MaterialDedupCreateGuard } from './MaterialDedupAssistant';
-import { FormModalTemplate } from '../../../components/layout-templates';
-import { MODAL_CONFIG, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
+import { FormModalTemplate, DocumentFormPageLayout, DocumentFormPageHeaderActions, DetailDrawerSection } from '../../../components/layout-templates';
+import {
+  MODAL_CONFIG,
+  MODAL_NESTED_ABOVE_PARENT_OFFSET,
+  DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
+} from '../../../components/layout-templates/constants';
 import { UniDropdown } from '../../../components/uni-dropdown';
-import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, QuestionCircleOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
 import { ProForm, ProFormInstance, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormDependency, ProFormUploadButton, ProFormItem } from '@ant-design/pro-components';
 import {
   formatMaterialGroupLabel,
@@ -43,8 +48,9 @@ import type { Supplier } from '../types/supply-chain';
 import { customerApi, supplierApi, unwrapSupplyPagedList } from '../services/supply-chain';
 import { warehouseApi, storageLocationApi, storageAreaApi } from '../services/warehouse';
 import { processRouteApi, operationApi } from '../services/process';
-import { materialCodeMappingApi } from '../services/material';
-import { bomApi } from '../services/material';
+import { materialCodeMappingApi, bomApi } from '../services/material';
+import { materialMarketPriceApi } from '../services/material-market-price';
+import { todaySiteDateString } from '../../../utils/format';
 import type { Warehouse, StorageLocation, StorageArea } from '../types/warehouse';
 import type { ProcessRoute, Operation } from '../types/process';
 import {
@@ -61,6 +67,11 @@ import DictionarySelect from '../../../components/dictionary-select';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../services/dataDictionary';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../components/price-type-switch/PriceTypeSwitch';
 import { convertUnitPriceByPriceType } from '../utils/resolve-partner-material-price';
+import {
+  DEFAULT_MARKET_FLOAT_FORMULA,
+  bakeQtyFactorIntoFormula,
+  evaluateMarketFloatFormula,
+} from '../utils/market-float-formula';
 import { buildImageUploadFileUrls, getFileByUuid, uploadMultipleFiles } from '../../../services/file';
 import { batchRuleApi, serialRuleApi } from '../services/batchSerialRules';
 import { saveSuspendedModal } from '../utils/suspendedModal';
@@ -173,6 +184,8 @@ export interface MaterialFormProps {
   onMaterialGroupsChange?: () => void;
   /** 防重提示中打开已存在物料（新建时） */
   onOpenExistingMaterial?: (uuid: string) => void;
+  /** 独立 uni-tab 页（/new、/:uuid/edit），与报价单等建单页同一套打开/关闭/保活 */
+  asPage?: boolean;
 }
 
 /**
@@ -190,6 +203,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   suspendedModalReturnPath,
   onMaterialGroupsChange,
   onOpenExistingMaterial,
+  asPage = false,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -662,6 +676,16 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           delete formDefaults.defaultCustomers;
           delete formDefaults.defaultWarehouses;
           delete formDefaults.defaultProcessRoute;
+          if (!formDefaults.salePriceMethod) {
+            formDefaults.salePriceMethod = 'fixed';
+          }
+          if (formDefaults.marketFixedSalePrice == null && formDefaults.marketProcessFee != null) {
+            formDefaults.marketFixedSalePrice = formDefaults.marketProcessFee;
+          }
+          formDefaults.marketFloatFormula = bakeQtyFactorIntoFormula(
+            formDefaults.marketFloatFormula || DEFAULT_MARKET_FLOAT_FORMULA,
+            Number(formDefaults.marketQtyFactor),
+          );
           if (
             formDefaults.defaultSalePrice != null &&
             formDefaults.defaultSalePrice !== '' &&
@@ -982,7 +1006,38 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         ...(values['defaults.defaultProcessRouteUuid'] !== undefined && { defaultProcessRouteUuid: values['defaults.defaultProcessRouteUuid'] }),
       };
       const processedDefaults: any = { ...existingDefaults, ...formDefaults };
-      
+      const saleMethod = processedDefaults.salePriceMethod === 'market' ? 'market' : 'fixed';
+      processedDefaults.salePriceMethod = saleMethod;
+      if (saleMethod === 'market') {
+        const fixed = Number(processedDefaults.marketFixedSalePrice ?? processedDefaults.marketProcessFee ?? 0);
+        if (!processedDefaults.marketBaseQuoteCode) {
+          messageApi.error(t('app.master-data.defaults.marketBaseMaterialRequired'));
+          setActiveTab('defaults');
+          throw new Error(t('app.master-data.defaults.marketBaseMaterialRequired'));
+        }
+        if (fixed < 0) {
+          messageApi.error(t('app.master-data.defaults.marketFixedSalePriceInvalid'));
+          setActiveTab('defaults');
+          throw new Error(t('app.master-data.defaults.marketFixedSalePriceInvalid'));
+        }
+        const formula = bakeQtyFactorIntoFormula(
+          processedDefaults.marketFloatFormula || DEFAULT_MARKET_FLOAT_FORMULA,
+          Number(processedDefaults.marketQtyFactor),
+        );
+        try {
+          evaluateMarketFloatFormula(formula, 1, 1);
+        } catch (e: any) {
+          const msg = e?.message || t('app.master-data.defaults.marketFloatFormulaInvalid');
+          messageApi.error(msg);
+          setActiveTab('defaults');
+          throw new Error(msg);
+        }
+        processedDefaults.marketFixedSalePrice = fixed;
+        processedDefaults.marketFloatFormula = formula;
+        delete processedDefaults.marketProcessFee;
+        delete processedDefaults.marketQtyFactor;
+      }
+
       // 将 ID 数组转换为对象数组
       if (formDefaults.defaultSupplierIds && Array.isArray(formDefaults.defaultSupplierIds)) {
         processedDefaults.defaultSuppliers = formDefaults.defaultSupplierIds.map((id: number, index: number) => {
@@ -1237,6 +1292,209 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
     }
   };
 
+  const triggerFormSubmit = useCallback(() => {
+    const inst = formRef.current as ProFormInstance | undefined;
+    if (!inst || typeof inst.submit !== 'function') {
+      messageApi.warning(t('components.layoutTemplates.formModal.formNotReady'));
+      return;
+    }
+    inst.submit();
+  }, [messageApi, t]);
+
+  useSubmitShortcut(() => triggerFormSubmit(), Boolean(asPage && open));
+
+  const formInitialValues = (() => {
+    let vals = !isEdit && !(initialValues?.baseUnit != null && initialValues?.baseUnit !== '')
+      ? { ...initialValues, baseUnit: DEFAULT_MATERIAL_BASE_UNIT }
+      : initialValues;
+    const normalizedSourceTypes = normalizeSourceTypeValues(
+      (vals as any)?.sourceType,
+      { source_types: (vals as any)?.sourceTypes },
+    );
+    const primarySourceType = getPrimarySourceType(normalizedSourceTypes);
+    if (normalizedSourceTypes.length > 0) {
+      vals = {
+        ...(vals as any),
+        sourceTypes: normalizedSourceTypes,
+        sourceType: primarySourceType,
+      } as any;
+    }
+    if (!isEdit && primarySourceType != null && vals?.defaults?.defaultTaxRate == null) {
+      vals = {
+        ...vals,
+        defaults: { ...vals?.defaults, defaultTaxRate: primarySourceType === 'Service' ? 6 : 13 },
+      };
+    }
+    return vals;
+  })();
+
+  const handleFormValuesChange = (changedValues: Record<string, unknown>, allValues: Record<string, any>) => {
+    if (!isEdit && isAutoGenerateEnabled('master-data-material')) {
+      const groupId = allValues.groupId;
+      const sourceType = allValues.sourceType || getPrimarySourceType(allValues.sourceTypes || []);
+      const name = allValues.name;
+      if (changedValues.groupId !== undefined) {
+        generateCode(groupId, sourceType, name, true);
+      } else if (
+        changedValues.sourceType !== undefined
+        || changedValues.sourceTypes !== undefined
+        || changedValues.name !== undefined
+      ) {
+        generateCode(groupId, sourceType, name, false);
+      }
+    }
+  };
+
+  const formTitle = isEdit
+    ? t('app.master-data.materialForm.editMaterial')
+    : t('app.master-data.materialForm.createMaterial');
+
+  const pageSuspendPath = asPage ? undefined : suspendedModalReturnPath;
+
+  const formFields = (
+    <>
+      <MaterialDedupCreateGuard
+        open={open}
+        enabled={!isEdit}
+        onOpenMaterial={onOpenExistingMaterial}
+      />
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        destroyOnHidden={false}
+        items={[
+          {
+            key: 'basic',
+            label: t('app.master-data.materialForm.basicInfo'),
+            children: (
+              <>
+                <BasicInfoTab
+                  part={1}
+                  formRef={formRef}
+                  material={material}
+                  materialGroups={localMaterialGroups}
+                  isEdit={isEdit}
+                  suspendedModalReturnPath={pageSuspendPath}
+                  customFields={customFields}
+                  customFieldValues={customFieldValues}
+                  variantManaged={variantManaged}
+                  onVariantManagedChange={handleVariantManagedChange}
+                  onQuickAddMaterialGroup={() => setGroupFormModalOpen(true)}
+                />
+
+                <MaterialSourceTab
+                  formRef={formRef}
+                  material={material}
+                  suppliers={suppliers}
+                  processRoutes={processRoutes}
+                  operations={operations}
+                  suppliersLoading={suppliersLoading}
+                  processRoutesLoading={processRoutesLoading}
+                  operationsLoading={operationsLoading}
+                  sourceTypeOptions={sourceTypeOptions}
+                  suspendedModalReturnPath={pageSuspendPath}
+                  materialUuid={isEdit && material ? material.uuid : undefined}
+                  onQuickAddProcessRoute={() => setRouteFormModalOpen(true)}
+                  onQuickAddSupplier={() => {
+                    setSupplierQuickCreateField('default_supplier_id');
+                    setSupplierFormModalOpen(true);
+                  }}
+                  onQuickAddOutsourceSupplier={() => {
+                    setSupplierQuickCreateField('outsource_supplier_id');
+                    setSupplierFormModalOpen(true);
+                  }}
+                  onQuickAddOperation={() => setOperationFormModalOpen(true)}
+                />
+                <BasicInfoTab
+                  part={2}
+                  formRef={formRef}
+                  material={material}
+                  materialGroups={[]}
+                  variantManaged={variantManaged}
+                  onVariantManagedChange={handleVariantManagedChange}
+                  isEdit={isEdit}
+                  suspendedModalReturnPath={pageSuspendPath}
+                  customFields={[]}
+                  customFieldValues={{}}
+                />
+              </>
+            ),
+          },
+          {
+            key: 'variant',
+            label: t('app.master-data.materialForm.variantManagement'),
+            disabled: !variantManaged,
+            children: (
+              <MaterialVariantCombinationsTable
+                material={material}
+                variantManaged={variantManaged}
+                isEdit={isEdit}
+                pendingRows={pendingVariantRows}
+                onPendingRowsChange={setPendingVariantRows}
+              />
+            ),
+          },
+          {
+            key: 'units',
+            label: t('app.master-data.materialForm.multiUnit'),
+            children: (
+              <MaterialUnitsManager />
+            ),
+          },
+          {
+            key: 'mapping',
+            label: t('app.master-data.materialForm.codeMapping'),
+            children: (
+              <CodeMappingTab
+                departmentCodes={departmentCodes}
+                customerCodes={customerCodes}
+                supplierCodes={supplierCodes}
+                externalSystemCodes={externalSystemCodes}
+                externalSystemCodesLoading={externalSystemCodesLoading}
+                materialUuid={isEdit && material ? material.uuid : undefined}
+                onExternalSystemCodesChange={setExternalSystemCodes}
+                onReloadExternalSystemCodes={material?.uuid ? () => loadExternalSystemCodes(material.uuid) : undefined}
+                customers={customers}
+                suppliers={suppliers}
+                customersLoading={customersLoading}
+                suppliersLoading={suppliersLoading}
+                onDepartmentCodesChange={setDepartmentCodes}
+                onCustomerCodesChange={setCustomerCodes}
+                onSupplierCodesChange={setSupplierCodes}
+              />
+            ),
+          },
+          {
+            key: 'inspection',
+            label: t('app.master-data.materialForm.inspection'),
+            children: (
+              <MaterialInspectionTab
+                formRef={formRef}
+                material={material}
+                isEdit={isEdit}
+                suspendedModalReturnPath={pageSuspendPath}
+              />
+            ),
+          },
+          {
+            key: 'defaults',
+            label: t('app.master-data.materialForm.defaults'),
+            children: (
+              <DefaultsTab
+                customers={customers}
+                suppliers={suppliers}
+                warehouses={warehouses}
+                customersLoading={customersLoading}
+                suppliersLoading={suppliersLoading}
+                warehousesLoading={warehousesLoading}
+              />
+            ),
+          },
+        ]}
+      />
+    </>
+  );
+
   return (
     <>
       <style>{`
@@ -1304,9 +1562,14 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           margin-bottom: 16px;
         }
         
-        /* Modal 内的 Table - 确保占满宽度 */
+        /* 物料表：只描外框，不画单元格内部分隔线 */
         .material-form-modal .ant-table-wrapper {
           width: 100%;
+        }
+        .material-form-modal .ant-table-wrapper .ant-table {
+          border: 1px solid var(--ant-colorBorder);
+          border-radius: var(--ant-borderRadius);
+          overflow: hidden;
         }
 
         .material-form-modal .material-units-table .ant-table-cell {
@@ -1347,202 +1610,75 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           margin: 0 8px 16px 8px !important;
         }
       `}</style>
-      <FormModalTemplate
-        className="material-form-modal"
-        title={isEdit ? t('app.master-data.materialForm.editMaterial') : t('app.master-data.materialForm.createMaterial')}
-        open={open}
-        onClose={onClose}
-        onFinish={handleSubmit}
-        isEdit={isEdit}
-        loading={loading}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-        formRef={formRef}
-        modalRender={(modal) => (
-          <div data-smart-suggestion-anchor="material-form">{modal}</div>
-        )}
-        initialValues={(() => {
-          let vals = !isEdit && !(initialValues?.baseUnit != null && initialValues?.baseUnit !== '')
-            ? { ...initialValues, baseUnit: DEFAULT_MATERIAL_BASE_UNIT }
-            : initialValues;
-          const normalizedSourceTypes = normalizeSourceTypeValues(
-            (vals as any)?.sourceType,
-            { source_types: (vals as any)?.sourceTypes },
-          );
-          const primarySourceType = getPrimarySourceType(normalizedSourceTypes);
-          if (normalizedSourceTypes.length > 0) {
-            vals = {
-              ...(vals as any),
-              sourceTypes: normalizedSourceTypes,
-              sourceType: primarySourceType,
-            } as any;
+      {asPage ? (
+        <DocumentFormPageLayout
+          header={
+            <>
+              <Space align="center" size={8}>
+                <Button
+                  type="text"
+                  icon={<ArrowLeftOutlined />}
+                  aria-label={t('common.back')}
+                  onClick={onClose}
+                />
+                <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+                  {formTitle}
+                </Typography.Title>
+              </Space>
+              <DocumentFormPageHeaderActions
+                onCancel={onClose}
+                onSaveDraft={() => undefined}
+                onPrimarySubmit={triggerFormSubmit}
+                isCreatePage={!isEdit}
+                showSaveDraft={false}
+                canSubmitAfterSave={!isEdit}
+                primarySaveLabel={t('components.layoutTemplates.formModal.submitUpdate')}
+                primaryLoading={loading}
+              />
+            </>
           }
-          // 新建模式：根据来源类型设置默认税率（服务6%，其他13%）
-          if (!isEdit && primarySourceType != null && vals?.defaults?.defaultTaxRate == null) {
-            vals = {
-              ...vals,
-              defaults: { ...vals?.defaults, defaultTaxRate: primarySourceType === 'Service' ? 6 : 13 },
-            };
-          }
-          return vals;
-        })()}
-        layout="vertical"
-        grid={false}
-        onValuesChange={(changedValues, allValues) => {
-          if (!isEdit && isAutoGenerateEnabled('master-data-material')) {
-            const groupId = allValues.groupId;
-            const sourceType = allValues.sourceType || getPrimarySourceType(allValues.sourceTypes || []);
-            const name = allValues.name;
-            if (changedValues.groupId !== undefined) {
-              // 切换分组时立即刷新编号预览，显示该分组对应的流水号
-              generateCode(groupId, sourceType, name, true);
-            } else if (
-              changedValues.sourceType !== undefined
-              || changedValues.sourceTypes !== undefined
-              || changedValues.name !== undefined
-            ) {
-              generateCode(groupId, sourceType, name, false);
-            }
-          }
-        }}
-      >
-        <MaterialDedupCreateGuard
+        >
+          <div className="form-modal-content-inner material-form-modal">
+            <ProForm
+              formRef={formRef}
+              layout="vertical"
+              submitter={false}
+              scrollToFirstError
+              onFinish={handleSubmit}
+              onFinishFailed={({ errorFields }) => {
+                const first = errorFields?.[0];
+                const text = first?.errors?.filter(Boolean)[0];
+                messageApi.error(text || t('components.layoutTemplates.formModal.checkFormHint'));
+              }}
+              onValuesChange={handleFormValuesChange}
+              initialValues={formInitialValues}
+            >
+              {formFields}
+            </ProForm>
+          </div>
+        </DocumentFormPageLayout>
+      ) : (
+        <FormModalTemplate
+          className="material-form-modal"
+          title={formTitle}
           open={open}
-          enabled={!isEdit}
-          onOpenMaterial={onOpenExistingMaterial}
-        />
-        <Tabs
-          activeKey={activeTab}
-          onChange={setActiveTab}
-          destroyOnHidden={false}
-          items={[
-            {
-              key: 'basic',
-              label: t('app.master-data.materialForm.basicInfo'),
-              children: (
-                <>
-                  <BasicInfoTab
-                    part={1}
-                    formRef={formRef}
-                    materialGroups={localMaterialGroups}
-                    isEdit={isEdit}
-                    suspendedModalReturnPath={suspendedModalReturnPath}
-                    customFields={customFields}
-                    customFieldValues={customFieldValues}
-                    variantManaged={variantManaged}
-                    onVariantManagedChange={handleVariantManagedChange}
-                    onQuickAddMaterialGroup={() => setGroupFormModalOpen(true)}
-                  />
-
-                  <MaterialSourceTab
-                    formRef={formRef}
-                    material={material}
-                    suppliers={suppliers}
-                    processRoutes={processRoutes}
-                    operations={operations}
-                    suppliersLoading={suppliersLoading}
-                    processRoutesLoading={processRoutesLoading}
-                    operationsLoading={operationsLoading}
-                    sourceTypeOptions={sourceTypeOptions}
-                    suspendedModalReturnPath={suspendedModalReturnPath}
-                    materialUuid={isEdit && material ? material.uuid : undefined}
-                    onQuickAddProcessRoute={() => setRouteFormModalOpen(true)}
-                    onQuickAddSupplier={() => {
-                      setSupplierQuickCreateField('default_supplier_id');
-                      setSupplierFormModalOpen(true);
-                    }}
-                    onQuickAddOutsourceSupplier={() => {
-                      setSupplierQuickCreateField('outsource_supplier_id');
-                      setSupplierFormModalOpen(true);
-                    }}
-                    onQuickAddOperation={() => setOperationFormModalOpen(true)}
-                  />
-                  <BasicInfoTab 
-                    part={2} 
-                    formRef={formRef} 
-                    materialGroups={[]} 
-                    variantManaged={variantManaged} 
-                    onVariantManagedChange={handleVariantManagedChange} 
-                    isEdit={isEdit} 
-                    suspendedModalReturnPath={suspendedModalReturnPath}
-                    customFields={[]}
-                    customFieldValues={{}}
-                  />
-                </>
-              ),
-            },
-            {
-              key: 'variant',
-              label: t('app.master-data.materialForm.variantManagement'),
-              disabled: !variantManaged,
-              children: (
-                <MaterialVariantCombinationsTable
-                  material={material}
-                  variantManaged={variantManaged}
-                  isEdit={isEdit}
-                  pendingRows={pendingVariantRows}
-                  onPendingRowsChange={setPendingVariantRows}
-                />
-              ),
-            },
-            {
-              key: 'units',
-              label: t('app.master-data.materialForm.multiUnit'),
-              children: (
-                <MaterialUnitsManager />
-              ),
-            },
-            {
-              key: 'mapping',
-              label: t('app.master-data.materialForm.codeMapping'),
-              children: (
-                <CodeMappingTab
-                  departmentCodes={departmentCodes}
-                  customerCodes={customerCodes}
-                  supplierCodes={supplierCodes}
-                  externalSystemCodes={externalSystemCodes}
-                  externalSystemCodesLoading={externalSystemCodesLoading}
-                  materialUuid={isEdit && material ? material.uuid : undefined}
-                  onExternalSystemCodesChange={setExternalSystemCodes}
-                  onReloadExternalSystemCodes={material?.uuid ? () => loadExternalSystemCodes(material.uuid) : undefined}
-                  customers={customers}
-                  suppliers={suppliers}
-                  customersLoading={customersLoading}
-                  suppliersLoading={suppliersLoading}
-                  onDepartmentCodesChange={setDepartmentCodes}
-                  onCustomerCodesChange={setCustomerCodes}
-                  onSupplierCodesChange={setSupplierCodes}
-                />
-              ),
-            },
-            {
-              key: 'inspection',
-              label: t('app.master-data.materialForm.inspection'),
-              children: (
-                <MaterialInspectionTab
-                  formRef={formRef}
-                  material={material}
-                  isEdit={isEdit}
-                  suspendedModalReturnPath={suspendedModalReturnPath}
-                />
-              ),
-            },
-            {
-              key: 'defaults',
-              label: t('app.master-data.materialForm.defaults'),
-              children: (
-                <DefaultsTab
-                  customers={customers}
-                  suppliers={suppliers}
-                  warehouses={warehouses}
-                  customersLoading={customersLoading}
-                  suppliersLoading={suppliersLoading}
-                  warehousesLoading={warehousesLoading}
-                />
-              ),
-            },
-          ]}
-        />
-      </FormModalTemplate>
+          onClose={onClose}
+          onFinish={handleSubmit}
+          isEdit={isEdit}
+          loading={loading}
+          width={MODAL_CONFIG.LARGE_WIDTH}
+          formRef={formRef}
+          modalRender={(modal) => (
+            <div data-smart-suggestion-anchor="material-form">{modal}</div>
+          )}
+          initialValues={formInitialValues}
+          layout="vertical"
+          grid={false}
+          onValuesChange={handleFormValuesChange}
+        >
+          {formFields}
+        </FormModalTemplate>
+      )}
       {groupFormModalOpen ? (
       <MaterialGroupFormModal
         open
@@ -1596,6 +1732,7 @@ interface MaterialInspectionTabProps {
 interface BasicInfoTabProps {
   part: 1 | 2;
   formRef: any;
+  material?: Material;
   materialGroups: MaterialGroup[];
   isEdit: boolean;
   suspendedModalReturnPath?: string;
@@ -1729,7 +1866,6 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
       width: 132,
       render: (_: unknown, record: MaterialUnit, index: number) => (
         <Select
-          size="small"
           value={record.unit}
           placeholder={t('app.master-data.materialForm.unitPlaceholder')}
           onChange={(unitValue: string) => handleUnitChange(index, 'unit', unitValue)}
@@ -1760,7 +1896,6 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
         return (
           <Space.Compact block className="material-units-conversion-row">
             <Input
-              size="small"
               style={{ width: '24%' }}
               type="number"
               value={numerator}
@@ -1773,7 +1908,6 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
               step={1}
             />
             <Input
-              size="small"
               className="material-units-conversion-sep"
               style={{ width: '8%' }}
               value="/"
@@ -1781,7 +1915,6 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
               tabIndex={-1}
             />
             <Input
-              size="small"
               style={{ width: '24%' }}
               type="number"
               value={denominator}
@@ -1794,7 +1927,6 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
               step={1}
             />
             <Input
-              size="small"
               className="material-units-conversion-preview"
               style={{ width: '44%' }}
               value={previewText}
@@ -1810,7 +1942,6 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
       dataIndex: 'scenarios',
       render: (_: unknown, record: MaterialUnit, index: number) => (
         <Select
-          size="small"
           mode="multiple"
           value={record.scenarios || []}
           onChange={(scenarioValues: string[]) => handleUnitChange(index, 'scenarios', scenarioValues)}
@@ -1869,7 +2000,6 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
         dataSource={units}
         rowKey={(_, index) => `unit-${index}`}
         pagination={false}
-        size="small"
         style={{ width: '100%' }}
         footer={() => (
           <Button
@@ -1967,6 +2097,7 @@ const MaterialUnitsManager: React.FC = () => (
 const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
   part,
   formRef,
+  material,
   materialGroups,
   isEdit,
   suspendedModalReturnPath,
@@ -2117,7 +2248,15 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
             name="mainCode"
             label={t('app.master-data.materialForm.mainCode')}
             placeholder={isAutoGenerateEnabled('master-data-material') ? t('app.master-data.materialForm.mainCodeAuto') : t('app.master-data.materialForm.mainCodePlaceholder')}
-            disabled={isEdit}
+            disabled={isEdit && material?.mainCodeEditable !== true}
+            tooltip={
+              isEdit
+                ? material?.mainCodeEditable === true
+                  ? t('app.master-data.materialForm.mainCodeEditableExtra')
+                  : material?.mainCodeLockReason ||
+                    t('app.master-data.materialForm.mainCodeLockedExtra')
+                : t('app.master-data.materialForm.mainCodeExtra')
+            }
             rules={[
               { required: true, message: t('app.master-data.materialForm.mainCodeRequired') },
               { max: 50, message: t('app.master-data.materialForm.mainCodeMax') },
@@ -2776,7 +2915,6 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
           },
         ]}
         pagination={false}
-        size="small"
         locale={{ emptyText: t('app.master-data.codeMapping.noMapping') }}
         footer={() => (
           <Button
@@ -2972,6 +3110,76 @@ interface DefaultsTabProps {
   warehousesLoading: boolean;
 }
 
+function useMaterialDefaultField<T>(name: string): T | undefined {
+  const form = Form.useFormInstance();
+  const nested = Form.useWatch(['defaults', name], form);
+  const flat = Form.useWatch(`defaults.${name}`, form);
+  return (nested ?? flat) as T | undefined;
+}
+
+/** 行情定价：固定售价 + 浮动公式随表单与当日行情即时算出建议售价。 */
+const MarketSuggestedPriceLive: React.FC = () => {
+  const form = Form.useFormInstance();
+  const quoteCode = String(useMaterialDefaultField<string>('marketBaseQuoteCode') || '').trim();
+  const formula = useMaterialDefaultField<string>('marketFloatFormula');
+  const fixed = Number(useMaterialDefaultField<number>('marketFixedSalePrice') ?? 0);
+  const taxR = Number(useMaterialDefaultField<number>('defaultTaxRate') ?? 0);
+  const priceType = useMaterialDefaultField<string>('defaultSalePriceType');
+  const [spot, setSpot] = useState<{ code: string; unitPrice: number; priceType: string } | null>(null);
+
+  useEffect(() => {
+    if (!quoteCode) {
+      setSpot(null);
+      return;
+    }
+    let cancelled = false;
+    void materialMarketPriceApi
+      .list({ quoteCode, priceDate: todaySiteDateString(), limit: 1 })
+      .then((res) => {
+        if (cancelled) return;
+        const row = res.items[0];
+        if (!row || !(Number(row.unitPrice) > 0)) {
+          setSpot(null);
+          return;
+        }
+        setSpot({
+          code: quoteCode,
+          unitPrice: Number(row.unitPrice),
+          priceType: row.priceType,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setSpot(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [quoteCode]);
+
+  useEffect(() => {
+    if (!quoteCode || !spot || spot.code !== quoteCode) return;
+    try {
+      const saleType: PriceTypeValue = priceType === 'tax_exclusive' ? 'tax_exclusive' : 'tax_inclusive';
+      const spotType: PriceTypeValue = spot.priceType === 'tax_exclusive' ? 'tax_exclusive' : 'tax_inclusive';
+      const spotNorm = convertUnitPriceByPriceType(spot.unitPrice, taxR, spotType, saleType);
+      const floating = evaluateMarketFloatFormula(formula || DEFAULT_MARKET_FLOAT_FORMULA, spotNorm, 1);
+      const next = Number((fixed + floating).toFixed(6));
+      const current = Number(
+        form.getFieldValue('defaults.defaultSalePrice') ??
+          form.getFieldValue(['defaults', 'defaultSalePrice']) ??
+          0,
+      );
+      if (current !== next) {
+        form.setFieldValue('defaults.defaultSalePrice', next);
+      }
+    } catch {
+      /* 公式未写完整时不覆盖建议售价 */
+    }
+  }, [quoteCode, formula, fixed, taxR, priceType, spot, form]);
+
+  return null;
+};
+
 const DefaultsTab: React.FC<DefaultsTabProps> = ({
   customers,
   suppliers,
@@ -2981,6 +3189,8 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
   warehousesLoading,
 }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const defaultsForm = Form.useFormInstance();
   const [unitOptions, setUnitOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [unitOptionsLoading, setUnitOptionsLoading] = useState(false);
   const [storageLocations, setStorageLocations] = useState<StorageLocation[]>([]);
@@ -3024,8 +3234,8 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
   }, []);
 
   return (
-    <Collapse defaultActiveKey={['finance', 'sale', 'purchase', 'inventory']}>
-        <Panel header={t('app.master-data.defaults.finance')} key="finance">
+    <>
+        <DetailDrawerSection title={t('app.master-data.defaults.finance')}>
           <Row gutter={16}>
             <Col span={12}>
               <ProFormSelect
@@ -3042,70 +3252,24 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
               />
             </Col>
           </Row>
-        </Panel>
+        </DetailDrawerSection>
 
         {/* 销售默认值：单位已在【多单位管理】标签配置 */}
-        <Panel header={t('app.master-data.defaults.sale')} key="sale">
+        <DetailDrawerSection title={t('app.master-data.defaults.sale')}>
           <ProFormText name="defaults.defaultSalePriceType" hidden initialValue="tax_inclusive" />
+          <ProFormText name="defaults.marketBaseQuoteName" hidden />
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item
-                label={t('app.master-data.defaults.defaultSalePrice')}
-                tooltip={t('app.master-data.defaults.defaultSalePriceTypeHint')}
-              >
-                <Row gutter={8} align="middle" wrap={false}>
-                  <Col flex="auto">
-                    <ProFormDigit
-                      name="defaults.defaultSalePrice"
-                      placeholder={t('app.master-data.defaults.defaultSalePricePlaceholder')}
-                      min={0}
-                      fieldProps={{ style: { width: '100%' } }}
-                      noStyle
-                    />
-                  </Col>
-                  <Col flex="none">
-                    <Form.Item
-                      noStyle
-                      shouldUpdate={(prev, cur) =>
-                        prev?.defaults?.defaultSalePriceType !== cur?.defaults?.defaultSalePriceType ||
-                        prev?.['defaults.defaultSalePriceType'] !== cur?.['defaults.defaultSalePriceType'] ||
-                        prev?.defaults?.defaultSalePrice !== cur?.defaults?.defaultSalePrice ||
-                        prev?.['defaults.defaultSalePrice'] !== cur?.['defaults.defaultSalePrice'] ||
-                        prev?.defaults?.defaultTaxRate !== cur?.defaults?.defaultTaxRate ||
-                        prev?.['defaults.defaultTaxRate'] !== cur?.['defaults.defaultTaxRate']
-                      }
-                    >
-                      {({ getFieldValue, setFieldValue }) => {
-                        const priceType = (getFieldValue('defaults.defaultSalePriceType') ??
-                          getFieldValue(['defaults', 'defaultSalePriceType']) ??
-                          'tax_inclusive') as PriceTypeValue;
-                        return (
-                          <PriceTypeSwitch
-                            checked={priceType === 'tax_inclusive'}
-                            onChange={(checked) => {
-                              const nextType: PriceTypeValue = checked ? 'tax_inclusive' : 'tax_exclusive';
-                              const fromType: PriceTypeValue = checked ? 'tax_exclusive' : 'tax_inclusive';
-                              const raw =
-                                Number(getFieldValue('defaults.defaultSalePrice')) ||
-                                Number(getFieldValue(['defaults', 'defaultSalePrice'])) ||
-                                0;
-                              const taxR =
-                                Number(getFieldValue('defaults.defaultTaxRate')) ||
-                                Number(getFieldValue(['defaults', 'defaultTaxRate'])) ||
-                                0;
-                              if (raw > 0) {
-                                const converted = convertUnitPriceByPriceType(raw, taxR, fromType, nextType);
-                                setFieldValue('defaults.defaultSalePrice', converted);
-                              }
-                              setFieldValue('defaults.defaultSalePriceType', nextType);
-                            }}
-                          />
-                        );
-                      }}
-                    </Form.Item>
-                  </Col>
-                </Row>
-              </Form.Item>
+              <ProFormSelect
+                name="defaults.salePriceMethod"
+                label={t('app.master-data.defaults.salePriceMethod')}
+                tooltip={t('app.master-data.defaults.salePriceMethodHint')}
+                initialValue="fixed"
+                options={[
+                  { label: t('app.master-data.defaults.salePriceMethodFixed'), value: 'fixed' },
+                  { label: t('app.master-data.defaults.salePriceMethodMarket'), value: 'market' },
+                ]}
+              />
             </Col>
             <Col span={12}>
               <ProFormSelect
@@ -3123,9 +3287,193 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
               />
             </Col>
           </Row>
-        </Panel>
+          <ProFormDependency name={['defaults.salePriceMethod']}>
+            {() => {
+              const readDefault = (key: string) =>
+                defaultsForm.getFieldValue(`defaults.${key}`) ??
+                defaultsForm.getFieldValue(['defaults', key]);
+              const method = readDefault('salePriceMethod') ?? 'fixed';
+              const priceTypeSwitch = (
+                <Form.Item
+                  noStyle
+                  shouldUpdate={(prev, cur) =>
+                    prev?.defaults?.defaultSalePriceType !== cur?.defaults?.defaultSalePriceType ||
+                    prev?.['defaults.defaultSalePriceType'] !== cur?.['defaults.defaultSalePriceType'] ||
+                    prev?.defaults?.defaultSalePrice !== cur?.defaults?.defaultSalePrice ||
+                    prev?.['defaults.defaultSalePrice'] !== cur?.['defaults.defaultSalePrice'] ||
+                    prev?.defaults?.marketFixedSalePrice !== cur?.defaults?.marketFixedSalePrice ||
+                    prev?.['defaults.marketFixedSalePrice'] !== cur?.['defaults.marketFixedSalePrice'] ||
+                    prev?.defaults?.defaultTaxRate !== cur?.defaults?.defaultTaxRate ||
+                    prev?.['defaults.defaultTaxRate'] !== cur?.['defaults.defaultTaxRate']
+                  }
+                >
+                  {({ getFieldValue, setFieldValue }) => {
+                    const priceType = (getFieldValue('defaults.defaultSalePriceType') ??
+                      getFieldValue(['defaults', 'defaultSalePriceType']) ??
+                      'tax_inclusive') as PriceTypeValue;
+                    return (
+                      <PriceTypeSwitch
+                        checked={priceType === 'tax_inclusive'}
+                        onChange={(checked) => {
+                          const nextType: PriceTypeValue = checked ? 'tax_inclusive' : 'tax_exclusive';
+                          const fromType: PriceTypeValue = checked ? 'tax_exclusive' : 'tax_inclusive';
+                          const taxR =
+                            Number(getFieldValue('defaults.defaultTaxRate')) ||
+                            Number(getFieldValue(['defaults', 'defaultTaxRate'])) ||
+                            0;
+                          const convertField = (name: string) => {
+                            const raw =
+                              Number(getFieldValue(`defaults.${name}`)) ||
+                              Number(getFieldValue(['defaults', name])) ||
+                              0;
+                            if (raw > 0) {
+                              setFieldValue(
+                                `defaults.${name}`,
+                                convertUnitPriceByPriceType(raw, taxR, fromType, nextType),
+                              );
+                            }
+                          };
+                          convertField('defaultSalePrice');
+                          convertField('marketFixedSalePrice');
+                          setFieldValue('defaults.defaultSalePriceType', nextType);
+                        }}
+                      />
+                    );
+                  }}
+                </Form.Item>
+              );
+              const salePriceField = (
+                <Form.Item
+                  label={
+                    method === 'market'
+                      ? t('app.master-data.defaults.marketSuggestedPrice')
+                      : t('app.master-data.defaults.defaultSalePrice')
+                  }
+                  tooltip={
+                    method === 'market'
+                      ? t('app.master-data.defaults.marketCompositionHint')
+                      : t('app.master-data.defaults.defaultSalePriceTypeHint')
+                  }
+                >
+                  <Row gutter={8} align="middle" wrap={false}>
+                    <Col flex="auto">
+                      <ProFormDigit
+                        name="defaults.defaultSalePrice"
+                        placeholder={t('app.master-data.defaults.defaultSalePricePlaceholder')}
+                        min={0}
+                        fieldProps={{ style: { width: '100%' }, disabled: method === 'market' }}
+                        noStyle
+                      />
+                    </Col>
+                    {method !== 'market' ? <Col flex="none">{priceTypeSwitch}</Col> : null}
+                  </Row>
+                </Form.Item>
+              );
+              if (method !== 'market') {
+                return <Row gutter={16}><Col span={12}>{salePriceField}</Col></Row>;
+              }
+              return (
+                <>
+                  <MarketSuggestedPriceLive />
+                  <Row gutter={16} style={{ marginBottom: 8 }}>
+                    <Col span={24}>
+                      <Typography.Text type="secondary">
+                        {t('app.master-data.defaults.marketComposition')}
+                      </Typography.Text>
+                    </Col>
+                  </Row>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item
+                        label={t('app.master-data.defaults.marketFixedSalePrice')}
+                        tooltip={t('app.master-data.defaults.defaultSalePriceTypeHint')}
+                      >
+                        <Row gutter={8} align="middle" wrap={false}>
+                          <Col flex="auto">
+                            <ProFormDigit
+                              name="defaults.marketFixedSalePrice"
+                              min={0}
+                              fieldProps={{ style: { width: '100%' } }}
+                              noStyle
+                            />
+                          </Col>
+                          <Col flex="none">{priceTypeSwitch}</Col>
+                        </Row>
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>{salePriceField}</Col>
+                  </Row>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <ProFormSelect
+                        name="defaults.marketBaseQuoteCode"
+                        label={
+                          <span style={{ position: 'relative', display: 'inline' }}>
+                            {t('app.master-data.defaults.marketBaseMaterial')}
+                            <Typography.Link
+                              onClick={() => navigate('/apps/master-data/materials/market-prices')}
+                              style={{
+                                position: 'absolute',
+                                left: '100%',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                marginLeft: 8,
+                                whiteSpace: 'nowrap',
+                                lineHeight: 1,
+                                height: '1em',
+                                fontSize: 12,
+                              }}
+                            >
+                              <LinkOutlined style={{ marginRight: 4 }} />
+                              {t('app.master-data.defaults.marketGoMaintain')}
+                            </Typography.Link>
+                          </span>
+                        }
+                        rules={[{ required: true, message: t('app.master-data.defaults.marketBaseMaterialRequired') }]}
+                        request={async () => {
+                          const items = await materialMarketPriceApi.listInstruments();
+                          return items.map((it) => ({
+                            label: `${it.code} ${it.name}`.trim(),
+                            value: it.code,
+                            quoteName: it.name,
+                          }));
+                        }}
+                        fieldProps={{
+                          showSearch: true,
+                          optionFilterProp: 'label',
+                          onChange: (_value: string, option: any) => {
+                            defaultsForm.setFieldValue(
+                              'defaults.marketBaseQuoteName',
+                              option?.quoteName,
+                            );
+                          },
+                        }}
+                      />
+                    </Col>
+                    <Col span={12}>
+                      <ProFormText
+                        name="defaults.marketFloatFormula"
+                        label={t('app.master-data.defaults.marketFloatFormula')}
+                        initialValue={DEFAULT_MARKET_FLOAT_FORMULA}
+                        extra={t('app.master-data.defaults.marketFloatFormulaHint')}
+                        rules={[
+                          { required: true, message: t('app.master-data.defaults.marketFloatFormulaRequired') },
+                          {
+                            validator: async (_, value) => {
+                              evaluateMarketFloatFormula(value || DEFAULT_MARKET_FLOAT_FORMULA, 1, 1);
+                            },
+                          },
+                        ]}
+                      />
+                    </Col>
+                  </Row>
+                </>
+              );
+            }}
+          </ProFormDependency>
+        </DetailDrawerSection>
 
-        <Panel header={t('app.master-data.defaults.purchase')} key="purchase">
+        <DetailDrawerSection title={t('app.master-data.defaults.purchase')}>
           <ProFormText name="defaults.defaultPurchasePriceType" hidden initialValue="tax_inclusive" />
           <Row gutter={16}>
             <Col span={12}>
@@ -3242,10 +3590,10 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
               />
             </Col>
           </Row>
-        </Panel>
+        </DetailDrawerSection>
 
         {/* 库存默认值 */}
-        <Panel header={t('app.master-data.defaults.inventory')} key="inventory">
+        <DetailDrawerSection title={t('app.master-data.defaults.inventory')} marginBottom={0}>
           <Row gutter={16}>
             <Col span={12}>
               <ProFormSelect
@@ -3329,8 +3677,8 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
               />
             </Col>
           </Row>
-        </Panel>
-      </Collapse>
+        </DetailDrawerSection>
+    </>
   );
 };
 

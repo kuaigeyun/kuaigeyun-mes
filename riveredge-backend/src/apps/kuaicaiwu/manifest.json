@@ -2,7 +2,7 @@
   "code": "kuaicaiwu",
   "name": "轻财务",
   "version": "1.0.0",
-  "description": "聚焦管理会计与经营分析协同平台",
+  "description": "管理会计总账核算与经营分析协同平台",
   "icon": "wallet",
   "author": "RiverEdge Team",
   "market_category": "base",
@@ -17,8 +17,8 @@
     "permission": "kuaicaiwu:entry:read",
     "children": [
       {
-        "title": "app.kuaicaiwu.menu.finance-management",
-        "icon": "wallet",
+        "title": "app.kuaicaiwu.menu.gl-management",
+        "icon": "book",
         "sort_order": 1,
         "children": [
           {
@@ -28,10 +28,84 @@
             "sort_order": 0
           },
           {
+            "title": "app.kuaicaiwu.menu.gl-management.chart-of-accounts",
+            "path": "/apps/kuaicaiwu/gl-management/chart-of-accounts",
+            "permission": "kuaicaiwu:gl:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaicaiwu.menu.gl-management.settings",
+            "path": "/apps/kuaicaiwu/gl-management/settings",
+            "permission": "kuaicaiwu:gl:read",
+            "sort_order": 2
+          },
+          {
+            "title": "app.kuaicaiwu.menu.gl-management.opening-balances",
+            "path": "/apps/kuaicaiwu/gl-management/opening-balances",
+            "permission": "kuaicaiwu:gl:read",
+            "sort_order": 3
+          },
+          {
+            "title": "app.kuaicaiwu.menu.gl-management.vouchers",
+            "path": "/apps/kuaicaiwu/gl-management/vouchers",
+            "permission": "kuaicaiwu:gl:read",
+            "sort_order": 4
+          },
+          {
+            "title": "app.kuaicaiwu.menu.gl-management.books",
+            "path": "/apps/kuaicaiwu/gl-management/books",
+            "permission": "kuaicaiwu:gl:read",
+            "sort_order": 5
+          },
+          {
+            "title": "app.kuaicaiwu.menu.gl-management.period-close",
+            "path": "/apps/kuaicaiwu/gl-management/period-close",
+            "permission": "kuaicaiwu:gl:read",
+            "sort_order": 6
+          },
+          {
+            "title": "app.kuaicaiwu.menu.gl-management.cashier",
+            "path": "/apps/kuaicaiwu/gl-management/cashier",
+            "permission": "kuaicaiwu:gl:read",
+            "sort_order": 7
+          },
+          {
+            "title": "app.kuaicaiwu.menu.gl-management.financial-statements",
+            "icon": "file-text",
+            "sort_order": 8,
+            "children": [
+              {
+                "title": "app.kuaicaiwu.menu.gl-management.financial-statements.balance-sheet",
+                "path": "/apps/kuaicaiwu/gl-management/financial-statements/balance-sheet",
+                "permission": "kuaicaiwu:gl:read",
+                "sort_order": 0
+              },
+              {
+                "title": "app.kuaicaiwu.menu.gl-management.financial-statements.income",
+                "path": "/apps/kuaicaiwu/gl-management/financial-statements/income",
+                "permission": "kuaicaiwu:gl:read",
+                "sort_order": 1
+              },
+              {
+                "title": "app.kuaicaiwu.menu.gl-management.financial-statements.cash-flow",
+                "path": "/apps/kuaicaiwu/gl-management/financial-statements/cash-flow",
+                "permission": "kuaicaiwu:gl:read",
+                "sort_order": 2
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "app.kuaicaiwu.menu.finance-management",
+        "icon": "wallet",
+        "sort_order": 2,
+        "children": [
+          {
             "title": "app.kuaicaiwu.menu.finance-management.receivables",
             "path": "/apps/kuaicaiwu/finance-management/receivables",
             "permission": "kuaicaiwu:receivable:read",
-            "sort_order": 1
+            "sort_order": 0
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.receipts",
@@ -40,21 +114,21 @@
             "sort_order": 2
           },
           {
+            "title": "app.kuaicaiwu.menu.finance-management.sales-invoices",
+            "path": "/apps/kuaicaiwu/finance-management/sales-invoices",
+            "permission": "kuaicaiwu:sales-invoice:read",
+            "sort_order": 3
+          },
+          {
             "title": "app.kuaicaiwu.menu.finance-management.payables",
             "path": "/apps/kuaicaiwu/finance-management/payables",
             "permission": "kuaicaiwu:payable:read",
-            "sort_order": 3
+            "sort_order": 4
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.payments",
             "path": "/apps/kuaicaiwu/finance-management/payments",
             "permission": "kuaicaiwu:payment:read",
-            "sort_order": 4
-          },
-          {
-            "title": "app.kuaicaiwu.menu.finance-management.sales-invoices",
-            "path": "/apps/kuaicaiwu/finance-management/sales-invoices",
-            "permission": "kuaicaiwu:sales-invoice:read",
             "sort_order": 5
           },
           {
@@ -76,41 +150,72 @@
             "sort_order": 8
           },
           {
+            "title": "app.kuaicaiwu.menu.finance-management.prepayments",
+            "path": "/apps/kuaicaiwu/finance-management/prepayments",
+            "permission": "kuaicaiwu:prepayment:read",
+            "sort_order": 9
+          },
+          {
             "title": "app.kuaicaiwu.menu.finance-management.document-reconciliation",
             "path": "/apps/kuaicaiwu/finance-management/document-reconciliation",
             "permission": "kuaicaiwu:document-reconciliation:read",
-            "sort_order": 9
+            "sort_order": 10
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.bank-accounts",
             "path": "/apps/kuaicaiwu/finance-management/bank-accounts",
             "permission": "kuaicaiwu:bank-account:read",
-            "sort_order": 10
+            "sort_order": 11
           },
           {
-            "title": "app.kuaicaiwu.menu.finance-management.prepayments",
-            "path": "/apps/kuaicaiwu/finance-management/prepayments",
-            "permission": "kuaicaiwu:prepayment:read",
-            "sort_order": 11
+            "title": "app.kuaicaiwu.menu.finance-management.notes-receivable",
+            "path": "/apps/kuaicaiwu/finance-management/notes-receivable",
+            "permission": "kuaicaiwu:notes-receivable:read",
+            "sort_order": 12
+          },
+          {
+            "title": "app.kuaicaiwu.menu.finance-management.notes-payable",
+            "path": "/apps/kuaicaiwu/finance-management/notes-payable",
+            "permission": "kuaicaiwu:notes-payable:read",
+            "sort_order": 13
+          }
+        ]
+      },
+      {
+        "title": "app.kuaicaiwu.menu.tax-management",
+        "icon": "audit",
+        "sort_order": 3,
+        "children": [
+          {
+            "title": "app.kuaicaiwu.menu.tax-management.settings",
+            "path": "/apps/kuaicaiwu/tax-management/settings",
+            "permission": "kuaicaiwu:tax:read",
+            "sort_order": 0
+          },
+          {
+            "title": "app.kuaicaiwu.menu.tax-management.vat-ledger",
+            "path": "/apps/kuaicaiwu/tax-management/vat-ledger",
+            "permission": "kuaicaiwu:tax:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaicaiwu.menu.tax-management.input-certification",
+            "path": "/apps/kuaicaiwu/tax-management/input-certification",
+            "permission": "kuaicaiwu:tax:read",
+            "sort_order": 2
           }
         ]
       },
       {
         "title": "app.kuaicaiwu.menu.cost-management",
         "icon": "calculator",
-        "sort_order": 2,
+        "sort_order": 4,
         "children": [
-          {
-            "title": "app.kuaicaiwu.menu.cost-management.dashboard",
-            "path": "/apps/kuaicaiwu/cost-management/dashboard",
-            "permission": "kuaicaiwu:cost-management-dashboard:read",
-            "sort_order": 0
-          },
           {
             "title": "app.kuaicaiwu.menu.cost-management.cost-calculations",
             "path": "/apps/kuaicaiwu/cost-management/cost-calculations",
             "permission": "kuaicaiwu:cost:read",
-            "sort_order": 1
+            "sort_order": 0
           },
           {
             "title": "app.kuaicaiwu.menu.cost-management.cost-rules",
@@ -141,19 +246,13 @@
       {
         "title": "app.kuaicaiwu.menu.management-analysis",
         "icon": "line-chart",
-        "sort_order": 3,
+        "sort_order": 5,
         "children": [
-          {
-            "title": "app.kuaicaiwu.menu.management-dashboard",
-            "path": "/apps/kuaicaiwu/management-dashboard",
-            "permission": "kuaicaiwu:management-dashboard:read",
-            "sort_order": 0
-          },
           {
             "title": "app.kuaicaiwu.menu.management-analysis.margin-report",
             "path": "/apps/kuaicaiwu/management-analysis/margin-report",
             "permission": "kuaicaiwu:margin-report:read",
-            "sort_order": 1
+            "sort_order": 0
           }
         ]
       }
@@ -178,6 +277,30 @@
     "kuaicaiwu:bank-account:audit",
     "kuaicaiwu:bank-account:reject",
     "kuaicaiwu:bank-account:print",
+    "kuaicaiwu:notes-receivable:read",
+    "kuaicaiwu:notes-receivable:create",
+    "kuaicaiwu:notes-receivable:delete",
+    "kuaicaiwu:notes-receivable:update",
+    "kuaicaiwu:notes-receivable:import",
+    "kuaicaiwu:notes-receivable:export",
+    "kuaicaiwu:notes-receivable:submit",
+    "kuaicaiwu:notes-receivable:revoke",
+    "kuaicaiwu:notes-receivable:approve",
+    "kuaicaiwu:notes-receivable:audit",
+    "kuaicaiwu:notes-receivable:reject",
+    "kuaicaiwu:notes-receivable:print",
+    "kuaicaiwu:notes-payable:read",
+    "kuaicaiwu:notes-payable:create",
+    "kuaicaiwu:notes-payable:delete",
+    "kuaicaiwu:notes-payable:update",
+    "kuaicaiwu:notes-payable:import",
+    "kuaicaiwu:notes-payable:export",
+    "kuaicaiwu:notes-payable:submit",
+    "kuaicaiwu:notes-payable:revoke",
+    "kuaicaiwu:notes-payable:approve",
+    "kuaicaiwu:notes-payable:audit",
+    "kuaicaiwu:notes-payable:reject",
+    "kuaicaiwu:notes-payable:print",
     "kuaicaiwu:cost-report:read",
     "kuaicaiwu:cost-report:export",
     "kuaicaiwu:cost-report:print",
@@ -221,7 +344,11 @@
     "kuaicaiwu:cost-management-dashboard:read",
     "kuaicaiwu:gl:read",
     "kuaicaiwu:gl:create",
+    "kuaicaiwu:gl:update",
+    "kuaicaiwu:gl:delete",
+    "kuaicaiwu:gl:audit",
     "kuaicaiwu:gl:execute",
+    "kuaicaiwu:gl:obsolete",
     "kuaicaiwu:gl:export",
     "kuaicaiwu:management-dashboard:read",
     "kuaicaiwu:margin-report:read",
@@ -333,6 +460,9 @@
     "kuaicaiwu:settlement:audit",
     "kuaicaiwu:settlement:reject",
     "kuaicaiwu:settlement:print",
+    "kuaicaiwu:tax:read",
+    "kuaicaiwu:tax:update",
+    "kuaicaiwu:tax:export",
     "kuaicaiwu:standard-cost:read",
     "kuaicaiwu:standard-cost:create",
     "kuaicaiwu:standard-cost:delete",

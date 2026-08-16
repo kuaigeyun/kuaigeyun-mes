@@ -6,7 +6,7 @@
  */
 
 import React, { ReactNode, useCallback, useRef } from 'react';
-import { Modal, Button, App, Space, Grid } from 'antd';
+import { Modal, Button, App, Space, Grid, Col } from 'antd';
 import { ProForm, ProFormInstance } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { MODAL_CONFIG, FORM_LAYOUT } from './constants';
@@ -14,8 +14,23 @@ import { useSubmitShortcut } from '../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../utils/globalSubmitShortcut';
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../utils/modalEventIsolation';
 
+/**
+ * `grid` 开启时，Alert / 说明 / Divider 等非 ProForm 字段必须包在本组件内。
+ * 裸节点会吃掉 Row gutter 负边距，比同排输入框更宽（连接器高德提示框）。
+ * 仅用于 `FormModalTemplate grid`（或移动端强制 grid）的 children。
+ */
+export function FormModalGridBlock({
+  children,
+  span = 24,
+}: {
+  children: ReactNode;
+  span?: number;
+}) {
+  return <Col span={span}>{children}</Col>;
+}
+
 export interface FormModalTemplateProps {
-  title: string;
+  title: ReactNode;
   open: boolean;
   /** 关闭弹窗（与 Modal onCancel 一致） */
   onClose?: () => void;
@@ -33,6 +48,11 @@ export interface FormModalTemplateProps {
   children?: ReactNode;
   width?: number;
   layout?: 'vertical' | 'horizontal';
+  /**
+   * 开启后 ProForm 包 Row+gutter。字段必须带 colProps；
+   * Alert / 说明等非字段必须包 `FormModalGridBlock`，否则会比输入框更宽。
+   * 有明细表时禁止开启（见 form-modal 契约）。
+   */
   grid?: boolean;
   loading?: boolean;
   formRef?:

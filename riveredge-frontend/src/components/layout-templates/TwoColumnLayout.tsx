@@ -286,8 +286,9 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
         ...style,
       }}
     >
-      {/* 左侧面板 */}
+      {/* 左侧面板：中灰用 token.colorBgLayout，不用 --ant-colorBgLayout（已被标签背景改写） */}
       <div
+        className="two-column-layout-left"
         style={{
           width: collapsed ? 0 : (typeof width === 'number' ? `${width}px` : width),
           minWidth: collapsed ? 0 : (typeof minWidth === 'number' ? `${minWidth}px` : minWidth),
@@ -296,7 +297,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
           borderBottom: `1px solid ${token.colorBorder}`,
           borderLeft: `1px solid ${token.colorBorder}`,
           borderRight: collapsed ? 'none' : `1px solid ${token.colorBorder}`,
-          backgroundColor: token.colorFillAlter || '#fafafa',
+          backgroundColor: token.colorBgLayout,
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
@@ -357,14 +358,27 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
         {leftContent ? (
           <div
             className="two-column-layout-left-custom scrollbar-like-modal"
-            style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflow: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              backgroundColor: token.colorBgLayout,
+            }}
           >
             {leftContent}
           </div>
         ) : treeProps ? (
           <div
             className="two-column-layout-left-tree scrollbar-like-modal"
-            style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '8px' }}
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflow: 'auto',
+              padding: '8px',
+              backgroundColor: token.colorBgLayout,
+            }}
           >
             {treeProps.loading ? (
               <div style={{ textAlign: 'center', padding: '40px' }}>

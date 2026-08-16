@@ -77,6 +77,8 @@ class Quotation(BaseModel):
     sales_order_code = fields.CharField(max_length=50, null=True, description="关联销售订单编码")
     contract_id = fields.IntField(null=True, description="关联销售合同ID")
     contract_code = fields.CharField(max_length=50, null=True, description="关联销售合同编码")
+    sales_review_id = fields.IntField(null=True, description="关联订单评审ID")
+    sales_review_code = fields.CharField(max_length=120, null=True, description="关联订单评审编码")
 
     notes = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")

@@ -8,7 +8,7 @@ Date: 2026-02-22
 """
 
 import uuid
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import date
 from fastapi import APIRouter, Depends, Query, Path, HTTPException as FastAPIHTTPException, status as http_status, Body
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -129,6 +129,44 @@ async def list_shipment_notices(
         order_by=safe_order_by,
         include_items=include_items,
     )
+
+
+@router.post(
+    "/pull-from-sales-order-items",
+    summary="Create shipment notices from sales order lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:shipment-notice:create"))],
+)
+async def pull_from_sales_order_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """从多张销售订单的开口行创建发货通知（同客户合并）。"""
+    from apps.kuaizhizao.services.sales_order_service import SalesOrderService
+
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="请至少选择一条可通知销售订单明细")
+    try:
+        selected_ids = [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    try:
+        return await SalesOrderService().create_shipment_notices_from_sales_order_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.exception("从销售订单开口行创建发货通知失败")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="从销售订单开口行创建发货通知失败",
+        )
 
 
 @router.get("/{notice_id}", response_model=ShipmentNoticeWithItemsResponse, summary="Get shipment notice")

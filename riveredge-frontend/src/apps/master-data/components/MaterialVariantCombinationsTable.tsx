@@ -773,7 +773,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
           }
           action={
             legacySplitAllowed ? (
-              <Button size="small" loading={migrating} onClick={() => void handleGenerateFromScope()}>
+              <Button loading={migrating} onClick={() => void handleGenerateFromScope()}>
                 {t('app.master-data.materials.migrateLegacyScope', '拆分为组合明细')}
               </Button>
             ) : undefined
@@ -793,11 +793,10 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
       {!legacyScope || !legacySplitAllowed ? (
         <Space orientation="vertical" size={8} style={{ marginBottom: 12, width: '100%' }}>
           <Space wrap>
-            <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => setAddOpen(true)}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddOpen(true)}>
               {t('app.master-data.materials.addVariantCombo', '新增行')}
             </Button>
             <Button
-              size="small"
               icon={<ImportOutlined />}
               loading={importing}
               onClick={() => setImportOpen(true)}
@@ -806,7 +805,6 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
             </Button>
             {masterSaved && autoGenerateAllowed && (
               <Button
-                size="small"
                 icon={<ThunderboltOutlined />}
                 loading={generating}
                 onClick={handleGenerate}
@@ -849,7 +847,6 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
 
       <Table
         rowKey="key"
-        size="small"
         loading={loading}
         dataSource={tableRows}
         columns={columns}

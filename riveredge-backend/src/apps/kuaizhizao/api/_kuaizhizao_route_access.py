@@ -41,6 +41,8 @@ def resolve_kuaizhizao_module_action(
         return "confirm_adjustment"
     if "/dispatch" in p and "/dispatch-orders" not in p:
         return "dispatch"
+    if module_code == "freight-order" and "/tracking-events" in p:
+        return "update"
     if "/release" in p:
         return "submit"
     if "/freeze" in p or "/unfreeze" in p:
@@ -53,11 +55,17 @@ def resolve_kuaizhizao_module_action(
         return "approve"
     if "/reject" in p:
         return "reject"
+    if "/issue" in p:
+        return "submit"
+    if "/dept-opinions" in p:
+        return "approve"
+    if "/push-to-" in p and module_code == "sales-review":
+        return "execute"
     if "/audit" in p or "/review" in p:
         return "audit"
     if "/recall" in p:
         return "recall"
-    if "/convert-to-order" in p:
+    if "/convert-to-order" in p or "/convert-to-sales-review" in p:
         return "update"
     if "/confirm-customer" in p:
         return "execute"

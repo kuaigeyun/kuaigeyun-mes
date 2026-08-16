@@ -73,6 +73,9 @@ ACTION_DISPLAY_LABELS: dict[str, str] = {
 
 PERMISSION_CODE_DISPLAY_LABELS: dict[str, str] = {
     "kuaizhizao:rework-order:release": "下达",
+    "kuaizhizao:sales-review:submit": "下达",
+    "kuaizhizao:sales-review:approve": "评审",
+    "kuaizhizao:sales-review:execute": "下推订单",
     "kuaizhizao:inbound:execute": "确认入库",
     "kuaizhizao:outbound:execute": "确认出库",
     "kuaizhizao:quality-management-incoming-inspection:execute": "检验",
@@ -82,6 +85,7 @@ PERMISSION_CODE_DISPLAY_LABELS: dict[str, str] = {
     "haoligo:equipment-documents-acceptance:submit": "调试",
     "haoligo:equipment-documents-acceptance:execute": "试产",
     "haoligo:equipment-documents-acceptance:complete": "台账结案",
+    "master-data:process:drawing-loan:complete": "归还",
     "haoligo:finance-equipment-payables:submit": "提交财务",
     "haoligo:finance-equipment-payables:execute": "登记付款",
     "system:application-connection:execute": "同步通讯录",

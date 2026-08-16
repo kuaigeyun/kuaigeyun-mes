@@ -31,7 +31,14 @@ from apps.kuaizhizao.utils.working_time import is_within_working_hours, load_sch
 
 from apps.kuaizhizao.services.scheduling_config_service import SchedulingConfigService
 
-from core.utils.timezone_utils import make_aware, resolve_business_datetime, site_timezone_name
+from core.utils.timezone_utils import (
+    coerce_business_datetime_to_utc,
+    make_aware,
+    resolve_business_datetime,
+    site_timezone_name,
+    to_site_date,
+    to_site_timezone,
+)
 
 from apps.kuaizhizao.services.scheduling_freeze import (
 
@@ -49,91 +56,60 @@ from core.services.base import BaseService
 
 
 
-def _intervals_overlap(s1: datetime, e1: datetime, s2: datetime, e2: datetime) -> bool:
-
-    return s1 < e2 and s2 < e1
-
-
-
-
-
 def _parse_dt(value: Any) -> Optional[datetime]:
-
+    """业务墙钟 / ISO / datetime → UTC aware，与 ORM DatetimeField 同一口径再比较。"""
     if value is None:
-
         return None
-
+    parsed: Optional[datetime]
     if isinstance(value, datetime):
-
-        return value
-
-    try:
-
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-
-    except ValueError:
-
-        return None
+        parsed = value
+    else:
+        try:
+            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    return coerce_business_datetime_to_utc(parsed)
 
 
-
+def _intervals_overlap(s1: datetime, e1: datetime, s2: datetime, e2: datetime) -> bool:
+    a1, b1, a2, b2 = _parse_dt(s1), _parse_dt(e1), _parse_dt(s2), _parse_dt(e2)
+    if not a1 or not b1 or not a2 or not b2:
+        return False
+    return a1 < b2 and a2 < b1
 
 
 def _schedule_minute(dt: datetime) -> datetime:
-
     """工序顺序校验精确到分钟。"""
-
     return dt.replace(second=0, microsecond=0)
 
 
-
-
-
 def _operation_start_before_prev_start(cur_start: datetime, prev_start: datetime) -> bool:
-
     """下道工序开始早于上道工序开始（允许结束/开始重叠，转序并行）。"""
-
-    return _schedule_minute(cur_start) < _schedule_minute(prev_start)
-
-
-
+    cur = _parse_dt(cur_start)
+    prev = _parse_dt(prev_start)
+    if not cur or not prev:
+        return False
+    return _schedule_minute(cur) < _schedule_minute(prev)
 
 
 def _effective_operation_planned_start(
-
     op: WorkOrderOperation,
-
     pending_by_id: Optional[Dict[int, Dict[str, Any]]],
-
 ) -> Optional[datetime]:
-
     patch = (pending_by_id or {}).get(int(op.id))
-
     if patch and patch.get("planned_start_date"):
-
         return _parse_dt(patch.get("planned_start_date"))
-
-    return op.planned_start_date
-
-
-
+    return _parse_dt(op.planned_start_date)
 
 
 def _effective_operation_planned_end(
-
     op: WorkOrderOperation,
-
     pending_by_id: Optional[Dict[int, Dict[str, Any]]],
-
 ) -> Optional[datetime]:
-
     patch = (pending_by_id or {}).get(int(op.id))
-
     if patch and patch.get("planned_end_date"):
-
         return _parse_dt(patch.get("planned_end_date"))
-
-    return op.planned_end_date
+    return _parse_dt(op.planned_end_date)
 
 
 
@@ -553,7 +529,7 @@ class VisualSchedulingService(BaseService):
             for key in ("planned_start_date", "planned_end_date"):
                 dt = _parse_dt(item.get(key))
                 if dt:
-                    holiday_dates.append(dt.date())
+                    holiday_dates.append(to_site_date(dt))
         around = min(holiday_dates) if holiday_dates else None
         holidays, work_hours, overtime = await load_scheduling_work_context(
             tenant_id, around=around
@@ -614,7 +590,7 @@ class VisualSchedulingService(BaseService):
                 continue
 
             if not is_within_working_hours(
-                start_dt, holidays=holidays, config=work_hours, overtime=overtime
+                to_site_timezone(start_dt), holidays=holidays, config=work_hours, overtime=overtime
             ):
                 conflicts.append(
                     _conflict_item(
@@ -818,14 +794,18 @@ class VisualSchedulingService(BaseService):
             for op in others:
                 sid = int(op.assigned_station_id or 0)
                 pid, code = product_by_wo.get(int(op.work_order_id or 0), (0, None))
+                other_start = _parse_dt(op.planned_start_date)
+                other_end = _parse_dt(op.planned_end_date)
+                if not other_start or not other_end:
+                    continue
                 by_station.setdefault(sid, []).append(
                     {
                         "op_id": int(op.id),
                         "wo_id": int(op.work_order_id or 0),
                         "wo_code": code,
                         "product_id": pid,
-                        "start": op.planned_start_date,
-                        "end": op.planned_end_date,
+                        "start": other_start,
+                        "end": other_end,
                     }
                 )
         conflicts: List[Dict[str, Any]] = []
@@ -841,13 +821,13 @@ class VisualSchedulingService(BaseService):
                 if a["op_id"] not in touched and b["op_id"] not in touched:
                     continue
                 ready = add_working_hours(
-                    a["end"],
+                    to_site_timezone(a["end"]),
                     changeover_hours,
                     holidays=holidays,
                     config=work_hours,
                     overtime=overtime,
                 )
-                if b["start"] < ready:
+                if to_site_timezone(b["start"]) < ready:
                     target = b if b["op_id"] in touched else a
                     conflicts.append(
                         _conflict_item(

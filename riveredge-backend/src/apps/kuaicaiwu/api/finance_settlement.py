@@ -11,6 +11,7 @@ from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_user
 from apps.kuaicaiwu.services.finance_service import AccountSettlementService
 from apps.kuaicaiwu.services.settlement_gate_service import SettlementGateService
+from apps.kuaicaiwu.schemas.finance import SettlementRecordListResponse, SettlementRecordResponse
 from apps.kuaicaiwu.utils.settlement_db_guard import (
     SETTLEMENTS_TABLE_MISSING_HINT,
     is_settlements_table_missing,
@@ -41,6 +42,65 @@ def _http_exception_with_trace(
         status_code=status_code,
         detail={"message": message, "trace_id": trace_id},
     )
+
+
+@router.get("/records", response_model=SettlementRecordListResponse, summary="List settlement records")
+async def list_settlement_records(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    business_type: Optional[str] = Query(
+        None,
+        description="业务方向 receivable|payable",
+    ),
+    partner_id: Optional[int] = Query(None),
+    keyword: Optional[str] = Query(None),
+    settlement_date_start: Optional[str] = Query(None),
+    settlement_date_end: Optional[str] = Query(None),
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query(None),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:settlement:read")),
+    current_user: Any = Depends(get_current_user),
+):
+    if business_type and business_type not in {"receivable", "payable"}:
+        raise _http_exception_with_trace(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "business_type 必须为 receivable 或 payable",
+            "/settlement/records",
+            current_user.tenant_id,
+        )
+    try:
+        rows, total = await service.list_settlement_records(
+            current_user.tenant_id,
+            skip,
+            limit,
+            business_type=business_type,
+            partner_id=partner_id,
+            keyword=keyword,
+            settlement_date_start=settlement_date_start,
+            settlement_date_end=settlement_date_end,
+            sort_field=sort_field,
+            sort_order=sort_order,
+        )
+        items = [SettlementRecordResponse.model_validate(row) for row in rows]
+        return SettlementRecordListResponse(
+            items=items,
+            total=total,
+            skip=skip,
+            limit=limit,
+        )
+    except Exception as e:
+        if is_settlements_table_missing(e):
+            logger.exception(
+                "list_settlement_records missing settlements table tenant_id={}",
+                current_user.tenant_id,
+            )
+            raise _http_exception_with_trace(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                SETTLEMENTS_TABLE_MISSING_HINT,
+                "/settlement/records",
+                current_user.tenant_id,
+            ) from e
+        raise
 
 
 @router.get("/receivable/preview", summary="Preview receivable settlement")

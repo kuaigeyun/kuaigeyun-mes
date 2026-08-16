@@ -12,6 +12,7 @@ import {
   renderAfterSalesStatusTag,
   renderAfterSalesTypeMarker,
 } from '../../shared/afterSalesListPresentation';
+import { LinkedDocumentCode } from '../../../../../../components/linked-document-code';
 import { AfterSalesDocDetailDrawer } from '../../shared/AfterSalesDocDetailDrawer';
 
 const PLACEHOLDER: AfterSalesTicket = {
@@ -65,8 +66,39 @@ export const AfterSalesTicketDetailDrawer: React.FC<AfterSalesTicketDetailDrawer
           dataIndex: 'status',
           render: (_, row) => renderAfterSalesStatusTag(row.status, AFTER_SALES_TICKET_STATUS_COLOR),
         },
-        { title: t('app.kuaizhizao.afterSalesTicket.colSalesOrder'), dataIndex: 'sales_order_code' },
-        { title: t('app.kuaizhizao.afterSalesTicket.colSalesReturn'), dataIndex: 'sales_return_code' },
+        {
+          title: t('app.kuaizhizao.afterSalesTicket.colSalesOrder'),
+          dataIndex: 'sales_order_code',
+          render: (_, row) => (
+            <LinkedDocumentCode
+              documentType="sales_order"
+              documentId={row.sales_order_id}
+              code={row.sales_order_code}
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.afterSalesTicket.colSalesDelivery'),
+          dataIndex: 'sales_delivery_code',
+          render: (_, row) => (
+            <LinkedDocumentCode
+              documentType="sales_delivery"
+              documentId={row.sales_delivery_id}
+              code={row.sales_delivery_code}
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.afterSalesTicket.colSalesReturn'),
+          dataIndex: 'sales_return_code',
+          render: (_, row) => (
+            <LinkedDocumentCode
+              documentType="sales_return"
+              documentId={row.sales_return_id}
+              code={row.sales_return_code}
+            />
+          ),
+        },
         {
           title: t('app.kuaizhizao.afterSalesTicket.colRegisteredAt'),
           dataIndex: 'registered_at',
@@ -127,6 +159,7 @@ export const AfterSalesTicketDetailDrawer: React.FC<AfterSalesTicketDetailDrawer
       extra={extra}
       footer={footer}
       zIndex={zIndex}
+      traceDocumentType="after_sales_ticket"
       linesTitle={t('app.kuaizhizao.afterSalesTicket.itemsTitle')}
       lines={
         <Table

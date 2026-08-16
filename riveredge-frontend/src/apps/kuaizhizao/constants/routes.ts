@@ -22,7 +22,6 @@ export const ROUTES = {
   RECEIPT_NOTICES: `${APP_BASE}/purchase-management/receipt-notices`,
   PURCHASE_RETURNS: `${APP_BASE}/purchase-management/purchase-returns`,
   SALES_ORDERS: `${APP_BASE}/sales-management/sales-orders`,
-  AFTER_SALES_DASHBOARD: `${APP_BASE}/after-sales-service/dashboard`,
   AFTER_SALES_TICKETS: `${APP_BASE}/after-sales-service/tickets`,
   AFTER_SALES_SERVICE_ASSETS: `${APP_BASE}/after-sales-service/service-assets`,
   AFTER_SALES_INSTALL_EXECUTION: `${APP_BASE}/after-sales-service/install-execution`,
@@ -68,6 +67,9 @@ export const ROUTES = {
   WM_DELIVERY_NOTES: `${APP_BASE}/warehouse-management/delivery-notes`,
   WM_STOCKTAKING: `${APP_BASE}/warehouse-management/stocktaking`,
   WM_INVENTORY_TRANSFER: `${APP_BASE}/warehouse-management/inventory-transfer`,
+  /** 物流管理 */
+  LOGISTICS_TRACKING: `${APP_BASE}/logistics-management/tracking`,
+  LOGISTICS_FREIGHT_ORDERS: `${APP_BASE}/logistics-management/freight-orders`,
   /** 绩效管理 */
   PERF_HOLIDAYS: `${APP_BASE}/performance/holidays`,
   PERF_SHIFTS: `${APP_BASE}/performance/shifts`,

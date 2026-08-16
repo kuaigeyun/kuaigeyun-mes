@@ -14,6 +14,8 @@ class AssetPurchaseCreate(BaseModel):
     currency: str = "CNY"
     department_name: Optional[str] = None
     purpose: Optional[str] = None
+    applicant_id: Optional[int] = None
+    applicant_name: Optional[str] = None
 
 
 class AssetPurchaseUpdate(BaseModel):

@@ -600,7 +600,29 @@ async def _build_material_response(tenant_id: int, material: Material) -> "Mater
     resp_data["code_aliases"] = [MaterialCodeAliasResponse.model_validate(a) for a in aliases]
     await _enrich_inspection_plan_name(resp_data)
     await _enrich_material_process_route_display(tenant_id, material, resp_data)
+    await _enrich_main_code_editability(tenant_id, material, resp_data)
     return MaterialResponse.model_validate(resp_data)
+
+
+async def _enrich_main_code_editability(
+    tenant_id: int,
+    material: Material,
+    resp_data: Dict[str, Any],
+) -> None:
+    """详情/更新响应：填充主编号是否可编辑。"""
+    from apps.master_data.services.material_main_code_editability import (
+        format_main_code_locked_message,
+        summarize_material_main_code_blockers,
+    )
+
+    summary = await summarize_material_main_code_blockers(
+        tenant_id, material, stop_on_first=True
+    )
+    editable = bool(summary.get("editable"))
+    resp_data["main_code_editable"] = editable
+    resp_data["main_code_lock_reason"] = (
+        None if editable else format_main_code_locked_message(summary)
+    )
 
 
 if TYPE_CHECKING:
@@ -2066,6 +2088,7 @@ class MaterialService:
         resp_data["code_aliases"] = [MaterialCodeAliasResponse.model_validate(a) for a in aliases]
         await _enrich_inspection_plan_name(resp_data)
         await _enrich_material_process_route_display(tenant_id, material, resp_data)
+        await _enrich_main_code_editability(tenant_id, material, resp_data)
         return MaterialResponse.model_validate(resp_data)
     
     @staticmethod
@@ -2547,13 +2570,33 @@ class MaterialService:
             if existing:
                 raise ValidationError(f"物料编码 {data.code} 已存在")
 
-        # 主编号创建后不可修改（允许请求体带回原值；禁止改成其它值）
+        # 主编号：无业务引用时可改；有引用则拒绝。允许请求体带回原值。
+        pending_main_code: Optional[str] = None
         incoming_main = getattr(data, "main_code", None)
         if incoming_main is not None:
             incoming_main_s = str(incoming_main).strip()
             current_main = str(material.main_code or "").strip()
             if incoming_main_s and incoming_main_s != current_main:
-                raise ValidationError("物料主编号不可修改")
+                from apps.master_data.services.material_main_code_editability import (
+                    family_material_ids,
+                    format_main_code_locked_message,
+                    summarize_material_main_code_blockers,
+                )
+
+                summary = await summarize_material_main_code_blockers(
+                    tenant_id, material, stop_on_first=False
+                )
+                if not summary.get("editable"):
+                    raise ValidationError(format_main_code_locked_message(summary))
+                family_ids = await family_material_ids(tenant_id, material)
+                clash = await Material.filter(
+                    tenant_id=tenant_id,
+                    main_code=incoming_main_s,
+                    deleted_at__isnull=True,
+                ).exclude(id__in=family_ids).exists()
+                if clash:
+                    raise ValidationError(f"物料主编号 {incoming_main_s} 已存在")
+                pending_main_code = incoming_main_s
 
         # 如果是属性物料，验证属性组合唯一性和属性值
         if data.variant_managed is not None and data.variant_managed and data.variant_attributes is not None:
@@ -2594,7 +2637,7 @@ class MaterialService:
             update_data = data.model_dump(exclude_unset=True, exclude={"department_codes", "customer_codes", "supplier_codes", "defaults"})
         else:
             update_data = data.dict(exclude_unset=True, exclude={"department_codes", "customer_codes", "supplier_codes", "defaults"})
-        # 主编号不可改：从更新字典移除，避免空串/同值覆盖
+        # 主编号单独处理：无引用时改整族；有引用已在上方拒绝
         update_data.pop("main_code", None)
 
         from apps.kuaizhizao.services.inspection_policy_service import (
@@ -2658,6 +2701,22 @@ class MaterialService:
 
         apply_update_audit(material, current_user)
         await material.save()
+
+        if pending_main_code:
+            from apps.master_data.services.material_main_code_editability import (
+                apply_family_main_code_change,
+            )
+
+            # 使用仍带旧 main_code 的实例同步整族；其它字段已落库
+            await apply_family_main_code_change(
+                tenant_id,
+                material,
+                pending_main_code,
+                current_user=current_user,
+            )
+            material = await Material.filter(id=material.id).first()
+            if not material:
+                raise NotFoundError(f"物料 {material_uuid} 不存在")
         
         # 处理编码映射更新
         # 如果提供了编码映射，先删除旧的编码别名，然后创建新的
@@ -2768,6 +2827,7 @@ class MaterialService:
         resp_data["code_aliases"] = [MaterialCodeAliasResponse.model_validate(a) for a in aliases]
         await _enrich_inspection_plan_name(resp_data)
         await _enrich_material_process_route_display(tenant_id, material, resp_data)
+        await _enrich_main_code_editability(tenant_id, material, resp_data)
         response = MaterialResponse.model_validate(resp_data)
 
         return response
@@ -6985,24 +7045,37 @@ class MaterialService:
         *,
         recursive: bool = False,
         include_obsolete: bool = False,
+        top_level_only: bool = False,
     ) -> Dict[str, Any]:
-        """反查：物料被哪些 BOM 作为子件使用。"""
+        """反查：物料被哪些 BOM 作为子件使用。
+
+        返回项含 level（直接父=1）与 path（原料码 > … > 父件码）。
+        top_level_only：仅保留自身不再作为任何 BOM 子件的父物料。
+        """
         component = await Material.filter(
             tenant_id=tenant_id, id=component_id, deleted_at__isnull=True
         ).first()
         if not component:
             raise NotFoundError(f"物料 {component_id} 不存在")
 
+        start_code = str(component.main_code or component.code or component_id)
+        # frontier: (as_component_id, level_of_that_id, path_codes_to_that_id)
+        frontier: List[Tuple[int, int, List[str]]] = [(component_id, 0, [start_code])]
         visited: Set[int] = set()
-        frontier = [component_id]
         rows: List[Dict[str, Any]] = []
 
         while frontier:
-            current_ids = [mid for mid in frontier if mid not in visited]
-            if not current_ids:
-                break
-            for mid in current_ids:
+            batch: List[Tuple[int, int, List[str]]] = []
+            for mid, level, path_codes in frontier:
+                if mid in visited:
+                    continue
                 visited.add(mid)
+                batch.append((mid, level, path_codes))
+            if not batch:
+                break
+
+            current_ids = [mid for mid, _, _ in batch]
+            meta_by_id = {mid: (level, path_codes) for mid, level, path_codes in batch}
 
             query = BOM.filter(
                 tenant_id=tenant_id,
@@ -7022,9 +7095,18 @@ class MaterialService:
             ).all()
             parent_map = {int(p.id): p for p in parents}
 
-            next_frontier: List[int] = []
+            next_frontier: List[Tuple[int, int, List[str]]] = []
             for bom in matches:
+                child_id = int(bom.component_id)
+                child_level, child_path = meta_by_id[child_id]
                 parent = parent_map.get(int(bom.material_id))
+                parent_code = (
+                    str(parent.main_code or parent.code or bom.material_id)
+                    if parent
+                    else str(bom.material_id)
+                )
+                parent_level = child_level + 1
+                parent_path = list(child_path) + [parent_code]
                 rows.append(
                     {
                         "bom_id": bom.id,
@@ -7040,17 +7122,38 @@ class MaterialService:
                         "is_default": bool(bom.is_default),
                         "is_obsolete": bool(bom.is_obsolete),
                         "bom_code": bom.bom_code,
+                        "level": parent_level,
+                        "path": " > ".join(parent_path),
                     }
                 )
                 if recursive and int(bom.material_id) not in visited:
-                    next_frontier.append(int(bom.material_id))
+                    next_frontier.append((int(bom.material_id), parent_level, parent_path))
             frontier = next_frontier if recursive else []
+
+        if top_level_only and rows:
+            candidate_ids = list({int(r["material_id"]) for r in rows if r.get("material_id")})
+            if candidate_ids:
+                used_q = BOM.filter(
+                    tenant_id=tenant_id,
+                    component_id__in=candidate_ids,
+                    deleted_at__isnull=True,
+                    is_active=True,
+                )
+                if not include_obsolete:
+                    used_q = used_q.filter(is_obsolete=False)
+                used_as_child = {
+                    int(cid)
+                    for cid in await used_q.values_list("component_id", flat=True)
+                    if cid is not None
+                }
+                rows = [r for r in rows if int(r["material_id"]) not in used_as_child]
 
         return {
             "component_id": component_id,
             "component_code": component.main_code or component.code,
             "component_name": component.name,
             "recursive": recursive,
+            "top_level_only": top_level_only,
             "items": rows,
             "total": len(rows),
         }

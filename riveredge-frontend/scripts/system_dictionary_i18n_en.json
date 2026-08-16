@@ -373,6 +373,14 @@
         "label": "Customer Cancellation",
         "desc": "Return due to customer order cancellation"
       },
+      "订单退货": {
+        "label": "Order Return",
+        "desc": "Return created by pushing from a sales or purchase order"
+      },
+      "出库退货": {
+        "label": "Outbound Return",
+        "desc": "Return created by pushing from a sales outbound document"
+      },
       "OTHER": {
         "label": "Other",
         "desc": "Other reason"

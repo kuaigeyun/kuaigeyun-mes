@@ -1,0 +1,35 @@
+/* Puck 0.20 无 i18n：用覆盖层替换侧栏标题，并用 CSS 变量替换大纲空态文案。 */
+
+.puck-chrome-i18n [class*='SidebarSection-title'] {
+  display: none;
+}
+
+.puck-chrome-section-title,
+.puck-chrome-fields-title {
+  box-sizing: border-box;
+  padding: 10px 16px 8px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: inherit;
+}
+
+.puck-chrome-section-title {
+  font-size: 12px;
+  opacity: 0.72;
+}
+
+.puck-chrome-fields-title {
+  font-size: 13px;
+}
+
+.puck-chrome-i18n [class*='LayerTree-helper'] {
+  font-size: 0 !important;
+  line-height: 0 !important;
+}
+
+.puck-chrome-i18n [class*='LayerTree-helper']::after {
+  content: var(--puck-i18n-no-items);
+  font-size: 12px;
+  line-height: 1.5;
+  opacity: 0.65;
+}

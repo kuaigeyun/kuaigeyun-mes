@@ -12,7 +12,8 @@ const QualityExceptionTracking: React.FC = () => {
     <KuaizhizaoReport
       title={t('app.kuaizhizao.menu.reports.quality-exception-tracking')}
       reportType={QUALITY_REPORT_TYPES.QUALITY_EXCEPTION}
-      columnPersistenceId="apps.kuaizhizao.pages.quality-management.reports.QualityExceptionTracking"
+      columnPersistenceId="apps.kuaizhizao.pages.quality-management.reports.QualityExceptionTracking-v2"
+      rowKey="id"
       columns={columns}
     />
   );

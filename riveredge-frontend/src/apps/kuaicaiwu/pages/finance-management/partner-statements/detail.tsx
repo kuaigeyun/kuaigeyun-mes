@@ -225,27 +225,31 @@ const PartnerStatementDetailPage: React.FC = () => {
   };
 
   const pageActions = data ? (
-    <Space wrap size={8}>
-      <Button onClick={() => navigate('/apps/kuaicaiwu/finance-management/partner-statements')}>{t('app.kuaicaiwu.common.back')}</Button>
-      {data.status === 'Draft' || data.status === 'Disputed' ? (
-        statementPerms.canUpdate ? (
-        <Button type="primary" onClick={handleConfirm}>{t(`${PS}.detail.internalConfirm`)}</Button>
-        ) : null
-      ) : null}
-      {data.status === 'Confirmed' && statementPerms.canUpdate ? (
-        <Button type="primary" onClick={handleMarkSent}>{t(`${PS}.detail.markSent`)}</Button>
-      ) : null}
-      {statementPerms.canExport ? (
-        <>
-      <Button loading={exporting === 'xlsx'} onClick={() => void handleExport('xlsx')}>{t(`${PS}.detail.exportExcel`)}</Button>
-      <Button loading={exporting === 'pdf'} onClick={() => void handleExport('pdf')}>{t(`${PS}.detail.exportPdf`)}</Button>
-        </>
-      ) : null}
-      <Button onClick={handlePrint}>{t(`${PS}.detail.print`)}</Button>
-      {(data.status === 'Sent' || data.status === 'Confirmed') && statementPerms.canUpdate ? (
-        <Button danger onClick={handleDispute}>{t(`${PS}.detail.recordDispute`)}</Button>
-      ) : null}
-    </Space>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+      <Space wrap size={8}>
+        <Button onClick={() => navigate('/apps/kuaicaiwu/finance-management/partner-statements')}>{t('app.kuaicaiwu.common.back')}</Button>
+        {data.status === 'Draft' || data.status === 'Disputed' ? (
+          statementPerms.canUpdate ? (
+          <Button type="primary" onClick={handleConfirm}>{t(`${PS}.detail.internalConfirm`)}</Button>
+          ) : null
+        ) : null}
+        {data.status === 'Confirmed' && statementPerms.canUpdate ? (
+          <Button type="primary" onClick={handleMarkSent}>{t(`${PS}.detail.markSent`)}</Button>
+        ) : null}
+        {(data.status === 'Sent' || data.status === 'Confirmed') && statementPerms.canUpdate ? (
+          <Button danger onClick={handleDispute}>{t(`${PS}.detail.recordDispute`)}</Button>
+        ) : null}
+      </Space>
+      <Space wrap size={8}>
+        {statementPerms.canExport ? (
+          <>
+            <Button loading={exporting === 'xlsx'} onClick={() => void handleExport('xlsx')}>{t(`${PS}.detail.exportExcel`)}</Button>
+            <Button loading={exporting === 'pdf'} onClick={() => void handleExport('pdf')}>{t(`${PS}.detail.exportPdf`)}</Button>
+          </>
+        ) : null}
+        <Button onClick={handlePrint}>{t(`${PS}.detail.print`)}</Button>
+      </Space>
+    </div>
   ) : null;
 
   return (

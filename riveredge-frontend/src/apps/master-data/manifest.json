@@ -2,7 +2,7 @@
   "name": "基础数据管理",
   "code": "master-data",
   "version": "1.0.0",
-  "description": "企业基础数据的统一管理与维护平台",
+  "description": "企业主数据唯一真源与基础资料协同平台",
   "icon": "database",
   "author": "RiverEdge Team",
   "entry_point": "../apps/master-data/index.tsx",
@@ -105,28 +105,34 @@
             "sort_order": 3
           },
           {
+            "title": "app.master-data.menu.materials.market-prices",
+            "path": "/apps/master-data/materials/market-prices",
+            "permission": "master-data:material:read",
+            "sort_order": 4
+          },
+          {
             "title": "app.master-data.menu.materials.batch-rules",
             "path": "/apps/master-data/materials/batch-rules",
             "permission": "master-data:material-batch-rule:read",
-            "sort_order": 4
+            "sort_order": 5
           },
           {
             "title": "app.master-data.menu.materials.batches",
             "path": "/apps/master-data/materials/batches",
             "permission": "master-data:material-batch:read",
-            "sort_order": 5
+            "sort_order": 6
           },
           {
             "title": "app.master-data.menu.materials.serial-rules",
             "path": "/apps/master-data/materials/serial-rules",
             "permission": "master-data:material-serial:read",
-            "sort_order": 6
+            "sort_order": 7
           },
           {
             "title": "app.master-data.menu.materials.serials",
             "path": "/apps/master-data/materials/serials",
             "permission": "master-data:material-serial:read",
-            "sort_order": 7
+            "sort_order": 8
           }
         ]
       },
@@ -166,16 +172,34 @@
             "sort_order": 5
           },
           {
+            "title": "app.master-data.menu.process.drawing-where-used",
+            "path": "/apps/master-data/process/drawing-where-used",
+            "permission": "master-data:process:drawing-where-used:read",
+            "sort_order": 6
+          },
+          {
+            "title": "app.master-data.menu.process.drawing-distributions",
+            "path": "/apps/master-data/process/drawing-distributions",
+            "permission": "master-data:process:drawing-distribution:read",
+            "sort_order": 7
+          },
+          {
+            "title": "app.master-data.menu.process.drawing-loans",
+            "path": "/apps/master-data/process/drawing-loans",
+            "permission": "master-data:process:drawing-loan:read",
+            "sort_order": 8
+          },
+          {
             "title": "app.master-data.menu.process.engineering-bom",
             "path": "/apps/master-data/process/engineering-bom",
             "permission": "master-data:process:engineering-bom:read",
-            "sort_order": 6
+            "sort_order": 9
           },
           {
             "title": "app.master-data.menu.process.sop",
             "path": "/apps/master-data/process/sop",
             "permission": "master-data:process:sop:read",
-            "sort_order": 7
+            "sort_order": 10
           }
         ]
       },
@@ -407,6 +431,30 @@
     "master-data:process:drawing:print",
     "master-data:process:drawing:obsolete",
     "master-data:process:drawing:release",
+    "master-data:process:drawing-where-used:read",
+    "master-data:process:drawing-where-used:export",
+    "master-data:process:drawing-distribution:read",
+    "master-data:process:drawing-distribution:create",
+    "master-data:process:drawing-distribution:update",
+    "master-data:process:drawing-distribution:delete",
+    "master-data:process:drawing-distribution:submit",
+    "master-data:process:drawing-distribution:approve",
+    "master-data:process:drawing-distribution:reject",
+    "master-data:process:drawing-distribution:revoke",
+    "master-data:process:drawing-distribution:recall",
+    "master-data:process:drawing-distribution:export",
+    "master-data:process:drawing-distribution:print",
+    "master-data:process:drawing-loan:read",
+    "master-data:process:drawing-loan:create",
+    "master-data:process:drawing-loan:update",
+    "master-data:process:drawing-loan:delete",
+    "master-data:process:drawing-loan:submit",
+    "master-data:process:drawing-loan:approve",
+    "master-data:process:drawing-loan:reject",
+    "master-data:process:drawing-loan:revoke",
+    "master-data:process:drawing-loan:complete",
+    "master-data:process:drawing-loan:export",
+    "master-data:process:drawing-loan:print",
     "master-data:process:sop:read",
     "master-data:process:sop:create",
     "master-data:process:sop:delete",
@@ -419,6 +467,10 @@
     "master-data:process:sop:audit",
     "master-data:process:sop:reject",
     "master-data:process:sop:print",
+    "master-data:process:sop:publish",
+    "master-data:process:sop:obsolete",
+    "master-data:process:sop:dispatch",
+    "master-data:process:sop:recall",
     "master-data:supply-chain:customer:read",
     "master-data:supply-chain:customer:create",
     "master-data:supply-chain:customer:delete",

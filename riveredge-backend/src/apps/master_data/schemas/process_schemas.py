@@ -590,8 +590,56 @@ class SOPBase(BaseModel):
         description="指定BOM的UUID（bom_load_mode=specific_bom时使用）",
         validation_alias=AliasChoices("specific_bom_uuid", "specificBomUuid"),
     )
-    
-    @validator("code")
+    carrier: Optional[str] = Field(
+        "electronic",
+        max_length=20,
+        description="载体 electronic/paper/hybrid",
+    )
+    storage_plant_id: Optional[int] = Field(
+        None,
+        description="纸质原件存放厂区ID",
+        validation_alias=AliasChoices("storage_plant_id", "storagePlantId"),
+    )
+    storage_location: Optional[str] = Field(
+        None,
+        max_length=200,
+        description="纸质存放位置",
+        validation_alias=AliasChoices("storage_location", "storageLocation"),
+    )
+    keeper_name: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="纸质保管人",
+        validation_alias=AliasChoices("keeper_name", "keeperName"),
+    )
+    page_count: Optional[int] = Field(
+        None,
+        description="纸质页数",
+        validation_alias=AliasChoices("page_count", "pageCount"),
+    )
+    paper_size: Optional[str] = Field(
+        None,
+        max_length=30,
+        description="纸张规格",
+        validation_alias=AliasChoices("paper_size", "paperSize"),
+    )
+    change_reason: Optional[str] = Field(
+        None,
+        description="变更原因",
+        validation_alias=AliasChoices("change_reason", "changeReason"),
+    )
+    qms_document_uuid: Optional[str] = Field(
+        None,
+        max_length=36,
+        description="关联质量体系文件UUID",
+        validation_alias=AliasChoices("qms_document_uuid", "qmsDocumentUuid"),
+    )
+
+    @validator("carrier")
+    def validate_carrier(cls, v):
+        if v is not None and v not in ("electronic", "paper", "hybrid"):
+            raise ValueError("carrier 必须是 electronic、paper 或 hybrid")
+        return v or "electronic"
     def validate_code(cls, v):
         """验证编码格式"""
         if not v or not v.strip():
@@ -681,6 +729,49 @@ class SOPUpdate(BaseModel):
         description="指定BOM的UUID",
         validation_alias=AliasChoices("specific_bom_uuid", "specificBomUuid"),
     )
+    carrier: Optional[str] = Field(
+        None,
+        max_length=20,
+        description="载体 electronic/paper/hybrid",
+    )
+    storage_plant_id: Optional[int] = Field(
+        None,
+        validation_alias=AliasChoices("storage_plant_id", "storagePlantId"),
+    )
+    storage_location: Optional[str] = Field(
+        None,
+        max_length=200,
+        validation_alias=AliasChoices("storage_location", "storageLocation"),
+    )
+    keeper_name: Optional[str] = Field(
+        None,
+        max_length=100,
+        validation_alias=AliasChoices("keeper_name", "keeperName"),
+    )
+    page_count: Optional[int] = Field(
+        None,
+        validation_alias=AliasChoices("page_count", "pageCount"),
+    )
+    paper_size: Optional[str] = Field(
+        None,
+        max_length=30,
+        validation_alias=AliasChoices("paper_size", "paperSize"),
+    )
+    change_reason: Optional[str] = Field(
+        None,
+        validation_alias=AliasChoices("change_reason", "changeReason"),
+    )
+    qms_document_uuid: Optional[str] = Field(
+        None,
+        max_length=36,
+        validation_alias=AliasChoices("qms_document_uuid", "qmsDocumentUuid"),
+    )
+
+    @validator("carrier")
+    def validate_carrier_update(cls, v):
+        if v is not None and v not in ("electronic", "paper", "hybrid"):
+            raise ValueError("carrier 必须是 electronic、paper 或 hybrid")
+        return v
     
     @validator("bom_load_mode")
     def validate_bom_load_mode_update(cls, v):
@@ -709,6 +800,42 @@ class SOPResponse(SOPBase):
     id: int = Field(..., description="主键ID")
     uuid: str = Field(..., description="UUID")
     tenant_id: int = Field(..., description="租户ID")
+    control_status: str = Field(
+        "draft",
+        description="文控状态",
+        validation_alias=AliasChoices("control_status", "controlStatus"),
+    )
+    current_revision: Optional[str] = Field(
+        None,
+        description="当前修订号",
+        validation_alias=AliasChoices("current_revision", "currentRevision"),
+    )
+    effective_at: Optional[datetime] = Field(
+        None,
+        validation_alias=AliasChoices("effective_at", "effectiveAt"),
+    )
+    obsolete_at: Optional[datetime] = Field(
+        None,
+        validation_alias=AliasChoices("obsolete_at", "obsoleteAt"),
+    )
+    approved_at: Optional[datetime] = Field(
+        None,
+        validation_alias=AliasChoices("approved_at", "approvedAt"),
+    )
+    approved_by_name: Optional[str] = Field(
+        None,
+        validation_alias=AliasChoices("approved_by_name", "approvedByName"),
+    )
+    issued_copy_count: int = Field(
+        0,
+        description="已发放受控份数",
+        validation_alias=AliasChoices("issued_copy_count", "issuedCopyCount"),
+    )
+    pending_retrieve_copy_count: int = Field(
+        0,
+        description="待回收受控份数",
+        validation_alias=AliasChoices("pending_retrieve_copy_count", "pendingRetrieveCopyCount"),
+    )
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
@@ -718,6 +845,137 @@ class SOPResponse(SOPBase):
     class Config:
         from_attributes = True
         populate_by_name = True
+
+
+class SopRevisionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: int
+    uuid: Optional[str] = None
+    sop_id: int = Field(..., validation_alias=AliasChoices("sop_id", "sopId"))
+    revision: str
+    carrier: str
+    content: Optional[str] = None
+    attachments: Optional[Dict[str, Any]] = None
+    flow_config: Optional[Dict[str, Any]] = Field(
+        None, validation_alias=AliasChoices("flow_config", "flowConfig")
+    )
+    form_config: Optional[Dict[str, Any]] = Field(
+        None, validation_alias=AliasChoices("form_config", "formConfig")
+    )
+    storage_location: Optional[str] = Field(
+        None, validation_alias=AliasChoices("storage_location", "storageLocation")
+    )
+    change_reason: Optional[str] = Field(
+        None, validation_alias=AliasChoices("change_reason", "changeReason")
+    )
+    effective_at: Optional[datetime] = Field(
+        None, validation_alias=AliasChoices("effective_at", "effectiveAt")
+    )
+    obsolete_at: Optional[datetime] = Field(
+        None, validation_alias=AliasChoices("obsolete_at", "obsoleteAt")
+    )
+    published_by_name: Optional[str] = Field(
+        None, validation_alias=AliasChoices("published_by_name", "publishedByName")
+    )
+    created_at: Optional[datetime] = Field(None, validation_alias=AliasChoices("created_at", "createdAt"))
+
+
+class SopControlledCopyResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: int
+    uuid: Optional[str] = None
+    sop_id: int = Field(..., validation_alias=AliasChoices("sop_id", "sopId"))
+    copy_no: str = Field(..., validation_alias=AliasChoices("copy_no", "copyNo"))
+    location_type: str = Field(..., validation_alias=AliasChoices("location_type", "locationType"))
+    station_id: Optional[int] = Field(None, validation_alias=AliasChoices("station_id", "stationId"))
+    holder_user_id: Optional[int] = Field(
+        None, validation_alias=AliasChoices("holder_user_id", "holderUserId")
+    )
+    location_note: Optional[str] = Field(
+        None, validation_alias=AliasChoices("location_note", "locationNote")
+    )
+    revision: str
+    status: str
+    issued_at: Optional[datetime] = Field(None, validation_alias=AliasChoices("issued_at", "issuedAt"))
+    issued_by_name: Optional[str] = Field(
+        None, validation_alias=AliasChoices("issued_by_name", "issuedByName")
+    )
+    retrieved_at: Optional[datetime] = Field(
+        None, validation_alias=AliasChoices("retrieved_at", "retrievedAt")
+    )
+    retrieved_by_name: Optional[str] = Field(
+        None, validation_alias=AliasChoices("retrieved_by_name", "retrievedByName")
+    )
+
+
+class SopControlledCopyDispatchRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    location_type: str = Field(..., validation_alias=AliasChoices("location_type", "locationType"))
+    station_id: Optional[int] = Field(None, validation_alias=AliasChoices("station_id", "stationId"))
+    holder_user_id: Optional[int] = Field(
+        None, validation_alias=AliasChoices("holder_user_id", "holderUserId")
+    )
+    location_note: Optional[str] = Field(
+        None, validation_alias=AliasChoices("location_note", "locationNote")
+    )
+
+
+class SopControlledCopyRecallRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    copy_id: int = Field(..., validation_alias=AliasChoices("copy_id", "copyId"))
+    mark_lost: bool = Field(
+        False,
+        description="标记为丢失而非正常回收",
+        validation_alias=AliasChoices("mark_lost", "markLost"),
+    )
+
+
+class SopReviseRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    change_reason: Optional[str] = Field(
+        None,
+        validation_alias=AliasChoices("change_reason", "changeReason"),
+    )
+
+
+class SopWorkflowNoteRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    note: Optional[str] = Field(None, description="审核意见或备注")
+
+
+class SopPrintDataResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    sop_uuid: str = Field(..., validation_alias=AliasChoices("sop_uuid", "sopUuid"))
+    code: str
+    name: str
+    revision: str
+    carrier: str
+    controlled: bool = Field(..., description="是否受控打印")
+    copy_no: Optional[str] = Field(None, validation_alias=AliasChoices("copy_no", "copyNo"))
+    watermark: str
+    storage_location: Optional[str] = Field(
+        None, validation_alias=AliasChoices("storage_location", "storageLocation")
+    )
+    content: Optional[str] = None
+    attachments: Optional[List[Dict[str, Any]]] = None
+    steps: Optional[List[Dict[str, Any]]] = None
+
+
+class SopRevisionListResponse(BaseModel):
+    data: List[SopRevisionResponse]
+    total: int
+
+
+class SopControlledCopyListResponse(BaseModel):
+    data: List[SopControlledCopyResponse]
+    total: int
 
 
 class SOPListResponse(BaseModel):

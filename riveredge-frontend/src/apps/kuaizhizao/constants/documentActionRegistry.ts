@@ -1,6 +1,8 @@
 export type KuaizhizaoDocumentActionKey =
   | 'sales_order.pull_from_quotation'
   | 'sales_order.pull_from_sales_contract'
+  | 'sales_order.pull_from_sales_review'
+  | 'sales_review.pull_from_quotation'
   | 'sales_contract.pull_from_quotation'
   | 'sales_contract.pull_from_sales_order'
   | 'sales_order_change.pull_from_sales_order'
@@ -19,6 +21,8 @@ export type KuaizhizaoDocumentActionKey =
   | 'sales_return.pull_from_sales_delivery'
   | 'after_sales_ticket.pull_from_sales_order'
   | 'after_sales_ticket.pull_from_sales_delivery'
+  | 'install_execution.pull_from_sales_order'
+  | 'install_execution.pull_from_sales_delivery'
   | 'receipt_notice.pull_from_purchase_order'
   | 'purchase_receipt.pull_from_purchase_order'
   | 'purchase_invoice.pull_from_purchase_order'
@@ -89,6 +93,22 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     labelKey: documentActionI18n('sales_order.pull_from_sales_contract', 'label'),
     sourceLabelKey: documentActionI18n('sales_order.pull_from_sales_contract', 'source'),
     targetLabelKey: documentActionI18n('sales_order.pull_from_sales_contract', 'target'),
+  },
+  'sales_order.pull_from_sales_review': {
+    key: 'sales_order.pull_from_sales_review',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('sales_order.pull_from_sales_review', 'label'),
+    sourceLabelKey: documentActionI18n('sales_order.pull_from_sales_review', 'source'),
+    targetLabelKey: documentActionI18n('sales_order.pull_from_sales_review', 'target'),
+  },
+  'sales_review.pull_from_quotation': {
+    key: 'sales_review.pull_from_quotation',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('sales_review.pull_from_quotation', 'label'),
+    sourceLabelKey: documentActionI18n('sales_review.pull_from_quotation', 'source'),
+    targetLabelKey: documentActionI18n('sales_review.pull_from_quotation', 'target'),
   },
   'sales_contract.pull_from_quotation': {
     key: 'sales_contract.pull_from_quotation',
@@ -233,6 +253,22 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     labelKey: documentActionI18n('after_sales_ticket.pull_from_sales_delivery', 'label'),
     sourceLabelKey: documentActionI18n('after_sales_ticket.pull_from_sales_delivery', 'source'),
     targetLabelKey: documentActionI18n('after_sales_ticket.pull_from_sales_delivery', 'target'),
+  },
+  'install_execution.pull_from_sales_order': {
+    key: 'install_execution.pull_from_sales_order',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('install_execution.pull_from_sales_order', 'label'),
+    sourceLabelKey: documentActionI18n('install_execution.pull_from_sales_order', 'source'),
+    targetLabelKey: documentActionI18n('install_execution.pull_from_sales_order', 'target'),
+  },
+  'install_execution.pull_from_sales_delivery': {
+    key: 'install_execution.pull_from_sales_delivery',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('install_execution.pull_from_sales_delivery', 'label'),
+    sourceLabelKey: documentActionI18n('install_execution.pull_from_sales_delivery', 'source'),
+    targetLabelKey: documentActionI18n('install_execution.pull_from_sales_delivery', 'target'),
   },
   'receipt_notice.pull_from_purchase_order': {
     key: 'receipt_notice.pull_from_purchase_order',

@@ -22,6 +22,8 @@ export type AiContextPayload = {
   recordLabel?: string;
   /** KU-AI 能力模式：综合问答 / 智能问数 / 智能实施 */
   capabilityMode?: AiCapabilityMode;
+  /** 智能体库 id */
+  agentId?: string;
 };
 
 export type PendingAssistantRequest = {
@@ -98,8 +100,10 @@ export function toAiContextApiPayload(context: AiContextPayload | null): Record<
   if (context.resourceKey) payload.resource_key = context.resourceKey;
   if (context.recordId != null && context.recordId !== '') payload.record_id = context.recordId;
   if (context.recordLabel) payload.record_label = context.recordLabel;
+  if (context.agentId) payload.agent_id = context.agentId;
   const extra: Record<string, unknown> = {};
   if (context.capabilityMode) extra.capability_mode = context.capabilityMode;
+  if (context.agentId) extra.agent_id = context.agentId;
   if (Object.keys(extra).length) payload.extra = extra;
   return Object.keys(payload).length ? payload : undefined;
 }

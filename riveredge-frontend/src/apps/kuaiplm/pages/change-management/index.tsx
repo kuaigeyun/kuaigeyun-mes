@@ -3,8 +3,8 @@ import { rowActionKind } from '../../../../components/uni-action';
  * ECR/ECO 变更工作台
  */
 
-import React, { useRef, useState, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Space } from 'antd';
 import { PlayCircleOutlined } from '@ant-design/icons';
@@ -14,19 +14,23 @@ import { UniBatchMenuButton } from '../../../../components/uni-batch';
 import { UniWorkflowActions } from '../../../../components/uni-workflow-actions';
 import { ListPageTemplate } from '../../../../components/layout-templates';
 import { useAuditRequired } from '../../../../hooks/useAuditRequired';
+import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import {
   listBomChanges,
   listRouteChanges,
+  listDrawingChanges,
   listUnifiedChanges,
   auditNodeKeyForRow,
   batchApproveChanges,
   batchDeleteChanges,
   batchExecuteChanges,
+  deskApiChangeType,
   executeChange,
   type UnifiedChangeRow,
   type ChangeDeskCategory,
 } from '../../services/change-desk';
 import { buildBomChangeCreateUrl, buildRouteChangeCreateUrl } from '../../services/master-data-links';
+import DrawingChangeFormModal from '../../components/DrawingChangeFormModal';
 import { useNewShortcut } from '../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
 import { getKuaiplmChangeStatusText } from '../../components/kuaiplmMeta';
@@ -43,21 +47,28 @@ import {
   renderPlmChangeStatusTag,
   renderPlmChangeTypeMarker,
 } from '../../utils/plmListPresentation';
+import ChangeDetailDrawer from '../../components/ChangeDetailDrawer';
 
-type TabKey = 'all' | 'bom' | 'route';
+type TabKey = 'all' | 'bom' | 'route' | 'drawing';
 
 const ChangeManagementPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { message: messageApi, modal: modalApi } = App.useApp();
+  const changePerms = useResourcePermissions('kuaiplm.change');
   const actionRef = useRef<ActionType>(null);
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const bomAuditEnabled = useAuditRequired('bom_change');
   const routeAuditEnabled = useAuditRequired('process_route_change');
-  const auditEnabled = bomAuditEnabled || routeAuditEnabled;
+  const drawingAuditEnabled = useAuditRequired('drawing_change');
+  const auditEnabled = bomAuditEnabled || routeAuditEnabled || drawingAuditEnabled;
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [rowsByUuid, setRowsByUuid] = useState<Record<string, UnifiedChangeRow>>({});
+  const [detailRow, setDetailRow] = useState<UnifiedChangeRow | null>(null);
+  const [drawingCreateOpen, setDrawingCreateOpen] = useState(false);
+  const [drawingCreateUuid, setDrawingCreateUuid] = useState<string | undefined>();
 
   const handleCreateBomChange = useCallback(() => {
     navigate(buildBomChangeCreateUrl());
@@ -65,6 +76,18 @@ const ChangeManagementPage: React.FC = () => {
   const handleCreateRouteChange = useCallback(() => {
     navigate(buildRouteChangeCreateUrl());
   }, [navigate]);
+  const handleCreateDrawingChange = useCallback((uuid?: string) => {
+    setDrawingCreateUuid(uuid);
+    setDrawingCreateOpen(true);
+  }, []);
+  useEffect(() => {
+    if (searchParams.get('create') !== 'drawing') return;
+    handleCreateDrawingChange(searchParams.get('drawingUuid') || undefined);
+    const next = new URLSearchParams(searchParams);
+    next.delete('create');
+    next.delete('drawingUuid');
+    setSearchParams(next, { replace: true });
+  }, [handleCreateDrawingChange, searchParams, setSearchParams]);
   useNewShortcut(handleCreateBomChange);
 
   const fetchList = async (
@@ -77,6 +100,7 @@ const ChangeManagementPage: React.FC = () => {
     const base = { skip, limit, ...listParams };
     if (category === 'bom') return listBomChanges(base);
     if (category === 'route') return listRouteChanges(base);
+    if (category === 'drawing') return listDrawingChanges(base);
     return listUnifiedChanges({ ...base, change_category: undefined });
   };
 
@@ -101,7 +125,7 @@ const ChangeManagementPage: React.FC = () => {
     .filter((row): row is UnifiedChangeRow => !!row?.uuid && !!row?.change_category)
     .map((row) => ({
       change_uuid: String(row.uuid),
-      change_type: row.change_category === 'route' ? 'process_route' : 'bom',
+      change_type: deskApiChangeType(row.change_category),
     }));
 
   const handleBatchApprove = useCallback(async () => {
@@ -143,7 +167,7 @@ const ChangeManagementPage: React.FC = () => {
         .filter((row): row is UnifiedChangeRow => !!row?.uuid && !!row?.change_category)
         .map((row) => ({
           change_uuid: String(row.uuid),
-          change_type: row.change_category === 'route' ? 'process_route' : 'bom',
+          change_type: deskApiChangeType(row.change_category),
         }));
       if (!items.length) {
         messageApi.warning(t('app.kuaiplm.change.messages.selectFirst'));
@@ -234,6 +258,15 @@ const ChangeManagementPage: React.FC = () => {
       plmListActionColumn<UnifiedChangeRow>(t, (_, row) => {
         const status = (row.status ?? '').toLowerCase();
         return [
+          <Button
+            {...rowActionKind('read')}
+            key="detail"
+            type="link"
+            size="small"
+            onClick={() => setDetailRow(row)}
+          >
+            {t('common.detail')}
+          </Button>,
           <UniWorkflowActions
             {...rowActionKind('skip')}
             key="audit"
@@ -258,6 +291,7 @@ const ChangeManagementPage: React.FC = () => {
               type="link"
               size="small"
               icon={<PlayCircleOutlined />}
+              disabled={!changePerms.canUpdate}
               onClick={() => handleExecute(row)}
             >
               {t('app.kuaiplm.common.actions.execute')}
@@ -266,7 +300,7 @@ const ChangeManagementPage: React.FC = () => {
         ].filter(Boolean) as React.ReactNode[];
       }, 200),
     ],
-    [handleExecute, t],
+    [handleExecute, t, changePerms.canUpdate],
   );
 
   const toolbarMenuItems = useMemo(
@@ -274,6 +308,7 @@ const ChangeManagementPage: React.FC = () => {
       { key: 'all', label: t('app.kuaiplm.change.tab.all') },
       { key: 'bom', label: t('app.kuaiplm.change.tab.bom') },
       { key: 'route', label: t('app.kuaiplm.change.tab.route') },
+      { key: 'drawing', label: t('app.kuaiplm.change.tab.drawing') },
     ],
     [t],
   );
@@ -292,7 +327,7 @@ const ChangeManagementPage: React.FC = () => {
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={PLM_CHANGE_PINNED_STATUS_FIELD}
-        showCreateButton
+        showCreateButton={changePerms.canCreate}
         createButtonText={t('app.kuaiplm.change.createBomButton') + NEW_SHORTCUT_HINT}
         onCreate={handleCreateBomChange}
         showDeleteButton
@@ -364,8 +399,23 @@ const ChangeManagementPage: React.FC = () => {
             <Button onClick={handleCreateRouteChange}>
               {t('app.kuaiplm.change.createRouteButton')}
             </Button>
+            {changePerms.canCreate ? (
+              <Button onClick={() => handleCreateDrawingChange()}>
+                {t('app.kuaiplm.change.createDrawingButton')}
+              </Button>
+            ) : null}
           </Space>,
         ]}
+      />
+      <ChangeDetailDrawer row={detailRow} onClose={() => setDetailRow(null)} />
+      <DrawingChangeFormModal
+        open={drawingCreateOpen}
+        drawingUuid={drawingCreateUuid}
+        onClose={() => {
+          setDrawingCreateOpen(false);
+          setDrawingCreateUuid(undefined);
+        }}
+        onSuccess={() => actionRef.current?.reload()}
       />
     </ListPageTemplate>
   );

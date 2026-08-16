@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
 from typing import Any, Dict, List, Set
 
 from apps.kuaizhizao.models.demand import Demand
@@ -17,6 +17,9 @@ from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
 from apps.kuaizhizao.models.demand_impact_record import DemandImpactRecord
 from apps.kuaizhizao.models.demand_item import DemandItem
 from apps.kuaizhizao.models.work_order import WorkOrder
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date
+
+RECOMPUTABLE_COMPUTATION_STATUSES = frozenset({"完成", "失败"})
 
 
 class DemandReplanImpactService:
@@ -27,9 +30,64 @@ class DemandReplanImpactService:
         if not effective_at:
             return False
         try:
-            return (effective_at.date() - date.today()).days <= frozen_days
+            site_today = to_site_date(resolve_business_datetime())
+            effective_site_date = to_site_date(effective_at)
+            return (effective_site_date - site_today).days <= frozen_days
         except Exception:
             return False
+
+    @staticmethod
+    async def collect_computation_ids_for_demands(
+        tenant_id: int,
+        demand_ids: Set[int] | List[int],
+    ) -> Set[int]:
+        """按需求反查关联需求计算（含合并计算的 demand_ids）。"""
+        ids: Set[int] = set()
+        normalized = {int(i) for i in demand_ids if i is not None}
+        if not normalized:
+            return ids
+
+        for cid in await Demand.filter(
+            tenant_id=tenant_id,
+            id__in=list(normalized),
+            deleted_at__isnull=True,
+        ).values_list("computation_id", flat=True):
+            if cid:
+                ids.add(int(cid))
+
+        primary_ids = await DemandComputation.filter(
+            tenant_id=tenant_id,
+            demand_id__in=list(normalized),
+        ).values_list("id", flat=True)
+        ids.update(int(i) for i in primary_ids)
+
+        merged_rows = await DemandComputation.filter(
+            tenant_id=tenant_id,
+            demand_ids__not_isnull=True,
+        ).values_list("id", "demand_ids")
+        for cid, raw_ids in merged_rows:
+            if not isinstance(raw_ids, list):
+                continue
+            member_ids = {int(x) for x in raw_ids if x is not None}
+            if member_ids.intersection(normalized):
+                ids.add(int(cid))
+        return ids
+
+    @staticmethod
+    async def filter_recomputable_computation_ids(
+        tenant_id: int,
+        computation_ids: Set[int] | List[int],
+    ) -> List[int]:
+        """仅保留可重算（完成/失败）的需求计算。"""
+        normalized = sorted({int(i) for i in computation_ids if i is not None})
+        if not normalized:
+            return []
+        rows = await DemandComputation.filter(
+            tenant_id=tenant_id,
+            id__in=normalized,
+            computation_status__in=list(RECOMPUTABLE_COMPUTATION_STATUSES),
+        ).values_list("id", flat=True)
+        return sorted(int(i) for i in rows)
 
     async def analyze_event(
         self,
@@ -188,12 +246,13 @@ class DemandReplanImpactService:
             if d.computation_id:
                 computation_ids.add(int(d.computation_id))
 
-        if demand_ids:
-            extra_computation_ids = await DemandComputation.filter(
-                tenant_id=tenant_id,
-                demand_id__in=list(demand_ids),
-            ).values_list("id", flat=True)
-            computation_ids.update(int(i) for i in extra_computation_ids)
+        computation_ids.update(
+            await self.collect_computation_ids_for_demands(tenant_id, demand_ids)
+        )
+        recomputable_ids = set(
+            await self.filter_recomputable_computation_ids(tenant_id, computation_ids)
+        )
+        computation_ids = recomputable_ids
 
         if computation_ids:
             items = await DemandComputationItem.filter(

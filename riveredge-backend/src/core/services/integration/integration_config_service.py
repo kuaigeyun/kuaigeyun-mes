@@ -68,6 +68,10 @@ _SENSITIVE_CONFIG_KEYS = (
     "access_key_secret",
     "secret_access_key",
     "secret_key",
+    "rest_key",
+    "security_code",
+    "js_key",
+    "app_code",
 )
 
 
@@ -488,6 +492,22 @@ class IntegrationConfigService:
                 "deepseek", "openai", "qwen", "zhipu", "moonshot", "siliconflow",
             ):
                 result = await IntegrationConfigService._test_llm_connection(integration)
+            elif integration.type == "amap":
+                from core.services.amap_geocode_service import test_amap_connection_config
+
+                result = await test_amap_connection_config(integration.config or {})
+            elif integration.type == "kuaidi100":
+                from core.services.logistics_service import test_kuaidi100_connection_config
+
+                result = await test_kuaidi100_connection_config(integration.config or {})
+            elif integration.type == "kdniao":
+                from core.services.logistics_service import test_kdniao_connection_config
+
+                result = await test_kdniao_connection_config(integration.config or {})
+            elif integration.type in ("aliyun_market", "tencent_market"):
+                from core.services.logistics_service import test_cloud_market_connection_config
+
+                result = await test_cloud_market_connection_config(integration.config or {})
             else:
                 raise ValueError(f"不支持的集成类型: {integration.type}")
 
@@ -710,6 +730,22 @@ class IntegrationConfigService:
                 "deepseek", "openai", "qwen", "zhipu", "moonshot", "siliconflow",
             ):
                 result = await IntegrationConfigService._test_llm_connection(temp)
+            elif temp.type == "amap":
+                from core.services.amap_geocode_service import test_amap_connection_config
+
+                result = await test_amap_connection_config(temp.config or {})
+            elif temp.type == "kuaidi100":
+                from core.services.logistics_service import test_kuaidi100_connection_config
+
+                result = await test_kuaidi100_connection_config(temp.config or {})
+            elif temp.type == "kdniao":
+                from core.services.logistics_service import test_kdniao_connection_config
+
+                result = await test_kdniao_connection_config(temp.config or {})
+            elif temp.type in ("aliyun_market", "tencent_market"):
+                from core.services.logistics_service import test_cloud_market_connection_config
+
+                result = await test_cloud_market_connection_config(temp.config or {})
             else:
                 raise ValueError(f"不支持的集成类型: {temp.type}")
             if isinstance(result, dict) and result.get("success") is False:

@@ -32,6 +32,7 @@ class PurchaseInvoice(BaseModel):
     invoice_number = fields.CharField(max_length=100, description="发票号码")
     invoice_date = fields.DateField(description="发票日期")
     invoice_type = fields.CharField(max_length=20, description="发票类型")
+    tax_period = fields.CharField(max_length=7, null=True, description="税务属期 YYYY-MM")
     tax_rate = fields.DecimalField(max_digits=5, decimal_places=2, description="税率")
 
     # 金额信息
@@ -58,6 +59,13 @@ class PurchaseInvoice(BaseModel):
     attachments = fields.JSONField(null=True, description="附件列表")
 
     notes = fields.TextField(null=True, description="备注")
+    verification_status = fields.CharField(
+        max_length=32, default="pending", description="认证状态 pending/certified/transferred_out/not_deductible"
+    )
+    verification_date = fields.DateField(null=True, description="认证日期")
+    transfer_out_reason = fields.TextField(null=True, description="进项转出原因")
+    original_invoice_id = fields.IntField(null=True, description="红字发票对应的蓝字发票ID")
+    red_flush_invoice_id = fields.IntField(null=True, description="蓝字发票被红冲后生成的红字发票ID")
     is_active = fields.BooleanField(default=True, description="是否有效")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 

@@ -85,8 +85,10 @@ import {
   updateQuotation,
   deleteQuotation,
   convertQuotationToOrder,
+  convertQuotationToSalesReview,
   previewPushQuotationToSalesOrder,
   previewPushQuotationToSalesContract,
+  previewPushQuotationToSalesReview,
   type QuotationPushPreviewResponse,
   submitQuotation,
   withdrawQuotation,
@@ -614,6 +616,7 @@ const QuotationsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const pushToSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'sales_order.pull_from_quotation');
   const pushToSalesContractAction = resolveKuaizhizaoDocumentAction(t, 'sales_contract.pull_from_quotation');
+  const pushToSalesReviewAction = resolveKuaizhizaoDocumentAction(t, 'sales_review.pull_from_quotation');
   const salesCommonFormLabels = useMemo(() => getSalesCommonFormLabels(t), [t]);
   const quotationLifecycleValueEnum = useMemo(
     () => buildQuotationLifecycleValueEnum(t),
@@ -898,7 +901,7 @@ const QuotationsPage: React.FC = () => {
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
   const [followUpPreset, setFollowUpPreset] = useState<CustomerFollowUpPreset | null>(null);
-  type QuotationPushTarget = 'sales_order' | 'sales_contract';
+  type QuotationPushTarget = 'sales_order' | 'sales_contract' | 'sales_review';
   const [pushPreviewOpen, setPushPreviewOpen] = useState(false);
   const [pushPreviewLoading, setPushPreviewLoading] = useState(false);
   const [pushPreviewConfirming, setPushPreviewConfirming] = useState(false);
@@ -1215,6 +1218,7 @@ const QuotationsPage: React.FC = () => {
           primary={normalizeUserDisplayName(r.salesman_name) || '-'}
           secondary={r.quotation_date ? formatDateTime(r.quotation_date, 'YYYY-MM-DD') : '-'}
           secondaryCopyable={false}
+          primaryBold={false}
         />
       ),
     },
@@ -1997,7 +2001,9 @@ const QuotationsPage: React.FC = () => {
       const fetchPreview =
         target === 'sales_order'
           ? () => previewPushQuotationToSalesOrder(record.id!)
-          : () => previewPushQuotationToSalesContract(record.id!);
+          : target === 'sales_contract'
+            ? () => previewPushQuotationToSalesContract(record.id!)
+            : () => previewPushQuotationToSalesReview(record.id!);
       void fetchPreview()
         .then((res) => {
           setPushPreviewData(res);
@@ -2076,7 +2082,7 @@ const QuotationsPage: React.FC = () => {
         invalidateSalesOrderList();
         actionRef.current?.reload();
         closeQuotationDetailDrawer();
-      } else {
+      } else if (pushPreviewTarget === 'sales_contract') {
         const contract = await salesContractApi.convertFromQuotation(pushPreviewRecord.id);
         const contractId = contract.id;
         const contractCode = contract.contract_code || '';
@@ -2105,6 +2111,23 @@ const QuotationsPage: React.FC = () => {
         if (quotationDetail?.id === pushPreviewRecord.id) {
           void loadQuotationDetail(pushPreviewRecord.id);
         }
+      } else {
+        const res = await convertQuotationToSalesReview(pushPreviewRecord.id, { selected_item_ids: selectedIds });
+        const reviewCode = res.sales_review?.review_code || '';
+        messageApi.success({
+          content: (
+            <span>
+              {t('app.kuaizhizao.quotation.pushedToSalesReview', { defaultValue: '已下推订单评审：' })}
+              {reviewCode}
+            </span>
+          ),
+          duration: 6,
+        });
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
+        if (quotationDetail?.id === pushPreviewRecord.id) {
+          void loadQuotationDetail(pushPreviewRecord.id);
+        }
       }
       resetPushPreviewModal();
     } catch (error: any) {
@@ -2113,7 +2136,9 @@ const QuotationsPage: React.FC = () => {
           error?.detail ||
           (pushPreviewTarget === 'sales_order'
             ? t('app.kuaizhizao.quotation.convertFailed')
-            : t('app.kuaizhizao.quotation.pushToSalesContractFailed')),
+            : pushPreviewTarget === 'sales_contract'
+              ? t('app.kuaizhizao.quotation.pushToSalesContractFailed')
+              : t('app.kuaizhizao.quotation.pushToSalesReviewFailed', { defaultValue: '下推订单评审失败' })),
       );
     } finally {
       setPushPreviewConfirming(false);
@@ -2126,6 +2151,10 @@ const QuotationsPage: React.FC = () => {
 
   const handleConvertToContract = (record: Quotation) => {
     showQuotationPushPreview(record, 'sales_contract');
+  };
+
+  const handleConvertToSalesReview = (record: Quotation) => {
+    showQuotationPushPreview(record, 'sales_review');
   };
 
   // 统一审核动作由 UniWorkflowActions 接管（提交/撤回提交/审核/驳回/撤销审核）
@@ -2405,6 +2434,7 @@ const QuotationsPage: React.FC = () => {
       const superseded = isQuotationSuperseded(record);
       const orderBizAllowed = quotationCapabilityAllowed(record, 'convert_to_order');
       const contractBizAllowed = quotationCapabilityAllowed(record, 'convert_to_contract');
+      const reviewBizAllowed = quotationCapabilityAllowed(record, 'convert_to_sales_review');
       const orderPushPermAllowed = quotationCanPushToSalesOrder(quotationPerms);
       const convertible = orderBizAllowed && orderPushPermAllowed;
       const contractConvertible = contractBizAllowed;
@@ -2445,6 +2475,14 @@ const QuotationsPage: React.FC = () => {
               : !salesContractPerms.canCreate
                 ? permDeniedTitle
                 : undefined;
+      const reviewPushTitle = superseded
+        ? t('app.kuaizhizao.quotation.supersededConvertHint')
+        : !reviewBizAllowed
+          ? quotationCapabilityReasonMessage(record.capabilities?.convert_to_sales_review?.reason, t) ||
+            t('app.kuaizhizao.quotation.pushBlockedStatus', {
+              status: quotationStatusNorm(record) || '-',
+            })
+          : undefined;
       return buildUniPushMenuItems([
         {
           key: 'sales-order',
@@ -2480,17 +2518,36 @@ const QuotationsPage: React.FC = () => {
             })();
           },
         },
+        {
+          key: 'sales-review',
+          label: pushToSalesReviewAction.label,
+          disabled: superseded || !reviewBizAllowed,
+          title: reviewPushTitle,
+          onClick: () => {
+            if (superseded || !reviewBizAllowed) return;
+            void (async () => {
+              try {
+                const latest = await getQuotation(record.id!);
+                handleConvertToSalesReview(latest);
+              } catch (error: any) {
+                messageApi.error(error?.message || t('app.kuaizhizao.quotation.loadFailed'));
+              }
+            })();
+          },
+        },
       ]);
     },
     [
       handleConvert,
       handleConvertToContract,
+      handleConvertToSalesReview,
       messageApi,
       quotationPerms,
       salesContractPerms.canCreate,
       permDeniedTitle,
       pushToSalesContractAction.label,
       pushToSalesOrderAction.label,
+      pushToSalesReviewAction.label,
       t,
     ],
   );

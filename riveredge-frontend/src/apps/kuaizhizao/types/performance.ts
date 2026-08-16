@@ -268,8 +268,14 @@ export interface PerformanceSummary {
   updated_by_name?: string;
 }
 
+export interface PerformanceCalculateResult {
+  items: PerformanceSummary[];
+  team_only_reporting_count: number;
+}
+
 export interface PerformanceDetailItem {
   reporting_record_id: number;
+  work_order_id?: number;
   work_order_code: string;
   operation_name: string;
   reported_at: string;

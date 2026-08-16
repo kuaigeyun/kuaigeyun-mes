@@ -27,24 +27,22 @@ function extractGradientAccentColor(vividGradient: string): string {
   return match?.[0] ?? '#1677ff';
 }
 
-/** 模块看板 KPI 卡：多彩渐变 / 简约主色+副色；暗黑模式下降低饱和度避免刺眼 */
+/** 模块工作台 KPI：卡面与瀑布流同白底；语义色只落在数字 / 图标浅底（同右侧快捷入口） */
 export function resolveModuleKpiVisual(
   vividGradient: string,
-  vividBoxShadow: string | undefined,
+  _vividBoxShadow: string | undefined,
   plain: boolean,
   token: GlobalToken,
   isDark = false,
 ): ModuleKpiVisualTokens {
-  if (!plain && isDark) {
+  if (!plain) {
     const accent = extractGradientAccentColor(vividGradient);
-    const tintedBg = `color-mix(in srgb, ${accent} 16%, ${token.colorBgContainer})`;
-    const accentBorder = `color-mix(in srgb, ${accent} 32%, transparent)`;
     return {
       plain: false,
       card: {
-        background: `linear-gradient(135deg, ${tintedBg} 0%, ${token.colorBgContainer} 78%)`,
+        background: token.colorBgContainer,
         boxShadow: 'none',
-        border: `1px solid ${accentBorder}`,
+        border: `1px solid ${token.colorBorderSecondary}`,
       },
       titleColor: token.colorTextSecondary,
       valueColor: accent,
@@ -52,31 +50,10 @@ export function resolveModuleKpiVisual(
       sideBorder: token.colorSplit,
       sideLabelColor: token.colorTextTertiary,
       sideValueColor: token.colorText,
-      iconWrapBg: `color-mix(in srgb, ${accent} 22%, transparent)`,
+      iconWrapBg: `color-mix(in srgb, ${accent} ${isDark ? 22 : 12}%, ${token.colorBgContainer})`,
       iconColor: accent,
       progressStroke: accent,
-      progressRail: accentBorder,
-    };
-  }
-
-  if (!plain) {
-    return {
-      plain: false,
-      card: {
-        background: vividGradient,
-        boxShadow: vividBoxShadow ?? '0 4px 12px rgba(0, 0, 0, 0.08)',
-        border: `1px solid ${token.colorBorderSecondary}`,
-      },
-      titleColor: 'rgba(255, 255, 255, 0.9)',
-      valueColor: '#fff',
-      subtitleColor: 'rgba(255, 255, 255, 0.72)',
-      sideBorder: 'rgba(255, 255, 255, 0.28)',
-      sideLabelColor: 'rgba(255, 255, 255, 0.72)',
-      sideValueColor: '#fff',
-      iconWrapBg: 'rgba(255, 255, 255, 0.2)',
-      iconColor: '#fff',
-      progressStroke: '#fff',
-      progressRail: 'rgba(255, 255, 255, 0.2)',
+      progressRail: `color-mix(in srgb, ${accent} 18%, transparent)`,
     };
   }
 

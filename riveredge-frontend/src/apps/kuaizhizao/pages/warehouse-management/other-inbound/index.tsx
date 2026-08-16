@@ -27,7 +27,7 @@ import { UniMaterialBatchPicker } from '../../../../../components/uni-material-b
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
-import { DictionaryLabel } from '../../../../../components/dictionary-label';
+import { MaterialUnitLabel } from '../../../../../components/material-unit-label';
 import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -774,7 +774,7 @@ const OtherInboundPage: React.FC = () => {
         title: t('app.kuaizhizao.warehouseOtherInbound.col.unit'),
         dataIndex: 'material_unit',
         width: 60,
-        render: (val: unknown) => <DictionaryLabel dictionaryCode="unit" value={val} />,
+        render: (val: unknown) => <MaterialUnitLabel value={val as string | null} />,
       },
       { title: t('app.kuaizhizao.warehouseOtherInbound.col.location'), dataIndex: 'location_code', width: 100, ellipsis: true },
       { title: t('app.kuaizhizao.warehouseOtherInbound.col.inboundQty'), dataIndex: 'inbound_quantity', width: 100, align: 'right' as const },

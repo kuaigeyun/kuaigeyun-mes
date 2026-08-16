@@ -48,6 +48,7 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
 from apps.kuaizhizao.services.document_action_policy.purchase_order import (
     assert_purchase_order_capability,
+    derive_purchase_order_capabilities,
 )
 
 PURCHASE_ORDER_SORTABLE_FIELDS = frozenset({
@@ -182,6 +183,13 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=order_data.supplier_id)
                 if not supplier:
                     raise NotFoundError(f"供应商不存在: {order_data.supplier_id}")
+                # 非草稿落供应商即门禁；草稿可先选商，提交时再强制准入
+                if (order_data.status or DocumentStatus.DRAFT.value) != DocumentStatus.DRAFT.value:
+                    from apps.master_data.services.supplier_governance import (
+                        assert_supplier_purchasable_for_tenant,
+                    )
+
+                    await assert_supplier_purchasable_for_tenant(tenant_id, supplier)
             else:
                 if (order_data.status or DocumentStatus.DRAFT.value) != DocumentStatus.DRAFT.value:
                     raise ValidationError("非草稿订单必须指定有效供应商")
@@ -915,6 +923,18 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             update_dict['updated_by'] = updated_by
             update_dict['updated_by_name'] = user_info["name"]
 
+            next_supplier_id = update_dict.get("supplier_id", order.supplier_id)
+            next_status = update_dict.get("status", order.status)
+            if int(next_supplier_id or 0) > 0 and next_status != DocumentStatus.DRAFT.value:
+                supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=int(next_supplier_id))
+                if not supplier:
+                    raise NotFoundError(f"供应商不存在: {next_supplier_id}")
+                from apps.master_data.services.supplier_governance import (
+                    assert_supplier_purchasable_for_tenant,
+                )
+
+                await assert_supplier_purchasable_for_tenant(tenant_id, supplier)
+
             await order.update_from_dict(update_dict).save()
 
             # 如果有明细更新，重新计算金额
@@ -1015,6 +1035,17 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
         assert_purchase_order_capability(order, "submit", has_items=True)
+
+        if int(order.supplier_id or 0) <= 0:
+            raise ValidationError("提交前须指定有效供应商")
+        supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=int(order.supplier_id))
+        if not supplier:
+            raise NotFoundError(f"供应商不存在: {order.supplier_id}")
+        from apps.master_data.services.supplier_governance import (
+            assert_supplier_purchasable_for_tenant,
+        )
+
+        await assert_supplier_purchasable_for_tenant(tenant_id, supplier)
 
         # 检查业务配置：若无需审核，则提交后直接设为已审核（考虑中小企业实情）
         from infra.services.business_config_service import BusinessConfigService
@@ -1776,9 +1807,6 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         tenant_id: int,
         order_id: int,
     ) -> Dict[str, Any]:
-        from apps.kuaizhizao.models.purchase_return import PurchaseReturn
-        from apps.kuaizhizao.models.purchase_return_item import PurchaseReturnItem
-
         order_model = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
         if not order_model:
             raise NotFoundError(f"采购订单不存在: {order_id}")
@@ -1792,20 +1820,12 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             has_received=has_received,
         )
 
-        return_ids = await PurchaseReturn.filter(
-            tenant_id=tenant_id,
-            purchase_order_id=order_id,
-            deleted_at__isnull=True,
-        ).exclude(status="已取消").values_list("id", flat=True)
-        returned_by_material: Dict[int, float] = {}
-        if return_ids:
-            return_items = await PurchaseReturnItem.filter(
-                tenant_id=tenant_id,
-                return_id__in=list(return_ids),
-            ).all()
-            for ri in return_items:
-                mid = int(ri.material_id)
-                returned_by_material[mid] = returned_by_material.get(mid, 0.0) + float(ri.return_quantity or 0)
+        from apps.kuaizhizao.services.warehouse_service import returned_qty_by_purchase_order_item_ids
+
+        returned_by_item = await returned_qty_by_purchase_order_item_ids(
+            tenant_id,
+            [int(item.id) for item in order_items],
+        )
 
         preview_items: List[Dict[str, Any]] = []
         material_fallback = await self._load_material_fallback_for_po_items(tenant_id, order_items)
@@ -1813,7 +1833,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             received = float(item.received_quantity or 0)
             if received <= 0:
                 continue
-            returned = returned_by_material.get(int(item.material_id), 0.0)
+            returned = returned_by_item.get(int(item.id), 0.0)
             max_return = max(0.0, received - returned)
             if max_return <= 0:
                 continue
@@ -2581,6 +2601,247 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             "notice_id": notice.id,
             "notice_code": notice.notice_code,
             "message": "收货通知单创建成功",
+        }
+
+    async def list_receipt_notice_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        order_id: Optional[int] = None,
+        pullable_only: bool = True,
+    ) -> Dict[str, Any]:
+        """开口采购订单行：可转收货通知的剩余明细。"""
+        from apps.kuaizhizao.services.warehouse_service import (
+            noticed_qty_by_po_item_ids,
+            sync_purchase_order_receipt_quantities,
+        )
+
+        po_query = PurchaseOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if order_id is not None:
+            po_query = po_query.filter(id=int(order_id))
+        orders = await po_query.only("id", "order_code", "status", "supplier_id", "supplier_name")
+        order_by_id = {int(o.id): o for o in orders}
+        if not order_by_id:
+            return {"data": [], "total": 0}
+
+        for oid in order_by_id:
+            await sync_purchase_order_receipt_quantities(tenant_id, oid)
+        items = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id, order_id__in=list(order_by_id.keys())
+        ).all()
+        noticed_raw = await noticed_qty_by_po_item_ids(tenant_id, list(order_by_id.keys()))
+        noticed_by_item = {int(k): float(v) for k, v in noticed_raw.items()}
+        kw = (keyword or "").strip().lower()
+        lines: List[Dict[str, Any]] = []
+        for item in items:
+            order = order_by_id.get(int(item.order_id))
+            if not order:
+                continue
+            qty = float(item.ordered_quantity or 0)
+            if qty <= 0:
+                continue
+            outstanding = float(effective_po_item_outstanding(item))
+            noticed = noticed_by_item.get(int(item.id), 0.0)
+            remaining = min(outstanding, max(0.0, qty - noticed)) if outstanding > 0 else 0.0
+            pushed = noticed
+            can_push = derive_purchase_order_capabilities(
+                order,
+                has_items=True,
+                has_outstanding=outstanding > 0,
+                has_pushable_notice_outstanding=remaining > 0,
+            ).push_receipt_notice.allowed
+            selectable = can_push and remaining > 0
+            if pullable_only and not selectable:
+                continue
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            material_spec = str(item.material_spec or "").strip()
+            if kw:
+                haystack = " ".join([material_code, material_name, material_spec]).lower()
+                if kw not in haystack:
+                    continue
+            lines.append(
+                {
+                    "id": int(item.id),
+                    "order_id": int(item.order_id),
+                    "order_code": order.order_code,
+                    "supplier_id": order.supplier_id,
+                    "supplier_name": order.supplier_name,
+                    "material_id": item.material_id,
+                    "material_code": material_code,
+                    "material_name": material_name,
+                    "material_spec": material_spec or None,
+                    "unit": item.unit or "件",
+                    "suggested_quantity": qty,
+                    "pushed_quantity": pushed,
+                    "remaining_quantity": remaining,
+                    "required_date": str(item.required_date) if item.required_date else None,
+                }
+            )
+        lines.sort(
+            key=lambda r: (
+                str(r.get("order_code") or ""),
+                str(r.get("material_code") or ""),
+                int(r.get("id") or 0),
+            )
+        )
+        return {"data": lines[skip : skip + limit], "total": len(lines)}
+
+    async def create_receipt_notices_from_po_items(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """按采购订单行 id 建收货通知，可跨多张订单；同供应商合并一张。"""
+        from apps.kuaizhizao.services.receipt_notice_service import ReceiptNoticeService
+        from apps.kuaizhizao.schemas.receipt_notice import ReceiptNoticeCreate, ReceiptNoticeItemCreate
+        from apps.kuaizhizao.services.warehouse_service import (
+            _resolve_warehouse_name_by_id,
+            noticed_qty_by_po_item_ids,
+            sync_purchase_order_receipt_quantities,
+        )
+        from apps.master_data.services.material_service import (
+            resolve_primary_default_warehouse_from_material,
+        )
+
+        selected_ids = [int(v) for v in item_ids if v is not None]
+        if not selected_ids:
+            raise BusinessLogicError("请至少选择一条可通知采购订单明细")
+        items = await PurchaseOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).all()
+        if not items:
+            raise BusinessLogicError("没有可通知的采购订单行")
+        order_ids = sorted({int(i.order_id) for i in items})
+        orders = await PurchaseOrder.filter(
+            tenant_id=tenant_id, id__in=order_ids, deleted_at__isnull=True
+        ).all()
+        order_by_id = {int(o.id): o for o in orders}
+        if len(order_by_id) != len(order_ids):
+            raise NotFoundError("采购订单不存在")
+        for oid in order_ids:
+            await sync_purchase_order_receipt_quantities(tenant_id, oid)
+        noticed_raw = await noticed_qty_by_po_item_ids(tenant_id, order_ids)
+        noticed_by_item = {int(k): float(v) for k, v in noticed_raw.items()}
+
+        def _max_notice_qty(po_item: PurchaseOrderItem) -> float:
+            outstanding_qty = float(effective_po_item_outstanding(po_item))
+            ordered_qty = float(po_item.ordered_quantity or 0)
+            noticed_qty = noticed_by_item.get(int(po_item.id), 0.0)
+            return min(outstanding_qty, max(0.0, ordered_qty - noticed_qty))
+
+        for order in orders:
+            order_items = [i for i in items if int(i.order_id) == int(order.id)]
+            has_outstanding = any(float(effective_po_item_outstanding(i)) > 0 for i in order_items)
+            has_pushable = any(_max_notice_qty(i) > 0 for i in order_items)
+            assert_purchase_order_capability(
+                order,
+                "push_receipt_notice",
+                has_items=True,
+                has_outstanding=has_outstanding,
+                has_pushable_notice_outstanding=has_pushable,
+            )
+
+        groups: Dict[int, List[PurchaseOrderItem]] = {}
+        for item in items:
+            groups.setdefault(int(order_by_id[int(item.order_id)].supplier_id or 0), []).append(item)
+
+        material_fallback = await self._load_material_fallback_for_po_items(tenant_id, items)
+        notice_service = ReceiptNoticeService()
+        notices_out: List[Dict[str, Any]] = []
+        for _sid, group_items in groups.items():
+            source_order_ids = sorted({int(i.order_id) for i in group_items})
+            primary = order_by_id[source_order_ids[0]]
+            source_codes = " ".join(order_by_id[oid].order_code for oid in source_order_ids)
+            header_wh_id: Optional[int] = None
+            header_wh_name: Optional[str] = None
+            notice_items = []
+            for item in group_items:
+                qty = _max_notice_qty(item)
+                if qty <= 0:
+                    continue
+                if not item.material_id:
+                    raise ValidationError("采购订单存在缺失物料ID的明细，无法下推收货通知")
+                try:
+                    unit_price = float(item.unit_price or 0)
+                except (TypeError, ValueError):
+                    raise ValidationError(
+                        f"物料 {item.material_code or item.material_name or item.id} 的单价无效，无法下推收货通知"
+                    )
+                line_wh_id: Optional[int] = None
+                line_wh_name: Optional[str] = None
+                material_wh = await resolve_primary_default_warehouse_from_material(
+                    tenant_id, material_id=int(item.material_id)
+                )
+                if material_wh:
+                    line_wh_id, line_wh_name = material_wh
+                if line_wh_id is None or line_wh_id <= 0:
+                    material_code, material_name = self._resolve_po_item_material_display(item, material_fallback)
+                    raise ValidationError(
+                        f"请为物料 {material_code or material_name or item.id} 选择入库仓库"
+                    )
+                if not line_wh_name:
+                    line_wh_name = await _resolve_warehouse_name_by_id(tenant_id, line_wh_id)
+                if header_wh_id is None:
+                    header_wh_id = line_wh_id
+                    header_wh_name = line_wh_name
+                material_code, material_name = self._resolve_po_item_material_display(item, material_fallback)
+                notice_items.append(
+                    ReceiptNoticeItemCreate(
+                        material_id=item.material_id,
+                        material_code=material_code,
+                        material_name=material_name,
+                        material_spec=item.material_spec or "",
+                        material_unit=str(item.unit or "件"),
+                        notice_quantity=qty,
+                        unit_price=unit_price,
+                        total_amount=qty * unit_price,
+                        purchase_order_item_id=item.id,
+                        warehouse_id=line_wh_id,
+                        warehouse_name=line_wh_name,
+                    )
+                )
+            if not notice_items:
+                continue
+            notice_data = ReceiptNoticeCreate(
+                purchase_order_id=primary.id,
+                purchase_order_code=primary.order_code,
+                supplier_id=primary.supplier_id,
+                supplier_name=primary.supplier_name,
+                supplier_contact=primary.supplier_contact,
+                supplier_phone=primary.supplier_phone,
+                warehouse_id=header_wh_id,
+                warehouse_name=header_wh_name,
+                planned_receipt_date=primary.delivery_date,
+                status="待收货",
+                notes=f"从采购订单 {source_codes} 下推",
+                items=notice_items,
+            )
+            notice = await notice_service.create_receipt_notice(
+                tenant_id=tenant_id, notice_data=notice_data, created_by=created_by
+            )
+            notices_out.append({
+                "notice_id": notice.id,
+                "notice_code": notice.notice_code,
+                "order_id": primary.id,
+                "order_code": primary.order_code,
+            })
+        if not notices_out:
+            raise BusinessLogicError("所选明细无法生成收货通知单")
+        first = notices_out[0]
+        msg = (
+            f"转单成功，共生成 {len(notices_out)} 张收货通知单"
+            if len(notices_out) > 1
+            else "收货通知单创建成功"
+        )
+        return {
+            "success": True,
+            "message": msg,
+            "notice_id": first["notice_id"],
+            "notice_code": first["notice_code"],
+            "notices": notices_out,
         }
 
     async def push_to_invoice(

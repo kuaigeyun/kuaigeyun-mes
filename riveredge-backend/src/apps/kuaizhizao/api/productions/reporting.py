@@ -395,6 +395,7 @@ async def list_reporting_pull_candidates(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(20, ge=1, le=200, description="每页数量"),
     keyword: Optional[str] = Query(None, description="工单/工序关键词"),
+    work_order_code: Optional[str] = Query(None, description="工单编码（模糊）"),
     scope: str = Query(
         "reportable",
         description="reportable=仅可报工；all=全部工序行",
@@ -407,6 +408,7 @@ async def list_reporting_pull_candidates(
     return await reporting_service.list_reporting_pull_candidates(
         tenant_id=tenant_id,
         keyword=keyword,
+        work_order_code=work_order_code,
         scope=scope,
         skip=skip,
         limit=limit,

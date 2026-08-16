@@ -660,6 +660,8 @@ class SalesDeliveryWithItemsResponse(SalesDeliveryResponse):
 
 class SalesDeliveryItemBase(BaseSchema):
     """销售出库单明细基础schema"""
+    sales_order_item_id: Optional[int] = Field(None, description="销售订单明细ID")
+    shipment_notice_item_id: Optional[int] = Field(None, description="发货通知明细ID")
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")
     material_name: str = Field(..., max_length=200, description="物料名称")
@@ -768,6 +770,7 @@ class PurchaseReceiptBase(BaseSchema):
 class PurchaseReceiptItemBase(BaseSchema):
     """采购入库单明细基础schema"""
     purchase_order_item_id: int = Field(0, description="采购订单明细ID（手动创建时为0）")
+    receipt_notice_item_id: Optional[int] = Field(None, description="收货通知明细ID")
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")
     material_name: str = Field(..., max_length=200, description="物料名称")
@@ -947,8 +950,9 @@ class SalesReturnListPaginatedResponse(BaseSchema):
 
 class SalesReturnItemBase(BaseSchema):
     """销售退货单明细基础schema"""
-    # 关联原销售出库单明细
+    # 关联原销售出库单明细 / 销售订单行
     sales_delivery_item_id: Optional[int] = Field(None, description="销售出库单明细ID")
+    sales_order_item_id: Optional[int] = Field(None, description="销售订单明细ID")
     
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")
@@ -1078,8 +1082,9 @@ class PurchaseReturnListPaginatedResponse(BaseSchema):
 
 class PurchaseReturnItemBase(BaseSchema):
     """采购退货单明细基础schema"""
-    # 关联原采购入库单明细
+    # 关联原采购入库单明细 / 采购订单行
     purchase_receipt_item_id: Optional[int] = Field(None, description="采购入库单明细ID")
+    purchase_order_item_id: Optional[int] = Field(None, description="采购订单明细ID")
     
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")

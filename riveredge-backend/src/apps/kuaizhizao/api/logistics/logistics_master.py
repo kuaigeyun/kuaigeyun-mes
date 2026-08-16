@@ -1,13 +1,16 @@
 """物流主数据 API"""
 
-from typing import Optional
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
 
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from apps.kuaizhizao.schemas.logistics import (
+    CarrierPresetItem,
     DriverCreate,
     DriverUpdate,
+    LoadCarrierPresetRequest,
+    LoadCarrierPresetResponse,
     LogisticsCarrierCreate,
     LogisticsCarrierUpdate,
     PaginatedCarrierList,
@@ -49,6 +52,36 @@ async def list_carriers(
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await service.list_carriers(tenant_id, skip=skip, limit=limit, keyword=keyword)
+
+
+@carriers_router.get("/preset-preview", response_model=List[CarrierPresetItem], summary="Preview common China carriers")
+async def preview_carrier_presets(
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await service.list_carrier_preset_preview(tenant_id)
+
+
+@carriers_router.post("/load-preset", response_model=LoadCarrierPresetResponse, summary="Load common China carriers")
+async def load_carrier_presets(
+    body: Optional[LoadCarrierPresetRequest] = Body(None),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    codes = body.codes if body else None
+    result = await service.load_preset_carriers(tenant_id, codes=codes)
+    created = result["created"]
+    skipped = result["skipped"]
+    updated = result.get("updated", 0)
+    parts = [f"已加载 {created} 个承运商"]
+    if updated:
+        parts.append(f"补全热线 {updated} 个")
+    if skipped:
+        parts.append(f"跳过 {skipped} 个已存在")
+    return {
+        "created": created,
+        "skipped": skipped,
+        "updated": updated,
+        "message": "，".join(parts),
+    }
 
 
 @carriers_router.post("", summary="Create carrier")

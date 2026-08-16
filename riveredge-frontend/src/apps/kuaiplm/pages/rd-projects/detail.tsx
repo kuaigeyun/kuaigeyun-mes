@@ -5,6 +5,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   App,
+  Alert,
   Button,
   Card,
   Col,
@@ -67,8 +68,9 @@ import {
   type RdProjectDeliverable,
   type ProjectType,
 } from '../../services/rd-project';
-import { openMasterDataInNewTab, type EngineeringLinkType } from '../../services/master-data-links';
+import { openMasterDataInNewTab, openProjectLinkInNewTab, type EngineeringLinkType } from '../../services/master-data-links';
 import { RdProjectGateStepper } from '../../components/RdProjectGateStepper';
+import EngineeringLinkTargetSelect from '../../components/EngineeringLinkTargetSelect';
 import { UniUserSelect } from '../../../../components/uni-user-select';
 import { resolveUserDisplay } from '../../../../services/user';
 import {
@@ -99,6 +101,33 @@ const DELIVERABLE_STATUS_COLOR: Record<string, string> = {
   APPROVED: 'success',
   REJECTED: 'error',
 };
+
+function resolveDeliverableEngineeringLink(
+  deliverable: RdProjectDeliverable,
+  materialId?: number | null,
+): { link_type: EngineeringLinkType; material_id?: number } | null {
+  const label = `${deliverable.name ?? ''} ${deliverable.deliverable_type ?? ''}`.toLowerCase();
+  if (label.includes('ebom') || label.includes('bom')) {
+    return materialId ? { link_type: 'bom', material_id: materialId } : { link_type: 'bom' };
+  }
+  if (label.includes('图纸') || label.includes('drawing')) {
+    return { link_type: 'drawing' };
+  }
+  if (label.includes('路线') || label.includes('route') || label.includes('工艺')) {
+    return { link_type: 'route' };
+  }
+  return null;
+}
+
+function canPassGate(gates: RdProjectGate[], gate: RdProjectGate): boolean {
+  const sorted = [...gates].sort(
+    (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || (a.id ?? 0) - (b.id ?? 0),
+  );
+  const idx = sorted.findIndex((item) => item.id === gate.id);
+  if (idx <= 0) return true;
+  const prev = sorted[idx - 1];
+  return prev.status === 'PASSED' || prev.status === 'SKIPPED';
+}
 
 const TASK_STATUS_COLOR: Record<string, string> = {
   TODO: 'default',
@@ -296,6 +325,10 @@ const RdProjectDetailPage: React.FC = () => {
 
   const handlePassGate = (gate: RdProjectGate) => {
     if (!id || !gate.id) return;
+    if (!canPassGate(gates, gate)) {
+      messageApi.warning(t('app.kuaiplm.rdProjects.detail.gatePreviousRequired'));
+      return;
+    }
     modalApi.confirm({
       title: `${t('app.kuaiplm.common.actions.approve')} - ${gate.gate_name}`,
       content: t('app.kuaiplm.rdProjects.detail.gatePassConfirm'),
@@ -341,15 +374,32 @@ const RdProjectDetailPage: React.FC = () => {
               type="link"
               size="small"
               icon={<LinkOutlined />}
-              onClick={() =>
+              onClick={() => {
+                const linkType = (row.link_type ?? 'material') as string;
+                if (
+                  linkType === 'work_order' ||
+                  linkType === 'requirement' ||
+                  row.target_type === 'design_review' ||
+                  row.target_type === 'fmea'
+                ) {
+                  openProjectLinkInNewTab({
+                    link_type:
+                      linkType === 'other' ? String(row.target_type ?? linkType) : linkType,
+                    target_type: row.target_type ?? linkType,
+                    target_id: row.target_id ?? undefined,
+                    target_code: row.target_code ?? undefined,
+                    project_id: project?.id ?? id,
+                  });
+                  return;
+                }
                 openMasterDataInNewTab({
-                  link_type: (row.link_type ?? 'material') as EngineeringLinkType,
+                  link_type: linkType as EngineeringLinkType,
                   target_uuid: row.target_uuid ?? undefined,
                   target_id: row.target_id ?? undefined,
                   version: row.version ?? undefined,
                   material_id: row.material_id ?? undefined,
-                })
-              }
+                });
+              }}
             >
               {t('app.kuaiplm.common.actions.detail')}
             </Button>
@@ -373,7 +423,7 @@ const RdProjectDetailPage: React.FC = () => {
         ),
       },
     ],
-    [t, id, modalApi, messageApi, load],
+    [t, id, project?.id, modalApi, messageApi, load],
   );
 
   const renderGatePanel = useCallback(
@@ -397,7 +447,11 @@ const RdProjectDetailPage: React.FC = () => {
                 <Button
                   type="primary"
                   size="small"
-                  disabled={gateStatus === 'PASSED' || gateStatus === 'SKIPPED'}
+                  disabled={
+                    gateStatus === 'PASSED' ||
+                    gateStatus === 'SKIPPED' ||
+                    !canPassGate(gates, gate)
+                  }
                   onClick={() => handlePassGate(gate)}
                 >
                   {t('app.kuaiplm.common.actions.approve')}
@@ -554,9 +608,21 @@ const RdProjectDetailPage: React.FC = () => {
                 },
                 {
                   title: t('app.kuaiplm.common.columns.actions'),
-                  width: 220,
-                  render: (_: unknown, row: RdProjectDeliverable) => (
+                  width: 280,
+                  render: (_: unknown, row: RdProjectDeliverable) => {
+                    const engineeringLink = resolveDeliverableEngineeringLink(row, project?.material_id);
+                    return (
                     <Space size={4} wrap={false} style={{ whiteSpace: 'nowrap' }}>
+                      {engineeringLink ? (
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<LinkOutlined />}
+                          onClick={() => openMasterDataInNewTab(engineeringLink)}
+                        >
+                          {t('app.kuaiplm.rdProjects.detail.deliverable.openEngineering')}
+                        </Button>
+                      ) : null}
                       <Button type="link" size="small" onClick={() => openEditDeliverable(row)}>
                         {t('app.kuaiplm.common.actions.edit')}
                       </Button>
@@ -604,7 +670,8 @@ const RdProjectDetailPage: React.FC = () => {
                         {t('app.kuaiplm.common.actions.delete')}
                       </Button>
                     </Space>
-                  ),
+                    );
+                  },
                 },
               ]}
             />
@@ -612,7 +679,7 @@ const RdProjectDetailPage: React.FC = () => {
         </Space>
       );
     },
-    [t, tasks, deliverables, id, modalApi, messageApi, load],
+    [t, tasks, deliverables, id, modalApi, messageApi, load, project?.material_id, gates],
   );
 
   if (loading) {
@@ -677,7 +744,7 @@ const RdProjectDetailPage: React.FC = () => {
           <Typography.Title level={4} style={{ margin: 0 }}>
             {project.project_code} - {project.project_name}
           </Typography.Title>
-          {renderKuaiplmProjectTypeMarker(t, projectType)}
+          {isRdProject ? renderKuaiplmProjectTypeMarker(t, projectType) : null}
           {project.status ? (
             <Tag color={project.status === 'DRAFT' ? 'default' : 'processing'}>
               {getKuaiplmProjectStatusText(t, project.status)}
@@ -888,7 +955,12 @@ const RdProjectDetailPage: React.FC = () => {
         onClose={() => setLinkModalOpen(false)}
         formRef={linkFormRef}
         onFinish={async (values) => {
-          await createRdProjectLink(id!, values);
+          const { _target_pick, link_label, ...rest } = values as Record<string, unknown>;
+          await createRdProjectLink(id!, {
+            ...rest,
+            link_label: link_label as string | undefined,
+            target_name: (rest.target_name as string | undefined) ?? (link_label as string | undefined),
+          });
           messageApi.success(t('app.kuaiplm.rdProjects.detail.link.addSuccess'));
           setLinkModalOpen(false);
           load();
@@ -901,10 +973,12 @@ const RdProjectDetailPage: React.FC = () => {
           options={engineeringLinkOptions}
         />
         <ProFormText name="link_label" label={t('app.kuaiplm.rdProjects.detail.link.displayName')} />
-        <ProFormText name="target_uuid" label={t('app.kuaiplm.rdProjects.detail.link.targetUuid')} />
-        <ProFormText name="target_id" label={t('app.kuaiplm.rdProjects.detail.link.targetId')} />
-        <ProFormText name="material_id" label={t('app.kuaiplm.rdProjects.detail.link.materialId')} />
-        <ProFormText name="version" label={t('app.kuaiplm.common.columns.version')} />
+        <EngineeringLinkTargetSelect formRef={linkFormRef} />
+        <ProFormText name="target_uuid" hidden />
+        <ProFormText name="target_id" hidden />
+        <ProFormText name="target_code" hidden />
+        <ProFormText name="target_name" hidden />
+        <ProFormText name="material_id" hidden />
         <ProFormTextArea name="notes" label={t('app.kuaiplm.rdProjects.form.notes')} />
       </FormModalTemplate>
 
@@ -1122,13 +1196,14 @@ const RdProjectDetailPage: React.FC = () => {
         onOk={async () => {
           setPushing(true);
           try {
-            const res = await pushTrialWorkOrder(id!, { quantity: pushQty, notes: pushNotes });
+            const res = await pushTrialWorkOrder(id!, { quantity: pushQty, remarks: pushNotes });
             messageApi.success(
               res.work_order_code
                 ? t('app.kuaiplm.rdProjects.detail.trialWo.successWithCode', { code: res.work_order_code })
                 : t('app.kuaiplm.rdProjects.detail.trialWo.success'),
             );
             setPushModalOpen(false);
+            load();
           } catch (e: any) {
             messageApi.error(e?.message || t('app.kuaiplm.rdProjects.detail.trialWo.failed'));
           } finally {
@@ -1137,8 +1212,9 @@ const RdProjectDetailPage: React.FC = () => {
         }}
       >
         <Space direction="vertical" style={{ width: '100%' }}>
+          <Alert type="info" showIcon title={t('app.kuaiplm.rdProjects.detail.trialWo.hint')} />
           <div>
-            <Typography.Text>{t('app.kuaiplm.common.columns.progress')}</Typography.Text>
+            <Typography.Text>{t('app.kuaiplm.rdProjects.detail.trialWo.quantity')}</Typography.Text>
             <InputNumber
               min={1}
               value={pushQty}

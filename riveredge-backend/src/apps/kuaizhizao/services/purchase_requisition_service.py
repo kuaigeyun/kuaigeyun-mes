@@ -41,9 +41,10 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
     enrich_purchase_requisition_list_capabilities,
     purchase_requisition_has_linked_purchase_order,
 )
-from core.utils.timezone_utils import resolve_business_datetime, today_site_str
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str, to_site_date
 from apps.kuaizhizao.services.document_action_policy.purchase_requisition import (
     assert_purchase_requisition_capability,
+    _can_push_downstream,
 )
 
 PURCHASE_REQUISITION_SORTABLE_FIELDS = frozenset({
@@ -1354,5 +1355,360 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             "purchase_order_code": first["purchase_order_code"],
             "purchase_orders": purchase_orders_out,
             "persisted_material_ids": persisted_material_ids if data.persist_default_supplier_to_material else [],
+        }
+
+    async def list_purchase_order_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        requisition_id: Optional[int] = None,
+        pullable_only: bool = True,
+    ) -> Dict[str, Any]:
+        """开口申请行：可转采购订单的剩余明细。"""
+        return await self._list_requisition_open_lines(
+            tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            requisition_id=requisition_id,
+            pullable_only=pullable_only,
+            target="purchase_order",
+        )
+
+    async def list_purchase_inquiry_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        requisition_id: Optional[int] = None,
+        pullable_only: bool = True,
+    ) -> Dict[str, Any]:
+        """开口申请行：可转询价的剩余明细。"""
+        return await self._list_requisition_open_lines(
+            tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            requisition_id=requisition_id,
+            pullable_only=pullable_only,
+            target="inquiry",
+        )
+
+    async def _list_requisition_open_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int,
+        limit: int,
+        keyword: Optional[str],
+        requisition_id: Optional[int],
+        pullable_only: bool,
+        target: str,
+    ) -> Dict[str, Any]:
+        req_query = PurchaseRequisition.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if requisition_id is not None:
+            req_query = req_query.filter(id=int(requisition_id))
+        requisitions = await req_query.only(
+            "id", "requisition_code", "status"
+        )
+        req_by_id = {int(r.id): r for r in requisitions}
+        if not req_by_id:
+            return {"data": [], "total": 0}
+
+        items = await PurchaseRequisitionItem.filter(
+            tenant_id=tenant_id,
+            requisition_id__in=list(req_by_id.keys()),
+        ).all()
+
+        blocked_ids: set = set()
+        if target == "inquiry":
+            from apps.kuaizhizao.models.purchase_inquiry import PurchaseInquiry, PurchaseInquiryItem
+            from apps.kuaizhizao.constants.purchase_inquiry import INQUIRY_ACTIVE_STATUSES
+
+            candidate_ids = [int(i.id) for i in items if i.id is not None and not i.purchase_order_id]
+            if candidate_ids:
+                active_items = await PurchaseInquiryItem.filter(
+                    tenant_id=tenant_id,
+                    source_requisition_item_id__in=candidate_ids,
+                    purchase_order_id__isnull=True,
+                ).all()
+                inquiry_ids = {a.inquiry_id for a in active_items}
+                active_inquiries = (
+                    await PurchaseInquiry.filter(
+                        tenant_id=tenant_id,
+                        id__in=list(inquiry_ids),
+                        deleted_at__isnull=True,
+                        status__in=list(INQUIRY_ACTIVE_STATUSES),
+                    ).all()
+                    if inquiry_ids
+                    else []
+                )
+                active_inquiry_ids = {a.id for a in active_inquiries}
+                blocked_ids = {
+                    int(a.source_requisition_item_id)
+                    for a in active_items
+                    if a.inquiry_id in active_inquiry_ids and a.source_requisition_item_id
+                }
+
+        kw = (keyword or "").strip().lower()
+        lines: List[Dict[str, Any]] = []
+        for item in items:
+            req = req_by_id.get(int(item.requisition_id))
+            if not req:
+                continue
+            can_push = _can_push_downstream(req.status)
+            qty = float(item.quantity or 0)
+            if qty <= 0:
+                continue
+            if target == "purchase_order":
+                if item.purchase_order_id:
+                    remaining = 0.0
+                    pushed = qty
+                else:
+                    pushed = float(item.converted_quantity_draft or 0) + float(
+                        item.converted_quantity_confirmed or 0
+                    )
+                    remaining = max(0.0, qty - pushed)
+            else:
+                in_active = int(item.id) in blocked_ids if item.id is not None else False
+                if item.purchase_order_id or in_active:
+                    remaining = 0.0
+                    pushed = qty
+                else:
+                    remaining = qty
+                    pushed = 0.0
+            selectable = can_push and remaining > 0
+            if pullable_only and not selectable:
+                continue
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            material_spec = str(item.material_spec or "").strip()
+            if kw:
+                haystack = " ".join([material_code, material_name, material_spec]).lower()
+                if kw not in haystack:
+                    continue
+            lines.append(
+                {
+                    "id": int(item.id),
+                    "requisition_id": int(item.requisition_id),
+                    "requisition_code": req.requisition_code,
+                    "material_id": item.material_id,
+                    "material_code": material_code,
+                    "material_name": material_name,
+                    "material_spec": material_spec or None,
+                    "unit": item.unit or "件",
+                    "suggested_quantity": qty,
+                    "pushed_quantity": pushed,
+                    "remaining_quantity": remaining,
+                    "required_date": str(item.required_date) if item.required_date else None,
+                    "supplier_id": item.supplier_id,
+                }
+            )
+
+        lines.sort(
+            key=lambda r: (
+                str(r.get("requisition_code") or ""),
+                str(r.get("material_code") or ""),
+                int(r.get("id") or 0),
+            )
+        )
+        total = len(lines)
+        return {"data": lines[skip : skip + limit], "total": total}
+
+    async def convert_selected_items_to_purchase_orders(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """按申请行 id 转采购订单，可跨多张申请；同供应商合并一张订单。"""
+        selected_ids = [int(v) for v in item_ids if v is not None]
+        if not selected_ids:
+            raise BusinessLogicError("请至少选择一条可下推采购申请明细")
+
+        items = await PurchaseRequisitionItem.filter(
+            tenant_id=tenant_id,
+            id__in=selected_ids,
+            purchase_order_id__isnull=True,
+        ).all()
+        if not items:
+            raise BusinessLogicError("没有可转单的申请行或所选行已转单")
+
+        requisition_ids = sorted({int(i.requisition_id) for i in items})
+        requisitions = await PurchaseRequisition.filter(
+            tenant_id=tenant_id,
+            id__in=requisition_ids,
+            deleted_at__isnull=True,
+        ).all()
+        req_by_id = {int(r.id): r for r in requisitions}
+        if len(req_by_id) != len(requisition_ids):
+            raise NotFoundError("采购申请不存在")
+        for req in requisitions:
+            assert_purchase_requisition_capability(req, "push_purchase_order")
+
+        from apps.kuaizhizao.services.purchase_inquiry_service import PurchaseInquiryService
+        await PurchaseInquiryService._assert_requisition_items_not_in_active_inquiry(
+            tenant_id, [i.id for i in items]
+        )
+
+        data = ConvertToPurchaseOrderRequest(item_ids=selected_ids)
+        line_suppliers: List[Tuple[PurchaseRequisitionItem, int]] = []
+        for item in items:
+            sid = self._resolve_line_supplier_id(item, data)
+            line_suppliers.append((item, int(sid) if sid else 0))
+
+        unique_ids = {sid for _, sid in line_suppliers}
+        supplier_rows = await Supplier.filter(
+            tenant_id=tenant_id, id__in=[sid for sid in unique_ids if sid > 0]
+        ).all()
+        supplier_by_id = {s.id: s for s in supplier_rows}
+        for sid in unique_ids:
+            if sid > 0 and sid not in supplier_by_id:
+                raise NotFoundError(f"供应商不存在: {sid}")
+
+        groups: Dict[int, List[PurchaseRequisitionItem]] = {}
+        for item, sid in line_suppliers:
+            groups.setdefault(sid, []).append(item)
+
+        today = to_site_date(resolve_business_datetime())
+        purchase_orders_out: List[Dict[str, Any]] = []
+        push_mode = await BusinessConfigService().get_push_default_mode(tenant_id)
+        push_as_confirm = push_mode == "confirm"
+
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+        rel_svc = DocumentRelationNewService()
+
+        for supplier_id, group_items in groups.items():
+            sup = supplier_by_id.get(supplier_id) if supplier_id > 0 else None
+            supplier_name = (sup.name if sup else None) or "待定供应商"
+            max_required = max((i.required_date or today for i in group_items), default=today)
+            source_req_ids = sorted({int(i.requisition_id) for i in group_items})
+            primary = req_by_id[source_req_ids[0]]
+            source_codes = " ".join(req_by_id[rid].requisition_code for rid in source_req_ids)
+            po_items = []
+            items_converted: List[tuple] = []
+            for item in group_items:
+                qty = item.quantity
+                if qty <= 0:
+                    continue
+                unit_price = item.suggested_unit_price or Decimal(0)
+                items_converted.append((item, qty))
+                po_items.append(
+                    PurchaseOrderItemCreate(
+                        material_id=item.material_id,
+                        material_code=item.material_code,
+                        material_name=item.material_name,
+                        material_spec=item.material_spec,
+                        ordered_quantity=qty,
+                        unit=item.unit or "件",
+                        unit_price=unit_price,
+                        total_price=qty * unit_price,
+                        received_quantity=Decimal(0),
+                        outstanding_quantity=qty,
+                        required_date=item.required_date or max_required,
+                        source_type="purchase_requisition",
+                        source_id=item.id,
+                        notes=item.notes,
+                    )
+                )
+            if not po_items:
+                continue
+            po_data = PurchaseOrderCreate(
+                supplier_id=supplier_id,
+                supplier_name=supplier_name,
+                order_date=today,
+                delivery_date=max_required,
+                order_type="标准采购",
+                status=DocumentStatus.DRAFT.value,
+                source_type="purchase_requisition",
+                source_id=primary.id,
+                notes=f"由采购申请{source_codes}转单生成",
+                items=po_items,
+            )
+            po = await self.purchase_service.create_purchase_order(
+                tenant_id=tenant_id, order_data=po_data, created_by=created_by
+            )
+            if push_as_confirm:
+                try:
+                    po = await self.purchase_service.submit_purchase_order(
+                        tenant_id=tenant_id,
+                        order_id=po.id,
+                        submitted_by=created_by,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "采购申请转单后自动提交采购订单失败: po_id={} err={}",
+                        po.id,
+                        e,
+                    )
+            for i, (item, _) in enumerate(items_converted):
+                po_item = po.items[i] if i < len(po.items) else None
+                po_item_id = getattr(po_item, "id", None) if po_item else None
+                await item.update_from_dict({
+                    "purchase_order_id": po.id,
+                    "purchase_order_item_id": po_item_id,
+                    "supplier_id": supplier_id if supplier_id > 0 else None,
+                }).save()
+            po_code = getattr(po, "order_code", str(po.id))
+            purchase_orders_out.append({
+                "purchase_order_id": po.id,
+                "purchase_order_code": po_code,
+                "supplier_id": supplier_id,
+            })
+            for rid in source_req_ids:
+                req = req_by_id[rid]
+                await rel_svc.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type="purchase_requisition",
+                        source_id=rid,
+                        source_code=req.requisition_code,
+                        source_name=req.requisition_name or req.requisition_code,
+                        target_type="purchase_order",
+                        target_id=po.id,
+                        target_code=po_code,
+                        target_name=getattr(po, "order_name", None) or po_code,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="采购申请转采购订单",
+                    ),
+                    created_by=created_by,
+                )
+
+        if not purchase_orders_out:
+            raise BusinessLogicError("所选明细的本次下推数量均为 0，无法生成采购订单")
+
+        for rid in requisition_ids:
+            all_items = await PurchaseRequisitionItem.filter(
+                tenant_id=tenant_id, requisition_id=rid
+            ).all()
+            all_converted = len(all_items) > 0 and all(i.purchase_order_id for i in all_items)
+            req = req_by_id[rid]
+            req.status = (
+                DocumentStatus.FULL_CONVERTED.value
+                if all_converted
+                else DocumentStatus.PARTIAL_CONVERTED.value
+            )
+            await req.save()
+
+        first = purchase_orders_out[0]
+        msg = (
+            f"转单成功，共生成 {len(purchase_orders_out)} 张采购订单"
+            if len(purchase_orders_out) > 1
+            else "转单成功"
+        )
+        return {
+            "success": True,
+            "message": msg,
+            "purchase_order_id": first["purchase_order_id"],
+            "purchase_order_code": first["purchase_order_code"],
+            "purchase_orders": purchase_orders_out,
         }
 

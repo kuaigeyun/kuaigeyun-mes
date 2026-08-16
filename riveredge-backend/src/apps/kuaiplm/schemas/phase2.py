@@ -39,6 +39,8 @@ class RdRequirementResponse(BaseModel):
     uuid: str
     tenant_id: int
     project_id: Optional[int] = None
+    project_code: Optional[str] = None
+    project_name: Optional[str] = None
     requirement_code: Optional[str] = None
     title: str
     description: Optional[str] = None
@@ -88,6 +90,8 @@ class RdDesignReviewResponse(BaseModel):
     uuid: str
     tenant_id: int
     project_id: Optional[int] = None
+    project_code: Optional[str] = None
+    project_name: Optional[str] = None
     review_code: Optional[str] = None
     title: str
     review_type: Optional[str] = None
@@ -135,6 +139,8 @@ class RdFmeaRecordResponse(BaseModel):
     uuid: str
     tenant_id: int
     project_id: Optional[int] = None
+    project_code: Optional[str] = None
+    project_name: Optional[str] = None
     fmea_code: Optional[str] = None
     title: str
     fmea_type: str

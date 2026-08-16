@@ -10,6 +10,7 @@ import {
   AFTER_SALES_ASSET_STATUS_COLOR,
   renderAfterSalesStatusTag,
 } from '../../shared/afterSalesListPresentation';
+import { LinkedDocumentCode } from '../../../../../../components/linked-document-code';
 import { AfterSalesDocDetailDrawer } from '../../shared/AfterSalesDocDetailDrawer';
 
 const PLACEHOLDER: ServiceAsset = {
@@ -51,14 +52,38 @@ export const ServiceAssetDetailDrawer: React.FC<ServiceAssetDetailDrawerProps> =
         { title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.materialName'), dataIndex: 'material_name' },
         { title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.materialSpec'), dataIndex: 'material_spec' },
         { title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.serialNumber'), dataIndex: 'serial_number' },
-        { title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.salesOrderCode'), dataIndex: 'sales_order_code' },
+        {
+          title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.salesOrderCode'),
+          dataIndex: 'sales_order_code',
+          render: (_, row) => (
+            <LinkedDocumentCode
+              documentType="sales_order"
+              documentId={row.sales_order_id}
+              code={row.sales_order_code}
+            />
+          ),
+        },
         {
           title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.salesDeliveryCode'),
           dataIndex: 'sales_delivery_code',
+          render: (_, row) => (
+            <LinkedDocumentCode
+              documentType="sales_delivery"
+              documentId={row.sales_delivery_id}
+              code={row.sales_delivery_code}
+            />
+          ),
         },
         {
           title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.installExecutionCode'),
           dataIndex: 'install_execution_code',
+          render: (_, row) => (
+            <LinkedDocumentCode
+              documentType="install_execution"
+              documentId={row.install_execution_id}
+              code={row.install_execution_code}
+            />
+          ),
         },
         {
           title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.installAddress'),
@@ -112,6 +137,7 @@ export const ServiceAssetDetailDrawer: React.FC<ServiceAssetDetailDrawerProps> =
       onRetry={onRetry}
       extra={extra}
       zIndex={zIndex}
+      traceDocumentType="service_asset"
     />
   );
 };

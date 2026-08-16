@@ -10,6 +10,7 @@ from core.services.business.business_notification_service import BusinessNotific
 
 # 与配置中心 trigger_document / trigger_action 一致
 DOC_SALES_ORDER = "sales_order"
+DOC_SALES_REVIEW = "sales_review"
 DOC_PURCHASE_ORDER = "purchase_order"
 DOC_WORK_ORDER = "work_order"
 DOC_QUALITY_EXCEPTION = "quality_exception"
@@ -21,6 +22,9 @@ ACTION_CREATED = "created"
 ACTION_ABNORMAL_DETECTED = "abnormal_detected"
 ACTION_REPORTED = "reported"
 ACTION_REMIND_BATCHING = "remind_batching"
+ACTION_ISSUED = "issued"
+ACTION_REJECTED = "rejected"
+ACTION_PASSED = "passed"
 
 
 async def dispatch_kuaizhizao_notification(

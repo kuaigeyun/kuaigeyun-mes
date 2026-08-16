@@ -566,6 +566,13 @@ code {
 }
 
 
+/* 两栏左栏中灰：用 antd layout token，不用 --ant-colorBgLayout（已被标签背景改写） */
+.two-column-layout-left,
+.two-column-layout-left-custom,
+.two-column-layout-left-tree {
+  background-color: var(--ant-color-bg-layout, #f5f5f5);
+}
+
 /* 两栏布局内容区骨架；UniTable 填高 / scroll / table-layout 唯一控制面见 uni-table.less */
 .two-column-layout-content {
   display: flex !important;
@@ -1407,9 +1414,11 @@ code {
   ) !important;
 }
 
-/* 全局：标题左侧主题色竖条（Modal / 表单板块等共用，药丸形） */
+/* 全局：标题左侧主题色竖条（Modal / 表单板块等共用，药丸形）
+   只作用于本卡片标题，不穿透到嵌套 Card（如订单评审部门意见） */
 .ant-modal .ant-modal-header .ant-modal-title,
-.detail-drawer-section-title-accent .ant-card-head-title {
+.detail-drawer-section-title-accent > .ant-card-head .ant-card-head-title,
+.detail-drawer-section-title-accent > .ant-pro-card-head .ant-pro-card-title {
   position: relative;
   padding-left: 14px;
 
@@ -1659,6 +1668,11 @@ code {
 
 /* 工作台首行便当：列等高、子块撑满宽度 */
 /* 快捷入口图标下标签：固定 12px，不随主题 fontSize 缩放；限宽换行，避免顶栏托盘溢出 */
+.quick-entry-icon__glyph .anticon,
+.quick-entry-icon__glyph svg {
+  color: inherit !important;
+}
+
 .quick-entry-icon__title {
   font-size: 12px !important;
   overflow-wrap: anywhere;
@@ -1669,9 +1683,9 @@ code {
   overflow: hidden;
 }
 
-/* 模块看板快捷入口：图标统一主题色，覆盖各看板硬编码色 */
-.module-shortcut-grid .module-shortcut-grid__item .anticon,
-.module-shortcut-grid .module-shortcut-grid__item svg {
+/* 模块看板快捷入口：仅简约主题锁主色；多彩主题由芯片 accent 上色 */
+.module-shortcut-grid--plain .module-shortcut-grid__item .anticon,
+.module-shortcut-grid--plain .module-shortcut-grid__item svg {
   color: var(--ant-color-primary) !important;
 }
 
@@ -2888,6 +2902,89 @@ code {
 }
 .dashboard-feed-item__stat--bad {
   color: var(--ant-color-error, #ff4d4f);
+}
+
+.module-broadcast-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.module-broadcast-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+.module-broadcast-item--interactive {
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.module-broadcast-item--interactive:hover {
+  background: var(--ant-color-fill-quaternary, rgba(0, 0, 0, 0.02));
+}
+.module-broadcast-item__chip {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+}
+.module-broadcast-item__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.module-broadcast-item__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.module-broadcast-item__process {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.module-broadcast-item__time {
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.module-broadcast-item__operator,
+.module-broadcast-item__product,
+.module-broadcast-item__work-order {
+  display: block;
+  min-width: 0;
+}
+.module-broadcast-item__operator {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.module-broadcast-item__product {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ant-color-text, rgba(0, 0, 0, 0.88));
+}
+.module-broadcast-item__work-order {
+  font-size: 11px;
+  line-height: 1.4;
+}
+.module-broadcast-item__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
 }
 .dashboard-todo-item {
   display: flex;

@@ -12,8 +12,10 @@ const QualityRateTrend: React.FC = () => {
     <KuaizhizaoReport
       title={t('app.kuaizhizao.menu.reports.quality-rate-trend')}
       reportType={QUALITY_REPORT_TYPES.QUALITY_RATE_TREND}
-      columnPersistenceId="apps.kuaizhizao.pages.quality-management.reports.QualityRateTrend"
+      columnPersistenceId="apps.kuaizhizao.pages.quality-management.reports.QualityRateTrend-v2"
+      rowKey="id"
       columns={columns}
+      summaryFields={['iqc_qty', 'ipqc_qty', 'fqc_qty']}
     />
   );
 };

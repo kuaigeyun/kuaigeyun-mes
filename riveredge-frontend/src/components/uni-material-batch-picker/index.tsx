@@ -1,7 +1,8 @@
 /**
  * UniMaterialBatchPicker — 统一多选物料弹窗
  *
- * 内容区集成搜索 / 分类 / 来源筛选；表格跨页多选；请求序号防竞态。
+ * 内容区集成搜索 / 分类 / 来源筛选；选择规则对齐 UniPullQuery
+ *（默认仅本页，筛选下已选预览，分段可开跨页）；请求序号防竞态。
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -31,6 +32,10 @@ import {
 } from '../../apps/master-data/utils/materialSourceType';
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../utils/modalEventIsolation';
 import { MarkerTag } from '../../constants/statusBadges';
+import {
+  UniPullQuerySelectionBar,
+  type UniPullQueryCrossPageMode,
+} from '../uni-pull-query';
 import './index.less';
 
 export type { UniMaterialBatchPickerProps } from './types';
@@ -50,6 +55,13 @@ function resolveMaterialImageFileUuid(raw: unknown): string | null {
   const uid = typeof obj.uid === 'string' ? obj.uid.trim() : '';
   if (/^[0-9a-fA-F-]{32,36}$/.test(uid)) return uid;
   return null;
+}
+
+function materialPreviewLabel(record: Material): string {
+  const rec = record as Record<string, unknown>;
+  const code = String(getMaterialField(rec, 'mainCode') ?? record.code ?? '').trim();
+  const name = String(record.name ?? '').trim();
+  return code || name || '';
 }
 
 export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
@@ -74,6 +86,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
   const [page, setPage] = useState(1);
   const [totalHint, setTotalHint] = useState(0);
   const [selectedMap, setSelectedMap] = useState<Map<number, Material>>(() => new Map());
+  const [crossPageMode, setCrossPageMode] = useState<UniPullQueryCrossPageMode>('page');
   const [bomMap, setBomMap] = useState<Record<number, boolean>>({});
   const [inventoryMap, setInventoryMap] = useState<Record<number, number>>({});
   const [indicatorsLoading, setIndicatorsLoading] = useState(false);
@@ -172,6 +185,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
     setSourceType(undefined);
     setPage(1);
     setSelectedMap(new Map());
+    setCrossPageMode('page');
   }, [open]);
 
   /** 筛选 / 分页变化时拉列表（open 纳入依赖，保证首次打开也会请求） */
@@ -206,10 +220,19 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
 
   const selectedCount = selectedMap.size;
   const selectedRowKeys = useMemo(() => Array.from(selectedMap.keys()), [selectedMap]);
+  const previewItems = useMemo(
+    () =>
+      Array.from(selectedMap.values()).map((row) => ({
+        key: row.id,
+        label: materialPreviewLabel(row) || t('components.uniPullQuery.selectedUnlabeled'),
+      })),
+    [selectedMap, t],
+  );
 
   const rowSelection = useMemo(
     () => ({
       selectedRowKeys,
+      preserveSelectedRowKeys: crossPageMode === 'cross',
       onChange: (keys: React.Key[]) => {
         setSelectedMap((prev) => {
           const next = new Map<number, Material>();
@@ -222,8 +245,46 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
         });
       },
     }),
-    [list, selectedRowKeys],
+    [crossPageMode, list, selectedRowKeys],
   );
+
+  const handleRemoveSelected = useCallback((key: React.Key) => {
+    setSelectedMap((prev) => {
+      const next = new Map(prev);
+      next.delete(Number(key));
+      return next;
+    });
+  }, []);
+
+  const handleCrossPageModeChange = useCallback(
+    (mode: UniPullQueryCrossPageMode) => {
+      setCrossPageMode(mode);
+      if (mode !== 'page') return;
+      setSelectedMap((prev) => {
+        const next = new Map<number, Material>();
+        for (const row of list) {
+          const existing = prev.get(row.id);
+          if (existing) next.set(row.id, existing);
+        }
+        return next;
+      });
+    },
+    [list],
+  );
+
+  const handlePageChange = useCallback(
+    (nextPage: number) => {
+      if (crossPageMode === 'page') {
+        setSelectedMap(new Map());
+      }
+      setPage(nextPage);
+    },
+    [crossPageMode],
+  );
+
+  const clearSelection = useCallback(() => {
+    setSelectedMap(new Map());
+  }, []);
 
   const toggleMaterialRow = useCallback((record: Material) => {
     setSelectedMap((prev) => {
@@ -252,7 +313,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
     () => [
       {
         title: t('app.master-data.materials.productImage'),
-        width: 80,
+        width: 64,
         render: (_, record) => {
           const images = (record as { images?: Array<{ uid?: string; uuid?: string } | string> }).images || [];
           if (images.length > 0) {
@@ -269,8 +330,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
       },
       {
         title: t('app.kuaizhizao.salesOrder.materialPickerMaterial'),
-        width: 200,
-        ellipsis: false,
+        ellipsis: true,
         render: (_, r) => {
           const rec = r as Record<string, unknown>;
           const code = String(
@@ -286,13 +346,13 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
       },
       {
         title: t('app.kuaizhizao.salesOrder.materialSpec'),
-        width: 120,
+        width: 100,
         ellipsis: true,
         render: (_, r) => String(getMaterialField(r as Record<string, unknown>, 'specification') ?? ''),
       },
       {
         title: t('app.kuaizhizao.salesOrder.unit'),
-        width: 72,
+        width: 64,
         render: (_, r) => {
           const val = String(getMaterialField(r as Record<string, unknown>, 'baseUnit') ?? '');
           return unitsMap[val] || val || '-';
@@ -300,7 +360,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
       },
       {
         title: t('app.kuaizhizao.salesOrder.materialPickerHasBom'),
-        width: 104,
+        width: 96,
         align: 'center',
         render: (_, r) => {
           const id = r.id;
@@ -321,9 +381,6 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
           const text = hasBom
             ? t('app.kuaizhizao.salesOrder.materialPickerHasBomYes')
             : t('app.kuaizhizao.salesOrder.materialPickerHasBomNo');
-          const color = hasBom
-            ? 'var(--ant-color-success)'
-            : 'var(--ant-color-text-tertiary)';
           return (
             <Tooltip
               title={
@@ -332,14 +389,16 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
                   : t('app.kuaizhizao.salesOrder.materialPickerHasBomNone')
               }
             >
-              <span style={{ color, fontSize: 12 }}>{text}</span>
+              <MarkerTag color={hasBom ? 'success' : 'default'} style={{ marginInlineEnd: 0 }}>
+                {text}
+              </MarkerTag>
             </Tooltip>
           );
         },
       },
       {
         title: t('app.kuaizhizao.salesOrder.materialPickerAvailableInventory'),
-        width: 110,
+        width: 88,
         align: 'right',
         render: (_, r) => {
           const id = r.id;
@@ -362,7 +421,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
       },
       {
         title: t('app.kuaizhizao.salesOrder.materialPickerSourceType'),
-        width: 100,
+        width: 88,
         render: (_, r) => {
           const rec = r as Record<string, unknown>;
           const val = (getMaterialField(rec, 'sourceType') ?? rec.source_type) as string;
@@ -401,9 +460,9 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
       style={{
         padding: 12,
         marginBottom: 12,
-        background: token.colorPrimaryBg,
+        background: token.colorFillAlter,
         borderRadius: token.borderRadius,
-        border: `1px solid ${token.colorPrimaryBorder}`,
+        border: `1px solid ${token.colorBorderSecondary}`,
       }}
     >
       <Flex gap={8} align="center" style={{ width: '100%' }}>
@@ -435,6 +494,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
           onChange={(v) => {
             setGroupId(v as number | undefined);
             setPage(1);
+            clearSelection();
           }}
           treeNodeFilterProp="title"
           getPopupContainer={popupContainer}
@@ -447,6 +507,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
           onChange={(v) => {
             setSourceType(v);
             setPage(1);
+            clearSelection();
           }}
           getPopupContainer={popupContainer}
           options={[
@@ -479,11 +540,19 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
       wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
     >
       {filterBar}
+      <UniPullQuerySelectionBar
+        crossPageMode={crossPageMode}
+        onCrossPageModeChange={handleCrossPageModeChange}
+        items={previewItems}
+        onRemove={handleRemoveSelected}
+        onClear={clearSelection}
+      />
       <Table<Material>
         className="uni-material-batch-picker-table"
         size="small"
         rowKey="id"
         loading={loading}
+        tableLayout="fixed"
         columns={columns}
         dataSource={list}
         rowSelection={rowSelection}
@@ -497,7 +566,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
           total: totalHint,
           showSizeChanger: false,
           showLessItems: true,
-          onChange: (p) => setPage(p),
+          onChange: (p) => handlePageChange(p),
           // mini 分页格宽 24px，antd 默认三个 • 会折行；改用单字符省略号
           itemRender: (_page, type, originalElement) => {
             if (type === 'jump-prev' || type === 'jump-next') {
@@ -520,7 +589,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
             </Flex>
           ),
         }}
-        scroll={{ x: 960, y: 360 }}
+        scroll={{ y: 360 }}
       />
     </Modal>
   );

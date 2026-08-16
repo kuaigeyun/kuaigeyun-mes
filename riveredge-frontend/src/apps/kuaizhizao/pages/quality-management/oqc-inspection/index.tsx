@@ -264,7 +264,7 @@ const OQCInspectionPage: React.FC = () => {
         const res = await qualityImprovementApi.oqc.listShipmentNoticePullCandidates({
           skip: 0,
           limit: 100,
-          keyword: keyword.trim() || undefined,
+          notice_code: keyword.trim() || undefined,
         });
         const rows = (res.data || []) as OqcPullSourceCandidate[];
         const filtered = filterByPullScope(rows, scope, isPullOqcInspectionSelectable);
@@ -297,7 +297,7 @@ const OQCInspectionPage: React.FC = () => {
         const res = await qualityImprovementApi.oqc.listSalesDeliveryPullCandidates({
           skip: 0,
           limit: 100,
-          keyword: keyword.trim() || undefined,
+          delivery_code: keyword.trim() || undefined,
         });
         const rows = (res.data || []) as OqcPullSourceCandidate[];
         const filtered = filterByPullScope(rows, scope, isPullOqcInspectionSelectable);
@@ -743,6 +743,7 @@ const OQCInspectionPage: React.FC = () => {
           confirmLoading={pullFromShipmentNoticeQuery.confirmLoading}
           selectionType={pullFromShipmentNoticeQuery.selectionType}
           selectedRowKeys={pullFromShipmentNoticeQuery.selectedRowKeys}
+          selectedRows={pullFromShipmentNoticeQuery.selectedRows}
           onSelectedRowKeysChange={pullFromShipmentNoticeQuery.handleSelectedRowKeysChange}
           isRowDisabled={pullFromShipmentNoticeQuery.isRowDisabled}
           searchDraft={pullFromShipmentNoticeQuery.searchDraft}
@@ -772,6 +773,7 @@ const OQCInspectionPage: React.FC = () => {
           confirmLoading={pullFromSalesDeliveryQuery.confirmLoading}
           selectionType={pullFromSalesDeliveryQuery.selectionType}
           selectedRowKeys={pullFromSalesDeliveryQuery.selectedRowKeys}
+          selectedRows={pullFromSalesDeliveryQuery.selectedRows}
           onSelectedRowKeysChange={pullFromSalesDeliveryQuery.handleSelectedRowKeysChange}
           isRowDisabled={pullFromSalesDeliveryQuery.isRowDisabled}
           searchDraft={pullFromSalesDeliveryQuery.searchDraft}

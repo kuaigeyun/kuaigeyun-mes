@@ -19,10 +19,11 @@ class StationSopAcknowledgment(BaseModel):
             ("operation_id",),
             ("sop_uuid",),
         ]
-        unique_together = [("tenant_id", "work_order_id", "operation_id", "sop_uuid", "worker_id")]
+        unique_together = [("tenant_id", "work_order_id", "operation_id", "sop_uuid", "sop_revision", "worker_id")]
 
     tenant_id = fields.IntField(description="租户ID")
     sop_uuid = fields.CharField(max_length=64, description="SOP UUID")
+    sop_revision = fields.CharField(max_length=20, description="确认时的SOP修订号")
     work_order_id = fields.IntField(description="工单ID")
     operation_id = fields.IntField(description="工序ID")
     worker_id = fields.IntField(description="操作工ID")

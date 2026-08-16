@@ -1,8 +1,13 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Flex, Modal, Table, theme } from 'antd';
 import { MODAL_CONFIG } from '../layout-templates/constants';
 import { UniPullQueryFilterBar } from './UniPullQueryFilterBar';
+import {
+  UniPullQuerySelectionBar,
+  type UniPullQueryCrossPageMode,
+} from './UniPullQuerySelectionBar';
+import { defaultPullRowLabel } from './defaultPullRowLabel';
 import type { UniPullQueryModalProps } from './types';
 
 function resolveRowKey<T extends object>(
@@ -52,16 +57,20 @@ export function UniPullQueryModal<T extends object>({
   okText,
   cancelText,
   okButtonProps,
-  width = MODAL_CONFIG.EXTRA_LARGE_WIDTH,
+  width = MODAL_CONFIG.PULL_QUERY_WIDTH,
   zIndex,
   destroyOnHidden = true,
   afterOpenChange,
   alert,
   footerHint,
-  tableScroll = { x: 1180, y: 360 },
+  tableScroll = { y: 360 },
+  selectedRows,
+  getRowLabel,
 }: UniPullQueryModalProps<T>) {
   const { t } = useTranslation();
   const { token } = theme.useToken();
+  const isMultiSelect = selectionType === 'checkbox';
+  const [crossPageMode, setCrossPageMode] = useState<UniPullQueryCrossPageMode>('page');
 
   const resolvedSearchPlaceholder = String(
     searchPlaceholder ?? t('components.uniPullQuery.searchPlaceholder'),
@@ -71,6 +80,66 @@ export function UniPullQueryModal<T extends object>({
   const resolvedOkText = okText ?? t('common.confirm');
   const resolvedCancelText = cancelText ?? t('common.cancel');
   const selectedCount = selectedRowKeys.length;
+  const resolveLabel = getRowLabel ?? ((record: T) => defaultPullRowLabel(record));
+
+  useEffect(() => {
+    if (!open) setCrossPageMode('page');
+  }, [open]);
+
+  const previewItems = useMemo(() => {
+    const rowByKey = new Map<React.Key, T>();
+    for (const row of selectedRows ?? []) {
+      rowByKey.set(resolveRowKey(row, rowKey), row);
+    }
+    for (const row of dataSource) {
+      const key = resolveRowKey(row, rowKey);
+      if (!rowByKey.has(key)) rowByKey.set(key, row);
+    }
+    const unlabeled = t('components.uniPullQuery.selectedUnlabeled');
+    return selectedRowKeys.map((key) => {
+      const row = rowByKey.get(key);
+      const label = row ? String(resolveLabel(row) ?? '').trim() : '';
+      return { key, label: label || unlabeled };
+    });
+  }, [dataSource, resolveLabel, rowKey, selectedRowKeys, selectedRows, t]);
+
+  const handleRemoveSelected = useCallback(
+    (key: React.Key) => {
+      const nextKeys = selectedRowKeys.filter((item) => item !== key);
+      const nextRows = (selectedRows ?? dataSource).filter((row) =>
+        nextKeys.includes(resolveRowKey(row, rowKey)),
+      );
+      onSelectedRowKeysChange(nextKeys, nextRows);
+    },
+    [dataSource, onSelectedRowKeysChange, rowKey, selectedRowKeys, selectedRows],
+  );
+
+  const handleClearSelected = useCallback(() => {
+    onSelectedRowKeysChange([], []);
+  }, [onSelectedRowKeysChange]);
+
+  const handleCrossPageModeChange = useCallback(
+    (mode: UniPullQueryCrossPageMode) => {
+      setCrossPageMode(mode);
+      if (mode !== 'page') return;
+      const pageKeys = new Set(dataSource.map((row) => resolveRowKey(row, rowKey)));
+      const nextKeys = selectedRowKeys.filter((key) => pageKeys.has(key));
+      if (nextKeys.length === selectedRowKeys.length) return;
+      const nextRows = dataSource.filter((row) => nextKeys.includes(resolveRowKey(row, rowKey)));
+      onSelectedRowKeysChange(nextKeys, nextRows);
+    },
+    [dataSource, onSelectedRowKeysChange, rowKey, selectedRowKeys],
+  );
+
+  const handlePageChange = useCallback(
+    (nextPage: number) => {
+      if (isMultiSelect && crossPageMode === 'page') {
+        onSelectedRowKeysChange([], []);
+      }
+      onPageChange(nextPage);
+    },
+    [crossPageMode, isMultiSelect, onPageChange, onSelectedRowKeysChange],
+  );
 
   const handleRowClick = useCallback(
     (record: T, event: React.MouseEvent<HTMLElement>) => {
@@ -104,6 +173,7 @@ export function UniPullQueryModal<T extends object>({
     <Modal
       title={title}
       styles={{ header: { marginBottom: 0 }, body: { paddingTop: 12 } }}
+      style={{ maxWidth: 'calc(100vw - 32px)' }}
       open={open}
       width={width}
       zIndex={zIndex}
@@ -127,10 +197,19 @@ export function UniPullQueryModal<T extends object>({
         onScopeChange={onScopeChange}
         filterExtra={filterExtra}
       />
+      <UniPullQuerySelectionBar
+        showCrossPage={isMultiSelect}
+        crossPageMode={crossPageMode}
+        onCrossPageModeChange={handleCrossPageModeChange}
+        items={previewItems}
+        onRemove={handleRemoveSelected}
+        onClear={handleClearSelected}
+      />
       <Table<T>
         rowKey={rowKey}
         loading={loading}
         size="small"
+        tableLayout="fixed"
         columns={columns}
         dataSource={dataSource}
         locale={{
@@ -139,6 +218,7 @@ export function UniPullQueryModal<T extends object>({
         rowSelection={{
           type: selectionType,
           selectedRowKeys,
+          preserveSelectedRowKeys: !isMultiSelect || crossPageMode === 'cross',
           onChange: (keys, rows) => {
             onSelectedRowKeysChange(keys, rows);
           },
@@ -155,7 +235,7 @@ export function UniPullQueryModal<T extends object>({
           pageSize,
           total,
           showSizeChanger: false,
-          onChange: (nextPage) => onPageChange(nextPage),
+          onChange: (nextPage) => handlePageChange(nextPage),
           showTotal: (tot) => (
             <Flex gap={16} align="center">
               <span style={{ color: token.colorTextSecondary, fontSize: 13 }}>

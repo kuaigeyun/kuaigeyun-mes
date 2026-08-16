@@ -10,6 +10,7 @@ import React from 'react';
 import { Typography } from 'antd';
 import type { ProColumns } from '@ant-design/pro-components';
 import type { TFunction } from 'i18next';
+import type { DefectLedgerItem } from '../../../services/quality-improvement';
 import {
   MaterialStackedCell,
   UniTableStackedPrimaryCell,
@@ -25,6 +26,12 @@ import {
   getInspectionTemplateSource,
   hasInspectionPlanSteps,
 } from './inspectionTemplateUtils';
+import { renderNcSourceInspectionStackedCell } from '../nonconforming-ledger/ncLedgerSource';
+
+/** 不良处理源检验单列 key → rank 10.6（台账编号后） */
+export const NC_SOURCE_INSPECTION_KEY = 'nc_source_inspection';
+
+const NC_SOURCE_INSPECTION_COLUMN_WIDTH = 150;
 
 /** 检验类型列统一 key → rank 10.5（单号后、第二业务叠列前） */
 export const QUALITY_INSPECTION_KIND_KEY = 'quality_inspection_kind';
@@ -61,6 +68,26 @@ export function renderUnqualifiedQuantity(value: unknown, record?: Record<string
     return <Typography.Text type="danger">{renderRecordQuantityWithUnit(record, 'unqualified_quantity')}</Typography.Text>;
   }
   return <Typography.Text type="danger">{formatQuantity(value)}</Typography.Text>;
+}
+
+/** 不良处理台账：源检验单（类型 + 单号堆叠，定宽） */
+export function buildNcSourceInspectionStackedColumn<T extends object>(
+  t: TFunction,
+  navigate: (path: string) => void,
+): ProColumns<T> {
+  return {
+    title: t('app.kuaizhizao.quality.nc.columns.sourceInspection'),
+    key: NC_SOURCE_INSPECTION_KEY,
+    dataIndex: NC_SOURCE_INSPECTION_KEY,
+    width: NC_SOURCE_INSPECTION_COLUMN_WIDTH,
+    minWidth: NC_SOURCE_INSPECTION_COLUMN_WIDTH,
+    uniTableKeepWidth: true,
+    resizable: false,
+    ellipsis: false,
+    hideInSearch: true,
+    onCell: () => ({ style: { whiteSpace: 'normal' } }),
+    render: (_, row) => renderNcSourceInspectionStackedCell(t, row as DefectLedgerItem, navigate),
+  };
 }
 
 export function stackedPrimarySecondaryColumn<T extends object>(

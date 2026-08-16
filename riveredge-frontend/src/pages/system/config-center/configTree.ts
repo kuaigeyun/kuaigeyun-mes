@@ -171,6 +171,19 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = createCategories({
     { key: 'warehouse.batch_management', nameKey: 'pages.system.configCenter.param.warehouse_batch_management', descriptionKey: 'pages.system.configCenter.param.warehouse_batch_management_desc', source: 'business_config', sourcePath: 'parameters.warehouse.batch_management', type: 'boolean' },
     { key: 'warehouse.serial_management', nameKey: 'pages.system.configCenter.param.warehouse_serial_management', descriptionKey: 'pages.system.configCenter.param.warehouse_serial_management_desc', source: 'business_config', sourcePath: 'parameters.warehouse.serial_management', type: 'boolean' },
     { key: 'warehouse.fifo', nameKey: 'pages.system.configCenter.param.warehouse_fifo', descriptionKey: 'pages.system.configCenter.param.warehouse_fifo_desc', source: 'business_config', sourcePath: 'parameters.warehouse.fifo', type: 'boolean' },
+    {
+      key: 'warehouse.fifo_mode',
+      nameKey: 'pages.system.configCenter.param.warehouse_fifo_mode',
+      descriptionKey: 'pages.system.configCenter.param.warehouse_fifo_mode_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.warehouse.fifo_mode',
+      type: 'select',
+      selectOptions: [
+        { value: 'batch_id', labelKey: 'pages.system.configCenter.param.warehouse_fifo_mode_opt_batch_id' },
+        { value: 'production_date', labelKey: 'pages.system.configCenter.param.warehouse_fifo_mode_opt_production_date' },
+        { value: 'expiry_date', labelKey: 'pages.system.configCenter.param.warehouse_fifo_mode_opt_expiry_date' },
+      ],
+    },
     { key: 'warehouse.lifo', nameKey: 'pages.system.configCenter.param.warehouse_lifo', descriptionKey: 'pages.system.configCenter.param.warehouse_lifo_desc', source: 'business_config', sourcePath: 'parameters.warehouse.lifo', type: 'boolean' },
     { key: 'warehouse.location_management', nameKey: 'pages.system.configCenter.param.warehouse_location_management', descriptionKey: 'pages.system.configCenter.param.warehouse_location_management_desc', source: 'business_config', sourcePath: 'parameters.warehouse.location_management', type: 'boolean' },
   ],
@@ -223,6 +236,7 @@ export const AUDIT_CATEGORIES: ConfigCategory[] = createCategories({});
 export const FLOW_CATEGORIES: ConfigCategory[] = createCategories({
   procurement: [
     { key: 'procurement.require_purchase_requisition', nameKey: 'pages.system.configCenter.param.procurement_require_purchase_requisition', descriptionKey: 'pages.system.configCenter.param.procurement_require_purchase_requisition_desc', source: 'business_config', sourcePath: 'parameters.procurement.require_purchase_requisition', type: 'boolean' },
+    { key: 'procurement.require_supplier_qualification', nameKey: 'pages.system.configCenter.param.procurement_require_supplier_qualification', descriptionKey: 'pages.system.configCenter.param.procurement_require_supplier_qualification_desc', source: 'business_config', sourcePath: 'parameters.procurement.require_supplier_qualification', type: 'boolean' },
   ],
   production: [
     { key: 'work_order.picking_confirm_warehouse_only', nameKey: 'pages.system.configCenter.param.work_order_picking_confirm_warehouse_only', descriptionKey: 'pages.system.configCenter.param.work_order_picking_confirm_warehouse_only_desc', source: 'business_config', sourcePath: 'parameters.work_order.picking_confirm_warehouse_only', type: 'boolean' },

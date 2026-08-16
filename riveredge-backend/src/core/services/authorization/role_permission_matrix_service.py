@@ -84,7 +84,8 @@ class RolePermissionMatrixService:
             norm = normalize_permission_code(p.code or "")
             if norm:
                 codes.add(norm)
-        return codes
+        # 矩阵展示与统计始终包含基线（即使历史角色尚未回填行）
+        return PermissionRegistryService.merge_baseline_permission_codes(codes)
 
     @staticmethod
     def _index_pool_by_resource(pool: List[Permission]) -> Dict[Tuple[str, str], List[Permission]]:
@@ -173,6 +174,9 @@ class RolePermissionMatrixService:
                     uuid=perms[0].uuid,
                     granted=granted,
                     merged_codes=codes,
+                    is_baseline=all(
+                        PermissionRegistryService.is_baseline_permission_code(c) for c in codes
+                    ),
                 )
             )
 
@@ -189,6 +193,7 @@ class RolePermissionMatrixService:
                     label=display_label_for_permission_code(norm) or action_key,
                     uuid=p.uuid,
                     granted=norm in granted_codes,
+                    is_baseline=PermissionRegistryService.is_baseline_permission_code(norm),
                 )
             )
         actions_out.sort(
@@ -267,6 +272,9 @@ class RolePermissionMatrixService:
         pool_by_code = {
             normalize_permission_code(p.code or ""): p for p in pool if p.code
         }
+        added = await RoleService.ensure_baseline_permissions_for_role(tenant_id, role)
+        if added:
+            await PermissionVersionService.bump(tenant_id=tenant_id, user_id=None)
         granted_codes = await RolePermissionMatrixService._granted_function_codes_for_role(
             tenant_id, role, pool
         )
@@ -343,6 +351,10 @@ class RolePermissionMatrixService:
             raise ValidationError(
                 f"部分功能权限 code 不存在或未同步: {sample}{suffix}"
             )
+        normalized_in = PermissionRegistryService.merge_baseline_permission_codes(
+            normalized_in & pool_keys
+        )
+        # 基线可能尚未进 pool（同步滞后）；只授予池内存在的基线码
         normalized_in = normalized_in & pool_keys
 
         desired_function_ids: Set[int] = {pool_by_code[c].id for c in normalized_in}

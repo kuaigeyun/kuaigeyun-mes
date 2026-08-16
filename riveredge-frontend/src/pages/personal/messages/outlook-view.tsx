@@ -161,9 +161,9 @@ const OutlookMessagesView: React.FC = () => {
   /** 与自定义字段管理等双栏页一致，使用 colorBorder 而非更浅的 colorBorderSecondary */
   const paneBorderColor = token.colorBorder;
 
-  /** 左栏 B 端分层：顶栏容器白底，列表区浅灰底，与右侧详情白底区分 */
+  /** 左栏 B 端分层：顶栏白底，列表区用两栏模板同一套中灰（不用半透明 colorFillAlter） */
   const leftPaneHeaderBg = token.colorBgContainer;
-  const leftPaneListBg = token.colorFillAlter;
+  const leftPaneListBg = token.colorBgLayout;
   const listItemActiveBg = token.colorBgContainer;
   const leftPaneGroupGlassStyle: React.CSSProperties = {
     padding: '6px 12px',
@@ -396,6 +396,7 @@ const OutlookMessagesView: React.FC = () => {
       <div style={paneStyle}>
         {/* 左侧：消息列表 */}
         <div
+          className="two-column-layout-left"
           style={{
             width: LIST_WIDTH,
             minWidth: LIST_WIDTH,

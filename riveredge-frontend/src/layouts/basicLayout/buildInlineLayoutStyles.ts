@@ -16,6 +16,8 @@ export type BasicLayoutStyleContext = {
   siderTextColor: string;
   siderBgColor: string;
   headerBgColor: string;
+  /** 激活标签与内容区背景，空则回落 colorBgLayout */
+  layoutBgColor: string;
   headerTextColor: string;
   siderFooterToken: GlobalToken;
   startMenuBaseRadius: number;
@@ -24,14 +26,15 @@ export type BasicLayoutStyleContext = {
 };
 
 export function buildShellLayoutStyles(ctx: BasicLayoutStyleContext): string {
-  const { token, isDarkMode } = ctx;
+  const { token, isDarkMode, layoutBgColor } = ctx;
+  const pageBg = layoutBgColor || token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5');
   return `
         html, body {
-          background-color: ${token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')} !important;
+          background-color: ${pageBg} !important;
           transition: none !important;
         }
         #root {
-          background-color: ${token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')} !important;
+          background-color: ${pageBg} !important;
           transition: none !important;
         }
         /* 主题切换：仅掐断布局壳常见层的过渡。避免使用全文档星号通配选择器及 ant-layout 下全后代通配，否则样式引擎需遍历巨量节点，易严重掉帧 */
@@ -352,7 +355,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         :root {
           --riveredge-menu-primary-color: ${token.colorPrimary};
           --ant-colorPrimary: ${token.colorPrimary};
-          --ant-colorBgLayout: ${token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')};
+          --ant-colorBgLayout: ${ctx.layoutBgColor || token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')};
           --ant-colorBorder: ${token.colorBorder};
           --ant-colorBorderSecondary: ${token.colorBorderSecondary ?? token.colorBorder};
           --ant-borderRadius: ${token.borderRadius}px;
@@ -807,8 +810,8 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         /* ==================== 菜单底部 ==================== */
         /* 使用主题边框颜色，支持深色模式，并根据菜单栏背景色自动适配 */
         .ant-pro-sider-footer {
-          margin-bottom: 10px !important;
-          padding-bottom: 0 !important;
+          margin-bottom: 0 !important;
+          padding-bottom: 16px !important;
         }
         /* 侧边栏底部收起按钮区域样式 - 根据菜单栏背景色自动适配 */
         .ant-pro-layout .ant-pro-sider-footer,
@@ -1304,14 +1307,14 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         }
         /* 内容区背景颜色与 PageContainer 一致 - 使用 token 值 */
         .ant-pro-layout-bg-list {
-          background: ${token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')} !important;
+          background: ${ctx.layoutBgColor || token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')} !important;
         }
         /* 确保 ProLayout 内容区域背景色与激活标签一致；强制 padding 为 0，避免首次加载 40/32 与 UniTabs 16px 叠层 */
         .ant-pro-layout-content,
         .ant-pro-layout-content .ant-pro-page-container,
         .ant-pro-layout-content .ant-pro-page-container-children-content,
         .ant-pro-layout-content .ant-pro-page-container-children-container {
-          background: ${token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')} !important;
+          background: ${ctx.layoutBgColor || token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')} !important;
           padding: 0 !important;
           padding-inline: 0 !important;
         }
@@ -2683,6 +2686,7 @@ export function useBasicLayoutInlineStyles(ctx: BasicLayoutStyleContext) {
       siderTextColor,
       siderBgColor,
       headerBgColor,
+      ctx.layoutBgColor,
       headerTextColor,
       siderFooterToken.colorFillSecondary,
       siderFooterToken.colorFillTertiary,

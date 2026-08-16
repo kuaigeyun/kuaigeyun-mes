@@ -23,6 +23,19 @@ export function systemDictionaryItemLabelKey(code: string, value: string): strin
   return `systemDictionary.${code}.item.${systemDictionaryItemValueKey(value)}.label`;
 }
 
+/** 系统字典项文案：只读 locale 键，缺 key 返回 undefined（禁止回退原始码） */
+export function resolveSystemDictionaryValueLabel(
+  dictionaryCode: string,
+  value: string | number | undefined | null,
+  t: TFunction,
+): string | undefined {
+  const raw = String(value ?? '').trim();
+  if (!raw) return undefined;
+  const key = systemDictionaryItemLabelKey(dictionaryCode, raw);
+  const text = t(key);
+  return text !== key ? text : undefined;
+}
+
 export function systemDictionaryItemDescKey(code: string, value: string): string {
   return `systemDictionary.${code}.item.${systemDictionaryItemValueKey(value)}.desc`;
 }

@@ -7,8 +7,8 @@ Author: RiverEdge Team
 Date: 2026-02-19
 """
 
-from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, Path, HTTPException, status as http_status
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, Body, Depends, Query, Path, HTTPException, status as http_status
 from fastapi.responses import JSONResponse, HTMLResponse
 from loguru import logger
 
@@ -16,7 +16,7 @@ from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_modu
 from core.api.deps import get_current_user, get_current_tenant
 from core.api.deps.access import require_permission_codes
 from infra.models.user import User
-from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
+from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 
 from apps.kuaizhizao.services.delivery_notice_service import DeliveryNoticeService
 from apps.kuaizhizao.schemas.delivery_notice import (
@@ -76,6 +76,70 @@ async def preview_delivery_notice_from_sales_delivery(
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessLogicError as e:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/sales-delivery-pull-lines",
+    summary="Open sales delivery lines for delivery notice pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outbound:read"))],
+)
+async def list_delivery_notice_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    sales_delivery_id: Optional[int] = Query(None, description="来源销售出库单"),
+    pullable_only: bool = Query(True, description="仅剩余可通知量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """开口销售出库行，供送货单跨单取明细。"""
+    try:
+        return await delivery_notice_service.list_delivery_notice_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            sales_delivery_id=sales_delivery_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/pull-from-sales-delivery-items",
+    summary="Create delivery notices from sales delivery lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-notice:create"))],
+)
+async def pull_from_sales_delivery_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """从多张销售出库单的开口行创建送货单（同客户合并）。"""
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="请至少选择一条可通知销售出库明细")
+    try:
+        selected_ids = [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    try:
+        return await delivery_notice_service.create_delivery_notices_from_sales_delivery_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.exception("从销售出库开口行创建送货单失败")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="从销售出库开口行创建送货单失败",
+        )
 
 
 @router.post("", response_model=DeliveryNoticeResponse, summary="Create delivery notice")

@@ -1,10 +1,11 @@
 /**
- * 客户销售明细对账报表
+ * 客户销售对账
  */
 import React, { useMemo } from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
+import { salesBillTypeEnum } from '../../../utils/reportPresentation';
 
 const CustomerSalesReconciliation: React.FC = () => {
   const { t } = useTranslation();
@@ -12,16 +13,14 @@ const CustomerSalesReconciliation: React.FC = () => {
     () => [
       {
         title: t('app.kuaizhizao.reports.transactionDate'),
-        dataIndex: 'transaction_date_range',
-        valueType: 'dateRange',
-        hideInTable: true,
-        search: { order: 10 } as any,
-      },
-      {
-        title: t('app.kuaizhizao.reports.transactionDate'),
         dataIndex: 'transaction_date',
         valueType: 'date',
-        fixed: 'left',
+        width: 110,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.reports.customerCode'),
+        dataIndex: 'customer_code',
         width: 120,
         hideInSearch: true,
       },
@@ -35,11 +34,7 @@ const CustomerSalesReconciliation: React.FC = () => {
         title: t('app.kuaizhizao.reports.billType'),
         dataIndex: 'bill_type',
         width: 100,
-        valueEnum: {
-          SALES_ORDER: { text: t('app.kuaizhizao.reports.billTypeSalesOrder'), status: 'Processing' },
-          SALES_DELIVERY: { text: t('app.kuaizhizao.reports.billTypeSalesDelivery'), status: 'Success' },
-          SALES_RETURN: { text: t('app.kuaizhizao.reports.billTypeSalesReturn'), status: 'Error' },
-        },
+        valueEnum: salesBillTypeEnum(t),
       },
       {
         title: t('app.kuaizhizao.reports.billCode'),
@@ -50,25 +45,35 @@ const CustomerSalesReconciliation: React.FC = () => {
         title: t('app.kuaizhizao.reports.amount'),
         dataIndex: 'amount',
         valueType: 'money',
-        width: 120,
+        width: 110,
+        hideInSearch: true,
       },
       {
         title: t('app.kuaizhizao.reports.invoicedAmount'),
         dataIndex: 'invoiced_amount',
         valueType: 'money',
-        width: 120,
+        width: 110,
+        hideInSearch: true,
       },
       {
         title: t('app.kuaizhizao.reports.receivedAmount'),
         dataIndex: 'received_amount',
         valueType: 'money',
-        width: 120,
+        width: 110,
+        hideInSearch: true,
       },
       {
         title: t('app.kuaizhizao.reports.pendingAmount'),
         dataIndex: 'pending_amount',
         valueType: 'money',
-        width: 120,
+        width: 110,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.reports.salesman'),
+        dataIndex: 'salesman_name',
+        width: 100,
+        hideInSearch: true,
       },
     ],
     [t],
@@ -76,11 +81,11 @@ const CustomerSalesReconciliation: React.FC = () => {
 
   return (
     <KuaizhizaoReport
-      columnPersistenceId="apps.kuaizhizao.pages.sales-management.reports.CustomerSalesReconciliation"
+      columnPersistenceId="apps.kuaizhizao.pages.sales-management.reports.CustomerSalesReconciliation-v2"
       title={t('app.kuaizhizao.menu.reports.customer-sales-reconciliation')}
       reportType="customer_reconciliation"
+      rowKey="row_key"
       columns={columns}
-      dateRangeKeys={['transaction_date_range', 'date_range', 'dateRange']}
       summaryFields={['total_sales', 'total_returns', 'total_received', 'total_pending', 'balance']}
     />
   );

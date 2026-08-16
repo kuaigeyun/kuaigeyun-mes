@@ -3,6 +3,7 @@
  */
 
 import React from 'react';
+import type { TFunction } from 'i18next';
 import { MarkerTag } from '../../../constants/statusBadges';
 
 /** 需求类型码值归一（兼容大小写、连字符） */
@@ -25,7 +26,16 @@ export function getDemandTypeMarkerColor(v: string | undefined | null): string {
   return 'default';
 }
 
-/** 需求类型展示文案（未知码值回退为原字符串，避免界面出现「空白」） */
+/** 需求类型展示文案（页面 / 取单唯一路径，五语） */
+export function translateDemandType(t: TFunction, v: string | undefined | null): string {
+  const k = normalizeDemandTypeKey(v);
+  if (k === 'sales_forecast') return t('app.kuaizhizao.salesForecast.title');
+  if (k === 'sales_order') return t('app.kuaizhizao.salesOrder.entityName');
+  if (k === 'demand_plan') return t('app.kuaizhizao.demandManagement.demandTypePlan');
+  return v?.trim() || '-';
+}
+
+/** 无 t 时的中文标签（仅溯源等非页面路径） */
 export function getDemandTypeLabel(v: string | undefined | null): string {
   const k = normalizeDemandTypeKey(v);
   return DEMAND_TYPE_LABEL[k] ?? (v?.trim() || '-');
@@ -38,8 +48,11 @@ export function getDemandTypeTagProps(
 }
 
 /** 来源类型徽章（filled） */
-export function renderDemandTypeMarkerTag(v: string | undefined | null): React.ReactNode {
-  const label = getDemandTypeLabel(v);
+export function renderDemandTypeMarkerTag(
+  t: TFunction,
+  v: string | undefined | null,
+): React.ReactNode {
+  const label = translateDemandType(t, v);
   if (label === '-') return '-';
   return React.createElement(MarkerTag, { color: getDemandTypeMarkerColor(v) }, label);
 }

@@ -17,6 +17,8 @@ import {
   RobotOutlined,
   CloudServerOutlined,
   HddOutlined,
+  EnvironmentOutlined,
+  CarOutlined,
 } from '@ant-design/icons';
 
 export type AppConnectorCategory =
@@ -28,7 +30,8 @@ export type AppConnectorCategory =
   | 'iot'
   | 'wms'
   | 'storage'
-  | 'ai';
+  | 'ai'
+  | 'other';
 
 /** OpenAI 兼容 LLM 应用连接类型（可多条不同 model；选用在 KU-AI → 模型设置） */
 export const LLM_CONNECTION_TYPES = [
@@ -750,6 +753,71 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
       model: 'deepseek-ai/DeepSeek-V3',
     },
   },
+  {
+    id: 'amap',
+    name: '高德地图',
+    type: 'amap',
+    category: 'other',
+    description: '物流跟踪看板地图与地址地理编码（JS Key + REST Key）',
+    icon: <EnvironmentOutlined />,
+    defaultConfig: {
+      js_key: '',
+      security_code: '',
+      rest_key: '',
+    },
+  },
+  {
+    id: 'kuaidi100',
+    name: '快递100',
+    type: 'kuaidi100',
+    category: 'other',
+    description: '实时快递轨迹查询（授权码 + API Key）',
+    icon: <CarOutlined />,
+    defaultConfig: {
+      customer: '',
+      api_key: '',
+    },
+  },
+  {
+    id: 'kdniao',
+    name: '快递鸟',
+    type: 'kdniao',
+    category: 'other',
+    description: '即时查询轨迹（用户 ID + API Key）',
+    icon: <CarOutlined />,
+    defaultConfig: {
+      ebusiness_id: '',
+      api_key: '',
+    },
+  },
+  {
+    id: 'aliyun_market',
+    name: '阿里云市场',
+    type: 'aliyun_market',
+    category: 'other',
+    description: '云市场 API（调用地址 + AppCode + 场景）',
+    icon: <CloudOutlined />,
+    defaultConfig: {
+      scene: 'express_query',
+      http_method: 'POST',
+      query_url: '',
+      app_code: '',
+    },
+  },
+  {
+    id: 'tencent_market',
+    name: '腾讯云市场',
+    type: 'tencent_market',
+    category: 'other',
+    description: '云市场 API（调用地址 + AppCode + 场景）',
+    icon: <CloudOutlined />,
+    defaultConfig: {
+      scene: 'express_query',
+      http_method: 'POST',
+      query_url: '',
+      app_code: '',
+    },
+  },
 ];
 
 export const APP_CONNECTOR_CATEGORIES = [
@@ -763,4 +831,5 @@ export const APP_CONNECTOR_CATEGORIES = [
   { key: 'wms', label: 'WMS 仓储' },
   { key: 'storage', label: '存储' },
   { key: 'ai', label: 'AI' },
+  { key: 'other', label: '其他' },
 ] as const;

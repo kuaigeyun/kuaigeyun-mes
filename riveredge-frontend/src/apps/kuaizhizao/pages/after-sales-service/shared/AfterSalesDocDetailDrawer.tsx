@@ -36,6 +36,7 @@ export type AfterSalesDocDetailDrawerProps<T extends Record<string, any>> = {
   supplementaryTitle?: React.ReactNode;
   timeline?: React.ReactNode;
   timelineTitle?: React.ReactNode;
+  traceDocumentType?: string;
 };
 
 export function AfterSalesDocDetailDrawer<T extends Record<string, any>>({
@@ -59,6 +60,7 @@ export function AfterSalesDocDetailDrawer<T extends Record<string, any>>({
   supplementaryTitle,
   timeline,
   timelineTitle,
+  traceDocumentType,
 }: AfterSalesDocDetailDrawerProps<T>) {
   const { t } = useTranslation();
 
@@ -116,6 +118,11 @@ export function AfterSalesDocDetailDrawer<T extends Record<string, any>>({
       lines={contentReady ? lines : undefined}
       timelineTitle={timelineTitle}
       timeline={contentReady ? timeline : undefined}
+      traceDocument={
+        traceDocumentType && record?.id
+          ? { documentType: traceDocumentType, documentId: Number(record.id) }
+          : undefined
+      }
     />
   );
 }

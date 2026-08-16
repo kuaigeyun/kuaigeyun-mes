@@ -8,7 +8,9 @@ from typing import Any, Dict, Optional, Type
 from tortoise.expressions import Q
 from tortoise.models import Model
 
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from core.utils.timezone_utils import resolve_business_datetime, today_site_str
+from infra.models.user import User
 
 
 def build_keyword_q(keyword: Optional[str], *fields: str) -> Q:
@@ -67,7 +69,34 @@ def model_to_dict(row: Model, extra: Optional[Dict[str, Any]] = None) -> Dict[st
     return data
 
 
-def touch_updated(row: Model, user_id: Optional[int] = None) -> None:
+async def touch_updated(row: Model, user: Optional[User | int] = None) -> None:
+    """写入 updated_at 与 updated_by / updated_by_name（int 时查用户表解析姓名）。"""
     row.updated_at = resolve_business_datetime()
-    if user_id is not None and hasattr(row, "updated_by"):
-        row.updated_by = user_id
+    if user is None:
+        return
+    if isinstance(user, User):
+        apply_update_audit(row, user)
+        return
+    resolved = await User.get_or_none(id=int(user))
+    if resolved:
+        apply_update_audit(row, resolved)
+        return
+    if hasattr(row, "updated_by"):
+        row.updated_by = int(user)
+
+
+def prepare_create_row(model_cls: type[Model], payload: dict[str, Any], user: User) -> dict[str, Any]:
+    data = dict(payload)
+    apply_create_audit(data, user)
+    return data
+
+
+async def apply_create_audit_by_user_id(payload: dict[str, Any], user_id: int) -> dict[str, Any]:
+    """创建前写入审计四字段；user_id 查不到用户时仅写 ID。"""
+    user = await User.get_or_none(id=user_id)
+    if user:
+        apply_create_audit(payload, user)
+    else:
+        payload["created_by"] = user_id
+        payload["updated_by"] = user_id
+    return payload

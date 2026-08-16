@@ -24,6 +24,7 @@ import {
   UniPullQueryModal,
   filterByPullScope,
   paginatePullRows,
+  renderPullQueryReviewStatus,
   UNI_PULL_QUERY_MAX_FETCH_LIMIT,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
@@ -46,11 +47,14 @@ import {
   assertBankAccountForPaymentMethod,
   formatBankAccountOptionLabel,
   BANK_TRANSFER_PAYMENT_METHOD,
+  isAcceptanceBillPaymentMethod,
 } from '../../../utils/financeSharedOptions';
 import {
   LedgerAccountFormFields,
-  resolveLedgerAccountNote,
+  resolveFinanceVoucherReferenceNote,
 } from '../../../components/LedgerAccountFormFields';
+import { linkAcceptanceNoteAfterVoucherCreate } from '../../../components/AcceptanceBillLinkFields';
+import { financeNoteService, type FinanceNote } from '../../../services/finance/note';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
@@ -94,6 +98,7 @@ const ReceiptsPage: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailRecord, setDetailRecord] = useState<ReceiptVoucher | null>(null);
+  const [linkedNote, setLinkedNote] = useState<FinanceNote | null>(null);
   const detailRetryIdRef = useRef<number | null>(null);
   const { message: messageApi } = App.useApp();
   const { t } = useTranslation();
@@ -131,10 +136,17 @@ const ReceiptsPage: React.FC = () => {
   const loadDetail = useCallback(async (id: number) => {
     setDetailLoading(true);
     setDetailError(null);
+    setLinkedNote(null);
     try {
-      setDetailRecord(await receiptService.getReceipt(id));
+      const record = await receiptService.getReceipt(id);
+      setDetailRecord(record);
+      if (isAcceptanceBillPaymentMethod(record.payment_method)) {
+        const noteRes = await financeNoteService.list('receivable', { receipt_id: id, limit: 1 });
+        setLinkedNote(noteRes.data?.[0] ?? null);
+      }
     } catch (error) {
       setDetailRecord(null);
+      setLinkedNote(null);
       setDetailError(getApiErrorMessage(error, t(`${R}.loadDetailFailed`)));
     } finally {
       setDetailLoading(false);
@@ -152,6 +164,7 @@ const ReceiptsPage: React.FC = () => {
   const closeDetail = () => {
     setDetailOpen(false);
     setDetailRecord(null);
+    setLinkedNote(null);
     setDetailError(null);
   };
 
@@ -174,15 +187,38 @@ const ReceiptsPage: React.FC = () => {
       receipt_date: formatDateTime(values.receipt_date || dayjs(), 'YYYY-MM-DD'),
       payment_method: values.payment_method,
       bank_account_id: values.bank_account_id,
-      bank_account: resolveLedgerAccountNote(bankAccounts, values.bank_account_id, values.bank_account),
+      bank_account: resolveFinanceVoucherReferenceNote(
+        bankAccounts,
+        values.payment_method,
+        values.bank_account_id,
+        values.bank_account,
+      ),
       settlement_type: values.settlement_type || 'normal',
       notes: values.notes,
       attachments: normalizeDocumentAttachments(values.attachments),
     };
-    await receiptService.create(data);
-    messageApi.success(t(`${R}.createSuccess`));
-    setCreateModalVisible(false);
-    actionRef.current?.reload();
+    try {
+      const created = await receiptService.create(data);
+      try {
+        await linkAcceptanceNoteAfterVoucherCreate(
+          'receivable',
+          values.note_id,
+          created.id,
+          'receipt',
+        );
+      } catch (linkError) {
+        messageApi.warning(
+          getApiErrorMessage(linkError, t('app.kuaicaiwu.notes.linkFailed')),
+        );
+      }
+      messageApi.success(t(`${R}.createSuccess`));
+      setCreateModalVisible(false);
+      actionRef.current?.reload();
+    } catch (error) {
+      messageApi.error(getApiErrorMessage(error, t('common.createFailed')));
+      return false;
+    }
+    return true;
   };
 
   const resetPullPreview = () => {
@@ -299,7 +335,7 @@ const ReceiptsPage: React.FC = () => {
     }
     setPullSubmitting(true);
     try {
-      await receiptService.create({
+      const created = await receiptService.create({
         customer_id: Number(pullPreviewData.customer_id || 0),
         customer_name: pullPreviewData.customer_name || '',
         source_type: 'receivable',
@@ -308,7 +344,12 @@ const ReceiptsPage: React.FC = () => {
         receipt_date: formatDateTime(values.receipt_date || dayjs(), 'YYYY-MM-DD'),
         payment_method: values.payment_method,
         bank_account_id: values.bank_account_id,
-        bank_account: resolveLedgerAccountNote(bankAccounts, values.bank_account_id, values.bank_account),
+        bank_account: resolveFinanceVoucherReferenceNote(
+          bankAccounts,
+          values.payment_method,
+          values.bank_account_id,
+          values.bank_account,
+        ),
         settlement_type: values.settlement_type || 'normal',
         notes:
           String(values.notes ?? '').trim() ||
@@ -318,6 +359,16 @@ const ReceiptsPage: React.FC = () => {
           }),
         attachments: normalizeDocumentAttachments(values.attachments),
       });
+      try {
+        await linkAcceptanceNoteAfterVoucherCreate(
+          'receivable',
+          values.note_id,
+          created.id,
+          'receipt',
+        );
+      } catch (linkError) {
+        messageApi.warning(getApiErrorMessage(linkError, t('app.kuaicaiwu.notes.linkFailed')));
+      }
       messageApi.success(t(`${R}.pullCreateSuccess`, { target: pullFromReceivableAction.targetLabel }));
       resetPullPreview();
       actionRef.current?.reload();
@@ -442,6 +493,7 @@ const ReceiptsPage: React.FC = () => {
         dataIndex: 'review_status',
         width: 120,
         align: 'center' as const,
+        render: (v) => renderPullQueryReviewStatus(t, v),
       },
       {
         title: t('app.kuaicaiwu.common.dueDate'),
@@ -582,6 +634,17 @@ const ReceiptsPage: React.FC = () => {
       hideInSearch: true,
       sorter: true,
       render: (_, record) => formatPaymentMethod(record.payment_method, t),
+    },
+    {
+      title: t('app.kuaicaiwu.common.referenceNumber'),
+      dataIndex: 'bank_account',
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      ellipsis: true,
+      render: (_, record) => record.bank_account || '—',
     },
     {
       title: t(`${R}.settlementType`, '结算类型'),
@@ -742,6 +805,7 @@ const ReceiptsPage: React.FC = () => {
         confirmLoading={pullFromReceivableQuery.confirmLoading}
         selectionType={pullFromReceivableQuery.selectionType}
         selectedRowKeys={pullFromReceivableQuery.selectedRowKeys}
+        selectedRows={pullFromReceivableQuery.selectedRows}
         onSelectedRowKeysChange={pullFromReceivableQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromReceivableQuery.isRowDisabled}
         searchDraft={pullFromReceivableQuery.searchDraft}
@@ -892,6 +956,8 @@ const ReceiptsPage: React.FC = () => {
                   accounts={bankAccounts}
                   accountLabel={t(`${R}.bankAccount`)}
                   noteLabel={t(`${R}.bankAccountNote`)}
+                  acceptanceNoteDirection="receivable"
+                  partnerFieldName="customer_id"
                 />
                 <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} colProps={financeColFull} />
                 <DocumentAttachmentsField category="receipt_attachments" />
@@ -953,6 +1019,8 @@ const ReceiptsPage: React.FC = () => {
           accountLabel={t(`${R}.bankAccount`)}
           noteLabel={t(`${R}.bankAccountNote`)}
           noteColProps={financeColFull}
+          acceptanceNoteDirection="receivable"
+          partnerFieldName="customer_id"
         />
         <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} colProps={financeColFull} />
         <DocumentAttachmentsField category="receipt_attachments" />
@@ -970,6 +1038,8 @@ const ReceiptsPage: React.FC = () => {
           if (id != null) void loadDetail(id);
         }}
         bankAccountLabel={resolveBankLabel(detailRecord?.bank_account_id)}
+        linkedNote={linkedNote}
+        linkedNotePath="/apps/kuaicaiwu/finance-management/notes-receivable"
         extra={
           detailRecord ? (
             <DetailDrawerActions

@@ -1,5 +1,6 @@
 /**
  * 需求计算「来源单号」：首码可点开上游原版详情抽屉；多来源后缀「等N个」用徽章展示。
+ * 可选叠显关联客户名 / 计划名（sourceLabel）。
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
@@ -20,6 +21,8 @@ export type DemandComputationSourceCodeProps = {
   /** 多来源时取首个；与 demandId 二选一即可 */
   demandIds?: number[] | null;
   sourceId?: number | null;
+  /** 关联客户名（销售订单/预测）或计划名（需求计划） */
+  sourceLabel?: string | null;
   emptyText?: string;
   copyable?: boolean;
   style?: React.CSSProperties;
@@ -116,6 +119,7 @@ export function DemandComputationSourceCode({
   demandId,
   demandIds,
   sourceId,
+  sourceLabel,
   emptyText = '-',
   copyable = true,
   style,
@@ -129,6 +133,7 @@ export function DemandComputationSourceCode({
   const parsed = useMemo(() => parseDemandComputationSourceDisplay(String(demandCode ?? '')), [demandCode]);
   const primary = parsed.primary;
   const totalCount = parsed.totalCount;
+  const labelText = String(sourceLabel ?? '').trim();
   const dtype = normalizeDemandTypeKey(demandType);
   const demandPk = firstDemandId(demandId, demandIds);
   const sourcePk = Number(sourceId);
@@ -181,15 +186,15 @@ export function DemandComputationSourceCode({
     e.stopPropagation();
   }, []);
 
-  if (!primary) {
+  if (!primary && !labelText) {
     return <span style={style}>{emptyText}</span>;
   }
 
-  return (
+  const codeRow = primary ? (
     <Space
       size={4}
       wrap={false}
-      style={{ maxWidth: '100%', ...style }}
+      style={{ maxWidth: '100%' }}
       onClick={stopRow}
       onMouseDown={stopRow}
     >
@@ -206,7 +211,11 @@ export function DemandComputationSourceCode({
       ) : (
         <Typography.Text
           ellipsis={{ tooltip: parsed.fullText || primary }}
-          style={{ maxWidth: 140 }}
+          style={{
+            maxWidth: 140,
+            fontSize: labelText ? token.fontSizeSM : undefined,
+            color: labelText ? token.colorTextSecondary : undefined,
+          }}
         >
           {primary}
         </Typography.Text>
@@ -236,5 +245,33 @@ export function DemandComputationSourceCode({
         </Tag>
       ) : null}
     </Space>
+  ) : null;
+
+  if (!labelText) {
+    return <span style={style}>{codeRow}</span>;
+  }
+
+  return (
+    <div
+      style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 0, ...style }}
+      onClick={stopRow}
+      onMouseDown={stopRow}
+    >
+      <Typography.Text
+        ellipsis={{ tooltip: labelText }}
+        style={{
+          margin: 0,
+          fontSize: token.fontSize,
+          fontWeight: 500,
+          lineHeight: 1.25,
+          maxWidth: '100%',
+        }}
+      >
+        {labelText}
+      </Typography.Text>
+      {codeRow ? (
+        <div style={{ fontSize: token.fontSizeSM, lineHeight: 1.2, marginTop: 2 }}>{codeRow}</div>
+      ) : null}
+    </div>
   );
 }

@@ -5,10 +5,11 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProFormInstance } from '@ant-design/pro-components';
-import { App, Input, Tabs, Row, Col } from 'antd';
+import { App, Input, Tabs, Row, Col, Button } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG, FORM_LAYOUT, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
 import { supplierApi, getUserOptions, getDictionaryOptions } from '../services/supply-chain';
+import { getBusinessConfig } from '../../../services/businessConfig';
 import { testGenerateCode, generateCode, fetchEffectivePageCodeRule } from '../../../services/codeRule';
 import type { Supplier, SupplierCreate, SupplierUpdate } from '../types/supply-chain';
 import { SchemaFormRenderer } from '../../../components/schema-form';
@@ -114,12 +115,21 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
   useEffect(() => {
     if (!open) return;
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ isActive: true });
+    formRef.current?.setFieldsValue({ isActive: true, qualificationStatus: 'approved' });
     resetFieldValues();
     if (!editUuid) {
       let cancelled = false;
       (async () => {
         try {
+          const cfg = await getBusinessConfig();
+          const requireQualification = Boolean(
+            cfg?.parameters?.procurement?.require_supplier_qualification,
+          );
+          if (!cancelled) {
+            formRef.current?.setFieldsValue({
+              qualificationStatus: requireQualification ? 'potential' : 'approved',
+            });
+          }
           const { ruleCode, autoGenerate } = await fetchEffectivePageCodeRule(PAGE_CODE);
           if (cancelled) return;
           setEffectiveRuleCode(ruleCode);
@@ -137,7 +147,11 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
             return;
           }
           setPreviewCode(code);
-          formRef.current?.setFieldsValue({ code, isActive: true });
+          formRef.current?.setFieldsValue({
+            code,
+            isActive: true,
+            qualificationStatus: requireQualification ? 'potential' : 'approved',
+          });
         } catch (err: any) {
           if (cancelled) return;
           setPreviewCode(null);
@@ -262,7 +276,7 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
         loading={formLoading}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef as React.RefObject<ProFormInstance>}
-        initialValues={{ isActive: true }}
+        initialValues={{ isActive: true, qualificationStatus: 'approved' }}
         layout="vertical"
         grid
         zIndex={zIndex}
@@ -325,6 +339,27 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
                       isEdit={isEdit}
                       optionsMap={optionsMap}
                     />
+                    {isEdit && editUuid ? (
+                      <Col span={24}>
+                        <Button
+                          onClick={async () => {
+                            try {
+                              const res = await supplierApi.recalculateRating(editUuid);
+                              formRef.current?.setFieldsValue({
+                                ratingGrade: res.ratingGrade,
+                              });
+                              messageApi.success(
+                                `已评级 ${res.ratingGrade}（综合 ${res.ratingScore}）`,
+                              );
+                            } catch (e: any) {
+                              messageApi.error(e?.message || '评级失败');
+                            }
+                          }}
+                        >
+                          {t('field.supplier.recalculateRating')}
+                        </Button>
+                      </Col>
+                    ) : null}
                   </Row>
                 ),
               },

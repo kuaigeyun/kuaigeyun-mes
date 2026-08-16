@@ -44,6 +44,12 @@ from .quality_exception import QualityException
 from .exception_process_record import ExceptionProcessRecord, ExceptionProcessHistory
 from .quality_8d_report import Quality8DReport
 from .oqc_inspection import OQCInspection
+from .fai_characteristic import FaiCharacteristic
+from .fai_order import FaiOrder
+from .qms_internal_audit import QmsInternalAudit
+from .qms_management_review import QmsManagementReview
+from .qms_iso_clause import QmsIsoClause
+from .qms_system_document import QmsSystemDocument
 from .spc_sample import SPCSample
 
 # 仓储管理模块
@@ -119,6 +125,9 @@ from .sales_contract_term_group import SalesContractTermGroup
 from .sales_contract_term_group_item import SalesContractTermGroupItem
 from .quotation import Quotation
 from .quotation_item import QuotationItem
+from .sales_review import SalesReview
+from .sales_review_item import SalesReviewItem
+from .sales_review_dept_opinion import SalesReviewDeptOpinion
 from .delivery_notice import DeliveryNotice
 from .delivery_notice_item import DeliveryNoticeItem
 from .logistics import (
@@ -281,6 +290,11 @@ __all__ = [
     'ExceptionProcessHistory',
     'Quality8DReport',
     'OQCInspection',
+    'FaiOrder',
+    'FaiCharacteristic',
+    'QmsSystemDocument',
+    'QmsInternalAudit',
+    'QmsManagementReview',
     'SPCSample',
 
     # 仓储管理模块
@@ -352,6 +366,9 @@ __all__ = [
     'SalesContractTermGroupItem',
     'Quotation',
     'QuotationItem',
+    'SalesReview',
+    'SalesReviewItem',
+    'SalesReviewDeptOpinion',
     'DeliveryNotice',
     'DeliveryNoticeItem',
     'LogisticsCarrier',

@@ -8,6 +8,7 @@ import { PRINT_TEMPLATE_SCHEMAS } from '../../../config/printTemplateSchemas';
 
 export type KuaizhizaoPrintDocumentType =
   | 'quotation'
+  | 'sales_review'
   | 'sales_contract'
   | 'sales_order'
   | 'sales_forecast'
@@ -33,6 +34,7 @@ export type KuaizhizaoPrintDocumentType =
 
 const PRINT_API_PATH_BUILDERS: Record<KuaizhizaoPrintDocumentType, (id: number) => string> = {
   quotation: (id) => `/apps/kuaizhizao/quotations/${id}/print`,
+  sales_review: (id) => `/apps/kuaizhizao/sales-reviews/${id}/print`,
   sales_contract: (id) => `/apps/kuaizhizao/sales-contracts/${id}/print`,
   sales_order: (id) => `/apps/kuaizhizao/sales-orders/${id}/print`,
   sales_forecast: (id) => `/apps/kuaizhizao/sales-forecasts/${id}/print`,

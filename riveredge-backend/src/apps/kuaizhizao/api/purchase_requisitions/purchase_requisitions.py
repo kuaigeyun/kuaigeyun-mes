@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Query, Path, HTTPException as FastAPIHTT
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_permission_codes
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
@@ -20,7 +21,7 @@ from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
 from apps.kuaizhizao.schemas.purchase_requisition import (
     PurchaseRequisitionCreate, PurchaseRequisitionUpdate, PurchaseRequisitionResponse,
     PurchaseRequisitionListResponse, ConvertToPurchaseOrderRequest,
-    ApproveRequisitionRequest,
+    ApproveRequisitionRequest, PullFromDemandComputationItemsRequest,
 )
 from apps.kuaizhizao.schemas.purchase_inquiry import (
     CreateFromRequisitionRequest,
@@ -61,6 +62,36 @@ def _http_exception_with_trace(
 
 def HTTPException(*, status_code: int, detail: str, **kwargs) -> FastAPIHTTPException:
     return _http_exception_with_trace(status_code, str(detail))
+
+
+@router.post(
+    "/purchase-requisitions/pull-from-demand-computation-items",
+    summary="Create purchase requisition from demand computation lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-requisition:create"))],
+)
+async def pull_from_demand_computation_items(
+    data: PullFromDemandComputationItemsRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """从多张需求计算的开口采购件行创建一张采购申请。"""
+    try:
+        from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPullService
+        return await DocumentPushPullService().create_purchase_requisition_from_computation_items(
+            tenant_id=tenant_id,
+            selected_item_ids=data.selected_item_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("从需求计算开口行创建采购申请失败")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="从需求计算开口行创建采购申请失败",
+        )
 
 
 @router.post("/purchase-requisitions", response_model=PurchaseRequisitionResponse, summary="Create purchase requisition")
@@ -123,6 +154,74 @@ async def list_requisitions(
         order_by=safe_order_by,
         include_items=include_items,
     )
+
+
+@router.get(
+    "/purchase-requisitions/purchase-order-pull-lines",
+    summary="Open requisition lines for purchase order pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-requisition:read"))],
+)
+async def list_purchase_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    requisition_id: Optional[int] = Query(None, description="来源采购申请"),
+    pullable_only: bool = Query(True, description="仅剩余可转量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """开口采购申请行，供采购订单跨单取明细。"""
+    try:
+        return await PurchaseRequisitionService().list_purchase_order_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            requisition_id=requisition_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.exception("列出采购订单开口申请行失败")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="列出采购订单开口申请行失败",
+        )
+
+
+@router.get(
+    "/purchase-requisitions/purchase-inquiry-pull-lines",
+    summary="Open requisition lines for purchase inquiry pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-requisition:read"))],
+)
+async def list_purchase_inquiry_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    requisition_id: Optional[int] = Query(None, description="来源采购申请"),
+    pullable_only: bool = Query(True, description="仅剩余可转量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """开口采购申请行，供询价单跨单取明细。"""
+    try:
+        return await PurchaseRequisitionService().list_purchase_inquiry_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            requisition_id=requisition_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.exception("列出询价开口申请行失败")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="列出询价开口申请行失败",
+        )
 
 
 @router.get("/purchase-requisitions/{requisition_id}", response_model=PurchaseRequisitionResponse, summary="Get purchase requisition")

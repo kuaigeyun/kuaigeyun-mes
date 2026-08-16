@@ -12,6 +12,7 @@ export interface RdRequirement {
   title?: string;
   project_id?: number | null;
   project_name?: string | null;
+  project_code?: string | null;
   source_type?: string | null;
   source_id?: number | null;
   priority?: string;
@@ -30,12 +31,15 @@ export interface RdDesignReview {
   title?: string;
   project_id?: number | null;
   project_name?: string | null;
+  project_code?: string | null;
+  material_id?: number | null;
+  material_code?: string | null;
+  material_name?: string | null;
   review_type?: string;
   status?: string;
-  scheduled_at?: string | null;
   review_date?: string | null;
   reviewer_name?: string | null;
-  conclusion?: string | null;
+  review_notes?: string | null;
   created_at?: string;
   updated_at?: string;
   created_by_name?: string | null;
@@ -52,6 +56,7 @@ export interface RdFmeaRecord {
   status?: string;
   material_code?: string | null;
   material_name?: string | null;
+  risk_items?: unknown[] | string | null;
   description?: string | null;
   created_at?: string;
   updated_at?: string;

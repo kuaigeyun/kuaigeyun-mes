@@ -7,6 +7,8 @@ import { Button, Space } from 'antd';
 import type { NavigateFunction } from 'react-router-dom';
 import type { TFunction } from 'i18next';
 import { ROUTES } from '../../constants/routes';
+import { useOptionalLinkedDocumentDetail } from '../../../../components/linked-document-detail';
+import { canOpenLinkedDocumentDetail } from '../../utils/linkedDocumentDetail';
 
 export interface PerformanceTraceBriefDoc {
   document_type: string;
@@ -21,9 +23,25 @@ export function PerformanceTraceBriefPrimaryActions(props: {
   closeDrawer: () => void;
 }): React.ReactNode {
   const { doc: brief, t, navigate, closeDrawer } = props;
+  const linked = useOptionalLinkedDocumentDetail();
   const go = (path: string) => {
     closeDrawer();
     navigate(path);
+  };
+  const openOrGo = (documentType: string, documentId: number, path: string, nestedLabel: string, listLabel: string) => {
+    const canNested = Boolean(linked) && canOpenLinkedDocumentDetail(documentType);
+    return (
+      <Button
+        type="primary"
+        size="small"
+        onClick={() => {
+          if (linked?.openLinkedDocumentDetail(documentType, documentId)) return;
+          go(path);
+        }}
+      >
+        {canNested ? nestedLabel : listLabel}
+      </Button>
+    );
   };
   return (
     <>
@@ -37,16 +55,26 @@ export function PerformanceTraceBriefPrimaryActions(props: {
           {t('components.documentTrackingPanel.traceBriefOpenPerformanceHoliday', { defaultValue: '前往假期管理' })}
         </Button>
       ) : null}
-      {brief.document_type === 'performance_summary' ? (
-        <Button type="primary" size="small" onClick={() => go(ROUTES.PERF_SUMMARIES)}>
-          {t('components.documentTrackingPanel.traceBriefOpenPerformanceSummary', { defaultValue: '前往绩效汇总' })}
-        </Button>
-      ) : null}
-      {brief.document_type === 'reporting_record' ? (
-        <Button type="primary" size="small" onClick={() => go(ROUTES.REPORTING)}>
-          {t('components.documentTrackingPanel.traceBriefOpenReporting', { defaultValue: '前往生产报工' })}
-        </Button>
-      ) : null}
+      {brief.document_type === 'performance_summary'
+        ? openOrGo(
+            'performance_summary',
+            brief.document_id,
+            ROUTES.PERF_SUMMARIES,
+            t('components.documentTrackingPanel.traceBriefOpenPerformanceSummaryDetail', {
+              defaultValue: '打开绩效汇总',
+            }),
+            t('components.documentTrackingPanel.traceBriefOpenPerformanceSummary', { defaultValue: '前往绩效汇总' }),
+          )
+        : null}
+      {brief.document_type === 'reporting_record'
+        ? openOrGo(
+            'reporting_record',
+            brief.document_id,
+            ROUTES.REPORTING,
+            t('components.documentTrackingPanel.traceBriefOpenReportingDetail', { defaultValue: '打开报工记录' }),
+            t('components.documentTrackingPanel.traceBriefOpenReporting', { defaultValue: '前往生产报工' }),
+          )
+        : null}
       {brief.document_type === 'purchase_order' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.PURCHASE_ORDERS)}>
           {t('components.documentTrackingPanel.traceBriefOpenPurchaseOrder', { defaultValue: '前往采购订单' })}

@@ -95,6 +95,8 @@ class DynamicDatabaseConfigService:
             "core.models.ai_audit_log",
             # 在线用户 / 会话活动（中间件与 OnlineUserService 依赖；须与静态 TORTOISE_ORM 一致纳入动态 apps）
             "core.models.user_activity",
+            # PG 缓存（Cache 工具与登录/平台设置等依赖；缺注册会 default_connection=None）
+            "core.models.cache_entry",
             "core.models.data_dictionary",
             "core.models.dictionary_item",
             "core.models.system_parameter",

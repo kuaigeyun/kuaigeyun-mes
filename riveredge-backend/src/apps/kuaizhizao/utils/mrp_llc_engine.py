@@ -147,6 +147,191 @@ def _within_lead_window(
     return (demand_day - today).days < lead
 
 
+_ERROR_EXCEPTION_CODES = frozenset({
+    "PAST_DUE_START",
+    "PAST_DUE_SUPPLY",
+    "SHORTAGE_WITHIN_LEAD_TIME",
+    "FIRM_FROZEN_SHORTAGE",
+    "FENCE_SHORTAGE",
+    "CANCEL_SUPPLY",
+    "NEW_ORDER",
+})
+_WARNING_EXCEPTION_CODES = frozenset({
+    "RESCHEDULE_IN",
+    "RESCHEDULE_OUT",
+    "LATE_VS_DEMAND",
+    "EXCESS_SUPPLY",
+    "BUCKET_RANGE_CLAMPED",
+})
+
+
+def _exception_level(code: str) -> str:
+    if code in _ERROR_EXCEPTION_CODES:
+        return "error"
+    if code in _WARNING_EXCEPTION_CODES:
+        return "warning"
+    return "info"
+
+
+def _normalize_exception(ex: Dict[str, Any]) -> Dict[str, Any]:
+    """统一例外结构：message=文案，severity=严重级（error/warning/info）。"""
+    code = str(ex.get("code") or "")
+    msg = ex.get("message")
+    sev = ex.get("severity")
+    if msg and str(msg) not in ("error", "warning", "info"):
+        text = str(msg)
+    elif sev and str(sev) not in ("error", "warning", "info"):
+        text = str(sev)
+    else:
+        text = str(msg or sev or "")
+    level = sev if sev in ("error", "warning", "info") else _exception_level(code)
+    out = {**ex, "message": text, "severity": level}
+    if out.get("bucket_date") and isinstance(out["bucket_date"], date):
+        out["bucket_date"] = out["bucket_date"].isoformat()
+    return out
+
+
+def _in_planning_fence(d: date, today: date, planning_fence_days: int) -> bool:
+    if planning_fence_days <= 0:
+        return False
+    return today <= d <= today + timedelta(days=planning_fence_days)
+
+
+def _parse_supply_date(value: Any) -> Optional[date]:
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value[:10])
+        except ValueError:
+            return None
+    return None
+
+
+def compare_planned_vs_open_supply(
+    *,
+    planned_orders: List[Dict[str, Any]],
+    open_supplies: List[Dict[str, Any]],
+    today: date,
+    planning_fence_days: int = 0,
+) -> List[Dict[str, Any]]:
+    """
+    对照未确认计划订单与开放供应，生成 NEW/RESCHEDULE/CANCEL 例外（物料内、按日贪心）。
+    """
+    exceptions: List[Dict[str, Any]] = []
+    supply_slots: List[Dict[str, Any]] = []
+    for row in open_supplies:
+        d = _parse_supply_date(row.get("date"))
+        qty = _f(row.get("qty"))
+        if d is None or qty <= 0:
+            continue
+        supply_slots.append({
+            "date": d,
+            "qty_remaining": qty,
+            "document_id": row.get("document_id"),
+            "document_code": row.get("document_code"),
+            "source_type": row.get("source_type"),
+        })
+    supply_slots.sort(key=lambda x: (x["date"], str(x.get("document_code") or "")))
+
+    plan_slots: List[Dict[str, Any]] = []
+    for po in planned_orders:
+        if po.get("firm"):
+            continue
+        rd = po.get("receipt_date")
+        if isinstance(rd, str):
+            rd = _parse_supply_date(rd)
+        if not isinstance(rd, date):
+            continue
+        qty = _f(po.get("qty"))
+        if qty <= 0:
+            continue
+        plan_slots.append({"receipt_date": rd, "qty_remaining": qty})
+    plan_slots.sort(key=lambda x: x["receipt_date"])
+
+    def _pick_supply_for_plan(plan_date: date) -> Optional[int]:
+        same = [i for i, s in enumerate(supply_slots) if s["qty_remaining"] > 0 and s["date"] == plan_date]
+        if same:
+            return same[0]
+        candidates = [
+            i for i, s in enumerate(supply_slots)
+            if s["qty_remaining"] > 0
+        ]
+        if not candidates:
+            return None
+        return min(candidates, key=lambda i: abs((supply_slots[i]["date"] - plan_date).days))
+
+    for plan in plan_slots:
+        while plan["qty_remaining"] > 1e-9:
+            idx = _pick_supply_for_plan(plan["receipt_date"])
+            if idx is None:
+                qty = plan["qty_remaining"]
+                exceptions.append(_normalize_exception({
+                    "code": "NEW_ORDER",
+                    "message": (
+                        f"{plan['receipt_date'].isoformat()} 需新建供应 {qty:g}，"
+                        "无对应开放工单/采购"
+                    ),
+                    "bucket_date": plan["receipt_date"].isoformat(),
+                    "qty": qty,
+                }))
+                plan["qty_remaining"] = 0
+                break
+            supply = supply_slots[idx]
+            match_qty = min(plan["qty_remaining"], supply["qty_remaining"])
+            plan["qty_remaining"] -= match_qty
+            supply["qty_remaining"] -= match_qty
+            if supply["date"] == plan["receipt_date"]:
+                continue
+            doc_hint = supply.get("document_code") or supply.get("document_id") or ""
+            doc_part = f"（{doc_hint}）" if doc_hint else ""
+            if supply["date"] > plan["receipt_date"]:
+                exceptions.append(_normalize_exception({
+                    "code": "RESCHEDULE_IN",
+                    "message": (
+                        f"开放供应{doc_part}到期 {supply['date'].isoformat()} "
+                        f"晚于需求 {plan['receipt_date'].isoformat()}，建议提前 {match_qty:g}"
+                    ),
+                    "bucket_date": plan["receipt_date"].isoformat(),
+                    "qty": match_qty,
+                    "document_id": supply.get("document_id"),
+                    "document_code": supply.get("document_code"),
+                }))
+            else:
+                exceptions.append(_normalize_exception({
+                    "code": "RESCHEDULE_OUT",
+                    "message": (
+                        f"开放供应{doc_part}到期 {supply['date'].isoformat()} "
+                        f"早于需求 {plan['receipt_date'].isoformat()}，建议延后 {match_qty:g}"
+                    ),
+                    "bucket_date": plan["receipt_date"].isoformat(),
+                    "qty": match_qty,
+                    "document_id": supply.get("document_id"),
+                    "document_code": supply.get("document_code"),
+                }))
+
+    for supply in supply_slots:
+        if supply["qty_remaining"] <= 1e-9:
+            continue
+        if _in_planning_fence(supply["date"], today, planning_fence_days):
+            continue
+        doc_hint = supply.get("document_code") or supply.get("document_id") or ""
+        doc_part = f"（{doc_hint}）" if doc_hint else ""
+        exceptions.append(_normalize_exception({
+            "code": "CANCEL_SUPPLY",
+            "message": (
+                f"开放供应{doc_part}到期 {supply['date'].isoformat()} "
+                f"本期无对应需求，建议取消 {supply['qty_remaining']:g}"
+            ),
+            "bucket_date": supply["date"].isoformat(),
+            "qty": supply["qty_remaining"],
+            "document_id": supply.get("document_id"),
+            "document_code": supply.get("document_code"),
+        }))
+
+    return exceptions
+
+
 def time_phased_net_material(
     *,
     gross_by_date: Dict[date, float],
@@ -166,6 +351,8 @@ def time_phased_net_material(
     firm_planned_orders: Optional[List[Dict[str, Any]]] = None,
     frozen: bool = False,
     schedule_direction: str = "backward",
+    planning_fence_days: int = 0,
+    open_supplies: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """
     单物料时间分桶净算。
@@ -175,8 +362,11 @@ def time_phased_net_material(
     firm_planned_orders: 已确认计划订单，按 receipt_date 计入供应，并保留在输出中。
     frozen: 冻结时不再生成新的未确认计划订单。
     schedule_direction: backward=交期倒排；forward=今天起正排。
+    planning_fence_days: 计划时间栏（天）；release 落在栏内的新计划自动 firm；0=关闭。
+    open_supplies: 开放供应明细（含 document_id/code），用于 NEW/RESCHEDULE/CANCEL 对照。
     """
     today = today or date.today()
+    fence_days = max(0, int(planning_fence_days or 0))
     lead = max(0, int(lead_time_days or 0)) + max(0, int(schedule_buffer_days or 0))
     safety = max(0.0, _f(safety_stock)) if include_safety_stock else 0.0
     rop = max(0.0, _f(reorder_point)) if include_reorder_point else 0.0
@@ -259,25 +449,25 @@ def time_phased_net_material(
             key = start if d < start else (end if d > end else d)
             folded_receipts[key] = folded_receipts.get(key, 0.0) + _f(q)
         receipts = folded_receipts
-        exceptions.append({
+        exceptions.append(_normalize_exception({
             "code": "BUCKET_RANGE_CLAMPED",
-            "severity": (
+            "message": (
                 f"分桶日期跨度 {span_days} 天超过上限 {MAX_MRP_BUCKET_DAYS}，"
                 f"已截断为 {start.isoformat()} ~ {end.isoformat()}（窗外数量并入边界日）"
             ),
             "qty": float(span_days),
-        })
+        }))
 
     # 逾期供应：到期日早于今天仍未入库的在途（不含已确认计划订单）
     past_due_supply = sum(
         qty for d, qty in receipts_by_date.items() if d < today and qty > 0
     )
     if past_due_supply > 0:
-        exceptions.append({
+        exceptions.append(_normalize_exception({
             "code": "PAST_DUE_SUPPLY",
-            "severity": f"存在逾期未到货/未完工供应 {past_due_supply:g}",
+            "message": f"存在逾期未到货/未完工供应 {past_due_supply:g}",
             "qty": past_due_supply,
-        })
+        }))
 
     day = start
     while day <= end:
@@ -303,12 +493,13 @@ def time_phased_net_material(
                 )
                 for ex in date_exc:
                     ex = {**ex, "qty": lot}
-                    exceptions.append(ex)
+                    exceptions.append(_normalize_exception(ex))
+                in_fence = _in_planning_fence(release, today, fence_days)
                 planned_orders.append({
                     "qty": lot,
                     "receipt_date": receipt_sched,
                     "release_date": release,
-                    "firm": False,
+                    "firm": bool(in_fence),
                 })
             projected = projected_before + planned_qty
             buckets.append({
@@ -346,21 +537,22 @@ def time_phased_net_material(
             )
             for ex in date_exc:
                 ex = {**ex, "qty": lot}
-                exceptions.append(ex)
+                exceptions.append(_normalize_exception(ex))
+            in_fence = _in_planning_fence(release, today, fence_days)
             planned_orders.append({
                 "qty": lot,
                 "receipt_date": receipt_sched,
                 "release_date": release,
-                "firm": False,
+                "firm": bool(in_fence),
             })
         elif net > 0 and frozen:
             total_net += net
-            exceptions.append({
+            exceptions.append(_normalize_exception({
                 "code": "FIRM_FROZEN_SHORTAGE",
-                "severity": f"{day.isoformat()} 计划已冻结，仍短缺 {net:g}，未生成新计划订单",
+                "message": f"{day.isoformat()} 计划已冻结，仍短缺 {net:g}，未生成新计划订单",
                 "bucket_date": day.isoformat(),
                 "qty": net,
-            })
+            }))
 
         buckets.append({
             "date": day.isoformat(),
@@ -372,11 +564,21 @@ def time_phased_net_material(
         day += timedelta(days=1)
 
     if total_gross <= 0 and projected > safety + 1e-6 and sum(receipts.values()) > 0:
-        exceptions.append({
+        exceptions.append(_normalize_exception({
             "code": "EXCESS_SUPPLY",
-            "severity": f"无毛需求但存在在途/在制，期末预计库存 {projected:g}",
+            "message": f"无毛需求但存在在途/在制，期末预计库存 {projected:g}",
             "qty": projected,
-        })
+        }))
+
+    if open_supplies:
+        exceptions.extend(
+            compare_planned_vs_open_supply(
+                planned_orders=planned_orders,
+                open_supplies=open_supplies,
+                today=today,
+                planning_fence_days=fence_days,
+            )
+        )
 
     earliest_demand = min(gross_by_date.keys()) if gross_by_date else None
     first_planned = planned_orders[0] if planned_orders else None
@@ -384,11 +586,17 @@ def time_phased_net_material(
     seen = set()
     uniq_exc: List[Dict[str, Any]] = []
     for ex in exceptions:
-        key = (ex.get("code"), ex.get("bucket_date"), round(_f(ex.get("qty")), 4))
+        normalized = _normalize_exception(ex)
+        key = (
+            normalized.get("code"),
+            normalized.get("bucket_date"),
+            round(_f(normalized.get("qty")), 4),
+            normalized.get("document_id"),
+        )
         if key in seen:
             continue
         seen.add(key)
-        uniq_exc.append(ex)
+        uniq_exc.append(normalized)
 
     return {
         "gross_requirement": total_gross,

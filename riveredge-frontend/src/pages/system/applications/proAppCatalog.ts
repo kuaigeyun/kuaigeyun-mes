@@ -4,13 +4,12 @@
  *
  * 应用排序唯一真源：各应用 manifest.json → core_applications.sort_order（API 返回）。
  * 未入库占位使用同一 PRO 段编号（210–250），KU-AI 固定末位 250。
+ * 快能源 / 快协同（kuaiems、kuaisrm）短期不做，不进清单。
  */
 
 export const PRO_APP_CODES = [
   'kuaireport',
   'kuaiiot',
-  'kuaiems',
-  'kuaisrm',
   'kuaiai',
 ] as const;
 
@@ -20,8 +19,6 @@ export type ProAppCode = (typeof PRO_APP_CODES)[number];
 export const PRO_APP_SORT_ORDER: Record<ProAppCode, number> = {
   kuaireport: 210,
   kuaiiot: 220,
-  kuaiems: 230,
-  kuaisrm: 240,
   kuaiai: 250,
 };
 
@@ -48,20 +45,6 @@ export const PRO_PLACEHOLDER_META: Record<ProAppCode, ProPlaceholderMeta> = {
     nameDefault: '快数采',
     descDefault: '工业物联网设备数采集成平台，敬请期待',
     version: 'PRO',
-  },
-  kuaiems: {
-    nameKey: 'pages.system.applications.mock.kuaienergy.name',
-    descKey: 'pages.system.applications.mock.kuaienergy.desc',
-    nameDefault: '快能源',
-    descDefault: '能源数据监控与能效分析平台，敬请期待',
-    version: 'PRO',
-  },
-  kuaisrm: {
-    nameKey: 'pages.system.applications.mock.kuaisrm.name',
-    descKey: 'pages.system.applications.mock.kuaisrm.desc',
-    nameDefault: '快协同',
-    descDefault: '新一代供应链与供应商协同平台，敬请期待',
-    version: 'Beta',
   },
   kuaiai: {
     nameKey: 'sys.app.kuaiai.name',

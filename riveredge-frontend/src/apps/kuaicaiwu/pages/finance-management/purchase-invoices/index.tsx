@@ -882,6 +882,7 @@ const PurchaseInvoiceList: React.FC = () => {
         confirmLoading={pullFromPurchaseOrderQuery.confirmLoading}
         selectionType={pullFromPurchaseOrderQuery.selectionType}
         selectedRowKeys={pullFromPurchaseOrderQuery.selectedRowKeys}
+        selectedRows={pullFromPurchaseOrderQuery.selectedRows}
         onSelectedRowKeysChange={pullFromPurchaseOrderQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromPurchaseOrderQuery.isRowDisabled}
         searchDraft={pullFromPurchaseOrderQuery.searchDraft}
@@ -898,7 +899,6 @@ const PurchaseInvoiceList: React.FC = () => {
         scope={pullFromPurchaseOrderQuery.scope}
         onScopeChange={pullFromPurchaseOrderQuery.handleScopeChange}
         okText={t('components.uniLifecycle.nextStep')}
-        width={1180}
       />
 
       <UniPullQueryModal<PurchaseInvoicePullCandidate>
@@ -915,6 +915,7 @@ const PurchaseInvoiceList: React.FC = () => {
         confirmLoading={pullFromPurchaseReceiptQuery.confirmLoading}
         selectionType={pullFromPurchaseReceiptQuery.selectionType}
         selectedRowKeys={pullFromPurchaseReceiptQuery.selectedRowKeys}
+        selectedRows={pullFromPurchaseReceiptQuery.selectedRows}
         onSelectedRowKeysChange={pullFromPurchaseReceiptQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromPurchaseReceiptQuery.isRowDisabled}
         searchDraft={pullFromPurchaseReceiptQuery.searchDraft}
@@ -931,7 +932,6 @@ const PurchaseInvoiceList: React.FC = () => {
         scope={pullFromPurchaseReceiptQuery.scope}
         onScopeChange={pullFromPurchaseReceiptQuery.handleScopeChange}
         okText={t('components.uniLifecycle.nextStep')}
-        width={1180}
       />
 
       <UniPullQueryModal<PurchaseInvoicePullCandidate>
@@ -948,6 +948,7 @@ const PurchaseInvoiceList: React.FC = () => {
         confirmLoading={pullFromPayableQuery.confirmLoading}
         selectionType={pullFromPayableQuery.selectionType}
         selectedRowKeys={pullFromPayableQuery.selectedRowKeys}
+        selectedRows={pullFromPayableQuery.selectedRows}
         onSelectedRowKeysChange={pullFromPayableQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromPayableQuery.isRowDisabled}
         searchDraft={pullFromPayableQuery.searchDraft}
@@ -964,7 +965,6 @@ const PurchaseInvoiceList: React.FC = () => {
         scope={pullFromPayableQuery.scope}
         onScopeChange={pullFromPayableQuery.handleScopeChange}
         okText={t('components.uniLifecycle.nextStep')}
-        width={1180}
       />
 
       <Modal

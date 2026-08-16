@@ -3693,7 +3693,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: '#666' }}>{groupKey}</div>
                               <div style={gridStyle}>
                                 {items.map((item, index) => (
-                                  <div key={index} style={layout === 'waterfall' ? { breakInside: 'avoid' as const, marginBottom: 16 } : {}}>
+                                  <div
+                                    key={index}
+                                    style={
+                                      layout === 'waterfall'
+                                        ? { breakInside: 'avoid' as const, marginBottom: 16 }
+                                        : { height: '100%', minHeight: 0 }
+                                    }
+                                  >
                                     {cardViewConfig!.renderCard!(item, index)}
                                   </div>
                                 ))}
@@ -3745,7 +3752,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                               style={
                                 layout === 'waterfall'
                                   ? { breakInside: 'avoid' as const, marginBottom: 16 }
-                                  : undefined
+                                  : { height: '100%', minHeight: 0 }
                               }
                             >
                               {slot.kind === 'stack'

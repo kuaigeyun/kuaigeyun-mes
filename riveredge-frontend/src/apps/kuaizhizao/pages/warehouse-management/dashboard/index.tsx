@@ -1,8 +1,9 @@
 import React, { useMemo, useCallback } from 'react';
-import { App, Table, Tag } from 'antd';
+import { App, Table } from 'antd';
 import {
   InboxOutlined,
   AlertOutlined,
+  CheckCircleOutlined,
   SwapOutlined,
   ImportOutlined,
   ExportOutlined,
@@ -29,9 +30,13 @@ import {
   ModuleTodoList,
   ModuleChartPanel,
   ModuleTrendLine,
+  showMasonryCard,
+  masonryWeightFromRows,
+  resolveMasonryEmptyFallback,
 } from '../../../components/module-center';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 import { inventoryAlertLevelLabel, inventoryAlertLevelTagColor } from '../../../utils/warehouseListCore';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 
 const WarehouseDashboard: React.FC = () => {
   const { t } = useTranslation();
@@ -67,6 +72,28 @@ const WarehouseDashboard: React.FC = () => {
     return Math.min(100, Math.round((s.normal_stock / s.total_sku) * 100));
   }, [s]);
 
+  const healthTone = useMemo(() => {
+    if ((s?.out_of_stock ?? 0) > 0) return 'error';
+    if ((s?.low_stock ?? 0) > 0) return 'warning';
+    return 'success';
+  }, [s]);
+
+  const healthVisual =
+    healthTone === 'success'
+      ? {
+          gradient: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)',
+          icon: <CheckCircleOutlined style={{ fontSize: 24, color: '#fff' }} />,
+        }
+      : healthTone === 'warning'
+        ? {
+            gradient: 'linear-gradient(135deg, #fa8c16 0%, #ffc069 100%)',
+            icon: <AlertOutlined style={{ fontSize: 24, color: '#fff' }} />,
+          }
+        : {
+            gradient: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
+            icon: <AlertOutlined style={{ fontSize: 24, color: '#fff' }} />,
+          };
+
   const kpis: ModuleKpiDef[] = useMemo(
     () => [
       {
@@ -78,7 +105,7 @@ const WarehouseDashboard: React.FC = () => {
             fieldName="total_amount"
             value={s?.total_inventory_value != null ? Number(s.total_inventory_value) : null}
             prefix=""
-            style={{ fontSize: 30, fontWeight: 700, color: '#fff' }}
+            style={{ fontSize: 30, fontWeight: 700 }}
           />
         ),
         subtitle: t('app.kuaizhizao.warehouseDashboard.kpi.totalInventoryValueSubtitle'),
@@ -100,8 +127,8 @@ const WarehouseDashboard: React.FC = () => {
           lowStock: s?.low_stock ?? 0,
           outOfStock: s?.out_of_stock ?? 0,
         }),
-        icon: <AlertOutlined style={{ fontSize: 24, color: '#fff' }} />,
-        gradient: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
+        icon: healthVisual.icon,
+        gradient: healthVisual.gradient,
         onClick: () => navigate('/apps/kuaizhizao/warehouse-management/inventory-alert'),
         progress: normalSkuPercent,
         sideMetrics: [
@@ -135,7 +162,7 @@ const WarehouseDashboard: React.FC = () => {
         ],
       },
     ],
-    [navigate, normalSkuPercent, s, t],
+    [healthVisual, navigate, normalSkuPercent, s, t],
   );
 
   const shortcuts: ModuleShortcutDef[] = useMemo(
@@ -221,6 +248,54 @@ const WarehouseDashboard: React.FC = () => {
     [formatTime, t],
   );
 
+  const stockStructureRows = useMemo(
+    () => [
+      {
+        key: 'normal',
+        label: t('app.kuaizhizao.warehouseDashboard.stockNormal'),
+        count: s?.normal_stock ?? 0,
+        tone: 'success' as const,
+      },
+      {
+        key: 'low',
+        label: t('app.kuaizhizao.warehouseDashboard.stockLow'),
+        count: s?.low_stock ?? 0,
+        tone: 'warning' as const,
+      },
+      {
+        key: 'out',
+        label: t('app.kuaizhizao.warehouseDashboard.stockOut'),
+        count: s?.out_of_stock ?? 0,
+        tone: 'error' as const,
+      },
+      {
+        key: 'high',
+        label: t('app.kuaizhizao.warehouseDashboard.stockHigh'),
+        count: s?.high_stock ?? 0,
+        tone: 'processing' as const,
+      },
+    ],
+    [s, t],
+  );
+
+  const stockStructureColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.warehouseDashboard.colStockStatus'),
+        dataIndex: 'label',
+        render: (label: string, row: { tone: 'success' | 'warning' | 'error' | 'processing' }) => (
+          <MarkerTag color={row.tone}>{label}</MarkerTag>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseDashboard.colSkuCount'),
+        dataIndex: 'count',
+        width: 88,
+      },
+    ],
+    [t],
+  );
+
   const alertColumns = useMemo(
     () => [
       {
@@ -233,105 +308,89 @@ const WarehouseDashboard: React.FC = () => {
         dataIndex: 'alert_level',
         width: 72,
         render: (level: string) => (
-          <Tag color={inventoryAlertLevelTagColor(level)}>
+          <MarkerTag color={inventoryAlertLevelTagColor(level)}>
             {inventoryAlertLevelLabel(level, t)}
-          </Tag>
+          </MarkerTag>
         ),
       },
     ],
     [t],
   );
 
+  const alertList = (alertRows as Record<string, unknown>[]) ?? [];
+  const pendingOutbound = s?.recent_outbounds ?? [];
+  const pendingInbound = s?.pending_inbounds ?? [];
+  const hasStockStructure = stockStructureRows.some((row) => Number(row.count) > 0);
+  const hasTrendData = trendChartData.some((d) => Number(d.value) > 0);
+
+  const masonryLoading = loading || todosLoading || alertsLoading || trendLoading;
+  const masonryEmptyFallback = resolveMasonryEmptyFallback(masonryLoading, [
+    todos.length > 0,
+    alertList.length > 0,
+    pendingOutbound.length > 0,
+    pendingInbound.length > 0,
+    hasTrendData,
+    hasStockStructure,
+  ]);
+
   return (
     <ModuleCenterLayout
       loading={loading && !s}
       kpiRow={<ModuleKpiRow items={kpis} />}
-      shortcutRow={<ModuleShortcutGrid items={shortcuts} colProps={{ xs: 12, sm: 8, md: 4 }} />}
+      shortcutRow={<ModuleShortcutGrid items={shortcuts} />}
       actionRow={
         <ModuleActionMasonry>
-          <ModuleActionPanel
-            layout="masonry"
-            title={t('app.kuaizhizao.warehouseDashboard.todosTitle')}
-            loading={todosLoading}
-          >
-            <ModuleTodoList
-              items={todos}
-              emptyText={t('app.kuaizhizao.warehouseDashboard.noTodos')}
-            />
-          </ModuleActionPanel>
-          <ModuleActionPanel
-            layout="masonry"
-            title={t('app.kuaizhizao.warehouseDashboard.pendingInboundTitle')}
-            extra={
-              <a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inbound')}>
-                {t('app.kuaizhizao.warehouseDashboard.more')}
-              </a>
-            }
-          >
-            <Table
-              size="small"
-              dataSource={s?.pending_inbounds ?? []}
-              pagination={false}
-              rowKey={(r) => `${r.doc_type}-${r.doc_code}`}
-              columns={queueColumns}
-              locale={{ emptyText: t('app.kuaizhizao.warehouseDashboard.noPendingInbound') }}
-            />
-          </ModuleActionPanel>
-          <ModuleActionPanel
-            layout="masonry"
-            title={t('app.kuaizhizao.warehouseDashboard.pendingOutboundTitle')}
-            extra={
-              <a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/outbound')}>
-                {t('app.kuaizhizao.warehouseDashboard.more')}
-              </a>
-            }
-          >
-            <Table
-              size="small"
-              dataSource={s?.recent_outbounds ?? []}
-              pagination={false}
-              rowKey={(r) => `${r.doc_type}-${r.doc_code}`}
-              columns={queueColumns}
-              locale={{ emptyText: t('app.kuaizhizao.warehouseDashboard.noPendingOutbound') }}
-            />
-          </ModuleActionPanel>
-          <ModuleActionPanel
-            layout="masonry"
-            title={t('app.kuaizhizao.warehouseDashboard.inventoryAlertsTitle')}
-            loading={alertsLoading}
-            extra={
-              <a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inventory-alert')}>
-                {t('app.kuaizhizao.warehouseDashboard.more')}
-              </a>
-            }
-          >
-            <Table
-              size="small"
-              dataSource={(alertRows as Record<string, unknown>[]) ?? []}
-              pagination={false}
-              rowKey={(r) => String(r.id ?? r.uuid ?? `${r.material_id}-${r.warehouse_id}`)}
-              columns={alertColumns}
-              locale={{ emptyText: t('app.kuaizhizao.warehouseDashboard.noInventoryAlerts') }}
-            />
-          </ModuleActionPanel>
-          <ModuleChartPanel
-            layout="masonry"
-            title={t('app.kuaizhizao.warehouseDashboard.dailyTrendTitle')}
-            loading={trendLoading}
-            height={260}
-          >
-            <ModuleTrendLine
-                data={trendChartData}
-                xField="date"
-                yField="value"
-                colorField="type"
-                height={260}
-                autoFit
-                style={{ lineWidth: 2 }}
-                axis={{ x: { title: false }, y: { title: false } }}
-                legend={{ color: { itemLabelFontSize: 13 } }}
-              />
-          </ModuleChartPanel>
+          {showMasonryCard(todosLoading, todos.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel layout="masonry" title={t('app.kuaizhizao.warehouseDashboard.todosTitle')} loading={todosLoading} masonryWeight={masonryWeightFromRows(todos.length)}>
+              <ModuleTodoList items={todos} emptyText={t('app.kuaizhizao.warehouseDashboard.noTodos')} />
+            </ModuleActionPanel>
+          ) : null}
+          {showMasonryCard(alertsLoading, alertList.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.warehouseDashboard.inventoryAlertsTitle')}
+              loading={alertsLoading}
+              masonryWeight={masonryWeightFromRows(Math.min(alertList.length, 6))}
+              extra={<a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inventory-alert')}>{t('app.kuaizhizao.warehouseDashboard.more')}</a>}
+            >
+              <Table tableLayout="fixed" size="small" dataSource={alertList} pagination={false} rowKey={(r) => String(r.id ?? r.uuid ?? `${r.material_id}-${r.warehouse_id}`)} columns={alertColumns} />
+            </ModuleActionPanel>
+          ) : null}
+          {showMasonryCard(false, pendingOutbound.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.warehouseDashboard.pendingOutboundTitle')}
+              masonryWeight={masonryWeightFromRows(pendingOutbound.length)}
+              extra={<a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/outbound')}>{t('app.kuaizhizao.warehouseDashboard.more')}</a>}
+            >
+              <Table tableLayout="fixed" size="small" dataSource={pendingOutbound} pagination={false} rowKey={(r) => `${r.doc_type}-${r.doc_code}`} columns={queueColumns} />
+            </ModuleActionPanel>
+          ) : null}
+          {showMasonryCard(false, pendingInbound.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.warehouseDashboard.pendingInboundTitle')}
+              masonryWeight={masonryWeightFromRows(pendingInbound.length)}
+              extra={<a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inbound')}>{t('app.kuaizhizao.warehouseDashboard.more')}</a>}
+            >
+              <Table tableLayout="fixed" size="small" dataSource={pendingInbound} pagination={false} rowKey={(r) => `${r.doc_type}-${r.doc_code}`} columns={queueColumns} />
+            </ModuleActionPanel>
+          ) : null}
+          {showMasonryCard(trendLoading, hasTrendData, masonryEmptyFallback) ? (
+            <ModuleChartPanel layout="masonry" title={t('app.kuaizhizao.warehouseDashboard.dailyTrendTitle')} loading={trendLoading} height={260} masonryWeight={3}>
+              <ModuleTrendLine data={trendChartData} xField="date" yField="value" colorField="type" height={260} autoFit style={{ lineWidth: 2 }} axis={{ x: { title: false }, y: { title: false } }} legend={{ color: { itemLabelFontSize: 13 } }} />
+            </ModuleChartPanel>
+          ) : null}
+          {showMasonryCard(false, hasStockStructure, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.warehouseDashboard.stockStructureTitle')}
+              masonryWeight={masonryWeightFromRows(stockStructureRows.filter((row) => row.count > 0).length)}
+              extra={<a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inventory')}>{t('app.kuaizhizao.warehouseDashboard.more')}</a>}
+            >
+              <Table tableLayout="fixed" size="small" dataSource={stockStructureRows.filter((row) => row.count > 0)} pagination={false} rowKey="key" columns={stockStructureColumns} />
+            </ModuleActionPanel>
+          ) : null}
         </ModuleActionMasonry>
       }
     />

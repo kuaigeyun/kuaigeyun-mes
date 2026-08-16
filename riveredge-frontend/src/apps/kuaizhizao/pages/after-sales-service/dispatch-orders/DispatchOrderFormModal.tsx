@@ -6,7 +6,11 @@ import { CustomerSelectDropdown } from '../../../../master-data/components/Custo
 import type { Customer } from '../../../../master-data/types/supply-chain';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
-import type { ServiceDispatchOrder, ServiceDispatchPayload } from '../../../services/after-sales-service';
+import {
+  serviceDispatchApi,
+  type ServiceDispatchOrder,
+  type ServiceDispatchPayload,
+} from '../../../services/after-sales-service';
 import { formDateFormItemProps } from '../../../../../utils/formDate';
 import { formatApiErrorDetail } from '../../../../../services/api';
 import { AfterSalesSourceDocumentSelect } from '../shared/AfterSalesSourceDocumentSelect';
@@ -41,6 +45,8 @@ const DispatchOrderFormModal: React.FC<DispatchOrderFormModalProps> = ({
   >();
   const [submitting, setSubmitting] = useState(false);
   const customerId = Form.useWatch('customer_id', form);
+  const sourceType = Form.useWatch('source_type', form) as string | undefined;
+  const [blockedSources, setBlockedSources] = useState<Record<number, { disabled: boolean; reason: string }>>({});
 
   useEffect(() => {
     if (!open) return;
@@ -64,6 +70,35 @@ const DispatchOrderFormModal: React.FC<DispatchOrderFormModalProps> = ({
       cancelled = true;
     };
   }, [editing, form, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void serviceDispatchApi
+      .list({ skip: 0, limit: 200 })
+      .then((res) => {
+        if (cancelled) return;
+        const blocked: Record<number, { disabled: boolean; reason: string }> = {};
+        for (const row of res.items ?? []) {
+          if (String(row.status ?? '').trim() === '已取消') continue;
+          if (sourceType && row.source_type !== sourceType) continue;
+          if (editing?.id && row.id === editing.id) continue;
+          blocked[row.source_id] = {
+            disabled: true,
+            reason: t('app.kuaizhizao.afterSalesService.dispatchOrder.sourceAlreadyDispatched', {
+              code: row.dispatch_code,
+            }),
+          };
+        }
+        setBlockedSources(blocked);
+      })
+      .catch(() => {
+        if (!cancelled) setBlockedSources({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editing?.id, open, sourceType, t]);
 
   const handleOk = async () => {
     try {
@@ -97,7 +132,7 @@ const DispatchOrderFormModal: React.FC<DispatchOrderFormModalProps> = ({
       onCancel={onClose}
       onOk={() => void handleOk()}
       confirmLoading={submitting}
-      destroyOnClose
+      destroyOnHidden
       width={760}
     >
       <Form form={form} layout="vertical">
@@ -127,6 +162,7 @@ const DispatchOrderFormModal: React.FC<DispatchOrderFormModalProps> = ({
           customerId={customerId}
           allowedTypes={['install_execution', 'repair_order']}
           typeLabelKeyPrefix="app.kuaizhizao.afterSalesService.dispatchOrder.field"
+          optionStateById={blockedSources}
         />
         <Form.Item name="engineer_id" hidden>
           <Input />

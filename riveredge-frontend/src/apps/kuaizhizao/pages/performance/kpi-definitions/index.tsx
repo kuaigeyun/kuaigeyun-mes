@@ -38,12 +38,16 @@ import {
   resolveKpiDefinitionListParams,
 } from '../../../utils/performanceListCore';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+
+const KPI_RESOURCE = 'kuaizhizao:performance-kpi-definitions';
 
 const KpiDefinitionsPage: React.FC = () => {
   const { t } = useTranslation();
   const { token } = AntdTheme.useToken();
   const detailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
+  const kpiPerms = useResourcePermissions(KPI_RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
   const [modalVisible, setModalVisible] = useState(false);
@@ -215,22 +219,28 @@ const KpiDefinitionsPage: React.FC = () => {
         hideInSearch: true,
         render: (_, record) => (
           <Space>
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-              {t('app.kuaizhizao.performance.common.actions.detail')}
-            </Button>
-            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-              {t('app.kuaizhizao.performance.common.actions.edit')}
-            </Button>
-            <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.kpi.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
-              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                {t('app.kuaizhizao.performance.common.actions.delete')}
+            {kpiPerms.canRead ? (
+              <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
+                {t('app.kuaizhizao.performance.common.actions.detail')}
               </Button>
-            </Popconfirm>
+            ) : null}
+            {kpiPerms.canUpdate ? (
+              <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
+                {t('app.kuaizhizao.performance.common.actions.edit')}
+              </Button>
+            ) : null}
+            {kpiPerms.canDelete ? (
+              <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.kpi.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+                <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                  {t('app.kuaizhizao.performance.common.actions.delete')}
+                </Button>
+              </Popconfirm>
+            ) : null}
           </Space>
         ),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [t, calcTypeOptions],
+    [t, calcTypeOptions, kpiPerms],
   );
 
   return (
@@ -262,8 +272,8 @@ const KpiDefinitionsPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          enableRowSelection={true}
-          showDeleteButton={true}
+          enableRowSelection={kpiPerms.canDelete}
+          showDeleteButton={kpiPerms.canDelete}
           onDelete={async (keys) => {
             try {
               for (const id of keys) {
@@ -276,7 +286,7 @@ const KpiDefinitionsPage: React.FC = () => {
             }
           }}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.performance.kpi.messages.deleteBatchConfirm', { count })}
-          showCreateButton
+          showCreateButton={kpiPerms.canCreate}
           createButtonText={t('app.kuaizhizao.performance.kpi.createButton')}
           onCreate={handleCreate}
         />
@@ -349,7 +359,7 @@ const KpiDefinitionsPage: React.FC = () => {
         }}
         detail={detail}
         detailColumns={detailColumns}
-        extra={buildDetailDrawerEditExtra(t, Boolean(detail), () => {
+        extra={buildDetailDrawerEditExtra(t, Boolean(detail && kpiPerms.canUpdate), () => {
           if (!detail) return;
           setEditId(detail.id);
           setModalVisible(true);

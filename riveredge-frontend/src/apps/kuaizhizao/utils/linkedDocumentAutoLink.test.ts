@@ -71,6 +71,14 @@ describe('resolveLinkedDocumentColumn', () => {
       codeField: 'freight_order_code',
     });
   });
+
+  it('maps after_sales_ticket_code to after_sales_ticket', () => {
+    expect(resolveLinkedDocumentColumn('after_sales_ticket_code')).toEqual({
+      documentType: 'after_sales_ticket',
+      idField: 'after_sales_ticket_id',
+      codeField: 'after_sales_ticket_code',
+    });
+  });
 });
 
 describe('resolveStackedSecondaryLinkedDocument', () => {

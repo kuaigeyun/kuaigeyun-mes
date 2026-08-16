@@ -1090,6 +1090,11 @@ class MenuService:
             app_sort_order_map.get(m.application_uuid, 999999) if m.application_uuid else 999999,
             m.sort_order
         ))
+
+        if overlay_manifest_sort and cache_key_suffix == "nav_v1":
+            from apps.kuaioa.services.form_template_menu_extension import append_mounted_form_template_menus
+
+            await append_mounted_form_template_menus(tenant_id, root_menus)
         
         # 缓存结果（序列化为字典列表，包含树形结构）
         if use_cache:

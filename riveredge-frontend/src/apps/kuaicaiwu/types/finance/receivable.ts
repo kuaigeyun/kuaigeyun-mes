@@ -55,6 +55,8 @@ export interface ReceivableListParams {
     updated_end_date?: string;
     sort_field?: string;
     sort_order?: 'asc' | 'desc';
+    aging_bucket?: string;
+    overdue_only?: boolean;
 }
 
 export interface ReceivableCreateData {

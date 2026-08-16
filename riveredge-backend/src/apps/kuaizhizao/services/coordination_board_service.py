@@ -32,7 +32,6 @@ from apps.kuaizhizao.services.demand_computation_service import (
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.constants import REVIEW_STATUS_ALIASES, ReviewStatus
 from apps.kuaizhizao.utils.material_source_helper import (
-    get_material_source_type,
     resolve_computation_item_source_config,
 )
 from core.utils.timezone_utils import to_api_isoformat
@@ -201,6 +200,282 @@ class CoordinationBoardService:
 
         return len(incomplete_ids)
 
+    @staticmethod
+    def _compute_bom_status(
+        lines: List[Tuple[int, str, str]],
+        source_by_material: Dict[int, Optional[str]],
+        bom_map: Dict[int, bool],
+    ) -> Tuple[str, str, List[str], List[int]]:
+        if not lines:
+            return "pending", "订单尚无明细", ["请完善销售订单明细"], []
+
+        need_check: List[Tuple[int, str]] = []
+        for material_id, material_code, material_name in lines:
+            source_type = source_by_material.get(material_id)
+            if source_type in (SOURCE_TYPE_BUY, None):
+                continue
+            label = material_code or material_name or str(material_id)
+            need_check.append((material_id, label))
+
+        if not need_check:
+            return "skipped", "外购件订单，无需 BOM", [], []
+
+        missing = [(mid, code) for mid, code in need_check if not bom_map.get(mid, False)]
+        blockers = [f"{code} 缺少已审核 BOM" for _, code in missing[:5]]
+        ready_count = len(need_check) - len(missing)
+        missing_ids = [mid for mid, _ in missing]
+
+        if not missing:
+            return (
+                "done",
+                f"已校验 {len(need_check)} 个成品/半成品 BOM",
+                [],
+                [],
+            )
+        if ready_count > 0:
+            return (
+                "partial",
+                f"BOM 就绪 {ready_count}/{len(need_check)}",
+                blockers,
+                missing_ids,
+            )
+        return (
+            "blocked",
+            f"{len(missing)} 个物料缺少 BOM",
+            blockers,
+            missing_ids,
+        )
+
+    async def _batch_material_source_types(
+        self, tenant_id: int, material_ids: List[int]
+    ) -> Dict[int, Optional[str]]:
+        if not material_ids:
+            return {}
+        from apps.master_data.models.material import Material
+
+        unique_ids = list({mid for mid in material_ids if mid})
+        if not unique_ids:
+            return {}
+        rows = await Material.filter(tenant_id=tenant_id, id__in=unique_ids).all()
+        return {m.id: m.source_type for m in rows}
+
+    async def _batch_demands_by_sales_order(
+        self, tenant_id: int, sales_order_ids: List[int]
+    ) -> Dict[int, Any]:
+        from apps.kuaizhizao.models.demand import Demand
+
+        if not sales_order_ids:
+            return {}
+        demands = (
+            await Demand.filter(
+                tenant_id=tenant_id,
+                source_type="sales_order",
+                source_id__in=sales_order_ids,
+                deleted_at__isnull=True,
+            )
+            .order_by("-id")
+            .all()
+        )
+        by_so: Dict[int, Any] = {}
+        for demand in demands:
+            if demand.source_id not in by_so:
+                by_so[demand.source_id] = demand
+        return by_so
+
+    async def _batch_latest_computations(
+        self,
+        tenant_id: int,
+        demand_ids: List[int],
+        planning_computation_ids: List[int],
+    ) -> Tuple[Dict[int, DemandComputation], Dict[int, DemandComputation]]:
+        by_demand: Dict[int, DemandComputation] = {}
+        by_id: Dict[int, DemandComputation] = {}
+
+        comps: List[DemandComputation] = []
+        if demand_ids:
+            comps = (
+                await DemandComputation.filter(
+                    tenant_id=tenant_id,
+                    demand_id__in=demand_ids,
+                )
+                .order_by("-id")
+                .all()
+            )
+
+        completed_by_demand: Dict[int, DemandComputation] = {}
+        latest_by_demand: Dict[int, DemandComputation] = {}
+        for comp in comps:
+            by_id[comp.id] = comp
+            if comp.demand_id is None:
+                continue
+            if comp.demand_id not in latest_by_demand:
+                latest_by_demand[comp.demand_id] = comp
+            if (
+                comp.computation_status == "完成"
+                and comp.demand_id not in completed_by_demand
+            ):
+                completed_by_demand[comp.demand_id] = comp
+        for demand_id, comp in latest_by_demand.items():
+            by_demand[demand_id] = completed_by_demand.get(demand_id, comp)
+
+        missing_planning = [
+            cid for cid in planning_computation_ids if cid and cid not in by_id
+        ]
+        if missing_planning:
+            extras = await DemandComputation.filter(
+                tenant_id=tenant_id,
+                id__in=missing_planning,
+            ).all()
+            for comp in extras:
+                by_id[comp.id] = comp
+
+        return by_demand, by_id
+
+    @staticmethod
+    def _pick_computation_for_order(
+        demand: Any,
+        planning_computation_id: Optional[int],
+        by_demand: Dict[int, DemandComputation],
+        by_id: Dict[int, DemandComputation],
+    ) -> Optional[DemandComputation]:
+        if demand:
+            comp = by_demand.get(demand.id)
+            if comp:
+                return comp
+        if planning_computation_id:
+            return by_id.get(planning_computation_id)
+        return None
+
+    async def _batch_incomplete_wo_counts(
+        self,
+        tenant_id: int,
+        sales_order_ids: List[int],
+        computation_id_by_so: Dict[int, int],
+    ) -> Dict[int, int]:
+        counts: Dict[int, Set[int]] = {so_id: set() for so_id in sales_order_ids}
+
+        if sales_order_ids:
+            direct_rows = (
+                await WorkOrder.filter(
+                    tenant_id=tenant_id,
+                    sales_order_id__in=sales_order_ids,
+                    deleted_at__isnull=True,
+                )
+                .exclude(status__in=list(_TERMINAL_WORK_ORDER_STATUSES))
+                .values("id", "sales_order_id")
+            )
+            for row in direct_rows:
+                so_id = row["sales_order_id"]
+                if so_id in counts:
+                    counts[so_id].add(int(row["id"]))
+
+        so_by_comp = {
+            comp_id: so_id for so_id, comp_id in computation_id_by_so.items()
+        }
+        comp_ids = list(so_by_comp.keys())
+        if comp_ids:
+            rels = await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="demand_computation",
+                source_id__in=comp_ids,
+                target_type="work_order",
+            ).all()
+            wo_ids = list({rel.target_id for rel in rels})
+            incomplete_related: Set[int] = set()
+            if wo_ids:
+                incomplete_related = set(
+                    await WorkOrder.filter(
+                        tenant_id=tenant_id,
+                        id__in=wo_ids,
+                        deleted_at__isnull=True,
+                    )
+                    .exclude(status__in=list(_TERMINAL_WORK_ORDER_STATUSES))
+                    .values_list("id", flat=True)
+                )
+            for rel in rels:
+                if rel.target_id not in incomplete_related:
+                    continue
+                so_id = so_by_comp.get(rel.source_id)
+                if so_id in counts:
+                    counts[so_id].add(int(rel.target_id))
+
+        return {so_id: len(ids) for so_id, ids in counts.items()}
+
+    async def _batch_bom_status_by_sales_order(
+        self,
+        tenant_id: int,
+        sales_order_ids: List[int],
+        demand_by_so: Dict[int, Any],
+    ) -> Dict[int, str]:
+        from apps.kuaizhizao.models.demand_item import DemandItem
+        from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+        from apps.master_data.services.material_service import MaterialService
+
+        lines_by_so: Dict[int, List[Tuple[int, str, str]]] = {
+            so_id: [] for so_id in sales_order_ids
+        }
+
+        demand_to_so = {d.id: so_id for so_id, d in demand_by_so.items()}
+        demand_ids = list(demand_to_so.keys())
+        if demand_ids:
+            demand_items = await DemandItem.filter(
+                tenant_id=tenant_id,
+                demand_id__in=demand_ids,
+            ).all()
+            for item in demand_items:
+                so_id = demand_to_so.get(item.demand_id)
+                if so_id is None:
+                    continue
+                if float(item.required_quantity or 0) > 0:
+                    lines_by_so[so_id].append(
+                        (
+                            item.material_id,
+                            item.material_code or "",
+                            item.material_name or "",
+                        )
+                    )
+
+        so_ids_without_demand = [
+            so_id for so_id in sales_order_ids if so_id not in demand_by_so
+        ]
+        if so_ids_without_demand:
+            so_items = await SalesOrderItem.filter(
+                tenant_id=tenant_id,
+                sales_order_id__in=so_ids_without_demand,
+            ).all()
+            for item in so_items:
+                if float(item.order_quantity or 0) > 0:
+                    lines_by_so[item.sales_order_id].append(
+                        (
+                            item.material_id,
+                            item.material_code or "",
+                            item.material_name or "",
+                        )
+                    )
+
+        all_material_ids = [
+            mid for lines in lines_by_so.values() for mid, _, _ in lines
+        ]
+        source_by_material = await self._batch_material_source_types(
+            tenant_id, all_material_ids
+        )
+        need_check_ids = list(
+            {
+                mid
+                for mid in all_material_ids
+                if source_by_material.get(mid) not in (SOURCE_TYPE_BUY, None)
+            }
+        )
+        bom_map = await MaterialService.batch_check_has_bom(
+            tenant_id=tenant_id,
+            material_ids=need_check_ids,
+            only_active=True,
+        )
+        return {
+            so_id: self._compute_bom_status(lines, source_by_material, bom_map)[0]
+            for so_id, lines in lines_by_so.items()
+        }
+
     async def list_active_computations(self, tenant_id: int, limit: int = 20) -> Dict[str, Any]:
         """返回进行中（存在未完工下游工单）的已完成 MRP 列表。"""
         computations = (
@@ -257,7 +532,6 @@ class CoordinationBoardService:
 
     async def list_active_orders(self, tenant_id: int, limit: int = 20) -> Dict[str, Any]:
         """以销售订单为起点，返回协调进行中的订单列表。"""
-        from apps.kuaizhizao.models.demand import Demand
         from apps.kuaizhizao.models.sales_order import SalesOrder
 
         scan_limit = min(max(limit * 10, limit), 200)
@@ -272,46 +546,64 @@ class CoordinationBoardService:
             .limit(scan_limit)
             .all()
         )
+        if not orders:
+            return {"items": []}
+
+        order_ids = [so.id for so in orders]
+        demand_by_so = await self._batch_demands_by_sales_order(tenant_id, order_ids)
+        demand_ids = [d.id for d in demand_by_so.values()]
+        planning_ids = [
+            so.planning_computation_id
+            for so in orders
+            if so.planning_computation_id
+        ]
+        comps_by_demand, comps_by_id = await self._batch_latest_computations(
+            tenant_id, demand_ids, planning_ids
+        )
+
+        computation_by_so: Dict[int, Optional[DemandComputation]] = {}
+        computation_id_by_so: Dict[int, int] = {}
+        for so in orders:
+            demand = demand_by_so.get(so.id)
+            comp = self._pick_computation_for_order(
+                demand,
+                so.planning_computation_id,
+                comps_by_demand,
+                comps_by_id,
+            )
+            computation_by_so[so.id] = comp
+            if comp:
+                computation_id_by_so[so.id] = comp.id
+
+        incomplete_by_so = await self._batch_incomplete_wo_counts(
+            tenant_id, order_ids, computation_id_by_so
+        )
+        bom_by_so = await self._batch_bom_status_by_sales_order(
+            tenant_id, order_ids, demand_by_so
+        )
 
         candidates: List[Dict[str, Any]] = []
         for so in orders:
-            demand = await Demand.get_or_none(
-                tenant_id=tenant_id,
-                source_type="sales_order",
-                source_id=so.id,
-                deleted_at__isnull=True,
-            )
-            bom_status, _, _ = await self._check_bom_for_order(
-                tenant_id, so.id, demand
-            )
-
-            comp = await self._resolve_latest_computation(
-                tenant_id,
-                demand.id if demand else None,
-                so.planning_computation_id,
-            )
-            incomplete_wo = await self._count_incomplete_work_orders_for_sales_order(
-                tenant_id,
-                so.id,
-                comp.id if comp else None,
-            )
-
+            demand = demand_by_so.get(so.id)
+            comp = computation_by_so.get(so.id)
             delivery = getattr(so, "delivery_date", None)
             candidates.append(
                 {
                     "sales_order_id": so.id,
-                    "sales_order_code": so.order_code,
+                    "sales_order_code": so.order_code or "",
                     "delivery_date": to_api_isoformat(delivery),
                     "computation_id": comp.id if comp else None,
                     "computation_code": comp.computation_code if comp else None,
                     "demand_id": demand.id if demand else None,
-                    "bom_status": bom_status,
-                    "incomplete_work_orders": incomplete_wo,
+                    "bom_status": bom_by_so.get(so.id, "pending"),
+                    "incomplete_work_orders": incomplete_by_so.get(so.id, 0),
                     "updated_at": to_api_isoformat(so.updated_at),
                 }
             )
 
-        incomplete_candidates = [row for row in candidates if row["incomplete_work_orders"] > 0]
+        incomplete_candidates = [
+            row for row in candidates if row["incomplete_work_orders"] > 0
+        ]
         incomplete_candidates.sort(
             key=lambda row: (
                 -int(row["incomplete_work_orders"]),
@@ -321,38 +613,8 @@ class CoordinationBoardService:
 
         if incomplete_candidates:
             items = incomplete_candidates[:limit]
-        elif candidates:
-            items = candidates[:limit]
-        elif orders:
-            so = orders[0]
-            demand = await Demand.get_or_none(
-                tenant_id=tenant_id,
-                source_type="sales_order",
-                source_id=so.id,
-                deleted_at__isnull=True,
-            )
-            bom_status, _, _ = await self._check_bom_for_order(tenant_id, so.id, demand)
-            comp = await self._resolve_latest_computation(
-                tenant_id,
-                demand.id if demand else None,
-                so.planning_computation_id,
-            )
-            delivery = getattr(so, "delivery_date", None)
-            items = [
-                {
-                    "sales_order_id": so.id,
-                    "sales_order_code": so.order_code,
-                    "delivery_date": to_api_isoformat(delivery),
-                    "computation_id": comp.id if comp else None,
-                    "computation_code": comp.computation_code if comp else None,
-                    "demand_id": demand.id if demand else None,
-                    "bom_status": bom_status,
-                    "incomplete_work_orders": 0,
-                    "updated_at": to_api_isoformat(so.updated_at),
-                }
-            ]
         else:
-            items = []
+            items = candidates[:limit]
 
         return {"items": items}
 
@@ -1548,50 +1810,20 @@ class CoordinationBoardService:
         from apps.master_data.services.material_service import MaterialService
 
         lines = await self._get_order_line_materials(tenant_id, sales_order_id, demand)
-        if not lines:
-            return "pending", "订单尚无明细", ["请完善销售订单明细"], []
-
-        need_check: List[Tuple[int, str]] = []
-        for material_id, material_code, material_name in lines:
-            source_type = await get_material_source_type(tenant_id, material_id)
-            if source_type in (SOURCE_TYPE_BUY, None):
-                continue
-            label = material_code or material_name or str(material_id)
-            need_check.append((material_id, label))
-
-        if not need_check:
-            return "skipped", "外购件订单，无需 BOM", [], []
-
-        material_ids = [mid for mid, _ in need_check]
+        source_by_material = await self._batch_material_source_types(
+            tenant_id, [mid for mid, _, _ in lines]
+        )
+        need_check_ids = [
+            mid
+            for mid, _, _ in lines
+            if source_by_material.get(mid) not in (SOURCE_TYPE_BUY, None)
+        ]
         bom_map = await MaterialService.batch_check_has_bom(
             tenant_id=tenant_id,
-            material_ids=material_ids,
+            material_ids=need_check_ids,
             only_active=True,
         )
-        missing = [(mid, code) for mid, code in need_check if not bom_map.get(mid, False)]
-        blockers = [f"{code} 缺少已审核 BOM" for _, code in missing[:5]]
-        ready_count = len(need_check) - len(missing)
-
-        if not missing:
-            return (
-                "done",
-                f"已校验 {len(need_check)} 个成品/半成品 BOM",
-                [],
-                [],
-            )
-        if ready_count > 0:
-            return (
-                "partial",
-                f"BOM 就绪 {ready_count}/{len(need_check)}",
-                blockers,
-                [mid for mid, _ in missing],
-            )
-        return (
-            "blocked",
-            f"{len(missing)} 个物料缺少 BOM",
-            blockers,
-            [mid for mid, _ in missing],
-        )
+        return self._compute_bom_status(lines, source_by_material, bom_map)
 
     async def _load_dynamic_monitor_alerts(
         self, tenant_id: int, computation_id: int

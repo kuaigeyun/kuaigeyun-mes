@@ -104,6 +104,14 @@ class ServiceDispatchService:
         source_type, source_code, default_address = await cls._resolve_source(
             tenant_id, data.source_type, data.source_id
         )
+        existing = await ServiceDispatchOrder.filter(
+            tenant_id=tenant_id,
+            source_type=source_type,
+            source_id=data.source_id,
+            deleted_at__isnull=True,
+        ).exclude(status="已取消").first()
+        if existing:
+            raise BusinessLogicError(f"该来源已有未取消派工: {existing.dispatch_code}")
         payload = {
             "tenant_id": tenant_id,
             "dispatch_code": cls._gen_dispatch_code(),

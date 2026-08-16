@@ -62,6 +62,22 @@ class TestDrawingServiceHelpers(unittest.TestCase):
         self.assertEqual(len(effective), 1)
         self.assertEqual(effective[0].revision, "C")
 
+    def test_pick_current_effective_prefers_pending_over_older_draft(self):
+        base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        rows = [
+            _drawing(code="PD0006", revision="A", status="Draft", created_at=base, drawing_id=1),
+            _drawing(
+                code="PD0006",
+                revision="B",
+                status="Pending",
+                created_at=base.replace(day=2),
+                drawing_id=2,
+            ),
+        ]
+        effective = pick_current_effective_rows(rows)
+        self.assertEqual(len(effective), 1)
+        self.assertEqual(effective[0].revision, "B")
+
     def test_pick_current_effective_falls_back_to_latest_draft(self):
         base = datetime(2026, 1, 1, tzinfo=timezone.utc)
         rows = [

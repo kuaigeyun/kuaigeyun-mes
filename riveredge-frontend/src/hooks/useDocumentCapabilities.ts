@@ -39,12 +39,19 @@ export const QUOTATION_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'quotation.cancel_customer_confirm.linked_contract': '已关联有效销售合同，请先处理合同后再取消确认',
   'quotation.convert_order.not_allowed': '当前状态不可转销售订单',
   'quotation.convert_order.linked_contract': '该报价已关联销售合同，请从销售合同下推订单',
+  'quotation.convert_order.linked_sales_review': '该报价已关联订单评审，请从订单评审下推销售订单',
   'quotation.convert_order.not_latest': '仅能对当前系列的最新版本报价单转销售订单',
   'quotation.convert_order.already_converted': '该报价单已转为销售订单',
   'quotation.convert_contract.not_allowed': '当前状态不可转销售合同',
   'quotation.convert_contract.linked_contract': '该报价单已关联销售合同',
   'quotation.convert_contract.linked_sales_order': '该报价单已关联销售订单',
+  'quotation.convert_contract.linked_sales_review': '该报价已关联订单评审，请先完成评审链路或解除关联',
   'quotation.convert_contract.superseded': '此为历史版本报价单，请使用系列最新版',
+  'quotation.convert_sales_review.not_allowed': '当前状态不可转订单评审',
+  'quotation.convert_sales_review.linked_contract': '该报价已关联销售合同',
+  'quotation.convert_sales_review.linked_sales_order': '该报价已关联销售订单',
+  'quotation.convert_sales_review.linked_sales_review': '该报价单已关联订单评审',
+  'quotation.convert_sales_review.not_latest': '仅能对当前系列的最新版本报价单转订单评审',
   'quotation.revoke_push.not_allowed': '仅已转订单且下游销售订单已删除时可撤回下推',
   'quotation.reopen.not_rejected': '仅已驳回的报价单可重新编辑',
   'quotation.revision.not_allowed': '仅非草稿的最新系列版本可新建修订版',
@@ -157,7 +164,7 @@ export function quotationBatchDeleteAllowed(
 /** capabilities 为唯一业务门控（与后端 derive_quotation_capabilities 一致） */
 export function quotationCapabilityAllowed(
   record: Quotation,
-  key: 'convert_to_order' | 'convert_to_contract',
+  key: 'convert_to_order' | 'convert_to_contract' | 'convert_to_sales_review',
 ): boolean {
   return record.capabilities?.[key]?.allowed === true;
 }
@@ -187,6 +194,7 @@ export function isQuotationRowSelectable(
     caps.cancel_customer_confirm?.allowed ||
     caps.convert_to_order?.allowed ||
     caps.convert_to_contract?.allowed ||
+    caps.convert_to_sales_review?.allowed ||
     caps.print_formal?.allowed ||
     caps.create_revision?.allowed ||
     caps.reopen?.allowed ||
@@ -230,8 +238,11 @@ export const SALES_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'sales_order.withdraw_computation.not_allowed': '当前状态不可撤回需求计算',
   'sales_order.push_work_order.not_allowed': '当前状态不可直推工单',
   'sales_order.push_work_order.no_items': '销售订单无明细，无法直推工单',
+  'sales_order.push_work_order.computation_pushed': '销售订单已下推需求计算，不可再直推工单',
   'sales_order.push_shipment.not_allowed': '当前状态不可下推发货通知单',
+  'sales_order.push_shipment.no_backorder': '销售订单无欠发数量，无法下推发货通知单',
   'sales_order.push_delivery.not_allowed': '当前状态不可下推销售出库',
+  'sales_order.push_delivery.no_backorder': '销售订单无欠发数量，无法下推销售出库',
   'sales_order.push_invoice.not_allowed': '当前状态不可下推销售发票',
   'sales_order.push_return.not_allowed': '当前状态不可下推销售退货单',
   'sales_order.push_return.no_delivered': '销售订单暂无可退货数量（已交货数量为 0）',
@@ -266,6 +277,10 @@ export const AFTER_SALES_TICKET_CAPABILITY_REASON_MESSAGES: Record<string, strin
   'after_sales_ticket.push_sales_return.already_pushed': '该售后服务工单已下推销售退货单',
   'after_sales_ticket.push_sales_return.no_items': '售后服务工单无明细，无法下推销售退货单',
   'after_sales_ticket.push_sales_return.no_returnable': '关联销售订单当前无可退货数量',
+  'after_sales_ticket.push_repair_order.not_allowed': '当前售后服务工单不可下推维修单',
+  'after_sales_ticket.push_repair_order.closed': '已关闭的售后服务工单不可下推维修单',
+  'after_sales_ticket.push_repair_order.request_type': '仅维修类型工单可下推维修单',
+  'after_sales_ticket.push_repair_order.already_exists': '该售后服务工单已存在维修单',
 };
 
 export function afterSalesTicketCapabilityReasonMessage(
@@ -692,6 +707,7 @@ export const DEMAND_COMPUTATION_CAPABILITY_REASON_MESSAGES: Record<string, strin
   'demand_computation.push_purchase_requisition.no_purchase_items': '需求计算中无采购件，无法下推采购申请',
   'demand_computation.push_work_order.no_pushable_items': '可下推明细均已占用，无可新建工单',
   'demand_computation.push_work_order.no_production_items': '需求计算中无生产件可生成工单',
+  'demand_computation.push_work_order.requires_production_plan': '当前配置要求经生产计划生成工单，请先下推到生产计划',
   'demand_computation.push_purchase_order.no_purchase_items': '无已配置默认供应商的采购件，无法下推采购订单',
 };
 
@@ -805,8 +821,9 @@ export function demandComputationCapabilityReasonMessage(
 
 export const DEMAND_PUSH_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'demand.push_computation.not_audited': '只能下推已审核或已确认的需求',
-  'demand.push_computation.not_approved': '只能下推审核通过的需求',
-  'demand.push_computation.already_pushed': '该需求已下推需求计算，不能重复下推',
+  'demand.merge_computation.not_audited': '只能对已审核或已确认的需求合并计算',
+  'demand.push_computation.already_pushed': '需求已下推需求计算，不可重复合并',
+  'demand.push_computation.not_approved': '需求未审核通过，无法下推需求计算',
   'demand.push_computation.no_items': '需求无有效明细数量，无法下推需求计算',
 };
 

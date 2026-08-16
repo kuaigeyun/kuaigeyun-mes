@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { Button, Space, Form, Select, InputNumber, Input, Switch, Tag, Modal, theme, Row, Col, List, Descriptions, Spin, App, Alert } from 'antd';
-import { EditOutlined, LeftOutlined, SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, DragOutlined, CloseCircleOutlined, SettingOutlined, ClusterOutlined, ReloadOutlined, CopyOutlined, DiffOutlined } from '@ant-design/icons';
+import { EditOutlined, LeftOutlined, SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, DragOutlined, CloseCircleOutlined, SettingOutlined, ClusterOutlined, ReloadOutlined, CopyOutlined, DiffOutlined, FileAddOutlined } from '@ant-design/icons';
 import { MindMap, RCNode, getNodeSide } from '@ant-design/graphs';
 import { formatQuantity } from '../../../../../utils/format';
 
@@ -95,6 +95,7 @@ import {
 } from '../../../../../utils/materialScenarioUnit';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { createBomChange, listBomChanges } from '../../../services/bom-change';
 const BOM_RESOURCE = 'master-data:process:engineering-bom';
 
 /** 现代化配色：主色（根节点/选中） */
@@ -528,6 +529,11 @@ const BOMDesignerPage: React.FC = () => {
   const [versionCompareV2, setVersionCompareV2] = useState<string | null>(null);
   const [versionCompareResult, setVersionCompareResult] = useState<BOMVersionCompareResult | null>(null);
   const [versionCompareLoading, setVersionCompareLoading] = useState(false);
+  const [ecnModalOpen, setEcnModalOpen] = useState(false);
+  const [ecnReason, setEcnReason] = useState('');
+  const [ecnFromVersion, setEcnFromVersion] = useState('');
+  const [ecnSubmitting, setEcnSubmitting] = useState(false);
+  const ecnFromVersionHintRef = useRef<string>('');
 
   useEffect(() => {
     let cancelled = false;
@@ -1501,6 +1507,99 @@ const BOMDesignerPage: React.FC = () => {
     return `子件 ${labels.join('、')} 用量/配置变更`;
   }, []);
 
+  const resolvePreviousVersion = useCallback(
+    (current: string | null | undefined): string => {
+      if (!current) return ecnFromVersionHintRef.current || '';
+      const sorted = [...versionOptions]
+        .map((o) => o.value)
+        .filter(Boolean)
+        .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+      const idx = sorted.indexOf(current);
+      if (idx >= 0 && idx + 1 < sorted.length) return sorted[idx + 1];
+      return ecnFromVersionHintRef.current || '';
+    },
+    [versionOptions],
+  );
+
+  const handleOpenSubmitEcn = useCallback(() => {
+    if (!rootMaterial?.uuid) {
+      messageApi.warning(t('app.master-data.bom.ecnMaterialRequired'));
+      return;
+    }
+    if (!resolvedVersion) {
+      messageApi.warning(t('app.master-data.bom.ecnVersionRequired'));
+      return;
+    }
+    const prev = resolvePreviousVersion(resolvedVersion);
+    if (!prev && !ecnFromVersionHintRef.current) {
+      messageApi.warning(t('app.master-data.bom.ecnNeedVersionBump'));
+      return;
+    }
+    setEcnFromVersion(prev || ecnFromVersionHintRef.current);
+    const remark = buildVersionRemark(dirtyNodeIdsRef.current, (mindMapDataRef.current ?? mindMapData) as MindMapNode);
+    setEcnReason(remark);
+    setEcnModalOpen(true);
+  }, [
+    buildVersionRemark,
+    messageApi,
+    mindMapData,
+    resolvePreviousVersion,
+    resolvedVersion,
+    rootMaterial?.uuid,
+    t,
+  ]);
+
+  const handleSubmitEcn = useCallback(async () => {
+    if (!rootMaterial?.uuid || !resolvedVersion) return;
+    const reason = ecnReason.trim();
+    if (!reason) {
+      messageApi.warning(t('app.master-data.bom.ecnReasonRequired'));
+      return;
+    }
+    const fromVersion = ecnFromVersion.trim();
+    if (!fromVersion || fromVersion === resolvedVersion) {
+      messageApi.warning(t('app.master-data.bom.ecnFromVersionRequired'));
+      return;
+    }
+    try {
+      setEcnSubmitting(true);
+      const pending = await listBomChanges({
+        material_uuid: rootMaterial.uuid,
+        page: 1,
+        page_size: 20,
+      });
+      const blocking = pending.items.filter((item) =>
+        ['draft', 'pending', 'approved'].includes(String(item.status ?? '').toLowerCase()),
+      );
+      if (blocking.length > 0) {
+        messageApi.warning(t('app.master-data.bom.ecnPendingExists'));
+        return;
+      }
+      const matCode =
+        (rootMaterial as any).mainCode ?? (rootMaterial as any).main_code ?? rootMaterial.code ?? '';
+      await createBomChange({
+        material_uuid: rootMaterial.uuid,
+        change_type: 'version_change',
+        change_reason: reason,
+        from_version: fromVersion,
+        to_version: resolvedVersion,
+        bom_code: matCode || undefined,
+        change_content: {
+          summary: reason,
+          material_id: rootMaterial.id,
+        },
+        status: 'draft',
+      });
+      messageApi.success(t('app.master-data.bom.ecnSubmitSuccess'));
+      setEcnModalOpen(false);
+      setEcnReason('');
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.master-data.bom.ecnSubmitFailed'));
+    } finally {
+      setEcnSubmitting(false);
+    }
+  }, [ecnFromVersion, ecnReason, messageApi, resolvedVersion, rootMaterial, t]);
+
   /**
    * 保存BOM设计（草稿/新建场景，直接覆盖）
    */
@@ -1769,6 +1868,7 @@ const BOMDesignerPage: React.FC = () => {
       }
 
       let rootNewVersion = '';
+      const versionBeforeBump = resolvedVersion ?? '';
       for (const job of jobs) {
         const allBoms = await bomApi.getByMaterial(job.materialId, undefined, false, true);
         if (!allBoms?.length) {
@@ -1786,6 +1886,10 @@ const BOMDesignerPage: React.FC = () => {
           bomName,
         });
         if (job.isRoot) rootNewVersion = newBom.version;
+      }
+
+      if (rootNewVersion && versionBeforeBump) {
+        ecnFromVersionHintRef.current = versionBeforeBump;
       }
 
       dirtyNodeIdsRef.current.clear();
@@ -2938,6 +3042,15 @@ const BOMDesignerPage: React.FC = () => {
           />
           {isReadOnly ? (
             <>
+              {bomPerms.canUpdate ? (
+              <Button
+                icon={<FileAddOutlined />}
+                onClick={handleOpenSubmitEcn}
+                title={t('app.master-data.bom.submitEcnTitle')}
+              >
+                {t('app.master-data.bom.submitEcn')}
+              </Button>
+              ) : null}
               {bomPerms.canUpdate ? (
               <Button
                 type="primary"
@@ -4206,6 +4319,39 @@ const BOMDesignerPage: React.FC = () => {
         }
       }}
     />
+    <Modal
+      title={t('app.master-data.bom.submitEcnTitle')}
+      open={ecnModalOpen}
+      confirmLoading={ecnSubmitting}
+      onCancel={() => setEcnModalOpen(false)}
+      onOk={() => void handleSubmitEcn()}
+      destroyOnHidden
+    >
+      <Space direction="vertical" style={{ width: '100%' }} size="middle">
+        <Alert type="info" showIcon message={t('app.master-data.bom.ecnSubmitHint')} />
+        <div>
+          <div style={{ marginBottom: 8 }}>{t('app.master-data.bom.ecnFromVersion')}</div>
+          <Input
+            value={ecnFromVersion}
+            onChange={(e) => setEcnFromVersion(e.target.value)}
+            placeholder={t('app.master-data.bom.ecnFromVersionPlaceholder')}
+          />
+        </div>
+        <div>
+          <div style={{ marginBottom: 8 }}>{t('app.master-data.bom.ecnToVersion')}</div>
+          <Input value={resolvedVersion ?? ''} disabled />
+        </div>
+        <div>
+          <div style={{ marginBottom: 8 }}>{t('app.master-data.bom.ecnReason')}</div>
+          <Input.TextArea
+            rows={4}
+            value={ecnReason}
+            onChange={(e) => setEcnReason(e.target.value)}
+            placeholder={t('app.master-data.bom.ecnReasonPlaceholder')}
+          />
+        </div>
+      </Space>
+    </Modal>
   </>
   );
 };

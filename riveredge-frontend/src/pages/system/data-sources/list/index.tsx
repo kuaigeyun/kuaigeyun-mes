@@ -15,7 +15,7 @@ import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/syste
 import { DeleteOutlined, EyeOutlined, DatabaseOutlined, ThunderboltOutlined, EditOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { rowActionKind } from '../../../../components/uni-action';
-import { DetailDrawerActions, ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { DetailDrawerActions, ListPageTemplate, FormModalTemplate, FormModalGridBlock, MODAL_CONFIG } from '../../../../components/layout-templates';
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import DataSourceConnectorMarket from '../DataSourceConnectorMarket';
@@ -1427,7 +1427,9 @@ const DataSourceListPage: React.FC = () => {
               }
 
               return (
-                <Alert title={t('pages.system.dataSources.typeFormNotSupported', { type })} type="info" />
+                <FormModalGridBlock>
+                  <Alert title={t('pages.system.dataSources.typeFormNotSupported', { type })} type="info" />
+                </FormModalGridBlock>
               );
             }}
           </ProFormDependency>

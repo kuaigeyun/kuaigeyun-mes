@@ -99,6 +99,72 @@ export async function createPurchaseRequisition(data: Partial<PurchaseRequisitio
   return apiRequest('/apps/kuaizhizao/purchase-requisitions', { method: 'POST', data });
 }
 
+export async function pullPurchaseRequisitionFromDemandComputationItems(
+  selectedItemIds: number[],
+): Promise<{ success: boolean; message: string; target_document?: { id: number; code: string } }> {
+  return apiRequest('/apps/kuaizhizao/purchase-requisitions/pull-from-demand-computation-items', {
+    method: 'POST',
+    data: { selected_item_ids: selectedItemIds },
+  });
+}
+
+export type PurchaseRequisitionPullLine = {
+  id: number;
+  requisition_id: number;
+  requisition_code?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+  required_date?: string | null;
+  supplier_id?: number | null;
+};
+
+export async function listPurchaseRequisitionPurchaseOrderPullLines(params: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  requisition_id?: number;
+  pullable_only?: boolean;
+}): Promise<{ data: PurchaseRequisitionPullLine[]; total: number }> {
+  return apiRequest('/apps/kuaizhizao/purchase-requisitions/purchase-order-pull-lines', {
+    method: 'GET',
+    params,
+  });
+}
+
+export async function listPurchaseRequisitionPurchaseInquiryPullLines(params: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  requisition_id?: number;
+  pullable_only?: boolean;
+}): Promise<{ data: PurchaseRequisitionPullLine[]; total: number }> {
+  return apiRequest('/apps/kuaizhizao/purchase-requisitions/purchase-inquiry-pull-lines', {
+    method: 'GET',
+    params,
+  });
+}
+
+export async function pullPurchaseOrdersFromRequisitionItems(
+  selectedItemIds: number[],
+): Promise<{
+  success: boolean;
+  message: string;
+  purchase_order_id?: number;
+  purchase_order_code?: string;
+  purchase_orders?: Array<{ purchase_order_id: number; purchase_order_code: string; supplier_id: number }>;
+}> {
+  return apiRequest('/apps/kuaizhizao/purchase-orders/pull-from-requisition-items', {
+    method: 'POST',
+    data: { selected_item_ids: selectedItemIds },
+  });
+}
+
 export async function updatePurchaseRequisition(id: number, data: Partial<PurchaseRequisition>): Promise<PurchaseRequisition> {
   return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${id}`, { method: 'PUT', data });
 }

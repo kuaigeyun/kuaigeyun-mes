@@ -33,5 +33,9 @@ class QualityEffectiveConfigResponse(BaseSchema):
     auto_create: Dict[str, bool] = Field(..., description="各节点自动建单开关")
     gate: Dict[str, bool] = Field(
         ...,
-        description="门禁 require_iqc_before_receipt_confirm / require_fqc_before_finished_goods_receipt / require_oqc_before_outbound",
+        description="门禁含 require_fai_before_mass_reporting 等",
+    )
+    fai: Dict[str, bool] = Field(
+        default_factory=dict,
+        description="FAI 相关开关 auto_create_fai_on_work_order",
     )

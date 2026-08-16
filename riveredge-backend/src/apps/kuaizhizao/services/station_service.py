@@ -529,11 +529,26 @@ class StationService(WorkOrderService):
     ) -> StationSopAcknowledgment:
         worker_id = data.worker_id or user_id
         worker_name = data.worker_name or user_name
+        sop_revision = (data.sop_revision or "").strip()
+        if not sop_revision:
+            from apps.master_data.models.process import SOP as SopModel
+
+            sop_row = await SopModel.filter(
+                tenant_id=tenant_id,
+                uuid=data.sop_uuid,
+                deleted_at__isnull=True,
+            ).first()
+            sop_revision = (
+                getattr(sop_row, "current_revision", None)
+                or getattr(sop_row, "version", None)
+                or "1.0"
+            )
         existing = await StationSopAcknowledgment.get_or_none(
             tenant_id=tenant_id,
             work_order_id=data.work_order_id,
             operation_id=data.operation_id,
             sop_uuid=data.sop_uuid,
+            sop_revision=sop_revision,
             worker_id=worker_id,
             deleted_at__isnull=True,
         )
@@ -543,6 +558,7 @@ class StationService(WorkOrderService):
         return await StationSopAcknowledgment.create(
             tenant_id=tenant_id,
             sop_uuid=data.sop_uuid,
+            sop_revision=sop_revision,
             work_order_id=data.work_order_id,
             operation_id=data.operation_id,
             worker_id=worker_id,
@@ -557,12 +573,27 @@ class StationService(WorkOrderService):
         operation_id: int,
         sop_uuid: str,
         worker_id: Optional[int] = None,
+        sop_revision: Optional[str] = None,
     ) -> dict:
+        if not sop_revision:
+            from apps.master_data.models.process import SOP as SopModel
+
+            sop_row = await SopModel.filter(
+                tenant_id=tenant_id,
+                uuid=sop_uuid,
+                deleted_at__isnull=True,
+            ).first()
+            sop_revision = (
+                getattr(sop_row, "current_revision", None)
+                or getattr(sop_row, "version", None)
+                or "1.0"
+            ) if sop_row else "1.0"
         q = StationSopAcknowledgment.filter(
             tenant_id=tenant_id,
             work_order_id=work_order_id,
             operation_id=operation_id,
             sop_uuid=sop_uuid,
+            sop_revision=sop_revision,
             deleted_at__isnull=True,
         )
         if worker_id is not None:
@@ -603,6 +634,8 @@ class StationService(WorkOrderService):
         tenant_id: int,
         work_order_id: int,
         operation_id: int,
+        station_id: Optional[int] = None,
+        current_user: Optional[User] = None,
     ) -> StationOperationDocumentsResponse:
         """
         工位工序文档聚合（唯一入口）：
@@ -696,10 +729,39 @@ class StationService(WorkOrderService):
                 if not isinstance(flow_config, dict):
                     flow_config = None
 
+                station_copy_no: Optional[str] = None
+                if sop_row and station_id:
+                    from apps.master_data.models.process import SopControlledCopy
+
+                    copy_row = await SopControlledCopy.filter(
+                        tenant_id=tenant_id,
+                        sop_id=sop_row.id,
+                        station_id=station_id,
+                        status="issued",
+                        deleted_at__isnull=True,
+                    ).order_by("-issued_at").first()
+                    if copy_row:
+                        station_copy_no = copy_row.copy_no
+
+                revision = (
+                    getattr(sop_row, "current_revision", None)
+                    or getattr(sop, "version", None)
+                    if sop_row is not None
+                    else getattr(sop, "version", None)
+                )
+                carrier = getattr(sop_row, "carrier", None) if sop_row else "electronic"
+                storage_location = (
+                    getattr(sop_row, "storage_location", None) if sop_row else None
+                )
+
                 sop_doc = StationSopDocument(
                     uuid=str(sop.uuid),
                     name=sop.name,
                     version=sop.version,
+                    current_revision=revision,
+                    carrier=carrier,
+                    storage_location=storage_location,
+                    station_copy_no=station_copy_no,
                     content=sop.content,
                     steps=_sop_flow_to_steps(flow_config),
                     flow_config=flow_config,
@@ -721,7 +783,7 @@ class StationService(WorkOrderService):
         # 1) 快研发 / 主数据工程图纸（已发布，按物料；路线/工序有绑定时再收窄）
         if material_uuid:
             eng_rows = await DrawingService.list_by_context(
-                tenant_id, material_uuid=material_uuid
+                tenant_id, material_uuid=material_uuid, current_user=current_user
             )
             for d in eng_rows:
                 op_uuids = list(getattr(d, "operation_uuids", None) or [])

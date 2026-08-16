@@ -82,6 +82,7 @@ function buildThemeConfigFromForm(
     siderBgColor: string;
     headerBgColor: string;
     tabsBgColor: string;
+    tabBgColor: string;
   };
 } {
   const themeMode = (values.colorMode as 'light' | 'dark' | 'auto') || fallbackColorMode || 'light';
@@ -91,6 +92,7 @@ function buildThemeConfigFromForm(
   const siderBgColorValue = colorFieldToHex(values.siderBgColor, '');
   const headerBgColorValue = normalizeBgColorField(values.headerBgColor, '');
   const tabsBgColorValue = normalizeBgColorField(values.tabsBgColor, '');
+  const tabBgColorValue = normalizeBgColorField(values.tabBgColor, '');
   const isLight =
     themeMode === 'light' || (themeMode !== 'dark' && themeMode !== 'auto' && fallbackColorMode === 'light');
 
@@ -105,6 +107,7 @@ function buildThemeConfigFromForm(
       siderBgColor: savingPlain || !isLight ? '' : siderBgColorValue || '',
       headerBgColor: savingPlain ? '' : headerBgColorValue || '',
       tabsBgColor: savingPlain ? '' : tabsBgColorValue || '',
+      tabBgColor: savingPlain ? '' : tabBgColorValue || '',
     }),
   };
 }
@@ -313,6 +316,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
   const [siderBgColorValue, setSiderBgColorValue] = useState<string>('');
   const [headerBgColorValue, setHeaderBgColorValue] = useState<string>('');
   const [tabsBgColorValue, setTabsBgColorValue] = useState<string>('');
+  const [tabBgColorValue, setTabBgColorValue] = useState<string>('');
   const [themeStyleValue, setThemeStyleValue] = useState<ThemeStyle>('vivid');
   const [brandThemeColor, setBrandThemeColor] = useState<string | null>(null);
 
@@ -402,6 +406,10 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
     return normalizeBackgroundColor(tabsBgColorValue, '') || '';
   }, [tabsBgColorValue]);
 
+  const normalizedTabBgColor = useMemo(() => {
+    return normalizeBackgroundColor(tabBgColorValue, '') || '';
+  }, [tabBgColorValue]);
+
 
   /**
    * 加载站点主题配置和用户偏好设置
@@ -456,6 +464,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         siderBgColor: applied.siderBgColor || '',
         headerBgColor: applied.headerBgColor || '',
         tabsBgColor: applied.tabsBgColor || '',
+        tabBgColor: applied.tabBgColor || '',
         colorMode: userThemeMode,
         tabsPersistence,
         layoutMode: 'mix',
@@ -469,6 +478,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       setSiderBgColorValue(applied.siderBgColor || '');
       setHeaderBgColorValue(applied.headerBgColor || '');
       setTabsBgColorValue(applied.tabsBgColor || '');
+      setTabBgColorValue(applied.tabBgColor || '');
       setTabsPersistenceValue(tabsPersistence);
 
       // 应用预览主题
@@ -546,6 +556,12 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       const tabsBgValue = normalizeBackgroundColor(changedValues.tabsBgColor, '');
       allValues.tabsBgColor = tabsBgValue;
       setTabsBgColorValue(tabsBgValue);
+    }
+
+    if (changedValues.tabBgColor !== undefined) {
+      const tabBgValue = normalizeBackgroundColor(changedValues.tabBgColor, '');
+      allValues.tabBgColor = tabBgValue;
+      setTabBgColorValue(tabBgValue);
     }
 
     // 如果颜色模式改变，更新状态
@@ -709,6 +725,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         siderBgColor: '',
         headerBgColor: '',
         tabsBgColor: '',
+        tabBgColor: '',
         themeStyle: 'vivid',
       });
 
@@ -718,6 +735,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       setSiderBgColorValue('');
       setHeaderBgColorValue('');
       setTabsBgColorValue('');
+      setTabBgColorValue('');
       setThemeStyleValue('vivid');
 
       form.setFieldsValue({
@@ -1496,6 +1514,107 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                         }
                         const colorValue = normalizeBackgroundColor(color, '');
                         form.setFieldValue('tabsBgColor', colorValue);
+                      }}
+                      allowClear
+                    />
+                  </Form.Item>
+                </div>
+              </Card>
+            )}
+
+            {/* 标签背景：激活标签 + 内容区（多彩 + 浅色模式） */}
+            {!isPlainStyle && (form.getFieldValue('colorMode') === 'light' || (!form.getFieldValue('colorMode') && colorMode === 'light')) && (
+              <Card
+                size="small"
+                title={
+                  <TitleWithHint
+                    title={t('components.themeEditor.tabBg.title')}
+                    hint={t('components.themeEditor.tabBg.hint')}
+                    inlineTip={t('components.themeEditor.lightModeOnly')}
+                  />
+                }
+                style={{ marginBottom: 16 }}
+                styles={{ body: { padding: '16px' } }}
+              >
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0, 1fr) 150px',
+                    gap: 16,
+                    alignItems: 'start',
+                  }}
+                >
+                  <div>
+                    <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>{t('components.themeEditor.common.quickSelect')}</div>
+                    <Space wrap size={10}>
+                      {presetTabsColors
+                        .map((preset, index) => (
+                          <Tooltip key={index} title={preset.labelKey ? t(preset.labelKey, { defaultValue: preset.label || preset.color }) : (preset.label || preset.color)} placement="top">
+                            <div
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: '50%',
+                                backgroundColor: preset.color,
+                                border: form.getFieldValue('tabBgColor') === preset.color
+                                  ? `2px solid ${preset.color}`
+                                  : '2px solid transparent',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                boxShadow: form.getFieldValue('tabBgColor') === preset.color
+                                  ? `0 0 0 2px ${preset.color}40`
+                                  : 'none',
+                                position: 'relative',
+                              }}
+                              onClick={() => {
+                                form.setFieldValue('tabBgColor', preset.color);
+                              }}
+                              onMouseEnter={(e) => {
+                                if (form.getFieldValue('tabBgColor') !== preset.color) {
+                                  e.currentTarget.style.transform = 'scale(1.1)';
+                                  e.currentTarget.style.boxShadow = `0 0 0 2px ${preset.color}40`;
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (form.getFieldValue('tabBgColor') !== preset.color) {
+                                  e.currentTarget.style.transform = 'scale(1)';
+                                  e.currentTarget.style.boxShadow = 'none';
+                                }
+                              }}
+                            />
+                          </Tooltip>
+                        ))}
+                    </Space>
+                  </div>
+
+                  <Form.Item
+                    name="tabBgColor"
+                    label={t('components.themeEditor.common.customColor')}
+                    style={{ marginBottom: 0 }}
+                    getValueFromEvent={(color) => {
+                      if (!color) return '';
+                      if (typeof color === 'string') return color;
+                      if (color && typeof color.toHexString === 'function') {
+                        try {
+                          return color.toHexString();
+                        } catch (e) {
+                          console.warn('Color toHexString failed:', e);
+                        }
+                      }
+                      return '';
+                    }}
+                  >
+                    <ColorPicker
+                      showText
+                      format="hex"
+                      value={normalizedTabBgColor || undefined}
+                      onChange={(color) => {
+                        if (!color || color === null) {
+                          form.setFieldValue('tabBgColor', '');
+                          return;
+                        }
+                        const colorValue = normalizeBackgroundColor(color, '');
+                        form.setFieldValue('tabBgColor', colorValue);
                       }}
                       allowClear
                     />

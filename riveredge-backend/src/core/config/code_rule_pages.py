@@ -46,6 +46,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-sales-order": "XS",             # 销售
     "kuaizhizao-sales-order-change": "XSBG",    # 销售变更单
     "kuaizhizao-quotation": "BJ",              # 报价
+    "kuaizhizao-sales-review": "SR",           # 订单评审
     "kuaizhizao-sales-contract": "XSHT",       # 销售合同
     "kuaizhizao-sales-contract-change": "XSHTBG",  # 销售合同变更
     "kuaizhizao-sales-delivery": "XSFH",        # 销售发货
@@ -76,6 +77,10 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-quality-inspection-plan": "ZJFA",  # 质检方案
     "kuaizhizao-quality-oqc-inspection": "CHJY",  # 出货检验
     "kuaizhizao-quality-eight-d-report": "BD",  # 8D报告
+    "kuaizhizao-quality-system-document": "TXWJ",  # 体系文件
+    "kuaizhizao-quality-internal-audit": "NS",  # 内部审核
+    "kuaizhizao-quality-management-review": "GLPS",  # 管理评审
+    "kuaizhizao-quality-fai-order": "FAI",  # FAI首件检验
     "kuaizhizao-quality-defect-record": "DF",  # 不合格品记录
     "kuaizhizao-quality-scrap-record": "BF",  # 报废记录
     "kuaizhizao-equipment-management-equipment": "EQ",    # 设备（仅此一处使用英文缩写，其余均为汉语拼音）
@@ -539,6 +544,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "QUOTATION_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-sales-review",
+        "page_name": "订单评审",
+        "page_path": "/apps/kuaizhizao/sales-management/sales-reviews",
+        "code_field": "review_code",
+        "code_field_label": "评审单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "SALES_REVIEW_CODE",
         "allow_manual_edit": True,
     },
     {
@@ -1013,6 +1030,54 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "EIGHT_D_REPORT_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-quality-system-document",
+        "page_name": "体系文件",
+        "page_path": "/apps/kuaizhizao/quality-management/system-documents",
+        "code_field": "document_code",
+        "code_field_label": "体系文件编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "QMS_SYSTEM_DOCUMENT_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-quality-internal-audit",
+        "page_name": "内部审核",
+        "page_path": "/apps/kuaizhizao/quality-management/internal-audits",
+        "code_field": "audit_code",
+        "code_field_label": "内审编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "QMS_INTERNAL_AUDIT_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-quality-management-review",
+        "page_name": "管理评审",
+        "page_path": "/apps/kuaizhizao/quality-management/management-reviews",
+        "code_field": "review_code",
+        "code_field_label": "管理评审编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "QMS_MANAGEMENT_REVIEW_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-quality-fai-order",
+        "page_name": "FAI首件检验",
+        "page_path": "/apps/kuaizhizao/quality-management/fai-orders",
+        "code_field": "fai_code",
+        "code_field_label": "FAI编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "FAI_ORDER_CODE",
         "allow_manual_edit": True,
     },
     {

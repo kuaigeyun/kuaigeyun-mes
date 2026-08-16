@@ -250,6 +250,11 @@ class InfraSettings(BaseSettings):
     # TIMEZONE：业务展示和数据库默认时区
     USE_TZ: bool = Field(default=True, description="是否启用时区支持（Tortoise ORM）")
     TIMEZONE: str = Field(default="Asia/Shanghai", description="默认时区（Tortoise ORM / 数据库连接）")
+
+    # 高德地图（运行时从应用连接器 type=amap 读取；此处 env 仅保留字段占位）
+    AMAP_JS_KEY: str = Field(default="", description="高德 JS API Key（请在应用连接器-其他-高德地图配置）")
+    AMAP_JS_SECURITY_CODE: str = Field(default="", description="高德 JS API 安全密钥（应用连接器配置）")
+    AMAP_REST_KEY: str = Field(default="", description="高德 Web 服务 REST Key（应用连接器配置）")
     
     # 平台超级管理员配置（兼容 PLATFORM_SUPERADMIN_* 与 INFRA_SUPERADMIN_*）
     infra_superadmin_USERNAME: str = Field(

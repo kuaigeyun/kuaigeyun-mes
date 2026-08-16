@@ -12,9 +12,10 @@ const FinishedInspectionReport: React.FC = () => {
     <KuaizhizaoReport
       title={t('app.kuaizhizao.menu.reports.finished-inspection-report')}
       reportType={QUALITY_REPORT_TYPES.FINAL_PASS_RATE}
-      columnPersistenceId="apps.kuaizhizao.pages.quality-management.reports.FinishedInspectionReport"
+      columnPersistenceId="apps.kuaizhizao.pages.quality-management.reports.FinishedInspectionReport-v2"
+      rowKey="id"
       columns={columns}
-      summaryFields={['avg_pass_rate']}
+      summaryFields={['sample_qty', 'qualified_qty', 'unqualified_qty']}
     />
   );
 };

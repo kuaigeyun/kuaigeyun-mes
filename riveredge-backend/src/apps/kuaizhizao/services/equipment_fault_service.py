@@ -211,6 +211,7 @@ class EquipmentFaultService:
         fault_end_date: Optional[str] = None,
         created_start_date: Optional[str] = None,
         created_end_date: Optional[str] = None,
+        uuid: Optional[str] = None,
     ) -> tuple[List[EquipmentFault], int]:
         """
         获取设备故障记录列表
@@ -239,6 +240,8 @@ class EquipmentFaultService:
             query = query.filter(status=status)
         if fault_type:
             query = query.filter(fault_type=fault_type)
+        if uuid:
+            query = query.filter(uuid=uuid.strip())
 
         from apps.kuaizhizao.services.equipment_list_core import (
             EQUIPMENT_FAULT_SORTABLE_FIELDS,

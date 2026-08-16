@@ -403,6 +403,30 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             if name:
                 query = query.filter(forecast_name__icontains=name)
 
+        pullable_only = filters.get("pullable_only")
+        pull_target_norm = str(filters.get("pull_target") or "").strip().lower()
+        if pullable_only and pull_target_norm == "demand_computation":
+            from apps.kuaizhizao.constants import LEGACY_AUDITED_VALUES, ReviewStatus
+
+            audited_statuses = (
+                "AUDITED",
+                "CONFIRMED",
+                "已审核",
+                "已确认",
+                *tuple(LEGACY_AUDITED_VALUES),
+            )
+            approved_review = (
+                ReviewStatus.APPROVED.value,
+                "APPROVED",
+                "已通过",
+                "审核通过",
+                "通过",
+                "已审核",
+            )
+            query = query.filter(
+                Q(status__in=audited_statuses) | Q(review_status__in=approved_review)
+            ).filter(planning_pushed_to_computation=False)
+
         # 获取总数
         total = await query.count()
 

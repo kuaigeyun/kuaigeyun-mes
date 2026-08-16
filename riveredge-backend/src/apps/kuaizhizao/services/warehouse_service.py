@@ -663,6 +663,80 @@ async def _sum_returned_qty_by_delivery_item_ids(
     return totals
 
 
+def _optional_positive_int(value: Any) -> Optional[int]:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+async def returned_qty_by_purchase_order_item_ids(
+    tenant_id: int,
+    purchase_order_item_ids: List[int],
+) -> Dict[int, float]:
+    """按采购订单行统计已退货数量（含待退货，占用可退余量）。"""
+    result: Dict[int, float] = {int(i): 0.0 for i in purchase_order_item_ids}
+    if not purchase_order_item_ids:
+        return result
+    return_items = await PurchaseReturnItem.filter(
+        tenant_id=tenant_id,
+        purchase_order_item_id__in=list(result.keys()),
+    ).all()
+    if not return_items:
+        return result
+    return_ids = list({int(ri.return_id) for ri in return_items if ri.return_id})
+    active_return_ids: set[int] = set()
+    if return_ids:
+        returns = await PurchaseReturn.filter(
+            tenant_id=tenant_id,
+            id__in=return_ids,
+            deleted_at__isnull=True,
+        ).exclude(status="已取消").all()
+        active_return_ids = {int(r.id) for r in returns}
+    for ri in return_items:
+        if int(ri.return_id) not in active_return_ids:
+            continue
+        item_id = int(ri.purchase_order_item_id or 0)
+        if item_id <= 0:
+            continue
+        result[item_id] = result.get(item_id, 0.0) + float(ri.return_quantity or 0)
+    return result
+
+
+async def returned_qty_by_sales_order_item_ids(
+    tenant_id: int,
+    sales_order_item_ids: List[int],
+) -> Dict[int, float]:
+    """按销售订单行统计已退货数量（含待退货，占用可退余量）。"""
+    result: Dict[int, float] = {int(i): 0.0 for i in sales_order_item_ids}
+    if not sales_order_item_ids:
+        return result
+    return_items = await SalesReturnItem.filter(
+        tenant_id=tenant_id,
+        sales_order_item_id__in=list(result.keys()),
+    ).all()
+    if not return_items:
+        return result
+    return_ids = list({int(ri.return_id) for ri in return_items if ri.return_id})
+    active_return_ids: set[int] = set()
+    if return_ids:
+        returns = await SalesReturn.filter(
+            tenant_id=tenant_id,
+            id__in=return_ids,
+            deleted_at__isnull=True,
+        ).all()
+        active_return_ids = {int(r.id) for r in returns}
+    for ri in return_items:
+        if int(ri.return_id) not in active_return_ids:
+            continue
+        item_id = int(ri.sales_order_item_id or 0)
+        if item_id <= 0:
+            continue
+        result[item_id] = result.get(item_id, 0.0) + float(ri.return_quantity or 0)
+    return result
+
+
 def _coerce_id_str_map(raw: Optional[Dict[Any, Any]]) -> Optional[Dict[int, str]]:
     if not raw:
         return None
@@ -960,6 +1034,110 @@ async def occupied_purchase_receipt_qty_by_po_item_ids(
     return occupied_by_po_item
 
 
+_SALES_DELIVERY_VOID_STATUSES = frozenset(
+    {"已取消", "cancelled", "CANCELLED", "已作废", "作废", "void", "VOID"}
+)
+
+
+async def occupied_purchase_receipt_qty_by_notice_item_ids(
+    tenant_id: int,
+    notice_item_ids: List[int],
+) -> dict[int, Decimal]:
+    """收货通知行被未作废采购入库占用的数量（草稿与已入库都计入）。"""
+    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+    from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+
+    selected_ids = [int(v) for v in notice_item_ids if v is not None]
+    if not selected_ids:
+        return {}
+    item_rows = await PurchaseReceiptItem.filter(
+        tenant_id=tenant_id,
+        receipt_notice_item_id__in=selected_ids,
+    ).values("receipt_id", "receipt_notice_item_id", "receipt_quantity")
+    receipt_ids = sorted({int(row["receipt_id"]) for row in item_rows if row.get("receipt_id")})
+    if not receipt_ids:
+        return {}
+    status_rows = await PurchaseReceipt.filter(
+        tenant_id=tenant_id,
+        id__in=receipt_ids,
+        deleted_at__isnull=True,
+    ).values("id", "status")
+    occupying_ids = {
+        int(row["id"])
+        for row in status_rows
+        if str(row.get("status") or "").strip() not in _PURCHASE_RECEIPT_VOID_STATUSES
+    }
+    occupied: dict[int, Decimal] = {}
+    for row in item_rows:
+        notice_item_id = int(row.get("receipt_notice_item_id") or 0)
+        receipt_id = int(row.get("receipt_id") or 0)
+        if notice_item_id <= 0 or receipt_id not in occupying_ids:
+            continue
+        qty = Decimal(str(row.get("receipt_quantity") or 0))
+        if qty <= 0:
+            continue
+        occupied[notice_item_id] = occupied.get(notice_item_id, Decimal("0")) + qty
+    return occupied
+
+
+async def occupied_sales_delivery_qty_by_notice_item_ids(
+    tenant_id: int,
+    notice_item_ids: List[int],
+) -> dict[int, Decimal]:
+    """发货通知行被未作废销售出库占用的数量（待出库与已出库都计入）。"""
+    from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+    from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+
+    selected_ids = [int(v) for v in notice_item_ids if v is not None]
+    if not selected_ids:
+        return {}
+    item_rows = await SalesDeliveryItem.filter(
+        tenant_id=tenant_id,
+        shipment_notice_item_id__in=selected_ids,
+    ).values("delivery_id", "shipment_notice_item_id", "delivery_quantity")
+    delivery_ids = sorted({int(row["delivery_id"]) for row in item_rows if row.get("delivery_id")})
+    if not delivery_ids:
+        return {}
+    status_rows = await SalesDelivery.filter(
+        tenant_id=tenant_id,
+        id__in=delivery_ids,
+        deleted_at__isnull=True,
+    ).values("id", "status")
+    occupying_ids = {
+        int(row["id"])
+        for row in status_rows
+        if str(row.get("status") or "").strip() not in _SALES_DELIVERY_VOID_STATUSES
+    }
+    occupied: dict[int, Decimal] = {}
+    for row in item_rows:
+        notice_item_id = int(row.get("shipment_notice_item_id") or 0)
+        delivery_id = int(row.get("delivery_id") or 0)
+        if notice_item_id <= 0 or delivery_id not in occupying_ids:
+            continue
+        qty = Decimal(str(row.get("delivery_quantity") or 0))
+        if qty <= 0:
+            continue
+        occupied[notice_item_id] = occupied.get(notice_item_id, Decimal("0")) + qty
+    return occupied
+
+
+async def _default_location_if_required(
+    tenant_id: int,
+    warehouse_id: int,
+    *,
+    material_label: str,
+) -> tuple[Optional[int], Optional[str]]:
+    location_required, _ = await _get_warehouse_policy_flags(tenant_id)
+    if not location_required:
+        return None, None
+    from apps.kuaizhizao.services.receipt_notice_service import _first_storage_location_for_warehouse
+
+    loc_id, loc_code = await _first_storage_location_for_warehouse(tenant_id, int(warehouse_id))
+    if loc_id is None:
+        raise ValidationError(f"物料 {material_label} 的默认仓库未维护可用库位")
+    return int(loc_id), loc_code
+
+
 _RECEIPT_NOTICE_VOID_STATUSES = frozenset({"已取消", "cancelled", "CANCELLED"})
 
 
@@ -977,12 +1155,33 @@ async def noticed_qty_by_po_item_ids(
     if not order_ids:
         return {}
 
-    notices = await ReceiptNotice.filter(
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+    po_item_ids = [
+        int(r["id"])
+        for r in await PurchaseOrderItem.filter(
+            tenant_id=tenant_id, order_id__in=list(order_ids)
+        ).values("id")
+        if r.get("id") is not None
+    ]
+    if not po_item_ids:
+        return {}
+
+    item_rows = await ReceiptNoticeItem.filter(
         tenant_id=tenant_id,
-        purchase_order_id__in=order_ids,
-        deleted_at__isnull=True,
-    ).values("id", "status")
-    active_notice_ids: List[int] = []
+        purchase_order_item_id__in=po_item_ids,
+    ).values("notice_id", "purchase_order_item_id", "notice_quantity")
+    notice_ids = {int(r["notice_id"]) for r in item_rows if r.get("notice_id") is not None}
+    notices = (
+        await ReceiptNotice.filter(
+            tenant_id=tenant_id,
+            id__in=list(notice_ids),
+            deleted_at__isnull=True,
+        ).values("id", "status")
+        if notice_ids
+        else []
+    )
+    active_notice_ids = set()
     for row in notices:
         nid = row.get("id")
         if nid is None:
@@ -990,15 +1189,12 @@ async def noticed_qty_by_po_item_ids(
         status = str(row.get("status") or "").strip()
         if status in _RECEIPT_NOTICE_VOID_STATUSES:
             continue
-        active_notice_ids.append(int(nid))
+        active_notice_ids.add(int(nid))
     if not active_notice_ids:
         return {}
 
     noticed_by_po_item: dict[int, Decimal] = {}
-    item_rows = await ReceiptNoticeItem.filter(
-        tenant_id=tenant_id,
-        notice_id__in=active_notice_ids,
-    ).values("purchase_order_item_id", "notice_quantity")
+    item_rows = [r for r in item_rows if int(r.get("notice_id") or 0) in active_notice_ids]
     for row in item_rows:
         po_item_id = int(row.get("purchase_order_item_id") or 0)
         if po_item_id <= 0:
@@ -4665,9 +4861,13 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     item_demand_id = getattr(item_data, 'demand_id', None) or demand_id
                     demand_item_id = getattr(item_data, 'demand_item_id', None)
                     
+                    so_line_id = getattr(item_data, "sales_order_item_id", None)
+                    sn_line_id = getattr(item_data, "shipment_notice_item_id", None)
                     await SalesDeliveryItem.create(
                         tenant_id=tenant_id,
                         delivery_id=delivery.id,
+                        sales_order_item_id=int(so_line_id) if so_line_id else None,
+                        shipment_notice_item_id=int(sn_line_id) if sn_line_id else None,
                         material_id=item_data.material_id,
                         material_code=item_data.material_code,
                         material_name=item_data.material_name,
@@ -5310,30 +5510,23 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         if not order_items:
             raise BusinessLogicError("销售订单没有明细，无法生成销售出库单")
 
-        # 统计该销售订单已生成但尚未完结的销售出库占用量，避免重复下推导致超量。
+        from apps.kuaizhizao.utils.sales_order_push_qty import get_pushable_qty_for_order_items
+
+        pushable_by_item = await get_pushable_qty_for_order_items(
+            tenant_id, sales_order_id, order_items
+        )
+
         existing_deliveries = await SalesDelivery.filter(
             tenant_id=tenant_id,
             sales_order_id=sales_order_id,
             deleted_at__isnull=True,
         ).exclude(status__in=["已取消", "cancelled", "CANCELLED"]).values("id", "delivery_code", "status")
-        closed_statuses = {"已出库", "已完成", "completed", "COMPLETED", "done", "DONE"}
-        occupying_deliveries = [
-            d for d in existing_deliveries if str(d.get("status") or "").strip() not in closed_statuses
-        ]
-        occupying_delivery_ids = [int(d["id"]) for d in occupying_deliveries if d.get("id") is not None]
-        occupied_qty_by_material: Dict[int, Decimal] = {}
-        if occupying_delivery_ids:
-            occupying_items = await SalesDeliveryItem.filter(
-                tenant_id=tenant_id,
-                delivery_id__in=occupying_delivery_ids,
-            ).values("material_id", "delivery_quantity")
-            for row in occupying_items:
-                mid = int(row.get("material_id") or 0)
-                if mid <= 0:
-                    continue
-                qty = Decimal(str(row.get("delivery_quantity") or 0))
-                occupied_qty_by_material[mid] = occupied_qty_by_material.get(mid, Decimal("0")) + qty
+        from apps.kuaizhizao.utils.sales_order_push_qty import CLOSED_DELIVERY_STATUSES
 
+        occupying_deliveries = [
+            d for d in existing_deliveries
+            if str(d.get("status") or "").strip() not in CLOSED_DELIVERY_STATUSES
+        ]
         existing_delivery_hint = "、".join(
             [str(d.get("delivery_code") or f"#{d.get('id')}") for d in occupying_deliveries[:3]]
         )
@@ -5357,9 +5550,8 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         total_amount = Decimal("0")
         
         for item in order_items:
-            base_remaining = Decimal(str(item.remaining_quantity or item.order_quantity or 0))
-            occupied_qty = occupied_qty_by_material.get(int(item.material_id or 0), Decimal("0"))
-            max_push_qty = base_remaining - occupied_qty
+            item_id = int(getattr(item, "id", 0) or 0)
+            max_push_qty = pushable_by_item.get(item_id, Decimal("0"))
             if max_push_qty <= 0:
                 continue
 
@@ -5367,17 +5559,14 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             if delivery_quantities and item.id in delivery_quantities:
                 delivery_qty = Decimal(str(delivery_quantities[item.id]))
             else:
-                # 默认只下推当前可用数量（剩余数量 - 已被待出库单占用）
                 delivery_qty = max_push_qty
             
             if delivery_qty <= 0:
-                continue  # 跳过数量为0或负数的情况
+                continue
             
-            # 检查是否超出剩余数量
             if delivery_qty > max_push_qty:
-                occupied_tip = f"（已被待出库单占用 {occupied_qty}）" if occupied_qty > 0 else ""
                 raise BusinessLogicError(
-                    f"物料 {item.material_code} 的出库数量 {delivery_qty} 超过可下推数量 {max_push_qty}{occupied_tip}"
+                    f"物料 {item.material_code} 的出库数量 {delivery_qty} 超过可下推数量 {max_push_qty}"
                 )
             
             # 计算金额
@@ -5385,6 +5574,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             
             delivery_items.append(
                 SalesDeliveryItemCreate(
+                    sales_order_item_id=item_id,
                     material_id=item.material_id,
                     material_code=item.material_code,
                     material_name=item.material_name,
@@ -5447,6 +5637,561 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         # 已交货/剩余数量在「确认出库」时按实发数量回写订单明细（见 confirm_delivery）
 
         return delivery
+
+    async def list_sales_order_delivery_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        sales_order_id: Optional[int] = None,
+        pullable_only: bool = True,
+    ) -> Dict[str, Any]:
+        """开口销售订单行：可转销售出库的剩余明细。"""
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+        from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+        from apps.kuaizhizao.services.sales_order_service import SalesOrderService
+        from apps.kuaizhizao.utils.sales_order_push_qty import batch_pushable_qty_by_order_item
+
+        so_query = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if sales_order_id is not None:
+            so_query = so_query.filter(id=int(sales_order_id))
+        orders = await so_query.only(
+            "id", "order_code", "status", "customer_id", "customer_name"
+        )
+        order_by_id = {int(o.id): o for o in orders}
+        if not order_by_id:
+            return {"data": [], "total": 0}
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id__in=list(order_by_id.keys())
+        ).all()
+        pushable = await batch_pushable_qty_by_order_item(tenant_id, items)
+        sales_order_service = SalesOrderService()
+        kw = (keyword or "").strip().lower()
+        lines: List[Dict[str, Any]] = []
+        for item in items:
+            order = order_by_id.get(int(item.sales_order_id))
+            if not order:
+                continue
+            qty = float(item.order_quantity or 0)
+            if qty <= 0:
+                continue
+            remaining = float(pushable.get(int(order.id), {}).get(int(item.id), Decimal("0")))
+            pushed = max(0.0, qty - remaining)
+            can_push = sales_order_service._is_audited(order.status) and remaining > 0
+            if pullable_only and not (can_push and remaining > 0):
+                continue
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            material_spec = str(item.material_spec or "").strip()
+            if kw:
+                haystack = " ".join([material_code, material_name, material_spec]).lower()
+                if kw not in haystack:
+                    continue
+            lines.append(
+                {
+                    "id": int(item.id),
+                    "sales_order_id": int(item.sales_order_id),
+                    "order_code": order.order_code,
+                    "customer_id": order.customer_id,
+                    "customer_name": order.customer_name,
+                    "material_id": item.material_id,
+                    "material_code": material_code,
+                    "material_name": material_name,
+                    "material_spec": material_spec or None,
+                    "unit": item.material_unit or "件",
+                    "suggested_quantity": qty,
+                    "pushed_quantity": pushed,
+                    "remaining_quantity": remaining,
+                    "required_date": str(item.required_date) if getattr(item, "required_date", None) else None,
+                }
+            )
+        lines.sort(
+            key=lambda r: (
+                str(r.get("order_code") or ""),
+                str(r.get("material_code") or ""),
+                int(r.get("id") or 0),
+            )
+        )
+        return {"data": lines[skip : skip + limit], "total": len(lines)}
+
+    async def create_sales_deliveries_from_sales_order_items(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """按销售订单行 id 建销售出库单，可跨多张订单；同客户同默认仓合并一张。"""
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+        from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        from apps.kuaizhizao.services.sales_order_service import SalesOrderService
+        from apps.kuaizhizao.utils.sales_order_push_qty import batch_pushable_qty_by_order_item
+        from apps.master_data.services.material_service import (
+            resolve_primary_default_warehouse_from_material,
+        )
+
+        selected_ids = [int(v) for v in item_ids if v is not None]
+        if not selected_ids:
+            raise BusinessLogicError("请至少选择一条可出库销售订单明细")
+        items = await SalesOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).all()
+        if not items:
+            raise BusinessLogicError("没有可出库的销售订单行")
+        order_ids = sorted({int(i.sales_order_id) for i in items})
+        orders = await SalesOrder.filter(
+            tenant_id=tenant_id, id__in=order_ids, deleted_at__isnull=True
+        ).all()
+        order_by_id = {int(o.id): o for o in orders}
+        if len(order_by_id) != len(order_ids):
+            raise NotFoundError("销售订单不存在")
+        sales_order_service = SalesOrderService()
+        for order in orders:
+            order_items = [i for i in items if int(i.sales_order_id) == int(order.id)]
+            await sales_order_service._assert_sales_order_capability_for_order(
+                tenant_id, order, "push_sales_delivery", items=order_items
+            )
+        pushable = await batch_pushable_qty_by_order_item(tenant_id, items)
+
+        prepared: List[tuple[SalesOrderItem, Decimal, int, str]] = []
+        for item in items:
+            remaining = pushable.get(int(item.sales_order_id), {}).get(int(item.id), Decimal("0"))
+            qty = max(Decimal("0"), Decimal(str(remaining)))
+            if qty <= 0:
+                continue
+            if not item.material_id:
+                raise ValidationError("销售订单存在缺失物料ID的明细，无法下推销售出库")
+            material_wh = await resolve_primary_default_warehouse_from_material(
+                tenant_id, material_id=int(item.material_id)
+            )
+            if not material_wh or not material_wh[0]:
+                raise ValidationError(
+                    f"请为物料 {item.material_code or item.material_name or item.id} 维护默认仓库"
+                )
+            line_wh_id = int(material_wh[0])
+            line_wh_name = material_wh[1] or await _resolve_warehouse_name_by_id(tenant_id, line_wh_id)
+            prepared.append((item, qty, line_wh_id, line_wh_name))
+
+        groups: Dict[tuple[int, int], List[tuple[SalesOrderItem, Decimal, int, str]]] = {}
+        for row in prepared:
+            item = row[0]
+            customer_id = int(order_by_id[int(item.sales_order_id)].customer_id or 0)
+            groups.setdefault((customer_id, row[2]), []).append(row)
+
+        deliveries_out: List[Dict[str, Any]] = []
+        for (_cid, _wh), group_rows in groups.items():
+            source_order_ids = sorted({int(r[0].sales_order_id) for r in group_rows})
+            primary = order_by_id[source_order_ids[0]]
+            source_codes = " ".join(order_by_id[oid].order_code for oid in source_order_ids)
+            header_wh_id = group_rows[0][2]
+            header_wh_name = group_rows[0][3]
+            delivery_items: List[SalesDeliveryItemCreate] = []
+            total_quantity = Decimal("0")
+            total_amount = Decimal("0")
+            for item, qty, _line_wh_id, _line_wh_name in group_rows:
+                loc_id, loc_code = await _default_location_if_required(
+                    tenant_id,
+                    header_wh_id,
+                    material_label=str(item.material_code or item.material_name or item.id),
+                )
+                item_total = qty * (item.unit_price or Decimal("0"))
+                delivery_items.append(
+                    SalesDeliveryItemCreate(
+                        sales_order_item_id=int(item.id),
+                        material_id=item.material_id,
+                        material_code=item.material_code,
+                        material_name=item.material_name,
+                        material_spec=item.material_spec,
+                        material_unit=item.material_unit or "件",
+                        delivery_quantity=float(qty),
+                        unit_price=float(item.unit_price or 0),
+                        total_amount=float(item_total),
+                        is_gift=bool(getattr(item, "is_gift", False)),
+                        gift_ref_unit_price=(
+                            float(item.gift_ref_unit_price)
+                            if getattr(item, "gift_ref_unit_price", None) is not None
+                            else None
+                        ),
+                        location_id=loc_id,
+                        location_code=loc_code,
+                    )
+                )
+                total_quantity += qty
+                total_amount += item_total
+            if not delivery_items:
+                continue
+            created = await self.create_sales_delivery(
+                tenant_id=tenant_id,
+                delivery_data=SalesDeliveryCreate(
+                    sales_order_id=primary.id,
+                    sales_order_code=primary.order_code,
+                    demand_type="sales_order",
+                    customer_id=primary.customer_id,
+                    customer_name=primary.customer_name,
+                    warehouse_id=header_wh_id,
+                    warehouse_name=header_wh_name,
+                    status="待出库",
+                    total_quantity=float(total_quantity),
+                    total_amount=float(total_amount),
+                    shipping_address=primary.shipping_address,
+                    shipping_method=primary.shipping_method,
+                    notes=f"从销售订单 {source_codes} 下推生成",
+                    items=delivery_items,
+                ),
+                created_by=created_by,
+                require_batch_serial_on_create=False,
+            )
+            for oid in source_order_ids[1:]:
+                source = order_by_id[oid]
+                try:
+                    await DocumentRelationNewService().create_relation(
+                        tenant_id=tenant_id,
+                        relation_data=DocumentRelationCreate(
+                            source_type="sales_order",
+                            source_id=source.id,
+                            source_code=source.order_code,
+                            target_type="sales_delivery",
+                            target_id=created.id,
+                            target_code=created.delivery_code,
+                            relation_type="source",
+                            relation_mode="push",
+                            relation_desc="销售订单下推销售出库单",
+                        ),
+                        created_by=created_by,
+                    )
+                except Exception as rel_err:
+                    logger.warning("建立销售订单→销售出库关联失败: %s", rel_err)
+            deliveries_out.append({
+                "delivery_id": created.id,
+                "delivery_code": created.delivery_code,
+                "order_id": primary.id,
+                "order_code": primary.order_code,
+            })
+        if not deliveries_out:
+            raise BusinessLogicError("所选明细无法生成销售出库单")
+        first = deliveries_out[0]
+        msg = (
+            f"转单成功，共生成 {len(deliveries_out)} 张销售出库单"
+            if len(deliveries_out) > 1
+            else "销售出库单创建成功"
+        )
+        return {
+            "success": True,
+            "message": msg,
+            "delivery_id": first["delivery_id"],
+            "delivery_code": first["delivery_code"],
+            "deliveries": deliveries_out,
+        }
+
+    async def list_shipment_notice_delivery_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        notice_id: Optional[int] = None,
+        pullable_only: bool = True,
+    ) -> Dict[str, Any]:
+        """开口发货通知行：可转销售出库的剩余明细。"""
+        from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
+        from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
+        from apps.kuaizhizao.services.document_action_policy.shipment_notice import (
+            derive_shipment_notice_capabilities,
+        )
+
+        notice_query = ShipmentNotice.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if notice_id is not None:
+            notice_query = notice_query.filter(id=int(notice_id))
+        notices = await notice_query.only(
+            "id", "notice_code", "status", "customer_id", "customer_name",
+            "sales_order_id", "sales_order_code", "sales_delivery_id",
+        )
+        notice_by_id = {int(n.id): n for n in notices}
+        if not notice_by_id:
+            return {"data": [], "total": 0}
+        items = await ShipmentNoticeItem.filter(
+            tenant_id=tenant_id, notice_id__in=list(notice_by_id.keys())
+        ).all()
+        occupied_by_item = await occupied_sales_delivery_qty_by_notice_item_ids(
+            tenant_id, [int(item.id) for item in items]
+        )
+        consumed_statuses = {"已通知", "已出库"}
+        kw = (keyword or "").strip().lower()
+        lines: List[Dict[str, Any]] = []
+        for item in items:
+            notice = notice_by_id.get(int(item.notice_id))
+            if not notice:
+                continue
+            qty = float(item.notice_quantity or 0)
+            if qty <= 0:
+                continue
+            occupied = float(occupied_by_item.get(int(item.id), 0))
+            status = str(notice.status or "").strip()
+            if status in consumed_statuses and occupied <= 0:
+                remaining = 0.0
+            else:
+                remaining = max(0.0, qty - occupied)
+            can_push = derive_shipment_notice_capabilities(
+                notice,
+                has_items=True,
+                has_warehouse=True,
+            ).notify.allowed
+            selectable = can_push and remaining > 0
+            if pullable_only and not selectable:
+                continue
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            material_spec = str(item.material_spec or "").strip()
+            if kw:
+                haystack = " ".join([material_code, material_name, material_spec]).lower()
+                if kw not in haystack:
+                    continue
+            lines.append(
+                {
+                    "id": int(item.id),
+                    "notice_id": int(item.notice_id),
+                    "notice_code": notice.notice_code,
+                    "sales_order_id": notice.sales_order_id,
+                    "sales_order_code": notice.sales_order_code,
+                    "customer_id": notice.customer_id,
+                    "customer_name": notice.customer_name,
+                    "material_id": item.material_id,
+                    "material_code": material_code,
+                    "material_name": material_name,
+                    "material_spec": material_spec or None,
+                    "unit": item.material_unit or "件",
+                    "suggested_quantity": qty,
+                    "pushed_quantity": occupied,
+                    "remaining_quantity": remaining,
+                }
+            )
+        lines.sort(
+            key=lambda r: (
+                str(r.get("notice_code") or ""),
+                str(r.get("material_code") or ""),
+                int(r.get("id") or 0),
+            )
+        )
+        return {"data": lines[skip : skip + limit], "total": len(lines)}
+
+    async def create_sales_deliveries_from_notice_items(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """按发货通知行 id 建销售出库单，可跨多张通知；同客户同仓合并一张。"""
+        from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
+        from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        from apps.kuaizhizao.services.document_action_policy.shipment_notice import (
+            assert_shipment_notice_capability,
+        )
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        from apps.master_data.services.material_service import (
+            resolve_primary_default_warehouse_from_material,
+        )
+
+        selected_ids = [int(v) for v in item_ids if v is not None]
+        if not selected_ids:
+            raise BusinessLogicError("请至少选择一条可出库发货通知明细")
+        items = await ShipmentNoticeItem.filter(tenant_id=tenant_id, id__in=selected_ids).all()
+        if not items:
+            raise BusinessLogicError("没有可出库的发货通知行")
+        notice_ids = sorted({int(i.notice_id) for i in items})
+        notices = await ShipmentNotice.filter(
+            tenant_id=tenant_id, id__in=notice_ids, deleted_at__isnull=True
+        ).all()
+        notice_by_id = {int(n.id): n for n in notices}
+        if len(notice_by_id) != len(notice_ids):
+            raise NotFoundError("发货通知单不存在")
+        occupied_by_item = await occupied_sales_delivery_qty_by_notice_item_ids(tenant_id, selected_ids)
+        consumed_statuses = {"已通知", "已出库"}
+
+        def _max_delivery_qty(notice_item: ShipmentNoticeItem) -> Decimal:
+            notice = notice_by_id[int(notice_item.notice_id)]
+            qty = Decimal(str(notice_item.notice_quantity or 0))
+            occupied = occupied_by_item.get(int(notice_item.id), Decimal("0"))
+            if str(notice.status or "").strip() in consumed_statuses and occupied <= 0:
+                return Decimal("0")
+            return max(Decimal("0"), qty - occupied)
+
+        for notice in notices:
+            assert_shipment_notice_capability(
+                notice,
+                "notify",
+                has_items=True,
+            )
+
+        prepared: List[tuple[ShipmentNoticeItem, Decimal, int, str]] = []
+        for item in items:
+            qty = _max_delivery_qty(item)
+            if qty <= 0:
+                continue
+            if not item.material_id:
+                raise ValidationError("发货通知存在缺失物料ID的明细，无法下推销售出库")
+            line_wh_id = int(item.warehouse_id) if getattr(item, "warehouse_id", None) else None
+            line_wh_name = getattr(item, "warehouse_name", None)
+            if line_wh_id is None:
+                notice = notice_by_id[int(item.notice_id)]
+                if getattr(notice, "warehouse_id", None):
+                    line_wh_id = int(notice.warehouse_id)
+                    line_wh_name = notice.warehouse_name
+            if line_wh_id is None:
+                material_wh = await resolve_primary_default_warehouse_from_material(
+                    tenant_id, material_id=int(item.material_id)
+                )
+                if not material_wh or not material_wh[0]:
+                    raise ValidationError(
+                        f"请为物料 {item.material_code or item.material_name or item.id} 维护默认仓库"
+                    )
+                line_wh_id, line_wh_name = int(material_wh[0]), material_wh[1]
+            if not line_wh_name:
+                line_wh_name = await _resolve_warehouse_name_by_id(tenant_id, line_wh_id)
+            prepared.append((item, qty, line_wh_id, str(line_wh_name or "")))
+
+        groups: Dict[tuple[int, int], List[tuple[ShipmentNoticeItem, Decimal, int, str]]] = {}
+        for row in prepared:
+            item = row[0]
+            customer_id = int(notice_by_id[int(item.notice_id)].customer_id or 0)
+            groups.setdefault((customer_id, row[2]), []).append(row)
+
+        deliveries_out: List[Dict[str, Any]] = []
+        created_by_notice: Dict[int, Any] = {}
+        for (_cid, _wh), group_rows in groups.items():
+            source_notice_ids = sorted({int(r[0].notice_id) for r in group_rows})
+            primary = notice_by_id[source_notice_ids[0]]
+            source_codes = " ".join(notice_by_id[nid].notice_code for nid in source_notice_ids)
+            header_wh_id = group_rows[0][2]
+            header_wh_name = group_rows[0][3]
+            delivery_items: List[SalesDeliveryItemCreate] = []
+            total_quantity = Decimal("0")
+            total_amount = Decimal("0")
+            for item, qty, _line_wh_id, _line_wh_name in group_rows:
+                loc_id, loc_code = await _default_location_if_required(
+                    tenant_id,
+                    header_wh_id,
+                    material_label=str(item.material_code or item.material_name or item.id),
+                )
+                item_total = qty * Decimal(str(item.unit_price or 0))
+                so_item_id = getattr(item, "sales_order_item_id", None)
+                delivery_items.append(
+                    SalesDeliveryItemCreate(
+                        sales_order_item_id=int(so_item_id) if so_item_id else None,
+                        shipment_notice_item_id=int(item.id),
+                        material_id=item.material_id,
+                        material_code=item.material_code,
+                        material_name=item.material_name,
+                        material_spec=getattr(item, "material_spec", None),
+                        material_unit=item.material_unit or "件",
+                        delivery_quantity=float(qty),
+                        unit_price=float(item.unit_price or 0),
+                        total_amount=float(item_total),
+                        is_gift=bool(getattr(item, "is_gift", False)),
+                        gift_ref_unit_price=(
+                            float(item.gift_ref_unit_price)
+                            if getattr(item, "gift_ref_unit_price", None) is not None
+                            else None
+                        ),
+                        location_id=loc_id,
+                        location_code=loc_code,
+                    )
+                )
+                total_quantity += qty
+                total_amount += item_total
+            if not delivery_items:
+                continue
+            created = await self.create_sales_delivery(
+                tenant_id=tenant_id,
+                delivery_data=SalesDeliveryCreate(
+                    sales_order_id=primary.sales_order_id,
+                    sales_order_code=primary.sales_order_code,
+                    demand_type="sales_order",
+                    customer_id=primary.customer_id,
+                    customer_name=primary.customer_name,
+                    warehouse_id=header_wh_id,
+                    warehouse_name=header_wh_name,
+                    status="待出库",
+                    total_quantity=float(total_quantity),
+                    total_amount=float(total_amount),
+                    shipping_address=primary.shipping_address,
+                    notes=f"从发货通知 {source_codes} 下推生成",
+                    items=delivery_items,
+                ),
+                created_by=created_by,
+                require_batch_serial_on_create=False,
+            )
+            for nid in source_notice_ids:
+                created_by_notice[nid] = created
+                source = notice_by_id[nid]
+                try:
+                    await DocumentRelationNewService().create_relation(
+                        tenant_id=tenant_id,
+                        relation_data=DocumentRelationCreate(
+                            source_type="shipment_notice",
+                            source_id=source.id,
+                            source_code=source.notice_code,
+                            target_type="sales_delivery",
+                            target_id=created.id,
+                            target_code=created.delivery_code,
+                            relation_type="source",
+                            relation_mode="push",
+                            relation_desc="发货通知下推销售出库单",
+                        ),
+                        created_by=created_by,
+                    )
+                except Exception as rel_err:
+                    logger.warning("建立发货通知→销售出库关联失败: %s", rel_err)
+            deliveries_out.append({
+                "delivery_id": created.id,
+                "delivery_code": created.delivery_code,
+                "notice_id": primary.id,
+                "notice_code": primary.notice_code,
+            })
+        if not deliveries_out:
+            raise BusinessLogicError("所选明细无法生成销售出库单")
+        all_notice_items = await ShipmentNoticeItem.filter(
+            tenant_id=tenant_id, notice_id__in=notice_ids
+        ).all()
+        occupied_after = await occupied_sales_delivery_qty_by_notice_item_ids(
+            tenant_id, [int(i.id) for i in all_notice_items]
+        )
+        for nid in notice_ids:
+            notice_items = [i for i in all_notice_items if int(i.notice_id) == nid]
+            remaining_any = False
+            for ni in notice_items:
+                qty = Decimal(str(ni.notice_quantity or 0))
+                occupied = occupied_after.get(int(ni.id), Decimal("0"))
+                if max(Decimal("0"), qty - occupied) > 0:
+                    remaining_any = True
+                    break
+            if remaining_any:
+                continue
+            created = created_by_notice.get(nid)
+            if created is None:
+                continue
+            await ShipmentNotice.filter(tenant_id=tenant_id, id=nid).update(
+                status="已通知",
+                notified_at=resolve_business_datetime(),
+                updated_by=created_by,
+                sales_delivery_id=created.id,
+                sales_delivery_code=created.delivery_code,
+            )
+        first = deliveries_out[0]
+        msg = (
+            f"转单成功，共生成 {len(deliveries_out)} 张销售出库单"
+            if len(deliveries_out) > 1
+            else "销售出库单创建成功"
+        )
+        return {
+            "success": True,
+            "message": msg,
+            "delivery_id": first["delivery_id"],
+            "delivery_code": first["delivery_code"],
+            "deliveries": deliveries_out,
+        }
 
     async def pull_from_sales_forecast(
         self,
@@ -6603,6 +7348,570 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 created_by=created_by,
             )
         return response
+
+    async def list_purchase_order_receipt_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        order_id: Optional[int] = None,
+        pullable_only: bool = True,
+    ) -> Dict[str, Any]:
+        """开口采购订单行：可转采购入库的剩余明细。"""
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem, effective_po_item_outstanding
+        from apps.kuaizhizao.services.document_action_policy.purchase_order import (
+            derive_purchase_order_capabilities,
+        )
+
+        po_query = PurchaseOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if order_id is not None:
+            po_query = po_query.filter(id=int(order_id))
+        orders = await po_query.only("id", "order_code", "status", "supplier_id", "supplier_name")
+        order_by_id = {int(o.id): o for o in orders}
+        if not order_by_id:
+            return {"data": [], "total": 0}
+        for oid in order_by_id:
+            await sync_purchase_order_receipt_quantities(tenant_id, oid)
+        items = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id, order_id__in=list(order_by_id.keys())
+        ).all()
+        occupied_by_item = await occupied_purchase_receipt_qty_by_po_item_ids(
+            tenant_id, list(order_by_id.keys())
+        )
+        kw = (keyword or "").strip().lower()
+        lines: List[Dict[str, Any]] = []
+        for item in items:
+            order = order_by_id.get(int(item.order_id))
+            if not order:
+                continue
+            qty = float(item.ordered_quantity or 0)
+            if qty <= 0:
+                continue
+            outstanding = float(effective_po_item_outstanding(item))
+            occupied = float(occupied_by_item.get(int(item.id), 0))
+            remaining = max(0.0, outstanding - occupied)
+            can_push = derive_purchase_order_capabilities(
+                order,
+                has_items=True,
+                has_outstanding=outstanding > 0,
+                has_pushable_receipt_outstanding=remaining > 0,
+            ).push_receipt.allowed
+            selectable = can_push and remaining > 0
+            if pullable_only and not selectable:
+                continue
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            material_spec = str(item.material_spec or "").strip()
+            if kw:
+                haystack = " ".join([material_code, material_name, material_spec]).lower()
+                if kw not in haystack:
+                    continue
+            lines.append(
+                {
+                    "id": int(item.id),
+                    "order_id": int(item.order_id),
+                    "order_code": order.order_code,
+                    "supplier_id": order.supplier_id,
+                    "supplier_name": order.supplier_name,
+                    "material_id": item.material_id,
+                    "material_code": material_code,
+                    "material_name": material_name,
+                    "material_spec": material_spec or None,
+                    "unit": item.unit or "件",
+                    "suggested_quantity": qty,
+                    "pushed_quantity": max(0.0, qty - remaining),
+                    "remaining_quantity": remaining,
+                    "required_date": str(item.required_date) if item.required_date else None,
+                }
+            )
+        lines.sort(
+            key=lambda r: (
+                str(r.get("order_code") or ""),
+                str(r.get("material_code") or ""),
+                int(r.get("id") or 0),
+            )
+        )
+        return {"data": lines[skip : skip + limit], "total": len(lines)}
+
+    async def create_purchase_receipts_from_po_items(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """按采购订单行 id 建采购入库单，可跨多张订单；同供应商合并一张。"""
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem, effective_po_item_outstanding
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        from apps.kuaizhizao.services.document_action_policy.purchase_order import (
+            assert_purchase_order_capability,
+        )
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        from apps.kuaizhizao.services.purchase_service import PurchaseService
+        from apps.master_data.services.material_service import (
+            resolve_primary_default_warehouse_from_material,
+        )
+
+        selected_ids = [int(v) for v in item_ids if v is not None]
+        if not selected_ids:
+            raise BusinessLogicError("请至少选择一条可入库采购订单明细")
+        items = await PurchaseOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).all()
+        if not items:
+            raise BusinessLogicError("没有可入库的采购订单行")
+        order_ids = sorted({int(i.order_id) for i in items})
+        orders = await PurchaseOrder.filter(
+            tenant_id=tenant_id, id__in=order_ids, deleted_at__isnull=True
+        ).all()
+        order_by_id = {int(o.id): o for o in orders}
+        if len(order_by_id) != len(order_ids):
+            raise NotFoundError("采购订单不存在")
+        for oid in order_ids:
+            await sync_purchase_order_receipt_quantities(tenant_id, oid)
+        items = await PurchaseOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).all()
+        occupied_by_item = await occupied_purchase_receipt_qty_by_po_item_ids(tenant_id, order_ids)
+
+        def _max_receipt_qty(po_item: PurchaseOrderItem) -> float:
+            outstanding = float(effective_po_item_outstanding(po_item))
+            occupied = float(occupied_by_item.get(int(po_item.id), 0))
+            return max(0.0, outstanding - occupied)
+
+        for order in orders:
+            order_items = [i for i in items if int(i.order_id) == int(order.id)]
+            has_outstanding = any(float(effective_po_item_outstanding(i)) > 0 for i in order_items)
+            has_pushable = any(_max_receipt_qty(i) > 0 for i in order_items)
+            assert_purchase_order_capability(
+                order,
+                "push_receipt",
+                has_items=True,
+                has_outstanding=has_outstanding,
+                has_pushable_receipt_outstanding=has_pushable,
+            )
+
+        groups: Dict[int, List[PurchaseOrderItem]] = {}
+        for item in items:
+            groups.setdefault(int(order_by_id[int(item.order_id)].supplier_id or 0), []).append(item)
+
+        purchase_service = PurchaseService()
+        receipts_out: List[Dict[str, Any]] = []
+        for _sid, group_items in groups.items():
+            source_order_ids = sorted({int(i.order_id) for i in group_items})
+            primary = order_by_id[source_order_ids[0]]
+            source_codes = " ".join(order_by_id[oid].order_code for oid in source_order_ids)
+            header_wh_id: Optional[int] = None
+            header_wh_name: Optional[str] = None
+            receipt_items: List[PurchaseReceiptItemCreate] = []
+            for item in group_items:
+                qty = _max_receipt_qty(item)
+                if qty <= 0:
+                    continue
+                if not item.material_id:
+                    raise ValidationError("采购订单存在缺失物料ID的明细，无法下推采购入库")
+                try:
+                    unit_price = float(item.unit_price or 0)
+                except (TypeError, ValueError):
+                    raise ValidationError(
+                        f"物料 {item.material_code or item.material_name or item.id} 的单价无效，无法下推采购入库"
+                    )
+                material_wh = await resolve_primary_default_warehouse_from_material(
+                    tenant_id, material_id=int(item.material_id)
+                )
+                if not material_wh or not material_wh[0]:
+                    raise ValidationError(
+                        f"请为物料 {item.material_code or item.material_name or item.id} 维护默认仓库"
+                    )
+                line_wh_id, line_wh_name = int(material_wh[0]), material_wh[1]
+                if not line_wh_name:
+                    line_wh_name = await _resolve_warehouse_name_by_id(tenant_id, line_wh_id)
+                loc_id, loc_code = await _default_location_if_required(
+                    tenant_id,
+                    line_wh_id,
+                    material_label=str(item.material_code or item.material_name or item.id),
+                )
+                if header_wh_id is None:
+                    header_wh_id = line_wh_id
+                    header_wh_name = line_wh_name
+                snapshot = await purchase_service._resolve_po_item_receipt_snapshot(tenant_id, item)
+                receipt_items.append(
+                    PurchaseReceiptItemCreate(
+                        purchase_order_item_id=int(item.id),
+                        material_id=item.material_id,
+                        material_code=snapshot["material_code"],
+                        material_name=snapshot["material_name"],
+                        material_unit=snapshot["material_unit"],
+                        receipt_quantity=qty,
+                        unit_price=unit_price,
+                        total_amount=qty * unit_price,
+                        qualified_quantity=qty,
+                        unqualified_quantity=0,
+                        warehouse_id=line_wh_id,
+                        warehouse_name=line_wh_name,
+                        location_id=loc_id,
+                        location_code=loc_code,
+                    )
+                )
+            if not receipt_items or header_wh_id is None:
+                continue
+            created = await self.create_purchase_receipt(
+                tenant_id=tenant_id,
+                receipt_data=PurchaseReceiptCreate(
+                    purchase_order_id=primary.id,
+                    purchase_order_code=primary.order_code,
+                    supplier_id=primary.supplier_id,
+                    supplier_name=primary.supplier_name,
+                    warehouse_id=header_wh_id,
+                    warehouse_name=header_wh_name or await _resolve_warehouse_name_by_id(
+                        tenant_id, header_wh_id
+                    ),
+                    status="草稿",
+                    review_status="待审核",
+                    notes=f"从采购订单 {source_codes} 下推生成",
+                    items=receipt_items,
+                ),
+                created_by=created_by,
+            )
+            for oid in source_order_ids[1:]:
+                source = order_by_id[oid]
+                try:
+                    await DocumentRelationNewService().create_relation(
+                        tenant_id=tenant_id,
+                        relation_data=DocumentRelationCreate(
+                            source_type="purchase_order",
+                            source_id=source.id,
+                            source_code=source.order_code,
+                            target_type="purchase_receipt",
+                            target_id=created.id,
+                            target_code=created.receipt_code,
+                            relation_type="source",
+                            relation_mode="push",
+                            relation_desc="采购订单下推采购入库单",
+                        ),
+                        created_by=created_by,
+                    )
+                except Exception as rel_err:
+                    logger.warning("建立采购订单→采购入库关联失败: %s", rel_err)
+            receipts_out.append({
+                "receipt_id": created.id,
+                "receipt_code": created.receipt_code,
+                "order_id": primary.id,
+                "order_code": primary.order_code,
+            })
+        if not receipts_out:
+            raise BusinessLogicError("所选明细无法生成采购入库单")
+        first = receipts_out[0]
+        msg = (
+            f"转单成功，共生成 {len(receipts_out)} 张采购入库单"
+            if len(receipts_out) > 1
+            else "采购入库单创建成功"
+        )
+        return {
+            "success": True,
+            "message": msg,
+            "receipt_id": first["receipt_id"],
+            "receipt_code": first["receipt_code"],
+            "receipts": receipts_out,
+        }
+
+    async def list_receipt_notice_receipt_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        notice_id: Optional[int] = None,
+        pullable_only: bool = True,
+    ) -> Dict[str, Any]:
+        """开口收货通知行：可转采购入库的剩余明细。"""
+        from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
+        from apps.kuaizhizao.models.receipt_notice_item import ReceiptNoticeItem
+        from apps.kuaizhizao.services.document_action_policy.receipt_notice import (
+            derive_receipt_notice_capabilities,
+        )
+
+        notice_query = ReceiptNotice.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if notice_id is not None:
+            notice_query = notice_query.filter(id=int(notice_id))
+        notices = await notice_query.only(
+            "id", "notice_code", "status", "supplier_id", "supplier_name",
+            "purchase_order_id", "purchase_order_code", "purchase_receipt_id",
+        )
+        notice_by_id = {int(n.id): n for n in notices}
+        if not notice_by_id:
+            return {"data": [], "total": 0}
+        items = await ReceiptNoticeItem.filter(
+            tenant_id=tenant_id, notice_id__in=list(notice_by_id.keys())
+        ).all()
+        occupied_by_item = await occupied_purchase_receipt_qty_by_notice_item_ids(
+            tenant_id, [int(item.id) for item in items]
+        )
+        consumed_statuses = {"已通知", "已入库"}
+        kw = (keyword or "").strip().lower()
+        lines: List[Dict[str, Any]] = []
+        for item in items:
+            notice = notice_by_id.get(int(item.notice_id))
+            if not notice:
+                continue
+            qty = float(item.notice_quantity or 0)
+            if qty <= 0:
+                continue
+            occupied = float(occupied_by_item.get(int(item.id), 0))
+            status = str(notice.status or "").strip()
+            if status in consumed_statuses and occupied <= 0:
+                remaining = 0.0
+            else:
+                remaining = max(0.0, qty - occupied)
+            can_push = derive_receipt_notice_capabilities(
+                notice,
+                has_items=True,
+                has_warehouse=True,
+            ).notify.allowed
+            selectable = can_push and remaining > 0
+            if pullable_only and not selectable:
+                continue
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            material_spec = str(item.material_spec or "").strip()
+            if kw:
+                haystack = " ".join([material_code, material_name, material_spec]).lower()
+                if kw not in haystack:
+                    continue
+            lines.append(
+                {
+                    "id": int(item.id),
+                    "notice_id": int(item.notice_id),
+                    "notice_code": notice.notice_code,
+                    "purchase_order_id": notice.purchase_order_id,
+                    "purchase_order_code": notice.purchase_order_code,
+                    "supplier_id": notice.supplier_id,
+                    "supplier_name": notice.supplier_name,
+                    "material_id": item.material_id,
+                    "material_code": material_code,
+                    "material_name": material_name,
+                    "material_spec": material_spec or None,
+                    "unit": item.material_unit or "件",
+                    "suggested_quantity": qty,
+                    "pushed_quantity": occupied,
+                    "remaining_quantity": remaining,
+                }
+            )
+        lines.sort(
+            key=lambda r: (
+                str(r.get("notice_code") or ""),
+                str(r.get("material_code") or ""),
+                int(r.get("id") or 0),
+            )
+        )
+        return {"data": lines[skip : skip + limit], "total": len(lines)}
+
+    async def create_purchase_receipts_from_notice_items(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """按收货通知行 id 建采购入库单，可跨多张通知；同供应商合并一张。"""
+        from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
+        from apps.kuaizhizao.models.receipt_notice_item import ReceiptNoticeItem
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        from apps.kuaizhizao.services.document_action_policy.receipt_notice import (
+            assert_receipt_notice_capability,
+        )
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        from apps.master_data.services.material_service import (
+            resolve_primary_default_warehouse_from_material,
+        )
+
+        selected_ids = [int(v) for v in item_ids if v is not None]
+        if not selected_ids:
+            raise BusinessLogicError("请至少选择一条可入库收货通知明细")
+        items = await ReceiptNoticeItem.filter(tenant_id=tenant_id, id__in=selected_ids).all()
+        if not items:
+            raise BusinessLogicError("没有可入库的收货通知行")
+        notice_ids = sorted({int(i.notice_id) for i in items})
+        notices = await ReceiptNotice.filter(
+            tenant_id=tenant_id, id__in=notice_ids, deleted_at__isnull=True
+        ).all()
+        notice_by_id = {int(n.id): n for n in notices}
+        if len(notice_by_id) != len(notice_ids):
+            raise NotFoundError("收货通知单不存在")
+        occupied_by_item = await occupied_purchase_receipt_qty_by_notice_item_ids(tenant_id, selected_ids)
+        consumed_statuses = {"已通知", "已入库"}
+
+        def _max_receipt_qty(notice_item: ReceiptNoticeItem) -> float:
+            notice = notice_by_id[int(notice_item.notice_id)]
+            qty = float(notice_item.notice_quantity or 0)
+            occupied = float(occupied_by_item.get(int(notice_item.id), 0))
+            if str(notice.status or "").strip() in consumed_statuses and occupied <= 0:
+                return 0.0
+            return max(0.0, qty - occupied)
+
+        for notice in notices:
+            notice_items = [i for i in items if int(i.notice_id) == int(notice.id)]
+            has_line_warehouse = any(getattr(ni, "warehouse_id", None) for ni in notice_items)
+            assert_receipt_notice_capability(
+                notice,
+                "notify",
+                has_items=True,
+                has_warehouse=getattr(notice, "warehouse_id", None) is not None or has_line_warehouse,
+            )
+
+        groups: Dict[int, List[ReceiptNoticeItem]] = {}
+        for item in items:
+            groups.setdefault(int(notice_by_id[int(item.notice_id)].supplier_id or 0), []).append(item)
+
+        receipts_out: List[Dict[str, Any]] = []
+        created_by_notice: Dict[int, Any] = {}
+        for _sid, group_items in groups.items():
+            source_notice_ids = sorted({int(i.notice_id) for i in group_items})
+            primary = notice_by_id[source_notice_ids[0]]
+            source_codes = " ".join(notice_by_id[nid].notice_code for nid in source_notice_ids)
+            header_wh_id: Optional[int] = None
+            header_wh_name: Optional[str] = None
+            receipt_items: List[PurchaseReceiptItemCreate] = []
+            for item in group_items:
+                qty = _max_receipt_qty(item)
+                if qty <= 0:
+                    continue
+                if not item.material_id:
+                    raise ValidationError("收货通知存在缺失物料ID的明细，无法下推采购入库")
+                try:
+                    unit_price = float(item.unit_price or 0)
+                except (TypeError, ValueError):
+                    raise ValidationError(
+                        f"物料 {item.material_code or item.material_name or item.id} 的单价无效，无法下推采购入库"
+                    )
+                line_wh_id = int(item.warehouse_id) if getattr(item, "warehouse_id", None) else None
+                line_wh_name = getattr(item, "warehouse_name", None)
+                if line_wh_id is None:
+                    material_wh = await resolve_primary_default_warehouse_from_material(
+                        tenant_id, material_id=int(item.material_id)
+                    )
+                    if not material_wh or not material_wh[0]:
+                        raise ValidationError(
+                            f"请为物料 {item.material_code or item.material_name or item.id} 维护默认仓库"
+                        )
+                    line_wh_id, line_wh_name = int(material_wh[0]), material_wh[1]
+                if not line_wh_name:
+                    line_wh_name = await _resolve_warehouse_name_by_id(tenant_id, line_wh_id)
+                loc_id, loc_code = await _default_location_if_required(
+                    tenant_id,
+                    line_wh_id,
+                    material_label=str(item.material_code or item.material_name or item.id),
+                )
+                if header_wh_id is None:
+                    header_wh_id = line_wh_id
+                    header_wh_name = line_wh_name
+                receipt_items.append(
+                    PurchaseReceiptItemCreate(
+                        purchase_order_item_id=int(item.purchase_order_item_id or 0),
+                        receipt_notice_item_id=int(item.id),
+                        material_id=item.material_id,
+                        material_code=item.material_code,
+                        material_name=item.material_name,
+                        material_spec=item.material_spec,
+                        material_unit=item.material_unit or "件",
+                        receipt_quantity=qty,
+                        unit_price=unit_price,
+                        total_amount=qty * unit_price,
+                        qualified_quantity=qty,
+                        unqualified_quantity=0,
+                        warehouse_id=line_wh_id,
+                        warehouse_name=line_wh_name,
+                        location_id=loc_id,
+                        location_code=loc_code,
+                    )
+                )
+            if not receipt_items or header_wh_id is None:
+                continue
+            created = await self.create_purchase_receipt(
+                tenant_id=tenant_id,
+                receipt_data=PurchaseReceiptCreate(
+                    purchase_order_id=int(primary.purchase_order_id or 0),
+                    purchase_order_code=str(primary.purchase_order_code or ""),
+                    supplier_id=primary.supplier_id,
+                    supplier_name=primary.supplier_name,
+                    warehouse_id=header_wh_id,
+                    warehouse_name=header_wh_name or await _resolve_warehouse_name_by_id(
+                        tenant_id, header_wh_id
+                    ),
+                    status="草稿",
+                    review_status="待审核",
+                    notes=f"从收货通知 {source_codes} 下推生成",
+                    items=receipt_items,
+                ),
+                created_by=created_by,
+            )
+            for nid in source_notice_ids:
+                created_by_notice[nid] = created
+                source = notice_by_id[nid]
+                try:
+                    await DocumentRelationNewService().create_relation(
+                        tenant_id=tenant_id,
+                        relation_data=DocumentRelationCreate(
+                            source_type="receipt_notice",
+                            source_id=source.id,
+                            source_code=source.notice_code,
+                            target_type="purchase_receipt",
+                            target_id=created.id,
+                            target_code=created.receipt_code,
+                            relation_type="source",
+                            relation_mode="push",
+                            relation_desc="收货通知下推采购入库单",
+                        ),
+                        created_by=created_by,
+                    )
+                except Exception as rel_err:
+                    logger.warning("建立收货通知→采购入库关联失败: %s", rel_err)
+            receipts_out.append({
+                "receipt_id": created.id,
+                "receipt_code": created.receipt_code,
+                "notice_id": primary.id,
+                "notice_code": primary.notice_code,
+            })
+        if not receipts_out:
+            raise BusinessLogicError("所选明细无法生成采购入库单")
+        all_notice_items = await ReceiptNoticeItem.filter(
+            tenant_id=tenant_id, notice_id__in=notice_ids
+        ).all()
+        occupied_after = await occupied_purchase_receipt_qty_by_notice_item_ids(
+            tenant_id, [int(i.id) for i in all_notice_items]
+        )
+        for nid in notice_ids:
+            notice = notice_by_id[nid]
+            notice_items = [i for i in all_notice_items if int(i.notice_id) == nid]
+            remaining_any = False
+            for ni in notice_items:
+                qty = float(ni.notice_quantity or 0)
+                occupied = float(occupied_after.get(int(ni.id), 0))
+                if max(0.0, qty - occupied) > 0:
+                    remaining_any = True
+                    break
+            if remaining_any:
+                continue
+            created = created_by_notice.get(nid)
+            if created is None:
+                continue
+            await ReceiptNotice.filter(tenant_id=tenant_id, id=nid).update(
+                status="已通知",
+                notified_at=resolve_business_datetime(),
+                updated_by=created_by,
+                purchase_receipt_id=created.id,
+                purchase_receipt_code=created.receipt_code,
+            )
+        first = receipts_out[0]
+        msg = (
+            f"转单成功，共生成 {len(receipts_out)} 张采购入库单"
+            if len(receipts_out) > 1
+            else "采购入库单创建成功"
+        )
+        return {
+            "success": True,
+            "message": msg,
+            "receipt_id": first["receipt_id"],
+            "receipt_code": first["receipt_code"],
+            "receipts": receipts_out,
+        }
 
     async def get_purchase_receipt_by_id(self, tenant_id: int, receipt_id: int) -> PurchaseReceiptWithItemsResponse:
         """根据ID获取采购入库单（含明细）"""
@@ -7775,14 +9084,11 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                     batch_number = getattr(item_data, 'batch_number', None)
                     sales_delivery_item_id = getattr(item_data, "sales_delivery_item_id", None)
                     if sales_delivery_item_id:
-                        source_item_q = SalesDeliveryItem.filter(
+                        source_item = await SalesDeliveryItem.filter(
                             tenant_id=tenant_id,
                             id=sales_delivery_item_id,
                             deleted_at__isnull=True,
-                        )
-                        if sales_delivery_id:
-                            source_item_q = source_item_q.filter(delivery_id=sales_delivery_id)
-                        source_item = await source_item_q.first()
+                        ).first()
                         if not source_item:
                             raise ValidationError(
                                 f"销售退货失败：未找到关联的销售出库明细 {sales_delivery_item_id}"
@@ -7822,6 +9128,9 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         tenant_id=tenant_id,
                         return_id=return_obj.id,
                         sales_delivery_item_id=getattr(item_data, 'sales_delivery_item_id', None),
+                        sales_order_item_id=_optional_positive_int(
+                            getattr(item_data, "sales_order_item_id", None)
+                        ),
                         material_id=item_data.material_id,
                         material_code=material_code,
                         material_name=material_name,
@@ -7892,20 +9201,10 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         if not order_items:
             raise BusinessLogicError("销售订单没有明细，无法预览退货明细")
 
-        return_ids = await SalesReturn.filter(
-            tenant_id=tenant_id,
-            sales_order_id=sales_order_id,
-            deleted_at__isnull=True,
-        ).values_list("id", flat=True)
-        returned_by_material: Dict[int, float] = {}
-        if return_ids:
-            return_items = await SalesReturnItem.filter(
-                tenant_id=tenant_id,
-                return_id__in=list(return_ids),
-            ).all()
-            for ri in return_items:
-                mid = int(ri.material_id)
-                returned_by_material[mid] = returned_by_material.get(mid, 0.0) + float(ri.return_quantity or 0)
+        returned_by_item = await returned_qty_by_sales_order_item_ids(
+            tenant_id,
+            [int(item.id) for item in order_items],
+        )
 
         await _hydrate_item_material_snapshot(tenant_id, order_items)
 
@@ -7914,7 +9213,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             delivered = float(item.delivered_quantity or 0)
             if delivered <= 0:
                 continue
-            returned = returned_by_material.get(int(item.material_id), 0.0)
+            returned = returned_by_item.get(int(item.id), 0.0)
             pending = max(0.0, delivered - returned)
             if pending <= 0:
                 continue
@@ -8064,6 +9363,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                     total_amount=float(total_amount),
                     batch_number=batch_number,
                     sales_delivery_item_id=sales_delivery_item_id,
+                    sales_order_item_id=int(item.id),
                     status="待退货",
                 )
             )
@@ -8254,9 +9554,18 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             batch_number = str(line.batch_number or "").strip() or None
             unit_price = Decimal(str(line.unit_price or 0))
             total_amount = selected_qty * unit_price
+            delivery_item = await SalesDeliveryItem.get_or_none(
+                tenant_id=tenant_id,
+                id=item_id,
+                deleted_at__isnull=True,
+            )
+            so_item_id = _optional_positive_int(
+                getattr(delivery_item, "sales_order_item_id", None) if delivery_item else None
+            )
             return_items.append(
                 SalesReturnItemCreate(
                     sales_delivery_item_id=item_id,
+                    sales_order_item_id=so_item_id,
                     material_id=line.material_id,
                     material_code=line.material_code,
                     material_name=line.material_name,
@@ -8316,6 +9625,545 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             logger.warning("建立销售出库→销售退货关联失败: %s", rel_err)
 
         return created
+
+    async def list_sales_order_return_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        sales_order_id: Optional[int] = None,
+        pullable_only: bool = True,
+    ) -> Dict[str, Any]:
+        """开口销售订单行：已发货且未退完的明细。"""
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+        from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+        from apps.kuaizhizao.services.document_action_policy.sales_order import (
+            derive_sales_order_capabilities,
+        )
+
+        so_query = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if sales_order_id is not None:
+            so_query = so_query.filter(id=int(sales_order_id))
+        orders = await so_query.only(
+            "id", "order_code", "status", "review_status", "customer_id", "customer_name"
+        )
+        order_by_id = {int(o.id): o for o in orders}
+        if not order_by_id:
+            return {"data": [], "total": 0}
+
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id__in=list(order_by_id.keys())
+        ).all()
+        await _hydrate_item_material_snapshot(tenant_id, items)
+        returned_by_item = await returned_qty_by_sales_order_item_ids(
+            tenant_id, [int(item.id) for item in items]
+        )
+        kw = (keyword or "").strip().lower()
+        lines: List[Dict[str, Any]] = []
+        for item in items:
+            order = order_by_id.get(int(item.sales_order_id))
+            if not order:
+                continue
+            delivered = float(item.delivered_quantity or 0)
+            if delivered <= 0:
+                continue
+            pushed = returned_by_item.get(int(item.id), 0.0)
+            remaining = max(0.0, delivered - pushed)
+            can_push = derive_sales_order_capabilities(
+                order,
+                has_items=True,
+                has_returnable_qty=remaining > 0,
+            ).push_sales_return.allowed
+            selectable = can_push and remaining > 0
+            if pullable_only and not selectable:
+                continue
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            material_spec = str(item.material_spec or "").strip()
+            if kw:
+                haystack = " ".join([material_code, material_name, material_spec]).lower()
+                if kw not in haystack:
+                    continue
+            lines.append(
+                {
+                    "id": int(item.id),
+                    "sales_order_id": int(item.sales_order_id),
+                    "order_code": order.order_code,
+                    "customer_id": order.customer_id,
+                    "customer_name": order.customer_name,
+                    "material_id": item.material_id,
+                    "material_code": material_code,
+                    "material_name": material_name,
+                    "material_spec": material_spec or None,
+                    "unit": item.material_unit or "个",
+                    "suggested_quantity": delivered,
+                    "pushed_quantity": pushed,
+                    "remaining_quantity": remaining,
+                    "required_date": str(item.required_date) if getattr(item, "required_date", None) else None,
+                }
+            )
+        lines.sort(
+            key=lambda r: (
+                str(r.get("order_code") or ""),
+                str(r.get("material_code") or ""),
+                int(r.get("id") or 0),
+            )
+        )
+        return {"data": lines[skip : skip + limit], "total": len(lines)}
+
+    async def create_sales_returns_from_sales_order_items(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """按销售订单行 id 建销售退货单，可跨多张订单；同客户合并一张。"""
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+        from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        from apps.kuaizhizao.services.document_action_policy.sales_order import (
+            assert_sales_order_capability,
+        )
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        from apps.master_data.services.material_service import (
+            resolve_primary_default_warehouse_from_material,
+        )
+
+        selected_ids = [int(v) for v in item_ids if v is not None]
+        if not selected_ids:
+            raise BusinessLogicError("请至少选择一条可退货销售订单明细")
+        items = await SalesOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).all()
+        if not items:
+            raise BusinessLogicError("没有可退货的销售订单行")
+        order_ids = sorted({int(i.sales_order_id) for i in items})
+        orders = await SalesOrder.filter(
+            tenant_id=tenant_id, id__in=order_ids, deleted_at__isnull=True
+        ).all()
+        order_by_id = {int(o.id): o for o in orders}
+        if len(order_by_id) != len(order_ids):
+            raise NotFoundError("销售订单不存在")
+        await _hydrate_item_material_snapshot(tenant_id, items)
+        returned_by_item = await returned_qty_by_sales_order_item_ids(tenant_id, selected_ids)
+
+        def _max_return_qty(so_item: SalesOrderItem) -> float:
+            delivered = float(so_item.delivered_quantity or 0)
+            returned = returned_by_item.get(int(so_item.id), 0.0)
+            return max(0.0, delivered - returned)
+
+        for order in orders:
+            order_items = [i for i in items if int(i.sales_order_id) == int(order.id)]
+            has_returnable = any(_max_return_qty(i) > 0 for i in order_items)
+            assert_sales_order_capability(
+                order,
+                "push_sales_return",
+                has_items=True,
+                has_returnable_qty=has_returnable,
+            )
+
+        groups: Dict[int, List[SalesOrderItem]] = {}
+        for item in items:
+            groups.setdefault(int(order_by_id[int(item.sales_order_id)].customer_id or 0), []).append(item)
+
+        returns_out: List[Dict[str, Any]] = []
+        for _cid, group_items in groups.items():
+            source_order_ids = sorted({int(i.sales_order_id) for i in group_items})
+            primary = order_by_id[source_order_ids[0]]
+            source_codes = " ".join(order_by_id[oid].order_code for oid in source_order_ids)
+            header_wh_id: Optional[int] = None
+            header_wh_name: Optional[str] = None
+            header_delivery_ids: set[int] = set()
+            return_items: List[SalesReturnItemCreate] = []
+            for item in group_items:
+                qty = _max_return_qty(item)
+                if qty <= 0:
+                    continue
+                if not item.material_id:
+                    raise ValidationError("销售订单存在缺失物料ID的明细，无法下推销售退货")
+                try:
+                    unit_price = float(item.unit_price or 0)
+                except (TypeError, ValueError):
+                    raise ValidationError(
+                        f"物料 {item.material_code or item.material_name or item.id} 的单价无效，无法下推销售退货"
+                    )
+                material_wh = await resolve_primary_default_warehouse_from_material(
+                    tenant_id, material_id=int(item.material_id)
+                )
+                if not material_wh:
+                    raise ValidationError(
+                        f"请为物料 {item.material_code or item.material_name or item.id} 维护默认仓库"
+                    )
+                line_wh_id, line_wh_name = material_wh
+                if line_wh_id is None or int(line_wh_id) <= 0:
+                    raise ValidationError(
+                        f"请为物料 {item.material_code or item.material_name or item.id} 维护默认仓库"
+                    )
+                if header_wh_id is None:
+                    header_wh_id = int(line_wh_id)
+                    header_wh_name = line_wh_name or await _resolve_warehouse_name_by_id(
+                        tenant_id, int(line_wh_id)
+                    )
+                outbound_batches = await _list_sales_order_material_outbound_batches(
+                    tenant_id=tenant_id,
+                    sales_order_id=int(item.sales_order_id),
+                    material_id=int(item.material_id),
+                )
+                batch_number: Optional[str] = None
+                for row in outbound_batches:
+                    candidate = str(row.get("batch_number") or "").strip()
+                    if candidate:
+                        batch_number = candidate
+                        break
+                outbound_link = _resolve_outbound_link_for_batch(outbound_batches, batch_number)
+                sales_delivery_item_id = _optional_positive_int(
+                    outbound_link.get("sales_delivery_item_id") if outbound_link else None
+                )
+                item_delivery_id = _optional_positive_int(
+                    outbound_link.get("sales_delivery_id") if outbound_link else None
+                )
+                if item_delivery_id:
+                    header_delivery_ids.add(item_delivery_id)
+                return_items.append(
+                    SalesReturnItemCreate(
+                        sales_order_item_id=int(item.id),
+                        sales_delivery_item_id=sales_delivery_item_id,
+                        material_id=item.material_id,
+                        material_code=item.material_code,
+                        material_name=item.material_name,
+                        material_spec=item.material_spec,
+                        material_unit=item.material_unit or "个",
+                        return_quantity=qty,
+                        unit_price=unit_price,
+                        total_amount=qty * unit_price,
+                        batch_number=batch_number,
+                        status="待退货",
+                    )
+                )
+            if not return_items or header_wh_id is None:
+                continue
+            header_sales_delivery_id = next(iter(header_delivery_ids)) if len(header_delivery_ids) == 1 else None
+            created = await self.create_sales_return(
+                tenant_id=tenant_id,
+                return_data=SalesReturnCreate(
+                    sales_delivery_id=header_sales_delivery_id,
+                    sales_order_id=primary.id,
+                    sales_order_code=primary.order_code,
+                    customer_id=primary.customer_id,
+                    customer_name=primary.customer_name,
+                    warehouse_id=header_wh_id,
+                    warehouse_name=header_wh_name or await _resolve_warehouse_name_by_id(
+                        tenant_id, header_wh_id
+                    ),
+                    status="待退货",
+                    return_reason="订单退货",
+                    notes=f"从销售订单 {source_codes} 下推生成",
+                    items=return_items,
+                ),
+                created_by=created_by,
+            )
+            for oid in source_order_ids:
+                source = order_by_id[oid]
+                try:
+                    await DocumentRelationNewService().create_relation(
+                        tenant_id=tenant_id,
+                        relation_data=DocumentRelationCreate(
+                            source_type="sales_order",
+                            source_id=source.id,
+                            source_code=source.order_code,
+                            target_type="sales_return",
+                            target_id=created.id,
+                            target_code=created.return_code,
+                            relation_type="source",
+                            relation_mode="push",
+                            relation_desc="销售订单下推销售退货单",
+                        ),
+                        created_by=created_by,
+                    )
+                except Exception as rel_err:
+                    logger.warning("建立销售订单→销售退货关联失败: %s", rel_err)
+            returns_out.append({
+                "return_id": created.id,
+                "return_code": created.return_code,
+                "order_id": primary.id,
+                "order_code": primary.order_code,
+            })
+        if not returns_out:
+            raise BusinessLogicError("所选明细无法生成销售退货单")
+        first = returns_out[0]
+        msg = (
+            f"转单成功，共生成 {len(returns_out)} 张销售退货单"
+            if len(returns_out) > 1
+            else "销售退货单创建成功"
+        )
+        return {
+            "success": True,
+            "message": msg,
+            "return_id": first["return_id"],
+            "return_code": first["return_code"],
+            "returns": returns_out,
+        }
+
+    async def list_sales_delivery_return_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        sales_delivery_id: Optional[int] = None,
+        pullable_only: bool = True,
+    ) -> Dict[str, Any]:
+        """开口销售出库行：已出库且未退完的明细。"""
+        delivery_query = SalesDelivery.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if sales_delivery_id is not None:
+            delivery_query = delivery_query.filter(id=int(sales_delivery_id))
+        deliveries = await delivery_query.only(
+            "id",
+            "delivery_code",
+            "status",
+            "customer_id",
+            "customer_name",
+            "delivery_date",
+            "sales_order_id",
+            "sales_order_code",
+        )
+        delivery_by_id = {int(row.id): row for row in deliveries}
+        if not delivery_by_id:
+            return {"data": [], "total": 0}
+
+        items = await SalesDeliveryItem.filter(
+            tenant_id=tenant_id,
+            delivery_id__in=list(delivery_by_id.keys()),
+            deleted_at__isnull=True,
+        ).all()
+        await _hydrate_item_material_snapshot(tenant_id, items)
+        returned_by_item = await _sum_returned_qty_by_delivery_item_ids(
+            tenant_id, [int(item.id) for item in items]
+        )
+        kw = (keyword or "").strip().lower()
+        lines: List[Dict[str, Any]] = []
+        for item in items:
+            delivery = delivery_by_id.get(int(item.delivery_id))
+            if not delivery:
+                continue
+            delivered = float(item.delivery_quantity or 0)
+            if delivered <= 0:
+                continue
+            pushed = returned_by_item.get(int(item.id), 0.0)
+            remaining = max(0.0, delivered - pushed)
+            status = str(delivery.status or "").strip()
+            selectable = (
+                status in _SALES_OUTBOUND_CLOSED_STATUSES
+                and bool(delivery.customer_id)
+                and remaining > 0
+            )
+            if pullable_only and not selectable:
+                continue
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            material_spec = str(item.material_spec or "").strip()
+            if kw:
+                haystack = " ".join([material_code, material_name, material_spec]).lower()
+                if kw not in haystack:
+                    continue
+            lines.append(
+                {
+                    "id": int(item.id),
+                    "sales_delivery_id": int(item.delivery_id),
+                    "delivery_code": delivery.delivery_code,
+                    "sales_order_id": delivery.sales_order_id,
+                    "sales_order_code": delivery.sales_order_code,
+                    "customer_id": delivery.customer_id,
+                    "customer_name": delivery.customer_name,
+                    "material_id": item.material_id,
+                    "material_code": material_code,
+                    "material_name": material_name,
+                    "material_spec": material_spec or None,
+                    "unit": item.material_unit or "个",
+                    "suggested_quantity": delivered,
+                    "pushed_quantity": pushed,
+                    "remaining_quantity": remaining,
+                    "required_date": str(delivery.delivery_date) if delivery.delivery_date else None,
+                }
+            )
+        lines.sort(
+            key=lambda r: (
+                str(r.get("delivery_code") or ""),
+                str(r.get("material_code") or ""),
+                int(r.get("id") or 0),
+            )
+        )
+        return {"data": lines[skip : skip + limit], "total": len(lines)}
+
+    async def create_sales_returns_from_sales_delivery_items(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """按销售出库行 id 建销售退货单，可跨多张出库单；同客户合并一张。"""
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        from apps.master_data.services.material_service import (
+            resolve_primary_default_warehouse_from_material,
+        )
+
+        selected_ids = [int(v) for v in item_ids if v is not None]
+        if not selected_ids:
+            raise BusinessLogicError("请至少选择一条可退货销售出库明细")
+        items = await SalesDeliveryItem.filter(
+            tenant_id=tenant_id,
+            id__in=selected_ids,
+            deleted_at__isnull=True,
+        ).all()
+        if not items:
+            raise BusinessLogicError("没有可退货的销售出库行")
+        delivery_ids = sorted({int(i.delivery_id) for i in items})
+        deliveries = await SalesDelivery.filter(
+            tenant_id=tenant_id, id__in=delivery_ids, deleted_at__isnull=True
+        ).all()
+        delivery_by_id = {int(d.id): d for d in deliveries}
+        if len(delivery_by_id) != len(delivery_ids):
+            raise NotFoundError("销售出库单不存在")
+        await _hydrate_item_material_snapshot(tenant_id, items)
+        returned_by_item = await _sum_returned_qty_by_delivery_item_ids(tenant_id, selected_ids)
+
+        def _max_return_qty(delivery_item: SalesDeliveryItem) -> float:
+            delivered = float(delivery_item.delivery_quantity or 0)
+            returned = returned_by_item.get(int(delivery_item.id), 0.0)
+            return max(0.0, delivered - returned)
+
+        for delivery in deliveries:
+            status = str(delivery.status or "").strip()
+            if status not in _SALES_OUTBOUND_CLOSED_STATUSES:
+                raise BusinessLogicError("仅已出库的销售出库单可创建销售退货单")
+            if not delivery.customer_id:
+                raise BusinessLogicError(f"销售出库单 {delivery.delivery_code} 缺少客户，无法下推销售退货")
+            delivery_items = [i for i in items if int(i.delivery_id) == int(delivery.id)]
+            if not any(_max_return_qty(i) > 0 for i in delivery_items):
+                raise BusinessLogicError(f"销售出库单 {delivery.delivery_code} 没有可退货明细")
+
+        groups: Dict[int, List[SalesDeliveryItem]] = {}
+        for item in items:
+            groups.setdefault(int(delivery_by_id[int(item.delivery_id)].customer_id or 0), []).append(item)
+
+        returns_out: List[Dict[str, Any]] = []
+        for _cid, group_items in groups.items():
+            source_delivery_ids = sorted({int(i.delivery_id) for i in group_items})
+            primary = delivery_by_id[source_delivery_ids[0]]
+            source_codes = " ".join(delivery_by_id[did].delivery_code for did in source_delivery_ids)
+            header_wh_id: Optional[int] = None
+            header_wh_name: Optional[str] = None
+            return_items: List[SalesReturnItemCreate] = []
+            for item in group_items:
+                qty = _max_return_qty(item)
+                if qty <= 0:
+                    continue
+                if not item.material_id:
+                    raise ValidationError("销售出库单存在缺失物料ID的明细，无法下推销售退货")
+                try:
+                    unit_price = float(item.unit_price or 0)
+                except (TypeError, ValueError):
+                    raise ValidationError(
+                        f"物料 {item.material_code or item.material_name or item.id} 的单价无效，无法下推销售退货"
+                    )
+                material_wh = await resolve_primary_default_warehouse_from_material(
+                    tenant_id, material_id=int(item.material_id)
+                )
+                if not material_wh:
+                    raise ValidationError(
+                        f"请为物料 {item.material_code or item.material_name or item.id} 维护默认仓库"
+                    )
+                line_wh_id, line_wh_name = material_wh
+                if line_wh_id is None or int(line_wh_id) <= 0:
+                    raise ValidationError(
+                        f"请为物料 {item.material_code or item.material_name or item.id} 维护默认仓库"
+                    )
+                if header_wh_id is None:
+                    header_wh_id = int(line_wh_id)
+                    header_wh_name = line_wh_name or await _resolve_warehouse_name_by_id(
+                        tenant_id, int(line_wh_id)
+                    )
+                return_items.append(
+                    SalesReturnItemCreate(
+                        sales_delivery_item_id=int(item.id),
+                        sales_order_item_id=_optional_positive_int(getattr(item, "sales_order_item_id", None)),
+                        material_id=item.material_id,
+                        material_code=item.material_code,
+                        material_name=item.material_name,
+                        material_spec=item.material_spec,
+                        material_unit=item.material_unit or "个",
+                        return_quantity=qty,
+                        unit_price=unit_price,
+                        total_amount=qty * unit_price,
+                        batch_number=str(getattr(item, "batch_number", None) or "").strip() or None,
+                        status="待退货",
+                    )
+                )
+            if not return_items or header_wh_id is None:
+                continue
+            created = await self.create_sales_return(
+                tenant_id=tenant_id,
+                return_data=SalesReturnCreate(
+                    sales_delivery_id=primary.id,
+                    sales_delivery_code=primary.delivery_code,
+                    sales_order_id=primary.sales_order_id,
+                    sales_order_code=primary.sales_order_code,
+                    customer_id=primary.customer_id,
+                    customer_name=primary.customer_name,
+                    warehouse_id=header_wh_id,
+                    warehouse_name=header_wh_name or await _resolve_warehouse_name_by_id(
+                        tenant_id, header_wh_id
+                    ),
+                    status="待退货",
+                    return_reason="出库退货",
+                    notes=f"从销售出库单 {source_codes} 下推生成",
+                    items=return_items,
+                ),
+                created_by=created_by,
+            )
+            for did in source_delivery_ids:
+                source = delivery_by_id[did]
+                try:
+                    await DocumentRelationNewService().create_relation(
+                        tenant_id=tenant_id,
+                        relation_data=DocumentRelationCreate(
+                            source_type="sales_delivery",
+                            source_id=source.id,
+                            source_code=source.delivery_code,
+                            target_type="sales_return",
+                            target_id=created.id,
+                            target_code=created.return_code,
+                            relation_type="source",
+                            relation_mode="push",
+                            relation_desc="销售出库单下推销售退货单",
+                        ),
+                        created_by=created_by,
+                    )
+                except Exception as rel_err:
+                    logger.warning("建立销售出库→销售退货关联失败: %s", rel_err)
+            returns_out.append({
+                "return_id": created.id,
+                "return_code": created.return_code,
+                "delivery_id": primary.id,
+                "delivery_code": primary.delivery_code,
+            })
+        if not returns_out:
+            raise BusinessLogicError("所选明细无法生成销售退货单")
+        first = returns_out[0]
+        msg = (
+            f"转单成功，共生成 {len(returns_out)} 张销售退货单"
+            if len(returns_out) > 1
+            else "销售退货单创建成功"
+        )
+        return {
+            "success": True,
+            "message": msg,
+            "return_id": first["return_id"],
+            "return_code": first["return_code"],
+            "returns": returns_out,
+        }
 
     async def list_customer_outbound_batches_for_return(
         self,
@@ -9040,6 +10888,9 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         tenant_id=tenant_id,
                         return_id=return_obj.id,
                         sales_delivery_item_id=getattr(item_data, "sales_delivery_item_id", None),
+                        sales_order_item_id=_optional_positive_int(
+                            getattr(item_data, "sales_order_item_id", None)
+                        ),
                         material_id=item_data.material_id,
                         material_code=material_code,
                         material_name=material_name,
@@ -9276,6 +11127,9 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                         tenant_id=tenant_id,
                         return_id=return_obj.id,
                         purchase_receipt_item_id=getattr(item_data, 'purchase_receipt_item_id', None),
+                        purchase_order_item_id=_optional_positive_int(
+                            getattr(item_data, "purchase_order_item_id", None)
+                        ),
                         material_id=item_data.material_id,
                         material_code=item_data.material_code,
                         material_name=item_data.material_name,
@@ -9361,27 +11215,17 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
         if not order_items:
             raise BusinessLogicError("采购订单没有明细，无法下推采购退货单")
 
-        return_ids = await PurchaseReturn.filter(
-            tenant_id=tenant_id,
-            purchase_order_id=purchase_order_id,
-            deleted_at__isnull=True,
-        ).exclude(status="已取消").values_list("id", flat=True)
-        returned_by_material: Dict[int, float] = {}
-        if return_ids:
-            return_items = await PurchaseReturnItem.filter(
-                tenant_id=tenant_id,
-                return_id__in=list(return_ids),
-            ).all()
-            for ri in return_items:
-                mid = int(ri.material_id)
-                returned_by_material[mid] = returned_by_material.get(mid, 0.0) + float(ri.return_quantity or 0)
+        returned_by_item = await returned_qty_by_purchase_order_item_ids(
+            tenant_id,
+            [int(item.id) for item in order_items],
+        )
 
         return_items: List[PurchaseReturnItemCreate] = []
         for item in order_items:
             received_qty = Decimal(str(item.received_quantity or 0))
             if received_qty <= 0:
                 continue
-            returned_qty = Decimal(str(returned_by_material.get(int(item.material_id), 0.0)))
+            returned_qty = Decimal(str(returned_by_item.get(int(item.id), 0.0)))
             max_return_qty = received_qty - returned_qty
             if max_return_qty <= 0:
                 continue
@@ -9399,6 +11243,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             total_amount = selected_qty * unit_price
             return_items.append(
                 PurchaseReturnItemCreate(
+                    purchase_order_item_id=int(item.id),
                     material_id=item.material_id,
                     material_code=item.material_code,
                     material_name=item.material_name,
@@ -9450,6 +11295,256 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             logger.warning("建立采购订单→采购退货关联失败: %s", rel_err)
 
         return created
+
+    async def list_purchase_return_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        order_id: Optional[int] = None,
+        pullable_only: bool = True,
+    ) -> Dict[str, Any]:
+        """开口采购订单行：已入库且未退完的明细。"""
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+        from apps.kuaizhizao.services.document_action_policy.purchase_order import (
+            derive_purchase_order_capabilities,
+        )
+
+        po_query = PurchaseOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if order_id is not None:
+            po_query = po_query.filter(id=int(order_id))
+        orders = await po_query.only("id", "order_code", "status", "review_status", "supplier_id", "supplier_name")
+        order_by_id = {int(o.id): o for o in orders}
+        if not order_by_id:
+            return {"data": [], "total": 0}
+
+        items = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id, order_id__in=list(order_by_id.keys())
+        ).all()
+        returned_by_item = await returned_qty_by_purchase_order_item_ids(
+            tenant_id, [int(item.id) for item in items]
+        )
+        kw = (keyword or "").strip().lower()
+        lines: List[Dict[str, Any]] = []
+        for item in items:
+            order = order_by_id.get(int(item.order_id))
+            if not order:
+                continue
+            received = float(item.received_quantity or 0)
+            if received <= 0:
+                continue
+            pushed = returned_by_item.get(int(item.id), 0.0)
+            remaining = max(0.0, received - pushed)
+            can_push = derive_purchase_order_capabilities(
+                order,
+                has_items=True,
+                has_received=received > 0,
+                has_returnable=remaining > 0,
+            ).push_purchase_return.allowed
+            selectable = can_push and remaining > 0
+            if pullable_only and not selectable:
+                continue
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            material_spec = str(item.material_spec or "").strip()
+            if kw:
+                haystack = " ".join([material_code, material_name, material_spec]).lower()
+                if kw not in haystack:
+                    continue
+            lines.append(
+                {
+                    "id": int(item.id),
+                    "order_id": int(item.order_id),
+                    "order_code": order.order_code,
+                    "supplier_id": order.supplier_id,
+                    "supplier_name": order.supplier_name,
+                    "material_id": item.material_id,
+                    "material_code": material_code,
+                    "material_name": material_name,
+                    "material_spec": material_spec or None,
+                    "unit": item.unit or "件",
+                    "suggested_quantity": received,
+                    "pushed_quantity": pushed,
+                    "remaining_quantity": remaining,
+                    "required_date": str(item.required_date) if item.required_date else None,
+                }
+            )
+        lines.sort(
+            key=lambda r: (
+                str(r.get("order_code") or ""),
+                str(r.get("material_code") or ""),
+                int(r.get("id") or 0),
+            )
+        )
+        return {"data": lines[skip : skip + limit], "total": len(lines)}
+
+    async def create_purchase_returns_from_po_items(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """按采购订单行 id 建采购退货单，可跨多张订单；同供应商合并一张。"""
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        from apps.kuaizhizao.services.document_action_policy.purchase_order import (
+            assert_purchase_order_capability,
+        )
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        from apps.master_data.services.material_service import (
+            resolve_primary_default_warehouse_from_material,
+        )
+
+        selected_ids = [int(v) for v in item_ids if v is not None]
+        if not selected_ids:
+            raise BusinessLogicError("请至少选择一条可退货采购订单明细")
+        items = await PurchaseOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).all()
+        if not items:
+            raise BusinessLogicError("没有可退货的采购订单行")
+        order_ids = sorted({int(i.order_id) for i in items})
+        orders = await PurchaseOrder.filter(
+            tenant_id=tenant_id, id__in=order_ids, deleted_at__isnull=True
+        ).all()
+        order_by_id = {int(o.id): o for o in orders}
+        if len(order_by_id) != len(order_ids):
+            raise NotFoundError("采购订单不存在")
+        returned_by_item = await returned_qty_by_purchase_order_item_ids(tenant_id, selected_ids)
+
+        def _max_return_qty(po_item: PurchaseOrderItem) -> float:
+            received = float(po_item.received_quantity or 0)
+            returned = returned_by_item.get(int(po_item.id), 0.0)
+            return max(0.0, received - returned)
+
+        for order in orders:
+            order_items = [i for i in items if int(i.order_id) == int(order.id)]
+            has_received = any(float(i.received_quantity or 0) > 0 for i in order_items)
+            has_returnable = any(_max_return_qty(i) > 0 for i in order_items)
+            assert_purchase_order_capability(
+                order,
+                "push_purchase_return",
+                has_items=True,
+                has_received=has_received,
+                has_returnable=has_returnable,
+            )
+
+        groups: Dict[int, List[PurchaseOrderItem]] = {}
+        for item in items:
+            groups.setdefault(int(order_by_id[int(item.order_id)].supplier_id or 0), []).append(item)
+
+        returns_out: List[Dict[str, Any]] = []
+        for _sid, group_items in groups.items():
+            source_order_ids = sorted({int(i.order_id) for i in group_items})
+            primary = order_by_id[source_order_ids[0]]
+            source_codes = " ".join(order_by_id[oid].order_code for oid in source_order_ids)
+            header_wh_id: Optional[int] = None
+            header_wh_name: Optional[str] = None
+            return_items: List[PurchaseReturnItemCreate] = []
+            for item in group_items:
+                qty = _max_return_qty(item)
+                if qty <= 0:
+                    continue
+                if not item.material_id:
+                    raise ValidationError("采购订单存在缺失物料ID的明细，无法下推采购退货")
+                try:
+                    unit_price = float(item.unit_price or 0)
+                except (TypeError, ValueError):
+                    raise ValidationError(
+                        f"物料 {item.material_code or item.material_name or item.id} 的单价无效，无法下推采购退货"
+                    )
+                material_wh = await resolve_primary_default_warehouse_from_material(
+                    tenant_id, material_id=int(item.material_id)
+                )
+                if not material_wh:
+                    raise ValidationError(
+                        f"请为物料 {item.material_code or item.material_name or item.id} 维护默认仓库"
+                    )
+                line_wh_id, line_wh_name = material_wh
+                if line_wh_id is None or int(line_wh_id) <= 0:
+                    raise ValidationError(
+                        f"请为物料 {item.material_code or item.material_name or item.id} 维护默认仓库"
+                    )
+                if header_wh_id is None:
+                    header_wh_id = int(line_wh_id)
+                    header_wh_name = line_wh_name or await _resolve_warehouse_name_by_id(
+                        tenant_id, int(line_wh_id)
+                    )
+                return_items.append(
+                    PurchaseReturnItemCreate(
+                        purchase_order_item_id=int(item.id),
+                        material_id=item.material_id,
+                        material_code=item.material_code,
+                        material_name=item.material_name,
+                        material_spec=item.material_spec,
+                        material_unit=item.unit or "件",
+                        return_quantity=qty,
+                        unit_price=unit_price,
+                        total_amount=qty * unit_price,
+                        status="待退货",
+                    )
+                )
+            if not return_items or header_wh_id is None:
+                continue
+            created = await self.create_purchase_return(
+                tenant_id=tenant_id,
+                return_data=PurchaseReturnCreate(
+                    purchase_order_id=primary.id,
+                    purchase_order_code=primary.order_code,
+                    supplier_id=primary.supplier_id,
+                    supplier_name=primary.supplier_name,
+                    warehouse_id=header_wh_id,
+                    warehouse_name=header_wh_name or await _resolve_warehouse_name_by_id(
+                        tenant_id, header_wh_id
+                    ),
+                    status="待退货",
+                    return_reason="订单退货",
+                    notes=f"从采购订单 {source_codes} 下推生成",
+                    items=return_items,
+                ),
+                created_by=created_by,
+            )
+            for oid in source_order_ids:
+                source = order_by_id[oid]
+                try:
+                    await DocumentRelationNewService().create_relation(
+                        tenant_id=tenant_id,
+                        relation_data=DocumentRelationCreate(
+                            source_type="purchase_order",
+                            source_id=source.id,
+                            source_code=source.order_code,
+                            target_type="purchase_return",
+                            target_id=created.id,
+                            target_code=created.return_code,
+                            relation_type="source",
+                            relation_mode="push",
+                            relation_desc="采购订单下推采购退货单",
+                        ),
+                        created_by=created_by,
+                    )
+                except Exception as rel_err:
+                    logger.warning("建立采购订单→采购退货关联失败: %s", rel_err)
+            returns_out.append({
+                "return_id": created.id,
+                "return_code": created.return_code,
+                "order_id": primary.id,
+                "order_code": primary.order_code,
+            })
+        if not returns_out:
+            raise BusinessLogicError("所选明细无法生成采购退货单")
+        first = returns_out[0]
+        msg = (
+            f"转单成功，共生成 {len(returns_out)} 张采购退货单"
+            if len(returns_out) > 1
+            else "采购退货单创建成功"
+        )
+        return {
+            "success": True,
+            "message": msg,
+            "return_id": first["return_id"],
+            "return_code": first["return_code"],
+            "returns": returns_out,
+        }
 
     async def get_purchase_return_by_id(self, tenant_id: int, return_id: int) -> PurchaseReturnResponse:
         """根据ID获取采购退货单"""
@@ -9819,6 +11914,9 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                         tenant_id=tenant_id,
                         return_id=return_obj.id,
                         purchase_receipt_item_id=getattr(item_data, "purchase_receipt_item_id", None),
+                        purchase_order_item_id=_optional_positive_int(
+                            getattr(item_data, "purchase_order_item_id", None)
+                        ),
                         material_id=item_data.material_id,
                         material_code=item_data.material_code,
                         material_name=item_data.material_name,
@@ -10328,6 +12426,33 @@ class OtherInboundService(AppBaseService[OtherInbound]):
             except Exception as cost_e:
                 logger.warning("其他入库确认-成本处理失败: %s", cost_e)
 
+            try:
+                from apps.kuaicaiwu.services.finance_integration_hooks import (
+                    record_finance_accounting_event,
+                )
+
+                inbound_fresh = await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
+                amount = Decimal("0")
+                for it in await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id):
+                    amount += Decimal(str(getattr(it, "amount", 0) or getattr(it, "inbound_amount", 0) or 0))
+                await record_finance_accounting_event(
+                    tenant_id=tenant_id,
+                    event_type="WAREHOUSE_INBOUND",
+                    business_type="inventory",
+                    source_doc_type="other_inbound",
+                    source_doc_id=inbound_id,
+                    source_doc_code=getattr(inbound_fresh, "inbound_code", None),
+                    target_doc_type="other_inbound",
+                    target_doc_id=inbound_id,
+                    target_doc_code=getattr(inbound_fresh, "inbound_code", None),
+                    amount=amount or None,
+                    operator_id=confirmed_by,
+                    notes=f"其他入库确认 {getattr(inbound_fresh, 'inbound_code', inbound_id)}",
+                    payload={"supplier_id": getattr(inbound_fresh, "supplier_id", None)},
+                )
+            except Exception as ev_e:
+                logger.warning("其他入库确认-会计事件失败: %s", ev_e)
+
             return OtherInboundResponse.model_validate(
                 await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
             )
@@ -10747,6 +12872,32 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             except Exception as cost_e:
                 logger.error("其他出库确认-成本回写失败: %s", cost_e)
                 raise BusinessLogicError(f"出库成本回写失败: {cost_e}")
+
+            try:
+                from apps.kuaicaiwu.services.finance_integration_hooks import (
+                    record_finance_accounting_event,
+                )
+
+                outbound_fresh = await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)
+                amount = Decimal("0")
+                for it in await OtherOutboundItem.filter(tenant_id=tenant_id, outbound_id=outbound_id):
+                    amount += Decimal(str(getattr(it, "amount", 0) or getattr(it, "outbound_amount", 0) or 0))
+                await record_finance_accounting_event(
+                    tenant_id=tenant_id,
+                    event_type="WAREHOUSE_OUTBOUND",
+                    business_type="inventory",
+                    source_doc_type="other_outbound",
+                    source_doc_id=outbound_id,
+                    source_doc_code=getattr(outbound_fresh, "outbound_code", None),
+                    target_doc_type="other_outbound",
+                    target_doc_id=outbound_id,
+                    target_doc_code=getattr(outbound_fresh, "outbound_code", None),
+                    amount=amount or None,
+                    operator_id=confirmed_by,
+                    notes=f"其他出库确认 {getattr(outbound_fresh, 'outbound_code', outbound_id)}",
+                )
+            except Exception as ev_e:
+                logger.warning("其他出库确认-会计事件失败: %s", ev_e)
 
             return OtherOutboundResponse.model_validate(
                 await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)

@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { ProDescriptions } from '@ant-design/pro-components';
-import { Button, message, Statistic, Row, Col, Spin, Empty, Typography, Space } from 'antd';
+import { Button, Statistic, Row, Col, Spin, Empty, Typography, Space } from 'antd';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import { receivableService } from '../../../services/finance/receivable';
 import { Receivable } from '../../../types/finance/receivable';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -28,6 +29,7 @@ const RECEIVABLE_RESOURCE = 'kuaicaiwu:receivable';
 
 const ReceivableDetail: React.FC = () => {
   const { t } = useTranslation();
+  const linked = useLinkedDocumentDetail();
   const receivablePerms = useResourcePermissions(RECEIVABLE_RESOURCE);
   const salesInvoicePerms = useResourcePermissions('kuaicaiwu:sales-invoice');
   const { id } = useParams<{ id: string }>();
@@ -213,9 +215,7 @@ const ReceivableDetail: React.FC = () => {
                   {documentTracking.data && (
                     <DocumentTrackingRelationsBody
                       data={documentTracking.data}
-                      onDocumentClick={(docType, docId) =>
-                        message.info(t('app.kuaicaiwu.common.openLinkedDoc', { docType, docId }))
-                      }
+                      onDocumentClick={(docType, docId) => linked.openLinkedDocumentDetail(docType, docId)}
                     />
                   )}
                 </div>

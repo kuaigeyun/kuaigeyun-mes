@@ -116,3 +116,45 @@ export function formatBankDirection(
   if (direction === 'out' || direction === '支出') return t('app.kuaicaiwu.financeUi.bankDirection.out');
   return direction ?? '—';
 }
+
+const NOTE_BILL_TYPE_I18N_KEY: Record<string, string> = {
+  bank_acceptance: 'app.kuaicaiwu.notes.billType.bankAcceptance',
+  commercial_acceptance: 'app.kuaicaiwu.notes.billType.commercialAcceptance',
+};
+
+export function formatNoteBillType(value: string | null | undefined, t: TFunction): string {
+  if (!value) return '—';
+  const i18nKey = NOTE_BILL_TYPE_I18N_KEY[value];
+  return i18nKey ? t(i18nKey) : value;
+}
+
+export function getNoteBillTypeSelectOptions(t: TFunction) {
+  return Object.keys(NOTE_BILL_TYPE_I18N_KEY).map((value) => ({
+    label: formatNoteBillType(value, t),
+    value,
+  }));
+}
+
+const NOTE_STATUS_I18N_KEY: Record<string, string> = {
+  held: 'app.kuaicaiwu.notes.status.held',
+  endorsed: 'app.kuaicaiwu.notes.status.endorsed',
+  discounted: 'app.kuaicaiwu.notes.status.discounted',
+  collected: 'app.kuaicaiwu.notes.status.collected',
+  dishonored: 'app.kuaicaiwu.notes.status.dishonored',
+  issued: 'app.kuaicaiwu.notes.status.issued',
+  honored: 'app.kuaicaiwu.notes.status.honored',
+};
+
+export function formatNoteStatus(value: string | null | undefined, t: TFunction): string {
+  if (!value) return '—';
+  const i18nKey = NOTE_STATUS_I18N_KEY[value];
+  return i18nKey ? t(i18nKey) : value;
+}
+
+export function getNoteStatusSelectOptions(direction: 'receivable' | 'payable', t: TFunction) {
+  const keys =
+    direction === 'receivable'
+      ? ['held', 'endorsed', 'discounted', 'collected', 'dishonored']
+      : ['issued', 'honored', 'dishonored'];
+  return keys.map((value) => ({ label: formatNoteStatus(value, t), value }));
+}

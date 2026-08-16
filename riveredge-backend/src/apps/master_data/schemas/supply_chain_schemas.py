@@ -7,7 +7,7 @@
 from decimal import Decimal
 
 from pydantic import BaseModel, Field, validator, ConfigDict
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 
@@ -275,6 +275,17 @@ class SupplierBase(PartnerInvoiceAndExtendedMixin):
         alias="payableRecognitionOverride",
     )
     is_active: bool = Field(True, alias="isActive", description="是否启用")
+    qualification_status: str = Field(
+        "approved",
+        alias="qualificationStatus",
+        description="准入状态 potential/qualifying/approved/suspended/eliminated",
+    )
+    qualifications: Optional[List[Dict[str, Any]]] = Field(
+        None, description="资质清单 [{name, expiresAt, remark}]"
+    )
+    rating_grade: Optional[str] = Field(None, alias="ratingGrade", max_length=8, description="评级等级")
+    rating_score: Optional[Decimal] = Field(None, alias="ratingScore", description="综合评分")
+    rated_at: Optional[datetime] = Field(None, alias="ratedAt", description="最近评级时间")
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -285,6 +296,20 @@ class SupplierBase(PartnerInvoiceAndExtendedMixin):
         s = str(v).strip()
         if s not in ("on_receipt", "on_purchase_invoice"):
             raise ValueError("payableRecognitionOverride 必须为 on_receipt、on_purchase_invoice 或空")
+        return s
+
+    @validator("qualification_status", pre=True)
+    def validate_qualification_status(cls, v):
+        from apps.master_data.services.supplier_governance import (
+            ALLOWED_QUALIFICATION_STATUSES,
+            QUALIFICATION_APPROVED,
+        )
+
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return QUALIFICATION_APPROVED
+        s = str(v).strip().lower()
+        if s not in ALLOWED_QUALIFICATION_STATUSES:
+            raise ValueError("qualificationStatus 无效")
         return s
 
     @validator("code")
@@ -346,6 +371,14 @@ class SupplierUpdate(PartnerInvoiceAndExtendedMixin):
         alias="payableRecognitionOverride",
     )
     is_active: Optional[bool] = Field(None, alias="isActive", description="是否启用")
+    qualification_status: Optional[str] = Field(
+        None,
+        alias="qualificationStatus",
+        description="准入状态",
+    )
+    qualifications: Optional[List[Dict[str, Any]]] = Field(None, description="资质清单")
+    rating_grade: Optional[str] = Field(None, alias="ratingGrade", max_length=8, description="评级等级")
+    rating_score: Optional[Decimal] = Field(None, alias="ratingScore", description="综合评分")
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -356,6 +389,17 @@ class SupplierUpdate(PartnerInvoiceAndExtendedMixin):
         s = str(v).strip()
         if s not in ("on_receipt", "on_purchase_invoice"):
             raise ValueError("payableRecognitionOverride 必须为 on_receipt、on_purchase_invoice 或空")
+        return s
+
+    @validator("qualification_status", pre=True)
+    def validate_qualification_status_update(cls, v):
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        from apps.master_data.services.supplier_governance import ALLOWED_QUALIFICATION_STATUSES
+
+        s = str(v).strip().lower()
+        if s not in ALLOWED_QUALIFICATION_STATUSES:
+            raise ValueError("qualificationStatus 无效")
         return s
 
     @validator("code")

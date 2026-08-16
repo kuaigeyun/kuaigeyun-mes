@@ -226,19 +226,19 @@ export function buildTraceabilityNodePath(node: TraceabilityNodeLike): string | 
   const docType = String(data.document_type || '');
   const docId = data.document_id;
   if (docType === 'finished_goods_receipt' && docId) {
-    return `/apps/kuaizhizao/warehouse-management/inbound?receipt_id=${docId}`;
+    return `/apps/kuaizhizao/warehouse-management/inbound?receipt_type=finished_goods&receipt_id=${docId}`;
   }
   if (docType === 'purchase_receipt' && docId) {
-    return `/apps/kuaizhizao/purchase-management/purchase-receipts?receipt_id=${docId}`;
+    return `/apps/kuaizhizao/warehouse-management/inbound?receipt_type=purchase&receipt_id=${docId}`;
   }
   if (docType === 'sales_delivery' && docId) {
-    return `/apps/kuaizhizao/sales-management/sales-deliveries?delivery_id=${docId}`;
+    return `/apps/kuaizhizao/warehouse-management/outbound?outbound_type=sales_delivery&id=${docId}`;
   }
   if (docType === 'sales_return' && docId) {
-    return `/apps/kuaizhizao/sales-management/sales-returns?return_id=${docId}`;
+    return `/apps/kuaizhizao/warehouse-management/inbound?receipt_type=sales_return&receipt_id=${docId}`;
   }
   if (docType === 'semi_finished_goods_receipt' && docId) {
-    return `/apps/kuaizhizao/warehouse-management/inbound?semi_receipt_id=${docId}`;
+    return `/apps/kuaizhizao/warehouse-management/inbound?receipt_type=semi_finished_goods&receipt_id=${docId}`;
   }
   if (docType === 'production_picking' && docId) {
     return `/apps/kuaizhizao/warehouse-management/outbound?outbound_type=production_picking&id=${docId}`;

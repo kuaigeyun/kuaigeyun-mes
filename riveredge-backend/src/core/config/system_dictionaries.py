@@ -178,6 +178,8 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
             {"label": "包装破损", "value": "PACKAGE_DAMAGE", "description": "包装或运输破损", "sort_order": 4},
             {"label": "错发漏发", "value": "WRONG_OR_MISSING", "description": "错发或漏发", "sort_order": 5},
             {"label": "客户取消", "value": "CUSTOMER_CANCEL", "description": "客户取消订单导致退货", "sort_order": 6},
+            {"label": "订单退货", "value": "订单退货", "description": "从销售订单或采购订单下推生成的退货", "sort_order": 7},
+            {"label": "出库退货", "value": "出库退货", "description": "从销售出库单下推生成的退货", "sort_order": 8},
             {"label": "其他", "value": "OTHER", "description": "其他原因", "sort_order": 99},
         ],
     },

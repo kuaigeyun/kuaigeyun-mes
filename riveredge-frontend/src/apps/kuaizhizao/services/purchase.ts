@@ -439,6 +439,51 @@ export async function pushPurchaseOrderToReceipt(
 /**
  * 下推到收货通知
  */
+export type PurchaseOrderReceiptPullLine = {
+  id: number;
+  order_id: number;
+  order_code?: string;
+  supplier_id?: number;
+  supplier_name?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+  required_date?: string | null;
+};
+
+export async function listPurchaseOrderReceiptNoticePullLines(params: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  order_id?: number;
+  pullable_only?: boolean;
+}): Promise<{ data: PurchaseOrderReceiptPullLine[]; total: number }> {
+  return apiRequest('/apps/kuaizhizao/purchase-orders/receipt-notice-pull-lines', {
+    method: 'GET',
+    params,
+  });
+}
+
+export async function pullReceiptNoticesFromPurchaseOrderItems(
+  selectedItemIds: number[],
+): Promise<{
+  success: boolean;
+  message: string;
+  notice_id?: number;
+  notice_code?: string;
+  notices?: Array<{ notice_id: number; notice_code: string }>;
+}> {
+  return apiRequest('/apps/kuaizhizao/receipt-notices/pull-from-purchase-order-items', {
+    method: 'POST',
+    data: { selected_item_ids: selectedItemIds },
+  });
+}
+
 export async function pushPurchaseOrderToReceiptNotice(
   id: number,
   data?: PushToReceiptNoticeRequest | Record<number, number>,

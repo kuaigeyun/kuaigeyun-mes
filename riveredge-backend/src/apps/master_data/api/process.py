@@ -11,9 +11,11 @@ from pydantic import BaseModel, Field, ConfigDict
 from loguru import logger
 
 from core.api.deps.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_access
 from apps.master_data.api._master_data_route_access import require_master_data_module_access
 from infra.models.user import User
 from apps.master_data.services.process_service import ProcessService
+from apps.master_data.services.sop_control_service import SopControlService
 from apps.master_data.services.process_route_change_service import ProcessRouteChangeService
 from apps.master_data.schemas.process_schemas import (
     DefectTypeCreate, DefectTypeUpdate, DefectTypeResponse, DefectTypeListResponse,
@@ -23,7 +25,14 @@ from apps.master_data.schemas.process_schemas import (
     ProcessRouteVersionCreate, ProcessRouteVersionCompare, ProcessRouteVersionCompareResult,
     ProcessRouteTemplateCreate, ProcessRouteTemplateUpdate, ProcessRouteTemplateResponse,
     ProcessRouteTemplateVersionCreate, ProcessRouteFromTemplateCreate,
-    SOPCreate, SOPUpdate, SOPResponse, SOPListResponse, SOPBatchCreateFromRouteRequest
+    SOPCreate, SOPUpdate, SOPResponse, SOPListResponse, SOPBatchCreateFromRouteRequest,
+    SopRevisionListResponse,
+    SopControlledCopyListResponse,
+    SopControlledCopyResponse,
+    SopControlledCopyDispatchRequest,
+    SopControlledCopyRecallRequest,
+    SopReviseRequest,
+    SopPrintDataResponse,
 )
 from apps.master_data.schemas.process_route_change_schemas import (
     ProcessRouteChangeCreate, ProcessRouteChangeUpdate, ProcessRouteChangeResponse,
@@ -35,7 +44,7 @@ from apps.master_data.schemas.material_product_process_schemas import (
     ProcessRouteOperationTemplateResponse,
 )
 from apps.master_data.services.material_product_process_service import MaterialProductProcessService
-from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 router = APIRouter(
     prefix="/process",
@@ -1278,6 +1287,70 @@ async def get_process_route_tree(
 # 注意：/sop/batch-create-from-route、/sop/for-material 等具体路径必须定义在 /sop/{sop_uuid} 之前，
 # 否则会被路径参数匹配导致 405 Method Not Allowed
 
+_SOP_SUBMIT = Depends(
+    require_access(
+        "master-data.process.sop",
+        "submit",
+        required_permissions=["master-data:process:sop:submit"],
+    )
+)
+_SOP_APPROVE = Depends(
+    require_access(
+        "master-data.process.sop",
+        "approve",
+        required_permissions=["master-data:process:sop:approve"],
+    )
+)
+_SOP_REJECT = Depends(
+    require_access(
+        "master-data.process.sop",
+        "reject",
+        required_permissions=["master-data:process:sop:reject"],
+    )
+)
+_SOP_REVOKE = Depends(
+    require_access(
+        "master-data.process.sop",
+        "revoke",
+        required_permissions=["master-data:process:sop:revoke"],
+    )
+)
+_SOP_PUBLISH = Depends(
+    require_access(
+        "master-data.process.sop",
+        "publish",
+        required_permissions=["master-data:process:sop:publish"],
+    )
+)
+_SOP_OBSOLETE = Depends(
+    require_access(
+        "master-data.process.sop",
+        "obsolete",
+        required_permissions=["master-data:process:sop:obsolete"],
+    )
+)
+_SOP_DISPATCH = Depends(
+    require_access(
+        "master-data.process.sop",
+        "dispatch",
+        required_permissions=["master-data:process:sop:dispatch"],
+    )
+)
+_SOP_RECALL = Depends(
+    require_access(
+        "master-data.process.sop",
+        "recall",
+        required_permissions=["master-data:process:sop:recall"],
+    )
+)
+_SOP_PRINT = Depends(
+    require_access(
+        "master-data.process.sop",
+        "print",
+        required_permissions=["master-data:process:sop:print"],
+    )
+)
+
 @router.post("/sop/batch-create-from-route", response_model=List[SOPResponse], summary="Batch create SOPs from process route")
 async def batch_create_sops_from_route(
     data: SOPBatchCreateFromRouteRequest,
@@ -1330,6 +1403,8 @@ async def list_sops(
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     operation_id: Optional[int] = Query(None, alias="operationId", description="工序ID（过滤）"),
     is_active: Optional[bool] = Query(None, alias="isActive", description="是否启用"),
+    carrier: Optional[str] = Query(None, description="载体 electronic/paper/hybrid"),
+    control_status: Optional[str] = Query(None, alias="controlStatus", description="文控状态"),
     material_uuid: Optional[str] = Query(None, description="物料UUID（筛选绑定该物料的SOP）"),
     material_group_uuid: Optional[str] = Query(None, description="物料组UUID（筛选绑定该物料组的SOP）"),
     route_uuid: Optional[str] = Query(None, description="工艺路线UUID（筛选载入该工艺路线的SOP）"),
@@ -1355,6 +1430,8 @@ async def list_sops(
         limit,
         operation_id=operation_id,
         is_active=is_active,
+        carrier=carrier,
+        control_status=control_status,
         material_uuid=material_uuid,
         material_group_uuid=material_group_uuid,
         route_uuid=route_uuid,
@@ -1469,6 +1546,205 @@ async def delete_sop(
     try:
         await ProcessService.delete_sop(tenant_id, sop_uuid)
         return {"message": "SOP删除成功"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/sop/{sop_uuid}/submit", response_model=SOPResponse, summary="Submit SOP for review")
+async def submit_sop(
+    sop_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _access=_SOP_SUBMIT,
+):
+    try:
+        return await SopControlService.submit(tenant_id, sop_uuid, current_user=current_user)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (ValidationError, BusinessLogicError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/sop/{sop_uuid}/approve", response_model=SOPResponse, summary="Approve SOP")
+async def approve_sop(
+    sop_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _access=_SOP_APPROVE,
+):
+    try:
+        return await SopControlService.approve(tenant_id, sop_uuid, current_user=current_user)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/sop/{sop_uuid}/reject", response_model=SOPResponse, summary="Reject SOP")
+async def reject_sop(
+    sop_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _access=_SOP_REJECT,
+):
+    try:
+        return await SopControlService.reject(tenant_id, sop_uuid, current_user=current_user)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/sop/{sop_uuid}/revoke", response_model=SOPResponse, summary="Revoke SOP submission")
+async def revoke_sop(
+    sop_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _access=_SOP_REVOKE,
+):
+    try:
+        return await SopControlService.revoke(tenant_id, sop_uuid, current_user=current_user)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/sop/{sop_uuid}/publish", response_model=SOPResponse, summary="Publish SOP effective")
+async def publish_sop(
+    sop_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _access=_SOP_PUBLISH,
+):
+    try:
+        return await SopControlService.publish(tenant_id, sop_uuid, current_user=current_user)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (ValidationError, BusinessLogicError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/sop/{sop_uuid}/obsolete", response_model=SOPResponse, summary="Obsolete SOP")
+async def obsolete_sop(
+    sop_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _access=_SOP_OBSOLETE,
+):
+    try:
+        return await SopControlService.obsolete(tenant_id, sop_uuid, current_user=current_user)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/sop/{sop_uuid}/revise", response_model=SOPResponse, summary="Revise effective SOP")
+async def revise_sop(
+    sop_uuid: str,
+    body: SopReviseRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _access=Depends(
+        require_access(
+            "master-data.process.sop",
+            "update",
+            required_permissions=["master-data:process:sop:update"],
+        )
+    ),
+):
+    try:
+        return await SopControlService.revise(tenant_id, sop_uuid, body, current_user=current_user)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/sop/{sop_uuid}/revisions", response_model=SopRevisionListResponse, summary="List SOP revisions")
+async def list_sop_revisions(
+    sop_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        items, total = await SopControlService.list_revisions(tenant_id, sop_uuid)
+        return SopRevisionListResponse(data=items, total=total)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/sop/{sop_uuid}/copies", response_model=SopControlledCopyListResponse, summary="List controlled copies")
+async def list_sop_copies(
+    sop_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        items, total = await SopControlService.list_copies(tenant_id, sop_uuid)
+        return SopControlledCopyListResponse(data=items, total=total)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post(
+    "/sop/{sop_uuid}/copies/dispatch",
+    response_model=SopControlledCopyResponse,
+    summary="Dispatch controlled copy",
+)
+async def dispatch_sop_copy(
+    sop_uuid: str,
+    body: SopControlledCopyDispatchRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _access=_SOP_DISPATCH,
+):
+    try:
+        return await SopControlService.dispatch_copy(
+            tenant_id, sop_uuid, body, current_user=current_user
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (ValidationError, BusinessLogicError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/sop/{sop_uuid}/copies/recall",
+    response_model=SopControlledCopyResponse,
+    summary="Recall controlled copy",
+)
+async def recall_sop_copy(
+    sop_uuid: str,
+    body: SopControlledCopyRecallRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _access=_SOP_RECALL,
+):
+    try:
+        return await SopControlService.recall_copy(
+            tenant_id, sop_uuid, body, current_user=current_user
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/sop/{sop_uuid}/print-data", response_model=SopPrintDataResponse, summary="SOP print data")
+async def get_sop_print_data(
+    sop_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    controlled: bool = Query(False, description="受控打印"),
+    copy_id: Optional[int] = Query(None, alias="copyId", description="受控份ID"),
+    _access=_SOP_PRINT,
+):
+    try:
+        return await SopControlService.get_print_data(
+            tenant_id, sop_uuid, controlled=controlled, copy_id=copy_id
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

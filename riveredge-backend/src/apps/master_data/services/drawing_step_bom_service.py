@@ -21,6 +21,7 @@ from apps.master_data.services.material_code_service import MaterialCodeService
 from apps.master_data.services.material_service import MaterialService
 from core.services.file.file_service import FileService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 
 def _sanitize_step_material_code(name: str, prefix: str = "STP-") -> str:
@@ -35,8 +36,10 @@ class DrawingStepBomService:
         tenant_id: int,
         drawing_uuid: str,
         data: DrawingStepBomImportRequest,
+        current_user: User | None = None,
     ) -> DrawingStepBomImportResponse:
         drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
+        DrawingService._require_checkout_owner(drawing, current_user, action="导入 BOM")
 
         file_meta = await FileService.get_file_by_uuid(tenant_id, drawing.file_uuid)
         ext = (file_meta.file_extension or "").lower().lstrip(".")

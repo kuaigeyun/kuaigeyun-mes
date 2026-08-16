@@ -135,7 +135,7 @@ const EquipmentRepairsPage: React.FC = () => {
             <Typography.Link
               onClick={() =>
                 navigate(
-                  `${ROUTES.EQUIPMENT_FAULTS}?keyword=${encodeURIComponent(r.equipment_fault_uuid!)}`,
+                  `${ROUTES.EQUIPMENT_FAULTS}?uuid=${encodeURIComponent(r.equipment_fault_uuid!)}`,
                 )
               }
             >
@@ -232,7 +232,7 @@ const EquipmentRepairsPage: React.FC = () => {
               onClick={(e) => {
                 e.stopPropagation();
                 navigate(
-                  `${ROUTES.EQUIPMENT_FAULTS}?keyword=${encodeURIComponent(r.equipment_fault_uuid!)}`,
+                  `${ROUTES.EQUIPMENT_FAULTS}?uuid=${encodeURIComponent(r.equipment_fault_uuid!)}`,
                 );
               }}
             >

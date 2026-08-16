@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class ChangeDeskItem(BaseModel):
     id: int = Field(..., description="内部主键，供 uni-audit 使用")
-    category: str = Field(..., description="bom | process_route")
+    category: str = Field(..., description="bom | process_route | drawing")
     change_type: str = Field(..., description="业务变更类型，如 item_modify / operation_change")
     uuid: str
     status: str
@@ -37,23 +37,31 @@ class ChangeDeskListResponse(BaseModel):
     total: int = 0
 
 
+class ChangeCreateRequest(BaseModel):
+    change_type: str = Field(..., description="drawing")
+    drawing_uuid: str
+    drawing_change_type: str
+    change_reason: Optional[str] = None
+    change_content: Optional[Dict[str, Any]] = None
+
+
 class ChangeApproveRequest(BaseModel):
-    change_type: str = Field(..., description="bom | process_route")
+    change_type: str = Field(..., description="bom | process_route | drawing")
     approved: bool = True
     approval_comment: Optional[str] = None
 
 
 class ChangeExecuteRequest(BaseModel):
-    change_type: str = Field(..., description="bom | process_route")
+    change_type: str = Field(..., description="bom | process_route | drawing")
 
 
 class ChangeSubmitRequest(BaseModel):
-    change_type: str = Field(..., description="bom | process_route")
+    change_type: str = Field(..., description="bom | process_route | drawing")
 
 
 class ChangeBatchItem(BaseModel):
     change_uuid: str = Field(..., description="变更UUID")
-    change_type: str = Field(..., description="bom | process_route")
+    change_type: str = Field(..., description="bom | process_route | drawing")
 
 
 class ChangeBatchApproveRequest(BaseModel):

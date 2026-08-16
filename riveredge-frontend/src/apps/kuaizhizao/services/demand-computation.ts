@@ -24,6 +24,8 @@ export interface DemandComputation {
   demand_type?: 'sales_forecast' | 'sales_order' | 'demand_plan';
   /** 来源单据 ID：SO/预测为上游单据；需求计划为 Demand.id；多来源合并为空 */
   source_id?: number | null;
+  /** 来源关联展示名：销售订单/预测为客户名；需求计划为计划名 */
+  source_label?: string | null;
   business_mode?: 'MTS' | 'MTO' | 'ATO';
   /** 恒为 MRP；业务模式见 business_mode */
   computation_type?: 'MRP';
@@ -114,6 +116,8 @@ export interface DemandComputationListParams {
   created_end_date?: string;
   keyword?: string;
   order_by?: string;
+  /** 选单轻量列表：跳过明细 / 下推进度 / capabilities */
+  view?: 'options';
 }
 
 /**
@@ -208,6 +212,71 @@ export async function getComputationDynamicMonitor(id: number): Promise<{
   return apiRequest(`/apps/kuaizhizao/demand-computations/${id}/dynamic-monitor`, {
     method: 'GET',
   });
+}
+
+/** MRP 例外收件箱行 */
+export interface MrpExceptionInboxItem {
+  inbox_key: string;
+  computation_id: number;
+  computation_code?: string;
+  computation_end_time?: string;
+  item_id: number;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  code: string;
+  severity: string;
+  message?: string;
+  qty?: number;
+  bucket_date?: string;
+  document_id?: number | null;
+  document_code?: string | null;
+  document_source_type?: string | null;
+}
+
+export interface MrpExceptionInboxResponse {
+  total: number;
+  error_count: number;
+  warning_count: number;
+  summary_by_code: Record<string, number>;
+  items: MrpExceptionInboxItem[];
+}
+
+export interface ComputationMonitorSummary {
+  computation_id: number;
+  has_upstream_change: boolean;
+  has_downstream_risk: boolean;
+  alert_count: number;
+}
+
+/** 聚合已完成计算的 MRP 例外（计划员收件箱） */
+export async function getMrpExceptionInbox(params?: {
+  computation_id?: number;
+  code?: string;
+  severity?: string;
+  skip?: number;
+  limit?: number;
+}): Promise<MrpExceptionInboxResponse> {
+  return apiRequest<MrpExceptionInboxResponse>('/apps/kuaizhizao/demand-computations/mrp-exception-inbox', {
+    method: 'GET',
+    params,
+  });
+}
+
+/** 批量获取计算动态监控摘要（列表角标） */
+export async function getMonitorSummariesBatch(computationIds: number[]): Promise<{
+  summaries: Record<string, ComputationMonitorSummary>;
+}> {
+  if (!computationIds.length) {
+    return { summaries: {} };
+  }
+  return apiRequest<{ summaries: Record<string, ComputationMonitorSummary> }>(
+    '/apps/kuaizhizao/demand-computations/monitor-summaries',
+    {
+      method: 'GET',
+      params: { computation_ids: computationIds },
+    },
+  );
 }
 
 /** 需求计算执行前：物料主数据缺失项 */
@@ -383,9 +452,42 @@ export interface GenerateOrdersResponse {
 /**
  * 下推到采购申请（仅采购件）
  */
-export async function pushToPurchaseRequisition(id: number): Promise<{ success: boolean; message: string; target_document?: { id: number; code: string } }> {
+export async function pushToPurchaseRequisition(
+  id: number,
+  body?: { selected_item_ids?: number[] },
+): Promise<{ success: boolean; message: string; target_document?: { id: number; code: string } }> {
   return apiRequest(`/apps/kuaizhizao/demand-computations/${id}/push-to-purchase-requisition`, {
     method: 'POST',
+    data: body,
+  });
+}
+
+export type DemandComputationPurchasePullLine = {
+  id: number;
+  computation_id: number;
+  computation_code?: string;
+  business_mode?: string;
+  material_id: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+  required_date?: string | null;
+};
+
+export async function listDemandComputationPurchasePullLines(params: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  computation_id?: number;
+  pullable_only?: boolean;
+}): Promise<{ data: DemandComputationPurchasePullLine[]; total: number }> {
+  return apiRequest('/apps/kuaizhizao/demand-computations/purchase-requisition-pull-lines', {
+    method: 'GET',
+    params,
   });
 }
 
@@ -404,14 +506,20 @@ export async function previewPushToPurchaseRequisition(id: number): Promise<Docu
 export async function generateOrdersFromComputation(
   id: number,
   generateMode: 'all' | 'work_order_only' | 'purchase_only' | 'outsource_only' = 'all',
-  options?: { allowDraft?: boolean }
+  options?: { allowDraft?: boolean; pushMode?: 'draft' | 'confirm'; selected_item_ids?: number[] },
 ): Promise<GenerateOrdersResponse> {
+  const body =
+    options?.selected_item_ids != null
+      ? { selected_item_ids: options.selected_item_ids }
+      : undefined;
   return apiRequest<GenerateOrdersResponse>(`/apps/kuaizhizao/demand-computations/${id}/generate-orders`, {
     method: 'POST',
     params: {
       generate_mode: generateMode,
       allow_draft: options?.allowDraft ?? false,
+      ...(options?.pushMode ? { push_mode: options.pushMode } : {}),
     },
+    data: body,
   });
 }
 
@@ -451,6 +559,9 @@ export interface ComputationPushPreviewItem {
   max_push_quantity: number
   source_type?: string | null
   target_document?: 'work_order' | 'outsource_work_order' | 'purchase_requisition' | 'purchase_order'
+  planned_release_date?: string | null
+  planned_receipt_date?: string | null
+  push_line_index?: number
 }
 
 export interface PushPreview {
@@ -497,6 +608,8 @@ export async function pushAll(
     purchase?: 'requisition' | 'purchase_order';
     include_outsource?: boolean;
     push_mode?: 'draft' | 'confirm';
+    purchase_requisition_item_ids?: number[];
+    production_item_ids?: number[];
   }
 ): Promise<{ success: boolean; message: string; results: Record<string, any> }> {
   return apiRequest(`/apps/kuaizhizao/demand-computations/${id}/push-all`, {

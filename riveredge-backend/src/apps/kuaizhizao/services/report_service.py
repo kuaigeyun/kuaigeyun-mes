@@ -14,7 +14,12 @@ from decimal import Decimal
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity, get_material_inventory_info
 from core.services.authorization.data_scope_service import DataScopeService
-from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
+from core.utils.timezone_utils import (
+    coerce_business_datetime_to_utc,
+    resolve_business_datetime,
+    to_api_isoformat,
+    to_site_date,
+)
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
@@ -23,7 +28,10 @@ PRODUCTION_WO_TRACKING_SORT = frozenset({
     "code", "product_name", "quantity", "completed_quantity", "status",
     "planned_start_date", "planned_end_date",
 })
-PRODUCTION_MATERIAL_USAGE_SORT = frozenset({"work_order_code", "material_name", "quantity", "created_at"})
+PRODUCTION_MATERIAL_USAGE_SORT = frozenset({
+    "material_code", "material_name", "picked_quantity", "picking_time", "id",
+})
+PRODUCTION_PICKING_CONFIRMED_STATUSES = ("已领料", "已确认", "picked", "confirmed")
 PRODUCTION_LABOR_DETAIL_SORT = frozenset({
     "work_order_code", "operation_name", "worker_name", "qualified_quantity", "work_hours", "reported_at",
 })
@@ -94,6 +102,96 @@ class ReportService:
     @classmethod
     def _wrap_report_payload(cls, payload: Dict[str, Any]) -> Dict[str, Any]:
         return cls._json_safe(payload)
+
+    def apply_report_list_query(
+        self,
+        payload: Dict[str, Any],
+        *,
+        order_by: Optional[str] = None,
+        column_filters: Optional[Any] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Dict[str, Any]:
+        """对完整行列表做列筛选/排序/分页后 wrap。"""
+        from apps.kuaizhizao.services.report_enhancements import (
+            finalize_report_items,
+            parse_column_filters_param,
+        )
+
+        if not isinstance(payload, dict):
+            return self._wrap_report_payload(payload)
+        data = payload.get("data")
+        if not isinstance(data, list):
+            return self._wrap_report_payload(payload)
+        existing_summary = payload.get("summary")
+        summary_fields = (
+            [str(k) for k in existing_summary.keys()]
+            if isinstance(existing_summary, dict) and existing_summary
+            else None
+        )
+        finalized = finalize_report_items(
+            data,
+            order_by=order_by,
+            column_filters=parse_column_filters_param(column_filters),
+            skip=skip,
+            limit=limit,
+            summary_fields=summary_fields,
+        )
+        merged = {**payload, **finalized}
+        return self._wrap_report_payload(merged)
+
+    @staticmethod
+    async def _customer_code_map(tenant_id: int, customer_ids: List[Any]) -> Dict[int, str]:
+        ids = [int(x) for x in customer_ids if x is not None]
+        if not ids:
+            return {}
+        from apps.master_data.models.customer import Customer
+
+        rows = await Customer.filter(
+            tenant_id=tenant_id, id__in=ids, deleted_at__isnull=True
+        ).values("id", "code")
+        return {int(r["id"]): str(r["code"] or "") for r in rows}
+
+    @staticmethod
+    async def _supplier_code_map(tenant_id: int, supplier_ids: List[Any]) -> Dict[int, str]:
+        ids = [int(x) for x in supplier_ids if x is not None]
+        if not ids:
+            return {}
+        from apps.master_data.models.supplier import Supplier
+
+        rows = await Supplier.filter(
+            tenant_id=tenant_id, id__in=ids, deleted_at__isnull=True
+        ).values("id", "code")
+        return {int(r["id"]): str(r["code"] or "") for r in rows}
+
+    @staticmethod
+    def _amount_share(amount: float, total: float) -> float:
+        if not total:
+            return 0.0
+        return round(float(amount) / float(total) * 100, 1)
+
+    @staticmethod
+    async def _item_line_no_map(
+        item_model: Any,
+        parent_field: str,
+        parent_ids: List[int],
+        tenant_id: int,
+        *,
+        with_deleted_at: bool = False,
+    ) -> Dict[int, int]:
+        if not parent_ids:
+            return {}
+        q = item_model.filter(tenant_id=tenant_id, **{f"{parent_field}__in": parent_ids})
+        if with_deleted_at:
+            q = q.filter(deleted_at__isnull=True)
+        rows = await q.order_by(parent_field, "id").values("id", parent_field)
+        counters: Dict[int, int] = {}
+        out: Dict[int, int] = {}
+        for r in rows:
+            pid = int(r[parent_field])
+            counters[pid] = counters.get(pid, 0) + 1
+            out[int(r["id"])] = counters[pid]
+        return out
 
     @staticmethod
     async def _aggregate_sums(qs, field_map: Dict[str, str]) -> Dict[str, float]:
@@ -204,6 +302,10 @@ class ReportService:
         date_start: Optional[datetime] = None,
         date_end: Optional[datetime] = None,
         warehouse_id: Optional[int] = None,
+        keyword: Optional[str] = None,
+        *,
+        skip: int = 0,
+        limit: int = 100,
     ) -> Dict[str, Any]:
         """
         获取库存报表数据
@@ -212,6 +314,11 @@ class ReportService:
             return await self._get_inventory_summary_v2(
                 tenant_id=tenant_id,
                 warehouse_id=warehouse_id,
+                date_start=date_start,
+                date_end=date_end,
+                keyword=keyword,
+                skip=skip,
+                limit=limit,
             )
         elif report_type in [
             "turnover", "inventory-turnover", "inventory_turnover",
@@ -231,104 +338,49 @@ class ReportService:
         self,
         tenant_id: int,
         warehouse_id: Optional[int] = None,
+        date_start: Optional[datetime] = None,
+        date_end: Optional[datetime] = None,
+        keyword: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
     ) -> Dict[str, Any]:
-        """获取库存状况分析"""
-        from apps.master_data.models.material_batch import MaterialBatch
-        from apps.kuaizhizao.models.inventory_alert import InventoryAlert
-        from tortoise.functions import Sum
+        """收发存汇总：批次/线边此刻结存 + 期间流水回算期初/入/出。"""
+        from apps.kuaizhizao.services.report_enhancements import build_inventory_summary
 
-        # 1. 基础查询
-        batch_query = MaterialBatch.filter(
-            tenant_id=tenant_id, 
-            deleted_at__isnull=True, 
-            quantity__gt=0, 
-            status="in_stock"
+        rows = await self._load_inventory_rows(
+            tenant_id,
+            warehouse_id=warehouse_id,
+            include_expired=True,
         )
-        # TODO: 如果有仓库关联，需要在这里过滤（目前 MaterialBatch 模型没看到直接关联仓库，可能通过其他方式或在主表中）
-        
-        # 2. 统计汇总
-        material_ids = await batch_query.values_list("material_id", flat=True)
-        total_materials = len(set(material_ids)) if material_ids else 0
-        
-        agg = await self._aggregate_sums(batch_query, {"total_qty": "quantity"})
-        total_quantity = float(agg.get("total_qty") or 0)
-        
-        # 3. 预警统计
-        alert_base = InventoryAlert.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="pending")
-        if warehouse_id:
-            alert_base = alert_base.filter(warehouse_id=warehouse_id)
-            
-        low_stock_alerts = alert_base.filter(alert_type="low_stock")
-        out_of_stock_count = await low_stock_alerts.filter(current_quantity=0).count()
-        low_stock_count = await low_stock_alerts.filter(current_quantity__gt=0).count()
-        high_stock_count = await alert_base.filter(alert_type="high_stock").count()
-        
-        # 4. 获取明细数据 (聚合每个物料的库存)
-        # 注意：这里需要 prefetch_related('material') 如果需要物料名称
-        batches = await batch_query.prefetch_related('material').all()
-        material_summary = {}
-        main_wh_cache: Dict[int, Optional[Tuple[int, str]]] = {}
-        for b in batches:
-            resolved_wh = await self._resolve_material_default_warehouse_for_report(
-                tenant_id=tenant_id,
-                material=getattr(b, "material", None),
-                cache=main_wh_cache,
-            )
-            resolved_wh_id = int(resolved_wh[0]) if resolved_wh else None
-            resolved_wh_name = self._normalize_warehouse_display_name(
-                resolved_wh[1] if resolved_wh else None
-            )
-            if warehouse_id and resolved_wh_id != int(warehouse_id):
+        grouped: Dict[tuple, Dict[str, Any]] = {}
+        for r in rows:
+            qty = float(r.get("quantity") or 0)
+            if qty == 0:
                 continue
-            mid = b.material_id
-            key = (mid, resolved_wh_name)
-            if key not in material_summary:
-                material_summary[key] = {
-                    "material_code": b.material.main_code if b.material else "Unknown",
-                    "material_name": b.material.name if b.material else "Unknown",
-                    "closing_qty": 0.0,
-                    "inbound_qty": 0.0, # 简化处理，实际需要从记录表中统计
-                    "outbound_qty": 0.0,
-                    "opening_qty": 0.0,
-                    "warehouse_name": resolved_wh_name,
+            mid = r.get("material_id")
+            wid = r.get("warehouse_id")
+            key = (int(mid) if mid is not None else r.get("material_code"), wid)
+            if key not in grouped:
+                grouped[key] = {
+                    "material_id": mid,
+                    "material_code": r.get("material_code") or "",
+                    "material_name": r.get("material_name") or "",
+                    "warehouse_id": wid,
+                    "warehouse_name": r.get("warehouse_name") or "",
+                    "quantity": 0.0,
                 }
-            material_summary[key]["closing_qty"] += float(b.quantity or 0)
+            grouped[key]["quantity"] += qty
 
-        total_value = 0.0
-        try:
-            from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
-            cost_svc = InventoryCostService()
-            seen_mids: set[int] = set()
-            for b in batches:
-                mid = int(b.material_id)
-                if mid in seen_mids:
-                    continue
-                seen_mids.add(mid)
-                unit_cost = float(await cost_svc.get_material_unit_cost(tenant_id, mid))
-                qty_sum = sum(
-                    float(x.quantity or 0)
-                    for x in batches
-                    if int(x.material_id) == mid
-                )
-                total_value += qty_sum * unit_cost
-        except Exception as exc:
-            logger.warning("库存状况 valuation 失败: {}", exc)
-
-        items = list(material_summary.values())
-
-        return {
-            "summary": {
-                "total_materials": total_materials,
-                "total_quantity": round(total_quantity, 2),
-                "total_value": round(total_value, 2),
-                "low_stock_count": low_stock_count,
-                "out_of_stock_count": out_of_stock_count,
-                "high_stock_count": high_stock_count,
-            },
-            "data": items,
-            "total": len(items),
-            "success": True
-        }
+        return await build_inventory_summary(
+            tenant_id,
+            list(grouped.values()),
+            date_start=date_start,
+            date_end=date_end,
+            warehouse_id=warehouse_id,
+            keyword=keyword,
+            skip=skip,
+            limit=limit,
+        )
 
     async def _get_inventory_turnover(
         self,
@@ -402,7 +454,8 @@ class ReportService:
     ) -> Dict[str, Any]:
         from apps.kuaizhizao.models.work_order import WorkOrder
         from apps.kuaizhizao.models.reporting_record import ReportingRecord
-        from apps.kuaizhizao.models.material_binding import MaterialBinding
+        from apps.kuaizhizao.models.production_picking import ProductionPicking
+        from apps.kuaizhizao.models.production_picking_item import ProductionPickingItem
         from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
         from apps.kuaizhizao.models.defect_record import DefectRecord
         from tortoise.functions import Sum, Count
@@ -450,13 +503,30 @@ class ReportService:
             order_clause = _resolve_production_report_order_by(
                 order_by, PRODUCTION_WO_QUERY_SORT, "-created_at", field_aliases=wo_aliases,
             )
-            items = await wo_q.order_by(order_clause).offset(sk).limit(lim).values(
-                "code", "product_name", "quantity", "status", "created_at"
+            items = await wo_q.order_by(order_clause).values(
+                "id",
+                "code",
+                "product_code",
+                "product_name",
+                "quantity",
+                "status",
+                "workshop_name",
+                "sales_order_code",
+                "planned_start_date",
+                "planned_end_date",
+                "created_at",
             )
             for it in items:
-                it["order_code"] = it.get("code")
+                it["order_code"] = it.get("code") or ""
                 it["plan_qty"] = float(it.get("quantity") or 0)
-            return self._wrap_report_payload({"data": items, "success": True, "total": total})
+                it["status"] = it.get("status") or ""
+            agg = await wo_q.annotate(total_qty=Sum("quantity")).values("total_qty")
+            return self._wrap_report_payload({
+                "data": items,
+                "success": True,
+                "total": total,
+                "summary": {"plan_qty": float(agg[0]["total_qty"] or 0) if agg else 0.0},
+            })
 
         if report_type in ["work-order-execution-report", "efficiency", "wo_tracking"]:
             wo_q = WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
@@ -480,52 +550,136 @@ class ReportService:
             order_clause = _resolve_production_report_order_by(
                 order_by, PRODUCTION_WO_TRACKING_SORT, "-planned_end_date", field_aliases=wo_aliases,
             )
-            items = await wo_q.order_by(order_clause).offset(sk).limit(lim).values(
-                "code", "product_name", "quantity", "completed_quantity", "status",
-                "planned_start_date", "planned_end_date",
+            items = await wo_q.order_by(order_clause).values(
+                "id",
+                "code",
+                "product_code",
+                "product_name",
+                "quantity",
+                "completed_quantity",
+                "status",
+                "planned_start_date",
+                "planned_end_date",
             )
+            site_today = to_site_date(resolve_business_datetime())
             for it in items:
                 planned = float(it.get("quantity") or 0)
                 actual = float(it.get("completed_quantity") or 0)
-                it["order_code"] = it.get("code")
+                remaining = max(0.0, planned - actual)
+                it["order_code"] = it.get("code") or ""
                 it["planned_qty"] = planned
                 it["actual_qty"] = actual
-                it["overall_progress"] = round((actual / planned * 100) if planned > 0 else 0, 2)
-            return self._wrap_report_payload({"data": items, "success": True, "total": total})
+                it["remaining_qty"] = remaining
+                it["overall_progress"] = round(actual / planned * 100, 1) if planned else 0.0
+                it["status"] = it.get("status") or ""
+                ped = self._as_date(it.get("planned_end_date"))
+                is_overdue = bool(remaining > 0 and ped is not None and ped < site_today)
+                it["is_overdue"] = is_overdue
+                it["overdue_days"] = (site_today - ped).days if is_overdue and ped is not None else 0
+            agg = await wo_q.annotate(
+                total_plan=Sum("quantity"),
+                total_done=Sum("completed_quantity"),
+            ).values("total_plan", "total_done")
+            total_plan = float(agg[0]["total_plan"] or 0) if agg else 0.0
+            total_done = float(agg[0]["total_done"] or 0) if agg else 0.0
+            return self._wrap_report_payload({
+                "data": items,
+                "success": True,
+                "total": total,
+                "summary": {
+                    "planned_qty": total_plan,
+                    "actual_qty": total_done,
+                    "remaining_qty": max(0.0, total_plan - total_done),
+                },
+            })
 
         if report_type == "work-order-material-usage":
-            q = MaterialBinding.filter(tenant_id=tenant_id, binding_type="feeding", deleted_at__isnull=True)
+            header_q = ProductionPicking.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                status__in=list(PRODUCTION_PICKING_CONFIRMED_STATUSES),
+            )
             if date_start:
-                q = q.filter(created_at__gte=date_start)
+                header_q = header_q.filter(picking_time__gte=date_start)
             if date_end:
-                q = q.filter(created_at__lte=date_end)
+                header_q = header_q.filter(picking_time__lte=date_end)
             woc = (work_order_code or order_code or "").strip()
             if woc:
-                q = q.filter(work_order_code__icontains=woc)
+                header_q = header_q.filter(work_order_code__icontains=woc)
+            header_ids = list(await header_q.values_list("id", flat=True))
+            if not header_ids:
+                return self._wrap_report_payload({
+                    "data": [],
+                    "success": True,
+                    "total": 0,
+                    "summary": {"actual_qty": 0.0},
+                })
+            item_q = ProductionPickingItem.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                picking_id__in=header_ids,
+            )
             pn = (product_name or "").strip()
             if pn:
-                q = q.filter(material_name__icontains=pn)
+                item_q = item_q.filter(material_name__icontains=pn)
             if kw:
-                q = q.filter(Q(work_order_code__icontains=kw) | Q(material_name__icontains=kw))
-            total = await q.count()
+                item_kw = Q(material_code__icontains=kw) | Q(material_name__icontains=kw)
+                matched_header_ids = list(
+                    await header_q.filter(
+                        Q(work_order_code__icontains=kw) | Q(picking_code__icontains=kw)
+                    ).values_list("id", flat=True)
+                )
+                if matched_header_ids:
+                    item_kw |= Q(picking_id__in=matched_header_ids)
+                item_q = item_q.filter(item_kw)
+            total = await item_q.count()
             order_clause = _resolve_production_report_order_by(
-                order_by, PRODUCTION_MATERIAL_USAGE_SORT, "-created_at",
-                field_aliases={"order_code": "work_order_code", "actual_qty": "quantity"},
+                order_by,
+                PRODUCTION_MATERIAL_USAGE_SORT,
+                "-picking_time",
+                field_aliases={"actual_qty": "picked_quantity", "created_at": "picking_time"},
             )
-            rows = await q.order_by(order_clause).offset(sk).limit(lim).values(
-                "work_order_code", "material_name", "quantity", "created_at",
+            rows = await item_q.order_by(order_clause).values(
+                "id",
+                "picking_id",
+                "material_code",
+                "material_name",
+                "material_spec",
+                "material_unit",
+                "picked_quantity",
+                "warehouse_name",
+                "picking_time",
             )
+            heads = await ProductionPicking.filter(
+                id__in=[it["picking_id"] for it in rows if it.get("picking_id")]
+            ).values("id", "picking_code", "work_order_code", "picker_name", "picking_time")
+            head_map = {h["id"]: h for h in heads}
             items = []
             for it in rows:
-                qty = float(it.get("quantity") or 0)
+                head = head_map.get(it.get("picking_id"), {})
+                qty = float(it.get("picked_quantity") or 0)
+                picked_at = it.get("picking_time") or head.get("picking_time")
                 items.append({
-                    "order_code": it.get("work_order_code"),
-                    "material_name": it.get("material_name"),
+                    "id": it.get("id"),
+                    "picking_code": head.get("picking_code") or "",
+                    "order_code": head.get("work_order_code") or "",
+                    "material_code": it.get("material_code") or "",
+                    "material_name": it.get("material_name") or "",
+                    "material_spec": it.get("material_spec") or "",
+                    "unit": it.get("material_unit") or "",
                     "actual_qty": qty,
                     "consumed_quantity": qty,
-                    "created_at": it.get("created_at"),
+                    "warehouse_name": it.get("warehouse_name") or "",
+                    "picker_name": head.get("picker_name") or "",
+                    "picking_time": picked_at,
                 })
-            return self._wrap_report_payload({"data": items, "success": True, "total": total})
+            agg = await item_q.annotate(total_qty=Sum("picked_quantity")).values("total_qty")
+            return self._wrap_report_payload({
+                "data": items,
+                "success": True,
+                "total": total,
+                "summary": {"actual_qty": float(agg[0]["total_qty"] or 0) if agg else 0.0},
+            })
 
         if report_type == "process-completion-report":
             q = ReportingRecord.filter(tenant_id=tenant_id, status="approved", deleted_at__isnull=True)
@@ -547,26 +701,42 @@ class ReportService:
                 order_by, PRODUCTION_LABOR_DETAIL_SORT, "-reported_at",
                 field_aliases={"process_name": "operation_name", "report_date": "reported_at", "qualified_qty": "qualified_quantity", "hours": "work_hours"},
             )
-            rows = await q.order_by(order_clause).offset(sk).limit(lim).values(
-                "id", "work_order_code", "operation_name", "worker_name",
-                "qualified_quantity", "work_hours", "reported_at",
+            rows = await q.order_by(order_clause).values(
+                "id",
+                "work_order_code",
+                "operation_name",
+                "worker_name",
+                "qualified_quantity",
+                "work_hours",
+                "reported_at",
             )
             items = []
             for it in rows:
                 reported_at = it.get("reported_at")
-                record_id = it.get("id")
                 items.append({
-                    "report_code": str(record_id) if record_id is not None else None,
-                    "order_code": it.get("work_order_code"),
-                    "work_order_code": it.get("work_order_code"),
-                    "process_name": it.get("operation_name"),
-                    "worker_name": it.get("worker_name"),
+                    "id": it.get("id"),
+                    "order_code": it.get("work_order_code") or "",
+                    "work_order_code": it.get("work_order_code") or "",
+                    "process_name": it.get("operation_name") or "",
+                    "worker_name": it.get("worker_name") or "",
                     "qualified_qty": float(it.get("qualified_quantity") or 0),
                     "hours": float(it.get("work_hours") or 0),
                     "report_date": reported_at,
                     "reported_at": reported_at,
                 })
-            return self._wrap_report_payload({"data": items, "success": True, "total": total})
+            agg = await q.annotate(
+                total_qty=Sum("qualified_quantity"),
+                total_hours=Sum("work_hours"),
+            ).values("total_qty", "total_hours")
+            return self._wrap_report_payload({
+                "data": items,
+                "success": True,
+                "total": total,
+                "summary": {
+                    "qualified_qty": float(agg[0]["total_qty"] or 0) if agg else 0.0,
+                    "hours": float(agg[0]["total_hours"] or 0) if agg else 0.0,
+                },
+            })
 
         if report_type == "scrap-reason-analysis":
             q = DefectRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True)
@@ -577,7 +747,15 @@ class ReportService:
             if kw:
                 q = q.filter(defect_reason__icontains=kw)
             stats = await q.annotate(count=Count("id")).group_by("defect_reason").values("defect_reason", "count")
-            items = [{"defect_reason": s.get("defect_reason") or "-", "count": int(s.get("count") or 0)} for s in stats]
+            total_count = sum(int(s.get("count") or 0) for s in stats)
+            items = []
+            for s in stats:
+                cnt = int(s.get("count") or 0)
+                items.append({
+                    "defect_reason": s.get("defect_reason") or "-",
+                    "count": cnt,
+                    "share": round(cnt / total_count * 100, 1) if total_count else 0.0,
+                })
             if kw:
                 items = [it for it in items if kw.lower() in str(it.get("defect_reason") or "").lower()]
             order_clause = _resolve_production_report_order_by(order_by, PRODUCTION_SCRAP_ANALYSIS_SORT, "-count")
@@ -585,8 +763,12 @@ class ReportService:
             sort_key = order_clause.lstrip("-")
             items.sort(key=lambda x: x.get(sort_key) or 0, reverse=descending)
             total = len(items)
-            page = items[sk : sk + lim]
-            return self._wrap_report_payload({"data": page, "success": True, "total": total})
+            return self._wrap_report_payload({
+                "data": items,
+                "success": True,
+                "total": total,
+                "summary": {"count": total_count},
+            })
 
         if report_type in ["first-pass-yield-analysis", "first_pass_yield"]:
             from apps.kuaizhizao.services.first_pass_yield_service import FirstPassYieldService
@@ -607,17 +789,24 @@ class ReportService:
                 rows = [row for row in rows if kw.lower() in str(row.get("operation_name") or "").lower()]
             order_clause = _resolve_production_report_order_by(
                 order_by,
-                {"operation_name", "count", "first_pass_yield_rate", "qualification_rate"},
+                {
+                    "operation_name",
+                    "count",
+                    "reported_quantity",
+                    "qualified_quantity",
+                    "unqualified_quantity",
+                    "first_pass_yield_rate",
+                    "qualification_rate",
+                },
                 "-first_pass_yield_rate",
             )
             descending = order_clause.startswith("-")
             sort_key = order_clause.lstrip("-")
             rows.sort(key=lambda x: x.get(sort_key) or 0, reverse=descending)
             total = len(rows)
-            page = rows[sk : sk + lim]
             return self._wrap_report_payload(
                 {
-                    "data": page,
+                    "data": rows,
                     "success": True,
                     "total": total,
                     "summary": summary,
@@ -946,28 +1135,43 @@ class ReportService:
                 },
             }
         elif report_type in ["salesperson-performance", "salesperson", "salesman"]:
-            from apps.kuaizhizao.models.sales_order import SalesOrder
+            COMPLETED_STATUSES = frozenset(
+                {"COMPLETED", "已完成", "完成", "CLOSED", "closed", "DONE", "done"}
+            )
             so_pf = await self._scoped_sales_order_query(tenant_id=tenant_id, current_user=current_user)
-            so_pf = so_pf.filter(status="COMPLETED")
             if date_start:
                 so_pf = so_pf.filter(order_date__gte=date_start.date())
             if date_end:
                 so_pf = so_pf.filter(order_date__lte=date_end.date())
             stats = (
-                await so_pf.annotate(total=Sum("total_amount"), order_count=Count("id"))
+                await so_pf.annotate(
+                    total=Sum("total_amount"),
+                    order_count=Count("id"),
+                    customer_count=Count("customer_id", distinct=True),
+                )
                 .group_by("salesman_name")
-                .values("salesman_name", "total", "order_count")
+                .values("salesman_name", "total", "order_count", "customer_count")
             )
+            status_rows = await so_pf.values("salesman_name", "status")
+            completed_by_name: Dict[str, int] = {}
+            for row in status_rows:
+                name = str(row.get("salesman_name") or "")
+                if (row.get("status") or "") in COMPLETED_STATUSES:
+                    completed_by_name[name] = completed_by_name.get(name, 0) + 1
+            grand_amt = sum(float(s.get("total") or 0) for s in stats)
+            ranked = sorted(stats, key=lambda x: float(x.get("total") or 0), reverse=True)
             rows = [
                 {
+                    "row_key": str(s.get("salesman_name") or "") or "_blank",
                     "salesman_name": s.get("salesman_name") or "",
                     "total_revenue": float(s.get("total") or 0),
                     "order_count": int(s.get("order_count") or 0),
+                    "completed_order_count": completed_by_name.get(str(s.get("salesman_name") or ""), 0),
+                    "customer_count": int(s.get("customer_count") or 0),
+                    "amount_share": self._amount_share(float(s.get("total") or 0), grand_amt),
                     "rank": i + 1,
                 }
-                for i, s in enumerate(
-                    sorted(stats, key=lambda x: float(x.get("total") or 0), reverse=True)
-                )
+                for i, s in enumerate(ranked)
             ]
             return {"data": rows, "success": True, "total": len(rows)}
         else:
@@ -985,7 +1189,8 @@ class ReportService:
         customer_keyword: Optional[str] = None,
         current_user: Optional[Any] = None,
     ) -> Dict[str, Any]:
-        """销售订单综合查询统计"""
+        """销售订单明细表：一行一物料。"""
+        from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
         from tortoise.functions import Count, Sum
 
         logger.info(
@@ -1009,39 +1214,111 @@ class ReportService:
             query = query.filter(customer_name__icontains=str(customer_keyword).strip())
 
         total_orders = await query.count()
-
         agg = await query.annotate(total_amt=Sum("total_amount")).values("total_amt")
         total_amount = float(agg[0]["total_amt"] or 0) if agg else 0.0
         pending_review = await query.filter(review_status="PENDING").count()
         in_execution = await query.filter(status__in=["CONFIRMED", "AUDITED", "已确认", "已审核"]).count()
         completed = await query.filter(status="COMPLETED").count()
+
+        order_ids = list(await query.values_list("id", flat=True))
+        if not order_ids:
+            return {
+                "summary": {
+                    "total_orders": 0,
+                    "total_amount": 0.0,
+                    "pending_review": 0,
+                    "in_execution": 0,
+                    "completed": 0,
+                    "line_count": 0,
+                },
+                "data": [],
+                "total": 0,
+                "success": True,
+            }
+
+        item_q = SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id__in=order_ids, deleted_at__isnull=True
+        )
+        total_lines = await item_q.count()
         lim = max(1, min(int(limit or 100), 500))
         sk = max(0, int(skip or 0))
-        items = await query.order_by("-order_date").offset(sk).limit(lim).values(
+        rows = await item_q.order_by("-sales_order_id", "id").values(
             "id",
-            "order_code",
-            "order_date",
-            "customer_name",
-            "delivery_date",
+            "sales_order_id",
+            "material_code",
+            "material_name",
+            "material_spec",
+            "material_unit",
+            "order_quantity",
+            "unit_price",
             "total_amount",
-            "status",
-            "review_status",
-            "salesman_name",
+            "delivery_date",
             "notes",
         )
-
-        return {
-            "summary": {
-                "total_orders": total_orders,
-                "total_amount": total_amount,
-                "pending_review": pending_review,
-                "in_execution": in_execution,
-                "completed": completed,
-            },
-            "data": items,
-            "total": total_orders,
-            "success": True,
-        }
+        page_order_ids = list({int(r["sales_order_id"]) for r in rows})
+        orders_map: Dict[int, Dict[str, Any]] = {}
+        if page_order_ids:
+            for o in await query.filter(id__in=page_order_ids).values(
+                "id",
+                "order_code",
+                "order_date",
+                "customer_id",
+                "customer_name",
+                "status",
+                "review_status",
+                "salesman_name",
+                "notes",
+                "currency_code",
+            ):
+                orders_map[int(o["id"])] = o
+        code_map = await self._customer_code_map(
+            tenant_id, [o.get("customer_id") for o in orders_map.values()]
+        )
+        line_map = await self._item_line_no_map(
+            SalesOrderItem, "sales_order_id", page_order_ids, tenant_id, with_deleted_at=True
+        )
+        items = []
+        for r in rows:
+            head = orders_map.get(int(r["sales_order_id"]), {})
+            cid = head.get("customer_id")
+            items.append(
+                {
+                    "id": r["id"],
+                    "line_no": line_map.get(int(r["id"])),
+                    "order_code": head.get("order_code"),
+                    "order_date": head.get("order_date"),
+                    "customer_code": code_map.get(int(cid), "") if cid is not None else "",
+                    "customer_name": head.get("customer_name"),
+                    "material_code": r.get("material_code"),
+                    "material_name": r.get("material_name"),
+                    "material_spec": r.get("material_spec"),
+                    "material_unit": r.get("material_unit"),
+                    "quantity": float(r.get("order_quantity") or 0),
+                    "unit_price": float(r.get("unit_price") or 0),
+                    "amount": float(r.get("total_amount") or 0),
+                    "delivery_date": r.get("delivery_date"),
+                    "status": head.get("status"),
+                    "review_status": head.get("review_status"),
+                    "salesman_name": head.get("salesman_name") or "",
+                    "currency_code": head.get("currency_code") or "",
+                    "notes": r.get("notes") or head.get("notes") or "",
+                }
+            )
+        return self._wrap_report_payload(
+            {
+                "summary": {
+                    "total_orders": total_orders,
+                    "total_amount": total_amount,
+                    "pending_review": pending_review,
+                    "in_execution": in_execution,
+                    "completed": completed,
+                    "line_count": total_lines,
+                },
+                "data": items,
+                "total": total_lines,
+                "success": True,
+            }
+        )
 
     async def _get_sales_order_execution(
         self,
@@ -1106,7 +1383,7 @@ class ReportService:
         total_items = await query.count()
         lim = max(1, min(int(limit or 100), 500))
         sk = max(0, int(skip or 0))
-        items = await query.order_by("-id").offset(sk).limit(lim).values(
+        items = await query.order_by("-id").values(
             "id",
             "sales_order_id",
             "material_code",
@@ -1118,19 +1395,30 @@ class ReportService:
             "delivery_date",
             "delivery_status",
             "material_unit",
+            "unit_price",
         )
         order_ids = list(set(it["sales_order_id"] for it in items))
         orders_map = {}
         if order_ids:
             orders = await scoped_order_query.filter(id__in=order_ids).values(
-                "id", "order_code", "customer_name"
+                "id", "order_code", "customer_id", "customer_name", "salesman_name"
             )
             orders_map = {o["id"]: o for o in orders}
+        code_map = await self._customer_code_map(
+            tenant_id, [o.get("customer_id") for o in orders_map.values()]
+        )
         for it in items:
             order = orders_map.get(it["sales_order_id"], {})
+            cid = order.get("customer_id")
             it["order_code"] = order.get("order_code")
             it["customer_name"] = order.get("customer_name")
+            it["customer_code"] = code_map.get(int(cid), "") if cid is not None else ""
+            it["salesman_name"] = order.get("salesman_name") or ""
             rem = float(it.get("remaining_quantity") or 0)
+            oq = float(it.get("order_quantity") or 0)
+            dq = float(it.get("delivered_quantity") or 0)
+            it["delivery_progress"] = round(dq / oq * 100, 1) if oq else 0.0
+            it["open_amount"] = rem * float(it.get("unit_price") or 0) if it.get("unit_price") is not None else None
             overdue = execution_overdue_fields(it.get("delivery_date"), rem)
             it.update(overdue)
 
@@ -1224,23 +1512,14 @@ class ReportService:
                 salesman_pick[int(cid)] = str(nm).strip()
 
         customer_ids = [int(s["customer_id"]) for s in stats if s.get("customer_id") is not None]
-        code_map: dict[int, str] = {}
-        if customer_ids:
-            try:
-                from apps.master_data.models.customer import Customer
-
-                cust_rows = await Customer.filter(
-                    tenant_id=tenant_id, id__in=customer_ids, deleted_at__isnull=True
-                ).values("id", "code")
-                code_map = {int(r["id"]): str(r["code"] or "") for r in cust_rows}
-            except Exception as e:
-                logger.warning("客户销售业绩汇总：加载客户编码失败: %s", e)
+        code_map = await self._customer_code_map(tenant_id, customer_ids)
 
         from apps.kuaizhizao.services.report_enhancements import customer_received_by_customer_id
         received_map = await customer_received_by_customer_id(
             tenant_id, customer_ids, date_start=date_start, date_end=date_end,
         )
 
+        grand_amt = sum(float(s["total_rev"] or 0) for s in stats)
         items_full: list[dict[str, Any]] = []
         for s in stats:
             cid = int(s["customer_id"])
@@ -1261,20 +1540,18 @@ class ReportService:
                     "received_amount": float(received_map.get(cid, 0.0)),
                     "last_order_date": last_dt.strftime("%Y-%m-%d") if last_dt else None,
                     "avg_order_value": total_rev / cnt if cnt else 0.0,
+                    "amount_share": self._amount_share(total_rev, grand_amt),
                     "salesman_name": last_salesman or "",
                 }
             )
 
-        lim = max(1, min(int(limit or 100), 500))
-        sk = max(0, int(skip or 0))
-        page = items_full[sk : sk + lim]
         return {
             "summary": {
                 "total_customers": len(items_full),
                 "total_revenue": sum(it["total_amount"] for it in items_full),
                 "total_received": sum(it.get("received_amount") or 0 for it in items_full),
             },
-            "data": page,
+            "data": items_full,
             "total": len(items_full),
             "success": True,
         }
@@ -1300,14 +1577,28 @@ class ReportService:
         if customer_id: query = query.filter(customer_id=customer_id)
         if customer_keyword and str(customer_keyword).strip():
             query = query.filter(customer_name__icontains=str(customer_keyword).strip())
-        orders = await query.values("order_code", "order_date", "customer_name", "total_amount")
+        orders = await query.values(
+            "order_code", "order_date", "customer_id", "customer_name", "total_amount", "salesman_name"
+        )
         ret_query = SalesReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="已审核")
         if date_start: ret_query = ret_query.filter(return_time__gte=date_start)
         if date_end: ret_query = ret_query.filter(return_time__lte=date_end)
         if customer_id: ret_query = ret_query.filter(customer_id=customer_id)
         if customer_keyword and str(customer_keyword).strip():
             ret_query = ret_query.filter(customer_name__icontains=str(customer_keyword).strip())
-        returns = await ret_query.values("return_code", "return_time", "customer_name", "total_amount")
+        returns = await ret_query.values(
+            "return_code", "return_time", "customer_id", "customer_name", "total_amount"
+        )
+        code_map = await self._customer_code_map(
+            tenant_id,
+            [o.get("customer_id") for o in orders] + [r.get("customer_id") for r in returns],
+        )
+        for o in orders:
+            cid = o.get("customer_id")
+            o["customer_code"] = code_map.get(int(cid), "") if cid is not None else ""
+        for r in returns:
+            cid = r.get("customer_id")
+            r["customer_code"] = code_map.get(int(cid), "") if cid is not None else ""
         from apps.kuaizhizao.services.report_enhancements import build_customer_sales_reconciliation
         return await build_customer_sales_reconciliation(
             tenant_id,
@@ -1344,8 +1635,6 @@ class ReportService:
         sk = max(0, int(skip or 0))
         ranking = (
             await grouped.order_by("-total_rev")
-            .offset(sk)
-            .limit(lim)
             .values(
                 "material_id",
                 "material_code",
@@ -1361,6 +1650,8 @@ class ReportService:
         profit_map = await product_profit_map(
             tenant_id, material_ids, date_start=date_start, date_end=date_end,
         )
+        grand = await self._aggregate_sums(query, {"grand_amt": "total_amount"})
+        grand_amt = float(grand.get("grand_amt") or 0)
         items = [
             {
                 "rank": sk + idx + 1,
@@ -1372,7 +1663,8 @@ class ReportService:
                 "total_quantity": float(r["total_qty"] or 0),
                 "total_revenue": float(r["total_rev"] or 0),
                 "profit": float(profit_map.get(int(r["material_id"]), 0.0)),
-                "category": "",
+                "category": r.get("category") or "",
+                "amount_share": self._amount_share(float(r["total_rev"] or 0), grand_amt),
                 "avg_price": float(r["total_rev"] or 0) / float(r["total_qty"]) if r["total_qty"] else 0,
             }
             for idx, r in enumerate(ranking)
@@ -1380,7 +1672,7 @@ class ReportService:
         return {
             "summary": {
                 "top_product": items[0]["product_name"] if items else None,
-                "total_revenue": sum(it["total_revenue"] for it in items),
+                "total_revenue": grand_amt,
             },
             "data": items,
             "success": True,
@@ -1423,7 +1715,7 @@ class ReportService:
         total = await item_q.count()
         lim = max(1, min(int(limit or 100), 500))
         sk = max(0, int(skip or 0))
-        rows = await item_q.order_by("-id").offset(sk).limit(lim).values(
+        rows = await item_q.order_by("-id").values(
             "id",
             "delivery_id",
             "material_code",
@@ -1439,13 +1731,25 @@ class ReportService:
         dmap = {}
         if dids:
             for d in await SalesDelivery.filter(id__in=dids).values(
-                "id", "delivery_code", "customer_name", "warehouse_name", "delivery_time", "sales_order_code"
+                "id",
+                "delivery_code",
+                "customer_id",
+                "customer_name",
+                "warehouse_name",
+                "delivery_time",
+                "sales_order_code",
+                "status",
+                "deliverer_name",
             ):
                 dmap[d["id"]] = d
+        code_map = await self._customer_code_map(
+            tenant_id, [d.get("customer_id") for d in dmap.values()]
+        )
         items = []
         for r in rows:
             head = dmap.get(r["delivery_id"], {})
             delivery_time = head.get("delivery_time")
+            cid = head.get("customer_id")
             items.append({
                 "id": r["id"],
                 "delivery_id": r["delivery_id"],
@@ -1455,10 +1759,13 @@ class ReportService:
                 "material_unit": r.get("material_unit"),
                 "batch_number": r.get("batch_number"),
                 "delivery_code": head.get("delivery_code"),
+                "customer_code": code_map.get(int(cid), "") if cid is not None else "",
                 "customer_name": head.get("customer_name"),
                 "warehouse_name": head.get("warehouse_name"),
                 "delivery_date": to_api_isoformat(delivery_time.date()) if delivery_time else None,
                 "sales_order_code": head.get("sales_order_code"),
+                "status": head.get("status") or "",
+                "deliverer_name": head.get("deliverer_name") or "",
                 "quantity": float(r.get("delivery_quantity") or 0),
                 "unit_price": float(r.get("unit_price") or 0),
                 "amount": float(r.get("total_amount") or 0),
@@ -1514,7 +1821,7 @@ class ReportService:
         total = await item_q.count()
         lim = max(1, min(int(limit or 100), 500))
         sk = max(0, int(skip or 0))
-        rows = await item_q.order_by("-id").offset(sk).limit(lim).values(
+        rows = await item_q.order_by("-id").values(
             "id",
             "return_id",
             "material_code",
@@ -1530,13 +1837,26 @@ class ReportService:
         rmap = {}
         if rids:
             for h in await SalesReturn.filter(id__in=rids).values(
-                "id", "return_code", "customer_name", "warehouse_name", "return_time", "sales_delivery_code", "return_reason"
+                "id",
+                "return_code",
+                "customer_id",
+                "customer_name",
+                "warehouse_name",
+                "return_time",
+                "sales_delivery_code",
+                "sales_order_code",
+                "return_reason",
+                "status",
             ):
                 rmap[h["id"]] = h
+        code_map = await self._customer_code_map(
+            tenant_id, [h.get("customer_id") for h in rmap.values()]
+        )
         items = []
         for r in rows:
             head = rmap.get(r["return_id"], {})
             return_time = head.get("return_time")
+            cid = head.get("customer_id")
             items.append({
                 "id": r["id"],
                 "return_id": r["return_id"],
@@ -1546,11 +1866,14 @@ class ReportService:
                 "material_unit": r.get("material_unit"),
                 "batch_number": r.get("batch_number"),
                 "return_code": head.get("return_code"),
+                "customer_code": code_map.get(int(cid), "") if cid is not None else "",
                 "customer_name": head.get("customer_name"),
                 "warehouse_name": head.get("warehouse_name"),
                 "return_date": to_api_isoformat(return_time.date()) if return_time else None,
                 "sales_delivery_code": head.get("sales_delivery_code"),
+                "sales_order_code": head.get("sales_order_code"),
                 "return_reason": head.get("return_reason"),
+                "status": head.get("status") or "",
                 "quantity": float(r.get("return_quantity") or 0),
                 "unit_price": float(r.get("unit_price") or 0),
                 "amount": float(r.get("total_amount") or 0),
@@ -1584,7 +1907,7 @@ class ReportService:
         """存货销售汇总表（按物料汇总已出库数量与金额）"""
         from apps.kuaizhizao.models.sales_delivery import SalesDelivery
         from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
-        from tortoise.functions import Sum
+        from tortoise.functions import Count, Sum
 
         dq = SalesDelivery.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         dq = dq.exclude(status__in=["待出库", "CANCELLED", "已取消"])
@@ -1603,6 +1926,7 @@ class ReportService:
         grouped = item_q.annotate(
             total_qty=Sum("delivery_quantity"),
             total_amt=Sum("total_amount"),
+            delivery_count=Count("id"),
         ).group_by("material_id", "material_code", "material_name", "material_spec", "material_unit")
 
         group_keys = await grouped.values("material_id")
@@ -1617,12 +1941,18 @@ class ReportService:
                 "material_unit",
                 "total_qty",
                 "total_amt",
+                "delivery_count",
             )
         rows = sorted(
             rows_raw,
             key=lambda r: float(r.get("total_amt") or 0),
             reverse=True,
-        )[sk : sk + lim]
+        )
+        all_agg = await self._aggregate_sums(
+            item_q,
+            {"grand_qty": "delivery_quantity", "grand_amt": "total_amount"},
+        )
+        grand_amt = float(all_agg.get("grand_amt") or 0)
         items = [
             {
                 "material_code": r["material_code"],
@@ -1631,14 +1961,12 @@ class ReportService:
                 "unit": r["material_unit"],
                 "total_quantity": float(r["total_qty"] or 0),
                 "total_amount": float(r["total_amt"] or 0),
+                "delivery_count": int(r.get("delivery_count") or 0),
+                "amount_share": self._amount_share(float(r["total_amt"] or 0), grand_amt),
                 "avg_price": float(r["total_amt"] or 0) / float(r["total_qty"]) if r["total_qty"] else 0,
             }
             for r in rows
         ]
-        all_agg = await self._aggregate_sums(
-            item_q,
-            {"grand_qty": "delivery_quantity", "grand_amt": "total_amount"},
-        )
         return {
             "data": items,
             "total": total_groups,
@@ -1646,7 +1974,7 @@ class ReportService:
             "summary": {
                 "material_count": total_groups,
                 "total_quantity": float(all_agg.get("grand_qty") or 0),
-                "total_amount": float(all_agg.get("grand_amt") or 0),
+                "total_amount": grand_amt,
             },
         }
 
@@ -1679,9 +2007,8 @@ class ReportService:
         total_rows = len(items)
         lim = max(1, min(int(limit or 100), 500))
         sk = max(0, int(skip or 0))
-        page = items[sk : sk + lim]
         return {
-            "data": page,
+            "data": items,
             "success": True,
             "total": total_rows,
             "summary": {"avg_accuracy": sum(it["accuracy"] for it in items) / len(items) if items else 0},
@@ -1699,6 +2026,8 @@ class ReportService:
         limit: int = 100,
         current_user: Optional[Any] = None,
     ):
+        from apps.kuaizhizao.models.quotation_item import QuotationItem
+
         query = await self._scoped_quotation_query(tenant_id=tenant_id, current_user=current_user)
         if date_start:
             query = query.filter(quotation_date__gte=date_start.date())
@@ -1708,18 +2037,76 @@ class ReportService:
             query = query.filter(customer_id=customer_id)
         if customer_keyword and str(customer_keyword).strip():
             query = query.filter(customer_name__icontains=str(customer_keyword).strip())
-        total = await query.count()
+        quotation_ids = list(await query.values_list("id", flat=True))
+        if not quotation_ids:
+            return {"data": [], "success": True, "total": 0}
+        item_q = QuotationItem.filter(tenant_id=tenant_id, quotation_id__in=quotation_ids)
+        total = await item_q.count()
         lim = max(1, min(int(limit or 100), 500))
         sk = max(0, int(skip or 0))
-        items = await query.order_by("-quotation_date").offset(sk).limit(lim).values(
-            "quotation_code",
-            "quotation_date",
-            "customer_name",
+        rows = await item_q.order_by("-quotation_id", "id").values(
+            "id",
+            "quotation_id",
+            "material_code",
+            "material_name",
+            "material_spec",
+            "material_unit",
+            "quote_quantity",
+            "unit_price",
             "total_amount",
-            "status",
-            "salesman_name",
+            "delivery_date",
+            "notes",
         )
-        return {"data": items, "success": True, "total": total}
+        page_qids = list({int(r["quotation_id"]) for r in rows})
+        qmap: Dict[int, Dict[str, Any]] = {}
+        if page_qids:
+            for q in await query.filter(id__in=page_qids).values(
+                "id",
+                "quotation_code",
+                "quotation_date",
+                "valid_until",
+                "customer_id",
+                "customer_name",
+                "status",
+                "salesman_name",
+                "currency_code",
+                "notes",
+            ):
+                qmap[int(q["id"])] = q
+        code_map = await self._customer_code_map(
+            tenant_id, [q.get("customer_id") for q in qmap.values()]
+        )
+        line_map = await self._item_line_no_map(
+            QuotationItem, "quotation_id", page_qids, tenant_id
+        )
+        items = []
+        for r in rows:
+            head = qmap.get(int(r["quotation_id"]), {})
+            cid = head.get("customer_id")
+            items.append(
+                {
+                    "id": r["id"],
+                    "line_no": line_map.get(int(r["id"])),
+                    "quotation_code": head.get("quotation_code"),
+                    "quotation_date": head.get("quotation_date"),
+                    "valid_until": head.get("valid_until"),
+                    "customer_code": code_map.get(int(cid), "") if cid is not None else "",
+                    "customer_name": head.get("customer_name"),
+                    "material_code": r.get("material_code"),
+                    "material_name": r.get("material_name"),
+                    "material_spec": r.get("material_spec"),
+                    "material_unit": r.get("material_unit"),
+                    "quantity": float(r.get("quote_quantity") or 0),
+                    "unit_price": float(r.get("unit_price") or 0),
+                    "amount": float(r.get("total_amount") or 0),
+                    "delivery_date": r.get("delivery_date"),
+                    "status": head.get("status"),
+                    "salesman_name": head.get("salesman_name") or "",
+                    "currency_code": head.get("currency_code") or "",
+                    "notes": r.get("notes") or head.get("notes") or "",
+                }
+            )
+        return self._wrap_report_payload({"data": items, "success": True, "total": total})
 
     async def _get_sales_contract_execution(
         self,
@@ -1752,7 +2139,7 @@ class ReportService:
         total = await query.count()
         lim = max(1, min(int(limit or 100), 500))
         sk = max(0, int(skip or 0))
-        contracts = await query.order_by("-contract_date").offset(sk).limit(lim)
+        contracts = await query.order_by("-contract_date")
 
         contract_ids = [c.id for c in contracts]
         release_counts: Dict[int, int] = {}
@@ -1794,12 +2181,16 @@ class ReportService:
             remaining_amt = max(Decimal("0"), total_amt - released_amt)
             items.append(
                 {
+                    "id": c.id,
                     "contract_code": c.contract_code,
                     "contract_type": c.contract_type,
+                    "customer_id": c.customer_id,
                     "customer_name": c.customer_name,
                     "contract_date": to_api_isoformat(c.contract_date) if c.contract_date else None,
                     "valid_to": to_api_isoformat(c.valid_to) if c.valid_to else None,
                     "status": c.status,
+                    "currency_code": c.currency_code or "",
+                    "salesman_name": c.salesman_name or "",
                     "total_amount": float(total_amt),
                     "released_amount": float(released_amt),
                     "remaining_amount": float(remaining_amt),
@@ -1808,6 +2199,12 @@ class ReportService:
                     "release_order_count": release_counts.get(c.id, 0),
                 }
             )
+        code_map = await self._customer_code_map(
+            tenant_id, [it.get("customer_id") for it in items]
+        )
+        for it in items:
+            cid = it.get("customer_id")
+            it["customer_code"] = code_map.get(int(cid), "") if cid is not None else ""
 
         summary_rate = (
             round(sum(it["execution_rate"] for it in items) / len(items), 2) if items else 0.0
@@ -2600,6 +2997,78 @@ class ReportService:
             },
         }
 
+    async def _plan_demand_ids(
+        self,
+        tenant_id: int,
+        date_start: Optional[datetime] = None,
+        date_end: Optional[datetime] = None,
+        *,
+        status: Optional[str] = None,
+        demand_type: Optional[str] = None,
+        customer_keyword: Optional[str] = None,
+    ) -> List[int]:
+        from apps.kuaizhizao.models.demand import Demand
+
+        dq = Demand.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        start = self._as_date(date_start)
+        end = self._as_date(date_end)
+        if start:
+            dq = dq.filter(start_date__gte=start)
+        if end:
+            dq = dq.filter(start_date__lte=end)
+        if status:
+            dq = dq.filter(status=status)
+        if demand_type:
+            dq = dq.filter(demand_type=demand_type)
+        kw = str(customer_keyword or "").strip()
+        if kw:
+            dq = dq.filter(customer_name__icontains=kw)
+        return list(await dq.values_list("id", flat=True))
+
+    async def _attach_plan_demand_headers(
+        self,
+        tenant_id: int,
+        items: List[Dict[str, Any]],
+    ) -> None:
+        from apps.kuaizhizao.models.demand import Demand
+
+        demand_ids = list({it.get("demand_id") for it in items if it.get("demand_id") is not None})
+        heads: List[Dict[str, Any]] = []
+        if demand_ids:
+            heads = await Demand.filter(tenant_id=tenant_id, id__in=demand_ids).values(
+                "id",
+                "demand_code",
+                "demand_type",
+                "start_date",
+                "customer_id",
+                "customer_name",
+                "salesman_name",
+                "status",
+                "source_code",
+                "notes",
+            )
+        head_map = {h["id"]: h for h in heads}
+        code_map = await self._customer_code_map(
+            tenant_id, [h.get("customer_id") for h in heads]
+        )
+        for it in items:
+            head = head_map.get(it.get("demand_id"), {})
+            cid = head.get("customer_id")
+            demand_code = head.get("demand_code") or ""
+            it["demand_code"] = demand_code
+            it["plan_code"] = demand_code
+            it["demand_type"] = head.get("demand_type") or ""
+            it["customer_name"] = head.get("customer_name") or ""
+            it["customer_code"] = code_map.get(int(cid), "") if cid is not None else ""
+            it["salesman_name"] = head.get("salesman_name") or ""
+            it["document_status"] = head.get("status") or ""
+            it["source_code"] = head.get("source_code") or ""
+            it["notes"] = it.get("notes") or head.get("notes") or ""
+            it["requirement_date"] = (
+                it.get("delivery_date") or it.get("forecast_date") or head.get("start_date")
+            )
+            it["start_date"] = head.get("start_date")
+
     async def get_plan_report(
         self,
         tenant_id: int,
@@ -2607,37 +3076,154 @@ class ReportService:
         date_start: Optional[datetime] = None,
         date_end: Optional[datetime] = None,
         *,
+        skip: int = 0,
+        limit: int = 100,
+        status: Optional[str] = None,
+        demand_type: Optional[str] = None,
+        customer_keyword: Optional[str] = None,
         current_user: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """计划报表汇总"""
-        from apps.kuaizhizao.models.demand import Demand
         from apps.kuaizhizao.models.demand_item import DemandItem
-        from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
         from apps.kuaizhizao.models.inventory_alert import InventoryAlert
-        from apps.kuaizhizao.models.work_order import WorkOrder
         from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+        from tortoise.functions import Sum
+
+        lim = max(1, min(int(limit or 100), 500))
+        sk = max(0, int(skip or 0))
 
         if report_type in ["plan-fulfillment-rate", "fulfillment"]:
-            # 计划达成率分析 - 使用 DemandItem 获取明细
-            items = await DemandItem.filter(tenant_id=tenant_id).limit(100).values("id", "material_name", "required_quantity", "delivered_quantity", "delivery_status")
-            res = []
-            for it in items:
-                res.append({
-                    "plan_code": f"D-ITEM-{it['id']}",
-                    "material_name": it["material_name"],
-                    "planned_quantity": float(it["required_quantity"] or 0),
-                    "completed_quantity": float(it["delivered_quantity"] or 0),
-                    "fulfillment_rate": (float(it["delivered_quantity"] or 0) / float(it["required_quantity"] or 1) * 100),
-                    "status": it["delivery_status"] or "未知"
+            demand_ids = await self._plan_demand_ids(
+                tenant_id,
+                date_start,
+                date_end,
+                status=status,
+                demand_type=demand_type,
+                customer_keyword=customer_keyword,
+            )
+            if not demand_ids:
+                return self._wrap_report_payload({
+                    "data": [],
+                    "success": True,
+                    "total": 0,
+                    "summary": {
+                        "planned_quantity": 0.0,
+                        "completed_quantity": 0.0,
+                        "remaining_quantity": 0.0,
+                    },
                 })
-            return {"data": res, "success": True}
-        elif report_type in ["demand-plan-detail", "demand_detail"]:
-            # 需求计划详情
-            items = await DemandItem.filter(tenant_id=tenant_id).limit(100).values("id", "material_code", "material_name", "required_quantity", "delivery_date")
+            item_q = DemandItem.filter(tenant_id=tenant_id, demand_id__in=demand_ids)
+            total = await item_q.count()
+            items = await item_q.order_by("-id").values(
+                "id",
+                "demand_id",
+                "material_code",
+                "material_name",
+                "material_spec",
+                "material_unit",
+                "required_quantity",
+                "delivered_quantity",
+                "remaining_quantity",
+                "delivery_date",
+                "forecast_date",
+                "delivery_status",
+                "notes",
+            )
+            await self._attach_plan_demand_headers(tenant_id, items)
+            site_today = to_site_date(resolve_business_datetime())
             for it in items:
-                it["quantity"] = float(it["required_quantity"] or 0)
-                it["requirement_date"] = it["delivery_date"].strftime("%Y-%m-%d") if it["delivery_date"] else None
-            return {"data": items, "success": True}
+                required = float(it.get("required_quantity") or 0)
+                delivered = float(it.get("delivered_quantity") or 0)
+                rem_raw = it.get("remaining_quantity")
+                remaining = float(rem_raw) if rem_raw is not None else max(0.0, required - delivered)
+                it["planned_quantity"] = required
+                it["completed_quantity"] = delivered
+                it["remaining_quantity"] = remaining
+                it["fulfillment_rate"] = round(delivered / required * 100, 1) if required else 0.0
+                it["status"] = it.get("delivery_status") or ""
+                dd = self._as_date(it.get("delivery_date"))
+                is_overdue = bool(remaining > 0 and dd is not None and dd < site_today)
+                it["is_overdue"] = is_overdue
+                it["overdue_days"] = (site_today - dd).days if is_overdue and dd is not None else 0
+            agg = await item_q.annotate(
+                total_req=Sum("required_quantity"),
+                total_del=Sum("delivered_quantity"),
+            ).values("total_req", "total_del")
+            total_req = float(agg[0]["total_req"] or 0) if agg else 0.0
+            total_del = float(agg[0]["total_del"] or 0) if agg else 0.0
+            return self._wrap_report_payload({
+                "data": items,
+                "success": True,
+                "total": total,
+                "summary": {
+                    "planned_quantity": total_req,
+                    "completed_quantity": total_del,
+                    "remaining_quantity": max(0.0, total_req - total_del),
+                },
+            })
+        elif report_type in ["demand-plan-detail", "demand_detail"]:
+            demand_ids = await self._plan_demand_ids(
+                tenant_id,
+                date_start,
+                date_end,
+                status=status,
+                demand_type=demand_type,
+                customer_keyword=customer_keyword,
+            )
+            if not demand_ids:
+                return self._wrap_report_payload({
+                    "data": [],
+                    "success": True,
+                    "total": 0,
+                    "summary": {
+                        "quantity": 0.0,
+                        "delivered_quantity": 0.0,
+                        "remaining_quantity": 0.0,
+                    },
+                })
+            item_q = DemandItem.filter(tenant_id=tenant_id, demand_id__in=demand_ids)
+            total = await item_q.count()
+            items = await item_q.order_by("-id").values(
+                "id",
+                "demand_id",
+                "material_code",
+                "material_name",
+                "material_spec",
+                "material_unit",
+                "required_quantity",
+                "delivered_quantity",
+                "remaining_quantity",
+                "delivery_date",
+                "forecast_date",
+                "notes",
+            )
+            await self._attach_plan_demand_headers(tenant_id, items)
+            for it in items:
+                qty = float(it.get("required_quantity") or 0)
+                delivered = float(it.get("delivered_quantity") or 0)
+                rem_raw = it.get("remaining_quantity")
+                it["quantity"] = qty
+                it["delivered_quantity"] = delivered
+                it["remaining_quantity"] = (
+                    float(rem_raw) if rem_raw is not None else max(0.0, qty - delivered)
+                )
+                it["status"] = it.get("document_status") or ""
+            agg = await item_q.annotate(
+                total_req=Sum("required_quantity"),
+                total_del=Sum("delivered_quantity"),
+            ).values("total_req", "total_del")
+            total_req = float(agg[0]["total_req"] or 0) if agg else 0.0
+            total_del = float(agg[0]["total_del"] or 0) if agg else 0.0
+            return self._wrap_report_payload({
+                "data": items,
+                "success": True,
+                "total": total,
+                "summary": {
+                    "quantity": total_req,
+                    "delivered_quantity": total_del,
+                    "remaining_quantity": max(0.0, total_req - total_del),
+                },
+            })
         elif report_type in ["purchase-plan-comparison", "pur_comparison"]:
             # 采购计划对比 - 使用 PurchaseRequisitionItem 获取明细
             from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisitionItem
@@ -2659,20 +3245,57 @@ class ReportService:
                 it["planned_end_date"] = it["planned_end_date"].strftime("%Y-%m-%d") if it["planned_end_date"] else None
             return {"data": items, "success": True}
         elif report_type in ["material-shortage-alert", "shortage"]:
-            # 物料短缺预警（InventoryAlert：threshold_value=最低库存阈值，triggered_at=预警时间）
-            items = await InventoryAlert.filter(
+            alert_q = InventoryAlert.filter(
                 tenant_id=tenant_id,
                 deleted_at__isnull=True,
                 alert_type="low_stock",
-                status="pending",
-            ).limit(100).values(
+            )
+            if date_start:
+                alert_q = alert_q.filter(
+                    triggered_at__gte=coerce_business_datetime_to_utc(date_start)
+                )
+            if date_end:
+                alert_q = alert_q.filter(
+                    triggered_at__lt=coerce_business_datetime_to_utc(date_end + timedelta(days=1))
+                )
+            if status:
+                alert_q = alert_q.filter(status=status)
+            else:
+                alert_q = alert_q.filter(status="pending")
+            total = await alert_q.count()
+            items = await alert_q.order_by("-triggered_at").values(
+                "id",
+                "material_code",
                 "material_name",
                 "warehouse_name",
                 "current_quantity",
                 "threshold_value",
+                "alert_level",
+                "status",
                 "triggered_at",
             )
-            return {"data": items, "success": True}
+            for it in items:
+                current = float(it.get("current_quantity") or 0)
+                threshold = float(it.get("threshold_value") or 0)
+                it["current_quantity"] = current
+                it["threshold_value"] = threshold
+                it["shortage_quantity"] = max(0.0, threshold - current)
+            agg = await alert_q.annotate(
+                total_current=Sum("current_quantity"),
+                total_threshold=Sum("threshold_value"),
+            ).values("total_current", "total_threshold")
+            total_current = float(agg[0]["total_current"] or 0) if agg else 0.0
+            total_threshold = float(agg[0]["total_threshold"] or 0) if agg else 0.0
+            return self._wrap_report_payload({
+                "data": items,
+                "success": True,
+                "total": total,
+                "summary": {
+                    "current_quantity": total_current,
+                    "threshold_value": total_threshold,
+                    "shortage_quantity": max(0.0, total_threshold - total_current),
+                },
+            })
         elif report_type in ["production-delay-analysis", "delay"]:
             # 生产延期分析
             delay_qs = await self._scoped_work_order_query(
@@ -2697,6 +3320,19 @@ class ReportService:
             return self._wrap_report_payload({"data": res, "success": True})
         return {"data": [], "success": True}
 
+    async def _scoped_purchase_requisition_query(self, tenant_id: int, current_user: Optional[Any] = None):
+        from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
+
+        query = PurchaseRequisition.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if current_user is None:
+            return query
+        return await DataScopeService.apply(
+            query,
+            tenant_id=tenant_id,
+            user=current_user,
+            resource="kuaizhizao:purchase-requisition",
+        )
+
     async def get_purchase_report(
         self,
         tenant_id: int,
@@ -2707,105 +3343,351 @@ class ReportService:
         *,
         skip: int = 0,
         limit: int = 100,
+        status: Optional[str] = None,
+        supplier_name: Optional[str] = None,
         current_user: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """采购报表汇总"""
-        from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
         from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
-        from apps.kuaizhizao.models.purchase_return import PurchaseReturn
-        from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
-        from tortoise.functions import Sum, Count, Avg
+        from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+        from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition, PurchaseRequisitionItem
+        from tortoise.functions import Sum
+
+        lim = max(1, min(int(limit or 100), 500))
+        sk = max(0, int(skip or 0))
+        start = self._as_date(date_start)
+        end = self._as_date(date_end)
+        supplier_kw = str(supplier_name or "").strip()
 
         if report_type in ["purchase-requisition-tracking", "req_tracking", "requisition_tracking"]:
-            from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisitionItem
-
-            rows = await PurchaseRequisitionItem.filter(tenant_id=tenant_id).order_by("-id").limit(100).values(
+            req_q = await self._scoped_purchase_requisition_query(
+                tenant_id=tenant_id, current_user=current_user,
+            )
+            if start:
+                req_q = req_q.filter(requisition_date__gte=start)
+            if end:
+                req_q = req_q.filter(requisition_date__lte=end)
+            if status:
+                req_q = req_q.filter(status=status)
+            req_ids = list(await req_q.values_list("id", flat=True))
+            if not req_ids:
+                return self._wrap_report_payload({
+                    "data": [], "success": True, "total": 0,
+                    "summary": {"quantity": 0.0},
+                })
+            item_q = PurchaseRequisitionItem.filter(tenant_id=tenant_id, requisition_id__in=req_ids)
+            total = await item_q.count()
+            items = await item_q.order_by("-id").values(
+                "id",
                 "requisition_id",
+                "material_code",
                 "material_name",
+                "material_spec",
+                "unit",
                 "quantity",
                 "required_date",
+                "purchase_order_id",
+                "notes",
             )
-            req_ids = list({r["requisition_id"] for r in rows if r.get("requisition_id")})
-            req_map = {}
-            if req_ids:
-                for head in await PurchaseRequisition.filter(id__in=req_ids).values(
-                    "id", "requisition_code", "status"
-                ):
-                    req_map[head["id"]] = head
-            res = []
-            for it in rows:
-                head = req_map.get(it.get("requisition_id"), {})
-                res.append({
-                    "requisition_code": head.get("requisition_code") or "N/A",
-                    "material_name": it.get("material_name"),
-                    "quantity": float(it.get("quantity") or 0),
-                    "requirement_date": it["required_date"].strftime("%Y-%m-%d") if it.get("required_date") else None,
-                    "status": head.get("status") or "未知",
-                })
-            return {"data": res, "success": True}
+            heads = await PurchaseRequisition.filter(id__in=[it["requisition_id"] for it in items]).values(
+                "id", "requisition_code", "requisition_date", "applicant_name", "status", "notes",
+            )
+            head_map = {h["id"]: h for h in heads}
+            po_ids = [it["purchase_order_id"] for it in items if it.get("purchase_order_id")]
+            po_code_map = {}
+            if po_ids:
+                for po in await PurchaseOrder.filter(id__in=po_ids).values("id", "order_code"):
+                    po_code_map[po["id"]] = po.get("order_code") or ""
+            for it in items:
+                head = head_map.get(it.get("requisition_id"), {})
+                it["requisition_code"] = head.get("requisition_code") or ""
+                it["requisition_date"] = head.get("requisition_date")
+                it["applicant_name"] = head.get("applicant_name") or ""
+                it["status"] = head.get("status") or ""
+                it["quantity"] = float(it.get("quantity") or 0)
+                it["purchase_order_code"] = po_code_map.get(it.get("purchase_order_id"), "")
+                it["notes"] = it.get("notes") or head.get("notes") or ""
+            agg = await item_q.annotate(total_qty=Sum("quantity")).values("total_qty")
+            return self._wrap_report_payload({
+                "data": items,
+                "success": True,
+                "total": total,
+                "summary": {"quantity": float(agg[0]["total_qty"] or 0) if agg else 0.0},
+            })
 
         scoped_po_query = await self._scoped_purchase_order_query(
             tenant_id=tenant_id,
             current_user=current_user,
         )
-        scoped_po_ids = await scoped_po_query.values_list("id", flat=True)
-        scoped_po_id_list = list(scoped_po_ids)
-
+        scoped_po_query = scoped_po_query.filter(deleted_at__isnull=True)
+        scoped_po_id_list = list(await scoped_po_query.values_list("id", flat=True))
         po_dependent_types = {
             "purchase-order-query",
             "po_query",
             "purchase-order-progress",
             "po_progress",
+            "supplier-delivery-summary",
+            "supplier_delivery",
+            "purchase-reconciliation",
+            "pur_reconciliation",
+            "purchase_recon",
         }
         if report_type in po_dependent_types and not scoped_po_id_list:
-            return {"data": [], "success": True, "total": 0}
-
-        lim = max(1, min(int(limit or 100), 500))
-        sk = max(0, int(skip or 0))
+            return self._wrap_report_payload({"data": [], "success": True, "total": 0})
 
         if report_type in ["purchase-order-query", "po_query"]:
             po_q = scoped_po_query
-            if date_start:
-                po_q = po_q.filter(order_date__gte=date_start.date())
-            if date_end:
-                po_q = po_q.filter(order_date__lte=date_end.date())
+            if start:
+                po_q = po_q.filter(order_date__gte=start)
+            if end:
+                po_q = po_q.filter(order_date__lte=end)
             if supplier_id:
                 po_q = po_q.filter(supplier_id=supplier_id)
-            total = await po_q.count()
-            items = await po_q.order_by("-order_date").offset(sk).limit(lim).values(
-                "order_code",
-                "order_date",
-                "supplier_name",
-                "total_amount",
-                "status",
-            )
-            return {"data": items, "success": True, "total": total}
-        elif report_type in ["purchase-order-progress", "po_progress"]:
+            if supplier_kw:
+                po_q = po_q.filter(supplier_name__icontains=supplier_kw)
+            if status:
+                po_q = po_q.filter(status=status)
+            po_ids = list(await po_q.values_list("id", flat=True))
+            if not po_ids:
+                return self._wrap_report_payload({
+                    "data": [], "success": True, "total": 0,
+                    "summary": {"quantity": 0.0, "amount": 0.0},
+                })
             item_q = PurchaseOrderItem.filter(
                 tenant_id=tenant_id,
-                order_id__in=scoped_po_id_list,
+                order_id__in=po_ids,
+                deleted_at__isnull=True,
             )
-            if date_start:
-                item_q = item_q.filter(required_date__gte=date_start.date())
-            if date_end:
-                item_q = item_q.filter(required_date__lte=date_end.date())
             total = await item_q.count()
-            items = await item_q.order_by("-id").offset(sk).limit(lim).values(
-                "material_name", "ordered_quantity", "received_quantity", "required_date",
+            items = await item_q.order_by("-id").values(
+                "id",
+                "order_id",
+                "material_code",
+                "material_name",
+                "material_spec",
+                "unit",
+                "ordered_quantity",
+                "unit_price",
+                "total_price",
+                "required_date",
+                "notes",
+            )
+            heads = await po_q.filter(
+                id__in=[it["order_id"] for it in items]
+            ).values(
+                "id", "order_code", "order_date", "supplier_id", "supplier_name",
+                "buyer_name", "status", "review_status", "notes",
+            )
+            head_map = {h["id"]: h for h in heads}
+            code_map = await self._supplier_code_map(
+                tenant_id, [h.get("supplier_id") for h in heads]
             )
             for it in items:
-                it["quantity"] = float(it["ordered_quantity"] or 0)
-                it["delivery_date"] = it["required_date"].strftime("%Y-%m-%d") if it["required_date"] else None
-            return {"data": items, "success": True, "total": total}
+                head = head_map.get(it.get("order_id"), {})
+                sid = head.get("supplier_id")
+                it["order_code"] = head.get("order_code") or ""
+                it["order_date"] = head.get("order_date")
+                it["supplier_name"] = head.get("supplier_name") or ""
+                it["supplier_code"] = code_map.get(int(sid), "") if sid is not None else ""
+                it["buyer_name"] = head.get("buyer_name") or ""
+                it["status"] = head.get("status") or ""
+                it["review_status"] = head.get("review_status") or ""
+                it["quantity"] = float(it.get("ordered_quantity") or 0)
+                it["unit_price"] = float(it["unit_price"]) if it.get("unit_price") is not None else None
+                it["amount"] = float(it["total_price"]) if it.get("total_price") is not None else None
+                it["notes"] = it.get("notes") or head.get("notes") or ""
+            agg = await item_q.annotate(
+                total_qty=Sum("ordered_quantity"),
+                total_amt=Sum("total_price"),
+            ).values("total_qty", "total_amt")
+            return self._wrap_report_payload({
+                "data": items,
+                "success": True,
+                "total": total,
+                "summary": {
+                    "quantity": float(agg[0]["total_qty"] or 0) if agg else 0.0,
+                    "amount": float(agg[0]["total_amt"] or 0) if agg else 0.0,
+                },
+            })
+        elif report_type in ["purchase-order-progress", "po_progress"]:
+            po_q = scoped_po_query
+            if supplier_id:
+                po_q = po_q.filter(supplier_id=supplier_id)
+            if supplier_kw:
+                po_q = po_q.filter(supplier_name__icontains=supplier_kw)
+            if status:
+                po_q = po_q.filter(status=status)
+            po_ids = list(await po_q.values_list("id", flat=True))
+            if not po_ids:
+                return self._wrap_report_payload({
+                    "data": [], "success": True, "total": 0,
+                    "summary": {
+                        "ordered_quantity": 0.0,
+                        "received_quantity": 0.0,
+                        "outstanding_quantity": 0.0,
+                    },
+                })
+            item_q = PurchaseOrderItem.filter(
+                tenant_id=tenant_id,
+                order_id__in=po_ids,
+                deleted_at__isnull=True,
+            )
+            if start:
+                item_q = item_q.filter(required_date__gte=start)
+            if end:
+                item_q = item_q.filter(required_date__lte=end)
+            total = await item_q.count()
+            items = await item_q.order_by("-id").values(
+                "id",
+                "order_id",
+                "material_code",
+                "material_name",
+                "material_spec",
+                "unit",
+                "ordered_quantity",
+                "received_quantity",
+                "outstanding_quantity",
+                "required_date",
+                "notes",
+            )
+            heads = await PurchaseOrder.filter(id__in=[it["order_id"] for it in items]).values(
+                "id", "order_code", "order_date", "supplier_id", "supplier_name",
+                "buyer_name", "status",
+            )
+            head_map = {h["id"]: h for h in heads}
+            code_map = await self._supplier_code_map(
+                tenant_id, [h.get("supplier_id") for h in heads]
+            )
+            site_today = to_site_date(resolve_business_datetime())
+            for it in items:
+                head = head_map.get(it.get("order_id"), {})
+                sid = head.get("supplier_id")
+                ordered = float(it.get("ordered_quantity") or 0)
+                received = float(it.get("received_quantity") or 0)
+                rem_raw = it.get("outstanding_quantity")
+                pending = float(rem_raw) if rem_raw is not None else max(0.0, ordered - received)
+                it["order_code"] = head.get("order_code") or ""
+                it["order_date"] = head.get("order_date")
+                it["supplier_name"] = head.get("supplier_name") or ""
+                it["supplier_code"] = code_map.get(int(sid), "") if sid is not None else ""
+                it["buyer_name"] = head.get("buyer_name") or ""
+                it["status"] = head.get("status") or ""
+                it["ordered_quantity"] = ordered
+                it["received_quantity"] = received
+                it["outstanding_quantity"] = pending
+                it["receipt_progress"] = round(received / ordered * 100, 1) if ordered else 0.0
+                dd = self._as_date(it.get("required_date"))
+                is_overdue = bool(pending > 0 and dd is not None and dd < site_today)
+                it["is_overdue"] = is_overdue
+                it["overdue_days"] = (site_today - dd).days if is_overdue and dd is not None else 0
+            agg = await item_q.annotate(
+                total_ord=Sum("ordered_quantity"),
+                total_rcv=Sum("received_quantity"),
+            ).values("total_ord", "total_rcv")
+            total_ord = float(agg[0]["total_ord"] or 0) if agg else 0.0
+            total_rcv = float(agg[0]["total_rcv"] or 0) if agg else 0.0
+            return self._wrap_report_payload({
+                "data": items,
+                "success": True,
+                "total": total,
+                "summary": {
+                    "ordered_quantity": total_ord,
+                    "received_quantity": total_rcv,
+                    "outstanding_quantity": max(0.0, total_ord - total_rcv),
+                },
+            })
         elif report_type in ["supplier-delivery-summary", "supplier_delivery"]:
-            rq = PurchaseReceipt.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            if supplier_kw:
+                scoped_po_id_list = list(
+                    await scoped_po_query.filter(
+                        supplier_name__icontains=supplier_kw
+                    ).values_list("id", flat=True)
+                )
+                if not scoped_po_id_list:
+                    return self._wrap_report_payload({"data": [], "success": True, "total": 0})
+            rq = PurchaseReceipt.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                purchase_order_id__in=scoped_po_id_list,
+            )
             if date_start:
-                rq = rq.filter(receipt_time__gte=date_start)
+                rq = rq.filter(receipt_time__gte=coerce_business_datetime_to_utc(date_start))
             if date_end:
-                rq = rq.filter(receipt_time__lte=date_end)
-            stats = await rq.annotate(count=Count("id")).group_by("supplier_name").values("supplier_name", "count")
-            return {"data": stats, "success": True}
+                rq = rq.filter(
+                    receipt_time__lt=coerce_business_datetime_to_utc(date_end + timedelta(days=1))
+                )
+            receipts = await rq.values(
+                "id", "receipt_code", "supplier_id", "supplier_name", "receipt_time",
+            )
+            if not receipts:
+                return self._wrap_report_payload({"data": [], "success": True, "total": 0})
+            receipt_ids = [r["id"] for r in receipts]
+            receipt_map = {r["id"]: r for r in receipts}
+            lines = await PurchaseReceiptItem.filter(
+                tenant_id=tenant_id,
+                receipt_id__in=receipt_ids,
+                deleted_at__isnull=True,
+            ).values(
+                "receipt_id",
+                "receipt_quantity",
+                "total_amount",
+                "purchase_order_item_id",
+                "receipt_time",
+            )
+            po_item_ids = [ln["purchase_order_item_id"] for ln in lines if ln.get("purchase_order_item_id")]
+            required_map = {}
+            if po_item_ids:
+                for poi in await PurchaseOrderItem.filter(id__in=po_item_ids).values("id", "required_date"):
+                    required_map[poi["id"]] = poi.get("required_date")
+            buckets: Dict[int, Dict[str, Any]] = {}
+            for ln in lines:
+                head = receipt_map.get(ln.get("receipt_id"), {})
+                sid = head.get("supplier_id")
+                if sid is None:
+                    continue
+                sid = int(sid)
+                bucket = buckets.setdefault(sid, {
+                    "supplier_id": sid,
+                    "supplier_name": head.get("supplier_name") or "",
+                    "receipt_count": 0,
+                    "receipt_quantity": 0.0,
+                    "receipt_amount": 0.0,
+                    "ontime_count": 0,
+                    "timed_count": 0,
+                    "_receipt_ids": set(),
+                })
+                bucket["_receipt_ids"].add(ln.get("receipt_id"))
+                bucket["receipt_quantity"] += float(ln.get("receipt_quantity") or 0)
+                bucket["receipt_amount"] += float(ln.get("total_amount") or 0)
+                rec_d = self._as_date(ln.get("receipt_time") or head.get("receipt_time"))
+                req_d = self._as_date(required_map.get(ln.get("purchase_order_item_id")))
+                if rec_d and req_d:
+                    bucket["timed_count"] += 1
+                    if rec_d <= req_d:
+                        bucket["ontime_count"] += 1
+            code_map = await self._supplier_code_map(tenant_id, list(buckets.keys()))
+            rows = []
+            for sid, bucket in buckets.items():
+                timed = int(bucket["timed_count"])
+                bucket["supplier_code"] = code_map.get(sid, "")
+                bucket["receipt_count"] = len(bucket["_receipt_ids"])
+                bucket["ontime_rate"] = round(bucket["ontime_count"] / timed * 100, 1) if timed else 0.0
+                bucket.pop("_receipt_ids", None)
+                bucket.pop("timed_count", None)
+                rows.append(bucket)
+            rows.sort(key=lambda r: r["supplier_name"] or "")
+            total = len(rows)
+            return self._wrap_report_payload({
+                "data": rows,
+                "success": True,
+                "total": total,
+                "summary": {
+                    "receipt_count": sum(r["receipt_count"] for r in rows),
+                    "receipt_quantity": sum(r["receipt_quantity"] for r in rows),
+                    "receipt_amount": sum(r["receipt_amount"] for r in rows),
+                },
+            })
         elif report_type in [
             "supplier-price-comparison", "price_comparison",
             "purchase-cost-trend", "cost_trend",
@@ -2815,10 +3697,19 @@ class ReportService:
             raise ValidationError(f"报表已下线: {report_type}")
         elif report_type in ["purchase-reconciliation", "pur_reconciliation", "purchase_recon"]:
             from apps.kuaizhizao.services.report_enhancements import build_purchase_reconciliation
-            return await build_purchase_reconciliation(
-                tenant_id, date_start=date_start, date_end=date_end, skip=sk, limit=lim,
+            return self._wrap_report_payload(
+                await build_purchase_reconciliation(
+                    tenant_id,
+                    date_start=date_start,
+                    date_end=date_end,
+                    skip=sk,
+                    limit=lim,
+                    status=status,
+                    supplier_name=supplier_kw or None,
+                    order_ids=scoped_po_id_list,
+                )
             )
-        return {"data": [], "success": True}
+        return self._wrap_report_payload({"data": [], "success": True})
 
     @staticmethod
     def _apply_inspection_date_filter(query, date_start: Optional[datetime], date_end: Optional[datetime], time_field: str = "inspection_time"):
@@ -2848,7 +3739,7 @@ class ReportService:
     def _pass_rate_from_bucket(bucket: Optional[Dict[str, float]]) -> Optional[float]:
         if not bucket or float(bucket.get("total") or 0) <= 0:
             return None
-        return float(bucket["qualified"]) / float(bucket["total"])
+        return round(float(bucket["qualified"]) / float(bucket["total"]) * 100, 2)
 
     async def get_quality_report(self, tenant_id: int, report_type: str = "quality-rate-trend", date_start: Optional[datetime] = None, date_end: Optional[datetime] = None, material_id: Optional[int] = None, *, skip: int = 0, limit: int = 100, **kwargs) -> Dict[str, Any]:
         """质量报表汇总"""
@@ -2858,69 +3749,154 @@ class ReportService:
         from apps.kuaizhizao.models.defect_record import DefectRecord
         from apps.kuaizhizao.models.quality_exception import QualityException
         from tortoise.functions import Sum
+        from tortoise.expressions import Q
+
+        from apps.kuaizhizao.services.report_enhancements import inspection_pass_rate_row
+
+        lim = max(1, min(int(limit or 100), 500))
+        sk = max(0, int(skip or 0))
+        status = str(kwargs.get("status") or "").strip() or None
+        keyword = str(kwargs.get("keyword") or "").strip() or None
+
+        def _inspection_rows(items: List[Dict[str, Any]], *, batch_from: Optional[str] = None) -> List[Dict[str, Any]]:
+            enriched = []
+            for it in items:
+                inspected_at = it.get("inspection_time")
+                it["inspection_date"] = (
+                    to_api_isoformat(inspected_at.date()) if inspected_at and hasattr(inspected_at, "date") else None
+                )
+                if batch_from:
+                    it["batch_no"] = it.get(batch_from)
+                enriched.append(inspection_pass_rate_row(it))
+            return enriched
+
+        def _apply_inspection_text_filters(query, *, extra_fields: Optional[List[str]] = None):
+            if status:
+                query = query.filter(status=status)
+            if keyword:
+                text_q = (
+                    Q(inspection_code__icontains=keyword)
+                    | Q(material_code__icontains=keyword)
+                    | Q(material_name__icontains=keyword)
+                )
+                for field in extra_fields or []:
+                    text_q |= Q(**{f"{field}__icontains": keyword})
+                query = query.filter(text_q)
+            return query
+
+        async def _inspection_query_summary(query) -> Dict[str, float]:
+            agg = await query.annotate(
+                sample_qty=Sum("inspection_quantity"),
+                qualified_qty=Sum("qualified_quantity"),
+                unqualified_qty=Sum("unqualified_quantity"),
+            ).values("sample_qty", "qualified_qty", "unqualified_qty")
+            sample = float(agg[0]["sample_qty"] or 0) if agg else 0.0
+            qualified = float(agg[0]["qualified_qty"] or 0) if agg else 0.0
+            unqualified = float(agg[0]["unqualified_qty"] or 0) if agg else 0.0
+            return {
+                "sample_qty": sample,
+                "qualified_qty": qualified,
+                "unqualified_qty": unqualified,
+                "avg_pass_rate": round(qualified / sample * 100, 2) if sample else 0.0,
+            }
 
         if report_type in ["incoming-inspection-report", "incoming", "incoming_pass_rate"]:
             query = IncomingInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
             if material_id:
                 query = query.filter(material_id=material_id)
             query = self._apply_inspection_date_filter(query, date_start, date_end)
+            query = _apply_inspection_text_filters(query, extra_fields=["supplier_name"])
             total = await query.count()
-            lim = max(1, min(int(limit or 100), 500))
-            sk = max(0, int(skip or 0))
-            items = await query.order_by("-inspection_time").offset(sk).limit(lim).values(
-                "inspection_code", "material_name", "inspection_time", "status",
-                "inspection_quantity", "qualified_quantity",
+            items = await query.order_by("-inspection_time").values(
+                "id",
+                "inspection_code",
+                "supplier_name",
+                "material_code",
+                "material_name",
+                "material_spec",
+                "material_unit",
+                "inspection_quantity",
+                "qualified_quantity",
+                "unqualified_quantity",
+                "inspection_result",
+                "status",
+                "inspector_name",
+                "inspection_time",
             )
-            from apps.kuaizhizao.services.report_enhancements import inspection_pass_rate_row
-            enriched = []
-            for it in items:
-                it["inspection_date"] = to_api_isoformat(it["inspection_time"].date()) if it["inspection_time"] else None
-                it["batch_no"] = None
-                enriched.append(inspection_pass_rate_row(it))
-            pass_rates = [r["pass_rate"] for r in enriched if r.get("pass_rate") is not None]
-            avg_rate = round(sum(pass_rates) / len(pass_rates), 2) if pass_rates else 0.0
-            return {"data": enriched, "total": total, "success": True, "summary": {"avg_pass_rate": avg_rate}}
+            enriched = _inspection_rows(items)
+            return self._wrap_report_payload({
+                "data": enriched,
+                "total": total,
+                "success": True,
+                "summary": await _inspection_query_summary(query),
+            })
         elif report_type in ["process-inspection-report", "process", "process_pass_rate"]:
             query = ProcessInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
             if material_id:
                 query = query.filter(material_id=material_id)
             query = self._apply_inspection_date_filter(query, date_start, date_end)
+            query = _apply_inspection_text_filters(query, extra_fields=["work_order_code", "operation_name"])
             total = await query.count()
-            lim = max(1, min(int(limit or 100), 500))
-            sk = max(0, int(skip or 0))
-            items = await query.order_by("-inspection_time").offset(sk).limit(lim).values(
-                "inspection_code", "material_name", "work_order_code", "inspection_time", "status",
-                "inspection_quantity", "qualified_quantity",
+            items = await query.order_by("-inspection_time").values(
+                "id",
+                "inspection_code",
+                "work_order_code",
+                "operation_name",
+                "material_code",
+                "material_name",
+                "material_spec",
+                "material_unit",
+                "batch_number",
+                "inspection_quantity",
+                "qualified_quantity",
+                "unqualified_quantity",
+                "inspection_result",
+                "status",
+                "inspector_name",
+                "inspection_time",
             )
-            from apps.kuaizhizao.services.report_enhancements import inspection_pass_rate_row
-            enriched = []
-            for it in items:
-                it["inspection_date"] = to_api_isoformat(it["inspection_time"].date()) if it["inspection_time"] else None
-                enriched.append(inspection_pass_rate_row(it))
-            pass_rates = [r["pass_rate"] for r in enriched if r.get("pass_rate") is not None]
-            avg_rate = round(sum(pass_rates) / len(pass_rates), 2) if pass_rates else 0.0
-            return {"data": enriched, "total": total, "success": True, "summary": {"avg_pass_rate": avg_rate}}
+            enriched = _inspection_rows(items, batch_from="batch_number")
+            return self._wrap_report_payload({
+                "data": enriched,
+                "total": total,
+                "success": True,
+                "summary": await _inspection_query_summary(query),
+            })
         elif report_type in ["finished-inspection-report", "finished", "final_pass_rate"]:
             query = FinishedGoodsInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
             if material_id:
                 query = query.filter(material_id=material_id)
             query = self._apply_inspection_date_filter(query, date_start, date_end)
-            total = await query.count()
-            lim = max(1, min(int(limit or 100), 500))
-            sk = max(0, int(skip or 0))
-            items = await query.order_by("-inspection_time").offset(sk).limit(lim).values(
-                "inspection_code", "material_name", "batch_number", "inspection_time", "status",
-                "inspection_quantity", "qualified_quantity",
+            query = _apply_inspection_text_filters(
+                query, extra_fields=["work_order_code", "sales_order_code", "customer_name"]
             )
-            from apps.kuaizhizao.services.report_enhancements import inspection_pass_rate_row
-            enriched = []
-            for it in items:
-                it["inspection_date"] = to_api_isoformat(it["inspection_time"].date()) if it["inspection_time"] else None
-                it["batch_no"] = it.pop("batch_number", None)
-                enriched.append(inspection_pass_rate_row(it))
-            pass_rates = [r["pass_rate"] for r in enriched if r.get("pass_rate") is not None]
-            avg_rate = round(sum(pass_rates) / len(pass_rates), 2) if pass_rates else 0.0
-            return {"data": enriched, "total": total, "success": True, "summary": {"avg_pass_rate": avg_rate}}
+            total = await query.count()
+            items = await query.order_by("-inspection_time").values(
+                "id",
+                "inspection_code",
+                "work_order_code",
+                "sales_order_code",
+                "customer_name",
+                "material_code",
+                "material_name",
+                "material_spec",
+                "material_unit",
+                "batch_number",
+                "inspection_quantity",
+                "qualified_quantity",
+                "unqualified_quantity",
+                "inspection_result",
+                "status",
+                "inspector_name",
+                "inspection_time",
+            )
+            enriched = _inspection_rows(items, batch_from="batch_number")
+            return self._wrap_report_payload({
+                "data": enriched,
+                "total": total,
+                "success": True,
+                "summary": await _inspection_query_summary(query),
+            })
         elif report_type in ["quality-exception-tracking", "exception_tracking", "quality_exception"]:
             query = QualityException.filter(tenant_id=tenant_id, deleted_at__isnull=True)
             if material_id:
@@ -2929,21 +3905,39 @@ class ReportService:
                 query = query.filter(created_at__gte=date_start)
             if date_end:
                 query = query.filter(created_at__lte=date_end)
-            items = await query.order_by("-created_at").limit(100).values(
+            if status:
+                query = query.filter(status=status)
+            if keyword:
+                query = query.filter(
+                    Q(material_code__icontains=keyword)
+                    | Q(material_name__icontains=keyword)
+                    | Q(work_order_code__icontains=keyword)
+                    | Q(problem_description__icontains=keyword)
+                )
+            total = await query.count()
+            items = await query.order_by("-created_at").values(
                 "id",
                 "exception_type",
+                "severity",
                 "problem_description",
                 "root_cause",
                 "status",
                 "created_at",
+                "work_order_code",
+                "material_code",
                 "material_name",
+                "batch_no",
+                "responsible_person_name",
             )
             for it in items:
-                it["exception_code"] = f"QE-{it['id']}"
-                it["discovery_date"] = to_api_isoformat(it["created_at"].date()) if it["created_at"] else None
-                it["type"] = it["exception_type"]
-                it["reason"] = it["root_cause"] or it["problem_description"]
-            return {"data": items, "success": True}
+                it["discovery_date"] = to_api_isoformat(it["created_at"].date()) if it.get("created_at") else None
+                it["type"] = it.get("exception_type") or ""
+                it["reason"] = it.get("root_cause") or it.get("problem_description") or ""
+            return self._wrap_report_payload({
+                "data": items,
+                "total": total,
+                "success": True,
+            })
         elif report_type in ["nonconforming-summary", "defect_summary", "nonconforming_summary"]:
             query = DefectRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True)
             if material_id:
@@ -2952,25 +3946,48 @@ class ReportService:
                 query = query.filter(created_at__gte=date_start)
             if date_end:
                 query = query.filter(created_at__lte=date_end)
-            items = await query.order_by("-created_at").limit(100).values(
-                "code", "product_name", "defect_quantity", "disposition", "processed_at"
+            if status:
+                query = query.filter(status=status)
+            if keyword:
+                query = query.filter(
+                    Q(code__icontains=keyword)
+                    | Q(product_code__icontains=keyword)
+                    | Q(product_name__icontains=keyword)
+                    | Q(work_order_code__icontains=keyword)
+                )
+            total = await query.count()
+            items = await query.order_by("-created_at").values(
+                "id",
+                "code",
+                "work_order_code",
+                "product_code",
+                "product_name",
+                "defect_quantity",
+                "defect_type",
+                "disposition",
+                "status",
+                "processed_at",
             )
             for it in items:
-                it["handle_code"] = it["code"]
-                it["material_name"] = it["product_name"]
-                it["unqualified_qty"] = float(it["defect_quantity"] or 0)
-                it["disposal_method"] = it["disposition"]
-                it["disposal_date"] = to_api_isoformat(it["processed_at"].date()) if it["processed_at"] else None
-            total_unqualified = sum(float(it["unqualified_qty"] or 0) for it in items)
-            return {
+                it["handle_code"] = it.get("code") or ""
+                it["material_code"] = it.get("product_code") or ""
+                it["material_name"] = it.get("product_name") or ""
+                it["unqualified_qty"] = float(it.get("defect_quantity") or 0)
+                it["disposal_method"] = it.get("disposition") or ""
+                it["disposal_date"] = (
+                    to_api_isoformat(it["processed_at"].date())
+                    if it.get("processed_at") and hasattr(it["processed_at"], "date")
+                    else None
+                )
+            agg = await query.annotate(total_qty=Sum("defect_quantity")).values("total_qty")
+            return self._wrap_report_payload({
                 "data": items,
-                "total": len(items),
+                "total": total,
                 "success": True,
                 "summary": {
-                    "unqualified_qty": round(total_unqualified, 2),
-                    "record_count": len(items),
+                    "unqualified_qty": float(agg[0]["total_qty"] or 0) if agg else 0.0,
                 },
-            }
+            })
         elif report_type in ["quality-rate-trend", "quality_trend", "quality_rate_trend"]:
             iqc_query = IncomingInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
             ipqc_query = ProcessInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
@@ -2994,18 +4011,25 @@ class ReportService:
 
             stats = []
             for month in all_months:
+                iqc_b = iqc_buckets.get(month) or {}
+                ipqc_b = ipqc_buckets.get(month) or {}
+                fqc_b = fqc_buckets.get(month) or {}
                 iqc_rate = self._pass_rate_from_bucket(iqc_buckets.get(month))
                 ipqc_rate = self._pass_rate_from_bucket(ipqc_buckets.get(month))
                 fqc_rate = self._pass_rate_from_bucket(fqc_buckets.get(month))
                 stage_rates = [r for r in (iqc_rate, ipqc_rate, fqc_rate) if r is not None]
                 stats.append({
+                    "id": month,
                     "month": month,
+                    "iqc_qty": float(iqc_b.get("total") or 0),
                     "iqc_rate": iqc_rate,
+                    "ipqc_qty": float(ipqc_b.get("total") or 0),
                     "ipqc_rate": ipqc_rate,
+                    "fqc_qty": float(fqc_b.get("total") or 0),
                     "fqc_rate": fqc_rate,
-                    "overall_rate": sum(stage_rates) / len(stage_rates) if stage_rates else None,
+                    "overall_rate": round(sum(stage_rates) / len(stage_rates), 2) if stage_rates else None,
                 })
-            return {"data": stats, "success": True}
+            return self._wrap_report_payload({"data": stats, "total": len(stats), "success": True})
         elif report_type in ["defect-pareto-analysis", "pareto", "analysis"]:
             query = DefectRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True)
             if material_id:
@@ -3024,55 +4048,243 @@ class ReportService:
             return {"data": items, "success": True}
         return {"data": [], "success": True}
 
-    async def get_equipment_report(self, tenant_id: int, report_type: str = "equipment-oee-analysis", date_start: Optional[datetime] = None, date_end: Optional[datetime] = None) -> Dict[str, Any]:
+    async def get_equipment_report(
+        self,
+        tenant_id: int,
+        report_type: str = "equipment-oee-analysis",
+        date_start: Optional[datetime] = None,
+        date_end: Optional[datetime] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Dict[str, Any]:
         """设备报表汇总"""
-        from apps.kuaizhizao.models.equipment import Equipment
-        from apps.kuaizhizao.models.equipment_fault import EquipmentFault
-        from apps.kuaizhizao.models.maintenance_plan import MaintenanceExecution, MaintenancePlan
-        from tortoise.functions import Count
+        lim = max(1, min(int(limit or 100), 500))
+        sk = max(0, int(skip or 0))
 
         if report_type in ["equipment-maintenance-detail", "maint_detail"]:
-            # 设备保养明细 - 使用 MaintenanceExecution
-            items = await MaintenanceExecution.filter(tenant_id=tenant_id).limit(100).values("execution_no", "equipment_name", "status", "execution_date")
-            for it in items:
-                it["record_code"] = it["execution_no"]
-                it["maintenance_time"] = it["execution_date"].strftime("%Y-%m-%d %H:%M") if it["execution_date"] else None
-            return {"data": items, "success": True}
-        elif report_type in ["equipment-oee-analysis", "oee"]:
+            return await self._get_equipment_maint_detail(tenant_id, date_start, date_end, sk, lim)
+        if report_type in ["equipment-oee-analysis", "oee"]:
             raise ValidationError(f"报表已下线: {report_type}")
-        elif report_type in ["equipment-fault-analysis", "fault_analysis"]:
-            # 设备故障分析
-            stats = await EquipmentFault.filter(tenant_id=tenant_id).annotate(count=Count("id")).group_by("equipment_name").values("equipment_name", "count")
-            return {"data": stats, "success": True}
-        elif report_type in ["equipment-maintenance-plan", "maint_plan"]:
-            # 设备保养计划
-            items = await MaintenancePlan.filter(tenant_id=tenant_id).exclude(status="已完成").limit(100).values("plan_no", "equipment_name", "planned_start_date")
-            for it in items:
-                it["record_code"] = it["plan_no"]
-                it["planned_time"] = it["planned_start_date"].strftime("%Y-%m-%d") if it["planned_start_date"] else None
-            return {"data": items, "success": True}
-        elif report_type in ["equipment-status-log", "status_log"]:
-            from apps.kuaizhizao.models.equipment_status_monitor import EquipmentStatusMonitor
-            items = await EquipmentStatusMonitor.filter(tenant_id=tenant_id).order_by("-created_at", "-id").limit(100).values(
-                "equipment_uuid", "equipment_name", "status", "updated_at",
-            )
-            uuid_list = [it["equipment_uuid"] for it in items if it.get("equipment_uuid")]
-            name_by_uuid: Dict[str, str] = {}
-            if uuid_list:
-                for eq in await Equipment.filter(tenant_id=tenant_id, uuid__in=uuid_list).values("uuid", "name", "code"):
-                    name_by_uuid[str(eq["uuid"])] = str(eq.get("name") or eq.get("code") or "")
-            for it in items:
-                it["equipment_name"] = it.get("equipment_name") or name_by_uuid.get(str(it.get("equipment_uuid") or ""), "")
-                it["to_status"] = it["status"]
-                it["status_changed_at"] = it["updated_at"].strftime("%Y-%m-%d %H:%M") if it["updated_at"] else None
-            return {"data": items, "success": True}
-        elif report_type in ["equipment-spot-check-summary", "spot_check_summary"]:
+        if report_type in ["equipment-fault-analysis", "fault_analysis"]:
+            return await self._get_equipment_fault_analysis(tenant_id, date_start, date_end)
+        if report_type in ["equipment-maintenance-plan", "maint_plan"]:
+            return await self._get_equipment_maint_plan(tenant_id, date_start, date_end, sk, lim)
+        if report_type in ["equipment-status-log", "status_log"]:
+            return await self._get_equipment_status_log(tenant_id, date_start, date_end, sk, lim)
+        if report_type in ["equipment-spot-check-summary", "spot_check_summary"]:
             return await self._build_equipment_spot_check_summary(tenant_id, date_start, date_end)
-        elif report_type in ["equipment-route-patrol-summary", "route_patrol_summary"]:
+        if report_type in ["equipment-route-patrol-summary", "route_patrol_summary"]:
             return await self._build_equipment_route_patrol_summary(tenant_id, date_start, date_end)
-        elif report_type in ["equipment-mttr-mtbf", "mttr_mtbf_summary"]:
+        if report_type in ["equipment-mttr-mtbf", "mttr_mtbf_summary"]:
             return await self._build_equipment_mttr_mtbf_summary(tenant_id, date_start, date_end)
-        return {"data": [], "success": True}
+        return {"data": [], "total": 0, "success": True}
+
+    async def _equipment_code_map(self, tenant_id: int, equipment_ids: List[Any]) -> Dict[int, str]:
+        ids = [int(x) for x in equipment_ids if x is not None]
+        if not ids:
+            return {}
+        from apps.kuaizhizao.models.equipment import Equipment
+
+        rows = await Equipment.filter(tenant_id=tenant_id, id__in=ids).values("id", "code")
+        return {int(r["id"]): str(r.get("code") or "") for r in rows}
+
+    async def _get_equipment_maint_detail(
+        self,
+        tenant_id: int,
+        date_start: Optional[datetime],
+        date_end: Optional[datetime],
+        skip: int,
+        limit: int,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.models.maintenance_plan import MaintenanceExecution
+
+        qs = MaintenanceExecution.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        start_d = self._as_date(date_start)
+        end_d = self._as_date(date_end)
+        if start_d:
+            qs = qs.filter(execution_date__gte=start_d)
+        if end_d:
+            qs = qs.filter(execution_date__lte=end_d)
+        total = await qs.count()
+        rows = await qs.order_by("-execution_date", "-id").offset(skip).limit(limit).values(
+            "id",
+            "execution_no",
+            "equipment_id",
+            "equipment_name",
+            "execution_content",
+            "executor_name",
+            "execution_date",
+            "acceptance_date",
+            "status",
+            "remark",
+        )
+        code_map = await self._equipment_code_map(tenant_id, [r.get("equipment_id") for r in rows])
+        data = []
+        for r in rows:
+            completed = r.get("acceptance_date") or r.get("execution_date")
+            data.append(
+                {
+                    "id": r["id"],
+                    "maint_code": r.get("execution_no") or "",
+                    "equipment_code": code_map.get(int(r["equipment_id"])) if r.get("equipment_id") else "",
+                    "equipment_name": r.get("equipment_name") or "",
+                    "work_content": r.get("execution_content") or r.get("remark") or "",
+                    "maint_person": r.get("executor_name") or "",
+                    "completed_at": completed,
+                    "status": r.get("status") or "",
+                }
+            )
+        return self._wrap_report_payload({"data": data, "total": total, "success": True})
+
+    async def _get_equipment_maint_plan(
+        self,
+        tenant_id: int,
+        date_start: Optional[datetime],
+        date_end: Optional[datetime],
+        skip: int,
+        limit: int,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.models.maintenance_plan import MaintenanceExecution, MaintenancePlan
+
+        qs = MaintenancePlan.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        start_d = self._as_date(date_start)
+        end_d = self._as_date(date_end)
+        if start_d:
+            qs = qs.filter(planned_start_date__gte=start_d)
+        if end_d:
+            qs = qs.filter(planned_start_date__lte=end_d)
+        total = await qs.count()
+        rows = await qs.order_by("-planned_start_date", "-id").offset(skip).limit(limit).values(
+            "id",
+            "plan_no",
+            "plan_name",
+            "equipment_id",
+            "equipment_name",
+            "planned_start_date",
+            "responsible_person_name",
+            "status",
+        )
+        plan_ids = [int(r["id"]) for r in rows]
+        latest_exec: Dict[int, Any] = {}
+        if plan_ids:
+            exec_rows = await MaintenanceExecution.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                maintenance_plan_id__in=plan_ids,
+            ).order_by("-execution_date", "-id").values("maintenance_plan_id", "execution_date")
+            for er in exec_rows:
+                pid = int(er["maintenance_plan_id"]) if er.get("maintenance_plan_id") else 0
+                if pid and pid not in latest_exec:
+                    latest_exec[pid] = er.get("execution_date")
+        code_map = await self._equipment_code_map(tenant_id, [r.get("equipment_id") for r in rows])
+        data = []
+        for r in rows:
+            data.append(
+                {
+                    "id": r["id"],
+                    "plan_no": r.get("plan_no") or "",
+                    "plan_name": r.get("plan_name") or "",
+                    "equipment_code": code_map.get(int(r["equipment_id"])) if r.get("equipment_id") else "",
+                    "equipment_name": r.get("equipment_name") or "",
+                    "plan_date": r.get("planned_start_date"),
+                    "actual_date": latest_exec.get(int(r["id"])),
+                    "executor": r.get("responsible_person_name") or "",
+                    "status": r.get("status") or "",
+                }
+            )
+        return self._wrap_report_payload({"data": data, "total": total, "success": True})
+
+    async def _get_equipment_fault_analysis(
+        self,
+        tenant_id: int,
+        date_start: Optional[datetime],
+        date_end: Optional[datetime],
+    ) -> Dict[str, Any]:
+        from collections import defaultdict
+
+        from apps.kuaizhizao.models.equipment_fault import EquipmentFault
+
+        qs = EquipmentFault.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        start_d = self._as_date(date_start)
+        end_d = self._as_date(date_end)
+        if start_d:
+            qs = qs.filter(fault_date__gte=start_d)
+        if end_d:
+            qs = qs.filter(fault_date__lte=end_d)
+        rows = await qs.values("equipment_id", "equipment_name", "fault_type")
+        buckets: Dict[tuple, Dict[str, Any]] = defaultdict(
+            lambda: {"equipment_id": 0, "equipment_name": "", "fault_type": "", "count": 0}
+        )
+        for r in rows:
+            eid = int(r["equipment_id"]) if r.get("equipment_id") else 0
+            ftype = str(r.get("fault_type") or "")
+            key = (eid, ftype)
+            bucket = buckets[key]
+            bucket["equipment_id"] = eid
+            bucket["equipment_name"] = r.get("equipment_name") or bucket["equipment_name"]
+            bucket["fault_type"] = ftype
+            bucket["count"] += 1
+        total_count = sum(b["count"] for b in buckets.values()) or 0
+        code_map = await self._equipment_code_map(tenant_id, [b["equipment_id"] for b in buckets.values()])
+        data = []
+        for (eid, ftype), bucket in sorted(buckets.items(), key=lambda x: (-x[1]["count"], x[0][0])):
+            cnt = bucket["count"]
+            data.append(
+                {
+                    "id": f"{eid}-{ftype or 'other'}",
+                    "equipment_code": code_map.get(eid, ""),
+                    "equipment_name": bucket["equipment_name"],
+                    "fault_type": ftype,
+                    "count": cnt,
+                    "share_rate": round(cnt * 100 / total_count, 1) if total_count else 0,
+                }
+            )
+        return self._wrap_report_payload({"data": data, "total": len(data), "success": True})
+
+    async def _get_equipment_status_log(
+        self,
+        tenant_id: int,
+        date_start: Optional[datetime],
+        date_end: Optional[datetime],
+        skip: int,
+        limit: int,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.models.equipment_status_monitor import EquipmentStatusMonitor
+
+        qs = EquipmentStatusMonitor.filter(tenant_id=tenant_id)
+        start_d = self._as_date(date_start)
+        end_d = self._as_date(date_end)
+        if start_d:
+            qs = qs.filter(monitored_at__gte=start_d)
+        if end_d:
+            qs = qs.filter(monitored_at__lte=end_d)
+        total = await qs.count()
+        rows = await qs.order_by("-monitored_at", "-id").offset(skip).limit(limit).values(
+            "id",
+            "equipment_id",
+            "equipment_code",
+            "equipment_name",
+            "status",
+            "monitored_at",
+            "runtime_hours",
+        )
+        data = []
+        for r in rows:
+            hours = r.get("runtime_hours")
+            duration_mins = None
+            if hours is not None:
+                duration_mins = round(float(hours) * 60, 1)
+            data.append(
+                {
+                    "id": r["id"],
+                    "equipment_code": r.get("equipment_code") or "",
+                    "equipment_name": r.get("equipment_name") or "",
+                    "status_change": r.get("status") or "",
+                    "event_time": r.get("monitored_at"),
+                    "duration_mins": duration_mins,
+                }
+            )
+        return self._wrap_report_payload({"data": data, "total": total, "success": True})
 
     async def _build_equipment_mttr_mtbf_summary(
         self,
@@ -3203,7 +4415,7 @@ class ReportService:
         total_count = len(records)
         completed_count = sum(1 for r in records if r.get("status") == "已完成")
         abnormality_count = sum(1 for r in records if r.get("has_abnormality"))
-        completion_rate = round(completed_count / total_count, 4) if total_count else 0.0
+        completion_rate = round(completed_count * 100 / total_count, 1) if total_count else 0.0
 
         record_ids = [r["id"] for r in records]
         fail_line_count = 0
@@ -3246,7 +4458,7 @@ class ReportService:
                     "total_count": tc,
                     "completed_count": bucket["completed_count"],
                     "abnormality_count": bucket["abnormality_count"],
-                    "completion_rate": round(bucket["completed_count"] / tc, 4) if tc else 0.0,
+                    "completion_rate": round(bucket["completed_count"] * 100 / tc, 1) if tc else 0.0,
                 }
             )
         data.sort(key=lambda x: (-x["total_count"], x.get("equipment_code") or ""))
@@ -3295,7 +4507,7 @@ class ReportService:
         total_count = len(records)
         completed_count = sum(1 for r in records if r.get("status") == "已完成")
         abnormality_count = sum(1 for r in records if r.get("has_abnormality"))
-        completion_rate = round(completed_count / total_count, 4) if total_count else 0.0
+        completion_rate = round(completed_count * 100 / total_count, 1) if total_count else 0.0
 
         record_ids = [r["id"] for r in records]
         fail_line_count = 0
@@ -3338,7 +4550,7 @@ class ReportService:
                     "total_count": tc,
                     "completed_count": bucket["completed_count"],
                     "abnormality_count": bucket["abnormality_count"],
-                    "completion_rate": round(bucket["completed_count"] / tc, 4) if tc else 0.0,
+                    "completion_rate": round(bucket["completed_count"] * 100 / tc, 1) if tc else 0.0,
                 }
             )
         data.sort(key=lambda x: (-x["total_count"], x.get("route_code") or ""))
@@ -3376,7 +4588,15 @@ class ReportService:
         sk = max(0, int(skip or 0))
 
         if report_type in ["inventory-summary", "inventory_summary"]:
-            return await self._get_inventory_summary_v2(tenant_id, warehouse_id)
+            return await self._get_inventory_summary_v2(
+                tenant_id,
+                warehouse_id,
+                date_start=date_start,
+                date_end=date_end,
+                keyword=keyword,
+                skip=sk,
+                limit=lim,
+            )
         elif report_type in ["inventory-ledger", "ledger", "inventory_ledger"]:
             from apps.kuaizhizao.services.report_enhancements import build_inventory_ledger
             return self._wrap_report_payload(await build_inventory_ledger(
@@ -3392,30 +4612,13 @@ class ReportService:
         elif report_type in ["inventory-turnover-analysis", "turnover"]:
             raise ValidationError(f"报表已下线: {report_type}")
         elif report_type in ["stocktaking-history", "stocktaking"]:
-            # 盘点历史记录
-            from apps.kuaizhizao.models.stocktaking import Stocktaking
-            items = await Stocktaking.filter(tenant_id=tenant_id).limit(100).values("code", "warehouse_name", "status", "created_at")
-            return {"data": items, "success": True}
-        elif report_type in ["warehouse-transfer-tracking", "transfer"]:
-            # 仓库调拨跟踪
-            from apps.kuaizhizao.models.inventory_transfer import InventoryTransfer
-            query = InventoryTransfer.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-            total = await query.count()
-            items = await query.order_by("-created_at").offset(sk).limit(lim).values(
-                "code",
-                "from_warehouse_name",
-                "to_warehouse_name",
-                "status",
-                "total_quantity",
-                "transfer_date",
+            return await self._get_stocktaking_history(
+                tenant_id, date_start, date_end, warehouse_id, sk, lim,
             )
-            for it in items:
-                it["order_code"] = it.get("code")
-                it["from_warehouse"] = it.get("from_warehouse_name")
-                it["to_warehouse"] = it.get("to_warehouse_name")
-                it["quantity"] = float(it.get("total_quantity") or 0)
-                it.setdefault("material_name", "-")
-            return self._wrap_report_payload({"data": items, "success": True, "total": total})
+        elif report_type in ["warehouse-transfer-tracking", "transfer"]:
+            return await self._get_transfer_tracking(
+                tenant_id, date_start, date_end, warehouse_id, sk, lim,
+            )
         elif report_type in ["material-batch-tracking", "batch_tracking"]:
             # 物料批次追溯
             items = await MaterialBatch.filter(tenant_id=tenant_id).limit(100).values("batch_no", "material_name", "quantity", "status")
@@ -3425,7 +4628,149 @@ class ReportService:
                 tenant_id, date_start, date_end, warehouse_id, skip=sk, limit=lim,
             )
             return self._wrap_report_payload(payload)
+        elif report_type in ["fifo_exception", "fifo-exception", "fifo_exception_audit"]:
+            from apps.kuaizhizao.services.report_enhancements import build_fifo_exception_audit
+            return self._wrap_report_payload(
+                await build_fifo_exception_audit(
+                    tenant_id,
+                    date_start=date_start,
+                    date_end=date_end,
+                    warehouse_id=warehouse_id,
+                    skip=sk,
+                    limit=lim,
+                )
+            )
         return {"data": [], "success": True}
+
+    async def _get_stocktaking_history(
+        self,
+        tenant_id: int,
+        date_start: Optional[datetime],
+        date_end: Optional[datetime],
+        warehouse_id: Optional[int],
+        skip: int,
+        limit: int,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.models.stocktaking import Stocktaking, StocktakingItem
+
+        header_qs = Stocktaking.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        start_d = self._as_date(date_start)
+        end_d = self._as_date(date_end)
+        if start_d:
+            header_qs = header_qs.filter(stocktaking_date__gte=start_d)
+        if end_d:
+            header_qs = header_qs.filter(stocktaking_date__lte=end_d)
+        if warehouse_id:
+            header_qs = header_qs.filter(warehouse_id=warehouse_id)
+        headers = await header_qs.values(
+            "id", "code", "warehouse_name", "stocktaking_date", "status",
+        )
+        header_map = {int(h["id"]): h for h in headers}
+        header_ids = list(header_map.keys())
+        if not header_ids:
+            return {"data": [], "total": 0, "success": True}
+
+        item_qs = StocktakingItem.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            stocktaking_id__in=header_ids,
+        )
+        total = await item_qs.count()
+        items = await item_qs.order_by("-stocktaking_id", "-id").offset(skip).limit(limit).values(
+            "id",
+            "stocktaking_id",
+            "material_code",
+            "material_name",
+            "material_unit",
+            "book_quantity",
+            "actual_quantity",
+            "difference_quantity",
+        )
+        data = []
+        for it in items:
+            header = header_map.get(int(it["stocktaking_id"]), {})
+            data.append(
+                {
+                    "id": it["id"],
+                    "order_code": header.get("code") or "",
+                    "warehouse_name": header.get("warehouse_name") or "",
+                    "material_code": it.get("material_code") or "",
+                    "material_name": it.get("material_name") or "",
+                    "material_unit": it.get("material_unit") or "",
+                    "book_qty": float(it.get("book_quantity") or 0),
+                    "actual_qty": float(it.get("actual_quantity") or 0),
+                    "diff_qty": float(it.get("difference_quantity") or 0),
+                    "check_date": header.get("stocktaking_date"),
+                    "status": header.get("status") or "",
+                }
+            )
+        return self._wrap_report_payload({"data": data, "total": total, "success": True})
+
+    async def _get_transfer_tracking(
+        self,
+        tenant_id: int,
+        date_start: Optional[datetime],
+        date_end: Optional[datetime],
+        warehouse_id: Optional[int],
+        skip: int,
+        limit: int,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.models.inventory_transfer import InventoryTransfer, InventoryTransferItem
+
+        header_qs = InventoryTransfer.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        start_d = self._as_date(date_start)
+        end_d = self._as_date(date_end)
+        if start_d:
+            header_qs = header_qs.filter(transfer_date__gte=start_d)
+        if end_d:
+            header_qs = header_qs.filter(transfer_date__lte=end_d)
+        if warehouse_id:
+            header_qs = header_qs.filter(from_warehouse_id=warehouse_id)
+        headers = await header_qs.values(
+            "id",
+            "code",
+            "from_warehouse_name",
+            "to_warehouse_name",
+            "transfer_date",
+            "status",
+        )
+        header_map = {int(h["id"]): h for h in headers}
+        header_ids = list(header_map.keys())
+        if not header_ids:
+            return {"data": [], "total": 0, "success": True}
+
+        item_qs = InventoryTransferItem.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            transfer_id__in=header_ids,
+        )
+        total = await item_qs.count()
+        items = await item_qs.order_by("-transfer_id", "-id").offset(skip).limit(limit).values(
+            "id",
+            "transfer_id",
+            "material_code",
+            "material_name",
+            "material_unit",
+            "quantity",
+        )
+        data = []
+        for it in items:
+            header = header_map.get(int(it["transfer_id"]), {})
+            data.append(
+                {
+                    "id": it["id"],
+                    "order_code": header.get("code") or "",
+                    "from_warehouse": header.get("from_warehouse_name") or "",
+                    "to_warehouse": header.get("to_warehouse_name") or "",
+                    "material_code": it.get("material_code") or "",
+                    "material_name": it.get("material_name") or "",
+                    "material_unit": it.get("material_unit") or "",
+                    "quantity": float(it.get("quantity") or 0),
+                    "transfer_date": header.get("transfer_date"),
+                    "status": header.get("status") or "",
+                }
+            )
+        return self._wrap_report_payload({"data": data, "total": total, "success": True})
 
     async def _get_inventory_summary(self, tenant_id: int, warehouse_id: Optional[int] = None) -> Dict[str, Any]:
         """获取库存汇总"""
@@ -3680,6 +5025,8 @@ class ReportService:
                 date_start=date_start,
                 date_end=date_end,
                 warehouse_id=warehouse_id,
+                skip=0,
+                limit=limit,
             )
         elif domain_key == "warehouse":
             payload = await self.get_warehouse_report(
@@ -3689,6 +5036,8 @@ class ReportService:
                 date_end=date_end,
                 warehouse_id=warehouse_id,
                 material_id=material_id,
+                skip=0,
+                limit=limit,
             )
         elif domain_key == "quality":
             payload = await self.get_quality_report(
@@ -3719,6 +5068,8 @@ class ReportService:
                 report_type=report_type,
                 date_start=date_start,
                 date_end=date_end,
+                skip=0,
+                limit=limit,
             )
         elif domain_key == "performance":
             payload = await self.get_performance_report(

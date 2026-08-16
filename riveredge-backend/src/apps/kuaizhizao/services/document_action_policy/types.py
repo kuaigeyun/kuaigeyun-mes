@@ -26,6 +26,7 @@ class QuotationCapabilities(BaseModel):
     cancel_customer_confirm: ActionCapability
     convert_to_order: ActionCapability
     convert_to_contract: ActionCapability
+    convert_to_sales_review: ActionCapability
     revoke_push: ActionCapability
     reopen: ActionCapability
     create_revision: ActionCapability
@@ -120,6 +121,7 @@ class AfterSalesTicketCapabilities(BaseModel):
     delete: ActionCapability
     close: ActionCapability
     push_sales_return: ActionCapability
+    push_repair_order: ActionCapability
 
 
 class InstallExecutionCapabilities(BaseModel):
@@ -353,12 +355,19 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "quotation.cancel_customer_confirm.linked_contract": "已关联有效销售合同，请先处理合同后再取消确认",
     "quotation.convert_order.not_allowed": "当前状态不可转销售订单",
     "quotation.convert_order.linked_contract": "该报价已关联销售合同，请从销售合同下推订单",
+    "quotation.convert_order.linked_sales_review": "该报价已关联订单评审，请从订单评审下推销售订单",
     "quotation.convert_order.not_latest": "仅能对当前系列的最新版本报价单转销售订单",
     "quotation.convert_order.already_converted": "该报价单已转为销售订单",
     "quotation.convert_contract.not_allowed": "当前状态不可转销售合同",
     "quotation.convert_contract.linked_contract": "该报价单已关联销售合同",
     "quotation.convert_contract.linked_sales_order": "该报价单已关联销售订单",
+    "quotation.convert_contract.linked_sales_review": "该报价已关联订单评审，请先完成评审链路或解除关联",
     "quotation.convert_contract.superseded": "此为历史版本报价单，请使用系列最新版",
+    "quotation.convert_sales_review.not_allowed": "当前状态不可转订单评审",
+    "quotation.convert_sales_review.linked_contract": "该报价已关联销售合同",
+    "quotation.convert_sales_review.linked_sales_order": "该报价已关联销售订单",
+    "quotation.convert_sales_review.linked_sales_review": "该报价单已关联订单评审",
+    "quotation.convert_sales_review.not_latest": "仅能对当前系列的最新版本报价单转订单评审",
     "quotation.revoke_push.not_allowed": "仅已转订单且下游销售订单已删除时可撤回下推",
     "quotation.reopen.not_rejected": "仅已驳回的报价单可重新编辑",
     "quotation.revision.not_allowed": "仅非草稿的最新系列版本可新建修订版",
@@ -390,8 +399,11 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "sales_order.withdraw_computation.not_allowed": "当前状态不可撤回需求计算",
     "sales_order.push_work_order.not_allowed": "当前状态不可直推工单",
     "sales_order.push_work_order.no_items": "销售订单无明细，无法直推工单",
+    "sales_order.push_work_order.computation_pushed": "销售订单已下推需求计算，不可再直推工单",
     "sales_order.push_shipment.not_allowed": "当前状态不可下推发货通知单",
+    "sales_order.push_shipment.no_backorder": "销售订单无欠发数量，无法下推发货通知单",
     "sales_order.push_delivery.not_allowed": "当前状态不可下推销售出库",
+    "sales_order.push_delivery.no_backorder": "销售订单无欠发数量，无法下推销售出库",
     "sales_order.push_invoice.not_allowed": "当前状态不可下推销售发票",
     "sales_order.push_return.not_allowed": "当前状态不可下推销售退货单",
     "sales_order.push_return.no_delivered": "销售订单暂无可退货数量（已交货数量为 0）",
@@ -466,6 +478,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "demand_computation.recompute.not_allowed": "只能对已完成或失败的计算执行重新计算",
     "demand_computation.compare.not_completed": "只能对比已完成的需求计算",
     "demand.merge_computation.not_audited": "只能对已审核或已确认的需求合并计算",
+    "demand.push_computation.already_pushed": "需求已下推需求计算，不可重复合并",
     "purchase_requisition.update.not_allowed": "当前状态不可编辑采购申请",
     "purchase_requisition.delete.not_allowed": "当前状态不可删除采购申请",
     "purchase_requisition.submit.not_draft": "只有草稿状态可提交",
@@ -702,6 +715,10 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "after_sales_ticket.push_sales_return.already_pushed": "该售后服务工单已下推销售退货单",
     "after_sales_ticket.push_sales_return.no_items": "售后服务工单无明细，无法下推销售退货单",
     "after_sales_ticket.push_sales_return.no_returnable": "关联销售订单当前无可退货数量",
+    "after_sales_ticket.push_repair_order.not_allowed": "当前售后服务工单不可下推维修单",
+    "after_sales_ticket.push_repair_order.closed": "已关闭的售后服务工单不可下推维修单",
+    "after_sales_ticket.push_repair_order.request_type": "仅维修类型工单可下推维修单",
+    "after_sales_ticket.push_repair_order.already_exists": "该售后服务工单已存在维修单",
     "install_execution.update.closed": "已关闭的安装执行单不可编辑",
     "install_execution.delete.closed": "已关闭的安装执行单不可删除",
     "install_execution.close.already_closed": "安装执行单已关闭",

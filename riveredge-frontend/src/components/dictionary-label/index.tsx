@@ -5,7 +5,10 @@ import {
   getDictionaryItemsCached,
   getDictionaryItemsSync,
 } from '../../services/dataDictionaryCache';
-import { resolveSystemDictionaryItemLabel } from '../../utils/systemDictionaryI18n';
+import {
+  resolveSystemDictionaryItemLabel,
+  resolveSystemDictionaryValueLabel,
+} from '../../utils/systemDictionaryI18n';
 
 interface DictionaryLabelProps {
   /** 字典代码 */
@@ -43,6 +46,8 @@ function resolveLabelSync(
   t: (key: string) => string,
 ): string | null {
   if (value === undefined || value === null || value === '') return null;
+  const fromI18n = resolveSystemDictionaryValueLabel(code, value, t);
+  if (fromI18n) return fromI18n;
   const items = getDictionaryItemsSync(code);
   if (!items) return null;
   const item = findDictionaryItem(items, value);
@@ -80,6 +85,11 @@ export const DictionaryLabel: React.FC<DictionaryLabelProps> = ({
     getDictionaryItemsCached(dictionaryCode)
       .then((items) => {
         if (cancelled) return;
+        const fromI18n = resolveSystemDictionaryValueLabel(dictionaryCode, value, t);
+        if (fromI18n) {
+          setLabel(fromI18n);
+          return;
+        }
         const item = findDictionaryItem(items, value);
         setLabel(
           item

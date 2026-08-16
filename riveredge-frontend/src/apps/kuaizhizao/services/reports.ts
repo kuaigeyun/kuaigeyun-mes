@@ -33,6 +33,8 @@ export interface ReportParams {
   product_name?: string;
   supplier_name?: string;
   work_order_code?: string;
+  demand_type?: string;
+  column_filters?: string;
   filters?: Record<string, any>;
 }
 
@@ -268,11 +270,13 @@ function buildReportQueryParams(
   if (params.customer_keyword) query.customer_keyword = params.customer_keyword;
   if (params.keyword) query.keyword = params.keyword;
   if (params.order_by) query.order_by = params.order_by;
+  if (params.column_filters) query.column_filters = params.column_filters;
   if (params.status) query.status = params.status;
   if (params.order_code) query.order_code = params.order_code;
   if (params.product_name) query.product_name = params.product_name;
   if (params.supplier_name) query.supplier_name = params.supplier_name;
   if (params.work_order_code) query.work_order_code = params.work_order_code;
+  if (params.demand_type) query.demand_type = params.demand_type;
   if (params.customer_id != null) query.customer_id = params.customer_id;
   if (params.filters?.customer_id != null) query.customer_id = params.filters.customer_id;
   if (params.filters?.warehouse_id != null) query.warehouse_id = params.filters.warehouse_id;
@@ -368,10 +372,10 @@ export interface SalesReportResponse {
   total?: number;
 }
 
-/** 从 ProTable / UniTable 搜索表单解析日期范围（YYYY-MM-DD） */
+/** 从工具栏 ReportPeriodFilter 写入的 date_range 解析期间（唯一真源） */
 export function parseSalesReportDateRange(
   searchFormValues?: Record<string, any>,
-  keys: string[] = ['date_range', 'dateRange', 'transaction_date'],
+  keys: string[] = ['date_range'],
 ): { date_start?: string; date_end?: string } {
   if (!searchFormValues) return {};
   for (const k of keys) {
@@ -491,11 +495,7 @@ function normalizeExportBody(params: ReportParams): Record<string, unknown> {
     ...params,
   };
   if (!body.date_start || !body.date_end) {
-    const { date_start, date_end } = parseSalesReportDateRange(params as Record<string, unknown>, [
-      'order_date_range',
-      'date_range',
-      'dateRange',
-    ]);
+    const { date_start, date_end } = parseSalesReportDateRange(params as Record<string, unknown>);
     if (date_start) body.date_start = date_start;
     if (date_end) body.date_end = date_end;
   }

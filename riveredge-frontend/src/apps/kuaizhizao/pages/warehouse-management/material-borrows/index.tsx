@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Col, DatePicker, Descriptions, Form as AntForm, Input, InputNumber, Modal, Row, Select, Space, Table, Tag, Typography } from 'antd';
@@ -55,6 +56,7 @@ import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 interface MaterialBorrow {
   id?: number;
+  uuid?: string;
   tenant_id?: number;
   borrow_code?: string;
   warehouse_id?: number;
@@ -102,9 +104,11 @@ function translateMaterialBorrowStatus(t: (key: string) => string, status?: stri
 
 const MaterialBorrowsPage: React.FC = () => {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const deepLinkOpenedRef = useRef(false);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
 
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -326,12 +330,13 @@ const MaterialBorrowsPage: React.FC = () => {
     },
   ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, materialBorrowStatusValueEnum]);
 
-  const handleDetail = async (record: MaterialBorrow) => {
+  const handleDetail = useCallback(async (record: MaterialBorrow) => {
+    if (record.id == null) return;
     setDetailDrawerVisible(true);
     setDetailLoading(true);
     setBorrowDetail(null);
     try {
-      const detail = await warehouseApi.materialBorrow.get(record.id!.toString());
+      const detail = await warehouseApi.materialBorrow.get(record.id.toString());
       setBorrowDetail(detail as MaterialBorrowDetail);
     } catch {
       messageApi.error(t('app.kuaizhizao.materialBorrow.msg.loadDetailFailed'));
@@ -339,7 +344,45 @@ const MaterialBorrowsPage: React.FC = () => {
     } finally {
       setDetailLoading(false);
     }
-  };
+  }, [messageApi, t]);
+
+  useEffect(() => {
+    const idRaw = searchParams.get('id')?.trim();
+    const uuidRaw = searchParams.get('uuid')?.trim();
+    if (!idRaw && !uuidRaw) {
+      deepLinkOpenedRef.current = false;
+      actionRef.current?.reload();
+      return;
+    }
+    if (deepLinkOpenedRef.current) {
+      actionRef.current?.reload();
+      return;
+    }
+    deepLinkOpenedRef.current = true;
+    void (async () => {
+      try {
+        if (idRaw) {
+          const id = Number(idRaw);
+          if (Number.isFinite(id) && id > 0) {
+            await handleDetail({ id });
+            return;
+          }
+        }
+        if (uuidRaw) {
+          const res = await warehouseApi.materialBorrow.list({ keyword: uuidRaw, limit: 100 });
+          const items = (res as { items?: MaterialBorrow[] }).items ?? [];
+          const hit = items.find((row) => String(row.uuid) === uuidRaw);
+          if (hit) {
+            await handleDetail(hit);
+          }
+        }
+      } catch {
+        messageApi.error(t('app.kuaizhizao.materialBorrow.msg.loadDetailFailed'));
+      } finally {
+        actionRef.current?.reload();
+      }
+    })();
+  }, [searchParams, handleDetail, messageApi, t]);
 
   const handleConfirm = async (record: MaterialBorrow) => {
     getAntdModal().confirm({

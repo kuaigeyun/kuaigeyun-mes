@@ -46,6 +46,9 @@ export const updateTrainingRecord = (id: number, data: Partial<TrainingRecord>) 
   kuaioaPut<TrainingRecord>(`${BASE}/records/${id}`, data);
 export const deleteTrainingRecord = (id: number) => kuaioaDelete(`${BASE}/records/${id}`);
 
+export const listExpiringWorkLicenses = (withinDays = 30) =>
+  kuaioaList<WorkLicense>(`${BASE}/work-licenses/expiring`, { within_days: withinDays });
+
 export const listWorkLicenses = (params?: Record<string, unknown>) =>
   kuaioaList<WorkLicense>(`${BASE}/work-licenses`, params);
 export const createWorkLicense = (data: Partial<WorkLicense>) =>

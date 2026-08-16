@@ -25,6 +25,7 @@ def derive_after_sales_ticket_capabilities(
     *,
     has_items: bool = False,
     has_returnable_qty: bool = False,
+    existing_repair_order_code: Optional[str] = None,
 ) -> AfterSalesTicketCapabilities:
     status = str(getattr(ticket, "status", "") or "").strip()
     request_type = str(getattr(ticket, "request_type", "") or "").strip()
@@ -60,11 +61,24 @@ def derive_after_sales_ticket_capabilities(
         push_allowed = True
         push_reason = None
 
+    repair_allowed = False
+    repair_reason = "after_sales_ticket.push_repair_order.not_allowed"
+    if closed:
+        repair_reason = "after_sales_ticket.push_repair_order.closed"
+    elif request_type != "维修":
+        repair_reason = "after_sales_ticket.push_repair_order.request_type"
+    elif existing_repair_order_code:
+        repair_reason = "after_sales_ticket.push_repair_order.already_exists"
+    else:
+        repair_allowed = True
+        repair_reason = None
+
     return AfterSalesTicketCapabilities(
         update=update_cap,
         delete=delete_cap,
         close=close_cap,
         push_sales_return=_cap(push_allowed, push_reason),
+        push_repair_order=_cap(repair_allowed, repair_reason),
     )
 
 
@@ -74,17 +88,20 @@ def assert_after_sales_ticket_capability(
     *,
     has_items: bool = False,
     has_returnable_qty: bool = False,
+    existing_repair_order_code: Optional[str] = None,
 ) -> None:
     caps = derive_after_sales_ticket_capabilities(
         ticket,
         has_items=has_items,
         has_returnable_qty=has_returnable_qty,
+        existing_repair_order_code=existing_repair_order_code,
     )
     cap_map = {
         "update": caps.update,
         "delete": caps.delete,
         "close": caps.close,
         "push_sales_return": caps.push_sales_return,
+        "push_repair_order": caps.push_repair_order,
     }
     cap = cap_map.get(action)
     if cap is None:

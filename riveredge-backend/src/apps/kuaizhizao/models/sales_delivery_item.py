@@ -19,6 +19,8 @@ class SalesDeliveryItem(BaseModel):
     """
     tenant_id = fields.IntField(description="租户ID")
     delivery_id = fields.IntField(description="出库单ID")
+    sales_order_item_id = fields.IntField(null=True, description="销售订单明细ID（关联）")
+    shipment_notice_item_id = fields.IntField(null=True, description="发货通知明细ID")
     material_id = fields.IntField(description="物料ID")
     material_code = fields.CharField(max_length=50, description="物料编码")
     material_name = fields.CharField(max_length=200, description="物料名称")
@@ -62,6 +64,8 @@ class SalesDeliveryItem(BaseModel):
         table_description = "快格轻制造 - 销售出库单明细"
         indexes = [
             ("tenant_id", "delivery_id"),
+            ("sales_order_item_id",),
+            ("shipment_notice_item_id",),
             ("material_id",),
             ("location_id",),
             ("demand_id",),  # 需求关联索引（销售出库与需求关联功能增强）

@@ -39,12 +39,14 @@ from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
+from infra.utils.client_ip import get_client_ip
 
 router = APIRouter(prefix="/files", tags=["Core - Files"])
 
 
 @router.post("/upload", response_model=FileUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_file(
+    request: Request,
     file: UploadFile = FastAPIFile(...),
     category: Optional[str] = Query(None, description="文件分类（可选）"),
     tags: Optional[str] = Query(None, description="文件标签（JSON数组字符串，可选）"),
@@ -116,6 +118,8 @@ async def upload_file(
             category=category,
             tags=tags_list,
             description=description,
+            client_ip=get_client_ip(request),
+            user_id=current_user.id,
         )
         
         return FileUploadResponse(
@@ -141,6 +145,7 @@ async def upload_file(
 
 @router.post("/upload/multiple", response_model=List[FileUploadResponse], status_code=status.HTTP_201_CREATED)
 async def upload_multiple_files(
+    request: Request,
     files: List[UploadFile] = FastAPIFile(...),
     category: Optional[str] = Query(None, description="文件分类（可选）"),
     category_from_form: Optional[str] = Form(None, alias="category"),
@@ -193,6 +198,8 @@ async def upload_multiple_files(
                 file_content=file_content,
                 original_name=original_filename,
                 category=resolved_category,
+                client_ip=get_client_ip(request),
+                user_id=current_user.id,
             )
             
             results.append(FileUploadResponse(

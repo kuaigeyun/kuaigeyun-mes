@@ -5,7 +5,7 @@
  */
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
+import { ActionType, ProColumns, type ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography, Space, Dropdown, Alert, Spin, Table, Empty, Form } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -129,6 +129,7 @@ function resolveApiErrorMessage(error: unknown, fallback: string): string {
 
 const SalesInvoicesPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
+  const createFormRef = useRef<ProFormInstance>();
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const navigate = useNavigate();
   const location = useLocation();
@@ -204,6 +205,9 @@ const SalesInvoicesPage: React.FC = () => {
       tax_rate: taxRate,
       invoice_amount: invoiceAmount,
       notes: values.notes,
+      partner_tax_no: values.partner_tax_no,
+      partner_bank_info: values.partner_bank_info,
+      partner_address_phone: values.partner_address_phone,
       attachments: normalizeDocumentAttachments(values.attachments),
     };
     try {
@@ -616,6 +620,17 @@ const SalesInvoicesPage: React.FC = () => {
         render: (_, r) => renderFinanceTypeMarker(formatChineseInvoiceType(r.invoice_type, t)),
       },
       {
+        title: t(`${P}.col.partnerTaxNo`),
+        dataIndex: 'partner_tax_no',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        ellipsis: true,
+        render: (_, r) => r.partner_tax_no || '—',
+      },
+      {
         title: t('app.kuaicaiwu.common.invoiceDate'),
         dataIndex: 'invoice_date',
         valueType: 'date',
@@ -918,7 +933,7 @@ const SalesInvoicesPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.sales-invoices.list-v1"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.sales-invoices.list-v2"
         showAdvancedSearch
         search={{ labelWidth: 120 }}
         showCreateButton={false}
@@ -1010,6 +1025,7 @@ const SalesInvoicesPage: React.FC = () => {
         confirmLoading={pullFromSalesOrderQuery.confirmLoading}
         selectionType={pullFromSalesOrderQuery.selectionType}
         selectedRowKeys={pullFromSalesOrderQuery.selectedRowKeys}
+        selectedRows={pullFromSalesOrderQuery.selectedRows}
         onSelectedRowKeysChange={pullFromSalesOrderQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromSalesOrderQuery.isRowDisabled}
         searchDraft={pullFromSalesOrderQuery.searchDraft}
@@ -1042,6 +1058,7 @@ const SalesInvoicesPage: React.FC = () => {
         confirmLoading={pullFromSalesDeliveryQuery.confirmLoading}
         selectionType={pullFromSalesDeliveryQuery.selectionType}
         selectedRowKeys={pullFromSalesDeliveryQuery.selectedRowKeys}
+        selectedRows={pullFromSalesDeliveryQuery.selectedRows}
         onSelectedRowKeysChange={pullFromSalesDeliveryQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromSalesDeliveryQuery.isRowDisabled}
         searchDraft={pullFromSalesDeliveryQuery.searchDraft}
@@ -1074,6 +1091,7 @@ const SalesInvoicesPage: React.FC = () => {
         confirmLoading={pullFromReceivableQuery.confirmLoading}
         selectionType={pullFromReceivableQuery.selectionType}
         selectedRowKeys={pullFromReceivableQuery.selectedRowKeys}
+        selectedRows={pullFromReceivableQuery.selectedRows}
         onSelectedRowKeysChange={pullFromReceivableQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromReceivableQuery.isRowDisabled}
         searchDraft={pullFromReceivableQuery.searchDraft}
@@ -1359,6 +1377,7 @@ const SalesInvoicesPage: React.FC = () => {
         open={createModalVisible}
         onOpenChange={setCreateModalVisible}
         onFinish={handleCreate}
+        formRef={createFormRef}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         {...financeFormGridProps}
       >
@@ -1370,6 +1389,34 @@ const SalesInvoicesPage: React.FC = () => {
           placeholder={t('app.kuaicaiwu.common.selectCustomer')}
           showSearch
           colProps={financeColHalf}
+          fieldProps={{
+            onChange: async (customerId: number) => {
+              if (!customerId) return;
+              try {
+                const customer = await apiRequest<Record<string, unknown>>(
+                  `/apps/master-data/supply-chain/customers/${customerId}`,
+                  { method: 'GET' },
+                );
+                const tax =
+                  String(customer.taxRegistrationNo ?? customer.tax_registration_no ?? '').trim();
+                const bank = [customer.invoiceBankName ?? customer.invoice_bank_name, customer.invoiceBankAccount ?? customer.invoice_bank_account]
+                  .map((v) => String(v ?? '').trim())
+                  .filter(Boolean)
+                  .join(' ');
+                const addressPhone = [customer.invoiceAddress ?? customer.invoice_address, customer.invoicePhone ?? customer.invoice_phone]
+                  .map((v) => String(v ?? '').trim())
+                  .filter(Boolean)
+                  .join(' ');
+                createFormRef.current?.setFieldsValue({
+                  partner_tax_no: tax || undefined,
+                  partner_bank_info: bank || undefined,
+                  partner_address_phone: addressPhone || undefined,
+                });
+              } catch {
+                /* 客户开票资料不可用时保留手工录入 */
+              }
+            },
+          }}
         />
         <ProFormText
           name="invoice_number"
@@ -1408,6 +1455,21 @@ const SalesInvoicesPage: React.FC = () => {
           rules={[{ required: true, message: t(`${P}.amountRequired`) }]}
           fieldProps={{ precision: 2, style: { width: '100%' } }}
           colProps={financeColHalf}
+        />
+        <ProFormText
+          name="partner_tax_no"
+          label={t(`${P}.col.partnerTaxNo`)}
+          colProps={financeColHalf}
+        />
+        <ProFormText
+          name="partner_bank_info"
+          label={t(`${P}.col.partnerBankInfo`)}
+          colProps={financeColFull}
+        />
+        <ProFormText
+          name="partner_address_phone"
+          label={t(`${P}.col.partnerAddressPhone`)}
+          colProps={financeColFull}
         />
         <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} colProps={financeColFull} />
         <DocumentAttachmentsField category="sales_invoice_attachments" />

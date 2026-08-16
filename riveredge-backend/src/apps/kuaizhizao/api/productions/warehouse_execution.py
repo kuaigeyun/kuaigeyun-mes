@@ -50,6 +50,9 @@ from apps.kuaizhizao.services.batching_order_service import BatchingOrderService
 from apps.kuaizhizao.services.batching_center_service import BatchingCenterService
 from apps.kuaizhizao.services.warehouse_dashboard_service import WarehouseDashboardService
 from apps.kuaizhizao.services.receipt_notice_service import ReceiptNoticeService
+from apps.kuaizhizao.services.warehouse_wo_outsource_pull_service import (
+    WarehouseWoOutsourcePullService,
+)
 
 # 初始化服务实例
 batching_order_service = BatchingOrderService()
@@ -712,6 +715,66 @@ async def create_production_picking_from_work_order_pull(
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+def _parse_selected_item_ids(request: Dict[str, Any], empty_detail: str) -> List[int]:
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=empty_detail)
+    try:
+        return [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+
+
+@router.get(
+    "/production-pickings/work-order-pull-lines",
+    summary="Open work order kitting lines for production picking pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:work-order:read"))],
+)
+async def list_production_picking_work_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    work_order_id: Optional[int] = Query(None, description="来源工单"),
+    pullable_only: bool = Query(True),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await WarehouseWoOutsourcePullService().list_work_order_picking_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            work_order_id=work_order_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/production-pickings/pull-from-work-order-items",
+    summary="Create production pickings from work order kitting lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outbound:create"))],
+)
+async def pull_production_pickings_from_work_order_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    selected_ids = _parse_selected_item_ids(request, "请至少选择一条可领料明细")
+    try:
+        return await WarehouseWoOutsourcePullService().create_production_pickings_from_lines(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.post("/production-pickings", response_model=ProductionPickingResponse, summary="Create production picking")
 async def create_production_picking(
     picking: ProductionPickingCreate,
@@ -912,6 +975,56 @@ async def preview_production_return_from_work_order(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
     )
+
+
+@router.get(
+    "/production-returns/picking-item-pull-lines",
+    summary="Open picking lines for production return pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:work-order:read"))],
+)
+async def list_production_return_picking_item_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    work_order_id: Optional[int] = Query(None, description="来源工单"),
+    pullable_only: bool = Query(True),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await WarehouseWoOutsourcePullService().list_production_return_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            work_order_id=work_order_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/production-returns/pull-from-picking-items",
+    summary="Create production returns from picking lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:inbound:create"))],
+)
+async def pull_production_returns_from_picking_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    selected_ids = _parse_selected_item_ids(request, "请至少选择一条可退料明细")
+    try:
+        return await WarehouseWoOutsourcePullService().create_production_returns_from_picking_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/production-returns", response_model=ProductionReturnResponse, summary="Create production return")
@@ -1874,6 +1987,56 @@ async def preview_work_order_inbound(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
     )
+
+
+@router.get(
+    "/finished-goods-receipts/work-order-pull-lines",
+    summary="Open work order product lines for finished goods receipt pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:work-order:read"))],
+)
+async def list_finished_goods_work_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    work_order_id: Optional[int] = Query(None, description="来源工单"),
+    pullable_only: bool = Query(True),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await WarehouseWoOutsourcePullService().list_work_order_finished_goods_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            work_order_id=work_order_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/finished-goods-receipts/pull-from-work-orders",
+    summary="Create finished goods receipts from work order product lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:inbound:create"))],
+)
+async def pull_finished_goods_from_work_orders(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    selected_ids = _parse_selected_item_ids(request, "请至少选择一条可入库工单成品行")
+    try:
+        return await WarehouseWoOutsourcePullService().create_finished_goods_from_work_orders(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/finished-goods-receipts/quick-receipt", response_model=FinishedGoodsReceiptResponse, summary="Quick receipt from work order")
@@ -3432,6 +3595,231 @@ async def list_sales_deliveries(
     return {"items": items, "total": total, "skip": skip, "limit": limit}
 
 
+@router.get(
+    "/sales-deliveries/sales-order-pull-lines",
+    summary="Open sales order lines for sales delivery pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:sales-order:read"))],
+)
+async def list_sales_delivery_sales_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    sales_order_id: Optional[int] = Query(None, description="来源销售订单"),
+    pullable_only: bool = Query(True, description="仅剩余可出库量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await SalesDeliveryService().list_sales_order_delivery_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            sales_order_id=sales_order_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/sales-deliveries/pull-from-sales-order-items",
+    summary="Create sales deliveries from sales order lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outbound:create"))],
+)
+async def pull_sales_deliveries_from_sales_order_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="请至少选择一条可出库销售订单明细")
+    try:
+        selected_ids = [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+
+    source_items = await SalesOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).only("sales_order_id")
+    for oid in {int(i.sales_order_id) for i in source_items}:
+        await _assert_sales_order_visible_by_id(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            sales_order_id=oid,
+        )
+    try:
+        return await SalesDeliveryService().create_sales_deliveries_from_sales_order_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/sales-deliveries/shipment-notice-pull-lines",
+    summary="Open shipment notice lines for sales delivery pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:shipment-notice:read"))],
+)
+async def list_sales_delivery_shipment_notice_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    notice_id: Optional[int] = Query(None, description="来源发货通知"),
+    pullable_only: bool = Query(True, description="仅剩余可出库量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await SalesDeliveryService().list_shipment_notice_delivery_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            notice_id=notice_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/sales-deliveries/pull-from-shipment-notice-items",
+    summary="Create sales deliveries from shipment notice lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outbound:create"))],
+)
+async def pull_sales_deliveries_from_shipment_notice_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="请至少选择一条可出库发货通知明细")
+    try:
+        selected_ids = [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    try:
+        return await SalesDeliveryService().create_sales_deliveries_from_notice_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/outsource-issues/work-order-pull-lines",
+    summary="Open outsource work order material lines for issue pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outsource-order:read"))],
+)
+async def list_outsource_issue_work_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    outsource_work_order_id: Optional[int] = Query(None, description="来源委外工单"),
+    pullable_only: bool = Query(True),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await WarehouseWoOutsourcePullService().list_outsource_issue_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            outsource_work_order_id=outsource_work_order_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/outsource-issues/pull-from-work-order-items",
+    summary="Create outsource issues from work order material lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outbound:create"))],
+)
+async def pull_outsource_issues_from_work_order_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    selected_ids = _parse_selected_item_ids(request, "请至少选择一条可发料明细")
+    try:
+        return await WarehouseWoOutsourcePullService().create_outsource_issues_from_lines(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/outsource-inbound/pull-lines",
+    summary="Open outsource inbound lines for receipt or return pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outsource-order:read"))],
+)
+async def list_outsource_inbound_pull_lines(
+    pull_type: str = Query(..., description="outsource_receipt / outsource_material_return / outsource_product_return"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    outsource_work_order_id: Optional[int] = Query(None, description="来源委外工单"),
+    pullable_only: bool = Query(True),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await WarehouseWoOutsourcePullService().list_outsource_inbound_pull_lines(
+            tenant_id=tenant_id,
+            pull_type=pull_type,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            outsource_work_order_id=outsource_work_order_id,
+            pullable_only=pullable_only,
+        )
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/outsource-inbound/pull-from-items",
+    summary="Create outsource inbound documents from selected lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:inbound:create"))],
+)
+async def pull_outsource_inbound_from_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    pull_type = str(request.get("pull_type") or "").strip()
+    selected_ids = _parse_selected_item_ids(request, "请至少选择一条可入库明细")
+    try:
+        return await WarehouseWoOutsourcePullService().create_outsource_inbound_from_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+            pull_type=pull_type,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.get("/sales-deliveries/{delivery_id}", response_model=SalesDeliveryWithItemsResponse, summary="Get sales delivery")
 async def get_sales_delivery(
     delivery_id: int,
@@ -4001,6 +4389,138 @@ async def pull_sales_return_from_sales_delivery(
 
 
 @router.get(
+    "/sales-returns/sales-order-pull-lines",
+    summary="Open sales order lines for sales return pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:sales-order:read"))],
+)
+async def list_sales_return_sales_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    sales_order_id: Optional[int] = Query(None, description="来源销售订单"),
+    pullable_only: bool = Query(True, description="仅剩余可退量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await SalesReturnService().list_sales_order_return_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            sales_order_id=sales_order_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/sales-returns/pull-from-sales-order-items",
+    summary="Create sales returns from sales order lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:sales-return:create"))],
+)
+async def pull_sales_returns_from_sales_order_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="请至少选择一条可退货销售订单明细")
+    try:
+        selected_ids = [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+
+    source_items = await SalesOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).only("sales_order_id")
+    for oid in {int(i.sales_order_id) for i in source_items}:
+        await _assert_sales_order_visible_by_id(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            sales_order_id=oid,
+        )
+    try:
+        return await SalesReturnService().create_sales_returns_from_sales_order_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/sales-returns/sales-delivery-pull-lines",
+    summary="Open sales delivery lines for sales return pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outbound:read"))],
+)
+async def list_sales_return_sales_delivery_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    sales_delivery_id: Optional[int] = Query(None, description="来源销售出库单"),
+    pullable_only: bool = Query(True, description="仅剩余可退量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await SalesReturnService().list_sales_delivery_return_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            sales_delivery_id=sales_delivery_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/sales-returns/pull-from-sales-delivery-items",
+    summary="Create sales returns from sales delivery lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:sales-return:create"))],
+)
+async def pull_sales_returns_from_sales_delivery_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="请至少选择一条可退货销售出库明细")
+    try:
+        selected_ids = [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+
+    source_items = await SalesDeliveryItem.filter(
+        tenant_id=tenant_id, id__in=selected_ids, deleted_at__isnull=True
+    ).only("delivery_id")
+    for did in {int(i.delivery_id) for i in source_items}:
+        await _assert_sales_delivery_visible(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            delivery_id=did,
+        )
+    try:
+        return await SalesReturnService().create_sales_returns_from_sales_delivery_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
     "/sales-returns/customer-outbound-batches",
     response_model=List[CustomerOutboundBatchOption],
     summary="List customer outbound batches available for sales return",
@@ -4285,6 +4805,127 @@ async def list_purchase_receipts(
         status=status,
         purchase_order_id=purchase_order_id,
     )
+
+
+@router.get(
+    "/purchase-receipts/purchase-order-pull-lines",
+    summary="Open purchase order lines for purchase receipt pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-order:read"))],
+)
+async def list_purchase_receipt_purchase_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    order_id: Optional[int] = Query(None, description="来源采购订单"),
+    pullable_only: bool = Query(True, description="仅剩余可入库量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await PurchaseReceiptService().list_purchase_order_receipt_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            order_id=order_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/purchase-receipts/pull-from-purchase-order-items",
+    summary="Create purchase receipts from purchase order lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:inbound:create"))],
+)
+async def pull_purchase_receipts_from_purchase_order_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="请至少选择一条可入库采购订单明细")
+    try:
+        selected_ids = [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+    source_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).only("order_id")
+    for oid in {int(i.order_id) for i in source_items}:
+        await _assert_purchase_order_visible_by_id(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            purchase_order_id=oid,
+        )
+    try:
+        return await PurchaseReceiptService().create_purchase_receipts_from_po_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/purchase-receipts/receipt-notice-pull-lines",
+    summary="Open receipt notice lines for purchase receipt pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:receipt-notice:read"))],
+)
+async def list_purchase_receipt_receipt_notice_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    notice_id: Optional[int] = Query(None, description="来源收货通知"),
+    pullable_only: bool = Query(True, description="仅剩余可入库量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await PurchaseReceiptService().list_receipt_notice_receipt_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            notice_id=notice_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/purchase-receipts/pull-from-receipt-notice-items",
+    summary="Create purchase receipts from receipt notice lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:inbound:create"))],
+)
+async def pull_purchase_receipts_from_receipt_notice_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="请至少选择一条可入库收货通知明细")
+    try:
+        selected_ids = [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    try:
+        return await PurchaseReceiptService().create_purchase_receipts_from_notice_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/purchase-receipts/{receipt_id}", response_model=PurchaseReceiptWithItemsResponse, summary="Get purchase receipt")
@@ -4667,6 +5308,71 @@ async def list_purchase_returns(
         **{k: v for k, v in filters.items() if v is not None},
     )
     return PurchaseReturnListPaginatedResponse(**result)
+
+
+@router.get(
+    "/purchase-returns/purchase-order-pull-lines",
+    summary="Open purchase order lines for purchase return pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-order:read"))],
+)
+async def list_purchase_return_purchase_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    order_id: Optional[int] = Query(None, description="来源采购订单"),
+    pullable_only: bool = Query(True, description="仅剩余可退量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await PurchaseReturnService().list_purchase_return_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            order_id=order_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/purchase-returns/pull-from-purchase-order-items",
+    summary="Create purchase returns from purchase order lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-return:create"))],
+)
+async def pull_purchase_returns_from_purchase_order_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="请至少选择一条可退货采购订单明细")
+    try:
+        selected_ids = [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+    source_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).only("order_id")
+    for oid in {int(i.order_id) for i in source_items}:
+        await _assert_purchase_order_visible_by_id(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            purchase_order_id=oid,
+        )
+    try:
+        return await PurchaseReturnService().create_purchase_returns_from_po_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/purchase-returns/statistics", summary="Purchase return statistics (KPI cards)")

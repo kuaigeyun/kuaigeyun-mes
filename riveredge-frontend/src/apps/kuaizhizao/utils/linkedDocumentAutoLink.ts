@@ -61,6 +61,14 @@ const PREFIX_TO_DOCUMENT_TYPE: Record<string, LinkedDocumentType> = {
   demand: 'demand',
   related_demand: 'demand',
   freight_order: 'freight_order',
+  after_sales_ticket: 'after_sales_ticket',
+  install_execution: 'install_execution',
+  service_asset: 'service_asset',
+  repair_order: 'repair_order',
+  service_dispatch: 'service_dispatch',
+  spare_part_requisition: 'spare_part_requisition',
+  service_settlement: 'service_settlement',
+  customer_return_visit: 'customer_return_visit',
 };
 
 /** 显式 dataIndex 绑定（含 source_code 三元组） */
@@ -89,6 +97,10 @@ const EXPLICIT_BINDINGS: Record<string, Omit<LinkedCodeBinding, 'codeField'>> = 
   purchase_receipt_code: { documentType: 'purchase_receipt', idField: 'purchase_receipt_id' },
   related_demand_code: { documentType: 'demand', idField: 'related_demand_id' },
   freight_order_code: { documentType: 'freight_order', idField: 'freight_order_id' },
+  after_sales_ticket_code: { documentType: 'after_sales_ticket', idField: 'after_sales_ticket_id' },
+  service_asset_code: { documentType: 'service_asset', idField: 'service_asset_id' },
+  install_execution_code: { documentType: 'install_execution', idField: 'install_execution_id' },
+  repair_order_code: { documentType: 'repair_order', idField: 'repair_order_id' },
 };
 
 /** 列已有自定义 render 时不得覆盖（报价单等主从叠列用 quotation_code 作 dataIndex）。 */

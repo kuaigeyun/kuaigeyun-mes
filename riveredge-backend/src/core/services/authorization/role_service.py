@@ -179,8 +179,39 @@ class RoleService:
                     ),
                     current_user_id=current_user_id,
                 )
+            await RoleService.ensure_baseline_permissions_for_role(tenant_id, role)
 
         return role
+
+    @staticmethod
+    async def ensure_baseline_permissions_for_role(tenant_id: int, role: Role) -> int:
+        """为角色补齐基线权限（幂等），返回新增条数。"""
+        from core.models.role_permission import RolePermission
+
+        baseline_codes = set(PermissionRegistryService.BASELINE_PERMISSION_CODES)
+        if not baseline_codes:
+            return 0
+        permissions = await Permission.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            code__in=list(baseline_codes),
+        ).all()
+        if not permissions:
+            return 0
+        desired_ids = {p.id for p in permissions}
+        existing = await RolePermission.filter(role_id=role.id).all()
+        existing_ids = {rp.permission_id for rp in existing}
+        to_add = desired_ids - existing_ids
+        if not to_add:
+            return 0
+        await RolePermission.bulk_create(
+            [
+                RolePermission(role_id=role.id, permission_id=pid, created_at=now_utc())
+                for pid in to_add
+            ],
+            ignore_conflicts=True,
+        )
+        return len(to_add)
     
     @staticmethod
     async def get_role_list(
@@ -508,6 +539,14 @@ class RoleService:
             permission_ids = [p.id for p in permissions]
         else:
             permission_ids = []
+
+        # 基线权限强制并入（不可通过分配接口剥离）
+        baseline_perms = await Permission.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            code__in=list(PermissionRegistryService.BASELINE_PERMISSION_CODES),
+        ).all()
+        permission_ids = list({*permission_ids, *[p.id for p in baseline_perms]})
         
         # 通过 RolePermission 关联表获取当前角色的权限
         from core.models.role_permission import RolePermission
@@ -797,7 +836,7 @@ class RoleService:
             "kuaizhizao:traceability",
             "kuaizhizao:quality-management-traceability",
         ],
-        "ADMIN_OFFICE": ["system:user:read", "system:role:read", "system:menu:read"],
+        "ADMIN_OFFICE": ["system:user:read", "system:role:read", "system:menu:read", "kuaioa:"],
         "EMPLOYEE": [],
     }
     LEGACY_ROLE_CODE_MAPPINGS = {
@@ -901,6 +940,13 @@ class RoleService:
             ).all()
             selected_permissions = read_perms
             selected_ids = {p.id for p in read_perms}
+
+        baseline_perms = await Permission.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            code__in=list(PermissionRegistryService.BASELINE_PERMISSION_CODES),
+        ).all()
+        selected_ids = {*selected_ids, *[p.id for p in baseline_perms]}
 
         if not selected_ids:
             return

@@ -7,8 +7,9 @@
  * Date: 2026-01-15
  */
 
-import React, { useRef, useState, useMemo, useEffect } from 'react';
+import React, { useRef, useState, useMemo, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, message, Table, Row, Col, Typography, Tag, Form as AntForm, Input, InputNumber, Select, Descriptions } from 'antd';
@@ -110,8 +111,11 @@ const defaultTransferItem = {
 
 const InventoryTransferPage: React.FC = () => {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const deepLinkOpenedRef = useRef(false);
+  const deepLinkFilterRef = useRef<{ id?: number; uuid?: string }>({});
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   // Modal 相关状态
@@ -290,15 +294,13 @@ const InventoryTransferPage: React.FC = () => {
     }
   };
 
-  /**
-   * 处理查看详情
-   */
-  const handleDetail = async (record: InventoryTransfer) => {
+  const handleDetail = useCallback(async (record: InventoryTransfer) => {
+    if (record.id == null) return;
     setDetailDrawerVisible(true);
     setDetailLoading(true);
     setCurrentTransfer(null);
     try {
-      const detail = await inventoryTransferApi.get(record.id!.toString());
+      const detail = await inventoryTransferApi.get(record.id.toString());
       setCurrentTransfer(detail);
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaizhizao.inventoryTransfer.msgGetDetailFailed'));
@@ -306,7 +308,49 @@ const InventoryTransferPage: React.FC = () => {
     } finally {
       setDetailLoading(false);
     }
-  };
+  }, [messageApi, t]);
+
+  useEffect(() => {
+    const idRaw = searchParams.get('id')?.trim();
+    const uuidRaw = searchParams.get('uuid')?.trim();
+    deepLinkFilterRef.current = {
+      id: idRaw && Number(idRaw) > 0 ? Number(idRaw) : undefined,
+      uuid: uuidRaw || undefined,
+    };
+    if (!idRaw && !uuidRaw) {
+      deepLinkOpenedRef.current = false;
+      actionRef.current?.reload();
+      return;
+    }
+    if (deepLinkOpenedRef.current) {
+      actionRef.current?.reload();
+      return;
+    }
+    deepLinkOpenedRef.current = true;
+    void (async () => {
+      try {
+        if (idRaw) {
+          const id = Number(idRaw);
+          if (Number.isFinite(id) && id > 0) {
+            await handleDetail({ id });
+            return;
+          }
+        }
+        if (uuidRaw) {
+          const result = await inventoryTransferApi.list({ keyword: uuidRaw, limit: 100 });
+          const { data } = normalizeWarehouseListResponse(result);
+          const hit = data.find((row: InventoryTransfer) => String(row.uuid) === uuidRaw);
+          if (hit) {
+            await handleDetail(hit);
+          }
+        }
+      } catch {
+        messageApi.error(t('app.kuaizhizao.inventoryTransfer.msgGetDetailFailed'));
+      } finally {
+        actionRef.current?.reload();
+      }
+    })();
+  }, [searchParams, handleDetail, messageApi, t]);
 
   /**
    * 处理执行调拨
@@ -724,7 +768,18 @@ const InventoryTransferPage: React.FC = () => {
               status: lifecycleStage ?? listParams.status,
             });
             const { data, total } = normalizeWarehouseListResponse(result);
-            return { data, success: true, total };
+            const deepLink = deepLinkFilterRef.current;
+            let rows = data;
+            if (deepLink.id) {
+              rows = rows.filter((row) => row.id === deepLink.id);
+            } else if (deepLink.uuid) {
+              rows = rows.filter((row) => String(row.uuid) === deepLink.uuid);
+            }
+            return {
+              data: rows,
+              success: true,
+              total: deepLink.id || deepLink.uuid ? rows.length : total,
+            };
           } catch {
             return { data: [], success: false, total: 0 };
           }
@@ -1248,6 +1303,15 @@ const InventoryTransferPage: React.FC = () => {
           ) : undefined
         }
         collaboration={detailCollaboration}
+        traceDocument={
+          currentTransfer?.id
+            ? {
+                documentType: 'inventory_transfer',
+                documentId: currentTransfer.id,
+                selfDocumentId: currentTransfer.id,
+              }
+            : undefined
+        }
         linesTitle={t('app.kuaizhizao.inventoryTransfer.detailItemsTitle')}
         lines={
           currentTransfer?.items && currentTransfer.items.length > 0 ? (

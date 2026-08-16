@@ -167,6 +167,31 @@ export const supplierApi = {
   },
 
   /**
+   * 按交期/来料合格率重算评级
+   */
+  recalculateRating: async (
+    uuid: string,
+    lookbackDays = 90,
+  ): Promise<{
+    ratingGrade: string;
+    ratingScore: number;
+    otdRate?: number;
+    qualityRate?: number;
+  }> => {
+    const raw = (await api.post(
+      `/apps/master-data/supply-chain/suppliers/${uuid}/recalculate-rating`,
+      null,
+      { params: { lookback_days: lookbackDays } },
+    )) as Record<string, unknown>;
+    return {
+      ratingGrade: String(raw.rating_grade ?? raw.ratingGrade ?? ''),
+      ratingScore: Number(raw.rating_score ?? raw.ratingScore ?? 0),
+      otdRate: raw.otd_rate != null ? Number(raw.otd_rate) : undefined,
+      qualityRate: raw.quality_rate != null ? Number(raw.quality_rate) : undefined,
+    };
+  },
+
+  /**
    * 删除供应商
    */
   delete: async (uuid: string): Promise<void> => {

@@ -213,7 +213,7 @@ class SalesContractPushToWorkOrderRequest(BaseModel):
         None, description="下推模式：draft/confirm（不传则使用租户默认）"
     )
     work_order_granularity: Optional[str] = Field(
-        None, description="工单粒度：grouped/per_unit（不传默认 grouped）"
+        None, description="工单粒度：grouped/peer_group（不传默认 grouped；peer_group 为多工单平级编组，不按台拆分）"
     )
 
 

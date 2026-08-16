@@ -16,6 +16,8 @@ import { useTranslation } from 'react-i18next';
 import { WizardTemplate } from '../layout-templates/WizardTemplate';
 import { getInitSteps, completeStep, completeInitWizard, type InitWizardData, type Step2DefaultSettings } from '../../services/init-wizard';
 import { getTenantId } from '../../utils/auth';
+import { normalizeUiLanguage } from '../../utils/localeBootstrap';
+import { LANGUAGE_MAP } from '../../config/i18n';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../services/dataDictionary';
 import { getLanguageList } from '../../services/language';
 import { useConfigStore } from '../../stores/configStore';
@@ -108,7 +110,12 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
         getDataDictionaryByCode('TIMEZONE').catch(() => null),
       ]);
       if (langRes?.items) {
-        const opts = langRes.items.map((l: any) => ({ label: l.native_name || l.name, value: l.code }));
+        const opts = langRes.items
+          .filter((l: { code?: string }) => Boolean(normalizeUiLanguage(l.code)))
+          .map((l: { native_name?: string; name?: string; code: string }) => ({
+            label: LANGUAGE_MAP[l.code] || l.name || l.native_name,
+            value: l.code,
+          }));
         setLanguageOptions(opts);
         setSiteSettingsDictCache({ language: opts.map((o) => ({ ...o, key: o.value })) });
       }

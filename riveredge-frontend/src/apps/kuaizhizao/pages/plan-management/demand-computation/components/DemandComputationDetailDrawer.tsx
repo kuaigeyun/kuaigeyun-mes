@@ -6,6 +6,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   App,
+  Alert,
   Button,
   Descriptions,
   Empty,
@@ -40,6 +41,7 @@ import { renderDemandTypeMarkerTag } from '../../../../utils/demandType'
 import {
   getComputationSnapshot,
   getPushRecords,
+  getComputationDynamicMonitor,
   listComputationRecalcHistory,
   validateMaterialSources,
   type ComputationRecalcHistoryItem,
@@ -56,6 +58,11 @@ import {
   getMaterialSourceTypeTagColor,
 } from '../../../../../master-data/utils/materialSourceType'
 import { renderAvailableInventoryCell } from './availableInventoryCell'
+import { MrpMaterialPlanPanel } from './MrpMaterialPlanPanel'
+import { mrpExceptionListHasError } from './mrpExceptionHelpers'
+import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions'
+
+const DEMAND_COMPUTATION_RESOURCE = 'plan-management-demand-computation'
 
 const PLACEHOLDER: DemandComputation = { id: 0 }
 const DEMAND_COMPUTATION_DETAIL_ITEMS_MIN_WIDTH = 1920
@@ -328,8 +335,11 @@ export type DemandComputationDetailDrawerProps = {
   loading?: boolean
   error?: string | null
   onRetry?: () => void
+  onRefresh?: () => void
   zIndex?: number
   trackingRefreshKey?: number
+  /** 从例外收件箱打开时自动弹出对应物料 MRP 分日净算面板 */
+  initialFocusItemId?: number | null
   extra?: React.ReactNode
   renderBriefActions?: (doc: TraceBriefDocument) => React.ReactNode
 }
@@ -341,17 +351,27 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
   loading = false,
   error = null,
   onRetry,
+  onRefresh,
   zIndex,
   trackingRefreshKey = 0,
+  initialFocusItemId = null,
   extra,
   renderBriefActions,
 }) => {
   const { t } = useTranslation()
   const { message: messageApi, modal: modalApi } = App.useApp()
+  const computationPerms = useResourcePermissions(DEMAND_COMPUTATION_RESOURCE)
   const contentReady = Boolean(computation)
   const showError = Boolean(error) && !contentReady && !loading
   const showLoading = loading || (!contentReady && !showError)
   const effective = computation ?? PLACEHOLDER
+  const computationCompleted = effective.computation_status === '完成'
+
+  const [planPanelItem, setPlanPanelItem] = useState<DemandComputationItem | null>(null)
+  const [dynamicMonitor, setDynamicMonitor] = useState<Awaited<
+    ReturnType<typeof getComputationDynamicMonitor>
+  > | null>(null)
+  const [monitorLoading, setMonitorLoading] = useState(false)
 
   const tracking = useDocumentTracking(
     open && contentReady ? 'demand_computation' : undefined,
@@ -390,6 +410,40 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
       cancelled = true
     }
   }, [open, effective.id, trackingRefreshKey, effective.items])
+
+  useEffect(() => {
+    if (!open || !effective.id || !computationCompleted) {
+      setDynamicMonitor(null)
+      return
+    }
+    let cancelled = false
+    setMonitorLoading(true)
+    void getComputationDynamicMonitor(effective.id)
+      .then((data) => {
+        if (!cancelled) setDynamicMonitor(data)
+      })
+      .catch(() => {
+        if (!cancelled) setDynamicMonitor(null)
+      })
+      .finally(() => {
+        if (!cancelled) setMonitorLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, effective.id, computationCompleted, trackingRefreshKey])
+
+  useEffect(() => {
+    if (!planPanelItem?.id || !effective.items?.length) return
+    const updated = effective.items.find((i) => i.id === planPanelItem.id)
+    if (updated) setPlanPanelItem(updated)
+  }, [effective.items, planPanelItem?.id])
+
+  useEffect(() => {
+    if (!open || !initialFocusItemId || !effective.items?.length) return
+    const item = effective.items.find((i) => i.id === initialFocusItemId)
+    if (item) setPlanPanelItem(item)
+  }, [open, initialFocusItemId, effective.items])
 
   const lifecycle = useMemo(
     () => (contentReady ? getDemandComputationLifecycle(effective, t) : null),
@@ -430,6 +484,7 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
               demandId={record.demand_id}
               demandIds={record.demand_ids}
               sourceId={record.source_id}
+              sourceLabel={record.source_label}
             />
           ),
         },
@@ -450,7 +505,7 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
         {
           title: t('app.kuaizhizao.demandComputation.colSourceType'),
           dataIndex: 'demand_type',
-          render: (_, record) => renderDemandTypeMarkerTag(record.demand_type),
+          render: (_, record) => renderDemandTypeMarkerTag(t, record.demand_type),
         },
         {
           title: t('app.kuaizhizao.demandComputation.colStartTime'),
@@ -486,6 +541,7 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
   if (!open) return null
 
   return (
+    <>
       <DetailDrawerTemplate
         title={title}
         open={open}
@@ -522,6 +578,28 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
         basic={
           contentReady ? (
             <div>
+              {dynamicMonitor &&
+              (dynamicMonitor.has_upstream_change || dynamicMonitor.has_downstream_risk) ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  title={t('app.kuaizhizao.demandComputation.dynamicMonitorTitle')}
+                  description={
+                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                      {[...(dynamicMonitor.upstream_alerts || []), ...(dynamicMonitor.downstream_alerts || [])].map(
+                        (a, idx) => (
+                          <li key={idx}>{a.message}</li>
+                        ),
+                      )}
+                    </ul>
+                  }
+                />
+              ) : monitorLoading ? (
+                <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+                  {t('app.kuaizhizao.demandComputation.dynamicMonitorLoading')}
+                </Typography.Text>
+              ) : null}
               <Descriptions column={3} size="small" items={detailDrawerDescriptionItems(basicColumns, effective as Record<string, unknown>)} />
               {validationResults ? (
                 <div style={{ marginTop: 12 }}>
@@ -742,44 +820,32 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
                         ? record.detail_results.exceptions
                         : []
                       if (!exceptions.length) return '-'
-                      const color = exceptions.some((e: { code?: string }) =>
-                        ['PAST_DUE_START', 'SHORTAGE_WITHIN_LEAD_TIME', 'PAST_DUE_SUPPLY'].includes(String(e?.code || '')),
-                      )
-                        ? 'error'
-                        : 'warning'
+                      const listColor = mrpExceptionListHasError(exceptions) ? 'error' : 'warning'
                       return (
                         <Button
                           type="link"
                           size="small"
-                          danger={color === 'error'}
-                          onClick={() => {
-                            modalApi.info({
-                              title: t('app.kuaizhizao.demandComputation.mrpExceptionTitle'),
-                              width: 560,
-                              content: (
-                                <ul style={{ maxHeight: 320, overflow: 'auto', paddingLeft: 18 }}>
-                                  {exceptions.map(
-                                    (
-                                      ex: { code?: string; severity?: string; message?: string; qty?: number },
-                                      idx: number,
-                                    ) => (
-                                      <li key={idx} style={{ marginBottom: 6 }}>
-                                        <Tag color={color}>{ex.code || 'INFO'}</Tag>
-                                        <span>{ex.message || '-'}</span>
-                                        {ex.qty != null ? (
-                                          <Typography.Text type="secondary" style={{ marginLeft: 6 }}>
-                                            ({ex.qty})
-                                          </Typography.Text>
-                                        ) : null}
-                                      </li>
-                                    ),
-                                  )}
-                                </ul>
-                              ),
-                            })
-                          }}
+                          danger={listColor === 'error'}
+                          onClick={() => setPlanPanelItem(record)}
                         >
                           {t('app.kuaizhizao.demandComputation.mrpExceptionCount', { count: exceptions.length })}
+                        </Button>
+                      )
+                    },
+                  },
+                  {
+                    title: t('app.kuaizhizao.demandComputation.colMrpPlanDetail'),
+                    dataIndex: 'id',
+                    width: 88,
+                    render: (_: unknown, record: DemandComputationItem) => {
+                      const detail = record.detail_results as Record<string, unknown> | undefined
+                      const buckets = Array.isArray(detail?.time_buckets) ? detail.time_buckets.length : 0
+                      const supply = (detail?.supply_calculation || {}) as Record<string, unknown>
+                      const planned = Array.isArray(supply.planned_orders) ? supply.planned_orders.length : 0
+                      if (!buckets && !planned) return '-'
+                      return (
+                        <Button type="link" size="small" onClick={() => setPlanPanelItem(record)}>
+                          {t('app.kuaizhizao.demandComputation.actionMrpPlanDetail')}
                         </Button>
                       )
                     },
@@ -872,5 +938,17 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
             : undefined
         }
       />
+      <MrpMaterialPlanPanel
+        open={Boolean(planPanelItem)}
+        onClose={() => setPlanPanelItem(null)}
+        computationId={effective.id}
+        item={planPanelItem}
+        computationCompleted={computationCompleted}
+        canFirm={computationPerms.canUpdate}
+        onFirmChanged={() => {
+          onRefresh?.()
+        }}
+      />
+    </>
   )
 }

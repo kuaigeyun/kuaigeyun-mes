@@ -5,7 +5,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, type ProFormInstance } from '@ant-design/pro-components';
@@ -57,6 +57,13 @@ import {
   resolveOutboundHubListParams,
 } from '../../../utils/warehouseListCore';
 import { fetchOutboundHubList } from './outboundListAggregate';
+import {
+  filterOutboundHubRowsByDeepLink,
+  outboundHubDeepLinkStub,
+  parseOutboundHubDeepLink,
+  resolveOutboundDeepLinkId,
+  type OutboundHubDeepLinkFilter,
+} from './outboundHubDeepLink';
 import { withdrawOutboundDocument, deleteOutboundDocument } from './outboundHubWithdraw';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
@@ -129,6 +136,7 @@ const OutboundPage: React.FC = () => {
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { token } = AntdTheme.useToken();
   const outboundDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
@@ -206,6 +214,8 @@ const OutboundPage: React.FC = () => {
   const [confirmPreviewOpen, setConfirmPreviewOpen] = useState(false);
   const [confirmPreviewRecord, setConfirmPreviewRecord] = useState<OutboundOrder | null>(null);
   const handledDirectConfirmKeyRef = useRef<string | null>(null);
+  const outboundDeepLinkRef = useRef<OutboundHubDeepLinkFilter | null>(null);
+  const outboundDeepLinkOpenedRef = useRef(false);
   const productionPickingAuditEnabled = useAuditRequired('production_picking', false);
   const salesDeliveryAuditEnabled = useAuditRequired('sales_delivery', false);
   const outboundAuditColumnEnabled = productionPickingAuditEnabled || salesDeliveryAuditEnabled;
@@ -397,6 +407,35 @@ const OutboundPage: React.FC = () => {
       setDetailLoading(false);
     }
   };
+
+  useEffect(() => {
+    const filter = parseOutboundHubDeepLink(searchParams);
+    outboundDeepLinkRef.current = filter;
+    if (!filter) {
+      outboundDeepLinkOpenedRef.current = false;
+      actionRef.current?.reload();
+      return;
+    }
+    if (filter.outboundType !== outboundTypeFilterRef.current) {
+      handleOutboundTypeFilterChange(filter.outboundType);
+    }
+    if (outboundDeepLinkOpenedRef.current) {
+      actionRef.current?.reload();
+      return;
+    }
+    outboundDeepLinkOpenedRef.current = true;
+    void (async () => {
+      try {
+        const id = await resolveOutboundDeepLinkId(filter);
+        if (id) {
+          await handleDetail(outboundHubDeepLinkStub({ ...filter, id }));
+        }
+      } catch {
+        messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.loadListFailed'));
+      }
+      actionRef.current?.reload();
+    })();
+  }, [searchParams, handleOutboundTypeFilterChange, messageApi, t]);
 
   const handleSaveProductionPickingEdit = async () => {
     if (!currentOrder?.id || currentOrder.outbound_type !== 'production_picking') return;
@@ -1259,7 +1298,12 @@ const OutboundPage: React.FC = () => {
               },
               currentUser,
             );
-            return result;
+            const filtered = filterOutboundHubRowsByDeepLink(result.data, outboundDeepLinkRef.current);
+            return {
+              ...result,
+              data: filtered,
+              total: outboundDeepLinkRef.current ? filtered.length : result.total,
+            };
           } catch {
             messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.loadListFailed'));
             return { data: [], success: false, total: 0 };

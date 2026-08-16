@@ -54,10 +54,11 @@ def _is_audited_for_computation(demand: Any) -> bool:
 
 def derive_demand_capabilities(demand: Any) -> DemandCapabilities:
     merge_allowed = _is_audited_for_computation(demand)
-    merge_cap = _cap(
-        merge_allowed,
-        "demand.merge_computation.not_audited" if not merge_allowed else None,
-    )
+    merge_reason = "demand.merge_computation.not_audited" if not merge_allowed else None
+    if merge_allowed and bool(getattr(demand, "pushed_to_computation", False)):
+        merge_allowed = False
+        merge_reason = "demand.push_computation.already_pushed"
+    merge_cap = _cap(merge_allowed, merge_reason if not merge_allowed else None)
     return DemandCapabilities(merge_computation=merge_cap)
 
 

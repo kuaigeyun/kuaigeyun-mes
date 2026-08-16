@@ -376,6 +376,32 @@ class DemandService(AppBaseService[Demand]):
         if created_end is not None:
             query = query.filter(created_at__lte=datetime.combine(created_end, time.max))
 
+        pullable_only = filters.get("pullable_only")
+        pull_target_norm = str(filters.get("pull_target") or "").strip().lower()
+        if pullable_only and pull_target_norm == "demand_computation":
+            from apps.kuaizhizao.constants import LEGACY_AUDITED_VALUES, ReviewStatus
+
+            approved_review = (
+                ReviewStatus.APPROVED.value,
+                "APPROVED",
+                "已通过",
+                "审核通过",
+                "通过",
+                "已审核",
+            )
+            merge_statuses = (
+                "AUDITED",
+                "CONFIRMED",
+                "EFFECTIVE",
+                "已审核",
+                "已确认",
+                "已生效",
+                *tuple(LEGACY_AUDITED_VALUES),
+            )
+            query = query.filter(review_status__in=approved_review).filter(
+                Q(status__in=merge_statuses)
+            ).filter(pushed_to_computation=False)
+
         # 获取总数
         total = await query.count()
 

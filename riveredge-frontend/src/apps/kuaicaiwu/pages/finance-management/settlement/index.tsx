@@ -21,6 +21,7 @@ import type { ReceivableListParams } from '../../../types/finance/receivable';
 import type { PayableListParams } from '../../../types/finance/payable';
 import type { ReceiptListParams } from '../../../services/finance/receipt';
 import type { PaymentListParams } from '../../../services/finance/payment';
+import type { SettlementRecord } from '../../../types/finance/settlement';
 import {
   financeDocCodePartnerSearchColumns,
   financeDocCreatedUpdatedColumns,
@@ -28,7 +29,9 @@ import {
   resolvePaymentListParams,
   resolveReceiptListParams,
   resolveReceivableListParams,
+  resolveSettlementHistoryListParams,
 } from '../../../utils/financeListCore';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { settlementCapabilityReasonMessage } from '../../../utils/settlementCapabilityMessages';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
@@ -58,9 +61,12 @@ const SettlementPage: React.FC = () => {
   const receiptActionRef = useRef<ActionType>();
   const payableActionRef = useRef<ActionType>();
   const paymentActionRef = useRef<ActionType>();
-  const [activeTab, setActiveTab] = useState(() =>
-    searchParams.get('tab') === 'payable' ? 'payable' : 'receivable',
-  );
+  const historyActionRef = useRef<ActionType>();
+  const [activeTab, setActiveTab] = useState(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'payable' || tab === 'history') return tab;
+    return 'receivable';
+  });
   const [focusSupplierId, setFocusSupplierId] = useState<number | null>(() =>
     parsePositiveInt(searchParams.get('supplierId')),
   );
@@ -359,6 +365,7 @@ const SettlementPage: React.FC = () => {
       resetArSelection();
       receivableActionRef.current?.reload();
       receiptActionRef.current?.reload();
+      historyActionRef.current?.reload();
     } catch (error: any) {
       message.error(
         error?.response?.data?.detail?.message || error?.message || t(`${P}.settleFailed`, { message: '' }),
@@ -389,6 +396,7 @@ const SettlementPage: React.FC = () => {
       resetApSelection();
       payableActionRef.current?.reload();
       paymentActionRef.current?.reload();
+      historyActionRef.current?.reload();
     } catch (error: any) {
       message.error(
         error?.response?.data?.detail?.message || error?.message || t(`${P}.settleFailed`, { message: '' }),
@@ -415,7 +423,7 @@ const SettlementPage: React.FC = () => {
           <Alert
             type="warning"
             showIcon
-            message={settlementCapabilityReasonMessage(preview.blocking_reason, t)}
+            title={settlementCapabilityReasonMessage(preview.blocking_reason, t)}
           />
         ) : null}
         {preview.items?.length ? (
@@ -695,6 +703,148 @@ const SettlementPage: React.FC = () => {
       },
     ],
     [t, selectedPayable, searchSuppliers, settlementPerms.canUpdate],
+  );
+
+  const historyColumns: ProColumns<SettlementRecord>[] = useMemo(
+    () => [
+      {
+        title: t(`${P}.history.col.settlementCode`),
+        dataIndex: 'settlement_code',
+        width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t(`${P}.history.col.businessType`),
+        dataIndex: 'business_type',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        valueType: 'select',
+        order: 10,
+        valueEnum: {
+          receivable: { text: t(`${P}.tabReceivable`) },
+          payable: { text: t(`${P}.tabPayable`) },
+        },
+        render: (_, record) =>
+          record.debit_doc_type === 'Payable'
+            ? t(`${P}.tabPayable`)
+            : t(`${P}.tabReceivable`),
+      },
+      {
+        title: t(`${P}.history.col.partner`),
+        dataIndex: 'partner_name',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        sorter: true,
+        ellipsis: true,
+      },
+      {
+        title: t(`${P}.history.col.debitDoc`),
+        dataIndex: 'debit_doc_code',
+        width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        ellipsis: true,
+      },
+      {
+        title: t(`${P}.history.col.creditDoc`),
+        dataIndex: 'credit_doc_code',
+        width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        ellipsis: true,
+      },
+      {
+        title: t(`${P}.history.col.amount`),
+        dataIndex: 'amount',
+        valueType: 'money',
+        align: 'right',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t(`${P}.history.col.settlementDate`),
+        dataIndex: 'settlement_date',
+        valueType: 'date',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t(`${P}.history.col.settlementDate`),
+        dataIndex: 'settlement_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        order: 11,
+        formItemProps: formDateRangeFormItemProps,
+      },
+      {
+        title: t(`${P}.history.col.operator`),
+        dataIndex: 'operator_name',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        ellipsis: true,
+        render: (_, record) => record.operator_name || '—',
+      },
+      {
+        title: t('common.keyword'),
+        dataIndex: 'keyword',
+        hideInTable: true,
+        order: 12,
+      },
+    ],
+    [t],
+  );
+
+  const settlementHistory = (
+    <>
+      <Alert type="info" showIcon style={{ marginBottom: 16 }} title={t(`${P}.history.alert`)} />
+      <UniTable<SettlementRecord>
+        headerTitle={t(`${P}.history.title`)}
+        actionRef={historyActionRef}
+        rowKey="id"
+        viewTypes={[...tableOnlyViewTypes]}
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement.history-v1"
+        search={{ labelWidth: 'auto' }}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        request={async (params, sort, _filter, searchFormValues) => {
+          const { current, pageSize } = params;
+          const listParams = resolveSettlementHistoryListParams(searchFormValues, sort);
+          try {
+            const res = await settlementService.listRecords({
+              skip: ((current || 1) - 1) * (pageSize || 20),
+              limit: pageSize || 20,
+              ...listParams,
+            });
+            return {
+              data: res?.items || [],
+              total: res?.total || 0,
+              success: true,
+            };
+          } catch (error: unknown) {
+            const err = error as { message?: string };
+            message.error(err?.message || t('app.kuaicaiwu.common.loadListFailed'));
+            return { data: [], total: 0, success: false };
+          }
+        }}
+        columns={historyColumns}
+      />
+    </>
   );
 
   useEffect(() => {
@@ -1000,6 +1150,7 @@ const SettlementPage: React.FC = () => {
         tabs={[
           { key: 'receivable', label: t(`${P}.tabReceivable`), children: receivableSettlement },
           { key: 'payable', label: t(`${P}.tabPayable`), children: payableSettlement },
+          { key: 'history', label: t(`${P}.tabHistory`), children: settlementHistory },
         ]}
       />
 

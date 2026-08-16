@@ -124,11 +124,11 @@ async def list_quotations(
     ),
     pullable_only: Optional[bool] = Query(
         None,
-        description="仅可加载建单：未关联有效销售订单且非已转订单状态",
+        description="仅可加载建单：与 convert_to_* capability 一致，不含已关联合同/订单/评审或历史版本",
     ),
     pull_target: Optional[str] = Query(
         None,
-        description="加载目标：sales_order/sales_contract；与 pullable_only 组合使用",
+        description="加载目标：sales_order/sales_contract/sales_review；与 pullable_only 组合使用",
     ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -706,4 +706,59 @@ async def convert_to_sales_order(
         raise HTTPException(
             status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="报价单转销售订单失败",
+        )
+
+
+@router.get(
+    "/{quotation_id}/push-to-sales-review/preview",
+    summary="Preview push quotation to sales review",
+)
+async def preview_push_quotation_to_sales_review(
+    quotation_id: int = Path(..., description="报价单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await quotation_service.preview_push_quotation_to_sales_review(
+            tenant_id=tenant_id,
+            quotation_id=quotation_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/{quotation_id}/convert-to-sales-review",
+    summary="Convert to sales review",
+)
+async def convert_to_sales_review(
+    quotation_id: int = Path(..., description="报价单ID"),
+    selected_item_ids: Optional[List[int]] = Body(
+        default=None, embed=True, description="可选：仅转换指定报价明细ID"
+    ),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        sales_review, quotation = await quotation_service.convert_to_sales_review(
+            tenant_id=tenant_id,
+            quotation_id=quotation_id,
+            created_by=current_user.id,
+            selected_item_ids=selected_item_ids,
+        )
+        return {
+            "sales_review": sales_review,
+            "quotation": quotation,
+        }
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error("报价单转订单评审失败: %s", e)
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="报价单转订单评审失败",
         )

@@ -28,17 +28,21 @@ import {
   renderPerformanceTypeMarker,
 } from '../components/performanceMeta';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import {
   normalizePerformanceListResponse,
   PERFORMANCE_PINNED_ACTIVE_FIELD,
   resolveSkillListParams,
 } from '../../../utils/performanceListCore';
 
+const SKILL_RESOURCE = 'kuaizhizao:performance-skills';
+
 const SkillsPage: React.FC = () => {
   const { t } = useTranslation();
   const { token } = AntdTheme.useToken();
   const skillDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
+  const skillPerms = useResourcePermissions(SKILL_RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -208,22 +212,28 @@ const SkillsPage: React.FC = () => {
       hideInSearch: true,
       render: (_, record) => (
         <Space>
-          <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-            {t('app.kuaizhizao.performance.common.actions.detail')}
-          </Button>
-          <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-            {t('app.kuaizhizao.performance.common.actions.edit')}
-          </Button>
-          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.skills.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
-            <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-              {t('app.kuaizhizao.performance.common.actions.delete')}
+          {skillPerms.canRead ? (
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
+              {t('app.kuaizhizao.performance.common.actions.detail')}
             </Button>
-          </Popconfirm>
+          ) : null}
+          {skillPerms.canUpdate ? (
+            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
+              {t('app.kuaizhizao.performance.common.actions.edit')}
+            </Button>
+          ) : null}
+          {skillPerms.canDelete ? (
+            <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.skills.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+                {t('app.kuaizhizao.performance.common.actions.delete')}
+              </Button>
+            </Popconfirm>
+          ) : null}
         </Space>
       ),
     },
     ], SALES_DOC_LIST_FIELD_RANK);
-  }, [t, customFields]);
+  }, [t, customFields, skillPerms]);
 
   return (
     <>
@@ -254,13 +264,13 @@ const SkillsPage: React.FC = () => {
           skipFuzzyPinyinClientFilter
           pinnedTabsField={PERFORMANCE_PINNED_ACTIVE_FIELD}
           pagination={{ defaultPageSize: 20, showSizeChanger: true }}
-          showCreateButton
+          showCreateButton={skillPerms.canCreate}
           createButtonText={t('app.kuaizhizao.performance.skills.createButton')}
           onCreate={handleCreate}
-          enableRowSelection
+          enableRowSelection={skillPerms.canDelete}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
-          showDeleteButton
+          showDeleteButton={skillPerms.canDelete}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('common.confirmBatchDeleteContent', { count })}
           deleteButtonText={t('common.batchDelete')}
@@ -281,7 +291,7 @@ const SkillsPage: React.FC = () => {
         detailColumns={skillDetailColumns}
         customFields={customFields}
         customFieldValues={customFieldValues}
-        extra={buildDetailDrawerEditExtra(t, Boolean(skillDetail), () => {
+        extra={buildDetailDrawerEditExtra(t, Boolean(skillDetail && skillPerms.canUpdate), () => {
           if (!skillDetail) return;
           setEditUuid(skillDetail.uuid);
           setModalVisible(true);

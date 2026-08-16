@@ -65,9 +65,19 @@
                         "permission": "kuaizhizao:customer-follow-up:read"
                     },
                     {
+                        "title": "app.kuaizhizao.menu.sales-management.sales-reviews",
+                        "path": "/apps/kuaizhizao/sales-management/sales-reviews",
+                        "sort_order": 4,
+                        "meta": {
+                            "node": "sales_review",
+                            "module": "sales"
+                        },
+                        "permission": "kuaizhizao:sales-review:read"
+                    },
+                    {
                         "title": "app.kuaizhizao.menu.sales-management.sales-contracts",
                         "path": "/apps/kuaizhizao/sales-management/sales-contracts",
-                        "sort_order": 4,
+                        "sort_order": 5,
                         "meta": {
                             "node": "sales_contract",
                             "module": "sales"
@@ -77,7 +87,7 @@
                     {
                         "title": "app.kuaizhizao.menu.sales-management.sales-forecasts",
                         "path": "/apps/kuaizhizao/sales-management/sales-forecasts",
-                        "sort_order": 5,
+                        "sort_order": 6,
                         "meta": {
                             "node": "sales_forecast",
                             "module": "sales"
@@ -87,7 +97,7 @@
                     {
                         "title": "app.kuaizhizao.menu.sales-management.sales-orders",
                         "path": "/apps/kuaizhizao/sales-management/sales-orders",
-                        "sort_order": 6,
+                        "sort_order": 7,
                         "meta": {
                             "node": "sales_order",
                             "module": "sales"
@@ -542,7 +552,7 @@
                     {
                         "title": "app.kuaizhizao.menu.production-execution.reports",
                         "icon": "fileText",
-                        "sort_order": 9,
+                        "sort_order": 10,
                         "children": [
                             {
                                 "title": "app.kuaizhizao.menu.reports.work-order-query",
@@ -647,9 +657,18 @@
                         "permission": "kuaizhizao:quality-management-finished-goods-inspection:read"
                     },
                     {
+                        "title": "app.kuaizhizao.menu.quality-management.nonconforming-ledger",
+                        "path": "/apps/kuaizhizao/quality-management/nonconforming-ledger",
+                        "sort_order": 9,
+                        "meta": {
+                            "module": "quality"
+                        },
+                        "permission": "kuaizhizao:quality-management-nonconforming-ledger:read"
+                    },
+                    {
                         "title": "app.kuaizhizao.menu.quality-management.traceability",
                         "path": "/apps/kuaizhizao/quality-management/traceability",
-                        "sort_order": 5,
+                        "sort_order": 10,
                         "meta": {
                             "module": "quality"
                         },
@@ -658,7 +677,7 @@
                     {
                         "title": "app.kuaizhizao.menu.quality-management.inspection-plans",
                         "path": "/apps/kuaizhizao/quality-management/inspection-plans",
-                        "sort_order": 9,
+                        "sort_order": 11,
                         "meta": {
                             "module": "quality"
                         },
@@ -667,7 +686,7 @@
                     {
                         "title": "app.kuaizhizao.menu.quality-management.eight-d-reports",
                         "path": "/apps/kuaizhizao/quality-management/eight-d-reports",
-                        "sort_order": 7,
+                        "sort_order": 8,
                         "meta": {
                             "module": "quality"
                         },
@@ -685,16 +704,59 @@
                     {
                         "title": "app.kuaizhizao.menu.quality-management.spc-monitor",
                         "path": "/apps/kuaizhizao/quality-management/spc-monitor",
-                        "sort_order": 8,
+                        "sort_order": 7,
                         "meta": {
                             "module": "quality"
                         },
                         "permission": "kuaizhizao:quality-management-spc-monitor:read"
                     },
                     {
+                        "title": "app.kuaizhizao.menu.quality-management.fai-orders",
+                        "path": "/apps/kuaizhizao/quality-management/fai-orders",
+                        "sort_order": 5,
+                        "meta": {
+                            "module": "quality"
+                        },
+                        "permission": "kuaizhizao:quality-management-fai-orders:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.quality-management.quality-system",
+                        "icon": "safety-certificate",
+                        "sort_order": 12,
+                        "meta": {
+                            "module": "quality"
+                        },
+                        "children": [
+                            {
+                                "title": "app.kuaizhizao.menu.quality-management.iso-clauses",
+                                "path": "/apps/kuaizhizao/quality-management/iso-clauses",
+                                "sort_order": 0,
+                                "permission": "kuaizhizao:quality-management-iso-clauses:read"
+                            },
+                            {
+                                "title": "app.kuaizhizao.menu.quality-management.system-documents",
+                                "path": "/apps/kuaizhizao/quality-management/system-documents",
+                                "sort_order": 1,
+                                "permission": "kuaizhizao:quality-management-system-documents:read"
+                            },
+                            {
+                                "title": "app.kuaizhizao.menu.quality-management.internal-audits",
+                                "path": "/apps/kuaizhizao/quality-management/internal-audits",
+                                "sort_order": 2,
+                                "permission": "kuaizhizao:quality-management-internal-audits:read"
+                            },
+                            {
+                                "title": "app.kuaizhizao.menu.quality-management.management-reviews",
+                                "path": "/apps/kuaizhizao/quality-management/management-reviews",
+                                "sort_order": 3,
+                                "permission": "kuaizhizao:quality-management-management-reviews:read"
+                            }
+                        ]
+                    },
+                    {
                         "title": "app.kuaizhizao.menu.quality-management.reports",
                         "icon": "fileText",
-                        "sort_order": 10,
+                        "sort_order": 13,
                         "children": [
                             {
                                 "title": "app.kuaizhizao.menu.reports.incoming-inspection-report",
@@ -721,21 +783,15 @@
                                 "permission": "kuaizhizao:quality-management-reports-quality-exception-tracking:read"
                             },
                             {
-                                "title": "app.kuaizhizao.menu.quality-management.nonconforming-ledger",
-                                "path": "/apps/kuaizhizao/quality-management/nonconforming-ledger",
-                                "sort_order": 5,
-                                "permission": "kuaizhizao:quality-management-nonconforming-ledger:read"
-                            },
-                            {
                                 "title": "app.kuaizhizao.menu.reports.nonconforming-summary",
                                 "path": "/apps/kuaizhizao/quality-management/reports/nonconforming-summary",
-                                "sort_order": 6,
+                                "sort_order": 5,
                                 "permission": "kuaizhizao:quality-management-reports-nonconforming-summary:read"
                             },
                             {
                                 "title": "app.kuaizhizao.menu.reports.quality-rate-trend",
                                 "path": "/apps/kuaizhizao/quality-management/reports/quality-rate-trend",
-                                "sort_order": 7,
+                                "sort_order": 6,
                                 "permission": "kuaizhizao:quality-management-reports-quality-rate-trend:read"
                             }
                         ]
@@ -818,6 +874,15 @@
                                         "meta": {
                                             "module": "equipment"
                                         }
+                                    },
+                                    {
+                                        "title": "app.kuaizhizao.menu.equipment-management.spare-parts",
+                                        "path": "/apps/kuaizhizao/equipment-management/spare-parts",
+                                        "permission": "kuaizhizao:spare-part:read",
+                                        "sort_order": 7,
+                                        "meta": {
+                                            "module": "equipment"
+                                        }
                                     }
                                 ]
                             },
@@ -896,11 +961,12 @@
                                         }
                                     },
                                     {
-                                        "title": "app.kuaizhizao.menu.equipment-management.spare-parts",
-                                        "path": "/apps/kuaizhizao/equipment-management/spare-parts",
-                                        "permission": "kuaizhizao:spare-part:read",
+                                        "title": "app.kuaizhizao.menu.equipment-management.maintenance-reminders",
+                                        "path": "/apps/kuaizhizao/equipment-management/maintenance-reminders",
+                                        "permission": "kuaizhizao:maintenance-reminder:read",
                                         "sort_order": 8,
                                         "meta": {
+                                            "node": "maintenance_reminder",
                                             "module": "equipment"
                                         }
                                     },
@@ -945,20 +1011,10 @@
                                         }
                                     },
                                     {
-                                        "title": "app.kuaizhizao.menu.equipment-management.maintenance-reminders",
-                                        "path": "/apps/kuaizhizao/equipment-management/maintenance-reminders",
-                                        "permission": "kuaizhizao:maintenance-reminder:read",
-                                        "sort_order": 13,
-                                        "meta": {
-                                            "node": "maintenance_reminder",
-                                            "module": "equipment"
-                                        }
-                                    },
-                                    {
                                         "title": "app.kuaizhizao.menu.equipment-management.equipment-status",
                                         "path": "/apps/kuaizhizao/equipment-management/equipment-status",
                                         "permission": "kuaizhizao:equipment-status:read",
-                                        "sort_order": 14,
+                                        "sort_order": 13,
                                         "meta": {
                                             "node": "equipment_status",
                                             "module": "equipment"
@@ -1596,15 +1652,21 @@
                                 "permission": "kuaizhizao:warehouse-management-reports-slow-moving-inventory:read"
                             },
                             {
+                                "title": "app.kuaizhizao.menu.reports.fifo-exception-audit",
+                                "path": "/apps/kuaizhizao/warehouse-management/reports/fifo-exception-audit",
+                                "sort_order": 4,
+                                "permission": "kuaizhizao:warehouse-management-reports-fifo-exception-audit:read"
+                            },
+                            {
                                 "title": "app.kuaizhizao.menu.reports.stocktaking-history",
                                 "path": "/apps/kuaizhizao/warehouse-management/reports/stocktaking-history",
-                                "sort_order": 4,
+                                "sort_order": 5,
                                 "permission": "kuaizhizao:warehouse-management-reports-stocktaking-history:read"
                             },
                             {
                                 "title": "app.kuaizhizao.menu.reports.transfer-tracking",
                                 "path": "/apps/kuaizhizao/warehouse-management/reports/transfer-tracking",
-                                "sort_order": 5,
+                                "sort_order": 6,
                                 "permission": "kuaizhizao:warehouse-management-reports-transfer-tracking:read"
                             }
                         ]
@@ -1665,16 +1727,6 @@
                     "module": "after_sales"
                 },
                 "children": [
-                    {
-                        "title": "app.kuaizhizao.menu.after-sales-service.dashboard",
-                        "path": "/apps/kuaizhizao/after-sales-service/dashboard",
-                        "sort_order": 0,
-                        "meta": {
-                            "module": "after_sales",
-                            "node": "after_sales_dashboard"
-                        },
-                        "permission": "kuaizhizao:after-sales-dashboard:read"
-                    },
                     {
                         "title": "app.kuaizhizao.menu.after-sales-service.tickets",
                         "path": "/apps/kuaizhizao/after-sales-service/tickets",
@@ -1769,7 +1821,7 @@
                         "title": "app.kuaizhizao.menu.performance-management.holidays",
                         "path": "/apps/kuaizhizao/performance/holidays",
                         "permission": "kuaizhizao:performance-holidays:read",
-                        "sort_order": 1
+                        "sort_order": 0
                     },
                     {
                         "title": "app.kuaizhizao.menu.performance-management.shifts",
@@ -2063,17 +2115,6 @@
             ],
             "data_scope_key": "kuaizhizao:customer-return-visit"
         },
-        "after-sales-dashboard": {
-            "permission_prefix": "kuaizhizao:after-sales-dashboard",
-            "display_fields": [
-                "id",
-                "uuid",
-                "code",
-                "name",
-                "label"
-            ],
-            "data_scope_key": null
-        },
         "plan-management-rolling-scheduling": {
             "permission_prefix": "kuaizhizao:plan-management-rolling-scheduling",
             "display_fields": [
@@ -2197,6 +2238,61 @@
         },
         "quality-management-oqc-inspection": {
             "permission_prefix": "kuaizhizao:quality-management-oqc-inspection",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": null
+        },
+        "quality-management-iso-clauses": {
+            "permission_prefix": "kuaizhizao:quality-management-iso-clauses",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": null
+        },
+        "quality-management-system-documents": {
+            "permission_prefix": "kuaizhizao:quality-management-system-documents",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": null
+        },
+        "quality-management-internal-audits": {
+            "permission_prefix": "kuaizhizao:quality-management-internal-audits",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": null
+        },
+        "quality-management-management-reviews": {
+            "permission_prefix": "kuaizhizao:quality-management-management-reviews",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": null
+        },
+        "quality-management-fai-orders": {
+            "permission_prefix": "kuaizhizao:quality-management-fai-orders",
             "display_fields": [
                 "id",
                 "uuid",
@@ -3055,7 +3151,6 @@
         "kuaizhizao:after-sales-install:update",
         "kuaizhizao:after-sales-install:assign",
         "kuaizhizao:after-sales-install:execute",
-        "kuaizhizao:after-sales-dashboard:read",
         "kuaizhizao:service-asset:create",
         "kuaizhizao:service-asset:read",
         "kuaizhizao:service-asset:update",
@@ -3265,6 +3360,14 @@
         "kuaizhizao:quality-management-eight-d-reports:export",
         "kuaizhizao:quality-management-eight-d-reports:read",
         "kuaizhizao:quality-management-eight-d-reports:update",
+        "kuaizhizao:quality-management-fai-orders:approve",
+        "kuaizhizao:quality-management-fai-orders:create",
+        "kuaizhizao:quality-management-fai-orders:delete",
+        "kuaizhizao:quality-management-fai-orders:export",
+        "kuaizhizao:quality-management-fai-orders:read",
+        "kuaizhizao:quality-management-fai-orders:reject",
+        "kuaizhizao:quality-management-fai-orders:submit",
+        "kuaizhizao:quality-management-fai-orders:update",
         "kuaizhizao:quality-management-finished-goods-inspection:approve",
         "kuaizhizao:quality-management-finished-goods-inspection:audit",
         "kuaizhizao:quality-management-finished-goods-inspection:create",
@@ -3303,6 +3406,25 @@
         "kuaizhizao:quality-management-inspection-plans:revoke",
         "kuaizhizao:quality-management-inspection-plans:submit",
         "kuaizhizao:quality-management-inspection-plans:update",
+        "kuaizhizao:quality-management-internal-audits:approve",
+        "kuaizhizao:quality-management-internal-audits:close",
+        "kuaizhizao:quality-management-internal-audits:create",
+        "kuaizhizao:quality-management-internal-audits:delete",
+        "kuaizhizao:quality-management-internal-audits:export",
+        "kuaizhizao:quality-management-internal-audits:read",
+        "kuaizhizao:quality-management-internal-audits:update",
+        "kuaizhizao:quality-management-iso-clauses:create",
+        "kuaizhizao:quality-management-iso-clauses:delete",
+        "kuaizhizao:quality-management-iso-clauses:export",
+        "kuaizhizao:quality-management-iso-clauses:read",
+        "kuaizhizao:quality-management-iso-clauses:update",
+        "kuaizhizao:quality-management-management-reviews:approve",
+        "kuaizhizao:quality-management-management-reviews:close",
+        "kuaizhizao:quality-management-management-reviews:create",
+        "kuaizhizao:quality-management-management-reviews:delete",
+        "kuaizhizao:quality-management-management-reviews:export",
+        "kuaizhizao:quality-management-management-reviews:read",
+        "kuaizhizao:quality-management-management-reviews:update",
         "kuaizhizao:quality-management-nonconforming-ledger:approve",
         "kuaizhizao:quality-management-nonconforming-ledger:close",
         "kuaizhizao:quality-management-nonconforming-ledger:create",
@@ -3362,6 +3484,13 @@
         "kuaizhizao:quality-management-spc-monitor:export",
         "kuaizhizao:quality-management-spc-monitor:read",
         "kuaizhizao:quality-management-spc-monitor:update",
+        "kuaizhizao:quality-management-system-documents:create",
+        "kuaizhizao:quality-management-system-documents:delete",
+        "kuaizhizao:quality-management-system-documents:export",
+        "kuaizhizao:quality-management-system-documents:obsolete",
+        "kuaizhizao:quality-management-system-documents:publish",
+        "kuaizhizao:quality-management-system-documents:read",
+        "kuaizhizao:quality-management-system-documents:update",
         "kuaizhizao:quality-management-traceability:print",
         "kuaizhizao:quality-management-traceability:read",
         "kuaizhizao:quotation:approve",
@@ -3490,6 +3619,17 @@
         "kuaizhizao:sales-order:revoke",
         "kuaizhizao:sales-order:submit",
         "kuaizhizao:sales-order:update",
+        "kuaizhizao:sales-review:approve",
+        "kuaizhizao:sales-review:create",
+        "kuaizhizao:sales-review:delete",
+        "kuaizhizao:sales-review:execute",
+        "kuaizhizao:sales-review:export",
+        "kuaizhizao:sales-review:print",
+        "kuaizhizao:sales-review:read",
+        "kuaizhizao:sales-review:reject",
+        "kuaizhizao:sales-review:revoke",
+        "kuaizhizao:sales-review:submit",
+        "kuaizhizao:sales-review:update",
         "kuaizhizao:after-sales-ticket:close",
         "kuaizhizao:after-sales-ticket:create",
         "kuaizhizao:after-sales-ticket:delete",
@@ -3870,6 +4010,9 @@
         "kuaizhizao:warehouse-management-reports-slow-moving-inventory:export",
         "kuaizhizao:warehouse-management-reports-slow-moving-inventory:print",
         "kuaizhizao:warehouse-management-reports-slow-moving-inventory:read",
+        "kuaizhizao:warehouse-management-reports-fifo-exception-audit:export",
+        "kuaizhizao:warehouse-management-reports-fifo-exception-audit:print",
+        "kuaizhizao:warehouse-management-reports-fifo-exception-audit:read",
         "kuaizhizao:warehouse-management-reports-stocktaking-history:export",
         "kuaizhizao:warehouse-management-reports-stocktaking-history:print",
         "kuaizhizao:warehouse-management-reports-stocktaking-history:read",
@@ -4176,6 +4319,18 @@
             "module_icon": "tool",
             "auto_generate": true,
             "rule_code": "QUOTATION_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-sales-review",
+            "page_name": "订单评审",
+            "page_path": "/apps/kuaizhizao/sales-management/sales-reviews",
+            "code_field": "review_code",
+            "code_field_label": "评审单编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "SALES_REVIEW_CODE",
             "allow_manual_edit": true
         },
         {
@@ -4637,6 +4792,54 @@
             "allow_manual_edit": true
         },
         {
+            "page_code": "kuaizhizao-quality-system-document",
+            "page_name": "体系文件",
+            "page_path": "/apps/kuaizhizao/quality-management/system-documents",
+            "code_field": "document_code",
+            "code_field_label": "体系文件编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "QMS_SYSTEM_DOCUMENT_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-quality-internal-audit",
+            "page_name": "内部审核",
+            "page_path": "/apps/kuaizhizao/quality-management/internal-audits",
+            "code_field": "audit_code",
+            "code_field_label": "内审编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "QMS_INTERNAL_AUDIT_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-quality-management-review",
+            "page_name": "管理评审",
+            "page_path": "/apps/kuaizhizao/quality-management/management-reviews",
+            "code_field": "review_code",
+            "code_field_label": "管理评审编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "QMS_MANAGEMENT_REVIEW_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-quality-fai-order",
+            "page_name": "FAI首件检验",
+            "page_path": "/apps/kuaizhizao/quality-management/fai-orders",
+            "code_field": "fai_code",
+            "code_field_label": "FAI编码",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "FAI_ORDER_CODE",
+            "allow_manual_edit": true
+        },
+        {
             "page_code": "kuaizhizao-quality-defect-record",
             "page_name": "不合格品记录",
             "page_path": "/apps/kuaizhizao/quality-management/nonconforming-ledger",
@@ -5031,6 +5234,42 @@
             "page_path": "/apps/kuaizhizao/quality-management/eight-d-reports",
             "table_name": "apps_kuaizhizao_quality_8d_reports",
             "table_name_label": "8D报告表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-quality-system-document",
+            "page_name": "体系文件",
+            "page_path": "/apps/kuaizhizao/quality-management/system-documents",
+            "table_name": "apps_kuaizhizao_qms_system_documents",
+            "table_name_label": "体系文件表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-quality-internal-audit",
+            "page_name": "内部审核",
+            "page_path": "/apps/kuaizhizao/quality-management/internal-audits",
+            "table_name": "apps_kuaizhizao_qms_internal_audits",
+            "table_name_label": "内部审核表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-quality-management-review",
+            "page_name": "管理评审",
+            "page_path": "/apps/kuaizhizao/quality-management/management-reviews",
+            "table_name": "apps_kuaizhizao_qms_management_reviews",
+            "table_name_label": "管理评审表",
+            "module": "快制造",
+            "module_icon": "tool"
+        },
+        {
+            "page_code": "kuaizhizao-quality-fai-order",
+            "page_name": "FAI首件检验",
+            "page_path": "/apps/kuaizhizao/quality-management/fai-orders",
+            "table_name": "apps_kuaizhizao_fai_orders",
+            "table_name_label": "FAI首件检验表",
             "module": "快制造",
             "module_icon": "tool"
         },

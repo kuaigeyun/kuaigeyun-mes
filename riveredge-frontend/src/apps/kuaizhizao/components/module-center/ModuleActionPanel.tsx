@@ -1,11 +1,7 @@
 import React from 'react';
 import { Col, theme } from 'antd';
 import { ProCard } from '@ant-design/pro-components';
-import { AppstoreOutlined } from '@ant-design/icons';
-import {
-  MODULE_PANEL_TITLE_ICON_SIZE,
-  MODULE_PANEL_TITLE_STYLE,
-} from './constants';
+import { MODULE_PANEL_TITLE_STYLE } from './constants';
 
 export interface ModuleActionPanelProps {
   title: string;
@@ -14,7 +10,9 @@ export interface ModuleActionPanelProps {
   xs?: number;
   children: React.ReactNode;
   loading?: boolean;
-  /** grid：Ant Row 栅格；masonry：配合 ModuleActionMasonry 瀑布流 */
+  /** ModuleActionMasonry balanced 装箱权重；默认 2 */
+  masonryWeight?: number;
+  /** grid：Ant Row 栅格；masonry：ModuleActionMasonry 纵列瀑布流内块 */
   layout?: 'grid' | 'masonry';
 }
 
@@ -28,16 +26,10 @@ export function ModuleActionPanel({
   layout = 'grid',
 }: ModuleActionPanelProps) {
   const { token } = theme.useToken();
-  const titleNode = (
-    <span style={{ ...MODULE_PANEL_TITLE_STYLE, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-      <AppstoreOutlined style={{ fontSize: MODULE_PANEL_TITLE_ICON_SIZE }} />
-      <span>{title}</span>
-    </span>
-  );
-
   const card = (
     <ProCard
-      title={titleNode}
+      className="detail-drawer-section-title-accent"
+      title={title}
       headerBordered
       bordered
       loading={loading}
@@ -78,3 +70,4 @@ export function ModuleActionPanel({
 }
 
 export default ModuleActionPanel;
+ModuleActionPanel.displayName = 'ModuleActionPanel';

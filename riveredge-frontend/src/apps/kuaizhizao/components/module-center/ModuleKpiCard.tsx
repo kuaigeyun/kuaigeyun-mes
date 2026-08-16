@@ -88,7 +88,7 @@ export function ModuleKpiRow({
               styles={{
                 body: {
                   ...MODULE_KPI_CARD_BODY_STYLE,
-                  color: !visual.plain && !isDark ? '#fff' : token.colorText,
+                  color: token.colorText,
                 },
               }}
             >

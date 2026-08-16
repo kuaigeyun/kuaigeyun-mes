@@ -10,17 +10,8 @@ export type ListParams = {
   keyword?: string;
   status?: string;
   customer_id?: number;
+  after_sales_ticket_id?: number;
   order_by?: string;
-};
-
-export type AfterSalesDashboardSummary = {
-  open_ticket_count?: number;
-  pending_install_count?: number;
-  pending_repair_count?: number;
-  pending_dispatch_count?: number;
-  pending_requisition_count?: number;
-  pending_settlement_count?: number;
-  recent_return_visit_count?: number;
 };
 
 export type ServiceAsset = {
@@ -275,10 +266,6 @@ function buildQuery(params?: ListParams): string {
   });
   const s = q.toString();
   return s ? `?${s}` : '';
-}
-
-export async function getAfterSalesDashboardSummary(): Promise<AfterSalesDashboardSummary> {
-  return apiRequest(`${BASE}/dashboard`);
 }
 
 export const serviceAssetApi = {

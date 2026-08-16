@@ -277,12 +277,12 @@ class MaterialCreate(MaterialBase):
 class MaterialUpdate(BaseModel):
     """更新物料 Schema"""
     
-    # 允许请求体带回原主编码；服务层校验不可改并在落库前剔除
+    # 无 BOM/批次/业务单据引用时可改；有引用时服务层拒绝。允许带回原值。
     main_code: Optional[str] = Field(
         None,
         alias="mainCode",
         max_length=50,
-        description="主编码（创建后不可修改；可带回原值）",
+        description="主编码（无业务引用时可修改；可带回原值）",
     )
     code: Optional[str] = Field(None, max_length=50, description="物料编码")
     name: Optional[str] = Field(None, max_length=200, description="物料名称")
@@ -862,6 +862,18 @@ class MaterialResponse(MaterialBase):
 
     # 树形列表：属性 SKU 子行（仅 treeView 请求时填充）
     children: Optional[List["MaterialResponse"]] = Field(None, description="属性 SKU 子行")
+
+    # 详情/更新响应填充；列表可省略（None）以免 N+1
+    main_code_editable: Optional[bool] = Field(
+        None,
+        alias="mainCodeEditable",
+        description="主编号是否可编辑（无 BOM/批次/业务单据引用时为 true）",
+    )
+    main_code_lock_reason: Optional[str] = Field(
+        None,
+        alias="mainCodeLockReason",
+        description="主编号不可编辑时的原因摘要",
+    )
     
     model_config = ConfigDict(
         from_attributes=True,

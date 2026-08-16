@@ -117,6 +117,7 @@ import { useCurrentUserQuery } from '../hooks/useCurrentUserQuery';
 import { buildRestoredUserFromStorage } from '../utils/restoredUser';
 import { getLanguageList, Language } from '../services/language';
 import { LANGUAGE_MAP, applyLanguageWithPersist } from '../config/i18n';
+import { SUPPORTED_UI_LANGUAGES, normalizeUiLanguage } from '../utils/localeBootstrap';
 import i18n from '../config/i18n';
 import {
   MenuTree,
@@ -544,6 +545,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/apps/kuaicaiwu': ManufacturingIcons.wallet, // 快财务
       '/apps/kuaichain': ManufacturingIcons.gitBranch, // 快协同
       '/apps/kuaicaiwu/finance-management': ManufacturingIcons.wallet, // 财务管理
+      '/apps/kuaicaiwu/tax-management': ManufacturingIcons.audit, // 税务管理
       '/apps/kuaicaiwu/cost-management': ManufacturingIcons.calculator, // 成本管理
       '/apps/kuaizhizao/performance': ManufacturingIcons.trophy, // 绩效管理 - 奖杯图标（与分析中心区分）
       '/apps/master-data': ManufacturingIcons.database, // 主数据 - 使用数据库图标
@@ -606,6 +608,9 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
     '品质管理': ManufacturingIcons['shield-check'],
     'Cost Management': ManufacturingIcons.calculator,
     'Cost': ManufacturingIcons.calculator,
+    '税务管理': ManufacturingIcons.audit,
+    'Tax Management': ManufacturingIcons.audit,
+    'app.kuaicaiwu.menu.tax-management': ManufacturingIcons.audit,
     'Equipment Management': ManufacturingIcons.wrench,
     'Equipment': ManufacturingIcons.wrench,
     'Finance Management': ManufacturingIcons.wallet, // 财务管理 - 使用钱包图标
@@ -1225,6 +1230,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           'BarChartBig': ManufacturingIcons.chartBar,
           'PieChart': ManufacturingIcons.pieChart,
           'CalendarDays': ManufacturingIcons.calendar,
+          'audit': ManufacturingIcons.audit,
         };
         const IconComponent = lucideIconMap[menu.icon];
         if (IconComponent) {
@@ -1653,6 +1659,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   // 注意：必须分别订阅，避免选择器返回新对象导致无限重渲染
   const storeSiderBg = useThemeStore((s) => s.resolved.siderBgColor);
   const storeHeaderBg = useThemeStore((s) => s.resolved.headerBgColor);
+  const storeTabBg = useThemeStore((s) => s.resolved.tabBgColor);
   const isDarkMode = useThemeStore((s) => s.resolved.isDark);
 
   useEffect(() => {
@@ -1670,6 +1677,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     if (isDarkMode) return token.colorBgContainer;
     return storeHeaderBg || token.colorBgContainer;
   }, [storeHeaderBg, token.colorBgContainer, isDarkMode]);
+
+  /** 内容区 / 底边留白：跟随「标签背景」，空则系统 colorBgLayout */
+  const layoutBgColor = React.useMemo(() => {
+    if (isDarkMode) return token.colorBgLayout || '#141414';
+    return storeTabBg || token.colorBgLayout || '#f5f5f5';
+  }, [storeTabBg, token.colorBgLayout, isDarkMode]);
 
   // 根据顶栏背景色计算文字颜色（参考左侧菜单栏的实现）
   const headerTextColor = React.useMemo(() => {
@@ -2429,11 +2442,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
     // 如果后端有语言列表，优先使用后端的
     if (backendLanguages.length > 0) {
+      const order = new Map(SUPPORTED_UI_LANGUAGES.map((code, index) => [code, index]));
       return backendLanguages
-        .filter((lang: Language) => lang.is_active)
+        .filter((lang: Language) => lang.is_active && normalizeUiLanguage(lang.code))
+        .slice()
+        .sort((a: Language, b: Language) => (order.get(a.code) ?? 99) - (order.get(b.code) ?? 99))
         .map((lang: Language) => ({
           key: lang.code,
-          label: lang.native_name || lang.name || LANGUAGE_MAP[lang.code] || lang.code,
+          label: LANGUAGE_MAP[lang.code] || lang.name || lang.native_name || lang.code,
           onClick: () => handleLanguageChange(lang.code),
         }));
     }
@@ -2555,6 +2571,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       siderTextColor,
       siderBgColor,
       headerBgColor,
+      layoutBgColor,
       headerTextColor,
       siderFooterToken,
       startMenuBaseRadius,
@@ -2570,6 +2587,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       siderTextColor,
       siderBgColor,
       headerBgColor,
+      layoutBgColor,
       headerTextColor,
       siderFooterToken,
       startMenuBaseRadius,
@@ -2771,7 +2789,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           paddingInline: 0,
           paddingInlineStart: 0,
           paddingInlineEnd: 0,
-          background: token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5'),
+          background: layoutBgColor,
           // 全屏时：确保内容区域占据全屏，覆盖 ProLayout 的默认 padding-inline: 40px
           ...(isFullscreen ? {
             marginLeft: 0,

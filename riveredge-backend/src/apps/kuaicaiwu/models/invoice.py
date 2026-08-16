@@ -45,6 +45,8 @@ class Invoice(BaseModel):
     # 日期
     invoice_date = fields.DateField(description="开票日期")
     received_date = fields.DateField(null=True, description="收票/开具日期")
+    tax_period = fields.CharField(max_length=7, null=True, description="税务属期 YYYY-MM")
+    invoice_color = fields.CharField(max_length=10, default="blue", description="蓝字/红字 blue/red")
 
     # 状态
     status = fields.CharField(max_length=20, default="DRAFT", description="状态")

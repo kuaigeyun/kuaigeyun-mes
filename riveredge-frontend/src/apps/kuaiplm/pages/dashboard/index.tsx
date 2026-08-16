@@ -53,6 +53,10 @@ import {
 
   ModuleChartPanel,
 
+  showMasonryCard,
+  masonryWeightFromRows,
+  resolveMasonryEmptyFallback,
+
 } from '../../../kuaizhizao/components/module-center';
 
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../kuaizhizao/components/module-center';
@@ -129,6 +133,19 @@ const KuaiplmDashboard: React.FC = () => {
   const gateReviewTasks = useMemo(
     () => (data?.my_tasks ?? []).filter((task) => task.gate_name).slice(0, 6),
     [data?.my_tasks],
+  );
+
+  const overdueTasks = useMemo(
+    () =>
+      (data?.my_tasks ?? [])
+        .filter((task) => task.due_date && dayjs(task.due_date).isBefore(dayjs(), 'day'))
+        .slice(0, 6),
+    [data?.my_tasks],
+  );
+
+  const pendingChangeItems = useMemo(
+    () => (pendingChanges?.items ?? []).slice(0, 6),
+    [pendingChanges?.items],
   );
 
   const activeProjects = useMemo(() => {
@@ -333,7 +350,14 @@ const KuaiplmDashboard: React.FC = () => {
 
   );
 
-
+  const masonryLoading = isLoading || changesLoading;
+  const masonryEmptyFallback = resolveMasonryEmptyFallback(masonryLoading, [
+    myTasks.length > 0,
+    overdueTasks.length > 0,
+    gateReviewTasks.length > 0,
+    activeProjects.length > 0,
+    pendingChangeItems.length > 0,
+  ]);
 
   return (
 
@@ -345,7 +369,7 @@ const KuaiplmDashboard: React.FC = () => {
 
       shortcutRow={
 
-        <ModuleShortcutGrid items={shortcuts} colProps={{ xs: 12, sm: 8, md: 8, lg: 4 }} />
+        <ModuleShortcutGrid items={shortcuts} />
 
       }
 
@@ -373,7 +397,166 @@ const KuaiplmDashboard: React.FC = () => {
       actionRow={
 
         <ModuleActionMasonry>
+          {showMasonryCard(isLoading, myTasks.length > 0, masonryEmptyFallback) ? (
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaiplm.dashboard.panel.myTasks')}
+            loading={isLoading}
+            masonryWeight={masonryWeightFromRows(myTasks.length)}
+            extra={
+              <a onClick={() => navigate('/apps/kuaiplm/rd-projects')}>
+                {t('app.kuaiplm.common.actions.allProjects')}
+              </a>
+            }
+          >
+            <Table
+              tableLayout="fixed"
+              size="small"
+              dataSource={myTasks}
+              pagination={false}
+              rowKey="id"
+              locale={{ emptyText: t('app.kuaiplm.dashboard.empty.myTasks') }}
+              columns={[
+                {
+                  title: t('app.kuaiplm.common.columns.task'),
+                  dataIndex: 'task_name',
+                  ellipsis: true,
+                  render: (name, record: MyTaskItem) => (
+                    <a
+                      onClick={() =>
+                        navigate(`/apps/kuaiplm/rd-projects/detail/${record.project_id}`)
+                      }
+                    >
+                      {name || '—'}
+                    </a>
+                  ),
+                },
+                {
+                  title: t('app.kuaiplm.common.columns.project'),
+                  dataIndex: 'project_code',
+                  width: 96,
+                  ellipsis: true,
+                  render: (code, record: MyTaskItem) => code || record.project_name || '—',
+                },
+                {
+                  title: t('app.kuaiplm.common.columns.gate'),
+                  dataIndex: 'gate_name',
+                  width: 80,
+                  ellipsis: true,
+                  render: (name) => name || '—',
+                },
+                {
+                  title: t('app.kuaiplm.common.columns.status'),
+                  dataIndex: 'status',
+                  width: 72,
+                  render: (status) => getKuaiplmTaskStatusText(t, status),
+                },
+                {
+                  title: t('app.kuaiplm.common.columns.dueDate'),
+                  dataIndex: 'due_date',
+                  width: 72,
+                  render: (val) => (val ? formatDateTime(val, 'MM-DD') : '—'),
+                },
+              ]}
+            />
+          </ModuleActionPanel>
+          ) : null}
 
+          {showMasonryCard(isLoading, overdueTasks.length > 0, masonryEmptyFallback) ? (
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaiplm.dashboard.panel.overdueTasks')}
+            loading={isLoading}
+            masonryWeight={masonryWeightFromRows(overdueTasks.length)}
+            extra={
+              <a onClick={() => navigate('/apps/kuaiplm/rd-projects')}>
+                {t('app.kuaiplm.common.actions.allProjects')}
+              </a>
+            }
+          >
+            <Table
+              tableLayout="fixed"
+              size="small"
+              dataSource={overdueTasks}
+              pagination={false}
+              rowKey="id"
+              columns={[
+                {
+                  title: t('app.kuaiplm.common.columns.task'),
+                  dataIndex: 'task_name',
+                  ellipsis: true,
+                  render: (name, record: MyTaskItem) => (
+                    <a onClick={() => navigate(`/apps/kuaiplm/rd-projects/detail/${record.project_id}`)}>
+                      {name || '—'}
+                    </a>
+                  ),
+                },
+                {
+                  title: t('app.kuaiplm.common.columns.project'),
+                  dataIndex: 'project_code',
+                  width: 96,
+                  ellipsis: true,
+                  render: (code, record: MyTaskItem) => code || record.project_name || '—',
+                },
+                {
+                  title: t('app.kuaiplm.common.columns.dueDate'),
+                  dataIndex: 'due_date',
+                  width: 72,
+                  render: (val) => (val ? formatDateTime(val, 'MM-DD') : '—'),
+                },
+              ]}
+            />
+          </ModuleActionPanel>
+          ) : null}
+
+          {showMasonryCard(isLoading, gateReviewTasks.length > 0, masonryEmptyFallback) ? (
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaiplm.dashboard.panel.pendingGateReviews')}
+            loading={isLoading}
+            masonryWeight={masonryWeightFromRows(gateReviewTasks.length)}
+            extra={
+              <a onClick={() => navigate('/apps/kuaiplm/phase2/design-reviews')}>
+                {t('app.kuaiplm.common.actions.viewAll')}
+              </a>
+            }
+          >
+            <Table
+              tableLayout="fixed"
+              size="small"
+              dataSource={gateReviewTasks}
+              pagination={false}
+              rowKey="id"
+              locale={{ emptyText: t('app.kuaiplm.dashboard.empty.pendingGateReviews') }}
+              columns={[
+                {
+                  title: t('app.kuaiplm.common.columns.project'),
+                  dataIndex: 'project_code',
+                  ellipsis: true,
+                  render: (code, record: MyTaskItem) => (
+                    <a onClick={() => navigate(`/apps/kuaiplm/rd-projects/detail/${record.project_id}`)}>
+                      {code || record.project_name || '—'}
+                    </a>
+                  ),
+                },
+                {
+                  title: t('app.kuaiplm.common.columns.gate'),
+                  dataIndex: 'gate_name',
+                  width: 88,
+                  ellipsis: true,
+                },
+                {
+                  title: t('app.kuaiplm.common.columns.dueDate'),
+                  dataIndex: 'due_date',
+                  width: 72,
+                  render: (val) => (val ? formatDateTime(val, 'MM-DD') : '—'),
+                },
+              ]}
+            />
+          </ModuleActionPanel>
+          ) : null}
+
+          {showMasonryCard(isLoading, activeProjects.length > 0, masonryEmptyFallback) ? (
           <ModuleActionPanel
 
             layout="masonry"
@@ -381,6 +564,7 @@ const KuaiplmDashboard: React.FC = () => {
             title={t('app.kuaiplm.dashboard.panel.activeProjects')}
 
             loading={isLoading}
+            masonryWeight={masonryWeightFromRows(activeProjects.length)}
 
             extra={
               <a onClick={() => navigate('/apps/kuaiplm/rd-projects')}>
@@ -391,6 +575,7 @@ const KuaiplmDashboard: React.FC = () => {
           >
 
             <Table
+              tableLayout="fixed"
 
               size="small"
 
@@ -479,7 +664,9 @@ const KuaiplmDashboard: React.FC = () => {
             />
 
           </ModuleActionPanel>
+          ) : null}
 
+          {showMasonryCard(changesLoading, pendingChangeItems.length > 0, masonryEmptyFallback) ? (
           <ModuleActionPanel
 
             layout="masonry"
@@ -487,6 +674,7 @@ const KuaiplmDashboard: React.FC = () => {
             title={t('app.kuaiplm.dashboard.panel.pendingChanges')}
 
             loading={changesLoading}
+            masonryWeight={masonryWeightFromRows(pendingChangeItems.length)}
 
             extra={
               <a onClick={() => navigate('/apps/kuaiplm/change-management')}>
@@ -497,10 +685,11 @@ const KuaiplmDashboard: React.FC = () => {
           >
 
             <Table
+              tableLayout="fixed"
 
               size="small"
 
-              dataSource={(pendingChanges?.items ?? []).slice(0, 6)}
+              dataSource={pendingChangeItems}
 
               pagination={false}
 
@@ -567,110 +756,7 @@ const KuaiplmDashboard: React.FC = () => {
             />
 
           </ModuleActionPanel>
-
-          <ModuleActionPanel
-            layout="masonry"
-            title={t('app.kuaiplm.dashboard.panel.myTasks')}
-            loading={isLoading}
-            extra={
-              <a onClick={() => navigate('/apps/kuaiplm/rd-projects')}>
-                {t('app.kuaiplm.common.actions.allProjects')}
-              </a>
-            }
-          >
-            <Table
-              size="small"
-              dataSource={myTasks}
-              pagination={false}
-              rowKey="id"
-              locale={{ emptyText: t('app.kuaiplm.dashboard.empty.myTasks') }}
-              columns={[
-                {
-                  title: t('app.kuaiplm.common.columns.task'),
-                  dataIndex: 'task_name',
-                  ellipsis: true,
-                  render: (name, record: MyTaskItem) => (
-                    <a
-                      onClick={() =>
-                        navigate(`/apps/kuaiplm/rd-projects/detail/${record.project_id}`)
-                      }
-                    >
-                      {name || '—'}
-                    </a>
-                  ),
-                },
-                {
-                  title: t('app.kuaiplm.common.columns.project'),
-                  dataIndex: 'project_code',
-                  width: 96,
-                  ellipsis: true,
-                  render: (code, record: MyTaskItem) => code || record.project_name || '—',
-                },
-                {
-                  title: t('app.kuaiplm.common.columns.gate'),
-                  dataIndex: 'gate_name',
-                  width: 80,
-                  ellipsis: true,
-                  render: (name) => name || '—',
-                },
-                {
-                  title: t('app.kuaiplm.common.columns.status'),
-                  dataIndex: 'status',
-                  width: 72,
-                  render: (status) => getKuaiplmTaskStatusText(t, status),
-                },
-                {
-                  title: t('app.kuaiplm.common.columns.dueDate'),
-                  dataIndex: 'due_date',
-                  width: 72,
-                  render: (val) => (val ? formatDateTime(val, 'MM-DD') : '—'),
-                },
-              ]}
-            />
-          </ModuleActionPanel>
-
-          <ModuleActionPanel
-            layout="masonry"
-            title={t('app.kuaiplm.dashboard.panel.pendingGateReviews')}
-            loading={isLoading}
-            extra={
-              <a onClick={() => navigate('/apps/kuaiplm/phase2/design-reviews')}>
-                {t('app.kuaiplm.common.actions.viewAll')}
-              </a>
-            }
-          >
-            <Table
-              size="small"
-              dataSource={gateReviewTasks}
-              pagination={false}
-              rowKey="id"
-              locale={{ emptyText: t('app.kuaiplm.dashboard.empty.pendingGateReviews') }}
-              columns={[
-                {
-                  title: t('app.kuaiplm.common.columns.project'),
-                  dataIndex: 'project_code',
-                  ellipsis: true,
-                  render: (code, record: MyTaskItem) => (
-                    <a onClick={() => navigate(`/apps/kuaiplm/rd-projects/detail/${record.project_id}`)}>
-                      {code || record.project_name || '—'}
-                    </a>
-                  ),
-                },
-                {
-                  title: t('app.kuaiplm.common.columns.gate'),
-                  dataIndex: 'gate_name',
-                  width: 88,
-                  ellipsis: true,
-                },
-                {
-                  title: t('app.kuaiplm.common.columns.dueDate'),
-                  dataIndex: 'due_date',
-                  width: 72,
-                  render: (val) => (val ? formatDateTime(val, 'MM-DD') : '—'),
-                },
-              ]}
-            />
-          </ModuleActionPanel>
+          ) : null}
         </ModuleActionMasonry>
       }
     />

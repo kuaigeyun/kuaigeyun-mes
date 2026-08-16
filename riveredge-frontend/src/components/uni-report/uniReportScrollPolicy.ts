@@ -1,3 +1,5 @@
+import { LIST_PAGE_TABLE_SCROLL } from '../layout-templates/constants';
+
 /**
  * 报表表体限高唯一真源。
  *
@@ -33,6 +35,24 @@ function findVerticalScrollPort(el: HTMLElement): HTMLElement {
 
 function measureContentBottom(el: HTMLElement): number {
   return el.getBoundingClientRect().top + el.clientTop + el.clientHeight;
+}
+
+/**
+ * 报表托盘应对齐页壳内容底（page-inner），把 UniTabs page-outer 底部 16px padding 留出来。
+ * 滚动口是 uni-tabs-content，若对滚动口底会把页底 padding 吃掉。
+ */
+function measureReportFloor(root: HTMLElement): number {
+  const pageInner = root.closest('.uni-tabs-content-page-inner') as HTMLElement | null;
+  if (pageInner) {
+    return pageInner.getBoundingClientRect().bottom;
+  }
+  const pageOuter = root.closest('.uni-tabs-content-page-outer') as HTMLElement | null;
+  if (pageOuter) {
+    const rect = pageOuter.getBoundingClientRect();
+    const paddingBottom = parseFloat(getComputedStyle(pageOuter).paddingBottom) || 0;
+    return rect.bottom - paddingBottom;
+  }
+  return measureContentBottom(findVerticalScrollPort(root));
 }
 
 function measureVerticalChrome(el: HTMLElement): number {
@@ -75,7 +95,7 @@ export function measureUniReportTableScroll(
 
   const belowBodyPx = tray.getBoundingClientRect().bottom - body.getBoundingClientRect().bottom;
   const availableBorderBoxPx =
-    measureContentBottom(findVerticalScrollPort(root)) - body.getBoundingClientRect().top - belowBodyPx;
+    measureReportFloor(root) - body.getBoundingClientRect().top - belowBodyPx;
   if (availableBorderBoxPx <= 0) return undefined;
 
   return {
@@ -99,6 +119,9 @@ export function resolveUniReportTableBodyScrollY(
     (root?.querySelector('.ant-table-tbody') as HTMLElement | null);
   if (!body) return undefined;
 
-  const next = toScrollYMaxHeight(body, measure.availableBorderBoxPx);
+  const next = toScrollYMaxHeight(
+    body,
+    measure.availableBorderBoxPx - LIST_PAGE_TABLE_SCROLL.RESOLUTION_SLACK_PX,
+  );
   return next > 0 ? next : undefined;
 }

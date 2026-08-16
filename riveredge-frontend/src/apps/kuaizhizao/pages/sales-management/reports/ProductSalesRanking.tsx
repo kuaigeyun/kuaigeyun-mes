@@ -1,54 +1,61 @@
 /**
- * 产品销售排行榜报表
+ * 存货销售排行
  */
 import React, { useMemo } from 'react';
 import { ProColumns } from '@ant-design/pro-components';
-import { Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
 import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 import { formatQuantity } from '../../../../../utils/format';
+import { reportPercent } from '../../../utils/reportPresentation';
 
 const ProductSalesRanking: React.FC = () => {
   const { t } = useTranslation();
   const columns: ProColumns[] = useMemo(
     () => [
       {
-        title: t('app.kuaizhizao.reports.productDeliveryDateRange'),
-        dataIndex: 'delivery_date_range',
-        valueType: 'dateRange',
-        hideInTable: true,
-        search: { order: 10 } as any,
-      },
-      {
         title: t('app.kuaizhizao.reports.rank'),
         dataIndex: 'rank',
-        valueType: 'indexBorder',
-        width: 60,
-        fixed: 'left',
+        width: 64,
+        hideInSearch: true,
+        align: 'right',
+      },
+      {
+        title: t('app.kuaizhizao.reports.productCode'),
+        dataIndex: 'product_code',
+        width: 120,
       },
       {
         title: t('app.kuaizhizao.reports.productName'),
         dataIndex: 'product_name',
         ellipsis: true,
-        fixed: 'left',
-        width: 200,
-      },
-      {
-        title: t('app.kuaizhizao.reports.productCode'),
-        dataIndex: 'product_code',
-        width: 150,
+        width: 180,
       },
       {
         title: t('app.kuaizhizao.reports.productSpec'),
         dataIndex: 'product_spec',
         ellipsis: true,
-        width: 150,
+        width: 140,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.reports.unit'),
+        dataIndex: 'unit',
+        width: 80,
+        minWidth: 80,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.reports.category'),
+        dataIndex: 'category',
+        width: 100,
+        hideInSearch: true,
       },
       {
         title: t('app.kuaizhizao.reports.salesTotalQuantity'),
         dataIndex: 'total_quantity',
         sorter: true,
-        width: 120,
+        width: 110,
+        hideInSearch: true,
         align: 'right',
         render: formatQuantity,
       },
@@ -57,31 +64,31 @@ const ProductSalesRanking: React.FC = () => {
         dataIndex: 'total_revenue',
         valueType: 'money',
         sorter: true,
-        width: 150,
+        width: 120,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.reports.avgUnitPrice'),
+        dataIndex: 'avg_price',
+        valueType: 'money',
+        width: 100,
+        hideInSearch: true,
       },
       {
         title: t('app.kuaizhizao.reports.profit'),
         dataIndex: 'profit',
         valueType: 'money',
         sorter: true,
-        width: 150,
+        width: 110,
+        hideInSearch: true,
       },
       {
-        title: t('app.kuaizhizao.reports.unit'),
-        dataIndex: 'unit',
-        width: 80,
-      },
-      {
-        title: t('app.kuaizhizao.reports.category'),
-        dataIndex: 'category',
-        width: 120,
-        render: (text) => <Tag color="blue">{text}</Tag>,
-      },
-      {
-        title: t('app.kuaizhizao.reports.avgUnitPrice'),
-        dataIndex: 'avg_price',
-        valueType: 'money',
-        width: 120,
+        title: t('app.kuaizhizao.reports.amountShare'),
+        dataIndex: 'amount_share',
+        width: 90,
+        hideInSearch: true,
+        align: 'right',
+        render: (_, record) => reportPercent(record.amount_share),
       },
     ],
     [t],
@@ -89,11 +96,11 @@ const ProductSalesRanking: React.FC = () => {
 
   return (
     <KuaizhizaoReport
-      columnPersistenceId="apps.kuaizhizao.pages.sales-management.reports.ProductSalesRanking"
+      columnPersistenceId="apps.kuaizhizao.pages.sales-management.reports.ProductSalesRanking-v2"
       title={t('app.kuaizhizao.menu.reports.product-sales-ranking')}
       reportType="product_ranking"
+      rowKey="product_id"
       columns={columns}
-      dateRangeKeys={['delivery_date_range', 'date_range', 'dateRange']}
     />
   );
 };

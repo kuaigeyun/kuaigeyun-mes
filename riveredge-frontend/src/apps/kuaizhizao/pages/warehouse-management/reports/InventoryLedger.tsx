@@ -1,13 +1,21 @@
 import React, { useMemo } from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
-import { copyableCodeColumn } from '../../../utils/reportCopyableColumn';
 import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const InventoryLedger: React.FC = () => {
   const { t } = useTranslation();
   const columns: ProColumns[] = useMemo(
     () => [
+      {
+        title: t('app.kuaizhizao.warehouseReports.keyword'),
+        dataIndex: 'keyword',
+        hideInTable: true,
+        fieldProps: {
+          placeholder: t('app.kuaizhizao.warehouseReports.keywordPlaceholder'),
+        },
+        search: { order: 20 } as ProColumns['search'],
+      },
       {
         title: t('app.kuaizhizao.warehouseReports.colEventDate'),
         dataIndex: 'event_date',
@@ -16,7 +24,9 @@ const InventoryLedger: React.FC = () => {
         hideInSearch: true,
       },
       {
-        ...copyableCodeColumn(t('app.kuaizhizao.warehouseReports.colMaterialCode'), 'material_code', 120),
+        title: t('app.kuaizhizao.warehouseReports.colMaterialCode'),
+        dataIndex: 'material_code',
+        width: 120,
         hideInSearch: true,
       },
       {
@@ -34,7 +44,9 @@ const InventoryLedger: React.FC = () => {
         hideInSearch: true,
       },
       {
-        ...copyableCodeColumn(t('app.kuaizhizao.warehouseReports.colOrderCode'), 'order_code', 150),
+        title: t('app.kuaizhizao.warehouseReports.colOrderCode'),
+        dataIndex: 'order_code',
+        width: 150,
         hideInSearch: true,
       },
       {
@@ -49,6 +61,7 @@ const InventoryLedger: React.FC = () => {
         valueType: 'digit',
         width: 100,
         hideInSearch: true,
+        align: 'right',
       },
       {
         title: t('app.kuaizhizao.warehouseReports.colBalanceQty'),
@@ -56,6 +69,7 @@ const InventoryLedger: React.FC = () => {
         valueType: 'digit',
         width: 110,
         hideInSearch: true,
+        align: 'right',
         tooltip: t('app.kuaizhizao.warehouseReports.balanceQtyTip'),
       },
       {
@@ -63,14 +77,6 @@ const InventoryLedger: React.FC = () => {
         dataIndex: 'operator',
         width: 100,
         hideInSearch: true,
-      },
-      {
-        title: t('app.kuaizhizao.warehouseReports.keyword'),
-        dataIndex: 'keyword',
-        hideInTable: true,
-        fieldProps: {
-          placeholder: t('app.kuaizhizao.warehouseReports.keywordPlaceholder'),
-        },
       },
     ],
     [t],
@@ -82,7 +88,7 @@ const InventoryLedger: React.FC = () => {
       reportType="inventory_ledger"
       templateId="inventoryLedger"
       columns={columns}
-      columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.reports.InventoryLedger"
+      columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.reports.InventoryLedger-v2"
     />
   );
 };

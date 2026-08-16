@@ -110,6 +110,7 @@ async def list_spot_checks(
     created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
     created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
     has_abnormality: Optional[bool] = Query(None, description="是否异常"),
+    uuid: Optional[str] = Query(None, description="点检单 UUID（精确匹配）"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows, total = await svc.spot_check_service.list(
@@ -125,6 +126,7 @@ async def list_spot_checks(
         created_start_date=created_start_date,
         created_end_date=created_end_date,
         has_abnormality=has_abnormality,
+        uuid=uuid,
     )
     return SpotCheckListResponse(
         items=[SpotCheckResponse.model_validate(r) for r in rows],
@@ -229,6 +231,7 @@ async def list_route_patrols(
     created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
     created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
     has_abnormality: Optional[bool] = Query(None, description="是否异常"),
+    uuid: Optional[str] = Query(None, description="巡检单 UUID（精确匹配）"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows, total = await svc.route_patrol_service.list(
@@ -244,6 +247,7 @@ async def list_route_patrols(
         created_start_date=created_start_date,
         created_end_date=created_end_date,
         has_abnormality=has_abnormality,
+        uuid=uuid,
     )
     return RoutePatrolListResponse(
         items=[RoutePatrolResponse.model_validate(r) for r in rows],

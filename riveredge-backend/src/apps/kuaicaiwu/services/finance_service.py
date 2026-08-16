@@ -229,7 +229,10 @@ class PayableService(AppBaseService[Payable]):
 
     async def list_payables(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> tuple[List[PayableResponse], int]:
         """获取应付单列表"""
-        from apps.kuaicaiwu.services.finance_list_core import apply_finance_ar_ap_list_filters
+        from apps.kuaicaiwu.services.finance_list_core import (
+            apply_finance_aging_list_filters,
+            apply_finance_ar_ap_list_filters,
+        )
 
         query = Payable.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if filters.get('status'):
@@ -259,6 +262,11 @@ class PayableService(AppBaseService[Payable]):
             updated_end_date=filters.get('updated_end_date'),
             sort_field=filters.get('sort_field'),
             sort_order=filters.get('sort_order'),
+        )
+        query = apply_finance_aging_list_filters(
+            query,
+            aging_bucket=filters.get('aging_bucket'),
+            overdue_only=bool(filters.get('overdue_only')),
         )
 
         total = await query.count()
@@ -549,6 +557,12 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
             )
             payload["tax_amount"] = tax_amount
             payload["total_amount"] = total_amount
+            from apps.kuaicaiwu.services.tax.purchase_invoice_tax_service import PurchaseInvoiceTaxService
+
+            tax_fields = await PurchaseInvoiceTaxService().apply_tax_fields_on_create(
+                tenant_id, payload["invoice_date"]
+            )
+            payload.update(tax_fields)
 
             invoice = await PurchaseInvoice.create(
                 tenant_id=tenant_id,
@@ -707,6 +721,10 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
             query = query.filter(supplier_id=filters['supplier_id'])
         if filters.get('purchase_order_id'):
             query = query.filter(purchase_order_id=filters['purchase_order_id'])
+        if filters.get('verification_status'):
+            query = query.filter(verification_status=filters['verification_status'])
+        if filters.get('tax_period'):
+            query = query.filter(tax_period=filters['tax_period'])
 
         query, order_expr = apply_finance_invoice_list_filters(
             query,
@@ -955,7 +973,10 @@ class ReceivableService(AppBaseService[Receivable]):
 
     async def list_receivables(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> tuple[List[ReceivableResponse], int]:
         """获取应收单列表"""
-        from apps.kuaicaiwu.services.finance_list_core import apply_finance_ar_ap_list_filters
+        from apps.kuaicaiwu.services.finance_list_core import (
+            apply_finance_aging_list_filters,
+            apply_finance_ar_ap_list_filters,
+        )
 
         query = Receivable.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if filters.get('status'):
@@ -985,6 +1006,11 @@ class ReceivableService(AppBaseService[Receivable]):
             updated_end_date=filters.get('updated_end_date'),
             sort_field=filters.get('sort_field'),
             sort_order=filters.get('sort_order'),
+        )
+        query = apply_finance_aging_list_filters(
+            query,
+            aging_bucket=filters.get('aging_bucket'),
+            overdue_only=bool(filters.get('overdue_only')),
         )
 
         total = await query.count()
@@ -1858,3 +1884,65 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
         )
 
         return settlement
+
+    async def list_settlement_records(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 20,
+        **filters,
+    ) -> tuple[List[SettlementRecord], int]:
+        """核销历史列表"""
+        from tortoise.expressions import Q
+        from apps.kuaicaiwu.services.finance_list_core import apply_finance_doc_date_range
+
+        query = SettlementRecord.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+        )
+        business_type = str(filters.get("business_type") or "").strip().lower()
+        if business_type == "receivable":
+            query = query.filter(debit_doc_type="Receivable", credit_doc_type="Receipt")
+        elif business_type == "payable":
+            query = query.filter(debit_doc_type="Payable", credit_doc_type="Payment")
+
+        partner_id = filters.get("partner_id")
+        if partner_id is not None and str(partner_id).strip():
+            query = query.filter(partner_id=int(partner_id))
+
+        keyword = filters.get("keyword")
+        if keyword and str(keyword).strip():
+            kw = str(keyword).strip()
+            query = query.filter(
+                Q(settlement_code__icontains=kw)
+                | Q(debit_doc_code__icontains=kw)
+                | Q(credit_doc_code__icontains=kw)
+                | Q(partner_name__icontains=kw)
+            )
+
+        query = apply_finance_doc_date_range(
+            query,
+            "settlement_date",
+            start_date=filters.get("settlement_date_start"),
+            end_date=filters.get("settlement_date_end"),
+        )
+
+        sort_field = str(filters.get("sort_field") or "").strip()
+        sort_order = str(filters.get("sort_order") or "desc").strip().lower()
+        order_prefix = "" if sort_order == "asc" else "-"
+        allowed_sort = {
+            "settlement_code",
+            "settlement_date",
+            "amount",
+            "partner_name",
+            "created_at",
+        }
+        if sort_field in allowed_sort:
+            order_expr = f"{order_prefix}{sort_field}"
+        else:
+            order_expr = "-settlement_date"
+
+        total = await query.count()
+        rows = await query.offset(skip).limit(limit).order_by(order_expr, "-id")
+        return rows, total

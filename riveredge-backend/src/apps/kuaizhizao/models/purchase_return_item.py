@@ -20,8 +20,9 @@ class PurchaseReturnItem(BaseModel):
     tenant_id = fields.IntField(description="租户ID")
     return_id = fields.IntField(description="退货单ID")
     
-    # 关联原采购入库单明细
+    # 关联原采购入库单明细 / 采购订单行（跨单取单按行占用）
     purchase_receipt_item_id = fields.IntField(null=True, description="采购入库单明细ID")
+    purchase_order_item_id = fields.IntField(null=True, description="采购订单明细ID")
     
     material_id = fields.IntField(description="物料ID")
     material_code = fields.CharField(max_length=50, description="物料编码")
@@ -57,6 +58,7 @@ class PurchaseReturnItem(BaseModel):
         indexes = [
             ("tenant_id", "return_id"),
             ("purchase_receipt_item_id",),  # 关联采购入库单明细索引
+            ("purchase_order_item_id",),
             ("material_id",),
             ("location_id",),
             ("batch_number",),

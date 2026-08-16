@@ -109,6 +109,12 @@ class PurchaseInvoiceBase(BaseSchema):
     attachment_path: Optional[str] = Field(None, max_length=500, description="附件路径")
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    tax_period: Optional[str] = Field(None, max_length=7, description="税务属期")
+    verification_status: Optional[str] = Field(None, max_length=32, description="认证状态")
+    verification_date: Optional[date] = Field(None, description="认证日期")
+    transfer_out_reason: Optional[str] = Field(None, description="转出原因")
+    original_invoice_id: Optional[int] = Field(None, description="原蓝字发票ID")
+    red_flush_invoice_id: Optional[int] = Field(None, description="红字发票ID")
 
 
 class ConcurrentSettlementCreate(BaseSchema):
@@ -403,6 +409,9 @@ class SalesInvoiceBase(BaseSchema):
     attachment_path: Optional[str] = Field(None, max_length=500, description="附件路径")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
     notes: Optional[str] = Field(None, description="备注")
+    partner_tax_no: Optional[str] = Field(None, max_length=50, description="购方税号")
+    partner_bank_info: Optional[str] = Field(None, max_length=200, description="购方开户行及账号")
+    partner_address_phone: Optional[str] = Field(None, max_length=200, description="购方地址及电话")
 
 
 class SalesInvoiceCreate(SalesInvoiceBase):
@@ -433,6 +442,9 @@ class SalesInvoiceUpdate(BaseSchema):
     total_amount: Optional[Decimal] = None
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    partner_tax_no: Optional[str] = Field(None, max_length=50)
+    partner_bank_info: Optional[str] = Field(None, max_length=200)
+    partner_address_phone: Optional[str] = Field(None, max_length=200)
 
 
 class SalesInvoiceLineResponse(BaseSchema):
@@ -468,6 +480,8 @@ class SalesInvoiceResponse(SalesInvoiceBase):
     invoice_code: str
     original_invoice_id: Optional[int] = None
     red_flush_invoice_id: Optional[int] = None
+    tax_period: Optional[str] = None
+    invoice_color: Optional[str] = None
     void_reason: Optional[str] = None
     voided_at: Optional[datetime] = None
     status: str = "未审核"
@@ -708,3 +722,40 @@ class MergeFinanceVoucherResponse(BaseSchema):
     partner_id: int
     partner_name: str
     allocations: List[dict]
+
+
+# === 往来核销记录 ===
+
+class SettlementRecordResponse(BaseSchema):
+    """核销记录响应"""
+
+    id: int
+    tenant_id: int
+    settlement_code: str
+    partner_id: int
+    partner_name: str
+    debit_doc_type: str
+    debit_doc_id: int
+    debit_doc_code: str
+    credit_doc_type: str
+    credit_doc_id: int
+    credit_doc_code: str
+    amount: Decimal
+    currency: str
+    settlement_date: date
+    operator_id: Optional[int] = None
+    operator_name: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class SettlementRecordListResponse(BaseSchema):
+    """核销记录列表"""
+
+    items: List[SettlementRecordResponse]
+    total: int
+    skip: int
+    limit: int

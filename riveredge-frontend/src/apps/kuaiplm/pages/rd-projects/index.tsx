@@ -8,7 +8,7 @@ import { ActionType, ProColumns, ProFormText, ProFormDatePicker, ProFormTextArea
 import { App, Button, Typography } from 'antd';
 import { EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { useNavigate } from 'react-router-dom';
+import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../components/uni-batch';
@@ -52,6 +52,7 @@ const PAGE_CODE_RD = 'kuaiplm-rd-project';
 const RdProjectsListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const projectPerms = useResourcePermissions('kuaiplm.project');
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
@@ -324,7 +325,7 @@ const RdProjectsListPage: React.FC = () => {
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
-        showCreateButton
+        showCreateButton={projectPerms.canCreate}
         createButtonText={t('app.kuaiplm.rdProjects.createButton') + NEW_SHORTCUT_HINT}
         onCreate={handleCreate}
         toolBarActionsAfterCreate={[

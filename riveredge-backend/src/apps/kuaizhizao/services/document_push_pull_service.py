@@ -201,14 +201,16 @@ class DocumentPushPullService:
         demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id)
         if not demand:
             raise NotFoundError(f"需求不存在: {demand_id}")
-        
-        # 验证需求状态
-        if demand.status != DemandStatus.AUDITED or demand.review_status != ReviewStatus.APPROVED:
-            raise BusinessLogicError("只能下推已审核通过的需求")
-        
-        # 检查是否已经下推过
+
+        from apps.kuaizhizao.services.document_action_policy.demand import assert_demand_capability
+
+        assert_demand_capability(demand, "merge_computation")
+
         if demand.pushed_to_computation:
-            raise BusinessLogicError("需求已经下推到需求计算，不能重复下推")
+            from apps.kuaizhizao.models.demand_computation import DemandComputation
+
+            if await DemandComputation.filter(tenant_id=tenant_id, demand_id=demand_id).exists():
+                raise BusinessLogicError("需求已经下推到需求计算，不能重复下推")
         
         computation_type = "MRP"
 
@@ -280,150 +282,38 @@ class DocumentPushPullService:
         push_params: Optional[Dict[str, Any]],
         created_by: int
     ) -> Dict[str, Any]:
-        """从需求计算下推到工单"""
-        # 获取需求计算信息
-        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
-        if not computation:
-            raise NotFoundError(f"需求计算不存在: {computation_id}")
-        
-        # 验证计算状态（必须是已完成）
-        if computation.computation_status != "完成":
-            raise BusinessLogicError("只能下推已完成的需求计算")
-        
-        # 获取已下推且仍存在的工单物料，避免重复下推
-        exclusions = await self.computation_service._get_already_pushed_exclusions(tenant_id, computation_id)
-        already_pushed_wo_material_ids = exclusions["wo_material_ids"]
-        
-        # 获取计算明细
-        from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
-        computation_items = await DemandComputationItem.filter(
-            tenant_id=tenant_id,
-            computation_id=computation_id
-        ).all()
-        
-        if not computation_items:
-            raise BusinessLogicError("需求计算没有明细，无法下推")
-        
-        # 按物料聚合（同一物料多行合并，避免重复生成工单），排除已下推的物料
-        prod_items = [
-            i for i in computation_items
-            if (i.planned_production or i.suggested_work_order_quantity or 0) > 0
-            and i.material_id not in already_pushed_wo_material_ids
-        ]
-        agg_by_material: Dict[int, List] = {}
-        for i in prod_items:
-            mid = i.material_id
-            if mid not in agg_by_material:
-                agg_by_material[mid] = []
-            agg_by_material[mid].append(i)
-        
-        work_orders = []
-        relations = []
-        
-        # MTO 模式：从 Demand 追溯销售订单，写入工单以便列表可追溯到源订单
+        """从需求计算下推到工单（委托 generate_work_orders_and_purchase_orders 统一口径）。"""
         push_mode = (push_params or {}).get("push_mode")
         resolved_push_mode = str(push_mode or "").strip().lower()
         if resolved_push_mode not in ("draft", "confirm"):
             resolved_push_mode = await BusinessConfigService().get_push_default_mode(tenant_id)
-        push_as_confirm = resolved_push_mode == "confirm"
 
-        sales_order_id: Optional[int] = None
-        sales_order_code: Optional[str] = None
-        sales_order_name: Optional[str] = None
-        if computation.business_mode in ("MTO", "ATO"):
-            demand_ids_to_check = [computation.demand_id] if computation.demand_id else (computation.demand_ids or [])
-            for did in demand_ids_to_check:
-                demand = await Demand.get_or_none(tenant_id=tenant_id, id=did)
-                if demand and demand.source_type == "sales_order" and demand.source_id:
-                    so = await SalesOrder.get_or_none(tenant_id=tenant_id, id=demand.source_id)
-                    if so:
-                        sales_order_id = so.id
-                        sales_order_code = so.order_code
-                        sales_order_name = getattr(so, "order_name", None) or so.order_code
-                        break
-        
-        for material_id, group in agg_by_material.items():
-            first = group[0]
-            total_qty = sum(float(i.suggested_work_order_quantity or i.planned_production or 0) for i in group)
-            start_dates = [i.production_start_date for i in group if i.production_start_date]
-            end_dates = [i.production_completion_date for i in group if i.production_completion_date]
-            
-            # 创建工单（MTO 时写入销售订单信息，便于工单列表追溯到源订单）
-            work_order_data = WorkOrderCreate(
-                code_rule="WORK_ORDER_CODE",  # 使用编码规则生成工单编码
-                product_id=first.material_id,
-                product_code=first.material_code,
-                product_name=first.material_name,
-                quantity=total_qty,
-                production_mode=computation.business_mode,
-                sales_order_id=sales_order_id,
-                sales_order_code=sales_order_code,
-                sales_order_name=sales_order_name,
-                planned_start_date=min(start_dates) if start_dates else None,
-                planned_end_date=max(end_dates) if end_dates else None,
-                status="draft",
-                priority="normal",
-                remarks=f"由需求计算{computation.computation_code}下推生成",
-            )
-            
-            work_order = await self.work_order_service.create_work_order(
-                tenant_id=tenant_id,
-                work_order_data=work_order_data,
-                created_by=created_by
-            )
-            if push_as_confirm and created_by is not None:
-                work_order = await self.work_order_service.release_work_order(
-                    tenant_id=tenant_id,
-                    work_order_id=work_order.id,
-                    released_by=created_by,
-                    check_shortage=False,
-                )
-            
-            work_orders.append(work_order)
-            
-            # 建立关联关系
-            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
-            
-            # 从响应对象中获取id和code
-            wo_id = work_order.id if hasattr(work_order, 'id') else work_order.model_dump().get('id')
-            wo_code = work_order.code if hasattr(work_order, 'code') else work_order.model_dump().get('code')
-            wo_name = work_order.name if hasattr(work_order, 'name') else work_order.model_dump().get('name')
-            
-            relation_data = DocumentRelationCreate(
-                source_type="demand_computation",
-                source_id=computation_id,
-                source_code=computation.computation_code,
-                source_name=None,
-                target_type="work_order",
-                target_id=wo_id,
-                target_code=wo_code,
-                target_name=wo_name,
-                relation_type="source",
-                relation_mode="push",
-                relation_desc="从需求计算下推到工单",
-                business_mode=computation.business_mode,
-                demand_id=computation.demand_id,
-            )
-            
-            relation = await self.relation_service.create_relation(
-                tenant_id=tenant_id,
-                relation_data=relation_data,
-                created_by=created_by
-            )
-            
-            relations.append(relation)
-        
-        if not work_orders:
+        r = await self.computation_service.generate_work_orders_and_purchase_orders(
+            tenant_id=tenant_id,
+            computation_id=computation_id,
+            created_by=created_by,
+            generate_mode="work_order_only",
+            push_mode=resolved_push_mode,
+            selected_item_ids=(push_params or {}).get("selected_item_ids"),
+        )
+        work_orders = r.get("work_orders") or []
+        outsource_work_orders = r.get("outsource_work_orders") or []
+        all_work_orders = work_orders + outsource_work_orders
+        if not all_work_orders:
             raise BusinessLogicError("没有需要生产的物料，无法生成工单")
-        
+
         return {
             "success": True,
-            "message": f"下推成功，共生成{len(work_orders)}个工单",
+            "message": f"下推成功，共生成{len(all_work_orders)}个工单",
             "target_documents": [
-                {"type": "work_order", "id": wo.id if hasattr(wo, 'id') else wo.get('id'), "code": wo.code if hasattr(wo, 'code') else wo.get('code')}
-                for wo in work_orders
+                {
+                    "type": "work_order" if wo in work_orders else "outsource_work_order",
+                    "id": wo.get("id") if isinstance(wo, dict) else wo.id,
+                    "code": wo.get("code") if isinstance(wo, dict) else getattr(wo, "code", None),
+                }
+                for wo in all_work_orders
             ],
-            "relations": [r.model_dump() if hasattr(r, "model_dump") else r for r in relations],
+            "relations": [],
         }
 
     async def _push_computation_to_purchase_requisition(
@@ -433,9 +323,28 @@ class DocumentPushPullService:
         push_params: Optional[Dict[str, Any]],
         created_by: int
     ) -> Dict[str, Any]:
-        """从需求计算下推到采购申请（仅采购件）"""
+        """从一张需求计算下推到采购申请（仅采购件）。"""
+        selected_ids = None
+        if push_params and push_params.get("selected_item_ids") is not None:
+            selected_ids = [
+                int(v) for v in (push_params.get("selected_item_ids") or []) if v is not None
+            ]
+        return await self.create_purchase_requisition_from_computation_items(
+            tenant_id=tenant_id,
+            selected_item_ids=selected_ids,
+            created_by=created_by,
+            computation_id=computation_id,
+        )
+
+    async def create_purchase_requisition_from_computation_items(
+        self,
+        tenant_id: int,
+        selected_item_ids: Optional[List[int]],
+        created_by: int,
+        computation_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """按计算明细 id 建一张采购申请，可跨多张已完成需求计算。"""
         from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
-        from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition, PurchaseRequisitionItem
         from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
         from apps.kuaizhizao.schemas.purchase_requisition import PurchaseRequisitionCreate, PurchaseRequisitionItemCreate
         from apps.kuaizhizao.utils.material_source_helper import (
@@ -445,32 +354,49 @@ class DocumentPushPullService:
         from decimal import Decimal
         from apps.master_data.models.material import Material
 
-        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
-        if not computation:
-            raise NotFoundError(f"需求计算不存在: {computation_id}")
-        if computation.computation_status != "完成":
-            raise BusinessLogicError("只能下推已完成的需求计算")
-        
-        # 若已下推采购申请且仍存在，则不再重复下推
-        exclusions = await self.computation_service._get_already_pushed_exclusions(tenant_id, computation_id)
-        if exclusions["has_purchase_requisition"]:
-            raise BusinessLogicError("该需求计算已下推采购申请且仍存在，请勿重复下推")
+        selected_ids: Optional[set] = None
+        if selected_item_ids is not None:
+            selected_ids = {int(v) for v in selected_item_ids if v is not None}
+            if not selected_ids:
+                raise BusinessLogicError("请至少选择一条可下推采购明细")
 
-        items = await DemandComputationItem.filter(
+        if computation_id is not None:
+            computation_ids = [int(computation_id)]
+        elif selected_ids:
+            selected_rows = await DemandComputationItem.filter(
+                tenant_id=tenant_id,
+                id__in=list(selected_ids),
+            ).only("id", "computation_id")
+            computation_ids = sorted({int(row.computation_id) for row in selected_rows})
+        else:
+            raise BusinessLogicError("请至少选择一条可下推采购明细")
+
+        if not computation_ids:
+            raise BusinessLogicError("所选明细均不可下推，请重新选择")
+
+        computations = await DemandComputation.filter(
             tenant_id=tenant_id,
-            computation_id=computation_id,
+            id__in=computation_ids,
+        ).all()
+        computation_by_id = {int(c.id): c for c in computations}
+        if len(computation_by_id) != len(computation_ids):
+            raise NotFoundError("需求计算不存在")
+        for computation in computations:
+            if computation.computation_status != "完成":
+                raise BusinessLogicError("只能下推已完成的需求计算")
+
+        all_buy_items = await DemandComputationItem.filter(
+            tenant_id=tenant_id,
+            computation_id__in=computation_ids,
             material_source_type=SOURCE_TYPE_BUY,
         ).all()
-
-        buy_items = [i for i in items if i.suggested_purchase_order_quantity and i.suggested_purchase_order_quantity > 0]
+        buy_items = [
+            i
+            for i in all_buy_items
+            if i.suggested_purchase_order_quantity and i.suggested_purchase_order_quantity > 0
+        ]
         if not buy_items:
             raise BusinessLogicError("需求计算中无采购件，无法下推采购申请")
-
-        remaining_by_material = self.computation_service._get_purchase_remaining_qty_by_material(
-            items, exclusions
-        )
-        if not any(qty > 0 for qty in remaining_by_material.values()):
-            raise BusinessLogicError("需求计算中无剩余可下推采购件，无法下推采购申请")
 
         material_ids = sorted({int(i.material_id) for i in buy_items if i.material_id is not None})
         material_rows = (
@@ -481,61 +407,91 @@ class DocumentPushPullService:
         material_by_id = {m.id: m for m in material_rows}
 
         req_items = []
-        seen_material_ids: set = set()
+        required_dates = []
+        used_computation_ids: set = set()
+        items_by_computation: Dict[int, List] = {}
         for item in buy_items:
-            if item.material_id is None or item.material_id in seen_material_ids:
-                continue
-            mid = int(item.material_id)
-            remaining = remaining_by_material.get(mid, 0.0)
-            if remaining <= 0:
-                continue
-            seen_material_ids.add(item.material_id)
-            supplier_id = None
-            if item.material_source_config:
-                sc = resolve_computation_item_source_config(item.material_source_config)
-                supplier_id = sc.get("default_supplier_id")
+            items_by_computation.setdefault(int(item.computation_id), []).append(item)
 
-            material = material_by_id.get(mid)
-            material_code = str(item.material_code or "").strip()
-            material_name = str(item.material_name or "").strip()
-            material_spec = str(item.material_spec or "").strip()
-            material_unit = str(item.material_unit or "").strip()
-            if material:
-                if not material_code:
-                    material_code = str(
-                        getattr(material, "main_code", None)
-                        or getattr(material, "code", None)
-                        or ""
-                    ).strip()
-                if not material_name:
-                    material_name = str(getattr(material, "name", "") or "").strip()
-                if not material_spec:
-                    material_spec = str(getattr(material, "specification", "") or "").strip()
-                if not material_unit:
-                    material_unit = str(getattr(material, "base_unit", "") or "").strip()
+        for cid, comp_items in items_by_computation.items():
+            exclusions = await self.computation_service._get_already_pushed_exclusions(tenant_id, cid)
+            remaining_by_material = self.computation_service._get_purchase_remaining_qty_by_material(
+                comp_items, exclusions
+            )
+            selected_material_ids: Optional[set] = None
+            if selected_ids is not None:
+                selected_material_ids = {
+                    int(i.material_id)
+                    for i in comp_items
+                    if i.id in selected_ids and i.material_id is not None
+                }
+                if not selected_material_ids:
+                    continue
+                remaining_by_material = {
+                    mid: qty
+                    for mid, qty in remaining_by_material.items()
+                    if mid in selected_material_ids and qty > 0
+                }
+            seen_material_ids: set = set()
+            for item in comp_items:
+                if item.material_id is None or item.material_id in seen_material_ids:
+                    continue
+                mid = int(item.material_id)
+                if selected_material_ids is not None and mid not in selected_material_ids:
+                    continue
+                remaining = remaining_by_material.get(mid, 0.0)
+                if remaining <= 0:
+                    continue
+                seen_material_ids.add(item.material_id)
+                supplier_id = None
+                if item.material_source_config:
+                    sc = resolve_computation_item_source_config(item.material_source_config)
+                    supplier_id = sc.get("default_supplier_id")
 
-            req_items.append(PurchaseRequisitionItemCreate(
-                material_id=item.material_id,
-                material_code=material_code or f"M{item.material_id}",
-                material_name=material_name or material_code or f"物料{item.material_id}",
-                material_spec=material_spec or None,
-                unit=material_unit or "件",
-                quantity=Decimal(str(remaining)),
-                suggested_unit_price=Decimal("0"),
-                required_date=item.procurement_completion_date,
-                demand_computation_item_id=item.id,
-                supplier_id=supplier_id,
-            ))
+                material = material_by_id.get(mid)
+                material_code = str(item.material_code or "").strip()
+                material_name = str(item.material_name or "").strip()
+                material_spec = str(item.material_spec or "").strip()
+                material_unit = str(item.material_unit or "").strip()
+                if material:
+                    if not material_code:
+                        material_code = str(
+                            getattr(material, "main_code", None)
+                            or getattr(material, "code", None)
+                            or ""
+                        ).strip()
+                    if not material_name:
+                        material_name = str(getattr(material, "name", "") or "").strip()
+                    if not material_spec:
+                        material_spec = str(getattr(material, "specification", "") or "").strip()
+                    if not material_unit:
+                        material_unit = str(getattr(material, "base_unit", "") or "").strip()
+
+                req_items.append(PurchaseRequisitionItemCreate(
+                    material_id=item.material_id,
+                    material_code=material_code or f"M{item.material_id}",
+                    material_name=material_name or material_code or f"物料{item.material_id}",
+                    material_spec=material_spec or None,
+                    unit=material_unit or "件",
+                    quantity=Decimal(str(remaining)),
+                    suggested_unit_price=Decimal("0"),
+                    required_date=item.procurement_completion_date,
+                    demand_computation_item_id=item.id,
+                    supplier_id=supplier_id,
+                ))
+                if item.procurement_completion_date:
+                    required_dates.append(item.procurement_completion_date)
+                used_computation_ids.add(cid)
 
         if not req_items:
-            raise BusinessLogicError("需求计算中无剩余可下推采购件，无法下推采购申请")
+            raise BusinessLogicError("所选明细均不可下推，请重新选择")
 
-        dates = [i.procurement_completion_date for i in buy_items if i.procurement_completion_date]
+        primary = computation_by_id[next(iter(used_computation_ids))]
         req_data = PurchaseRequisitionCreate(
-            required_date=min(dates) if dates else None,
+            required_date=min(required_dates) if required_dates else None,
             source_type="DemandComputation",
-            source_id=computation_id,
-            source_code=computation.computation_code,
+            source_id=primary.id,
+            source_code=primary.computation_code,
             items=req_items,
         )
 
@@ -547,32 +503,35 @@ class DocumentPushPullService:
         )
 
         from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
-        relation_data = DocumentRelationCreate(
-            source_type="demand_computation",
-            source_id=computation_id,
-            source_code=computation.computation_code,
-            source_name=None,
-            target_type="purchase_requisition",
-            target_id=req.id,
-            target_code=req.requisition_code,
-            target_name=req.requisition_name,
-            relation_type="source",
-            relation_mode="push",
-            relation_desc="从需求计算下推到采购申请",
-            business_mode=computation.business_mode,
-            demand_id=computation.demand_id,
-        )
-        relation = await self.relation_service.create_relation(
-            tenant_id=tenant_id,
-            relation_data=relation_data,
-            created_by=created_by
-        )
+        last_relation = None
+        for cid in sorted(used_computation_ids):
+            computation = computation_by_id[cid]
+            relation_data = DocumentRelationCreate(
+                source_type="demand_computation",
+                source_id=cid,
+                source_code=computation.computation_code,
+                source_name=None,
+                target_type="purchase_requisition",
+                target_id=req.id,
+                target_code=req.requisition_code,
+                target_name=req.requisition_name,
+                relation_type="source",
+                relation_mode="push",
+                relation_desc="从需求计算下推到采购申请",
+                business_mode=computation.business_mode,
+                demand_id=computation.demand_id,
+            )
+            last_relation = await self.relation_service.create_relation(
+                tenant_id=tenant_id,
+                relation_data=relation_data,
+                created_by=created_by
+            )
 
         return {
             "success": True,
             "message": "下推成功，已生成采购申请",
             "target_document": {"type": "purchase_requisition", "id": req.id, "code": req.requisition_code},
-            "relation": relation.model_dump() if hasattr(relation, "model_dump") else relation,
+            "relation": last_relation.model_dump() if last_relation and hasattr(last_relation, "model_dump") else last_relation,
         }
 
     async def _push_purchase_receipt_to_incoming_inspection(
@@ -621,143 +580,35 @@ class DocumentPushPullService:
         push_params: Optional[Dict[str, Any]],
         created_by: int
     ) -> Dict[str, Any]:
-        """从需求计算下推到采购单"""
-        # 获取需求计算信息
-        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
-        if not computation:
-            raise NotFoundError(f"需求计算不存在: {computation_id}")
-        
-        # 验证计算状态（必须是已完成）
-        if computation.computation_status != "完成":
-            raise BusinessLogicError("只能下推已完成的需求计算")
-        
-        # 获取计算明细
-        from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
-        computation_items = await DemandComputationItem.filter(
+        """从需求计算下推到采购单（委托 generate_work_orders_and_purchase_orders 统一口径）。"""
+        push_mode = (push_params or {}).get("push_mode") if push_params else None
+        resolved_push_mode = str(push_mode or "").strip().lower()
+        if resolved_push_mode not in ("draft", "confirm"):
+            resolved_push_mode = await BusinessConfigService().get_push_default_mode(tenant_id)
+
+        r = await self.computation_service.generate_work_orders_and_purchase_orders(
             tenant_id=tenant_id,
-            computation_id=computation_id
-        ).all()
-        
-        if not computation_items:
-            raise BusinessLogicError("需求计算没有明细，无法下推")
-        
-        # 创建采购单列表
-        purchase_orders = []
-        relations = []
-        
-        # 检查是否提供了供应商信息（采购单必须要有供应商）
-        supplier_id = push_params.get("supplier_id") if push_params else None
-        supplier_name = push_params.get("supplier_name") if push_params else None
-        
-        if not supplier_id:
-            raise BusinessLogicError("下推采购单必须提供供应商ID")
-        
-        # 获取已下推且仍存在的采购单物料，避免重复下推
-        exclusions = await self.computation_service._get_already_pushed_exclusions(tenant_id, computation_id)
-        already_pushed_po_material_ids = exclusions["po_material_ids"]
-        
-        # 按物料分组创建采购单（每个物料一个采购单，或者可以合并为单个采购单）
-        # 这里采用每个物料一个采购单的方式，便于后续管理
-        for item in computation_items:
-            # 只处理需要采购的物料（planned_procurement > 0），排除已下推的物料
-            if (item.planned_procurement or 0) <= 0:
-                continue
-            if item.material_id in already_pushed_po_material_ids:
-                continue
-            
-            # 创建采购单明细
-            ordered_quantity = item.suggested_purchase_order_quantity or item.planned_procurement or 0
-            unit_price = push_params.get("unit_price", 0) if push_params else 0
-            total_price = ordered_quantity * unit_price
-            
-            purchase_item = PurchaseOrderItemCreate(
-                material_id=item.material_id,
-                material_code=item.material_code,
-                material_name=item.material_name,
-                material_spec=item.material_spec,
-                ordered_quantity=ordered_quantity,
-                unit=item.material_unit or "件",
-                unit_price=unit_price,
-                total_price=total_price,
-                required_date=item.procurement_completion_date or to_site_date(resolve_business_datetime()),
-                source_type="demand_computation",
-                source_id=computation_id,
-                notes=f"由需求计算{computation.computation_code}下推生成",
-            )
-            
-            # 创建采购单
-            purchase_order_data = PurchaseOrderCreate(
-                supplier_id=supplier_id,
-                supplier_name=supplier_name or "",
-                order_date=to_site_date(resolve_business_datetime()),
-                delivery_date=item.procurement_completion_date or to_site_date(resolve_business_datetime()),
-                status="草稿",
-                remarks=f"由需求计算{computation.computation_code}下推生成",
-                items=[purchase_item],
-            )
-            
-            purchase_order = await self.purchase_service.create_purchase_order(
-                tenant_id=tenant_id,
-                purchase_order_data=purchase_order_data,
-                created_by=created_by
-            )
-            
-            purchase_orders.append(purchase_order)
-            
-            # 建立关联关系
-            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
-            
-            # 从响应对象中获取id和code
-            po_id = purchase_order.id if hasattr(purchase_order, 'id') else purchase_order.model_dump().get('id')
-            po_code = purchase_order.order_code if hasattr(purchase_order, 'order_code') else purchase_order.model_dump().get('order_code')
-            po_name = (
-                purchase_order.order_code
-                if hasattr(purchase_order, "order_code")
-                else purchase_order.model_dump().get("order_code")
-            )
-            
-            relation_data = DocumentRelationCreate(
-                source_type="demand_computation",
-                source_id=computation_id,
-                source_code=computation.computation_code,
-                source_name=None,
-                target_type="purchase_order",
-                target_id=po_id,
-                target_code=po_code,
-                target_name=po_name,
-                relation_type="source",
-                relation_mode="push",
-                relation_desc="从需求计算下推到采购单",
-                business_mode=computation.business_mode,
-                demand_id=computation.demand_id,
-            )
-            
-            relation = await self.relation_service.create_relation(
-                tenant_id=tenant_id,
-                relation_data=relation_data,
-                created_by=created_by
-            )
-            
-            relations.append(relation)
-        
+            computation_id=computation_id,
+            created_by=created_by,
+            generate_mode="purchase_only",
+            push_mode=resolved_push_mode,
+        )
+        purchase_orders = r.get("purchase_orders") or []
         if not purchase_orders:
             raise BusinessLogicError("没有需要采购的物料，无法生成采购单")
-        
+
         return {
             "success": True,
             "message": f"下推成功，共生成{len(purchase_orders)}个采购单",
             "target_documents": [
                 {
                     "type": "purchase_order",
-                    "id": po.id if hasattr(po, 'id') else po.model_dump().get('id'),
-                    "code": po.order_code if hasattr(po, 'order_code') else po.model_dump().get('order_code'),
+                    "id": po.get("id") if isinstance(po, dict) else po.id,
+                    "code": po.get("order_code") if isinstance(po, dict) else getattr(po, "order_code", None),
                 }
                 for po in purchase_orders
             ],
-            "relations": [
-                r.model_dump() if hasattr(r, "model_dump") else r
-                for r in relations
-            ],
+            "relations": [],
         }
     
     async def _get_source_document(

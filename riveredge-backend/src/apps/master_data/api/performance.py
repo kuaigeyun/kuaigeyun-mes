@@ -59,6 +59,7 @@ from apps.master_data.schemas.employee_performance_schemas import (
     KPIDefinitionUpdate,
     KPIDefinitionResponse,
     PerformanceSummaryResponse,
+    PerformanceCalculateResponse,
     PerformanceDetailResponse,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -685,7 +686,19 @@ async def get_performance_summaries(
         created_end_date=created_end_date,
         updated_start_date=updated_start_date,
         updated_end_date=updated_end_date,
-    )
+        )
+
+
+@router.get("/summaries/{summary_id}", response_model=PerformanceSummaryResponse, summary="Get performance summary")
+async def get_performance_summary(
+    summary_id: int = Path(..., description="汇总ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await PerformanceCalcService.get_summary_by_id(tenant_id, summary_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.get("/details", response_model=PerformanceDetailResponse, summary="Get performance detail")
@@ -699,7 +712,7 @@ async def get_performance_details(
     return await PerformanceCalcService.get_detail(tenant_id, employee_id, period)
 
 
-@router.post("/calculate", response_model=List[PerformanceSummaryResponse], summary="Trigger performance calculation")
+@router.post("/calculate", response_model=PerformanceCalculateResponse, summary="Trigger performance calculation")
 async def calculate_performance(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),

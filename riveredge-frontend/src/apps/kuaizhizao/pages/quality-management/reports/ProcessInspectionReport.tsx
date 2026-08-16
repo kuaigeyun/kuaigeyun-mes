@@ -12,9 +12,10 @@ const ProcessInspectionReport: React.FC = () => {
     <KuaizhizaoReport
       title={t('app.kuaizhizao.menu.reports.process-inspection-report')}
       reportType={QUALITY_REPORT_TYPES.PROCESS_PASS_RATE}
-      columnPersistenceId="apps.kuaizhizao.pages.quality-management.reports.ProcessInspectionReport"
+      columnPersistenceId="apps.kuaizhizao.pages.quality-management.reports.ProcessInspectionReport-v2"
+      rowKey="id"
       columns={columns}
-      summaryFields={['avg_pass_rate']}
+      summaryFields={['sample_qty', 'qualified_qty', 'unqualified_qty']}
     />
   );
 };

@@ -16,6 +16,7 @@ import type { CSSProperties } from 'react';
  * - SMALL_WIDTH (600)：单栏表单（无 grid 或仅 span:24）
  * - STANDARD_WIDTH (800)：双栏表单（grid + colProps span:12 等）
  * - LARGE_WIDTH (1000)：复杂表单（多块 Row/Col、多步骤、大量字段）
+ * - PULL_QUERY_WIDTH (1200)：取单弹窗（UniPullQueryModal）；小屏由 maxWidth 收窄
  * - CONNECTOR_MARKET_WIDTH (1080)：数据源 / 应用连接器选择器（分类标签单行展示）
  * - EXTRA_LARGE_WIDTH (1400)：宽表格预览、多列确认（如 MRP 结果预览）；小屏由 maxWidth 收窄
  */
@@ -24,6 +25,8 @@ export const MODAL_CONFIG = {
   STANDARD_WIDTH: 800,
   /** 大宽度（复杂表单） */
   LARGE_WIDTH: 1000,
+  /** 取单弹窗（UniPullQueryModal） */
+  PULL_QUERY_WIDTH: 1200,
   /** 连接器市场（数据源 / 应用连接器卡片选择，分类 Tab 不换行） */
   CONNECTOR_MARKET_WIDTH: 1080,
   /** 超大宽度（宽表、多列表格确认） */
@@ -325,8 +328,10 @@ export const LIST_PAGE_TABLE_SCROLL = {
   GAP_COUNT_BASE: 8,
   /** UniTable 固定占位聚合（搜索行/标题行/分页行等，px） */
   TABLE_CHROME_PX: 82,
-  /** 顶栏 + 标签 + 间距(7*16) + 表格固定位 */
-  BASE_OFFSET_PX: 56 + 56 + (9 * 16) + 82, // = 312
+  /** 不同分辨率下的 1px 冗余，避免表体刚好顶死 */
+  RESOLUTION_SLACK_PX: 1,
+  /** 顶栏 + 标签 + 间距(7*16) + 表格固定位 + 分辨率冗余 */
+  BASE_OFFSET_PX: 56 + 56 + (9 * 16) + 82 + 1, // = 313
   /** 桌面端展示 ListPageTemplate 指标卡行时追加（一行 Card + marginBottom 16） */
   STAT_CARDS_ROW_EXTRA_PX: 120,
   /** MultiTabListPageTemplate 相对标准列表：Ant Design Card 的 Tab 栏及结构增量 */
@@ -340,8 +345,8 @@ export const LIST_PAGE_TABLE_SCROLL = {
   REPORT_META_SUBTITLE_LINE_PX: 22,
   REPORT_META_MARGIN_BOTTOM_PX: 12,
   REPORT_META_HEADER_EXTRA_PX: 32 + 4 + 22 + 12,
-  /** UniTable 无模板变量时使用的默认回退（312 + 136） */
-  DEFAULT_FALLBACK_OFFSET_PX: 448,
+  /** UniTable 无模板变量时使用的默认回退（313 + 136） */
+  DEFAULT_FALLBACK_OFFSET_PX: 449,
 } as const;
 
 /** MultiTabListPageTemplate 视口高度容器：与业务配置页同一套计算方式 */

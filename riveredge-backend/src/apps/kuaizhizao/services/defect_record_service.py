@@ -387,6 +387,7 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             "-created_at",
         )
         defect_records = await defect_query.order_by(order_clause).offset(skip).limit(limit).all()
+        await self._hydrate_source_inspection_codes(tenant_id, defect_records)
 
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             enrich_nonconforming_ledger_list_capabilities,
@@ -399,6 +400,102 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             responses,
         )
         return {"data": data, "total": total, "success": True}
+
+    async def _hydrate_source_inspection_codes(
+        self,
+        tenant_id: int,
+        records: List[DefectRecord],
+    ) -> None:
+        """列表/详情展示用：有检验单 ID 但未落编码时，从源检验单补编码（不写回）。"""
+        if not records:
+            return
+
+        def _blank(value: Optional[str]) -> bool:
+            return not str(value or "").strip()
+
+        incoming_ids = [
+            int(r.incoming_inspection_id)
+            for r in records
+            if r.incoming_inspection_id and _blank(r.incoming_inspection_code)
+        ]
+        process_ids = [
+            int(r.process_inspection_id)
+            for r in records
+            if r.process_inspection_id and _blank(r.process_inspection_code)
+        ]
+        finished_ids = [
+            int(r.finished_goods_inspection_id)
+            for r in records
+            if r.finished_goods_inspection_id and _blank(r.finished_goods_inspection_code)
+        ]
+
+        incoming_map: Dict[int, str] = {}
+        process_map: Dict[int, str] = {}
+        finished_map: Dict[int, str] = {}
+        if incoming_ids:
+            from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+
+            rows = await IncomingInspection.filter(
+                tenant_id=tenant_id,
+                id__in=incoming_ids,
+                deleted_at__isnull=True,
+            ).values_list("id", "inspection_code")
+            incoming_map = {int(i): str(c) for i, c in rows if c}
+        if process_ids:
+            from apps.kuaizhizao.models.process_inspection import ProcessInspection
+
+            rows = await ProcessInspection.filter(
+                tenant_id=tenant_id,
+                id__in=process_ids,
+                deleted_at__isnull=True,
+            ).values_list("id", "inspection_code")
+            process_map = {int(i): str(c) for i, c in rows if c}
+        if finished_ids:
+            from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+
+            rows = await FinishedGoodsInspection.filter(
+                tenant_id=tenant_id,
+                id__in=finished_ids,
+                deleted_at__isnull=True,
+            ).values_list("id", "inspection_code")
+            finished_map = {int(i): str(c) for i, c in rows if c}
+
+        for record in records:
+            if record.incoming_inspection_id and _blank(record.incoming_inspection_code):
+                code = incoming_map.get(int(record.incoming_inspection_id))
+                if code:
+                    record.incoming_inspection_code = code
+            if record.process_inspection_id and _blank(record.process_inspection_code):
+                code = process_map.get(int(record.process_inspection_id))
+                if code:
+                    record.process_inspection_code = code
+            if record.finished_goods_inspection_id and _blank(record.finished_goods_inspection_code):
+                code = finished_map.get(int(record.finished_goods_inspection_id))
+                if code:
+                    record.finished_goods_inspection_code = code
+
+    async def get_defect_record(self, tenant_id: int, defect_id: int) -> DefectRecordResponse:
+        defect_record = await DefectRecord.get_or_none(
+            id=defect_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not defect_record:
+            raise NotFoundError(f"不良品记录不存在: {defect_id}")
+
+        await self._hydrate_source_inspection_codes(tenant_id, [defect_record])
+
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_nonconforming_ledger_list_capabilities,
+        )
+
+        response = DefectRecordResponse.model_validate(defect_record)
+        enriched = await enrich_nonconforming_ledger_list_capabilities(
+            tenant_id,
+            [defect_record],
+            [response],
+        )
+        return enriched[0]
 
     async def update_disposition(
         self,

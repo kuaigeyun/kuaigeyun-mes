@@ -28,7 +28,6 @@ from apps.kuaiplm.schemas.rd_project import (
     RdProjectTaskUpdate,
     RdProjectUpdate,
     RdProjectWorkbenchResponse,
-    SpawnDeliveryProjectRequest,
 )
 from apps.kuaiplm.services.rd_project_service import RdProjectService
 from core.api.deps.access import require_access
@@ -306,26 +305,3 @@ async def push_trial_work_order(
         return await service.push_trial_work_order(tenant_id, project_id, data, current_user.id)
     except (NotFoundError, BusinessLogicError) as e:
         raise _err(400, str(e), f"/rd-projects/{project_id}/push-trial-work-order", tenant_id)
-
-
-@router.post(
-    "/{project_id}/spawn-delivery",
-    response_model=RdProjectResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Spawn delivery project from RD project",
-)
-async def spawn_delivery_project(
-    data: SpawnDeliveryProjectRequest,
-    project_id: int = Path(...),
-    current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "create", required_permissions=["kuaiplm:project:create"])),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    try:
-        return await service.spawn_delivery_project(
-            tenant_id, project_id, data, current_user.id
-        )
-    except NotFoundError as e:
-        raise _err(404, str(e), f"/rd-projects/{project_id}/spawn-delivery", tenant_id)
-    except BusinessLogicError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"message": str(e)})

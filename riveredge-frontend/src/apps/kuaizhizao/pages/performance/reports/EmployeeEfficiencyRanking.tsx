@@ -11,7 +11,7 @@ const EmployeeEfficiencyRanking: React.FC = () => {
     <KuaizhizaoReport
       title={t('app.kuaizhizao.menu.reports.employee-efficiency-ranking')}
       reportType="employee-efficiency-ranking"
-      columnPersistenceId="apps.kuaizhizao.pages.performance.reports.EmployeeEfficiencyRanking"
+      columnPersistenceId="apps.kuaizhizao.pages.performance.reports.EmployeeEfficiencyRanking-v2"
       columns={columns}
     />
   );

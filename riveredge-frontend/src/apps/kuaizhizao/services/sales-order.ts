@@ -179,7 +179,7 @@ export interface SalesOrderListParams {
   /** 仅可加载建单；需配合 pull_target */
   pullable_only?: boolean;
   /** 加载目标：sales_order_change / after_sales_ticket / sales_return */
-  pull_target?: 'sales_order_change' | 'after_sales_ticket' | 'sales_return';
+  pull_target?: 'sales_order_change' | 'after_sales_ticket' | 'sales_return' | 'shipment_notice' | 'sales_delivery' | 'demand_computation';
   /** options=选单轻量列表（跳过进度/capabilities；可配合 include_items） */
   view?: 'options';
 }
@@ -499,6 +499,51 @@ export interface PushToShipmentNoticeRequest {
   warehouse_name?: string;
 }
 
+export type SalesOrderShipmentPullLine = {
+  id: number;
+  sales_order_id: number;
+  order_code?: string;
+  customer_id?: number;
+  customer_name?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+  required_date?: string | null;
+};
+
+export async function listSalesOrderShipmentNoticePullLines(params: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  sales_order_id?: number;
+  pullable_only?: boolean;
+}): Promise<{ data: SalesOrderShipmentPullLine[]; total: number }> {
+  return apiRequest('/apps/kuaizhizao/sales-orders/shipment-notice-pull-lines', {
+    method: 'GET',
+    params,
+  });
+}
+
+export async function pullShipmentNoticesFromSalesOrderItems(
+  selectedItemIds: number[],
+): Promise<{
+  success: boolean;
+  message: string;
+  notice_id?: number;
+  notice_code?: string;
+  notices?: Array<{ notice_id: number; notice_code: string }>;
+}> {
+  return apiRequest('/apps/kuaizhizao/shipment-notices/pull-from-sales-order-items', {
+    method: 'POST',
+    data: { selected_item_ids: selectedItemIds },
+  });
+}
+
 export async function previewPushSalesOrderToShipmentNotice(salesOrderId: number): Promise<PushPreviewResponse> {
   return apiRequest<PushPreviewResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-shipment-notice/preview`, {
     method: 'GET',
@@ -652,6 +697,23 @@ export async function pullSalesOrderFromSalesContract(
   });
 }
 
+export interface PullFromSalesReviewResponse {
+  success: boolean;
+  message: string;
+  source_type: 'sales_review';
+  source_id: number;
+  sales_order_id?: number;
+  sales_order_code?: string;
+  sales_order?: SalesOrder;
+}
+
+export async function pullSalesOrderFromSalesReview(reviewId: number): Promise<PullFromSalesReviewResponse> {
+  return apiRequest<PullFromSalesReviewResponse>('/apps/kuaizhizao/sales-orders/pull-from-sales-review', {
+    method: 'POST',
+    data: { sales_review_id: reviewId },
+  });
+}
+
 /**
  * 撤回销售订单
  */
@@ -682,7 +744,7 @@ export interface PushToWorkOrderResponse {
 
 export interface PushToWorkOrderRequest {
   push_mode?: 'draft' | 'confirm';
-  work_order_granularity?: 'grouped' | 'per_unit';
+  work_order_granularity?: 'grouped' | 'peer_group';
   selected_item_ids?: number[];
   selected_quantities?: Record<number, number>;
   selected_work_centers?: Record<number, number>;

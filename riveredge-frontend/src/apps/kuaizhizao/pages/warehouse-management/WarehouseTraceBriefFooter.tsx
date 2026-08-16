@@ -148,12 +148,22 @@ export function WarehouseTraceBriefPrimaryActions(props: {
         />
       ) : null}
       {brief.document_type === 'receipt_notice' ? (
-        <Button type="primary" size="small" onClick={() => go(ROUTES.RECEIPT_NOTICES)}>
+        <Button
+          type="primary"
+          size="small"
+          onClick={() => go(`${ROUTES.RECEIPT_NOTICES}?highlight=${brief.document_id}`)}
+        >
           {t('components.documentTrackingPanel.traceBriefOpenReceiptNotice')}
         </Button>
       ) : null}
       {brief.document_type === 'other_inbound' ? (
-        <Button type="primary" size="small" onClick={() => go(ROUTES.WM_OTHER_INBOUND)}>
+        <Button
+          type="primary"
+          size="small"
+          onClick={() =>
+            go(`${ROUTES.WM_INBOUND}?receipt_type=other_inbound&receipt_id=${brief.document_id}`)
+          }
+        >
           {t('components.documentTrackingPanel.traceBriefOpenOtherInbound')}
         </Button>
       ) : null}
@@ -164,10 +174,36 @@ export function WarehouseTraceBriefPrimaryActions(props: {
           label={t('components.documentTrackingPanel.traceBriefOpenInbound')}
         />
       ) : null}
-      {brief.document_type === 'finished_goods_receipt' ||
-      brief.document_type === 'semi_finished_goods_receipt' ||
-      brief.document_type === 'production_return' ? (
-        <Button type="primary" size="small" onClick={() => go(ROUTES.WM_INBOUND)}>
+      {brief.document_type === 'finished_goods_receipt' ? (
+        <Button
+          type="primary"
+          size="small"
+          onClick={() =>
+            go(`${ROUTES.WM_INBOUND}?receipt_type=finished_goods&receipt_id=${brief.document_id}`)
+          }
+        >
+          {t('components.documentTrackingPanel.traceBriefOpenInbound')}
+        </Button>
+      ) : null}
+      {brief.document_type === 'semi_finished_goods_receipt' ? (
+        <Button
+          type="primary"
+          size="small"
+          onClick={() =>
+            go(`${ROUTES.WM_INBOUND}?receipt_type=semi_finished_goods&receipt_id=${brief.document_id}`)
+          }
+        >
+          {t('components.documentTrackingPanel.traceBriefOpenInbound')}
+        </Button>
+      ) : null}
+      {brief.document_type === 'production_return' ? (
+        <Button
+          type="primary"
+          size="small"
+          onClick={() =>
+            go(`${ROUTES.WM_INBOUND}?receipt_type=production_return&receipt_id=${brief.document_id}`)
+          }
+        >
           {t('components.documentTrackingPanel.traceBriefOpenInbound')}
         </Button>
       ) : null}
@@ -179,7 +215,13 @@ export function WarehouseTraceBriefPrimaryActions(props: {
         />
       ) : null}
       {brief.document_type === 'production_picking' ? (
-        <Button type="primary" size="small" onClick={() => go(ROUTES.WM_OUTBOUND)}>
+        <Button
+          type="primary"
+          size="small"
+          onClick={() =>
+            go(`${ROUTES.WM_OUTBOUND}?outbound_type=production_picking&id=${brief.document_id}`)
+          }
+        >
           {t('components.documentTrackingPanel.traceBriefOpenOutbound')}
         </Button>
       ) : null}
@@ -189,12 +231,20 @@ export function WarehouseTraceBriefPrimaryActions(props: {
         </Button>
       ) : null}
       {brief.document_type === 'material_borrow' ? (
-        <Button type="primary" size="small" onClick={() => go(ROUTES.WM_MATERIAL_BORROWS)}>
+        <Button
+          type="primary"
+          size="small"
+          onClick={() => go(`${ROUTES.WM_MATERIAL_BORROWS}?id=${brief.document_id}`)}
+        >
           {t('components.documentTrackingPanel.traceBriefOpenMaterialBorrow')}
         </Button>
       ) : null}
       {brief.document_type === 'material_return' ? (
-        <Button type="primary" size="small" onClick={() => go(ROUTES.WM_MATERIAL_RETURNS)}>
+        <Button
+          type="primary"
+          size="small"
+          onClick={() => go(`${ROUTES.WM_MATERIAL_RETURNS}?id=${brief.document_id}`)}
+        >
           {t('components.documentTrackingPanel.traceBriefOpenMaterialReturn')}
         </Button>
       ) : null}

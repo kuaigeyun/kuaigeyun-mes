@@ -34,6 +34,52 @@ def compute_first_pass_yield_rate(qualified: float, reported: float) -> float:
     return round(qualified / reported * 100, 2)
 
 
+def _empty_qty_bucket() -> Dict[str, Decimal]:
+    return {
+        "count": Decimal("0"),
+        "reported_quantity": Decimal("0"),
+        "qualified_quantity": Decimal("0"),
+        "unqualified_quantity": Decimal("0"),
+        "first_pass_reported_quantity": Decimal("0"),
+        "first_pass_qualified_quantity": Decimal("0"),
+        "first_pass_unqualified_quantity": Decimal("0"),
+    }
+
+
+def _add_record_quantities(bucket: Dict[str, Decimal], record: ReportingRecord) -> None:
+    reported = record.reported_quantity or Decimal("0")
+    qualified = record.qualified_quantity or Decimal("0")
+    unqualified = record.unqualified_quantity or Decimal("0")
+    bucket["count"] += Decimal("1")
+    bucket["reported_quantity"] += reported
+    bucket["qualified_quantity"] += qualified
+    bucket["unqualified_quantity"] += unqualified
+    if record.rework_order_id is None:
+        bucket["first_pass_reported_quantity"] += reported
+        bucket["first_pass_qualified_quantity"] += qualified
+        bucket["first_pass_unqualified_quantity"] += unqualified
+
+
+def _qty_fields(bucket: Dict[str, Decimal]) -> Dict[str, Any]:
+    reported = float(bucket["reported_quantity"])
+    qualified = float(bucket["qualified_quantity"])
+    unqualified = float(bucket["unqualified_quantity"])
+    fp_reported = float(bucket["first_pass_reported_quantity"])
+    fp_qualified = float(bucket["first_pass_qualified_quantity"])
+    fp_unqualified = float(bucket["first_pass_unqualified_quantity"])
+    return {
+        "count": int(bucket["count"]),
+        "reported_quantity": reported,
+        "qualified_quantity": qualified,
+        "unqualified_quantity": unqualified,
+        "qualification_rate": compute_first_pass_yield_rate(qualified, reported),
+        "first_pass_reported_quantity": fp_reported,
+        "first_pass_qualified_quantity": fp_qualified,
+        "first_pass_unqualified_quantity": fp_unqualified,
+        "first_pass_yield_rate": compute_first_pass_yield_rate(fp_qualified, fp_reported),
+    }
+
+
 def _aggregate_quantities(
     records: Sequence[ReportingRecord],
     *,
@@ -112,43 +158,14 @@ class FirstPassYieldService:
             date_end=date_end,
             approved_only=approved_only,
         )
-        stats: Dict[str, Dict[str, Decimal]] = defaultdict(
-            lambda: {
-                "count": Decimal("0"),
-                "reported_quantity": Decimal("0"),
-                "qualified_quantity": Decimal("0"),
-                "first_pass_reported_quantity": Decimal("0"),
-                "first_pass_qualified_quantity": Decimal("0"),
-            }
-        )
+        stats: Dict[str, Dict[str, Decimal]] = defaultdict(_empty_qty_bucket)
         for record in records:
             key = record.operation_name or record.operation_code or "-"
-            bucket = stats[key]
-            bucket["count"] += Decimal("1")
-            bucket["reported_quantity"] += record.reported_quantity or Decimal("0")
-            bucket["qualified_quantity"] += record.qualified_quantity or Decimal("0")
-            if record.rework_order_id is None:
-                bucket["first_pass_reported_quantity"] += record.reported_quantity or Decimal("0")
-                bucket["first_pass_qualified_quantity"] += record.qualified_quantity or Decimal("0")
+            _add_record_quantities(stats[key], record)
 
         rows: List[Dict[str, Any]] = []
         for operation_name, bucket in stats.items():
-            reported = float(bucket["reported_quantity"])
-            qualified = float(bucket["qualified_quantity"])
-            fp_reported = float(bucket["first_pass_reported_quantity"])
-            fp_qualified = float(bucket["first_pass_qualified_quantity"])
-            rows.append(
-                {
-                    "operation_name": operation_name,
-                    "count": int(bucket["count"]),
-                    "reported_quantity": reported,
-                    "qualified_quantity": qualified,
-                    "qualification_rate": compute_first_pass_yield_rate(qualified, reported),
-                    "first_pass_reported_quantity": fp_reported,
-                    "first_pass_qualified_quantity": fp_qualified,
-                    "first_pass_yield_rate": compute_first_pass_yield_rate(fp_qualified, fp_reported),
-                }
-            )
+            rows.append({"operation_name": operation_name, **_qty_fields(bucket)})
         rows.sort(key=lambda item: item["count"], reverse=True)
         return rows[: max(1, limit)]
 
@@ -274,47 +291,53 @@ class FirstPassYieldService:
         skip: int = 0,
         limit: int = 100,
     ) -> Tuple[List[Dict[str, Any]], int]:
-        """工单直通率：完工工单中未产生返工单的占比（按数量加权）。"""
-        wo_query = WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="completed")
-        if date_start:
-            wo_query = wo_query.filter(actual_end_date__gte=date_start)
-        if date_end:
-            wo_query = wo_query.filter(actual_end_date__lte=date_end)
-        total = await wo_query.count()
-        work_orders = await wo_query.order_by("-actual_end_date").offset(skip).limit(limit).values(
-            "id",
-            "code",
-            "product_name",
-            "quantity",
-            "completed_quantity",
-            "actual_end_date",
+        """工单直通率：按报工汇总报工/合格/不合格，直通率=首次合格/首次报工。"""
+        records = await self._load_records(
+            tenant_id,
+            date_start=date_start,
+            date_end=date_end,
+            approved_only=False,
         )
-        if not work_orders:
-            return [], total
+        stats: Dict[int, Dict[str, Decimal]] = defaultdict(_empty_qty_bucket)
+        for record in records:
+            if not record.work_order_id:
+                continue
+            _add_record_quantities(stats[int(record.work_order_id)], record)
+        if not stats:
+            return [], 0
 
-        wo_ids = [row["id"] for row in work_orders]
-        rework_rows = await ReworkOrder.filter(
+        wo_ids = list(stats.keys())
+        work_orders = await WorkOrder.filter(
             tenant_id=tenant_id,
-            work_order_id__in=wo_ids,
+            id__in=wo_ids,
             deleted_at__isnull=True,
-        ).values_list("work_order_id", flat=True)
-        rework_set = set(rework_rows)
+        ).values("id", "code", "product_name")
+        wo_map = {int(row["id"]): row for row in work_orders}
+        rework_set = set(
+            await ReworkOrder.filter(
+                tenant_id=tenant_id,
+                original_work_order_id__in=wo_ids,
+                deleted_at__isnull=True,
+            ).values_list("original_work_order_id", flat=True)
+        )
 
         rows: List[Dict[str, Any]] = []
-        for row in work_orders:
-            qty = float(row.get("completed_quantity") or row.get("quantity") or 0)
-            has_rework = row["id"] in rework_set
+        for wo_id, bucket in stats.items():
+            wo = wo_map.get(wo_id, {})
+            qty = _qty_fields(bucket)
             rows.append(
                 {
-                    "work_order_code": row.get("code"),
-                    "product_name": row.get("product_name"),
-                    "completed_quantity": qty,
-                    "has_rework": has_rework,
-                    "work_order_first_pass_yield_rate": 100.0 if not has_rework and qty > 0 else 0.0,
-                    "actual_end_date": row.get("actual_end_date"),
+                    "id": wo_id,
+                    "work_order_code": wo.get("code") or "",
+                    "product_name": wo.get("product_name") or "",
+                    "has_rework": wo_id in rework_set,
+                    "work_order_first_pass_yield_rate": qty["first_pass_yield_rate"],
+                    **qty,
                 }
             )
-        return rows, total
+        rows.sort(key=lambda item: item["work_order_first_pass_yield_rate"])
+        total = len(rows)
+        return rows[skip : skip + limit], total
 
     async def get_product_rty(
         self,
@@ -370,29 +393,22 @@ class FirstPassYieldService:
                 "product_name": product.get("product_name") or "-",
             }
             seq = sequence_by_wo_op.get((record.work_order_id, record.operation_id), record.operation_id)
-            bucket = product_op_stats[product_code].setdefault(
-                seq,
-                {
-                    "operation_name": record.operation_name or record.operation_code or "-",
-                    "first_pass_reported_quantity": Decimal("0"),
-                    "first_pass_qualified_quantity": Decimal("0"),
-                },
-            )
-            bucket["first_pass_reported_quantity"] += record.reported_quantity or Decimal("0")
-            bucket["first_pass_qualified_quantity"] += record.qualified_quantity or Decimal("0")
+            bucket = product_op_stats[product_code].setdefault(seq, _empty_qty_bucket())
+            _add_record_quantities(bucket, record)
 
         rows: List[Dict[str, Any]] = []
         for product_code, op_map in product_op_stats.items():
             meta = product_meta.get(product_code, {})
             operation_rates: List[float] = []
             operation_count = 0
+            product_bucket = _empty_qty_bucket()
             for seq in sorted(op_map.keys()):
                 bucket = op_map[seq]
-                reported = float(bucket["first_pass_reported_quantity"])
-                qualified = float(bucket["first_pass_qualified_quantity"])
-                rate = compute_first_pass_yield_rate(qualified, reported)
-                if reported > 0:
-                    operation_rates.append(rate / 100)
+                for field, value in bucket.items():
+                    product_bucket[field] += value
+                qty = _qty_fields(bucket)
+                if qty["first_pass_reported_quantity"] > 0:
+                    operation_rates.append(qty["first_pass_yield_rate"] / 100)
                     operation_count += 1
             rty = 100.0
             for rate in operation_rates:
@@ -405,6 +421,7 @@ class FirstPassYieldService:
                     "product_name": meta.get("product_name") or "-",
                     "operation_count": operation_count,
                     "roll_through_yield_rate": round(rty, 2),
+                    **_qty_fields(product_bucket),
                 }
             )
 

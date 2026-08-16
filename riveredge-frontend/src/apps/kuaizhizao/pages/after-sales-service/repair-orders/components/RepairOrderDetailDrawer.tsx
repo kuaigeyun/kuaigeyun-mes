@@ -12,6 +12,7 @@ import {
   renderAfterSalesStatusTag,
   renderAfterSalesTypeMarker,
 } from '../../shared/afterSalesListPresentation';
+import { LinkedDocumentCode } from '../../../../../../components/linked-document-code';
 import { AfterSalesDocDetailDrawer } from '../../shared/AfterSalesDocDetailDrawer';
 
 const PLACEHOLDER: RepairOrder = {
@@ -54,10 +55,24 @@ export const RepairOrderDetailDrawer: React.FC<RepairOrderDetailDrawerProps> = (
         {
           title: t('app.kuaizhizao.afterSalesService.repairOrder.field.ticketCode'),
           dataIndex: 'after_sales_ticket_code',
+          render: (_, row) => (
+            <LinkedDocumentCode
+              documentType="after_sales_ticket"
+              documentId={row.after_sales_ticket_id}
+              code={row.after_sales_ticket_code}
+            />
+          ),
         },
         {
           title: t('app.kuaizhizao.afterSalesService.repairOrder.field.assetCode'),
           dataIndex: 'service_asset_code',
+          render: (_, row) => (
+            <LinkedDocumentCode
+              documentType="service_asset"
+              documentId={row.service_asset_id}
+              code={row.service_asset_code}
+            />
+          ),
         },
         {
           title: t('app.kuaizhizao.afterSalesService.repairOrder.field.repairMode'),
@@ -131,6 +146,7 @@ export const RepairOrderDetailDrawer: React.FC<RepairOrderDetailDrawerProps> = (
       onRetry={onRetry}
       extra={extra}
       zIndex={zIndex}
+      traceDocumentType="repair_order"
       linesTitle={t('app.kuaizhizao.afterSalesService.common.itemsTitle')}
       lines={
         items.length > 0 ? (

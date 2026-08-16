@@ -236,9 +236,44 @@ export const LIFECYCLE_ZH_LABEL_TO_KEY: Record<string, string> = {
   提醒: 'notify',
 };
 
+/** 后端 status / stage 码统一规范化（CONFIRMED → confirmed，待审核等中文原样 trim） */
+export function normalizeLifecycleStageKey(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  if (/[\u4e00-\u9fff]/.test(trimmed)) return trimmed;
+  return trimmed.toLowerCase().replace(/[\s-]+/g, '_');
+}
+
+/** 审核状态中文展示 → reviewStatus key（与 LIFECYCLE_ZH_LABEL_TO_KEY 同级，唯一真源） */
+export const REVIEW_STATUS_ZH_TO_KEY: Record<string, string> = {
+  待审核: 'pending',
+  审核通过: 'approved',
+  已通过: 'approved',
+  已审核: 'approved',
+  审核驳回: 'rejected',
+  驳回: 'rejected',
+  已驳回: 'rejected',
+};
+
+/** 审核状态 review_status.*（唯一文案源：locales reviewStatus.{key}） */
+export function translateReviewStatusByKey(
+  t: LifecycleTranslateFn,
+  raw: string | undefined,
+): string {
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed) return '—';
+  const fromZh = REVIEW_STATUS_ZH_TO_KEY[trimmed];
+  const normalized = fromZh ?? normalizeLifecycleStageKey(trimmed);
+  if (!normalized) return '—';
+  const i18nKey = `reviewStatus.${normalized}`;
+  const translated = t(i18nKey);
+  if (translated && translated !== i18nKey) return translated;
+  return '—';
+}
+
 export function resolveLifecycleStageI18nKey(stageKey: string): string | undefined {
-  const key = stageKey.trim();
-  if (!key) return undefined;
+  const key = normalizeLifecycleStageKey(stageKey);
+  if (!key || /[\u4e00-\u9fff]/.test(key)) return undefined;
   if (DOCUMENT_STATUS_STAGE_KEYS.has(key)) {
     return `documentStatus.${key}`;
   }
@@ -266,13 +301,14 @@ export function translateLifecycleStageByKey(
   fallbackLabel?: string,
 ): string {
   if (stageKey) {
-    const i18nKey = resolveLifecycleStageI18nKey(stageKey);
+    const normalized = normalizeLifecycleStageKey(stageKey);
+    const i18nKey = resolveLifecycleStageI18nKey(normalized);
     if (i18nKey) {
       const translated = t(i18nKey);
       if (translated && translated !== i18nKey) return translated;
     }
   }
-  const label = (fallbackLabel ?? '').trim();
+  const label = (fallbackLabel ?? stageKey ?? '').trim();
   if (!label || label === '-') return label || '-';
   const keyFromZh = LIFECYCLE_ZH_LABEL_TO_KEY[label];
   if (keyFromZh) {

@@ -8,7 +8,7 @@ Date: 2025-01-14
 
 computation_params（MRP）中小企业常用键白名单（JSON 存取，与前端表单一致）：
 
-- 净算与库存：include_safety_stock, include_in_transit, include_reserved, include_reorder_point；
+- 净算与库存：include_safety_stock, include_in_transit（默认 true）, include_reserved, include_reorder_point；
   safety_stock / reorder_point（全局覆盖物料主数据）。
 - 建议量依据：mrp_suggestion_basis: "net" | "gross"（默认 net）。
   net=建议工单/采购/委外量按净需求，供需净算四项按参数参与；
@@ -16,6 +16,7 @@ computation_params（MRP）中小企业常用键白名单（JSON 存取，与前
 - 仓库范围：warehouse_ids: int[]；缺省时后端按全部启用且 warehouse_type=normal 的仓库汇总线边库存；
   MaterialBatch 主仓批次不按仓过滤（全量计入）。
 - 时间窗：planning_horizon: int（天），有交期的需求行交期晚于「今天+horizon」则跳过；缺省或 <=0 不裁剪。
+- 计划时间栏：planning_fence_days: int（天，默认 7；0=关闭），release 落在栏内的新计划自动确认（firm）。
 - 建议量：apply_lot_sizing: bool（默认 true）；suggested_qty_min / suggested_qty_max / suggested_qty_multiple / suggested_qty_fixed（全局覆盖）；
   物料级规则：defaults.purchase（Buy）与 defaults.production（Make/Outsource）中的 min/max/multiple/fixed（固定批量 FOQ）等别名键。
   自制建议量还会按 source_config.production_waste_rate（百分比，如 5=5%）放大。
@@ -248,6 +249,10 @@ class DemandComputationResponse(DemandComputationBase):
     source_id: Optional[int] = Field(
         None,
         description="首个来源单据ID：销售订单/销售预测为上游单据ID；需求计划为 Demand.id",
+    )
+    source_label: Optional[str] = Field(
+        None,
+        description="来源关联展示名：销售订单/预测为客户名；需求计划为计划名（demand_name）",
     )
     items: Optional[List[DemandComputationItemResponse]] = Field(default_factory=list)
     downstream_push_progress: Optional[float] = Field(

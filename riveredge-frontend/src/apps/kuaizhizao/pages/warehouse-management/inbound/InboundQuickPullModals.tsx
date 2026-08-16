@@ -1,77 +1,34 @@
 import React, { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
-import { Alert, App, Empty, Form, Modal, Select, Spin, Table, Tag, Typography } from 'antd';
+import { App, Select } from 'antd';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import {
   UniPullQueryModal,
-  filterByPullScope,
-  paginatePullRows,
+  isPullableScope,
+  renderPullCapabilityTag,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
-import {
-  listPurchaseReceiptPullCandidates,
-  previewPushToReceipt,
-  type DocumentPushPreview,
-} from '../../../services/purchase';
-import {
-  formatPullPercent,
-  renderLifecycleSubStageTag,
-} from './inboundPullModalUtils';
+import { MaterialStackedCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { listPurchaseOrders } from '../../../services/purchase';
 import { formatQuantity } from '../../../../../utils/format';
-import { listSalesOrders, previewPushSalesOrderToSalesReturn, type PushPreviewResponse } from '../../../services/sales-order';
+import { listSalesOrders } from '../../../services/sales-order';
+import { receiptNoticeApi } from '../../../services/receipt-notice';
 import {
-  receiptNoticeApi,
-  type ReceiptNotice,
-  type ReceiptNoticeNotifyPreviewResponse,
-} from '../../../services/receipt-notice';
-import { warehouseApi } from '../../../services/warehouse-execution';
+  warehouseApi,
+  type OutsourceInboundPullLine,
+  type ProductionReturnPullLine,
+  type PurchaseReceiptNoticePullLine,
+  type PurchaseReceiptOrderPullLine,
+  type SalesReturnOrderPullLine,
+  type WorkOrderFinishedGoodsPullLine,
+} from '../../../services/warehouse-execution';
 import {
   workOrderApi,
   outsourceWorkOrderApi,
-  outsourceMaterialReceiptApi,
-  outsourceMaterialReturnApi,
-  outsourceProductReturnApi,
 } from '../../../services/production';
 import { type InboundOutsourcePullType } from './inboundCreateConfig';
-
-type OutsourceInboundCapabilityKey =
-  | 'push_outsource_receipt'
-  | 'push_outsource_material_return'
-  | 'push_outsource_product_return';
-
-function inboundOutsourceCapabilityKey(pullType: InboundOutsourcePullType): OutsourceInboundCapabilityKey {
-  if (pullType === 'outsource_material_return') return 'push_outsource_material_return';
-  if (pullType === 'outsource_product_return') return 'push_outsource_product_return';
-  return 'push_outsource_receipt';
-}
-
-function inboundOutsourcePreviewLineKey(pullType: InboundOutsourcePullType, itemId: number): string {
-  if (pullType === 'outsource_material_return') return `issue-${itemId}`;
-  if (pullType === 'outsource_product_return') return `receipt-${itemId}`;
-  return String(itemId);
-}
-import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
-import {
-  inboundOutsourceEntryPath,
-  inboundPoEntryPath,
-  inboundProductionReturnEntryPath,
-  inboundSalesReturnEntryPath,
-  inboundWorkOrderEntryPath,
-} from './inboundPaths';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-import {
-  purchaseOrderCapabilityReasonMessage,
-  receiptNoticeCapabilityReasonMessage,
-  salesOrderCapabilityReasonMessage,
-  workOrderCapabilityReasonMessage,
-  outsourceWorkOrderCapabilityReasonMessage,
-} from '../../../../../hooks/useDocumentCapabilities';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
-import {
-  buildDocumentCreateDraftKey,
-  setDocumentFormDraft,
-} from '../../../../../utils/documentFormDraftCache';
 
 export type {
   InboundPullDirectConfirmTarget,
@@ -90,98 +47,13 @@ export type InboundQuickPullModalsRef = {
   open: (key: InboundQuickPullKey) => void;
 };
 
-type PullReceiptNoticeCandidate = ReceiptNotice & {
-  id: number;
-};
+type PullReceiptNoticeCandidate = PurchaseReceiptNoticePullLine;
+type PullSalesOrderCandidate = SalesReturnOrderPullLine;
+type PullPurchaseOrderCandidate = PurchaseReceiptOrderPullLine;
 
-type PullSalesOrderCandidate = {
-  id: number;
-  order_code?: string;
-  customer_name?: string;
-  status?: string;
-  delivery_date?: string;
-  updated_at?: string;
-  total_quantity?: number;
-  delivery_progress?: number | null;
-  capabilities?: {
-    push_sales_return?: { allowed?: boolean; reason?: string | null };
-  };
-};
-
-type PullPurchaseOrderCandidate = {
-  id: number;
-  order_code?: string;
-  supplier_name?: string;
-  status?: string;
-  order_date?: string;
-  delivery_date?: string;
-  items_count?: number;
-  total_quantity?: number;
-  ordered_total?: number;
-  received_total?: number;
-  outstanding_total?: number;
-  lifecycle?: {
-    current_stage_name?: string;
-    sub_stages?: Array<{ key: string; label: string; status: string }>;
-  };
-  capabilities?: {
-    push_receipt?: { allowed?: boolean; reason?: string | null };
-  };
-};
-
-type PullWorkOrderCandidate = {
-  id: number;
-  code?: string;
-  product_name?: string;
-  sales_order_code?: string;
-  status?: string;
-  quantity?: number;
-  completed_quantity?: number;
-  updated_at?: string;
-  capabilities?: {
-    push_finished_goods_receipt?: { allowed?: boolean; reason?: string | null };
-    push_production_return?: { allowed?: boolean; reason?: string | null };
-  };
-};
-
-type ProductionReturnPreviewPicking = {
-  picking_id: number;
-  picking_code: string;
-  status: string;
-  lines: Array<{
-    picking_item_id?: number;
-    material_id?: number;
-    material_code?: string;
-    material_name?: string;
-    source_doc_quantity?: number;
-    source_received_quantity?: number;
-    source_pending_quantity?: number;
-  }>;
-};
-
-type ProductionReturnPreviewResponse = {
-  work_order_id: number;
-  work_order_code: string;
-  pickings: ProductionReturnPreviewPicking[];
-  message?: string | null;
-};
-
-type PullOutsourceWoCandidate = {
-  id: number;
-  code?: string;
-  product_name?: string;
-  supplier_name?: string;
-  status?: string;
-  quantity?: number;
-  received_quantity?: number;
-  issued_quantity?: number;
-  updated_at?: string;
-  capabilities?: {
-    push_outsource_receipt?: { allowed?: boolean; reason?: string | null };
-    push_outsource_material_return?: { allowed?: boolean; reason?: string | null };
-    push_outsource_product_return?: { allowed?: boolean; reason?: string | null };
-  };
-};
+type PullWorkOrderCandidate = WorkOrderFinishedGoodsPullLine;
+type PullProductionReturnCandidate = ProductionReturnPullLine;
+type PullOutsourceWoCandidate = OutsourceInboundPullLine;
 
 type InboundQuickPullModalsProps = {
   onSuccess: () => void;
@@ -191,7 +63,6 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
   ({ onSuccess }, ref) => {
     const { t } = useTranslation();
     const { message: messageApi } = App.useApp();
-    const navigate = useNavigate();
     const pullFromPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_receipt.pull_from_purchase_order');
     const pullFromReceiptNoticeAction = resolveKuaizhizaoDocumentAction(t, 'purchase_receipt.pull_from_receipt_notice');
     const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_work_order');
@@ -201,646 +72,24 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
 
     const [outsourcePullType, setOutsourcePullType] = useState<InboundOutsourcePullType>('outsource_receipt');
 
-    const pullPoQueryCloseRef = useRef<(() => void) | null>(null);
-    const pullRnQueryCloseRef = useRef<(() => void) | null>(null);
-    const pullWoQueryCloseRef = useRef<(() => void) | null>(null);
-    const pullPrQueryCloseRef = useRef<(() => void) | null>(null);
-    const pullSrQueryCloseRef = useRef<(() => void) | null>(null);
-    const pullOibQueryCloseRef = useRef<(() => void) | null>(null);
     const outsourcePullTypeRef = useRef<InboundOutsourcePullType>('outsource_receipt');
-    const [pullPoPreviewOpen, setPullPoPreviewOpen] = useState(false);
-    const [pullPoPreviewLoading, setPullPoPreviewLoading] = useState(false);
-    const [pullPoPreviewConfirming, setPullPoPreviewConfirming] = useState(false);
-    const [pullPoPreviewData, setPullPoPreviewData] = useState<DocumentPushPreview | null>(null);
-    const [pullPoPreviewOrderId, setPullPoPreviewOrderId] = useState<number | null>(null);
-    const [pullPoSelectedItemIds, setPullPoSelectedItemIds] = useState<number[]>([]);
-    const [pullRnPreviewOpen, setPullRnPreviewOpen] = useState(false);
-    const [pullRnPreviewLoading, setPullRnPreviewLoading] = useState(false);
-    const [pullRnPreviewConfirming, setPullRnPreviewConfirming] = useState(false);
-    const [pullRnPreviewData, setPullRnPreviewData] = useState<ReceiptNoticeNotifyPreviewResponse | null>(null);
-    const [pullRnPreviewTarget, setPullRnPreviewTarget] = useState<ReceiptNotice | null>(null);
-    const [pullWoPreviewOpen, setPullWoPreviewOpen] = useState(false);
-    const [pullWoPreviewLoading, setPullWoPreviewLoading] = useState(false);
-    const [pullWoPreviewData, setPullWoPreviewData] = useState<PushPreviewResponse | null>(null);
-    const [pullWoPreviewWorkOrderId, setPullWoPreviewWorkOrderId] = useState<number | null>(null);
-    const [pullPrPreviewOpen, setPullPrPreviewOpen] = useState(false);
-    const [pullPrPreviewLoading, setPullPrPreviewLoading] = useState(false);
-    const [pullPrPreviewConfirming, setPullPrPreviewConfirming] = useState(false);
-    const [pullPrPreviewData, setPullPrPreviewData] = useState<ProductionReturnPreviewResponse | null>(null);
-    const [pullPrPreviewWorkOrderId, setPullPrPreviewWorkOrderId] = useState<number | null>(null);
-    const [pullPrPreviewPickingId, setPullPrPreviewPickingId] = useState<number | null>(null);
-    const [pullPrSelectedItemIds, setPullPrSelectedItemIds] = useState<number[]>([]);
-    const [pullSrPreviewOpen, setPullSrPreviewOpen] = useState(false);
-    const [pullSrPreviewLoading, setPullSrPreviewLoading] = useState(false);
-    const [pullSrPreviewConfirming, setPullSrPreviewConfirming] = useState(false);
-    const [pullSrPreviewData, setPullSrPreviewData] = useState<PushPreviewResponse | null>(null);
-    const [pullSrPreviewOrderId, setPullSrPreviewOrderId] = useState<number | null>(null);
-    const [pullSrSelectedItemIds, setPullSrSelectedItemIds] = useState<number[]>([]);
-    const [pullOibPreviewOpen, setPullOibPreviewOpen] = useState(false);
-    const [pullOibPreviewLoading, setPullOibPreviewLoading] = useState(false);
-    const [pullOibPreviewConfirming, setPullOibPreviewConfirming] = useState(false);
-    const [pullOibPreviewData, setPullOibPreviewData] = useState<PushPreviewResponse | null>(null);
-    const [pullOibPreviewWorkOrderId, setPullOibPreviewWorkOrderId] = useState<number | null>(null);
-    const [pullOibPreviewPullType, setPullOibPreviewPullType] = useState<InboundOutsourcePullType>('outsource_receipt');
-    const [pullOibSelectedItemIds, setPullOibSelectedItemIds] = useState<number[]>([]);
-
-    const resetPullOibPreviewModal = useCallback(() => {
-      setPullOibPreviewOpen(false);
-      setPullOibPreviewData(null);
-      setPullOibPreviewWorkOrderId(null);
-      setPullOibSelectedItemIds([]);
-    }, []);
-
-    const resetPullWoPreviewModal = useCallback(() => {
-      setPullWoPreviewOpen(false);
-      setPullWoPreviewData(null);
-      setPullWoPreviewWorkOrderId(null);
-    }, []);
-
-    const resetPullPrPreviewModal = useCallback(() => {
-      setPullPrPreviewOpen(false);
-      setPullPrPreviewData(null);
-      setPullPrPreviewWorkOrderId(null);
-      setPullPrPreviewPickingId(null);
-      setPullPrSelectedItemIds([]);
-    }, []);
-
-    const resetPullSrPreviewModal = useCallback(() => {
-      setPullSrPreviewOpen(false);
-      setPullSrPreviewData(null);
-      setPullSrPreviewOrderId(null);
-      setPullSrSelectedItemIds([]);
-    }, []);
-
-    const resetPullPoPreviewModal = useCallback(() => {
-      setPullPoPreviewOpen(false);
-      setPullPoPreviewData(null);
-      setPullPoPreviewOrderId(null);
-      setPullPoSelectedItemIds([]);
-    }, []);
-
-    const resetPullRnPreviewModal = useCallback(() => {
-      setPullRnPreviewOpen(false);
-      setPullRnPreviewData(null);
-      setPullRnPreviewTarget(null);
-    }, []);
-
-    const showPullPoPreview = useCallback(
-      (orderId: number) => {
-        pullPoQueryCloseRef.current?.();
-        setPullPoPreviewOpen(true);
-        setPullPoPreviewLoading(true);
-        setPullPoPreviewConfirming(false);
-        setPullPoPreviewData(null);
-        setPullPoPreviewOrderId(orderId);
-        setPullPoSelectedItemIds([]);
-        previewPushToReceipt(orderId)
-          .then((res) => {
-            setPullPoPreviewData(res);
-            setPullPoSelectedItemIds(
-              (res.items || [])
-                .filter((row) => Number(row.max_push_quantity ?? 0) > 0)
-                .map((row) => Number(row.item_id)),
-            );
-          })
-          .catch((error: unknown) => {
-            messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.po.previewFailed')));
-            resetPullPoPreviewModal();
-          })
-          .finally(() => setPullPoPreviewLoading(false));
-      },
-      [messageApi, resetPullPoPreviewModal, t],
-    );
-
-    const handlePullPoPreviewConfirm = useCallback(async () => {
-      if (!pullPoPreviewOrderId || !pullPoPreviewData) return;
-      if (pullPoPreviewData.has_blocking_issues) return;
-      const rowById = new Map(
-        (pullPoPreviewData.items || []).map((row) => [Number(row.item_id), row]),
-      );
-      const selectedIds = pullPoSelectedItemIds.filter((id) => {
-        const row = rowById.get(id);
-        return row && Number(row.max_push_quantity ?? 0) > 0;
-      });
-      if (!selectedIds.length) {
-        messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.po.selectLinesFirst'));
-        return;
-      }
-      const quantities: Record<number, number> = {};
-      (pullPoPreviewData.items || []).forEach((row) => {
-        quantities[Number(row.item_id)] = 0;
-      });
-      selectedIds.forEach((id) => {
-        quantities[id] = Number(rowById.get(id)?.max_push_quantity ?? 0);
-      });
-      const entryPath = inboundPoEntryPath(pullPoPreviewOrderId);
-      const draftKey = buildDocumentCreateDraftKey('kuaizhizao:inbound-po-pull', entryPath, '');
-      setDocumentFormDraft(draftKey, { quantities });
-      resetPullPoPreviewModal();
-      navigate(entryPath);
-    }, [
-      messageApi,
-      navigate,
-      pullPoPreviewData,
-      pullPoPreviewOrderId,
-      pullPoSelectedItemIds,
-      resetPullPoPreviewModal,
-      t,
-    ]);
-
-    const showPullRnPreview = useCallback(
-      (notice: ReceiptNotice) => {
-        if (!notice.id) return;
-        pullRnQueryCloseRef.current?.();
-        setPullRnPreviewOpen(true);
-        setPullRnPreviewLoading(true);
-        setPullRnPreviewConfirming(false);
-        setPullRnPreviewData(null);
-        setPullRnPreviewTarget(notice);
-        receiptNoticeApi
-          .previewNotify(String(notice.id))
-          .then((res) => setPullRnPreviewData(res))
-          .catch((error: unknown) => {
-            messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.receiptNotice.notifyPreviewFailed')));
-            resetPullRnPreviewModal();
-          })
-          .finally(() => setPullRnPreviewLoading(false));
-      },
-      [messageApi, resetPullRnPreviewModal, t],
-    );
-
-    const handlePullRnPreviewConfirm = useCallback(async () => {
-      if (!pullRnPreviewTarget?.id || !pullRnPreviewData) return;
-      if (pullRnPreviewData.has_blocking_issues) return;
-      setPullRnPreviewConfirming(true);
-      try {
-        const res = (await receiptNoticeApi.notify(String(pullRnPreviewTarget.id))) as ReceiptNotice;
-        messageApi.success(
-          res?.purchase_receipt_code
-            ? t('app.kuaizhizao.receiptNotice.notifySuccessWithDraft', { receiptCode: res.purchase_receipt_code })
-            : t('app.kuaizhizao.receiptNotice.notifySuccess'),
-        );
-        resetPullRnPreviewModal();
-        onSuccess();
-      } catch (error: unknown) {
-        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.shipmentNotice.notifyFailed')));
-      } finally {
-        setPullRnPreviewConfirming(false);
-      }
-    }, [messageApi, onSuccess, pullRnPreviewData, pullRnPreviewTarget, resetPullRnPreviewModal, t]);
-
-    const mapWorkOrderInboundPreview = useCallback(
-      (preview: {
-        work_order_code?: string;
-        lines?: Array<{
-          material_id?: number;
-          material_code?: string;
-          material_name?: string;
-          source_doc_quantity?: number | string;
-          source_received_quantity?: number | string;
-          source_pending_quantity?: number | string;
-        }>;
-        message?: string | null;
-      }): PushPreviewResponse => {
-        const items = (preview.lines ?? []).map((line) => ({
-          item_id: Number(line.material_id),
-          material_code: String(line.material_code ?? ''),
-          material_name: String(line.material_name ?? ''),
-          quantity: Number(line.source_doc_quantity ?? 0),
-          pushed_quantity: Number(line.source_received_quantity ?? 0),
-          max_push_quantity: Number(line.source_pending_quantity ?? 0),
-        }));
-        const pushableCount = items.filter((row) => Number(row.max_push_quantity ?? 0) > 0).length;
-        let blockingReason: string | null = null;
-        if (!items.length || pushableCount === 0) {
-          blockingReason = preview.message || t('app.kuaizhizao.warehouseInbound.pull.workOrder.previewNoLines');
-        }
-        return {
-          target_type: 'finished_goods_receipt',
-          summary: t('app.kuaizhizao.warehouseInbound.pull.workOrder.previewSummary', {
-            code: preview.work_order_code ?? '',
-            pushable: pushableCount,
-            total: items.length,
-          }),
-          items,
-          tip: t('app.kuaizhizao.warehouseInbound.pull.workOrder.previewTip'),
-          has_blocking_issues: !!blockingReason,
-          blocking_reason: blockingReason,
-        };
-      },
-      [t],
-    );
-
-    const showPullWoPreview = useCallback(
-      (workOrderId: number) => {
-        pullWoQueryCloseRef.current?.();
-        setPullWoPreviewOpen(true);
-        setPullWoPreviewLoading(true);
-        setPullWoPreviewData(null);
-        setPullWoPreviewWorkOrderId(workOrderId);
-        warehouseApi.finishedGoodsReceipt
-          .previewFromWorkOrder(workOrderId)
-          .then((res) => setPullWoPreviewData(mapWorkOrderInboundPreview(res as Parameters<typeof mapWorkOrderInboundPreview>[0])))
-          .catch((error: unknown) => {
-            messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.workOrder.previewFailed')));
-            resetPullWoPreviewModal();
-          })
-          .finally(() => setPullWoPreviewLoading(false));
-      },
-      [mapWorkOrderInboundPreview, messageApi, resetPullWoPreviewModal, t],
-    );
-
-    const handlePullWoPreviewConfirm = useCallback(() => {
-      if (!pullWoPreviewWorkOrderId || !pullWoPreviewData) return;
-      if (pullWoPreviewData.has_blocking_issues) return;
-      const firstLine = pullWoPreviewData.items?.[0];
-      const receiptQty = Number(firstLine?.max_push_quantity ?? 0);
-      const entryPath = inboundWorkOrderEntryPath(pullWoPreviewWorkOrderId);
-      const draftKey = buildDocumentCreateDraftKey('kuaizhizao:inbound-work-order-pull', entryPath, '');
-      setDocumentFormDraft(draftKey, { receiptQty });
-      resetPullWoPreviewModal();
-      navigate(entryPath);
-    }, [navigate, pullWoPreviewData, pullWoPreviewWorkOrderId, resetPullWoPreviewModal]);
-
-    const pullPrPreviewLines = useMemo(() => {
-      if (!pullPrPreviewData || pullPrPreviewPickingId == null) return [];
-      const picking = pullPrPreviewData.pickings.find((row) => row.picking_id === pullPrPreviewPickingId);
-      return picking?.lines ?? [];
-    }, [pullPrPreviewData, pullPrPreviewPickingId]);
-
-    const pullPrPreviewBlocking = useMemo(() => {
-      if (!pullPrPreviewData) return { has_blocking_issues: true, blocking_reason: null as string | null, summary: '' };
-      const allLines = pullPrPreviewData.pickings.flatMap((picking) => picking.lines);
-      const pushableCount = allLines.filter((line) => Number(line.source_pending_quantity ?? 0) > 0).length;
-      let blockingReason: string | null = null;
-      if (!pullPrPreviewData.pickings.length || pushableCount === 0) {
-        blockingReason = pullPrPreviewData.message || t('app.kuaizhizao.warehouseInbound.pull.productionReturn.previewNoLines');
-      }
-      return {
-        has_blocking_issues: !!blockingReason,
-        blocking_reason: blockingReason,
-        summary: t('app.kuaizhizao.warehouseInbound.pull.productionReturn.previewSummary', {
-          code: pullPrPreviewData.work_order_code ?? '',
-          pushable: pushableCount,
-          total: allLines.length,
-        }),
-      };
-    }, [pullPrPreviewData, t]);
-
-    const showPullPrPreview = useCallback(
-      (workOrderId: number) => {
-        pullPrQueryCloseRef.current?.();
-        setPullPrPreviewOpen(true);
-        setPullPrPreviewLoading(true);
-        setPullPrPreviewConfirming(false);
-        setPullPrPreviewData(null);
-        setPullPrPreviewWorkOrderId(workOrderId);
-        setPullPrPreviewPickingId(null);
-        setPullPrSelectedItemIds([]);
-        warehouseApi.productionReturn
-          .previewFromWorkOrder(workOrderId)
-          .then((res) => {
-            const raw = (res as ProductionReturnPreviewResponse);
-            setPullPrPreviewData(raw);
-            const firstPicking = (raw.pickings || []).find((picking) =>
-              (picking.lines || []).some((line) => Number(line.source_pending_quantity ?? 0) > 0),
-            );
-            if (firstPicking) {
-              setPullPrPreviewPickingId(firstPicking.picking_id);
-              setPullPrSelectedItemIds(
-                (firstPicking.lines || [])
-                  .filter((line) => Number(line.source_pending_quantity ?? 0) > 0)
-                  .map((line) => Number(line.picking_item_id)),
-              );
-            }
-          })
-          .catch((error: unknown) => {
-            messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.productionReturn.previewFailed')));
-            resetPullPrPreviewModal();
-          })
-          .finally(() => setPullPrPreviewLoading(false));
-      },
-      [messageApi, resetPullPrPreviewModal, t],
-    );
-
-    const handlePullPrPreviewConfirm = useCallback(() => {
-      if (!pullPrPreviewWorkOrderId || !pullPrPreviewData) return;
-      if (pullPrPreviewBlocking.has_blocking_issues) return;
-      if (!pullPrPreviewPickingId) {
-        messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.productionReturn.selectPickingFirst'));
-        return;
-      }
-      const rowById = new Map(
-        pullPrPreviewLines.map((line) => [Number(line.picking_item_id), line]),
-      );
-      const selectedIds = pullPrSelectedItemIds.filter((id) => {
-        const row = rowById.get(id);
-        return row && Number(row.source_pending_quantity ?? 0) > 0;
-      });
-      if (!selectedIds.length) {
-        messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.productionReturn.selectLinesFirst'));
-        return;
-      }
-      const lineReturnQty: Record<number, number> = {};
-      selectedIds.forEach((id) => {
-        lineReturnQty[id] = Number(rowById.get(id)?.source_pending_quantity ?? 0);
-      });
-      const entryPath = inboundProductionReturnEntryPath(pullPrPreviewWorkOrderId);
-      const draftKey = buildDocumentCreateDraftKey('kuaizhizao:inbound-production-return-pull', entryPath, '');
-      const picking = pullPrPreviewData.pickings.find((row) => row.picking_id === pullPrPreviewPickingId);
-      setDocumentFormDraft(draftKey, {
-        pickingId: pullPrPreviewPickingId,
-        pickingCode: picking?.picking_code,
-        lineReturnQty,
-      });
-      resetPullPrPreviewModal();
-      navigate(entryPath);
-    }, [
-      messageApi,
-      navigate,
-      pullPrPreviewBlocking.has_blocking_issues,
-      pullPrPreviewData,
-      pullPrPreviewLines,
-      pullPrPreviewPickingId,
-      pullPrPreviewWorkOrderId,
-      pullPrSelectedItemIds,
-      resetPullPrPreviewModal,
-      t,
-    ]);
-
-    const showPullSrPreview = useCallback(
-      (orderId: number) => {
-        pullSrQueryCloseRef.current?.();
-        setPullSrPreviewOpen(true);
-        setPullSrPreviewLoading(true);
-        setPullSrPreviewConfirming(false);
-        setPullSrPreviewData(null);
-        setPullSrPreviewOrderId(orderId);
-        setPullSrSelectedItemIds([]);
-        previewPushSalesOrderToSalesReturn(orderId)
-          .then((res) => {
-            setPullSrPreviewData(res);
-            setPullSrSelectedItemIds(
-              (res.items || [])
-                .filter((row) => Number(row.max_push_quantity ?? 0) > 0)
-                .map((row) => Number(row.item_id)),
-            );
-          })
-          .catch((error: unknown) => {
-            messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.salesReturn.previewFailed')));
-            resetPullSrPreviewModal();
-          })
-          .finally(() => setPullSrPreviewLoading(false));
-      },
-      [messageApi, resetPullSrPreviewModal, t],
-    );
-
-    const handlePullSrPreviewConfirm = useCallback(() => {
-      if (!pullSrPreviewOrderId || !pullSrPreviewData) return;
-      if (pullSrPreviewData.has_blocking_issues) return;
-      const rowById = new Map(
-        (pullSrPreviewData.items || []).map((row) => [Number(row.item_id), row]),
-      );
-      const selectedIds = pullSrSelectedItemIds.filter((id) => {
-        const row = rowById.get(id);
-        return row && Number(row.max_push_quantity ?? 0) > 0;
-      });
-      if (!selectedIds.length) {
-        messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.salesReturn.selectLinesFirst'));
-        return;
-      }
-      const quantities: Record<number, number> = {};
-      const maxQuantities: Record<number, number> = {};
-      (pullSrPreviewData.items || []).forEach((row) => {
-        const itemId = Number(row.item_id);
-        quantities[itemId] = 0;
-        maxQuantities[itemId] = Number(row.max_push_quantity ?? 0);
-      });
-      selectedIds.forEach((id) => {
-        quantities[id] = Number(rowById.get(id)?.max_push_quantity ?? 0);
-      });
-      const entryPath = inboundSalesReturnEntryPath(pullSrPreviewOrderId);
-      const draftKey = buildDocumentCreateDraftKey('kuaizhizao:inbound-sales-return-pull', entryPath, '');
-      setDocumentFormDraft(draftKey, { quantities, maxQuantities });
-      resetPullSrPreviewModal();
-      navigate(entryPath);
-    }, [
-      messageApi,
-      navigate,
-      pullSrPreviewData,
-      pullSrPreviewOrderId,
-      pullSrSelectedItemIds,
-      resetPullSrPreviewModal,
-      t,
-    ]);
-
-    const loadWorkOrderListPage = useCallback(async (keyword: string, page: number, pageSize: number) => {
-      const res = await workOrderApi.list({
-        skip: (page - 1) * pageSize,
-        limit: pageSize,
-        keyword: keyword.trim() || undefined,
-      });
-      const list = Array.isArray(res)
-        ? res
-        : (res as { data?: unknown[]; items?: unknown[] })?.data
-          ?? (res as { items?: unknown[] })?.items
-          ?? [];
-      const rows = (Array.isArray(list) ? list : []) as Record<string, unknown>[];
-      const candidates = rows
-        .filter((wo) => !wo.row_kind || wo.row_kind === 'work_order')
-        .map((wo) => ({
-          id: Number(wo.id),
-          code: wo.code != null ? String(wo.code) : undefined,
-          product_name: String(wo.product_name ?? wo.name ?? ''),
-          sales_order_code: wo.sales_order_code != null ? String(wo.sales_order_code) : undefined,
-          status: wo.status != null ? String(wo.status) : undefined,
-          quantity: Number(wo.quantity ?? 0) || undefined,
-          completed_quantity: Number(wo.completed_quantity ?? 0) || undefined,
-          updated_at: wo.updated_at != null ? String(wo.updated_at) : undefined,
-          capabilities: wo.capabilities as PullWorkOrderCandidate['capabilities'],
-        }));
-      const total = Number((res as { total?: number })?.total ?? candidates.length);
-      return { data: candidates, total };
-    }, []);
-
-    const loadOutsourceWorkOrderListPage = useCallback(async (keyword: string, page: number, pageSize: number) => {
-      const res = await outsourceWorkOrderApi.list({
-        skip: (page - 1) * pageSize,
-        limit: pageSize,
-        keyword: keyword.trim() || undefined,
-      });
-      const rows = Array.isArray(res)
-        ? res
-        : (res as { data?: unknown[]; items?: unknown[] })?.data
-          ?? (res as { items?: unknown[] })?.items
-          ?? [];
-      const candidates = (Array.isArray(rows) ? rows : []).map((r: Record<string, unknown>) => ({
-        id: Number(r.id),
-        code: r.code != null ? String(r.code) : undefined,
-        product_name: String(r.product_name ?? r.productName ?? ''),
-        supplier_name: r.supplier_name != null ? String(r.supplier_name) : undefined,
-        status: r.status != null ? String(r.status) : undefined,
-        quantity: Number(r.quantity ?? 0) || undefined,
-        received_quantity: Number(r.received_quantity ?? 0) || undefined,
-        issued_quantity: Number(r.issued_quantity ?? 0) || undefined,
-        updated_at: r.updated_at != null ? String(r.updated_at) : undefined,
-        capabilities: r.capabilities as PullOutsourceWoCandidate['capabilities'],
-      }));
-      const total = Number((res as { total?: number })?.total ?? candidates.length);
-      return { data: candidates, total };
-    }, []);
-
-    const mapOutsourceInboundPreview = useCallback(
-      (
-        pullType: InboundOutsourcePullType,
-        preview: {
-          lines?: Array<Record<string, unknown>>;
-          message?: string | null;
-          outsource_work_order_code?: string;
-        },
-      ): PushPreviewResponse => {
-        const lines = preview.lines ?? [];
-        let items: PushPreviewResponse['items'] = [];
-        if (pullType === 'outsource_receipt') {
-          items = lines.map((line) => ({
-            item_id: Number(line.product_id ?? 0),
-            material_code: String(line.product_code ?? ''),
-            material_name: String(line.product_name ?? ''),
-            quantity: Number(line.ordered_quantity ?? 0),
-            pushed_quantity: Number(line.received_quantity ?? 0),
-            max_push_quantity: Number(line.pending_quantity ?? 0),
-          }));
-        } else if (pullType === 'outsource_material_return') {
-          items = lines.map((line) => ({
-            item_id: Number(line.issue_id ?? 0),
-            material_code: String(line.material_code ?? ''),
-            material_name: String(line.material_name ?? ''),
-            quantity: Number(line.issued_quantity ?? 0),
-            pushed_quantity: Number(line.returned_quantity ?? 0),
-            max_push_quantity: Number(line.returnable_quantity ?? 0),
-          }));
-        } else {
-          items = lines.map((line) => ({
-            item_id: Number(line.receipt_id ?? 0),
-            material_code: String(line.product_code ?? line.receipt_code ?? ''),
-            material_name: String(line.product_name ?? ''),
-            quantity: Number(line.received_quantity ?? 0),
-            pushed_quantity: Number(line.returned_quantity ?? 0),
-            max_push_quantity: Number(line.returnable_quantity ?? 0),
-          }));
-        }
-        const pushableCount = items.filter((row) => Number(row.max_push_quantity ?? 0) > 0).length;
-        let blockingReason: string | null = null;
-        if (!items.length || pushableCount === 0) {
-          blockingReason = preview.message || t('app.kuaizhizao.warehouseInbound.pull.outsource.previewNoLines');
-        }
-        const summaryKey =
-          pullType === 'outsource_receipt'
-            ? 'app.kuaizhizao.warehouseInbound.pull.outsource.receiptPreviewSummary'
-            : pullType === 'outsource_material_return'
-              ? 'app.kuaizhizao.warehouseInbound.pull.outsource.materialReturnPreviewSummary'
-              : 'app.kuaizhizao.warehouseInbound.pull.outsource.productReturnPreviewSummary';
-        return {
-          target_type: pullType,
-          summary: t(summaryKey, {
-            code: preview.outsource_work_order_code ?? '',
-            pushable: pushableCount,
-            total: items.length,
-          }),
-          items,
-          tip: t('app.kuaizhizao.warehouseInbound.pull.outsource.previewTip'),
-          has_blocking_issues: !!blockingReason,
-          blocking_reason: blockingReason,
-        };
-      },
-      [t],
-    );
-
-    const showPullOibPreview = useCallback(
-      (outsourceWorkOrderId: number, pullType: InboundOutsourcePullType) => {
-        pullOibQueryCloseRef.current?.();
-        setPullOibPreviewOpen(true);
-        setPullOibPreviewLoading(true);
-        setPullOibPreviewConfirming(false);
-        setPullOibPreviewData(null);
-        setPullOibPreviewWorkOrderId(outsourceWorkOrderId);
-        setPullOibPreviewPullType(pullType);
-        setPullOibSelectedItemIds([]);
-        const previewPromise =
-          pullType === 'outsource_receipt'
-            ? outsourceMaterialReceiptApi.receiptPreview(outsourceWorkOrderId)
-            : pullType === 'outsource_material_return'
-              ? outsourceMaterialReturnApi.returnPreview(outsourceWorkOrderId)
-              : outsourceProductReturnApi.returnPreview(outsourceWorkOrderId);
-        previewPromise
-          .then((res) => {
-            const raw = (res as { data?: unknown })?.data ?? res;
-            const mapped = mapOutsourceInboundPreview(pullType, raw as Parameters<typeof mapOutsourceInboundPreview>[1]);
-            setPullOibPreviewData(mapped);
-            if (pullType !== 'outsource_receipt') {
-              setPullOibSelectedItemIds(
-                (mapped.items || [])
-                  .filter((row) => Number(row.max_push_quantity ?? 0) > 0)
-                  .map((row) => Number(row.item_id)),
-              );
-            }
-          })
-          .catch((error: unknown) => {
-            messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.outsource.previewFailed')));
-            resetPullOibPreviewModal();
-          })
-          .finally(() => setPullOibPreviewLoading(false));
-      },
-      [mapOutsourceInboundPreview, messageApi, resetPullOibPreviewModal, t],
-    );
-
-    const handlePullOibPreviewConfirm = useCallback(() => {
-      if (!pullOibPreviewWorkOrderId || !pullOibPreviewData) return;
-      if (pullOibPreviewData.has_blocking_issues) return;
-      const entryPath = inboundOutsourceEntryPath(pullOibPreviewWorkOrderId, pullOibPreviewPullType);
-      const draftKey = buildDocumentCreateDraftKey('kuaizhizao:inbound-outsource-pull', entryPath, '');
-      if (pullOibPreviewPullType === 'outsource_receipt') {
-        const firstLine = pullOibPreviewData.items?.[0];
-        const qty = Number(firstLine?.max_push_quantity ?? 0);
-        setDocumentFormDraft(draftKey, {
-          receiptLine: {
-            receiptQuantity: qty,
-            qualifiedQuantity: qty,
-            unqualifiedQuantity: 0,
-          },
-        });
-      } else {
-        const rowById = new Map(
-          (pullOibPreviewData.items || []).map((row) => [Number(row.item_id), row]),
-        );
-        const selectedIds = pullOibSelectedItemIds.filter((id) => {
-          const row = rowById.get(id);
-          return row && Number(row.max_push_quantity ?? 0) > 0;
-        });
-        if (!selectedIds.length) {
-          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.outsource.selectLinesFirst'));
-          return;
-        }
-        const previewQtyByKey: Record<string, number> = {};
-        selectedIds.forEach((id) => {
-          previewQtyByKey[inboundOutsourcePreviewLineKey(pullOibPreviewPullType, id)] = Number(
-            rowById.get(id)?.max_push_quantity ?? 0,
-          );
-        });
-        setDocumentFormDraft(draftKey, { previewQtyByKey });
-      }
-      resetPullOibPreviewModal();
-      navigate(entryPath);
-    }, [
-      messageApi,
-      navigate,
-      pullOibPreviewData,
-      pullOibPreviewPullType,
-      pullOibPreviewWorkOrderId,
-      pullOibSelectedItemIds,
-      resetPullOibPreviewModal,
-      t,
-    ]);
+    const pullSourceOrderIdRef = useRef<number | undefined>(undefined);
+    const pullSourceNoticeIdRef = useRef<number | undefined>(undefined);
+    const pullSourceSalesOrderIdRef = useRef<number | undefined>(undefined);
+    const pullSourceWorkOrderIdRef = useRef<number | undefined>(undefined);
+    const pullSourceReturnWorkOrderIdRef = useRef<number | undefined>(undefined);
+    const pullSourceOutsourceIdRef = useRef<number | undefined>(undefined);
+    const [pullSourceOrderId, setPullSourceOrderId] = useState<number | undefined>();
+    const [pullSourceNoticeId, setPullSourceNoticeId] = useState<number | undefined>();
+    const [pullSourceSalesOrderId, setPullSourceSalesOrderId] = useState<number | undefined>();
+    const [pullSourceOrderOptions, setPullSourceOrderOptions] = useState<Array<{ value: number; label: string }>>([]);
+    const [pullSourceNoticeOptions, setPullSourceNoticeOptions] = useState<Array<{ value: number; label: string }>>([]);
+    const [pullSourceSalesOrderOptions, setPullSourceSalesOrderOptions] = useState<Array<{ value: number; label: string }>>([]);
+    const [pullSourceWorkOrderId, setPullSourceWorkOrderId] = useState<number | undefined>();
+    const [pullSourceReturnWorkOrderId, setPullSourceReturnWorkOrderId] = useState<number | undefined>();
+    const [pullSourceOutsourceId, setPullSourceOutsourceId] = useState<number | undefined>();
+    const [pullSourceWorkOrderOptions, setPullSourceWorkOrderOptions] = useState<Array<{ value: number; label: string }>>([]);
+    const [pullSourceOutsourceOptions, setPullSourceOutsourceOptions] = useState<Array<{ value: number; label: string }>>([]);
 
     const pullDocumentScopeOptions = useMemo(
       () => [
@@ -850,254 +99,468 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
       [t],
     );
 
-    const isPullInboundPoSelectable = useCallback(
-      (record: PullPurchaseOrderCandidate) => record.capabilities?.push_receipt?.allowed === true,
+    const isPullLineSelectable = useCallback(
+      (record: { remaining_quantity?: number }) => Number(record.remaining_quantity ?? 0) > 0,
       [],
     );
 
-    const isPullInboundSalesReturnSelectable = useCallback(
-      (record: PullSalesOrderCandidate) => record.capabilities?.push_sales_return?.allowed === true,
-      [],
-    );
-
-    const isPullInboundReceiptNoticeSelectable = useCallback(
-      (record: PullReceiptNoticeCandidate) => record.capabilities?.notify?.allowed === true,
-      [],
-    );
-
-    const isPullInboundWorkOrderSelectable = useCallback(
-      (record: PullWorkOrderCandidate) => record.capabilities?.push_finished_goods_receipt?.allowed === true,
-      [],
-    );
-
-    const isPullInboundProductionReturnSelectable = useCallback(
-      (record: PullWorkOrderCandidate) => record.capabilities?.push_production_return?.allowed === true,
-      [],
-    );
-
-    const isPullInboundOutsourceSelectable = useCallback((record: PullOutsourceWoCandidate) => {
-      const capKey = inboundOutsourceCapabilityKey(outsourcePullTypeRef.current);
-      return record.capabilities?.[capKey]?.allowed === true;
-    }, []);
 
     const pullFromPurchaseOrderQuery = useUniPullQuery<PullPurchaseOrderCandidate>({
       rowKey: 'id',
-      selectionType: 'radio',
+      selectionType: 'checkbox',
       scopeOptions: pullDocumentScopeOptions,
       defaultScope: 'pullable',
+      onOpen: () => {
+        pullSourceOrderIdRef.current = undefined;
+        setPullSourceOrderId(undefined);
+        void listPurchaseOrders({ skip: 0, limit: 100 })
+          .then((res) => {
+            setPullSourceOrderOptions(
+              (res?.data ?? [])
+                .filter((row) => row.id != null && row.order_code)
+                .map((row) => ({ value: row.id!, label: String(row.order_code) })),
+            );
+          })
+          .catch((error: unknown) => {
+            messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.po.loadSourceFailed')));
+            setPullSourceOrderOptions([]);
+          });
+      },
       loadData: async ({ keyword, page, pageSize, scope }) => {
         try {
-          const res = await listPurchaseReceiptPullCandidates({
-            skip: 0,
-            limit: 200,
+          const listRes = await warehouseApi.purchaseReceipt.listPurchaseOrderPullLines({
+            skip: (page - 1) * pageSize,
+            limit: pageSize,
             keyword: keyword.trim() || undefined,
+            order_id: pullSourceOrderIdRef.current,
+            pullable_only: isPullableScope(scope),
           });
-          const data = Array.isArray((res as { data?: unknown[] })?.data)
-            ? ((res as { data: PullPurchaseOrderCandidate[] }).data)
-            : [];
-          const filtered = filterByPullScope(data, scope, isPullInboundPoSelectable);
-          return paginatePullRows(filtered, page, pageSize);
-        } catch {
-          messageApi.error(t('app.kuaizhizao.warehouseInbound.pull.po.loadFailed'));
+          return { data: listRes?.data ?? [], total: listRes?.total ?? 0 };
+        } catch (error: unknown) {
+          messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.po.loadFailed')));
           return { data: [], total: 0 };
         }
       },
-      isRowDisabled: (record) => !isPullInboundPoSelectable(record),
-      onConfirm: async (keys) => {
-        const selectedId = Number(keys[0]);
-        if (!selectedId) {
-          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.po.selectOnlyOne'));
+      isRowDisabled: (record) => !isPullLineSelectable(record),
+      onConfirm: async (_keys, rows) => {
+        const selectedIds = rows
+          .filter((row) => isPullLineSelectable(row))
+          .map((row) => Number(row.id))
+          .filter((id) => id > 0);
+        if (!selectedIds.length) {
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.po.selectLinesFirst'));
           return;
         }
-        showPullPoPreview(selectedId);
+        try {
+          const res = await warehouseApi.purchaseReceipt.pullFromPurchaseOrderItems(selectedIds);
+          messageApi.success(
+            res.message ||
+              t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
+                source: pullFromPurchaseOrderAction.sourceLabel,
+                target: pullFromPurchaseOrderAction.targetLabel,
+              }),
+          );
+          pullFromPurchaseOrderQuery.closeModal();
+          onSuccess();
+        } catch (error: unknown) {
+          messageApi.error(
+            getApiErrorMessage(
+              error,
+              t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
+                source: pullFromPurchaseOrderAction.sourceLabel,
+                target: pullFromPurchaseOrderAction.targetLabel,
+              }),
+            ),
+          );
+        }
       },
     });
-    pullPoQueryCloseRef.current = pullFromPurchaseOrderQuery.closeModal;
 
     const pullFromReceiptNoticeQuery = useUniPullQuery<PullReceiptNoticeCandidate>({
       rowKey: 'id',
-      selectionType: 'radio',
+      selectionType: 'checkbox',
       scopeOptions: pullDocumentScopeOptions,
       defaultScope: 'pullable',
+      onOpen: () => {
+        pullSourceNoticeIdRef.current = undefined;
+        setPullSourceNoticeId(undefined);
+        void receiptNoticeApi.list({ skip: 0, limit: 100 })
+          .then((res) => {
+            const rows = Array.isArray((res as { data?: Array<{ id?: number; notice_code?: string }> })?.data)
+              ? (res as { data: Array<{ id?: number; notice_code?: string }> }).data
+              : Array.isArray(res)
+                ? (res as Array<{ id?: number; notice_code?: string }>)
+                : [];
+            setPullSourceNoticeOptions(
+              rows
+                .filter((row) => row.id != null && row.notice_code)
+                .map((row) => ({ value: row.id!, label: String(row.notice_code) })),
+            );
+          })
+          .catch((error: unknown) => {
+            messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.receiptNotice.loadSourceFailed')));
+            setPullSourceNoticeOptions([]);
+          });
+      },
       loadData: async ({ keyword, page, pageSize, scope }) => {
         try {
-          const res = await receiptNoticeApi.list({
-            skip: 0,
-            limit: 200,
+          const listRes = await warehouseApi.purchaseReceipt.listReceiptNoticePullLines({
+            skip: (page - 1) * pageSize,
+            limit: pageSize,
             keyword: keyword.trim() || undefined,
+            notice_id: pullSourceNoticeIdRef.current,
+            pullable_only: isPullableScope(scope),
           });
-          const data = Array.isArray((res as { data?: unknown[] })?.data)
-            ? ((res as { data: PullReceiptNoticeCandidate[] }).data)
-            : Array.isArray(res)
-              ? (res as PullReceiptNoticeCandidate[])
-              : [];
-          const filtered = filterByPullScope(data, scope, isPullInboundReceiptNoticeSelectable);
-          return paginatePullRows(filtered, page, pageSize);
-        } catch {
-          messageApi.error(t('app.kuaizhizao.warehouseInbound.pull.receiptNotice.loadFailed'));
+          return { data: listRes?.data ?? [], total: listRes?.total ?? 0 };
+        } catch (error: unknown) {
+          messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.receiptNotice.loadFailed')));
           return { data: [], total: 0 };
         }
       },
-      isRowDisabled: (record) => !isPullInboundReceiptNoticeSelectable(record),
+      isRowDisabled: (record) => !isPullLineSelectable(record),
       onConfirm: async (_keys, rows) => {
-        const selected = rows[0];
-        if (!selected?.id) {
-          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.receiptNotice.selectRequired'));
+        const selectedIds = rows
+          .filter((row) => isPullLineSelectable(row))
+          .map((row) => Number(row.id))
+          .filter((id) => id > 0);
+        if (!selectedIds.length) {
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.receiptNotice.selectLinesFirst'));
           return;
         }
-        if (selected.capabilities?.notify?.allowed !== true) {
-          const reason = receiptNoticeCapabilityReasonMessage(selected.capabilities?.notify?.reason, t);
-          messageApi.warning(reason || t('app.kuaizhizao.receiptNotice.notifyPreviewBlocked'));
-          return;
+        try {
+          const res = await warehouseApi.purchaseReceipt.pullFromReceiptNoticeItems(selectedIds);
+          messageApi.success(
+            res.message ||
+              t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
+                source: pullFromReceiptNoticeAction.sourceLabel,
+                target: pullFromReceiptNoticeAction.targetLabel,
+              }),
+          );
+          pullFromReceiptNoticeQuery.closeModal();
+          onSuccess();
+        } catch (error: unknown) {
+          messageApi.error(
+            getApiErrorMessage(
+              error,
+              t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
+                source: pullFromReceiptNoticeAction.sourceLabel,
+                target: pullFromReceiptNoticeAction.targetLabel,
+              }),
+            ),
+          );
         }
-        showPullRnPreview(selected);
       },
     });
-    pullRnQueryCloseRef.current = pullFromReceiptNoticeQuery.closeModal;
 
     const pullFromWorkOrderQuery = useUniPullQuery<PullWorkOrderCandidate>({
       rowKey: 'id',
-      selectionType: 'radio',
+      selectionType: 'checkbox',
       scopeOptions: pullDocumentScopeOptions,
       defaultScope: 'pullable',
+      onOpen: () => {
+        pullSourceWorkOrderIdRef.current = undefined;
+        setPullSourceWorkOrderId(undefined);
+        void workOrderApi.list({ skip: 0, limit: 100 })
+          .then((res) => {
+            const rows = Array.isArray((res as { data?: Array<{ id?: number; code?: string }> })?.data)
+              ? (res as { data: Array<{ id?: number; code?: string }> }).data
+              : Array.isArray((res as { items?: Array<{ id?: number; code?: string }> })?.items)
+                ? (res as { items: Array<{ id?: number; code?: string }> }).items
+                : Array.isArray(res)
+                  ? (res as Array<{ id?: number; code?: string }>)
+                  : [];
+            setPullSourceWorkOrderOptions(
+              rows
+                .filter((row) => row.id != null && row.code)
+                .map((row) => ({ value: row.id!, label: String(row.code) })),
+            );
+          })
+          .catch((error: unknown) => {
+            messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.workOrder.loadSourceFailed')));
+            setPullSourceWorkOrderOptions([]);
+          });
+      },
       loadData: async ({ keyword, page, pageSize, scope }) => {
         try {
-          const { data } = await loadWorkOrderListPage(keyword, 1, 200);
-          const filtered = filterByPullScope(data, scope, isPullInboundWorkOrderSelectable);
-          return paginatePullRows(filtered, page, pageSize);
-        } catch {
-          messageApi.error(t('app.kuaizhizao.warehouseInbound.pull.workOrder.loadFailed'));
+          const listRes = await warehouseApi.finishedGoodsReceipt.listWorkOrderPullLines({
+            skip: (page - 1) * pageSize,
+            limit: pageSize,
+            keyword: keyword.trim() || undefined,
+            work_order_id: pullSourceWorkOrderIdRef.current,
+            pullable_only: isPullableScope(scope),
+          });
+          return { data: listRes?.data ?? [], total: listRes?.total ?? 0 };
+        } catch (error: unknown) {
+          messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.workOrder.loadFailed')));
           return { data: [], total: 0 };
         }
       },
-      isRowDisabled: (record) => !isPullInboundWorkOrderSelectable(record),
-      onConfirm: async (keys, rows) => {
-        const selectedId = Number(keys[0]);
-        if (!selectedId) {
-          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.workOrder.selectRequired'));
+      isRowDisabled: (record) => !isPullLineSelectable(record),
+      onConfirm: async (_keys, rows) => {
+        const selectedIds = rows
+          .filter((row) => isPullLineSelectable(row))
+          .map((row) => Number(row.id))
+          .filter((id) => id > 0);
+        if (!selectedIds.length) {
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.workOrder.selectLinesFirst'));
           return;
         }
-        const selected = rows[0];
-        if (selected?.capabilities?.push_finished_goods_receipt?.allowed !== true) {
-          const reason = workOrderCapabilityReasonMessage(selected?.capabilities?.push_finished_goods_receipt?.reason, t);
-          messageApi.warning(reason || t('app.kuaizhizao.warehouseInbound.pull.workOrder.previewBlocked'));
-          return;
+        try {
+          const res = await warehouseApi.finishedGoodsReceipt.pullFromWorkOrders(selectedIds);
+          messageApi.success(
+            res.message ||
+              t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
+                source: pullFromWorkOrderAction.sourceLabel,
+                target: pullFromWorkOrderAction.targetLabel,
+              }),
+          );
+          pullFromWorkOrderQuery.closeModal();
+          onSuccess();
+        } catch (error: unknown) {
+          messageApi.error(
+            getApiErrorMessage(
+              error,
+              t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
+                source: pullFromWorkOrderAction.sourceLabel,
+                target: pullFromWorkOrderAction.targetLabel,
+              }),
+            ),
+          );
         }
-        showPullWoPreview(selectedId);
       },
     });
-    pullWoQueryCloseRef.current = pullFromWorkOrderQuery.closeModal;
 
-    const pullFromProductionReturnQuery = useUniPullQuery<PullWorkOrderCandidate>({
+    const pullFromProductionReturnQuery = useUniPullQuery<PullProductionReturnCandidate>({
       rowKey: 'id',
-      selectionType: 'radio',
+      selectionType: 'checkbox',
       scopeOptions: pullDocumentScopeOptions,
       defaultScope: 'pullable',
+      onOpen: () => {
+        pullSourceReturnWorkOrderIdRef.current = undefined;
+        setPullSourceReturnWorkOrderId(undefined);
+        void workOrderApi.list({ skip: 0, limit: 100 })
+          .then((res) => {
+            const rows = Array.isArray((res as { data?: Array<{ id?: number; code?: string }> })?.data)
+              ? (res as { data: Array<{ id?: number; code?: string }> }).data
+              : Array.isArray((res as { items?: Array<{ id?: number; code?: string }> })?.items)
+                ? (res as { items: Array<{ id?: number; code?: string }> }).items
+                : Array.isArray(res)
+                  ? (res as Array<{ id?: number; code?: string }>)
+                  : [];
+            setPullSourceWorkOrderOptions(
+              rows
+                .filter((row) => row.id != null && row.code)
+                .map((row) => ({ value: row.id!, label: String(row.code) })),
+            );
+          })
+          .catch((error: unknown) => {
+            messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.productionReturn.loadSourceFailed')));
+            setPullSourceWorkOrderOptions([]);
+          });
+      },
       loadData: async ({ keyword, page, pageSize, scope }) => {
         try {
-          const { data } = await loadWorkOrderListPage(keyword, 1, 200);
-          const filtered = filterByPullScope(data, scope, isPullInboundProductionReturnSelectable);
-          return paginatePullRows(filtered, page, pageSize);
-        } catch {
-          messageApi.error(t('app.kuaizhizao.warehouseInbound.pull.productionReturn.loadFailed'));
+          const listRes = await warehouseApi.productionReturn.listPickingItemPullLines({
+            skip: (page - 1) * pageSize,
+            limit: pageSize,
+            keyword: keyword.trim() || undefined,
+            work_order_id: pullSourceReturnWorkOrderIdRef.current,
+            pullable_only: isPullableScope(scope),
+          });
+          return { data: listRes?.data ?? [], total: listRes?.total ?? 0 };
+        } catch (error: unknown) {
+          messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.productionReturn.loadFailed')));
           return { data: [], total: 0 };
         }
       },
-      isRowDisabled: (record) => !isPullInboundProductionReturnSelectable(record),
-      onConfirm: async (keys, rows) => {
-        const selectedId = Number(keys[0]);
-        if (!selectedId) {
-          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.productionReturn.selectRequired'));
+      isRowDisabled: (record) => !isPullLineSelectable(record),
+      onConfirm: async (_keys, rows) => {
+        const selectedIds = rows
+          .filter((row) => isPullLineSelectable(row))
+          .map((row) => Number(row.id))
+          .filter((id) => id > 0);
+        if (!selectedIds.length) {
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.productionReturn.selectLinesFirst'));
           return;
         }
-        const selected = rows[0];
-        if (selected?.capabilities?.push_production_return?.allowed !== true) {
-          const reason = workOrderCapabilityReasonMessage(selected?.capabilities?.push_production_return?.reason, t);
-          messageApi.warning(reason || t('app.kuaizhizao.warehouseInbound.pull.productionReturn.previewBlocked'));
-          return;
+        try {
+          const res = await warehouseApi.productionReturn.pullFromPickingItems(selectedIds);
+          messageApi.success(
+            res.message ||
+              t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
+                source: pullFromProductionReturnAction.sourceLabel,
+                target: pullFromProductionReturnAction.targetLabel,
+              }),
+          );
+          pullFromProductionReturnQuery.closeModal();
+          onSuccess();
+        } catch (error: unknown) {
+          messageApi.error(
+            getApiErrorMessage(
+              error,
+              t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
+                source: pullFromProductionReturnAction.sourceLabel,
+                target: pullFromProductionReturnAction.targetLabel,
+              }),
+            ),
+          );
         }
-        showPullPrPreview(selectedId);
       },
     });
-    pullPrQueryCloseRef.current = pullFromProductionReturnQuery.closeModal;
 
     const pullFromSalesOrderQuery = useUniPullQuery<PullSalesOrderCandidate>({
       rowKey: 'id',
-      selectionType: 'radio',
+      selectionType: 'checkbox',
       scopeOptions: pullDocumentScopeOptions,
       defaultScope: 'pullable',
+      onOpen: () => {
+        pullSourceSalesOrderIdRef.current = undefined;
+        setPullSourceSalesOrderId(undefined);
+        void listSalesOrders({ skip: 0, limit: 100 })
+          .then((res) => {
+            const rows = Array.isArray((res as { data?: Array<{ id?: number; order_code?: string }> })?.data)
+              ? (res as { data: Array<{ id?: number; order_code?: string }> }).data
+              : [];
+            setPullSourceSalesOrderOptions(
+              rows
+                .filter((row) => row.id != null && row.order_code)
+                .map((row) => ({ value: row.id!, label: String(row.order_code) })),
+            );
+          })
+          .catch((error: unknown) => {
+            messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.salesReturn.loadSourceFailed')));
+            setPullSourceSalesOrderOptions([]);
+          });
+      },
       loadData: async ({ keyword, page, pageSize, scope }) => {
         try {
-          const res = await listSalesOrders({
-            skip: 0,
-            limit: 200,
+          const listRes = await warehouseApi.salesReturn.listSalesOrderPullLines({
+            skip: (page - 1) * pageSize,
+            limit: pageSize,
             keyword: keyword.trim() || undefined,
+            sales_order_id: pullSourceSalesOrderIdRef.current,
+            pullable_only: isPullableScope(scope),
           });
-          const orders = Array.isArray((res as { data?: unknown[] })?.data)
-            ? ((res as { data: PullSalesOrderCandidate[] }).data)
-            : [];
-          const filtered = filterByPullScope(orders, scope, isPullInboundSalesReturnSelectable);
-          return paginatePullRows(filtered, page, pageSize);
-        } catch {
-          messageApi.error(t('app.kuaizhizao.warehouseInbound.pull.salesReturn.loadFailed'));
+          return { data: listRes?.data ?? [], total: listRes?.total ?? 0 };
+        } catch (error: unknown) {
+          messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.salesReturn.loadFailed')));
           return { data: [], total: 0 };
         }
       },
-      isRowDisabled: (record) => !isPullInboundSalesReturnSelectable(record),
-      onConfirm: async (keys, rows) => {
-        const selectedId = Number(keys[0]);
-        if (!selectedId) {
-          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.salesReturn.selectRequired'));
+      isRowDisabled: (record) => !isPullLineSelectable(record),
+      onConfirm: async (_keys, rows) => {
+        const selectedIds = rows
+          .filter((row) => isPullLineSelectable(row))
+          .map((row) => Number(row.id))
+          .filter((id) => id > 0);
+        if (!selectedIds.length) {
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.salesReturn.selectLinesFirst'));
           return;
         }
-        const selected = rows[0];
-        if (selected?.capabilities?.push_sales_return?.allowed !== true) {
-          const reason = salesOrderCapabilityReasonMessage(selected?.capabilities?.push_sales_return?.reason, t);
-          messageApi.warning(reason || t('app.kuaizhizao.warehouseInbound.pull.salesReturn.previewBlocked'));
-          return;
+        try {
+          const res = await warehouseApi.salesReturn.pullFromSalesOrderItems(selectedIds);
+          messageApi.success(
+            res.message ||
+              t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
+                source: pullFromSalesOrderAction.sourceLabel,
+                target: pullFromSalesOrderAction.targetLabel,
+              }),
+          );
+          pullFromSalesOrderQuery.closeModal();
+          onSuccess();
+        } catch (error: unknown) {
+          messageApi.error(
+            getApiErrorMessage(
+              error,
+              t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
+                source: pullFromSalesOrderAction.sourceLabel,
+                target: pullFromSalesOrderAction.targetLabel,
+              }),
+            ),
+          );
         }
-        showPullSrPreview(selectedId);
       },
     });
-    pullSrQueryCloseRef.current = pullFromSalesOrderQuery.closeModal;
 
     const pullFromOutsourceWorkOrderQuery = useUniPullQuery<PullOutsourceWoCandidate>({
       rowKey: 'id',
-      selectionType: 'radio',
+      selectionType: 'checkbox',
       scopeOptions: pullDocumentScopeOptions,
       defaultScope: 'pullable',
+      onOpen: () => {
+        pullSourceOutsourceIdRef.current = undefined;
+        setPullSourceOutsourceId(undefined);
+        void outsourceWorkOrderApi.list({ skip: 0, limit: 100 })
+          .then((res) => {
+            const rows = Array.isArray((res as { data?: Array<{ id?: number; code?: string }> })?.data)
+              ? (res as { data: Array<{ id?: number; code?: string }> }).data
+              : Array.isArray(res)
+                ? (res as Array<{ id?: number; code?: string }>)
+                : [];
+            setPullSourceOutsourceOptions(
+              rows
+                .filter((row) => row.id != null && row.code)
+                .map((row) => ({ value: row.id!, label: String(row.code) })),
+            );
+          })
+          .catch((error: unknown) => {
+            messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.outsource.loadSourceFailed')));
+            setPullSourceOutsourceOptions([]);
+          });
+      },
       onClose: () => {
         setOutsourcePullType('outsource_receipt');
       },
       loadData: async ({ keyword, page, pageSize, scope }) => {
         try {
-          const { data } = await loadOutsourceWorkOrderListPage(keyword, 1, 200);
-          const filtered = filterByPullScope(data, scope, isPullInboundOutsourceSelectable);
-          return paginatePullRows(filtered, page, pageSize);
-        } catch {
-          messageApi.error(t('app.kuaizhizao.warehouseInbound.pull.outsource.loadFailed'));
+          const listRes = await warehouseApi.outsourceInbound.listPullLines({
+            pull_type: outsourcePullTypeRef.current,
+            skip: (page - 1) * pageSize,
+            limit: pageSize,
+            keyword: keyword.trim() || undefined,
+            outsource_work_order_id: pullSourceOutsourceIdRef.current,
+            pullable_only: isPullableScope(scope),
+          });
+          return { data: listRes?.data ?? [], total: listRes?.total ?? 0 };
+        } catch (error: unknown) {
+          messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.outsource.loadFailed')));
           return { data: [], total: 0 };
         }
       },
-      isRowDisabled: (record) => !isPullInboundOutsourceSelectable(record),
-      onConfirm: async (keys, rows) => {
-        const selectedId = Number(keys[0]);
-        if (!selectedId) {
-          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.outsource.selectRequired'));
+      isRowDisabled: (record) => !isPullLineSelectable(record),
+      onConfirm: async (_keys, rows) => {
+        const selectedIds = rows
+          .filter((row) => isPullLineSelectable(row))
+          .map((row) => Number(row.id))
+          .filter((id) => id > 0);
+        if (!selectedIds.length) {
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.outsource.selectLinesFirst'));
           return;
         }
-        const pullType = outsourcePullTypeRef.current;
-        const selected = rows[0];
-        const capKey = inboundOutsourceCapabilityKey(pullType);
-        if (selected?.capabilities?.[capKey]?.allowed !== true) {
-          const reason = outsourceWorkOrderCapabilityReasonMessage(selected?.capabilities?.[capKey]?.reason, t);
-          messageApi.warning(reason || t('app.kuaizhizao.warehouseInbound.pull.outsource.previewBlocked'));
-          return;
+        try {
+          const res = await warehouseApi.outsourceInbound.pullFromItems(selectedIds, outsourcePullTypeRef.current);
+          messageApi.success(
+            res.message ||
+              t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
+                source: pullFromOutsourceWorkOrderAction.sourceLabel,
+                target: pullFromOutsourceWorkOrderAction.targetLabel,
+              }),
+          );
+          pullFromOutsourceWorkOrderQuery.closeModal();
+          onSuccess();
+        } catch (error: unknown) {
+          messageApi.error(
+            getApiErrorMessage(
+              error,
+              t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
+                source: pullFromOutsourceWorkOrderAction.sourceLabel,
+                target: pullFromOutsourceWorkOrderAction.targetLabel,
+              }),
+            ),
+          );
         }
-        showPullOibPreview(selectedId, pullType);
       },
     });
-    pullOibQueryCloseRef.current = pullFromOutsourceWorkOrderQuery.closeModal;
     outsourcePullTypeRef.current = outsourcePullType;
 
     const outsourcePullTypeOptions = useMemo(
@@ -1138,43 +601,52 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
 
     const poPullColumns = useMemo(
       () => [
-        { title: t('app.kuaizhizao.warehouseInbound.col.poCode'), dataIndex: 'order_code', width: 160, ellipsis: true },
-        { title: t('app.kuaizhizao.warehouseInbound.col.supplier'), dataIndex: 'supplier_name', width: 160, ellipsis: true },
-        { title: t('app.kuaizhizao.warehouseInbound.col.orderStatus'), dataIndex: 'status', width: 100, align: 'center' as const },
+        { title: t('app.kuaizhizao.warehouseInbound.col.poCode'), dataIndex: 'order_code', width: 168, ellipsis: true },
         {
-          title: t('app.kuaizhizao.warehouseInbound.col.purchaseQty'),
-          dataIndex: 'ordered_total',
-          width: 100,
-          align: 'right' as const,
-          render: (_: unknown, r: PullPurchaseOrderCandidate) => formatQuantity(r.ordered_total ?? r.total_quantity),
+          title: t('app.kuaizhizao.salesOrder.materialName'),
+          dataIndex: 'material_name',
+          ellipsis: true,
+          render: (_: unknown, record: PullPurchaseOrderCandidate) => (
+            <MaterialStackedCell
+              material_name={record.material_name}
+              material_code={record.material_code}
+              material_spec={record.material_spec}
+            />
+          ),
         },
         {
-          title: t('app.kuaizhizao.warehouseInbound.col.receivedQty'),
-          dataIndex: 'received_total',
-          width: 100,
-          align: 'right' as const,
-          render: (v: unknown) => formatQuantity(v),
-        },
-        {
-          title: t('app.kuaizhizao.warehouseInbound.col.outstandingQty'),
-          dataIndex: 'outstanding_total',
+          title: t('app.kuaizhizao.salesOrder.quantity'),
+          dataIndex: 'suggested_quantity',
           width: 100,
           align: 'right' as const,
           render: (v: unknown) => formatQuantity(v),
         },
         {
-          title: t('app.kuaizhizao.warehouseInbound.col.receiptProgress'),
-          key: 'receipt_stage',
-          width: 130,
+          title: t('app.kuaizhizao.salesOrder.colShippedQty'),
+          dataIndex: 'pushed_quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatQuantity(v),
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.colShippableQty'),
+          dataIndex: 'remaining_quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatQuantity(v),
+        },
+        { title: t('app.kuaizhizao.warehouseInbound.col.supplier'), dataIndex: 'supplier_name', width: 140, ellipsis: true },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.pull.gateStatus'),
+          key: 'convert_status',
+          width: 100,
           align: 'center' as const,
-          render: (_: unknown, r: PullPurchaseOrderCandidate) =>
-            renderLifecycleSubStageTag(t, r.lifecycle?.sub_stages, 'purchase_receipt'),
-        },
-        {
-          title: t('app.kuaizhizao.warehouseInbound.col.deliveryDate'),
-          dataIndex: 'delivery_date',
-          width: 110,
-          render: (v: unknown) => v || '—',
+          render: (_: unknown, record: PullPurchaseOrderCandidate) =>
+            renderPullCapabilityTag(
+              Number(record.remaining_quantity ?? 0) > 0,
+              t('app.kuaizhizao.warehouseInbound.pull.canCreate'),
+              t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
+            ),
         },
       ],
       [t],
@@ -1182,33 +654,51 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
 
     const receiptNoticePullColumns = useMemo(
       () => [
-        { title: t('app.kuaizhizao.warehouseInbound.col.noticeCode'), dataIndex: 'notice_code', width: 180, ellipsis: true },
-        { title: t('app.kuaizhizao.warehouseInbound.col.poCode'), dataIndex: 'purchase_order_code', width: 180, ellipsis: true },
-        { title: t('app.kuaizhizao.warehouseInbound.col.supplier'), dataIndex: 'supplier_name', width: 180, ellipsis: true },
+        { title: t('app.kuaizhizao.warehouseInbound.col.noticeCode'), dataIndex: 'notice_code', width: 168, ellipsis: true },
         {
-          title: t('app.kuaizhizao.warehouseInbound.col.targetWarehouse'),
-          dataIndex: 'warehouse_name',
-          width: 150,
+          title: t('app.kuaizhizao.salesOrder.materialName'),
+          dataIndex: 'material_name',
           ellipsis: true,
-          render: (v: unknown) => v || '-',
-        },
-        { title: t('app.kuaizhizao.warehouseInbound.col.noticeStatus'), dataIndex: 'status', width: 120, align: 'center' as const },
-        {
-          title: t('app.kuaizhizao.warehouseInbound.col.updatedAt'),
-          dataIndex: 'updated_at',
-          width: 180,
-          render: (v: unknown) => (v ? formatDateTimeBySiteSetting(String(v)) : '—'),
+          render: (_: unknown, record: PullReceiptNoticeCandidate) => (
+            <MaterialStackedCell
+              material_name={record.material_name}
+              material_code={record.material_code}
+              material_spec={record.material_spec}
+            />
+          ),
         },
         {
-          title: t('app.kuaizhizao.warehouseInbound.col.linkedReceipt'),
-          key: 'linked_receipt',
-          width: 170,
-          ellipsis: true,
-          render: (_: unknown, r: PullReceiptNoticeCandidate) =>
-            r.purchase_receipt_code ? (
-              <Tag color="gold">{r.purchase_receipt_code}</Tag>
-            ) : (
-              '—'
+          title: t('app.kuaizhizao.salesOrder.quantity'),
+          dataIndex: 'suggested_quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatQuantity(v),
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.colShippedQty'),
+          dataIndex: 'pushed_quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatQuantity(v),
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.colShippableQty'),
+          dataIndex: 'remaining_quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatQuantity(v),
+        },
+        { title: t('app.kuaizhizao.warehouseInbound.col.supplier'), dataIndex: 'supplier_name', width: 140, ellipsis: true },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.pull.gateStatus'),
+          key: 'convert_status',
+          width: 100,
+          align: 'center' as const,
+          render: (_: unknown, record: PullReceiptNoticeCandidate) =>
+            renderPullCapabilityTag(
+              Number(record.remaining_quantity ?? 0) > 0,
+              t('app.kuaizhizao.warehouseInbound.pull.canCreate'),
+              t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
             ),
         },
       ],
@@ -1217,28 +707,51 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
 
     const workOrderPullColumns = useMemo(
       () => [
-        { title: t('app.kuaizhizao.warehouseInbound.col.workOrderCode'), dataIndex: 'code', width: 140, ellipsis: true },
-        { title: t('app.kuaizhizao.warehouseInbound.col.product'), dataIndex: 'product_name', width: 160, ellipsis: true },
+        { title: t('app.kuaizhizao.warehouseInbound.col.workOrderCode'), dataIndex: 'work_order_code', width: 168, ellipsis: true },
         {
-          title: t('app.kuaizhizao.warehouseInbound.col.sourceSalesOrder'),
-          dataIndex: 'sales_order_code',
-          width: 140,
+          title: t('app.kuaizhizao.salesOrder.materialName'),
+          dataIndex: 'material_name',
           ellipsis: true,
-          render: (v: unknown) => v || '—',
+          render: (_: unknown, record: PullWorkOrderCandidate) => (
+            <MaterialStackedCell
+              material_name={record.material_name}
+              material_code={record.material_code}
+              material_spec={record.material_spec}
+            />
+          ),
         },
-        { title: t('app.kuaizhizao.warehouseInbound.col.workOrderStatus'), dataIndex: 'status', width: 100, align: 'center' as const },
         {
-          title: t('app.kuaizhizao.warehouseInbound.col.completionProgress'),
-          key: 'completion',
-          width: 180,
+          title: t('app.kuaizhizao.salesOrder.quantity'),
+          dataIndex: 'suggested_quantity',
+          width: 100,
           align: 'right' as const,
-          render: (_: unknown, r: PullWorkOrderCandidate) => formatPullPercent(r.completed_quantity, r.quantity),
+          render: (v: unknown) => formatQuantity(v),
         },
         {
-          title: t('app.kuaizhizao.warehouseInbound.col.updatedAt'),
-          dataIndex: 'updated_at',
-          width: 168,
-          render: (v: unknown) => (v ? formatDateTimeBySiteSetting(String(v)) : '—'),
+          title: t('app.kuaizhizao.salesOrder.colShippedQty'),
+          dataIndex: 'pushed_quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatQuantity(v),
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.colShippableQty'),
+          dataIndex: 'remaining_quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatQuantity(v),
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.pull.gateStatus'),
+          key: 'convert_status',
+          width: 100,
+          align: 'center' as const,
+          render: (_: unknown, record: PullWorkOrderCandidate) =>
+            renderPullCapabilityTag(
+              Number(record.remaining_quantity ?? 0) > 0,
+              t('app.kuaizhizao.warehouseInbound.pull.canCreate'),
+              t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
+            ),
         },
       ],
       [t],
@@ -1246,22 +759,52 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
 
     const productionReturnPullColumns = useMemo(
       () => [
-        { title: t('app.kuaizhizao.warehouseInbound.col.workOrderCode'), dataIndex: 'code', width: 140, ellipsis: true },
-        { title: t('app.kuaizhizao.warehouseInbound.col.product'), dataIndex: 'product_name', width: 160, ellipsis: true },
+        { title: t('app.kuaizhizao.warehouseInbound.col.workOrderCode'), dataIndex: 'work_order_code', width: 168, ellipsis: true },
+        { title: t('app.kuaizhizao.warehouseInbound.pull.productionReturn.pickingLabel'), dataIndex: 'picking_code', width: 168, ellipsis: true },
         {
-          title: t('app.kuaizhizao.warehouseInbound.col.sourceSalesOrder'),
-          dataIndex: 'sales_order_code',
-          width: 140,
+          title: t('app.kuaizhizao.salesOrder.materialName'),
+          dataIndex: 'material_name',
           ellipsis: true,
-          render: (v: unknown) => v || '—',
+          render: (_: unknown, record: PullProductionReturnCandidate) => (
+            <MaterialStackedCell
+              material_name={record.material_name}
+              material_code={record.material_code}
+              material_spec={record.material_spec}
+            />
+          ),
         },
-        { title: t('app.kuaizhizao.warehouseInbound.col.workOrderStatus'), dataIndex: 'status', width: 100, align: 'center' as const },
         {
-          title: t('app.kuaizhizao.warehouseInbound.col.completionProgress'),
-          key: 'completion',
-          width: 120,
+          title: t('app.kuaizhizao.salesOrder.quantity'),
+          dataIndex: 'suggested_quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatQuantity(v),
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.colShippedQty'),
+          dataIndex: 'pushed_quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatQuantity(v),
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.colShippableQty'),
+          dataIndex: 'remaining_quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatQuantity(v),
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.pull.gateStatus'),
+          key: 'convert_status',
+          width: 100,
           align: 'center' as const,
-          render: (_: unknown, r: PullWorkOrderCandidate) => formatPullPercent(r.completed_quantity, r.quantity),
+          render: (_: unknown, record: PullProductionReturnCandidate) =>
+            renderPullCapabilityTag(
+              Number(record.remaining_quantity ?? 0) > 0,
+              t('app.kuaizhizao.warehouseInbound.pull.canCreate'),
+              t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
+            ),
         },
       ],
       [t],
@@ -1269,34 +812,52 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
 
     const salesReturnPullColumns = useMemo(
       () => [
-        { title: t('app.kuaizhizao.warehouseInbound.col.salesOrderCode'), dataIndex: 'order_code', width: 160, ellipsis: true },
-        { title: t('app.kuaizhizao.warehouseInbound.col.customer'), dataIndex: 'customer_name', width: 180, ellipsis: true },
-        { title: t('app.kuaizhizao.warehouseInbound.col.orderStatus'), dataIndex: 'status', width: 110, align: 'center' as const },
+        { title: t('app.kuaizhizao.warehouseInbound.col.salesOrderCode'), dataIndex: 'order_code', width: 168, ellipsis: true },
         {
-          title: t('app.kuaizhizao.warehouseInbound.col.orderQty'),
-          dataIndex: 'total_quantity',
+          title: t('app.kuaizhizao.salesOrder.materialName'),
+          dataIndex: 'material_name',
+          ellipsis: true,
+          render: (_: unknown, record: PullSalesOrderCandidate) => (
+            <MaterialStackedCell
+              material_name={record.material_name}
+              material_code={record.material_code}
+              material_spec={record.material_spec}
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.quantity'),
+          dataIndex: 'suggested_quantity',
           width: 100,
           align: 'right' as const,
           render: (v: unknown) => formatQuantity(v),
         },
         {
-          title: t('app.kuaizhizao.warehouseInbound.col.deliveryProgress'),
-          dataIndex: 'delivery_progress',
+          title: t('app.kuaizhizao.salesOrder.colShippedQty'),
+          dataIndex: 'pushed_quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatQuantity(v),
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.colShippableQty'),
+          dataIndex: 'remaining_quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatQuantity(v),
+        },
+        { title: t('app.kuaizhizao.warehouseInbound.col.customer'), dataIndex: 'customer_name', width: 140, ellipsis: true },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.pull.gateStatus'),
+          key: 'convert_status',
           width: 100,
           align: 'center' as const,
-          render: (v: unknown) => (v != null && Number.isFinite(Number(v)) ? `${Number(v)}%` : '—'),
-        },
-        {
-          title: t('app.kuaizhizao.warehouseInbound.col.deliveryDate'),
-          dataIndex: 'delivery_date',
-          width: 110,
-          render: (v: unknown) => (v ? String(v).slice(0, 10) : '-'),
-        },
-        {
-          title: t('app.kuaizhizao.warehouseInbound.col.updatedAt'),
-          dataIndex: 'updated_at',
-          width: 168,
-          render: (v: unknown) => (v ? formatDateTimeBySiteSetting(String(v)) : '—'),
+          render: (_: unknown, record: PullSalesOrderCandidate) =>
+            renderPullCapabilityTag(
+              Number(record.remaining_quantity ?? 0) > 0,
+              t('app.kuaizhizao.warehouseInbound.pull.canCreate'),
+              t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
+            ),
         },
       ],
       [t],
@@ -1304,40 +865,52 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
 
     const outsourcePullColumns = useMemo(
       () => [
-        { title: t('app.kuaizhizao.warehouseInbound.col.outsourceWoCode'), dataIndex: 'code', width: 140, ellipsis: true },
-        { title: t('app.kuaizhizao.warehouseInbound.col.product'), dataIndex: 'product_name', width: 150, ellipsis: true },
-        { title: t('app.kuaizhizao.warehouseInbound.col.outsourceSupplier'), dataIndex: 'supplier_name', width: 150, ellipsis: true },
-        { title: t('app.kuaizhizao.warehouseInbound.col.status'), dataIndex: 'status', width: 90, align: 'center' as const },
+        { title: t('app.kuaizhizao.warehouseInbound.col.outsourceWoCode'), dataIndex: 'outsource_work_order_code', width: 168, ellipsis: true },
         {
-          title: t('app.kuaizhizao.warehouseInbound.col.plannedOutsourceQty'),
-          dataIndex: 'quantity',
+          title: t('app.kuaizhizao.salesOrder.materialName'),
+          dataIndex: 'material_name',
+          ellipsis: true,
+          render: (_: unknown, record: PullOutsourceWoCandidate) => (
+            <MaterialStackedCell
+              material_name={record.material_name}
+              material_code={record.material_code}
+              material_spec={record.material_spec}
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.quantity'),
+          dataIndex: 'suggested_quantity',
           width: 100,
           align: 'right' as const,
           render: (v: unknown) => formatQuantity(v),
         },
         {
-          title: t('app.kuaizhizao.warehouseInbound.col.receivedOutsourceQty'),
-          dataIndex: 'received_quantity',
+          title: t('app.kuaizhizao.salesOrder.colShippedQty'),
+          dataIndex: 'pushed_quantity',
           width: 100,
           align: 'right' as const,
           render: (v: unknown) => formatQuantity(v),
         },
         {
-          title: t('app.kuaizhizao.warehouseInbound.col.issuedQty'),
-          dataIndex: 'issued_quantity',
+          title: t('app.kuaizhizao.salesOrder.colShippableQty'),
+          dataIndex: 'remaining_quantity',
           width: 100,
           align: 'right' as const,
           render: (v: unknown) => formatQuantity(v),
         },
+        { title: t('app.kuaizhizao.warehouseInbound.col.outsourceSupplier'), dataIndex: 'supplier_name', width: 140, ellipsis: true },
         {
-          title: t('app.kuaizhizao.warehouseInbound.col.pendingOutsourceReceipt'),
-          key: 'pending_receipt',
+          title: t('app.kuaizhizao.warehouseInbound.pull.gateStatus'),
+          key: 'convert_status',
           width: 100,
-          align: 'right' as const,
-          render: (_: unknown, r: PullOutsourceWoCandidate) => {
-            const pending = Math.max(0, Number(r.quantity || 0) - Number(r.received_quantity || 0));
-            return formatQuantity(pending);
-          },
+          align: 'center' as const,
+          render: (_: unknown, record: PullOutsourceWoCandidate) =>
+            renderPullCapabilityTag(
+              Number(record.remaining_quantity ?? 0) > 0,
+              t('app.kuaizhizao.warehouseInbound.pull.canCreate'),
+              t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
+            ),
         },
       ],
       [t],
@@ -1357,6 +930,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           confirmLoading={pullFromPurchaseOrderQuery.confirmLoading}
           selectionType={pullFromPurchaseOrderQuery.selectionType}
           selectedRowKeys={pullFromPurchaseOrderQuery.selectedRowKeys}
+          selectedRows={pullFromPurchaseOrderQuery.selectedRows}
           onSelectedRowKeysChange={pullFromPurchaseOrderQuery.handleSelectedRowKeysChange}
           isRowDisabled={pullFromPurchaseOrderQuery.isRowDisabled}
           searchDraft={pullFromPurchaseOrderQuery.searchDraft}
@@ -1365,6 +939,26 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           onSearchClear={pullFromPurchaseOrderQuery.handleSearchClear}
           appliedKeyword={pullFromPurchaseOrderQuery.appliedKeyword}
           searchPlaceholder={t('app.kuaizhizao.warehouseInbound.pull.po.searchPlaceholder')}
+          filterExtra={(
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder={t('app.kuaizhizao.warehouseInbound.pull.po.sourceDocPlaceholder')}
+              style={{ width: 220, flexShrink: 0 }}
+              value={pullSourceOrderId}
+              options={pullSourceOrderOptions}
+              onChange={(value) => {
+                const nextId = Number(value);
+                const next = Number.isFinite(nextId) && nextId > 0 ? nextId : undefined;
+                pullSourceOrderIdRef.current = next;
+                setPullSourceOrderId(next);
+                pullFromPurchaseOrderQuery.handleSelectedRowKeysChange([], []);
+                pullFromPurchaseOrderQuery.handleSearchApply(pullFromPurchaseOrderQuery.appliedKeyword);
+              }}
+            />
+          )}
+          getRowLabel={(row) => [row.order_code, row.material_code].filter(Boolean).join(' ')}
           page={pullFromPurchaseOrderQuery.page}
           pageSize={pullFromPurchaseOrderQuery.pageSize}
           total={pullFromPurchaseOrderQuery.total}
@@ -1372,268 +966,9 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           scopeOptions={pullFromPurchaseOrderQuery.scopeOptions}
           scope={pullFromPurchaseOrderQuery.scope}
           onScopeChange={pullFromPurchaseOrderQuery.handleScopeChange}
-          okText={t('app.kuaizhizao.warehouseInbound.action.nextStep')}
-          width={1280}
-          tableScroll={{ x: 1200, y: 360 }}
+          okText={t('app.kuaizhizao.warehouseInbound.pull.po.ok')}
         />
 
-        <Modal
-          title={pullFromPurchaseOrderAction.label}
-          open={pullPoPreviewOpen}
-          destroyOnClose
-          width={1100}
-          onCancel={resetPullPoPreviewModal}
-          okText={t('app.kuaizhizao.warehouseInbound.action.inbound')}
-          cancelText={t('common.cancel')}
-          confirmLoading={pullPoPreviewConfirming}
-          onOk={() => void handlePullPoPreviewConfirm()}
-          okButtonProps={{
-            disabled:
-              pullPoPreviewLoading ||
-              !pullPoPreviewData ||
-              !!pullPoPreviewData?.has_blocking_issues,
-          }}
-        >
-          {pullPoPreviewLoading ? (
-            <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-              <Spin />
-              <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
-            </div>
-          ) : pullPoPreviewData ? (
-            <div>
-              <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPoPreviewData.summary}</p>
-              {pullPoPreviewData.has_blocking_issues && pullPoPreviewData.blocking_reason ? (
-                <Alert
-                  type="warning"
-                  showIcon
-                  style={{ marginBottom: 12 }}
-                  message={purchaseOrderCapabilityReasonMessage(pullPoPreviewData.blocking_reason, t)}
-                />
-              ) : null}
-              {pullPoPreviewData.items?.length > 0 ? (
-                <Table
-                  size="small"
-                  dataSource={pullPoPreviewData.items}
-                  rowKey={(row) => String(row.item_id)}
-                  pagination={false}
-                  scroll={{ x: 960 }}
-                  rowSelection={{
-                    selectedRowKeys: pullPoSelectedItemIds.map(String),
-                    onChange: (keys) => setPullPoSelectedItemIds(keys.map((k) => Number(k))),
-                    getCheckboxProps: (row) => ({
-                      disabled: Number(row.max_push_quantity ?? 0) <= 0,
-                    }),
-                  }}
-                  columns={[
-                    { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
-                    { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                    { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
-                    { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
-                    { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
-                  ]}
-                />
-              ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.warehouseInbound.pull.po.previewNoLines')} />
-              )}
-              {pullPoPreviewData.tip ? (
-                <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-                  {pullPoPreviewData.tip}
-                </Typography.Paragraph>
-              ) : null}
-            </div>
-          ) : null}
-        </Modal>
-
-        <Modal
-          title={pullFromReceiptNoticeAction.label}
-          open={pullRnPreviewOpen}
-          destroyOnClose
-          width={1100}
-          onCancel={resetPullRnPreviewModal}
-          okText={pullFromReceiptNoticeAction.label}
-          cancelText={t('common.cancel')}
-          confirmLoading={pullRnPreviewConfirming}
-          onOk={() => void handlePullRnPreviewConfirm()}
-          okButtonProps={{
-            disabled: pullRnPreviewLoading || !pullRnPreviewData || !!pullRnPreviewData?.has_blocking_issues,
-          }}
-        >
-          {pullRnPreviewLoading ? (
-            <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-              <Spin />
-              <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
-            </div>
-          ) : pullRnPreviewData ? (
-            <div>
-              <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullRnPreviewData.summary}</p>
-              {pullRnPreviewData.has_blocking_issues ? (
-                <Alert
-                  type="warning"
-                  showIcon
-                  style={{ marginBottom: 12 }}
-                  message={
-                    (pullRnPreviewData.line_blocking_issues && pullRnPreviewData.line_blocking_issues.length > 0
-                      ? pullRnPreviewData.line_blocking_issues.join('；')
-                      : null) ||
-                    receiptNoticeCapabilityReasonMessage(pullRnPreviewData.blocking_reason, t) ||
-                    t('app.kuaizhizao.receiptNotice.notifyPreviewBlocked')
-                  }
-                />
-              ) : null}
-              {pullRnPreviewData.items?.length > 0 ? (
-                <Table
-                  size="small"
-                  dataSource={pullRnPreviewData.items}
-                  rowKey={(row) => String(row.item_id)}
-                  pagination={false}
-                  scroll={{ x: 960 }}
-                  columns={[
-                    { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
-                    { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                    { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
-                    { title: t('app.kuaizhizao.purchaseOrder.col.noticeQty'), dataIndex: 'notice_quantity', width: 90, align: 'right' , render: formatQuantity },
-                    { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
-                    { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
-                  ]}
-                />
-              ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.receiptNotice.notifyPreviewNoLines')} />
-              )}
-              {pullRnPreviewData.tip ? (
-                <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-                  {pullRnPreviewData.tip}
-                </Typography.Paragraph>
-              ) : null}
-            </div>
-          ) : null}
-        </Modal>
-
-        <Modal
-          title={pullFromWorkOrderAction.label}
-          open={pullWoPreviewOpen}
-          destroyOnClose
-          width={1100}
-          onCancel={resetPullWoPreviewModal}
-          okText={t('app.kuaizhizao.warehouseInbound.action.enterEntryPage')}
-          cancelText={t('common.cancel')}
-          onOk={handlePullWoPreviewConfirm}
-          okButtonProps={{
-            disabled: pullWoPreviewLoading || !pullWoPreviewData || !!pullWoPreviewData?.has_blocking_issues,
-          }}
-        >
-          {pullWoPreviewLoading ? (
-            <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-              <Spin />
-              <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
-            </div>
-          ) : pullWoPreviewData ? (
-            <div>
-              <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullWoPreviewData.summary}</p>
-              {pullWoPreviewData.has_blocking_issues && pullWoPreviewData.blocking_reason ? (
-                <Alert
-                  type="warning"
-                  showIcon
-                  style={{ marginBottom: 12 }}
-                  message={workOrderCapabilityReasonMessage(pullWoPreviewData.blocking_reason, t) || pullWoPreviewData.blocking_reason}
-                />
-              ) : null}
-              {pullWoPreviewData.items?.length > 0 ? (
-                <Table
-                  size="small"
-                  dataSource={pullWoPreviewData.items}
-                  rowKey={(row) => String(row.item_id)}
-                  pagination={false}
-                  scroll={{ x: 960 }}
-                  columns={[
-                    { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
-                    { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                    { title: t('app.kuaizhizao.warehouseInbound.col.plannedQty'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
-                    { title: t('app.kuaizhizao.warehouseInbound.col.receivedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
-                    { title: t('app.kuaizhizao.warehouseInbound.col.pendingQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
-                  ]}
-                />
-              ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.warehouseInbound.pull.workOrder.previewNoLines')} />
-              )}
-              {pullWoPreviewData.tip ? (
-                <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-                  {pullWoPreviewData.tip}
-                </Typography.Paragraph>
-              ) : null}
-            </div>
-          ) : null}
-        </Modal>
-
-        <Modal
-          title={pullFromSalesOrderAction.label}
-          open={pullSrPreviewOpen}
-          destroyOnClose
-          width={1100}
-          onCancel={resetPullSrPreviewModal}
-          okText={t('app.kuaizhizao.warehouseInbound.action.enterEntryPage')}
-          cancelText={t('common.cancel')}
-          confirmLoading={pullSrPreviewConfirming}
-          onOk={() => void (async () => {
-            setPullSrPreviewConfirming(true);
-            try {
-              handlePullSrPreviewConfirm();
-            } finally {
-              setPullSrPreviewConfirming(false);
-            }
-          })()}
-          okButtonProps={{
-            disabled: pullSrPreviewLoading || !pullSrPreviewData || !!pullSrPreviewData?.has_blocking_issues,
-          }}
-        >
-          {pullSrPreviewLoading ? (
-            <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-              <Spin />
-              <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
-            </div>
-          ) : pullSrPreviewData ? (
-            <div>
-              <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullSrPreviewData.summary}</p>
-              {pullSrPreviewData.has_blocking_issues && pullSrPreviewData.blocking_reason ? (
-                <Alert
-                  type="warning"
-                  showIcon
-                  style={{ marginBottom: 12 }}
-                  message={salesOrderCapabilityReasonMessage(pullSrPreviewData.blocking_reason, t)}
-                />
-              ) : null}
-              {pullSrPreviewData.items?.length > 0 ? (
-                <Table
-                  size="small"
-                  dataSource={pullSrPreviewData.items}
-                  rowKey={(row) => String(row.item_id)}
-                  pagination={false}
-                  scroll={{ x: 960 }}
-                  rowSelection={{
-                    selectedRowKeys: pullSrSelectedItemIds.map(String),
-                    onChange: (keys) => setPullSrSelectedItemIds(keys.map((k) => Number(k))),
-                    getCheckboxProps: (row) => ({
-                      disabled: Number(row.max_push_quantity ?? 0) <= 0,
-                    }),
-                  }}
-                  columns={[
-                    { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
-                    { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                    { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
-                    { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
-                    { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
-                  ]}
-                />
-              ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.warehouseInbound.pull.salesReturn.previewNoLines')} />
-              )}
-              {pullSrPreviewData.tip ? (
-                <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-                  {pullSrPreviewData.tip}
-                </Typography.Paragraph>
-              ) : null}
-            </div>
-          ) : null}
-        </Modal>
 
         <UniPullQueryModal<PullReceiptNoticeCandidate>
           title={pullFromReceiptNoticeAction.label}
@@ -1650,6 +985,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           confirmLoading={pullFromReceiptNoticeQuery.confirmLoading}
           selectionType={pullFromReceiptNoticeQuery.selectionType}
           selectedRowKeys={pullFromReceiptNoticeQuery.selectedRowKeys}
+          selectedRows={pullFromReceiptNoticeQuery.selectedRows}
           onSelectedRowKeysChange={pullFromReceiptNoticeQuery.handleSelectedRowKeysChange}
           isRowDisabled={pullFromReceiptNoticeQuery.isRowDisabled}
           searchDraft={pullFromReceiptNoticeQuery.searchDraft}
@@ -1658,6 +994,26 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           onSearchClear={pullFromReceiptNoticeQuery.handleSearchClear}
           appliedKeyword={pullFromReceiptNoticeQuery.appliedKeyword}
           searchPlaceholder={t('app.kuaizhizao.warehouseInbound.pull.receiptNotice.searchPlaceholder')}
+          filterExtra={(
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder={t('app.kuaizhizao.warehouseInbound.pull.receiptNotice.sourceDocPlaceholder')}
+              style={{ width: 220, flexShrink: 0 }}
+              value={pullSourceNoticeId}
+              options={pullSourceNoticeOptions}
+              onChange={(value) => {
+                const nextId = Number(value);
+                const next = Number.isFinite(nextId) && nextId > 0 ? nextId : undefined;
+                pullSourceNoticeIdRef.current = next;
+                setPullSourceNoticeId(next);
+                pullFromReceiptNoticeQuery.handleSelectedRowKeysChange([], []);
+                pullFromReceiptNoticeQuery.handleSearchApply(pullFromReceiptNoticeQuery.appliedKeyword);
+              }}
+            />
+          )}
+          getRowLabel={(row) => [row.notice_code, row.material_code].filter(Boolean).join(' ')}
           page={pullFromReceiptNoticeQuery.page}
           pageSize={pullFromReceiptNoticeQuery.pageSize}
           total={pullFromReceiptNoticeQuery.total}
@@ -1665,9 +1021,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           scopeOptions={pullFromReceiptNoticeQuery.scopeOptions}
           scope={pullFromReceiptNoticeQuery.scope}
           onScopeChange={pullFromReceiptNoticeQuery.handleScopeChange}
-          width={1240}
-          okText={t('app.kuaizhizao.warehouseInbound.action.nextStep')}
-          tableScroll={{ x: 1160, y: 360 }}
+          okText={t('app.kuaizhizao.warehouseInbound.pull.receiptNotice.ok')}
         />
 
         <UniPullQueryModal<PullWorkOrderCandidate>
@@ -1682,6 +1036,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           confirmLoading={pullFromWorkOrderQuery.confirmLoading}
           selectionType={pullFromWorkOrderQuery.selectionType}
           selectedRowKeys={pullFromWorkOrderQuery.selectedRowKeys}
+          selectedRows={pullFromWorkOrderQuery.selectedRows}
           onSelectedRowKeysChange={pullFromWorkOrderQuery.handleSelectedRowKeysChange}
           isRowDisabled={pullFromWorkOrderQuery.isRowDisabled}
           searchDraft={pullFromWorkOrderQuery.searchDraft}
@@ -1690,6 +1045,26 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           onSearchClear={pullFromWorkOrderQuery.handleSearchClear}
           appliedKeyword={pullFromWorkOrderQuery.appliedKeyword}
           searchPlaceholder={t('app.kuaizhizao.warehouseInbound.pull.workOrder.searchPlaceholder')}
+          filterExtra={(
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder={t('app.kuaizhizao.warehouseInbound.pull.workOrder.sourceDocPlaceholder')}
+              style={{ width: 220, flexShrink: 0 }}
+              value={pullSourceWorkOrderId}
+              options={pullSourceWorkOrderOptions}
+              onChange={(value) => {
+                const nextId = Number(value);
+                const next = Number.isFinite(nextId) && nextId > 0 ? nextId : undefined;
+                pullSourceWorkOrderIdRef.current = next;
+                setPullSourceWorkOrderId(next);
+                pullFromWorkOrderQuery.handleSelectedRowKeysChange([], []);
+                pullFromWorkOrderQuery.handleSearchApply(pullFromWorkOrderQuery.appliedKeyword);
+              }}
+            />
+          )}
+          getRowLabel={(row) => [row.work_order_code, row.material_code].filter(Boolean).join(' ')}
           page={pullFromWorkOrderQuery.page}
           pageSize={pullFromWorkOrderQuery.pageSize}
           total={pullFromWorkOrderQuery.total}
@@ -1697,12 +1072,10 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           scopeOptions={pullFromWorkOrderQuery.scopeOptions}
           scope={pullFromWorkOrderQuery.scope}
           onScopeChange={pullFromWorkOrderQuery.handleScopeChange}
-          width={1200}
-          okText={t('app.kuaizhizao.warehouseInbound.action.nextStep')}
-          tableScroll={{ x: 1100, y: 360 }}
+          okText={t('app.kuaizhizao.warehouseInbound.pull.workOrder.ok')}
         />
 
-        <UniPullQueryModal<PullWorkOrderCandidate>
+        <UniPullQueryModal<PullProductionReturnCandidate>
           title={pullFromProductionReturnAction.label}
           open={pullFromProductionReturnQuery.open}
           onCancel={pullFromProductionReturnQuery.closeModal}
@@ -1714,6 +1087,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           confirmLoading={pullFromProductionReturnQuery.confirmLoading}
           selectionType={pullFromProductionReturnQuery.selectionType}
           selectedRowKeys={pullFromProductionReturnQuery.selectedRowKeys}
+          selectedRows={pullFromProductionReturnQuery.selectedRows}
           onSelectedRowKeysChange={pullFromProductionReturnQuery.handleSelectedRowKeysChange}
           isRowDisabled={pullFromProductionReturnQuery.isRowDisabled}
           searchDraft={pullFromProductionReturnQuery.searchDraft}
@@ -1722,6 +1096,26 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           onSearchClear={pullFromProductionReturnQuery.handleSearchClear}
           appliedKeyword={pullFromProductionReturnQuery.appliedKeyword}
           searchPlaceholder={t('app.kuaizhizao.warehouseInbound.pull.productionReturn.searchPlaceholder')}
+          filterExtra={(
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder={t('app.kuaizhizao.warehouseInbound.pull.productionReturn.sourceDocPlaceholder')}
+              style={{ width: 220, flexShrink: 0 }}
+              value={pullSourceReturnWorkOrderId}
+              options={pullSourceWorkOrderOptions}
+              onChange={(value) => {
+                const nextId = Number(value);
+                const next = Number.isFinite(nextId) && nextId > 0 ? nextId : undefined;
+                pullSourceReturnWorkOrderIdRef.current = next;
+                setPullSourceReturnWorkOrderId(next);
+                pullFromProductionReturnQuery.handleSelectedRowKeysChange([], []);
+                pullFromProductionReturnQuery.handleSearchApply(pullFromProductionReturnQuery.appliedKeyword);
+              }}
+            />
+          )}
+          getRowLabel={(row) => [row.work_order_code, row.picking_code, row.material_code].filter(Boolean).join(' ')}
           page={pullFromProductionReturnQuery.page}
           pageSize={pullFromProductionReturnQuery.pageSize}
           total={pullFromProductionReturnQuery.total}
@@ -1729,112 +1123,8 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           scopeOptions={pullFromProductionReturnQuery.scopeOptions}
           scope={pullFromProductionReturnQuery.scope}
           onScopeChange={pullFromProductionReturnQuery.handleScopeChange}
-          width={1200}
-          okText={t('app.kuaizhizao.warehouseInbound.action.nextStep')}
-          tableScroll={{ x: 1100, y: 360 }}
+          okText={t('app.kuaizhizao.warehouseInbound.pull.productionReturn.ok')}
         />
-
-        <Modal
-          title={pullFromProductionReturnAction.label}
-          open={pullPrPreviewOpen}
-          destroyOnClose
-          width={1100}
-          onCancel={resetPullPrPreviewModal}
-          okText={t('app.kuaizhizao.warehouseInbound.action.enterEntryPage')}
-          cancelText={t('common.cancel')}
-          confirmLoading={pullPrPreviewConfirming}
-          onOk={() => void (async () => {
-            setPullPrPreviewConfirming(true);
-            try {
-              handlePullPrPreviewConfirm();
-            } finally {
-              setPullPrPreviewConfirming(false);
-            }
-          })()}
-          okButtonProps={{
-            disabled:
-              pullPrPreviewLoading ||
-              !pullPrPreviewData ||
-              pullPrPreviewBlocking.has_blocking_issues ||
-              !pullPrPreviewPickingId,
-          }}
-        >
-          {pullPrPreviewLoading ? (
-            <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-              <Spin />
-              <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
-            </div>
-          ) : pullPrPreviewData ? (
-            <div>
-              <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPrPreviewBlocking.summary}</p>
-              {pullPrPreviewBlocking.has_blocking_issues && pullPrPreviewBlocking.blocking_reason ? (
-                <Alert
-                  type="warning"
-                  showIcon
-                  style={{ marginBottom: 12 }}
-                  message={
-                    workOrderCapabilityReasonMessage(pullPrPreviewBlocking.blocking_reason, t) ||
-                    pullPrPreviewBlocking.blocking_reason
-                  }
-                />
-              ) : null}
-              {pullPrPreviewData.pickings.length > 0 ? (
-                <>
-                  <Form.Item label={t('app.kuaizhizao.warehouseInbound.pull.productionReturn.pickingLabel')} style={{ marginBottom: 12 }}>
-                    <Select
-                      style={{ width: '100%' }}
-                      value={pullPrPreviewPickingId ?? undefined}
-                      options={pullPrPreviewData.pickings.map((picking) => ({
-                        value: picking.picking_id,
-                        label: `${picking.picking_code} - ${picking.status}`,
-                      }))}
-                      onChange={(value) => {
-                        const nextPickingId = Number(value);
-                        setPullPrPreviewPickingId(nextPickingId);
-                        const nextPicking = pullPrPreviewData.pickings.find((row) => row.picking_id === nextPickingId);
-                        setPullPrSelectedItemIds(
-                          (nextPicking?.lines || [])
-                            .filter((line) => Number(line.source_pending_quantity ?? 0) > 0)
-                            .map((line) => Number(line.picking_item_id)),
-                        );
-                      }}
-                    />
-                  </Form.Item>
-                  {pullPrPreviewLines.length > 0 ? (
-                    <Table
-                      size="small"
-                      dataSource={pullPrPreviewLines}
-                      rowKey={(row) => String(row.picking_item_id)}
-                      pagination={false}
-                      scroll={{ x: 960 }}
-                      rowSelection={{
-                        selectedRowKeys: pullPrSelectedItemIds.map(String),
-                        onChange: (keys) => setPullPrSelectedItemIds(keys.map((k) => Number(k))),
-                        getCheckboxProps: (row) => ({
-                          disabled: Number(row.source_pending_quantity ?? 0) <= 0,
-                        }),
-                      }}
-                      columns={[
-                        { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
-                        { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                        { title: t('app.kuaizhizao.warehouseInbound.col.pickedQty'), dataIndex: 'source_doc_quantity', width: 90, align: 'right' },
-                        { title: t('app.kuaizhizao.warehouseInbound.col.returnedQty'), dataIndex: 'source_received_quantity', width: 90, align: 'right' },
-                        { title: t('app.kuaizhizao.warehouseInbound.col.returnableQty'), dataIndex: 'source_pending_quantity', width: 90, align: 'right' },
-                      ]}
-                    />
-                  ) : (
-                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.warehouseInbound.pull.productionReturn.previewNoLines')} />
-                  )}
-                </>
-              ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.warehouseInbound.pull.productionReturn.previewNoLines')} />
-              )}
-              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-                {t('app.kuaizhizao.warehouseInbound.pull.productionReturn.previewTip')}
-              </Typography.Paragraph>
-            </div>
-          ) : null}
-        </Modal>
 
         <UniPullQueryModal<PullSalesOrderCandidate>
           title={pullFromSalesOrderAction.label}
@@ -1848,6 +1138,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           confirmLoading={pullFromSalesOrderQuery.confirmLoading}
           selectionType={pullFromSalesOrderQuery.selectionType}
           selectedRowKeys={pullFromSalesOrderQuery.selectedRowKeys}
+          selectedRows={pullFromSalesOrderQuery.selectedRows}
           onSelectedRowKeysChange={pullFromSalesOrderQuery.handleSelectedRowKeysChange}
           isRowDisabled={pullFromSalesOrderQuery.isRowDisabled}
           searchDraft={pullFromSalesOrderQuery.searchDraft}
@@ -1856,6 +1147,26 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           onSearchClear={pullFromSalesOrderQuery.handleSearchClear}
           appliedKeyword={pullFromSalesOrderQuery.appliedKeyword}
           searchPlaceholder={t('app.kuaizhizao.warehouseInbound.pull.salesReturn.searchPlaceholder')}
+          filterExtra={(
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder={t('app.kuaizhizao.warehouseInbound.pull.salesReturn.sourceDocPlaceholder')}
+              style={{ width: 220, flexShrink: 0 }}
+              value={pullSourceSalesOrderId}
+              options={pullSourceSalesOrderOptions}
+              onChange={(value) => {
+                const nextId = Number(value);
+                const next = Number.isFinite(nextId) && nextId > 0 ? nextId : undefined;
+                pullSourceSalesOrderIdRef.current = next;
+                setPullSourceSalesOrderId(next);
+                pullFromSalesOrderQuery.handleSelectedRowKeysChange([], []);
+                pullFromSalesOrderQuery.handleSearchApply(pullFromSalesOrderQuery.appliedKeyword);
+              }}
+            />
+          )}
+          getRowLabel={(row) => [row.order_code, row.material_code].filter(Boolean).join(' ')}
           page={pullFromSalesOrderQuery.page}
           pageSize={pullFromSalesOrderQuery.pageSize}
           total={pullFromSalesOrderQuery.total}
@@ -1863,9 +1174,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           scopeOptions={pullFromSalesOrderQuery.scopeOptions}
           scope={pullFromSalesOrderQuery.scope}
           onScopeChange={pullFromSalesOrderQuery.handleScopeChange}
-          okText={t('app.kuaizhizao.warehouseInbound.action.nextStep')}
-          width={1100}
-          tableScroll={{ x: 900, y: 340 }}
+          okText={t('app.kuaizhizao.warehouseInbound.pull.salesReturn.ok')}
         />
 
         <UniPullQueryModal<PullOutsourceWoCandidate>
@@ -1880,6 +1189,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           confirmLoading={pullFromOutsourceWorkOrderQuery.confirmLoading}
           selectionType={pullFromOutsourceWorkOrderQuery.selectionType}
           selectedRowKeys={pullFromOutsourceWorkOrderQuery.selectedRowKeys}
+          selectedRows={pullFromOutsourceWorkOrderQuery.selectedRows}
           onSelectedRowKeysChange={pullFromOutsourceWorkOrderQuery.handleSelectedRowKeysChange}
           isRowDisabled={pullFromOutsourceWorkOrderQuery.isRowDisabled}
           searchDraft={pullFromOutsourceWorkOrderQuery.searchDraft}
@@ -1888,6 +1198,39 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           onSearchClear={pullFromOutsourceWorkOrderQuery.handleSearchClear}
           appliedKeyword={pullFromOutsourceWorkOrderQuery.appliedKeyword}
           searchPlaceholder={t('app.kuaizhizao.warehouseInbound.pull.outsource.searchPlaceholder')}
+          filterExtra={(
+            <>
+              <ThemedSegmented
+                value={outsourcePullType}
+                options={outsourcePullTypeOptions}
+                onChange={(v) => {
+                  const nextType = v as InboundOutsourcePullType;
+                  setOutsourcePullType(nextType);
+                  outsourcePullTypeRef.current = nextType;
+                  pullFromOutsourceWorkOrderQuery.handleSelectedRowKeysChange([], []);
+                  pullFromOutsourceWorkOrderQuery.reloadCurrent();
+                }}
+              />
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder={t('app.kuaizhizao.warehouseInbound.pull.outsource.sourceDocPlaceholder')}
+                style={{ width: 220, flexShrink: 0 }}
+                value={pullSourceOutsourceId}
+                options={pullSourceOutsourceOptions}
+                onChange={(value) => {
+                  const nextId = Number(value);
+                  const next = Number.isFinite(nextId) && nextId > 0 ? nextId : undefined;
+                  pullSourceOutsourceIdRef.current = next;
+                  setPullSourceOutsourceId(next);
+                  pullFromOutsourceWorkOrderQuery.handleSelectedRowKeysChange([], []);
+                  pullFromOutsourceWorkOrderQuery.handleSearchApply(pullFromOutsourceWorkOrderQuery.appliedKeyword);
+                }}
+              />
+            </>
+          )}
+          getRowLabel={(row) => [row.outsource_work_order_code, row.material_code].filter(Boolean).join(' ')}
           page={pullFromOutsourceWorkOrderQuery.page}
           pageSize={pullFromOutsourceWorkOrderQuery.pageSize}
           total={pullFromOutsourceWorkOrderQuery.total}
@@ -1895,124 +1238,8 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           scopeOptions={pullFromOutsourceWorkOrderQuery.scopeOptions}
           scope={pullFromOutsourceWorkOrderQuery.scope}
           onScopeChange={pullFromOutsourceWorkOrderQuery.handleScopeChange}
-          width={1200}
-          okText={t('app.kuaizhizao.warehouseInbound.action.nextStep')}
-          filterExtra={(
-            <ThemedSegmented
-              block
-              value={outsourcePullType}
-              options={outsourcePullTypeOptions}
-              onChange={(v) => {
-                const nextType = v as InboundOutsourcePullType;
-                setOutsourcePullType(nextType);
-                outsourcePullTypeRef.current = nextType;
-                pullFromOutsourceWorkOrderQuery.handleSelectedRowKeysChange([], []);
-                pullFromOutsourceWorkOrderQuery.reloadCurrent();
-              }}
-            />
-          )}
-          tableScroll={{ x: 1050, y: 360 }}
+          okText={t('app.kuaizhizao.warehouseInbound.pull.outsource.ok')}
         />
-
-        <Modal
-          title={
-            pullOibPreviewPullType === 'outsource_receipt'
-              ? t('app.kuaizhizao.warehouseInbound.pull.outsourceType.receipt')
-              : pullOibPreviewPullType === 'outsource_material_return'
-                ? t('app.kuaizhizao.warehouseInbound.pull.outsourceType.materialReturn')
-                : t('app.kuaizhizao.warehouseInbound.pull.outsourceType.productReturn')
-          }
-          open={pullOibPreviewOpen}
-          destroyOnClose
-          width={1100}
-          onCancel={resetPullOibPreviewModal}
-          okText={t('app.kuaizhizao.warehouseInbound.action.enterEntryPage')}
-          cancelText={t('common.cancel')}
-          confirmLoading={pullOibPreviewConfirming}
-          onOk={() => void (async () => {
-            setPullOibPreviewConfirming(true);
-            try {
-              handlePullOibPreviewConfirm();
-            } finally {
-              setPullOibPreviewConfirming(false);
-            }
-          })()}
-          okButtonProps={{
-            disabled: pullOibPreviewLoading || !pullOibPreviewData || !!pullOibPreviewData?.has_blocking_issues,
-          }}
-        >
-          {pullOibPreviewLoading ? (
-            <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-              <Spin />
-              <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
-            </div>
-          ) : pullOibPreviewData ? (
-            <div>
-              <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullOibPreviewData.summary}</p>
-              {pullOibPreviewData.has_blocking_issues && pullOibPreviewData.blocking_reason ? (
-                <Alert
-                  type="warning"
-                  showIcon
-                  style={{ marginBottom: 12 }}
-                  message={
-                    outsourceWorkOrderCapabilityReasonMessage(pullOibPreviewData.blocking_reason, t) ||
-                    pullOibPreviewData.blocking_reason
-                  }
-                />
-              ) : null}
-              {pullOibPreviewData.items?.length > 0 ? (
-                <Table
-                  size="small"
-                  dataSource={pullOibPreviewData.items}
-                  rowKey={(row) => String(row.item_id)}
-                  pagination={false}
-                  scroll={{ x: 960 }}
-                  rowSelection={
-                    pullOibPreviewPullType === 'outsource_receipt'
-                      ? undefined
-                      : {
-                          selectedRowKeys: pullOibSelectedItemIds.map(String),
-                          onChange: (keys) => setPullOibSelectedItemIds(keys.map((k) => Number(k))),
-                          getCheckboxProps: (row) => ({
-                            disabled: Number(row.max_push_quantity ?? 0) <= 0,
-                          }),
-                        }
-                  }
-                  columns={[
-                    {
-                      title:
-                        pullOibPreviewPullType === 'outsource_product_return'
-                          ? t('app.kuaizhizao.warehouseInbound.col.productCode')
-                          : t('app.kuaizhizao.salesOrder.materialCode'),
-                      dataIndex: 'material_code',
-                      width: 130,
-                      ellipsis: true,
-                    },
-                    {
-                      title:
-                        pullOibPreviewPullType === 'outsource_product_return'
-                          ? t('app.kuaizhizao.warehouseInbound.col.productName')
-                          : t('app.kuaizhizao.salesOrder.materialName'),
-                      dataIndex: 'material_name',
-                      width: 160,
-                      ellipsis: true,
-                    },
-                    { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
-                    { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
-                    { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
-                  ]}
-                />
-              ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.warehouseInbound.pull.outsource.previewNoLines')} />
-              )}
-              {pullOibPreviewData.tip ? (
-                <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-                  {pullOibPreviewData.tip}
-                </Typography.Paragraph>
-              ) : null}
-            </div>
-          ) : null}
-        </Modal>
       </>
     );
   },

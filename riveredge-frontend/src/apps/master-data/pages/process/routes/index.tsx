@@ -9,19 +9,21 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, PlusOutlined, FileAddOutlined } from '@ant-design/icons';
+import { ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { downloadFile } from '../../../../../utils';
 import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
-import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
 import { ProcessMasterDetailDrawer } from '../shared/processMasterDetailDrawer';
 import { RouteFormModal } from '../../../components/RouteFormModal';
 
 import { processRouteApi } from '../../../services/process';
+import { createProcessRouteChange, listProcessRouteChanges } from '../../../services/process-route-change';
 import type { ProcessRoute } from '../../../types/process';
 import {
   MASTER_DATA_LIST_FIELD_RANK,
@@ -70,6 +72,8 @@ const ProcessRoutesPage: React.FC = () => {
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
+  const [changeRoute, setChangeRoute] = useState<ProcessRoute | null>(null);
+  const [changeSubmitting, setChangeSubmitting] = useState(false);
 
   const {
     customFields,
@@ -234,6 +238,49 @@ const ProcessRoutesPage: React.FC = () => {
     setModalVisible(false);
     setEditUuid(null);
     actionRef.current?.reload();
+  };
+
+  const handleOpenRouteChange = (record: ProcessRoute) => {
+    setChangeRoute(record);
+  };
+
+  const handleSubmitRouteChange = async (values: Record<string, unknown>) => {
+    if (!changeRoute?.uuid) return;
+    const reason = String(values.change_reason ?? '').trim();
+    if (!reason) {
+      messageApi.warning(t('app.master-data.route.changeReasonRequired'));
+      return;
+    }
+    try {
+      setChangeSubmitting(true);
+      const pending = await listProcessRouteChanges({
+        process_route_uuid: changeRoute.uuid,
+        page: 1,
+        page_size: 20,
+      });
+      const blocking = pending.items.filter((item) =>
+        ['draft', 'pending', 'approved'].includes(String(item.status ?? '').toLowerCase()),
+      );
+      if (blocking.length > 0) {
+        messageApi.warning(t('app.master-data.bom.ecnPendingExists'));
+        return;
+      }
+      await createProcessRouteChange({
+        process_route_uuid: changeRoute.uuid,
+        change_type: String(values.change_type ?? 'other'),
+        change_reason: reason,
+        change_content: values.change_content
+          ? { summary: String(values.change_content) }
+          : undefined,
+        status: 'draft',
+      });
+      messageApi.success(t('app.master-data.route.changeSubmitSuccess'));
+      setChangeRoute(null);
+    } catch (error: unknown) {
+      messageApi.error(error instanceof Error ? error.message : t('common.saveFailed'));
+    } finally {
+      setChangeSubmitting(false);
+    }
   };
 
   /**
@@ -539,6 +586,15 @@ const ProcessRoutesPage: React.FC = () => {
           >
             {t('field.customField.edit')}
           </Button>
+          <Button
+            key="change"
+            {...rowActionKind('skip')}
+            size="small"
+            icon={<FileAddOutlined />}
+            onClick={() => handleOpenRouteChange(record)}
+          >
+            {t('app.master-data.route.submitChange')}
+          </Button>
           <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.routes.deleteConfirm')}
             description={t('app.master-data.routes.deleteDescription')}
             onConfirm={() => handleDelete(record)}
@@ -667,6 +723,33 @@ const ProcessRoutesPage: React.FC = () => {
         editUuid={editUuid}
         onSuccess={handleModalSuccess}
       />
+
+      <FormModalTemplate
+        title={t('app.master-data.route.submitChangeTitle')}
+        open={!!changeRoute}
+        loading={changeSubmitting}
+        onClose={() => setChangeRoute(null)}
+        initialValues={{ change_type: 'operation_change' }}
+        onFinish={handleSubmitRouteChange}
+      >
+        <ProFormSelect
+          name="change_type"
+          label={t('app.kuaiplm.common.columns.changeType')}
+          options={[
+            { value: 'operation_change', label: t('app.kuaiplm.change.type.operationChange') },
+            { value: 'time_change', label: t('app.kuaiplm.change.type.timeChange') },
+            { value: 'sop_change', label: t('app.kuaiplm.change.type.sopChange') },
+            { value: 'other', label: t('app.kuaiplm.change.type.other') },
+          ]}
+          rules={[{ required: true }]}
+        />
+        <ProFormTextArea
+          name="change_reason"
+          label={t('app.kuaiplm.common.columns.changeReason')}
+          rules={[{ required: true }]}
+        />
+        <ProFormTextArea name="change_content" label={t('app.kuaiplm.change.detailContent')} />
+      </FormModalTemplate>
 
     </ListPageTemplate>
   );

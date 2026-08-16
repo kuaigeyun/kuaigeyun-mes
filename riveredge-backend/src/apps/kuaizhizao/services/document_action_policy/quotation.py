@@ -70,18 +70,29 @@ def _sent_allows_business_action(status: str, audit_required: bool, review_statu
     return _is_approved(review_status)
 
 
+def _has_live_sales_review_link(quotation: Any, review_downstream_missing: bool) -> bool:
+    rid = getattr(quotation, "sales_review_id", None)
+    if rid is None or int(rid) <= 0:
+        return False
+    if review_downstream_missing:
+        return False
+    return True
+
+
 def derive_quotation_capabilities(
     quotation: Any,
     *,
     audit_required: bool,
     conversion_downstream_missing: bool = False,
     contract_downstream_missing: bool = False,
+    sales_review_downstream_missing: bool = False,
 ) -> QuotationCapabilities:
     st = _norm_status(getattr(quotation, "status", None))
     rs = getattr(quotation, "review_status", None)
     superseded = _is_superseded(quotation)
     linked_so = _has_live_sales_order_link(quotation, conversion_downstream_missing)
     linked_contract = _has_live_contract_link(quotation, contract_downstream_missing)
+    linked_review = _has_live_sales_review_link(quotation, sales_review_downstream_missing)
 
     # update — 草稿，或已发送且待审核（撤回审核后可编辑）
     update_allowed = st in ("草稿", "draft") or (st == "已发送" and _is_pending_review(rs))
@@ -99,6 +110,8 @@ def derive_quotation_capabilities(
         delete_reason = "quotation.delete.linked_sales_order"
     elif linked_contract:
         delete_reason = "quotation.delete.linked_contract"
+    elif linked_review:
+        delete_reason = "quotation.delete.not_allowed"
     elif st in ("草稿", "draft", "已拒绝", "rejected"):
         delete_allowed = True
     elif st == "已发送" and _is_pending_review(rs):
@@ -151,8 +164,8 @@ def derive_quotation_capabilities(
     cancel_confirm_allowed = False
     cancel_confirm_reason = "quotation.cancel_customer_confirm.not_allowed"
     if st == "已接受":
-        if linked_contract:
-            cancel_confirm_reason = "quotation.cancel_customer_confirm.linked_contract"
+        if linked_contract or linked_review:
+            cancel_confirm_reason = "quotation.cancel_customer_confirm.not_allowed"
         else:
             cancel_confirm_allowed = True
     cancel_confirm_cap = _cap(
@@ -165,6 +178,8 @@ def derive_quotation_capabilities(
     convert_order_reason = "quotation.convert_order.not_allowed"
     if linked_contract:
         convert_order_reason = "quotation.convert_order.linked_contract"
+    elif linked_review:
+        convert_order_reason = "quotation.convert_order.linked_sales_review"
     elif superseded or getattr(quotation, "is_latest_in_series", True) is False:
         convert_order_reason = "quotation.convert_order.not_latest"
     elif st == "已拒绝":
@@ -189,6 +204,8 @@ def derive_quotation_capabilities(
         convert_contract_reason = "quotation.convert_contract.linked_contract"
     elif linked_so:
         convert_contract_reason = "quotation.convert_contract.linked_sales_order"
+    elif linked_review:
+        convert_contract_reason = "quotation.convert_contract.linked_sales_review"
     elif st == "已转订单":
         if conversion_downstream_missing:
             convert_contract_allowed = True
@@ -201,6 +218,28 @@ def derive_quotation_capabilities(
     convert_contract_cap = _cap(
         convert_contract_allowed,
         convert_contract_reason if not convert_contract_allowed else None,
+    )
+
+    # convert_to_sales_review — 与转订单同门槛，但不改变报价状态；已关联评审则不可重复
+    convert_review_allowed = False
+    convert_review_reason = "quotation.convert_sales_review.not_allowed"
+    if linked_contract:
+        convert_review_reason = "quotation.convert_sales_review.linked_contract"
+    elif linked_so:
+        convert_review_reason = "quotation.convert_sales_review.linked_sales_order"
+    elif linked_review:
+        convert_review_reason = "quotation.convert_sales_review.linked_sales_review"
+    elif superseded or getattr(quotation, "is_latest_in_series", True) is False:
+        convert_review_reason = "quotation.convert_sales_review.not_latest"
+    elif st == "已拒绝" or st == "已转订单":
+        convert_review_reason = "quotation.convert_sales_review.not_allowed"
+    elif st == "已接受":
+        convert_review_allowed = True
+    elif _sent_allows_business_action(st, audit_required, rs):
+        convert_review_allowed = True
+    convert_review_cap = _cap(
+        convert_review_allowed,
+        convert_review_reason if not convert_review_allowed else None,
     )
 
     # revoke_push
@@ -247,6 +286,7 @@ def derive_quotation_capabilities(
         cancel_customer_confirm=cancel_confirm_cap,
         convert_to_order=convert_order_cap,
         convert_to_contract=convert_contract_cap,
+        convert_to_sales_review=convert_review_cap,
         revoke_push=revoke_push_cap,
         reopen=reopen_cap,
         create_revision=revision_cap,
@@ -261,12 +301,14 @@ def assert_quotation_capability(
     audit_required: bool,
     conversion_downstream_missing: bool = False,
     contract_downstream_missing: bool = False,
+    sales_review_downstream_missing: bool = False,
 ) -> None:
     caps = derive_quotation_capabilities(
         quotation,
         audit_required=audit_required,
         conversion_downstream_missing=conversion_downstream_missing,
         contract_downstream_missing=contract_downstream_missing,
+        sales_review_downstream_missing=sales_review_downstream_missing,
     )
     cap_map = {
         "update": caps.update,
@@ -279,6 +321,7 @@ def assert_quotation_capability(
         "cancel_customer_confirm": caps.cancel_customer_confirm,
         "convert_to_order": caps.convert_to_order,
         "convert_to_contract": caps.convert_to_contract,
+        "convert_to_sales_review": caps.convert_to_sales_review,
         "revoke_push": caps.revoke_push,
         "reopen": caps.reopen,
         "create_revision": caps.create_revision,
@@ -315,6 +358,8 @@ def quotation_capabilities_to_suggestions(
             suggestions.append("转销售订单（下推，可直接下推不经客户确认）")
         else:
             suggestions.append("转销售订单（下推）")
+    if caps.convert_to_sales_review.allowed:
+        suggestions.append("转订单评审（下推）")
     if caps.print_formal.allowed and (audit_required or caps.confirm_customer.allowed):
         suggestions.append("生成正式报价 PDF")
     if caps.revoke_approval.allowed:

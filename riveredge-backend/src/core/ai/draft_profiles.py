@@ -111,3 +111,27 @@ def ensure_draft_profiles() -> None:
             empty_ocr_message="未能从图片中识别出有效的采购订单信息",
         )
     )
+
+    StructuredDraftService.register_profile(
+        DraftProfile(
+            schema_name="fai_balloon",
+            system_prompt=(
+                "你是制造 ERP 首件检验（FAI）图纸气泡结构化助手。"
+                "根据工程图纸 OCR 文本，提取尺寸/公差/关键特性，整理为气泡候选。"
+                "无法确认的数值留 null，不要编造。"
+                "仅输出一个 JSON 对象，不要 Markdown。"
+            ),
+            json_spec=(
+                "输出 JSON，字段："
+                "confidenceNotes，"
+                "candidates 数组每项含 balloonNo, characteristicName, nominalValue, "
+                "upperTolerance, lowerTolerance, unit, x, y, anchorX, anchorY。"
+                "x/y/anchorX/anchorY 为相对图纸宽高的 0~1（左上原点）；未知可省略。"
+            ),
+            ocr_user_prefix=(
+                "以下是从工程图纸 OCR 提取的文本，可能含尺寸、公差与气泡编号。"
+                "请尽量还原每一处需检验的特性，不要返回空 candidates。"
+            ),
+            empty_ocr_message="未能从图纸中识别出尺寸/公差气泡，请换更清晰图片或改为手工点选放置",
+        )
+    )

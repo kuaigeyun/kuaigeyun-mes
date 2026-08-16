@@ -231,6 +231,8 @@ export interface FunctionGrantAction {
   uuid: string;
   granted: boolean;
   merged_codes?: string[] | null;
+  /** 基线权限：默认授予且不可取消（如个人中心） */
+  is_baseline?: boolean;
 }
 
 export interface FunctionGrantMenuNode {

@@ -126,6 +126,8 @@ export interface SalesForecastListParams {
   forecast_name?: string;
   order_by?: string;
   include_items?: boolean;
+  pullable_only?: boolean;
+  pull_target?: 'demand_computation';
 }
 
 export interface SalesForecastListResponse {

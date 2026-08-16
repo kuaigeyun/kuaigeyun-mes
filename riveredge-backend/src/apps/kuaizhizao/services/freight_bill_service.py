@@ -275,6 +275,7 @@ class FreightBillService(AppBaseService):
         tenant_id: int,
         *,
         carrier_id: Optional[int] = None,
+        keyword: Optional[str] = None,
         skip: int = 0,
         limit: int = 50,
     ) -> Dict[str, Any]:
@@ -285,6 +286,9 @@ class FreightBillService(AppBaseService):
         )
         if carrier_id:
             query = query.filter(carrier_id=carrier_id)
+        text = (keyword or "").strip()
+        if text:
+            query = query.filter(Q(order_code__icontains=text) | Q(tracking_number__icontains=text))
         total = await query.count()
         rows = await query.offset(skip).limit(limit).order_by("-created_at")
         return {"items": rows, "total": total}

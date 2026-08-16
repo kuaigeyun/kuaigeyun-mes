@@ -12,6 +12,8 @@ import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { App, Card, ColorPicker, Form, Row, Col, Typography, Space } from 'antd';
 import { useUserPreferenceStore, readCachedPreferencesForCurrentUser } from '../../../stores/userPreferenceStore';
 import { getLanguageList, Language } from '../../../services/language';
+import { SUPPORTED_UI_LANGUAGES, normalizeUiLanguage } from '../../../utils/localeBootstrap';
+import { LANGUAGE_MAP } from '../../../config/i18n';
 import type { Color } from 'antd/es/color-picker';
 import { clampBorderRadius, readBorderRadius } from '../../../utils/themeBorderRadius';
 import { clampFontSize, readFontSize } from '../../../utils/themeFontSize';
@@ -59,6 +61,7 @@ const defaultPreferenceValues: Record<string, any> = {
     siderBgColor: '',
     headerBgColor: '',
     tabsBgColor: '',
+    tabBgColor: '',
   },
   tabs_persistence: false,
   language: 'zh-CN',
@@ -110,7 +113,7 @@ const UserPreferencesPage: React.FC = () => {
   const loadLanguages = useCallback(async () => {
     try {
       const response = await getLanguageList({ is_active: true });
-      setLanguages(response.items || []);
+      setLanguages((response.items || []).filter((lang) => Boolean(normalizeUiLanguage(lang.code))));
     } catch (error: any) {
       if (typeof window !== 'undefined') {
         window.console.warn('Failed to load languages:', error);
@@ -177,6 +180,7 @@ const UserPreferencesPage: React.FC = () => {
           siderBgColor: getPreference<string>('theme_config.siderBgColor', '') ?? '',
           headerBgColor: getPreference<string>('theme_config.headerBgColor', '') ?? '',
           tabsBgColor: getPreference<string>('theme_config.tabsBgColor', '') ?? '',
+          tabBgColor: getPreference<string>('theme_config.tabBgColor', '') ?? '',
         },
         defaultPreferenceValues.theme_config,
       ),
@@ -223,6 +227,7 @@ const UserPreferencesPage: React.FC = () => {
             siderBgColor: normalizeColor(tc.siderBgColor, '') || '',
             headerBgColor: normalizeColor(tc.headerBgColor, '') || '',
             tabsBgColor: normalizeColor(tc.tabsBgColor, '') || '',
+            tabBgColor: normalizeColor(tc.tabBgColor, '') || '',
           },
         };
       }
@@ -335,6 +340,16 @@ const UserPreferencesPage: React.FC = () => {
                         <ColorPicker showText format="hex" allowClear />
                       </Form.Item>
                     </Col>
+                    <Col span={12}>
+                      <Form.Item
+                        name={['theme_config', 'tabBgColor']}
+                        label={t('pages.personal.preferences.tabBgColor')}
+                        getValueFromEvent={(c: any) => normalizeColor(c, '')}
+                        normalize={(v: any) => (v == null || v === '') ? '' : normalizeColor(v, '')}
+                      >
+                        <ColorPicker showText format="hex" allowClear />
+                      </Form.Item>
+                    </Col>
                   </Row>
                 </div>
 
@@ -363,16 +378,21 @@ const UserPreferencesPage: React.FC = () => {
                     noStyle
                     valueEnum={
                       languages.length > 0
-                        ? languages.reduce((acc, lang) => {
-                            acc[lang.code] = lang.native_name || lang.name;
+                        ? [...languages]
+                            .sort((a, b) => {
+                              const order = SUPPORTED_UI_LANGUAGES as readonly string[];
+                              const ia = order.indexOf(a.code);
+                              const ib = order.indexOf(b.code);
+                              return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+                            })
+                            .reduce((acc, lang) => {
+                            acc[lang.code] = LANGUAGE_MAP[lang.code] || lang.name || lang.native_name;
                             return acc;
                           }, {} as Record<string, string>)
                         : {
                             'zh-CN': t('common.languages.zhCN'),
-                            'en-US': t('common.languages.enUS'),
                             'zh-Hant': t('common.languages.zhTW'),
-                            'ja-JP': t('common.languages.jaJP'),
-                            'vi-VN': t('common.languages.viVN'),
+                            'en-US': t('common.languages.enUS'),
                           }
                     }
                     placeholder={t('pages.personal.preferences.pleaseSelectLanguage')}

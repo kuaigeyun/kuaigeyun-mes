@@ -9,6 +9,7 @@
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Col, Descriptions, Form, InputNumber, Modal, Row, Table, Tag, Typography } from 'antd';
@@ -42,6 +43,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { ROUTES } from '../../../constants/routes';
 interface MaterialReturn {
   id?: number;
   tenant_id?: number;
@@ -89,6 +91,7 @@ interface BorrowItemForReturn {
 
 const MaterialReturnsPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -414,11 +417,19 @@ const MaterialReturnsPage: React.FC = () => {
         ellipsis: true,
         sorter: true,
         hideInSearch: true,
-        render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.borrow_code ?? '') }} ellipsis>
-            {r.borrow_code ?? '-'}
-          </Typography.Text>
-        ),
+        render: (_, r) =>
+          r.borrow_id ? (
+            <Typography.Link
+              ellipsis
+              onClick={() => navigate(`${ROUTES.WM_MATERIAL_BORROWS}?id=${r.borrow_id}`)}
+            >
+              {r.borrow_code ?? '-'}
+            </Typography.Link>
+          ) : (
+            <Typography.Text copyable={{ text: String(r.borrow_code ?? '') }} ellipsis>
+              {r.borrow_code ?? '-'}
+            </Typography.Text>
+          ),
       },
       {
         title: t('app.kuaizhizao.warehouseMaterialReturn.col.warehouse'),

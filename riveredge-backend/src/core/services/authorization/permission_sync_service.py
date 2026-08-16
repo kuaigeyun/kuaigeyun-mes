@@ -356,10 +356,20 @@ class PermissionSyncService:
                     )
 
             execute_grants = 0
+            baseline_grants = 0
             if not dry_run:
                 execute_grants = await cls._propagate_quality_inspection_execute_grants(
                     conn, tenant_id=tenant_id
                 )
+                baseline_grants = await cls._ensure_baseline_role_grants(
+                    conn, tenant_id=tenant_id
+                )
+                if baseline_grants:
+                    from core.services.authorization.permission_version_service import (
+                        PermissionVersionService,
+                    )
+
+                    await PermissionVersionService.bump(tenant_id=tenant_id, user_id=None)
 
             result = {
                 "created": len(create_rows),
@@ -371,6 +381,7 @@ class PermissionSyncService:
                 "scanned": len(desired_codes),
                 "type_repaired": type_repaired,
                 "execute_grants": execute_grants,
+                "baseline_grants": baseline_grants,
                 "dry_run": 1 if dry_run else 0,
             }
             cls._last_run_stats[tenant_id] = result
@@ -563,6 +574,63 @@ class PermissionSyncService:
                     execute_id,
                 )
                 granted += max(0, int(after or 0) - int(before or 0))
+        return granted
+
+    @classmethod
+    async def _ensure_baseline_role_grants(cls, conn, *, tenant_id: int) -> int:
+        """为租户下全部未删除角色补齐基线权限（个人中心等，幂等）。"""
+        baseline_codes = sorted(PermissionRegistryService.BASELINE_PERMISSION_CODES)
+        if not baseline_codes:
+            return 0
+        perm_rows = await conn.fetch(
+            """
+            SELECT id, code
+            FROM core_permissions
+            WHERE tenant_id = $1
+              AND deleted_at IS NULL
+              AND code = ANY($2::text[])
+            """,
+            tenant_id,
+            baseline_codes,
+        )
+        if not perm_rows:
+            return 0
+        role_rows = await conn.fetch(
+            """
+            SELECT id
+            FROM core_roles
+            WHERE tenant_id = $1
+              AND deleted_at IS NULL
+            """,
+            tenant_id,
+        )
+        if not role_rows:
+            return 0
+
+        granted = 0
+        now_dt = now_utc()
+        for role in role_rows:
+            role_id = int(role["id"])
+            for perm in perm_rows:
+                perm_id = int(perm["id"])
+                result = await conn.execute(
+                    """
+                    INSERT INTO core_role_permissions (role_id, permission_id, created_at)
+                    SELECT $1, $2, $3
+                    WHERE NOT EXISTS (
+                      SELECT 1
+                      FROM core_role_permissions rp
+                      WHERE rp.role_id = $1
+                        AND rp.permission_id = $2
+                    )
+                    """,
+                    role_id,
+                    perm_id,
+                    now_dt,
+                )
+                # asyncpg: "INSERT 0 1" when inserted
+                if isinstance(result, str) and result.endswith("1"):
+                    granted += 1
         return granted
 
     @staticmethod

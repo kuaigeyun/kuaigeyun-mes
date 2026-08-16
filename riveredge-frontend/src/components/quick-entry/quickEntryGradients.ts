@@ -53,6 +53,32 @@ export function generateQuickEntryGradient(
   return gradients[index % gradients.length];
 }
 
+/** 工作台快捷入口芯片：浅色方底 + 同色描线（与指标卡图标一致，按 index 轮换） */
+export function resolveQuickEntryChipVisual(
+  index: number,
+  isDark: boolean,
+  containerBg: string,
+): { accent: string; boxBg: string } {
+  const gradient = generateQuickEntryGradient(index, isDark, 'vivid');
+  const [accent] = parseGradientColors(gradient);
+  return {
+    accent,
+    boxBg: `color-mix(in srgb, ${accent} ${isDark ? 22 : 12}%, ${containerBg})`,
+  };
+}
+
+export function resolveQuickEntryChipVisualFromGradient(
+  gradient: string | undefined,
+  isDark: boolean,
+  containerBg: string,
+): { accent: string; boxBg: string } {
+  const accent = gradient?.match(/#[0-9A-Fa-f]{3,8}/)?.[0] ?? '#1677ff';
+  return {
+    accent,
+    boxBg: `color-mix(in srgb, ${accent} ${isDark ? 22 : 12}%, ${containerBg})`,
+  };
+}
+
 function parseGradientColors(gradient: string): [string, string] {
   const colors = gradient.match(/#[0-9A-Fa-f]{6}/g);
   return [colors?.[0] ?? '#0A84FF', colors?.[1] ?? '#5AC8FA'];

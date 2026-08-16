@@ -82,28 +82,79 @@ class ServiceSettlementService:
         cls,
         tenant_id: int,
         items: Sequence[ServiceSettlementItemCreate],
+        *,
+        exclude_settlement_id: Optional[int] = None,
     ) -> List[dict]:
         if not items:
             raise ValidationError("请至少添加一条结算明细")
         normalized: List[dict] = []
+        seen: set[tuple[str, int]] = set()
         for idx, item in enumerate(items, start=1):
             st = (item.source_type or "").strip()
             if st not in SETTLEMENT_SOURCE_TYPES:
                 raise ValidationError(f"无效的来源类型: {item.source_type}")
+            source_id = int(item.source_id)
+            key = (st, source_id)
+            if key in seen:
+                raise BusinessLogicError(f"结算明细来源重复: {item.source_code or source_id}")
+            seen.add(key)
             source_code = item.source_code or await cls._resolve_source_code(
-                tenant_id, st, item.source_id
+                tenant_id, st, source_id
             )
             amount = Decimal(str(item.amount or 0))
             normalized.append({
                 "source_type": st,
-                "source_id": item.source_id,
+                "source_id": source_id,
                 "source_code": source_code,
                 "warranty_status": (item.warranty_status or "").strip() or None,
                 "amount": amount,
                 "notes": (item.notes or "").strip() or None,
                 "line_no": idx,
             })
+        await cls._assert_sources_not_settled(
+            tenant_id, normalized, exclude_settlement_id=exclude_settlement_id
+        )
         return normalized
+
+    @classmethod
+    async def _assert_sources_not_settled(
+        cls,
+        tenant_id: int,
+        items: Sequence[dict],
+        *,
+        exclude_settlement_id: Optional[int] = None,
+    ) -> None:
+        source_ids = [int(row["source_id"]) for row in items]
+        if not source_ids:
+            return
+        existing_items = await ServiceSettlementItem.filter(
+            tenant_id=tenant_id,
+            source_id__in=source_ids,
+            deleted_at__isnull=True,
+        )
+        wanted = {(str(row["source_type"]), int(row["source_id"])) for row in items}
+        matched = [
+            row
+            for row in existing_items
+            if (str(row.source_type), int(row.source_id)) in wanted
+            and (exclude_settlement_id is None or row.settlement_id != exclude_settlement_id)
+        ]
+        if not matched:
+            return
+        settlement_ids = {row.settlement_id for row in matched}
+        settlements = await ServiceSettlement.filter(
+            tenant_id=tenant_id,
+            id__in=list(settlement_ids),
+            deleted_at__isnull=True,
+        )
+        settlement_by_id = {row.id: row for row in settlements}
+        for row in matched:
+            settlement = settlement_by_id.get(row.settlement_id)
+            if not settlement:
+                continue
+            raise BusinessLogicError(
+                f"来源 {row.source_code} 已在结算单 {settlement.settlement_code} 入账"
+            )
 
     @classmethod
     def _calc_amounts(cls, items: Sequence[dict]) -> tuple[Decimal, Decimal, Decimal]:
@@ -127,7 +178,9 @@ class ServiceSettlementService:
         items: Sequence[ServiceSettlementItemCreate],
         current_user: User,
     ) -> List[ServiceSettlementItem]:
-        normalized = await cls._normalize_items(tenant_id, items)
+        normalized = await cls._normalize_items(
+            tenant_id, items, exclude_settlement_id=settlement_id
+        )
         await ServiceSettlementItem.filter(
             tenant_id=tenant_id,
             settlement_id=settlement_id,

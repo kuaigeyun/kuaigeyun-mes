@@ -22,7 +22,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -62,10 +62,13 @@ import {
   FINANCE_DOC_PINNED_STATUS_FIELD,
   financeDocCodePartnerSearchColumns,
   financeDocCreatedUpdatedColumns,
+  parseFinanceAgingUrlFilters,
   resolveReceivableListParams,
 } from '../../../utils/financeListCore';
+import { formatAgingBucket } from '../../../utils/financeUiLabels';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import { LinkedDocumentCode } from '../../../../../components/linked-document-code/LinkedDocumentCode';
 import MergeFinanceDocsModal, {
   type MergeFinanceMode,
   type MergeFinanceSourceRow,
@@ -101,6 +104,8 @@ const ReceivableList: React.FC = () => {
     const { message: messageApi } = App.useApp();
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const urlAgingFilters = useMemo(() => parseFinanceAgingUrlFilters(searchParams), [searchParams]);
     const pullFromSalesOrderAction = getKuaicaiwuDocumentAction('receivable.pull_from_sales_order');
     const pullFromSalesDeliveryAction = getKuaicaiwuDocumentAction('receivable.pull_from_sales_delivery');
 
@@ -123,6 +128,21 @@ const ReceivableList: React.FC = () => {
         setSelectedRowKeys([]);
         actionRef.current?.reload();
     };
+
+    useEffect(() => {
+        actionRef.current?.reload();
+    }, [urlAgingFilters.aging_bucket, urlAgingFilters.overdue_only]);
+
+    const agingFilterDescription = useMemo(() => {
+        const parts: string[] = [];
+        if (urlAgingFilters.aging_bucket) {
+            parts.push(formatAgingBucket(urlAgingFilters.aging_bucket, t));
+        }
+        if (urlAgingFilters.overdue_only) {
+            parts.push(t('app.kuaicaiwu.financeUi.aging.overdueOnly'));
+        }
+        return parts.join(' / ');
+    }, [t, urlAgingFilters.aging_bucket, urlAgingFilters.overdue_only]);
 
     const openMergeModal = (mode: MergeFinanceMode) => {
         const selected = selectedRecordsForBatch;
@@ -544,6 +564,33 @@ const ReceivableList: React.FC = () => {
             hideInTable: true,
         },
         {
+            title: t(`${P}.col.sourceCode`),
+            dataIndex: 'source_code',
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            render: (_, record) => (
+                <LinkedDocumentCode
+                    documentType={record.source_type}
+                    documentId={record.source_id}
+                    code={record.source_code}
+                />
+            ),
+        },
+        {
+            title: t(`${P}.col.paymentTerms`),
+            dataIndex: 'payment_terms',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            ellipsis: true,
+            render: (_, record) => record.payment_terms || '-',
+        },
+        {
             title: t(`${P}.col.invoiceStatus`),
             key: 'invoice_status',
             dataIndex: 'invoice_status',
@@ -804,14 +851,26 @@ const ReceivableList: React.FC = () => {
 
     return (
         <ListPageTemplate>
+            {(urlAgingFilters.aging_bucket || urlAgingFilters.overdue_only) ? (
+                <Alert
+                    type="info"
+                    showIcon
+                    closable
+                    style={{ marginBottom: 16 }}
+                    title={t('app.kuaicaiwu.financeUi.aging.listFilterActive', {
+                        filter: agingFilterDescription,
+                    })}
+                    onClose={() => setSearchParams({})}
+                />
+            ) : null}
             <UniTable<Receivable>
                 headerTitle={t(`${P}.pageTitle`)}
                 actionRef={actionRef}
                 columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receivables.list-v1"
+                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receivables.list-v2"
                 request={async (params, sort, _filter, searchFormValues) => {
                     const { current, pageSize } = params;
-                    const listParams = resolveReceivableListParams(searchFormValues, sort);
+                    const listParams = resolveReceivableListParams(searchFormValues, sort, urlAgingFilters);
                     lastListParamsRef.current = listParams;
                     const apiParams: ReceivableListParams = {
                         skip: ((current || 1) - 1) * (pageSize || 20),
@@ -1019,6 +1078,7 @@ const ReceivableList: React.FC = () => {
                 confirmLoading={pullFromSalesOrderQuery.confirmLoading}
                 selectionType={pullFromSalesOrderQuery.selectionType}
                 selectedRowKeys={pullFromSalesOrderQuery.selectedRowKeys}
+                selectedRows={pullFromSalesOrderQuery.selectedRows}
                 onSelectedRowKeysChange={pullFromSalesOrderQuery.handleSelectedRowKeysChange}
                 isRowDisabled={pullFromSalesOrderQuery.isRowDisabled}
                 searchDraft={pullFromSalesOrderQuery.searchDraft}
@@ -1051,6 +1111,7 @@ const ReceivableList: React.FC = () => {
                 confirmLoading={pullFromSalesDeliveryQuery.confirmLoading}
                 selectionType={pullFromSalesDeliveryQuery.selectionType}
                 selectedRowKeys={pullFromSalesDeliveryQuery.selectedRowKeys}
+                selectedRows={pullFromSalesDeliveryQuery.selectedRows}
                 onSelectedRowKeysChange={pullFromSalesDeliveryQuery.handleSelectedRowKeysChange}
                 isRowDisabled={pullFromSalesDeliveryQuery.isRowDisabled}
                 searchDraft={pullFromSalesDeliveryQuery.searchDraft}

@@ -13,9 +13,17 @@ from .material_code_mapping import MaterialCodeMapping
 from .material_batch import MaterialBatch
 from .material_serial import MaterialSerial
 from .unit import MaterialUnit, MaterialUnitConversion
-from .process import DefectType, Operation, ProcessRoute, SOP
+from .material_market_price import MaterialMarketPrice
+from .process import DefectType, Operation, ProcessRoute, SOP, SopRevision, SopControlledCopy
 from .process_route_change import ProcessRouteChange
-from .drawing import EngineeringDrawing
+from .drawing import DrawingFolder, DrawingUserClearance, EngineeringDrawing
+from .drawing_change import DrawingChange
+from .drawing_distribution import (
+    DrawingDistribution,
+    DrawingDistributionLine,
+    DrawingDistributionPolicy,
+)
+from .drawing_loan import DrawingLoan, DrawingLoanLine
 from .customer import Customer
 from .supplier import Supplier
 from .performance import Holiday, Skill
@@ -49,12 +57,23 @@ __all__ = [
     "MaterialSerial",
     "MaterialUnit",
     "MaterialUnitConversion",
+    "MaterialMarketPrice",
     "DefectType",
     "Operation",
     "ProcessRoute",
     "SOP",
+    "SopRevision",
+    "SopControlledCopy",
     "ProcessRouteChange",
+    "DrawingFolder",
+    "DrawingUserClearance",
     "EngineeringDrawing",
+    "DrawingChange",
+    "DrawingDistribution",
+    "DrawingDistributionLine",
+    "DrawingDistributionPolicy",
+    "DrawingLoan",
+    "DrawingLoanLine",
     "Customer",
     "Supplier",
     "Holiday",

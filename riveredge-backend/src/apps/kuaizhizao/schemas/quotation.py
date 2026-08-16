@@ -35,6 +35,7 @@ class QuotationItemBase(BaseSchema):
     is_gift: bool = Field(False, description="是否赠品")
     gift_ref_unit_price: Optional[Decimal] = Field(None, ge=0, description="赠品参考单价")
     variant_attributes: Optional[Dict[str, Any]] = Field(None, description="属性组合（临时组合）")
+    pricing_snapshot: Optional[Dict[str, Any]] = Field(None, description="行情定价取价快照")
     delivery_date: Optional[date] = Field(None, description="预计交货日期")
     notes: Optional[str] = Field(None, description="备注")
 
@@ -58,6 +59,7 @@ class QuotationItemUpdate(BaseSchema):
     is_gift: Optional[bool] = None
     gift_ref_unit_price: Optional[Decimal] = Field(None, ge=0)
     variant_attributes: Optional[Dict[str, Any]] = None
+    pricing_snapshot: Optional[Dict[str, Any]] = None
     delivery_date: Optional[date] = None
     notes: Optional[str] = None
 
@@ -179,6 +181,8 @@ class QuotationResponse(QuotationBase):
     sales_order_code: Optional[str] = Field(None, max_length=50, description="关联销售订单编码")
     contract_id: Optional[int] = Field(None, description="关联销售合同ID")
     contract_code: Optional[str] = Field(None, max_length=50, description="关联销售合同编码")
+    sales_review_id: Optional[int] = Field(None, description="关联订单评审ID")
+    sales_review_code: Optional[str] = Field(None, max_length=120, description="关联订单评审编码")
     is_active: bool = Field(True, description="是否有效")
     created_by: Optional[int] = None
     created_by_name: Optional[str] = None

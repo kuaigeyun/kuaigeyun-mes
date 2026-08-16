@@ -210,6 +210,11 @@ class AwardQuotesRequest(BaseModel):
         return out
 
 
+class PullFromInquiryItemsRequest(BaseModel):
+    """从询价开口行创建采购订单"""
+    selected_item_ids: List[int] = Field(..., min_length=1, description="询价明细 id，可跨询价单")
+
+
 class ConvertInquiryToPORequest(BaseModel):
     item_ids: Optional[List[int]] = Field(None, description="询价行ID，不传则转全部已定标行")
     persist_default_supplier_to_material: bool = False

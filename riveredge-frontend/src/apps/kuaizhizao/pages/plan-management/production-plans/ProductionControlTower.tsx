@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  Card, Row, Col, Progress, Table, Tag, Typography, Space, Spin, Empty, 
+  Card, Row, Col, Progress, Table, Tag, Typography, Space, Empty, 
   Button, Drawer, Form, Select, InputNumber, DatePicker, message, 
   theme, List, Divider, Alert
 } from 'antd';
@@ -19,10 +19,10 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { apiRequest } from '../../../../../services/api';
+import { getMrpExceptionInbox } from '../../../services/demand-computation';
 import dayjs from 'dayjs';
 import CoordinationPipelinePanel from './CoordinationPipelinePanel';
-import { ModuleKpiRow, ModuleShortcutGrid } from '../../../components/module-center';
-import { UniDashboard } from '../../../../../components/uni-dashboard';
+import { ModuleCenterLayout, ModuleKpiRow, ModuleShortcutGrid } from '../../../components/module-center';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 import { toApiDateTimeString } from '../../../../../utils/formDate';
 
@@ -59,6 +59,12 @@ const ProductionControlTower: React.FC = () => {
   }, 'kz:plan-dashboard:control-tower-summary', {
     pollingInterval: 30000,
   });
+
+  const { data: mrpInboxSummary } = useDashboardRequest(
+    () => getMrpExceptionInbox({ skip: 0, limit: 1 }),
+    'kz:plan-dashboard:mrp-exception-inbox',
+    { pollingInterval: 60000 },
+  );
 
   const s = summary as SummaryShape | undefined;
 
@@ -147,7 +153,7 @@ const ProductionControlTower: React.FC = () => {
         onClick: () => navigate('/apps/kuaizhizao/plan-management/demand-computation'),
         sideMetrics: [
           { label: t('app.kuaizhizao.planControlTower.kpi.pendingReview'), value: s?.stats?.pending_review_count ?? 0 },
-          { label: t('app.kuaizhizao.planControlTower.kpi.executed'), value: s?.stats?.executed_count ?? 0 },
+          { label: t('app.kuaizhizao.planControlTower.kpi.mrpExceptions'), value: mrpInboxSummary?.total ?? 0 },
         ],
       },
       {
@@ -177,39 +183,51 @@ const ProductionControlTower: React.FC = () => {
         ],
       },
     ],
-    [avgReadiness, delayedCount, navigate, notFullyKitted, readinessList.length, s, t],
+    [avgReadiness, delayedCount, mrpInboxSummary?.total, navigate, notFullyKitted, readinessList.length, s, t],
   );
 
   return (
-    <UniDashboard className="plan-module-dashboard" style={{ padding: 0, overflow: 'visible' }}>
-      <Row gutter={[16, 16]}>
-        
-        {/* KPI 区 */}
-        <Col span={24}>
-          <Spin spinning={loading && !s}>
-            <ModuleKpiRow items={kpis} />
-          </Spin>
-        </Col>
-
-        {/* 快捷按钮 */}
-        <Col span={24}>
-          <ModuleShortcutGrid
-            items={kpiShortcuts}
-            colProps={{ xs: 12, sm: 8, md: 4, lg: 4 }}
-            fillByItemCount
-          />
-        </Col>
-
-        {/* 执行协调 */}
-        <Col span={24}>
+    <>
+    <ModuleCenterLayout
+      loading={loading && !s}
+      kpiRow={<ModuleKpiRow items={kpis} />}
+      shortcutRow={
+        <ModuleShortcutGrid items={kpiShortcuts} />
+      }
+      fullWidthRow={
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {(mrpInboxSummary?.total ?? 0) > 0 ? (
+            <Alert
+              type={(mrpInboxSummary?.error_count ?? 0) > 0 ? 'error' : 'warning'}
+              showIcon
+              title={t('app.kuaizhizao.planControlTower.mrpExceptionInboxAlertTitle', {
+                count: mrpInboxSummary?.total ?? 0,
+              })}
+              description={t('app.kuaizhizao.planControlTower.mrpExceptionInboxAlertDesc', {
+                errors: mrpInboxSummary?.error_count ?? 0,
+                warnings: mrpInboxSummary?.warning_count ?? 0,
+              })}
+              action={
+                <Button
+                  size="small"
+                  onClick={() =>
+                    navigate('/apps/kuaizhizao/plan-management/demand-computation?tab=exceptions')
+                  }
+                >
+                  {t('app.kuaizhizao.planControlTower.mrpExceptionInboxAction')}
+                </Button>
+              }
+            />
+          ) : null}
           <Card
             style={{ borderRadius: token.borderRadiusLG, border: 'none', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)' }}
             styles={{ body: { padding: '16px 24px' } }}
           >
             <CoordinationPipelinePanel onRefreshSummary={refreshSummary} />
           </Card>
-        </Col>
-      </Row>
+        </div>
+      }
+    />
 
       {/* 紧急插单影响模拟 Drawer */}
       <Drawer
@@ -286,7 +304,7 @@ const ProductionControlTower: React.FC = () => {
             
             {/* 决策推荐 */}
             <Alert
-              message={t('app.kuaizhizao.planControlTower.simulation.recommendation')}
+              title={t('app.kuaizhizao.planControlTower.simulation.recommendation')}
               description={simulationResult.recommendation}
               type={simulationResult.can_fulfill_material ? "success" : "warning"}
               showIcon
@@ -404,7 +422,7 @@ const ProductionControlTower: React.FC = () => {
           </div>
         )}
       </Drawer>
-    </UniDashboard>
+    </>
   );
 };
 

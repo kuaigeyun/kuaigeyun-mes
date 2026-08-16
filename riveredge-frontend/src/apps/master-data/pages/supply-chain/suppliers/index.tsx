@@ -792,6 +792,41 @@ const SuppliersPage: React.FC = () => {
       render: (_, record) => renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled'),
       sorter: true,
     },
+    {
+      title: t('field.supplier.qualificationStatus'),
+      dataIndex: 'qualificationStatus',
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      valueType: 'select',
+      valueEnum: {
+        potential: { text: t('field.supplier.qualification.potential') },
+        qualifying: { text: t('field.supplier.qualification.qualifying') },
+        approved: { text: t('field.supplier.qualification.approved') },
+        suspended: { text: t('field.supplier.qualification.suspended') },
+        eliminated: { text: t('field.supplier.qualification.eliminated') },
+      },
+      render: (_, record) => {
+        const key = record?.qualificationStatus || 'approved';
+        const map: Record<string, string> = {
+          potential: t('field.supplier.qualification.potential'),
+          qualifying: t('field.supplier.qualification.qualifying'),
+          approved: t('field.supplier.qualification.approved'),
+          suspended: t('field.supplier.qualification.suspended'),
+          eliminated: t('field.supplier.qualification.eliminated'),
+        };
+        return map[key] || key;
+      },
+    },
+    {
+      title: t('field.supplier.ratingGrade'),
+      dataIndex: 'ratingGrade',
+      width: 72,
+      minWidth: 72,
+      uniTableKeepWidth: true,
+      hideInSearch: true,
+      render: (_, record) => record?.ratingGrade || '—',
+    },
     ...customFieldColumns,
     ...masterCrudCreatedUpdatedColumns<Supplier>(t),
     {
@@ -857,6 +892,29 @@ const SuppliersPage: React.FC = () => {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
       render: (_, record) => renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled'),
+    },
+    {
+      title: t('field.supplier.qualificationStatus'),
+      dataIndex: 'qualificationStatus',
+      render: (_, r) => {
+        const key = r?.qualificationStatus || 'approved';
+        const map: Record<string, string> = {
+          potential: t('field.supplier.qualification.potential'),
+          qualifying: t('field.supplier.qualification.qualifying'),
+          approved: t('field.supplier.qualification.approved'),
+          suspended: t('field.supplier.qualification.suspended'),
+          eliminated: t('field.supplier.qualification.eliminated'),
+        };
+        return map[key] || key;
+      },
+    },
+    {
+      title: t('field.supplier.ratingGrade'),
+      dataIndex: 'ratingGrade',
+      render: (_, r) =>
+        r?.ratingGrade
+          ? `${r.ratingGrade}${r.ratingScore != null ? ` (${r.ratingScore})` : ''}`
+          : '—',
     },
   ];
 
@@ -949,6 +1007,7 @@ const SuppliersPage: React.FC = () => {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
             isActive: listParams.isActive as boolean | undefined,
+            qualificationStatus: listParams.qualificationStatus as string | undefined,
             category: listParams.category as string | undefined,
             buyerId: listParams.buyerId as number | undefined,
             keyword: listParams.keyword as string | undefined,

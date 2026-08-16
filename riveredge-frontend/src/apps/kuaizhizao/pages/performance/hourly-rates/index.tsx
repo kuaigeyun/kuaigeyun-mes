@@ -32,12 +32,16 @@ import {
   resolveHourlyRateListParams,
 } from '../../../utils/performanceListCore';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+
+const HOURLY_RATE_RESOURCE = 'kuaizhizao:performance-hourly-rates';
 
 const HourlyRatesPage: React.FC = () => {
   const { t } = useTranslation();
   const { token } = AntdTheme.useToken();
   const detailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
+  const ratePerms = useResourcePermissions(HOURLY_RATE_RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
   const [modalVisible, setModalVisible] = useState(false);
@@ -194,22 +198,28 @@ const HourlyRatesPage: React.FC = () => {
         hideInSearch: true,
         render: (_, record) => (
           <Space>
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-              {t('app.kuaizhizao.performance.common.actions.detail')}
-            </Button>
-            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-              {t('app.kuaizhizao.performance.common.actions.edit')}
-            </Button>
-            <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.hourlyRates.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
-              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                {t('app.kuaizhizao.performance.common.actions.delete')}
+            {ratePerms.canRead ? (
+              <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
+                {t('app.kuaizhizao.performance.common.actions.detail')}
               </Button>
-            </Popconfirm>
+            ) : null}
+            {ratePerms.canUpdate ? (
+              <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
+                {t('app.kuaizhizao.performance.common.actions.edit')}
+              </Button>
+            ) : null}
+            {ratePerms.canDelete ? (
+              <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.hourlyRates.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+                <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                  {t('app.kuaizhizao.performance.common.actions.delete')}
+                </Button>
+              </Popconfirm>
+            ) : null}
           </Space>
         ),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [t],
+    [t, ratePerms],
   );
 
   return (
@@ -241,8 +251,8 @@ const HourlyRatesPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          enableRowSelection={true}
-          showDeleteButton={true}
+          enableRowSelection={ratePerms.canDelete}
+          showDeleteButton={ratePerms.canDelete}
           onDelete={async (keys) => {
             try {
               for (const id of keys) {
@@ -255,7 +265,7 @@ const HourlyRatesPage: React.FC = () => {
             }
           }}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.performance.hourlyRates.messages.deleteBatchConfirm', { count })}
-          showCreateButton
+          showCreateButton={ratePerms.canCreate}
           createButtonText={t('app.kuaizhizao.performance.hourlyRates.createButton')}
           onCreate={handleCreate}
         />
@@ -341,7 +351,7 @@ const HourlyRatesPage: React.FC = () => {
         }}
         detail={detail}
         detailColumns={detailColumns}
-        extra={buildDetailDrawerEditExtra(t, Boolean(detail), () => {
+        extra={buildDetailDrawerEditExtra(t, Boolean(detail && ratePerms.canUpdate), () => {
           if (!detail) return;
           setEditId(detail.id);
           setModalVisible(true);

@@ -13,6 +13,7 @@ class KuaioaFormTemplate(BaseModel):
     description = fields.TextField(null=True, description="说明")
     fields_schema = fields.JSONField(default=list, description="字段定义 JSON")
     is_active = fields.BooleanField(default=True, description="是否启用")
+    show_in_menu = fields.BooleanField(default=False, description="是否挂到自定义审批菜单分组")
     deleted_at = fields.DatetimeField(null=True)
 
     class Meta:

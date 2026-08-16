@@ -70,8 +70,6 @@ const APP_SOLAR_ICONS: Record<string, string> = {
   kuaiiot: 'solar:cpu-bolt-bold-duotone',
   kuaiplm: 'solar:layers-bold-duotone',
   kuaioa: 'solar:document-text-bold-duotone',
-  kuaisrm: 'solar:share-circle-bold-duotone',
-  kuaiems: 'solar:bolt-bold-duotone',
   kuaicrm: 'solar:hand-shake-bold-duotone',
   kuaitms: 'solar:delivery-bold-duotone',
   kuaiasms: 'solar:headphones-round-bold-duotone',
@@ -183,7 +181,7 @@ const INDUSTRY_APP_CODES = [
 
 const APP_DESCRIPTION_OVERRIDES: Record<string, string> = {
   // 快财务当前聚焦管理会计，不包含总账
-  kuaicaiwu: '聚焦管理会计与经营分析协同平台（不含总账）',
+  kuaicaiwu: '聚焦管理会计、总账核算与经营分析协同平台',
 };
 
 type AppCategoryFilter = 'basic' | 'pro' | 'industry' | 'dedicated';
@@ -221,9 +219,6 @@ const CARD_COVER_HEIGHT = 136;
 const CARD_COVER_PADDING_Y = 16;
 /** 角标（免费/专业版）占位，避免与「已安装」重叠，同时作为有角标时的上下内边距 */
 const CARD_TIER_BADGE_CLEARANCE = 22;
-/** 卡片第二、三行共用垂直内边距，保持行高一致 */
-const CARD_ROW_PADDING_Y = 12;
-const CARD_ROW_PADDING_X = 16;
 
 /**
  * 根据应用代码和图标配置获取图标（Solar Bold Duotone）
@@ -272,12 +267,10 @@ const CARD_HEADER_TINT: Record<string, string> = {
   bi: '#4ade80',
   kuaicrm: '#fb923c',
   kuaiplm: '#a78bfa',
-  kuaisrm: '#2dd4bf',
   kuaitms: '#60a5fa',
   kuaiasms: '#fb923c',
   kuailtms: '#a78bfa',
   kuaiip: '#94a3b8',
-  kuaiems: '#22d3ee',
 };
 
 const getCardGradient = (code: string, isActive: boolean, token: GlobalToken, isDark: boolean): string => {
@@ -306,12 +299,10 @@ const getCardGradient = (code: string, isActive: boolean, token: GlobalToken, is
     bi: 'linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 100%)',          // 翡翠绿
     kuaicrm: 'linear-gradient(135deg, #fff7ed 0%, #fdba74 100%)',     // 橙色
     kuaiplm: 'linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%)',     // 丁香紫
-    kuaisrm: 'linear-gradient(135deg, #e6fffb 0%, #b5f5ec 100%)',     // 青绿色
     kuaitms: 'linear-gradient(135deg, #eff6ff 0%, #bfdbfe 100%)',     // 物流蓝
     kuaiasms: 'linear-gradient(135deg, #fff7ed 0%, #fdba74 100%)',    // 服务橙
     kuailtms: 'linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%)',    // 实验紫
     kuaiip: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',      // 知产灰
-    kuaiems: 'linear-gradient(135deg, #ecfeff 0%, #a5f3fc 100%)',     // 能源青
   };
   return gradients[code] || 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)';
 };
@@ -1380,51 +1371,34 @@ const ApplicationListPage: React.FC = () => {
     ];
 
     return (
-      <Card
+      <div
         key={application.uuid}
-        hoverable
         className="application-center-card"
-        styles={{
-          body: {
-            padding: `${CARD_ROW_PADDING_Y}px ${CARD_ROW_PADDING_X}px`,
-            background: themeToken.colorBgContainer,
-          },
-          actions: {
-            background: themeToken.colorBgContainer,
-            borderTop: `1px solid ${themeToken.colorBorderSecondary}`,
-            margin: 0,
-          },
-        }}
         style={{
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
           borderRadius: cardRadius,
           border: `1px solid ${themeToken.colorBorderSecondary}`,
           overflow: 'hidden',
           boxShadow: isDark ? themeToken.boxShadowSecondary : undefined,
-          ['--app-center-card-row-padding-y' as string]: `${CARD_ROW_PADDING_Y}px`,
         }}
-        cover={
-          <div
-            style={{
-              position: 'relative',
-              height: CARD_COVER_HEIGHT,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-start',
-              background: getCardGradient(
-                application.code,
-                !!(application.is_active && application.is_installed),
-                themeToken,
-                isDark,
-              ),
-              padding: `${coverPaddingY}px 20px`,
-              borderBottom: `1px solid ${themeToken.colorBorderSecondary}`,
-              borderTopLeftRadius: themeToken.borderRadiusLG,
-              borderTopRightRadius: themeToken.borderRadiusLG,
-            }}
-          >
+      >
+        <div
+          className="application-center-card__cover"
+          style={{
+            position: 'relative',
+            height: CARD_COVER_HEIGHT,
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'flex-start',
+            background: getCardGradient(
+              application.code,
+              !!(application.is_active && application.is_installed),
+              themeToken,
+              isDark,
+            ),
+            padding: `${coverPaddingY}px 20px`,
+            borderBottom: `1px solid ${themeToken.colorBorderSecondary}`,
+          }}
+        >
             {(() => {
               return (
                 <>
@@ -1497,7 +1471,7 @@ const ApplicationListPage: React.FC = () => {
                       minWidth: 0,
                       display: 'flex',
                       flexDirection: 'column',
-                      justifyContent: 'center',
+                      justifyContent: 'flex-start',
                     }}
                   >
                     {(() => {
@@ -1649,6 +1623,7 @@ const ApplicationListPage: React.FC = () => {
                         color: themeToken.colorTextSecondary,
                         fontSize: 13,
                         lineHeight: '18px',
+                        minHeight: 36,
                         display: '-webkit-box',
                         WebkitLineClamp: 2,
                         WebkitBoxOrient: 'vertical',
@@ -1661,60 +1636,9 @@ const ApplicationListPage: React.FC = () => {
                 </>
               );
             })()}
-          </div>
-        }
-        actions={[
-          <div
-            key="active"
-            style={{
-              padding: `0 ${CARD_ROW_PADDING_X}px`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              lineHeight: 1,
-            }}
-          >
-            <span style={{ fontSize: 12, color: themeToken.colorTextSecondary }}>{t('pages.system.applications.activeStatus')}</span>
-            <Tooltip title={!canManageAppLifecycle ? t('pages.system.applications.platformAdminOnlyLifecycle') : undefined}>
-              <span style={{ display: 'inline-flex' }}>
-                <Switch
-                  checked={application.is_active}
-                  onChange={(checked) => handleToggleActive(application, checked)}
-                  disabled={!application.is_installed || !canManageAppLifecycle}
-                  checkedChildren={t('pages.system.applications.enabled')}
-                  unCheckedChildren={t('pages.system.applications.disabled')}
-                />
-              </span>
-            </Tooltip>
-          </div>,
-          <div
-            key="more"
-            style={{
-              padding: `0 ${CARD_ROW_PADDING_X}px`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              lineHeight: 1,
-            }}
-          >
-            <Dropdown {...rowActionKind('skip')} menu={{ items: menuItems }} trigger={['click']}>
-              <Button type="text" icon={<DownOutlined />} style={{ width: '100%' }}>
-                {t('pages.system.applications.moreActions')}
-              </Button>
-            </Dropdown>
-          </div>,
-        ]}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            fontSize: 12,
-            color: themeToken.colorTextTertiary,
-          }}
-        >
+        </div>
+        <div className="application-center-card__grow" />
+        <div className="application-center-card__meta">
           <span>{t('pages.system.applications.codeLabel')}: {application.code}</span>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
             <Tag
@@ -1737,7 +1661,30 @@ const ApplicationListPage: React.FC = () => {
             )}
           </div>
         </div>
-      </Card>
+        <div className="application-center-card__tray">
+          <div className="application-center-card__tray-cell">
+            <span style={{ fontSize: 12, color: themeToken.colorTextSecondary }}>{t('pages.system.applications.activeStatus')}</span>
+            <Tooltip title={!canManageAppLifecycle ? t('pages.system.applications.platformAdminOnlyLifecycle') : undefined}>
+              <span style={{ display: 'inline-flex' }}>
+                <Switch
+                  checked={application.is_active}
+                  onChange={(checked) => handleToggleActive(application, checked)}
+                  disabled={!application.is_installed || !canManageAppLifecycle}
+                  checkedChildren={t('pages.system.applications.enabled')}
+                  unCheckedChildren={t('pages.system.applications.disabled')}
+                />
+              </span>
+            </Tooltip>
+          </div>
+          <div className="application-center-card__tray-cell">
+            <Dropdown {...rowActionKind('skip')} menu={{ items: menuItems }} trigger={['click']}>
+              <Button type="text" icon={<DownOutlined />} style={{ width: '100%' }}>
+                {t('pages.system.applications.moreActions')}
+              </Button>
+            </Dropdown>
+          </div>
+        </div>
+      </div>
     );
   };
 
@@ -1815,7 +1762,7 @@ const ApplicationListPage: React.FC = () => {
 
               const allData = await getApplicationList(apiParams);
 
-              // 专业版占位：未 compose / 未入库时补齐 KU-AI、快报表、快数采、快能源、快协同
+              // 专业版占位：未 compose / 未入库时补齐 KU-AI、快报表、快数采
               const existingCodes = new Set((allData || []).map((app) => app.code));
               const mergedPlaceholders = buildProPlaceholders(t).filter(
                 (app) => !existingCodes.has(app.code as string),

@@ -24,6 +24,7 @@ import {
   type PlatformLicenseItem,
 } from '../../../services/licenseCenter';
 import { getAntdModal } from '../../../utils/antdAppApis';
+import { copyTextToClipboard } from '../../../utils/clipboard';
 
 const GLOBAL_SCOPE = '*';
 
@@ -138,10 +139,14 @@ export default function LicenseManagementPage() {
             onClick={async () => {
               try {
                 const resp = await getPlatformLicensePlainKey(record.uuid);
-                await navigator.clipboard.writeText(resp.license_key);
+                await copyTextToClipboard(resp.license_key);
                 messageApi.success(t('pages.infra.licenseCenter.copySuccess', { defaultValue: 'License Key 已复制' }));
               } catch (error: any) {
-                messageApi.error(error?.message || t('pages.infra.licenseCenter.copyFailed', { defaultValue: '复制失败，请重试' }));
+                messageApi.error(
+                  error?.message && !String(error.message).startsWith('clipboard_') && error.message !== 'empty_clipboard_text'
+                    ? error.message
+                    : t('pages.infra.licenseCenter.copyFailed', { defaultValue: '复制失败，请重试' }),
+                );
               }
             }}
           >

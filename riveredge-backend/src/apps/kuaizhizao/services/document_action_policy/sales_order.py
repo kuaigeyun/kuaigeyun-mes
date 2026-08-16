@@ -136,6 +136,7 @@ def derive_sales_order_capabilities(
     has_line_work_orders: bool = False,
     computation_pushed_blocks_withdraw: bool = False,
     has_returnable_qty: bool = False,
+    has_pushable_qty: bool = False,
 ) -> SalesOrderCapabilities:
     status = getattr(order, "status", None)
     review_status = getattr(order, "review_status", None)
@@ -259,7 +260,9 @@ def derive_sales_order_capabilities(
     push_work_order_allowed = False
     push_work_order_reason = push_reason or "sales_order.push_work_order.not_allowed"
     if push_ok:
-        if not has_items:
+        if pushed_to_computation:
+            push_work_order_reason = "sales_order.push_work_order.computation_pushed"
+        elif not has_items:
             push_work_order_reason = "sales_order.push_work_order.no_items"
         else:
             push_work_order_allowed = True
@@ -268,21 +271,41 @@ def derive_sales_order_capabilities(
         push_work_order_reason if not push_work_order_allowed else None,
     )
 
-    # push_shipment_notice / push_sales_delivery / push_invoice — 须已审核且有明细
-    def _push_with_items_cap(not_allowed_key: str) -> ActionCapability:
+    # push_shipment_notice / push_sales_delivery / push_invoice — 须已审核、有明细且存在可下推数量
+    def _push_shipment_or_delivery_cap(not_allowed_key: str, no_qty_key: str) -> ActionCapability:
         allowed = False
         reason = push_reason or not_allowed_key
         if push_ok:
             if not has_items:
                 reason = "sales_order.push.no_items"
+            elif not has_pushable_qty:
+                reason = no_qty_key
             else:
                 allowed = True
                 reason = None
         return _cap(allowed, reason if not allowed else None)
 
-    push_shipment_cap = _push_with_items_cap("sales_order.push_shipment.not_allowed")
-    push_delivery_cap = _push_with_items_cap("sales_order.push_delivery.not_allowed")
-    push_invoice_cap = _push_with_items_cap("sales_order.push_invoice.not_allowed")
+    push_shipment_cap = _push_shipment_or_delivery_cap(
+        "sales_order.push_shipment.not_allowed",
+        "sales_order.push_shipment.no_backorder",
+    )
+    push_delivery_cap = _push_shipment_or_delivery_cap(
+        "sales_order.push_delivery.not_allowed",
+        "sales_order.push_delivery.no_backorder",
+    )
+
+    push_invoice_allowed = False
+    push_invoice_reason = push_reason or "sales_order.push_invoice.not_allowed"
+    if push_ok:
+        if not has_items:
+            push_invoice_reason = "sales_order.push.no_items"
+        else:
+            push_invoice_allowed = True
+            push_invoice_reason = None
+    push_invoice_cap = _cap(
+        push_invoice_allowed,
+        push_invoice_reason if not push_invoice_allowed else None,
+    )
 
     # push_sales_return — 须已审核且有已交货数量
     push_return_allowed = False
@@ -358,6 +381,7 @@ def assert_sales_order_capability(
     has_line_work_orders: bool = False,
     computation_pushed_blocks_withdraw: bool = False,
     has_returnable_qty: bool = False,
+    has_pushable_qty: bool = False,
 ) -> None:
     caps = derive_sales_order_capabilities(
         order,
@@ -366,6 +390,7 @@ def assert_sales_order_capability(
         has_line_work_orders=has_line_work_orders,
         computation_pushed_blocks_withdraw=computation_pushed_blocks_withdraw,
         has_returnable_qty=has_returnable_qty,
+        has_pushable_qty=has_pushable_qty,
     )
     cap_map = {
         "update": caps.update,

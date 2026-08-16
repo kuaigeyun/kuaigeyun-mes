@@ -210,6 +210,13 @@ class RepairOrderService:
             ).first()
             if not ticket:
                 raise ValidationError(f"售后工单不存在: {data.after_sales_ticket_id}")
+            existing = await RepairOrder.filter(
+                tenant_id=tenant_id,
+                after_sales_ticket_id=ticket.id,
+                deleted_at__isnull=True,
+            ).first()
+            if existing:
+                raise BusinessLogicError(f"该工单已存在维修单: {existing.order_code}")
             ticket_id, ticket_code = ticket.id, ticket.ticket_code
 
         async with in_transaction():
@@ -269,10 +276,13 @@ class RepairOrderService:
         status: Optional[str] = None,
         warranty_status: Optional[str] = None,
         keyword: Optional[str] = None,
+        after_sales_ticket_id: Optional[int] = None,
     ) -> RepairOrderListEnvelope:
         query = RepairOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if customer_id is not None:
             query = query.filter(customer_id=customer_id)
+        if after_sales_ticket_id is not None:
+            query = query.filter(after_sales_ticket_id=after_sales_ticket_id)
         if status:
             query = query.filter(status=status.strip())
         if warranty_status:

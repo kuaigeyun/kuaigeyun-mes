@@ -14,6 +14,7 @@ import {
   Space,
   Spin,
   Table,
+  Tag,
   Typography,
 } from 'antd';
 import type { InventoryPickOption } from './outboundConfirmInventoryOptions';
@@ -23,7 +24,7 @@ import {
   type OutboundBatchAllocation,
 } from './outboundBatchAllocation';
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../../../../utils/modalEventIsolation';
-import { formatQuantity } from '../../../../../utils/format';
+import { formatBusinessDateOnly, formatQuantity } from '../../../../../utils/format';
 
 export type OutboundBatchAllocationFieldProps = {
   value?: OutboundBatchAllocation[];
@@ -56,6 +57,11 @@ const OutboundBatchAllocationField: React.FC<OutboundBatchAllocationFieldProps> 
     [draft],
   );
   const selectedSet = useMemo(() => new Set(selectedNos), [selectedNos]);
+
+  const showDateCols = useMemo(
+    () => options.some((o) => o.productionDate || o.expiryDate),
+    [options],
+  );
 
   const filteredOptions = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
@@ -158,10 +164,10 @@ const OutboundBatchAllocationField: React.FC<OutboundBatchAllocationFieldProps> 
         onOk={applyDraft}
         okText={t('app.kuaizhizao.warehouseOutbound.confirm.batchPicker.confirm')}
         okButtonProps={{ disabled: sumMismatch && target > 0 }}
-        width={560}
+        width={showDateCols ? 720 : 560}
         destroyOnHidden
       >
-        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={8} style={{ width: '100%' }}>
           <Typography.Text type="secondary">
             {t('app.kuaizhizao.warehouseOutbound.confirm.batchPicker.hint', {
               qty: formatQuantity(target),
@@ -212,7 +218,41 @@ const OutboundBatchAllocationField: React.FC<OutboundBatchAllocationFieldProps> 
                     title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'),
                     dataIndex: 'value',
                     ellipsis: true,
+                    render: (bn: string, opt: InventoryPickOption) => (
+                      <Space size={4} wrap>
+                        <span>{bn}</span>
+                        {opt.fifoRecommended ? (
+                          <Tag color="processing" variant="filled">
+                            {t('app.kuaizhizao.warehouseOutbound.confirm.batchPicker.fifoRecommended')}
+                          </Tag>
+                        ) : null}
+                      </Space>
+                    ),
                   },
+                  ...(showDateCols
+                    ? [
+                        {
+                          title: t(
+                            'app.kuaizhizao.warehouseOutbound.confirm.batchPicker.colProductionDate',
+                          ),
+                          key: 'productionDate',
+                          width: 110,
+                          render: (_: unknown, opt: InventoryPickOption) =>
+                            opt.productionDate
+                              ? formatBusinessDateOnly(opt.productionDate)
+                              : '—',
+                        },
+                        {
+                          title: t(
+                            'app.kuaizhizao.warehouseOutbound.confirm.batchPicker.colExpiryDate',
+                          ),
+                          key: 'expiryDate',
+                          width: 110,
+                          render: (_: unknown, opt: InventoryPickOption) =>
+                            opt.expiryDate ? formatBusinessDateOnly(opt.expiryDate) : '—',
+                        },
+                      ]
+                    : []),
                   {
                     title: t('app.kuaizhizao.warehouseOutbound.confirm.batchPicker.colAvailable'),
                     key: 'available',
@@ -246,8 +286,8 @@ const OutboundBatchAllocationField: React.FC<OutboundBatchAllocationFieldProps> 
           </Spin>
           <Typography.Text type={sumMismatch ? 'danger' : 'secondary'}>
             {t('app.kuaizhizao.warehouseOutbound.confirm.batchPicker.totalLine', {
-              selected: draftSum,
-              required: target,
+              selected: formatQuantity(draftSum),
+              required: formatQuantity(target),
             })}
           </Typography.Text>
         </Space>

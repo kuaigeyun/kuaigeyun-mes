@@ -1,0 +1,86 @@
+.fs-print-sheet {
+  font-family: 'Songti SC', 'SimSun', 'Noto Serif SC', serif;
+  color: #111;
+  background: #fff;
+  padding: 8px 4px 16px;
+}
+
+.fs-print-title {
+  margin: 0 0 12px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+
+.fs-print-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.fs-print-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.fs-print-table th,
+.fs-print-table td {
+  border: 1px solid #111;
+  padding: 5px 8px;
+  vertical-align: middle;
+}
+
+.fs-print-table th {
+  text-align: center;
+  font-weight: 700;
+  background: #fafafa;
+}
+
+.fs-print-table .col-item {
+  width: 28%;
+}
+
+.fs-print-table .col-line {
+  width: 8%;
+  text-align: center;
+}
+
+.fs-print-table .col-amt {
+  width: 14%;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.fs-print-table .is-header td,
+.fs-print-table td.is-header {
+  font-weight: 700;
+}
+
+.fs-print-table .is-total td,
+.fs-print-table td.is-total {
+  font-weight: 700;
+}
+
+.fs-print-sign {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 28px;
+  font-size: 12px;
+}
+
+.fs-print-time {
+  margin-top: 10px;
+  text-align: right;
+  font-size: 11px;
+  color: #444;
+}
+
+@media print {
+  .fs-print-sheet {
+    padding: 0;
+  }
+}

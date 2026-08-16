@@ -38,7 +38,7 @@ function sortByRank<T>(
  *
  * 段位约定（语义聚类）：
  * - 10–14 单据名称 / 编号 / 主标识叠列；报工：workOrderStacked→operation；返工：product_name_code_stacked→rework_type→original_work_order_code；异常单据：exception_doc_work_order_code→物料/计划结束；检验四单据（同来料）：quality_inspection_kind→inspection_code→第二业务叠列→quality_inspection_material；设备单据：单号→设备/路线/计划名
- * - 15–19 伙伴主称谓（客户/供应商等，非叠列时）
+ * - 15–19 伙伴主称谓（客户/供应商等，非叠列时）；销售/项目上下文：project_name
  * - 20–29 类型类（合同类型、预测周期、版本、业务模式、分类等）；工单委外：owo_product_stacked→priority；异常：exception_type/alert_level/severity；设备：fault/repair/plan 类型→级别/结果标识
  * - 30–49 品种数 / 数量 / 金额 / 价税度量；报工：work_hours(32) → worker_name(32.5)；work_start_end_stacked(67.05)→reported_at
  * - 50–59 下推 / 进度类
@@ -135,11 +135,17 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   sales_return_related_docs: 12.5,
   purchase_return_related_docs: 12.5,
 
-  // —— 15 伙伴主称谓 ——
+  // —— 15 伙伴主称谓 / 项目上下文 ——
   customer_name: 15,
   partnerName: 15,
   partnerId: 15.1,
   supplier_name: 15.2,
+  /** 客户/供应商价格本：伙伴叠列 → 物料叠列 → 伙伴料号/品名 */
+  price_book_material_stacked: 15.5,
+  partnerMaterialCode: 15.6,
+  partnerMaterialName: 15.7,
+  /** 订单评审等：项目名称紧跟客户，勿落 75+ 偶发段 */
+  project_name: 16,
 
   /**
    * 异常单据（缺料/延期/质量）：工单编号 → 第二业务列（物料叠列 / 计划结束）→ 类型/级别 → …
@@ -156,9 +162,14 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
    * inspection_code → quality_inspection_kind → supplierReceipt / quality_inspection_partner_stacked
    * → quality_inspection_material → 数量类 → quality_inspection_extra → downstream_push_progress
    * → inspector_name → lifecycle
+   *
+   * 不良处理：code → nc_source_inspection → operation_work_order_stacked → quality_inspection_material
+   * → nc_defect_type → disposition → defect_quantity → defect_reason → 降级/回用关联 → lifecycle → action
    */
   /** 检验类型（简易 / 方案），不含勾选列时的第二列（紧挨单号后） */
   quality_inspection_kind: 10.5,
+  /** 不良处理：源检验单（紧跟台账编号） */
+  nc_source_inspection: 10.6,
   supplierReceipt: 11,
   quality_inspection_partner_stacked: 11,
   quality_inspection_material: 12,
@@ -191,6 +202,16 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   fault_type: 20,
   repair_type: 20,
   plan_type: 20,
+  folderName: 19.5,
+  folder_name: 19.5,
+  drawingType: 20,
+  drawing_type: 20,
+  securityLevel: 20.05,
+  security_level: 20.05,
+  dueAt: 65,
+  due_at: 65,
+  returnedAt: 65.5,
+  returned_at: 65.5,
   maintenance_type: 20.5,
   fault_level: 21,
   urgency: 21,
@@ -230,9 +251,14 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   transport_mode: 20.1,
   vehicle_type: 20,
   carrier_type: 20,
+  service_hotline: 20.5,
   ownership: 21,
   carrier_name: 22,
+  logistics_vehicle_driver_stacked: 22.5,
   tracking_number: 23,
+  freight_route_stacked: 24,
+  planned_depart_at: 60,
+  planned_arrive_at: 60.1,
   payable_code: 24,
   contact_name: 77,
   is_enabled: 91.6,
@@ -278,11 +304,24 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   stationId: 22,
   reason: 82.1,
   // —— 20 类型类（同类靠拢，均在数量之前）——
+  /** 不良处理：缺陷类型 / 处置方式 */
+  nc_defect_type: 20,
+  disposition: 21,
   /** 质量异常等：异常子类型（非流程页首列） */
   exception_type: 20,
   exception_work_order_code: 21,
   alert_level: 22,
   severity: 22,
+  /**
+   * MRP 例外收件箱：严重级 → 说明 → 物料叠列 → 计算单 → 分桶日 → 关联单号 → 计算完成
+   */
+  mrp_inbox_severity: 20,
+  mrp_inbox_message: 21,
+  mrp_inbox_material: 22,
+  mrp_inbox_computation: 23,
+  mrp_inbox_bucket_date: 24,
+  mrp_inbox_document: 25,
+  mrp_inbox_computed_at: 26,
   /** 快数采：连接/点位/规则/边缘类型与健康类 MarkerTag 列 */
   tag_key: 10.15,
   connection_type: 20,
@@ -352,6 +391,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   sample_qty: 31.3,
   qualified_quantity: 31.4,
   unqualified_quantity: 31.5,
+  /** 不良处理：不合格数量（与检验 unqualified_quantity 同段） */
+  defect_quantity: 31.5,
   /** 检验四单据：数量类之后、下推进度之前的专属结论列（如 OQC 放行） */
   quality_inspection_extra: 32,
   reported_quantity: 31.6,
@@ -384,9 +425,12 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   unit_cost: 36.3,
   total_cost: 36.4,
   effective_date: 37,
+  price_date: 37.05,
+  priceDate: 37.05,
   /** 异常单据：延期原因 / 问题描述 */
   delay_reason: 40,
   problem_description: 40,
+  defect_reason: 40,
   /** 异常单据：建议动作 */
   suggested_action: 50,
 
@@ -432,6 +476,10 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   assigned_at: 64.2,
   recycle_at: 64.3,
   applied_at: 64.4,
+  issued_at: 64.5,
+  issuedAt: 64.5,
+  recalled_at: 64.6,
+  recalledAt: 64.6,
   scheduled_at: 65,
   review_date: 65,
   computation_start_time: 65.1,
@@ -465,6 +513,10 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   reviewer_name: 76.1,
   owner_name: 76.2,
   inspector_name: 76.4,
+  issued_by_name: 76.45,
+  issuedByName: 76.45,
+  recalled_by_name: 76.46,
+  recalledByName: 76.46,
   responsible_person_name: 76.5,
   inspectorName: 76.4,
   contact_person: 77,
@@ -487,11 +539,10 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   material_id: 79.35,
   materialId: 79.35,
   materialModel: 79.4,
-  partnerMaterialCode: 79.5,
-  partnerMaterialName: 79.6,
-  project_name: 80,
   target_code: 80.1,
   target_name: 80.2,
+  downgrade_material_name: 80.3,
+  other_inbound_id: 81.4,
   sales_order_code: 81,
   work_order_code: 81.1,
   source_order_code: 81.2,
@@ -620,6 +671,8 @@ export function alignProColumns<T extends Record<string, unknown>>(
  */
 export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   quotation_code: 10,
+  /** 订单评审单号（与 PLM review_code 列表段位同为 10） */
+  review_code: 10,
   contract_code: 10,
   order_code: 10,
   forecast_code: 10,
@@ -659,6 +712,7 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   document_type: 21,
   order_date: 11,
   quotation_date: 11,
+  review_date: 11,
   contract_date: 11,
   inquiry_date: 11,
   requisition_date: 11,
@@ -680,6 +734,11 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   planned_delivery_date: 12,
   expected_return_date: 12.08,
   due_date: 12.05,
+  dueAt: 12.06,
+  due_at: 12.06,
+  returnedAt: 12.07,
+  returned_at: 12.07,
+  purpose: 40.1,
   planned_ship_date: 12,
   planned_receipt_date: 12,
   required_date: 12,
@@ -695,6 +754,10 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   planned_end_time: 13,
   notified_at: 14,
   applied_at: 14,
+  issued_at: 14.02,
+  issuedAt: 14.02,
+  recalled_at: 14.03,
+  recalledAt: 14.03,
   receipt_time: 14,
   borrow_time: 14,
   delivery_time: 14,
@@ -729,6 +792,9 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   employee_name: 20,
   customer_name: 20,
   supplier_name: 20,
+  project_name: 20.05,
+  urgency: 20.08,
+  risk_level: 20.09,
   customer_contact: 21,
   supplier_contact: 21,
   customer_phone: 22,
@@ -773,6 +839,8 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   severity: 21.7,
   quality_status: 21.75,
   inspection_result: 21.85,
+  defect_type: 21.86,
+  disposition: 21.87,
   release_decision: 21.9,
   delay_reason: 22,
   business_direction: 20,
@@ -782,7 +850,9 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   driver_phone: 22.6,
   vehicle_plate: 51.12,
   origin_address: 45,
+  sender_phone: 45.02,
   destination_address: 45.05,
+  recipient_phone: 45.07,
   planned_depart_at: 12,
   planned_arrive_at: 12.1,
   actual_depart_at: 14.05,
@@ -792,6 +862,10 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   remark: 80,
 
   quotation_code_link: 40,
+  nc_source_inspection: 40.15,
+  incoming_inspection_code: 40.2,
+  process_inspection_code: 40.3,
+  finished_goods_inspection_code: 40.4,
   linked_contract_code: 40,
   linked_source_code: 40,
   sales_order_code: 41,
@@ -804,6 +878,7 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   linked_work_order_code: 41.4,
   original_work_order_code: 41.4,
   sales_delivery_code: 42,
+  other_inbound_id: 42.15,
   purchase_receipt_code: 42.2,
   shipment_notice_code: 42.4,
   linked_picking_code: 42.6,
@@ -838,6 +913,8 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   assigned_to_name: 50.5,
   suggested_action: 50.52,
   alternative_material_name: 50.72,
+  downgrade_material_name: 50.73,
+  downgrade_warehouse_name: 51.02,
   priority: 50.6,
   shipping_method: 51,
   warehouse_name: 51,
@@ -871,6 +948,7 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   completed_quantity: 62.1,
   qualified_quantity: 62.2,
   unqualified_quantity: 62.3,
+  defect_quantity: 62.32,
   reported_quantity: 62.4,
   outsource_quantity: 62.5,
   packing_quantity: 62.6,
@@ -906,6 +984,7 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   after_total_amount: 68,
   delta_amount: 69,
 
+  defect_reason: 70.4,
   root_cause: 70,
   corrective_action: 71,
   preventive_action: 72,
@@ -1035,8 +1114,12 @@ export const MASTER_DATA_DETAIL_BASIC_FIELD_RANK = {
   warehouseType: 20,
   warehouse_type: 20,
   plan_type: 20,
+  folderName: 19.5,
+  folder_name: 19.5,
   drawingType: 20,
   drawing_type: 20,
+  securityLevel: 20.05,
+  security_level: 20.05,
   operationId: 20,
   operation_id: 20,
   materialId: 20,
@@ -1049,6 +1132,7 @@ export const MASTER_DATA_DETAIL_BASIC_FIELD_RANK = {
   ownership: 20.5,
   contact_name: 30,
   contact_phone: 31,
+  service_hotline: 31.5,
   license_number: 32,
   is_enabled: 40,
   load_capacity: 50.2,

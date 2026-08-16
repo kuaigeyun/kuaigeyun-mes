@@ -39,6 +39,7 @@ const BatchRulesPage = lazy(() => import('./pages/materials/batch-rules'));
 const BatchesPage = lazy(() => import('./pages/materials/batches'));
 const SerialRulesPage = lazy(() => import('./pages/materials/serial-rules'));
 const SerialsPage = lazy(() => import('./pages/materials/serials'));
+const MarketPricesPage = lazy(() => import('./pages/materials/market-prices'));
 
 // 工艺管理页面
 const DefectTypesPage = lazy(() => import('./pages/process/defect-types'));
@@ -46,6 +47,9 @@ const OperationsPage = lazy(() => import('./pages/process/operations'));
 const ProcessRoutesPage = lazy(() => import('./pages/process/routes'));
 const ProductProcessPage = lazy(() => import('./pages/process/product-process'));
 const DrawingsPage = lazy(() => import('./pages/process/drawings'));
+const DrawingWhereUsedPage = lazy(() => import('./pages/process/drawing-where-used'));
+const DrawingDistributionsPage = lazy(() => import('./pages/process/drawing-distributions'));
+const DrawingLoansPage = lazy(() => import('./pages/process/drawing-loans'));
 const SOPPage = lazy(() => import('./pages/process/sop'));
 const ESOPDesignerPage = lazy(() => import('./pages/process/sop/designer'));
 const SOPExecutionPage = lazy(() => import('./pages/process/sop/execution'));
@@ -75,10 +79,13 @@ const MasterDataApp: React.FC = () => {
       <Route path="warehouse/storage-areas" element={withPageSuspense(StorageAreasPage)} />
       <Route path="warehouse/storage-locations" element={withPageSuspense(StorageLocationsPage)} />
 
-      {/* 物料管理路由 */}
+      {/* 物料管理路由：新建/编辑须在列表前，与报价单等建单页一致 */}
+      <Route path="materials/new" element={withPageSuspense(MaterialsManagementPage)} />
+      <Route path="materials/:uuid/edit" element={withPageSuspense(MaterialsManagementPage)} />
       <Route path="materials" element={withPageSuspense(MaterialsManagementPage)} />
       <Route path="materials/variant-attributes" element={withPageSuspense(VariantAttributesPage)} />
       <Route path="materials/units" element={withPageSuspense(UnitsPage)} />
+      <Route path="materials/market-prices" element={withPageSuspense(MarketPricesPage)} />
       <Route path="materials/batch-rules" element={withPageSuspense(BatchRulesPage)} />
       <Route path="materials/batches" element={withPageSuspense(BatchesPage)} />
       <Route path="materials/serial-rules" element={withPageSuspense(SerialRulesPage)} />
@@ -90,6 +97,9 @@ const MasterDataApp: React.FC = () => {
       <Route path="process/routes" element={withPageSuspense(ProcessRoutesPage)} />
       <Route path="process/product-process" element={withPageSuspense(ProductProcessPage)} />
       <Route path="process/drawings" element={withPageSuspense(DrawingsPage)} />
+      <Route path="process/drawing-where-used" element={withPageSuspense(DrawingWhereUsedPage)} />
+      <Route path="process/drawing-distributions" element={withPageSuspense(DrawingDistributionsPage)} />
+      <Route path="process/drawing-loans" element={withPageSuspense(DrawingLoansPage)} />
       <Route path="process/engineering-bom" element={withPageSuspense(BOMPage)} />
       <Route path="process/engineering-bom/designer" element={
         <PermissionGuard permission="master-data:process:engineering-bom:update" fallback={<Navigate to="../engineering-bom" replace />}>

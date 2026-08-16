@@ -11,7 +11,7 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import {
@@ -62,8 +62,8 @@ import {
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
-  filterByPullScope,
-  paginatePullRows,
+  isPullableScope,
+  renderPullCapabilityTag,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { SimpleSparkline } from '../../../../../components';
@@ -76,7 +76,6 @@ import {
   receiptNoticeBatchNotifyAllowed,
   receiptNoticeBatchWithdrawAllowed,
   receiptNoticeCapabilityReasonMessage,
-  purchaseOrderCapabilityReasonMessage,
 } from '../../../../../hooks/useDocumentCapabilities';
 import {
   buildReceiptNoticeLifecycleValueEnum,
@@ -100,10 +99,10 @@ import type { ReceiptNoticeListParams } from '../../../services/receipt-notice';
 import {
   listPurchaseOrders,
   getPurchaseOrder,
-  previewPushToReceiptNotice,
-  pushPurchaseOrderToReceiptNotice,
-  type DocumentPushPreview,
+  listPurchaseOrderReceiptNoticePullLines,
+  pullReceiptNoticesFromPurchaseOrderItems,
   type PurchaseOrder,
+  type PurchaseOrderReceiptPullLine,
 } from '../../../services/purchase';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
@@ -117,7 +116,7 @@ import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } f
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
-import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { formatBusinessDateOnly, formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
@@ -149,16 +148,7 @@ type ReceiptNoticeItemRow = {
 const RECEIPT_NOTICE_LIST_PERSISTENCE_ID =
   'apps.kuaizhizao.pages.purchase-management.receipt-notices.list-v3';
 
-type PullPurchaseOrderCandidate = {
-  id: number;
-  order_code?: string;
-  supplier_id?: number;
-  supplier_name?: string;
-  status?: string;
-  order_date?: string;
-  updated_at?: string;
-  capabilities?: PurchaseOrder['capabilities'];
-};
+type PullPurchaseOrderCandidate = PurchaseOrderReceiptPullLine;
 
 const RN_STAT_SPARK_1 = [10, 12, 11, 13, 14, 15, 16];
 const RN_STAT_SPARK_2 = [6, 8, 7, 9, 8, 10, 9];
@@ -198,6 +188,8 @@ const ReceiptNoticesPage: React.FC = () => {
     [t, i18n.language],
   );
   const actionRef = useRef<ActionType>(null);
+  const [searchParams] = useSearchParams();
+  const highlightOpenedRef = useRef(false);
   const tableRowsRef = useRef<ReceiptNotice[]>([]);
   const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>(() =>
     readPersistedUniTableViewType(RECEIPT_NOTICE_LIST_PERSISTENCE_ID, 'table', [
@@ -255,13 +247,9 @@ const ReceiptNoticesPage: React.FC = () => {
     [noticeDetail, t],
   );
 
-  const pullQueryCloseRef = useRef<(() => void) | null>(null);
-  const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
-  const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
-  const [pullPreviewConfirming, setPullPreviewConfirming] = useState(false);
-  const [pullPreviewData, setPullPreviewData] = useState<DocumentPushPreview | null>(null);
-  const [pullPreviewOrderId, setPullPreviewOrderId] = useState<number | null>(null);
-  const [pullSelectedItemIds, setPullSelectedItemIds] = useState<number[]>([]);
+  const pullSourceOrderIdRef = useRef<number | undefined>(undefined);
+  const [pullSourceOrderId, setPullSourceOrderId] = useState<number | undefined>();
+  const [pullSourceOrderOptions, setPullSourceOrderOptions] = useState<Array<{ value: number; label: string }>>([]);
 
   const [notifyPreviewOpen, setNotifyPreviewOpen] = useState(false);
   const [notifyPreviewLoading, setNotifyPreviewLoading] = useState(false);
@@ -393,6 +381,32 @@ const ReceiptNoticesPage: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    const highlightRaw = searchParams.get('highlight')?.trim();
+    if (!highlightRaw) {
+      highlightOpenedRef.current = false;
+      actionRef.current?.reload();
+      return;
+    }
+    if (highlightOpenedRef.current) {
+      actionRef.current?.reload();
+      return;
+    }
+    highlightOpenedRef.current = true;
+    void (async () => {
+      try {
+        const id = Number(highlightRaw);
+        if (Number.isFinite(id) && id > 0) {
+          await handleDetail({ id });
+        }
+      } catch {
+        messageApi.error(t('app.kuaizhizao.receiptNotice.detailFailed'));
+      } finally {
+        actionRef.current?.reload();
+      }
+    })();
+  }, [searchParams, messageApi, t]);
+
   const handleEdit = async (record: ReceiptNotice) => {
     try {
       const detail = await receiptNoticeApi.get(record.id!.toString()) as ReceiptNoticeDetail;
@@ -425,99 +439,11 @@ const ReceiptNoticesPage: React.FC = () => {
     }
   };
 
-  const resetPullPreviewModal = useCallback(() => {
-    setPullPreviewOpen(false);
-    setPullPreviewData(null);
-    setPullPreviewOrderId(null);
-    setPullSelectedItemIds([]);
-  }, []);
-
   const resetNotifyPreviewModal = useCallback(() => {
     setNotifyPreviewOpen(false);
     setNotifyPreviewData(null);
     setNotifyPreviewTarget(null);
   }, []);
-
-  const showPullCreatePreview = useCallback(
-    (orderId: number) => {
-      setPullPreviewOpen(true);
-      setPullPreviewLoading(true);
-      setPullPreviewConfirming(false);
-      setPullPreviewData(null);
-      setPullPreviewOrderId(orderId);
-      setPullSelectedItemIds([]);
-      previewPushToReceiptNotice(orderId)
-        .then((res) => {
-          setPullPreviewData(res);
-          setPullSelectedItemIds(
-            (res.items || [])
-              .filter((row) => Number(row.max_push_quantity ?? 0) > 0)
-              .map((row) => Number(row.item_id)),
-          );
-        })
-        .catch((error: unknown) => {
-          messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.receiptNotice.pull.previewFailed')));
-          resetPullPreviewModal();
-        })
-        .finally(() => setPullPreviewLoading(false));
-    },
-    [messageApi, resetPullPreviewModal, t],
-  );
-
-  const handlePullPreviewConfirm = useCallback(async () => {
-    if (!pullPreviewOrderId || !pullPreviewData) return;
-    if (pullPreviewData.has_blocking_issues) return;
-    const rowById = new Map(
-      (pullPreviewData.items || []).map((row) => [Number(row.item_id), row]),
-    );
-    const selectedIds = pullSelectedItemIds.filter((id) => {
-      const row = rowById.get(id);
-      return row && Number(row.max_push_quantity ?? 0) > 0;
-    });
-    if (!selectedIds.length) {
-      messageApi.warning(t('app.kuaizhizao.receiptNotice.pull.selectLinesFirst'));
-      return;
-    }
-    const noticeQuantities = Object.fromEntries(
-      selectedIds.map((id) => [id, Number(rowById.get(id)?.max_push_quantity ?? 0)]),
-    );
-    setPullPreviewConfirming(true);
-    try {
-      await pushPurchaseOrderToReceiptNotice(pullPreviewOrderId, noticeQuantities);
-      messageApi.success(
-        t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
-          source: pullFromPurchaseOrderAction.sourceLabel,
-          target: pullFromPurchaseOrderAction.targetLabel,
-        }),
-      );
-      setStatsVersion((v) => v + 1);
-      invalidateMenuBadgeCounts();
-      actionRef.current?.reload();
-      resetPullPreviewModal();
-    } catch (error: unknown) {
-      messageApi.error(
-        getApiErrorMessage(
-          error,
-          t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
-            source: pullFromPurchaseOrderAction.sourceLabel,
-            target: pullFromPurchaseOrderAction.targetLabel,
-          }),
-        ),
-      );
-    } finally {
-      setPullPreviewConfirming(false);
-    }
-  }, [
-    invalidateMenuBadgeCounts,
-    messageApi,
-    pullFromPurchaseOrderAction.sourceLabel,
-    pullFromPurchaseOrderAction.targetLabel,
-    pullPreviewData,
-    pullPreviewOrderId,
-    pullSelectedItemIds,
-    resetPullPreviewModal,
-    t,
-  ]);
 
   const executeNotify = useCallback(
     async (record: ReceiptNotice) => {
@@ -892,7 +818,7 @@ const ReceiptNoticesPage: React.FC = () => {
                 size="small"
                 onClick={(e) => {
                   e.stopPropagation();
-                  navigate(ROUTES.WM_INBOUND);
+                  navigate(`${ROUTES.WM_INBOUND}?receipt_type=purchase&receipt_id=${record.purchase_receipt_id}`);
                 }}
               >
                 {t('app.kuaizhizao.receiptNotice.viewInboundReceipt')}
@@ -1030,13 +956,65 @@ const ReceiptNoticesPage: React.FC = () => {
 
   const pullPurchaseOrderColumns = useMemo(
     () => [
-      { title: t('app.kuaizhizao.receiptNotice.purchaseOrderCode'), dataIndex: 'order_code', width: 190, ellipsis: true },
-      { title: t('app.kuaizhizao.receiptNotice.supplier'), dataIndex: 'supplier_name', width: 220, ellipsis: true },
-      { title: t('app.kuaizhizao.shipmentNotice.orderStatus'), dataIndex: 'status', width: 120, align: 'center' as const },
-      { title: t('app.kuaizhizao.receiptNotice.orderDate'), dataIndex: 'order_date', width: 130, render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-') },
-      { title: t('common.updatedAt'), dataIndex: 'updated_at', width: 180, render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-') },
+      {
+        title: t('app.kuaizhizao.receiptNotice.purchaseOrderCode'),
+        dataIndex: 'order_code',
+        width: 168,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.materialName'),
+        dataIndex: 'material_name',
+        ellipsis: true,
+        render: (_: unknown, record: PullPurchaseOrderCandidate) => (
+          <MaterialStackedCell
+            material_name={record.material_name}
+            material_code={record.material_code}
+            material_spec={record.material_spec}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.quantity'),
+        dataIndex: 'suggested_quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number) => formatQuantity(v),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.colShippedQty'),
+        dataIndex: 'pushed_quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number) => formatQuantity(v),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.colShippableQty'),
+        dataIndex: 'remaining_quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number) => formatQuantity(v),
+      },
+      {
+        title: t('app.kuaizhizao.receiptNotice.supplier'),
+        dataIndex: 'supplier_name',
+        width: 140,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseRequisition.pull.convertStatus'),
+        key: 'convert_status',
+        width: 100,
+        align: 'center' as const,
+        render: (_: unknown, record: PullPurchaseOrderCandidate) =>
+          renderPullCapabilityTag(
+            Number(record.remaining_quantity ?? 0) > 0,
+            t('app.kuaizhizao.purchaseRequisition.pull.canCreate'),
+            t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
+          ),
+      },
     ],
-    [t, i18n.language],
+    [t],
   );
 
   const createItemColumns = useMemo(
@@ -1180,8 +1158,8 @@ const ReceiptNoticesPage: React.FC = () => {
     }
   };
 
-  const isPullReceiptNoticePoSelectable = useCallback(
-    (record: PullPurchaseOrderCandidate) => record.capabilities?.push_receipt_notice?.allowed === true,
+  const isPullLineSelectable = useCallback(
+    (record: { remaining_quantity?: number }) => Number(record.remaining_quantity ?? 0) > 0,
     [],
   );
 
@@ -1195,37 +1173,76 @@ const ReceiptNoticesPage: React.FC = () => {
 
   const pullFromPurchaseOrderQuery = useUniPullQuery<PullPurchaseOrderCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions: pullFromPurchaseOrderScopeOptions,
     defaultScope: 'pullable',
+    onOpen: () => {
+      pullSourceOrderIdRef.current = undefined;
+      setPullSourceOrderId(undefined);
+      void listPurchaseOrders({ skip: 0, limit: 100 })
+        .then((res) => {
+          setPullSourceOrderOptions(
+            (res?.data ?? [])
+              .filter((row) => row.id != null && row.order_code)
+              .map((row) => ({ value: row.id!, label: String(row.order_code) })),
+          );
+        })
+        .catch((error: unknown) => {
+          messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.receiptNotice.pull.loadSourceFailed')));
+          setPullSourceOrderOptions([]);
+        });
+    },
     loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
-        const poRes = await listPurchaseOrders({
-          skip: 0,
-          limit: 200,
+        const listRes = await listPurchaseOrderReceiptNoticePullLines({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
           keyword: keyword.trim() || undefined,
+          order_id: pullSourceOrderIdRef.current,
+          pullable_only: isPullableScope(scope),
         });
-        const rows = (poRes?.data || []).filter((row) => row.id != null) as PullPurchaseOrderCandidate[];
-        const filtered = filterByPullScope(rows, scope, isPullReceiptNoticePoSelectable);
-        return paginatePullRows(filtered, page, pageSize);
+        return { data: listRes?.data ?? [], total: listRes?.total ?? 0 };
       } catch (error: unknown) {
         messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.receiptNotice.loadPurchaseOrdersFailed')));
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (record) => !isPullReceiptNoticePoSelectable(record),
-    onConfirm: async (keys) => {
-      const orderId = Number(keys[0]);
-      if (!orderId || orderId <= 0) {
-        messageApi.warning(t('app.kuaizhizao.receiptNotice.selectPurchaseOrderFirst'));
+    isRowDisabled: (record) => !isPullLineSelectable(record),
+    onConfirm: async (_keys, rows) => {
+      const selectedIds = rows
+        .filter((row) => isPullLineSelectable(row))
+        .map((row) => Number(row.id))
+        .filter((id) => id > 0);
+      if (!selectedIds.length) {
+        messageApi.warning(t('app.kuaizhizao.receiptNotice.pull.selectLinesFirst'));
         return;
       }
-      pullQueryCloseRef.current?.();
-      showPullCreatePreview(orderId);
+      try {
+        const res = await pullReceiptNoticesFromPurchaseOrderItems(selectedIds);
+        messageApi.success(
+          res.message ||
+            t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
+              source: pullFromPurchaseOrderAction.sourceLabel,
+              target: pullFromPurchaseOrderAction.targetLabel,
+            }),
+        );
+        pullFromPurchaseOrderQuery.closeModal();
+        setStatsVersion((v) => v + 1);
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(
+            error,
+            t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
+              source: pullFromPurchaseOrderAction.sourceLabel,
+              target: pullFromPurchaseOrderAction.targetLabel,
+            }),
+          ),
+        );
+      }
     },
   });
-
-  pullQueryCloseRef.current = pullFromPurchaseOrderQuery.closeModal;
 
   const onPurchaseOrderSelect = async (orderId: number) => {
     let order = purchaseOrderList.find((o: any) => (o.id ?? o.purchase_order_id) === orderId);
@@ -1795,6 +1812,7 @@ const ReceiptNoticesPage: React.FC = () => {
         confirmLoading={pullFromPurchaseOrderQuery.confirmLoading}
         selectionType={pullFromPurchaseOrderQuery.selectionType}
         selectedRowKeys={pullFromPurchaseOrderQuery.selectedRowKeys}
+        selectedRows={pullFromPurchaseOrderQuery.selectedRows}
         onSelectedRowKeysChange={pullFromPurchaseOrderQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromPurchaseOrderQuery.isRowDisabled}
         searchDraft={pullFromPurchaseOrderQuery.searchDraft}
@@ -1802,7 +1820,29 @@ const ReceiptNoticesPage: React.FC = () => {
         onSearchApply={pullFromPurchaseOrderQuery.handleSearchApply}
         onSearchClear={pullFromPurchaseOrderQuery.handleSearchClear}
         appliedKeyword={pullFromPurchaseOrderQuery.appliedKeyword}
-        searchPlaceholder={t('app.kuaizhizao.receiptNotice.pullSearchPlaceholder')}
+        searchPlaceholder={t('app.kuaizhizao.receiptNotice.pull.searchPlaceholder')}
+        filterExtra={(
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('app.kuaizhizao.receiptNotice.pull.sourceDocPlaceholder')}
+            style={{ width: 220, flexShrink: 0 }}
+            value={pullSourceOrderId}
+            options={pullSourceOrderOptions}
+            onChange={(value) => {
+              const nextId = Number(value);
+              const next = Number.isFinite(nextId) && nextId > 0 ? nextId : undefined;
+              pullSourceOrderIdRef.current = next;
+              setPullSourceOrderId(next);
+              pullFromPurchaseOrderQuery.handleSelectedRowKeysChange([], []);
+              pullFromPurchaseOrderQuery.handleSearchApply(pullFromPurchaseOrderQuery.appliedKeyword);
+            }}
+          />
+        )}
+        getRowLabel={(row) =>
+          [row.order_code, row.material_code].filter(Boolean).join(' ')
+        }
         page={pullFromPurchaseOrderQuery.page}
         pageSize={pullFromPurchaseOrderQuery.pageSize}
         total={pullFromPurchaseOrderQuery.total}
@@ -1810,8 +1850,7 @@ const ReceiptNoticesPage: React.FC = () => {
         scopeOptions={pullFromPurchaseOrderQuery.scopeOptions}
         scope={pullFromPurchaseOrderQuery.scope}
         onScopeChange={pullFromPurchaseOrderQuery.handleScopeChange}
-        okText={t('common.next')}
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        okText={t('app.kuaizhizao.receiptNotice.pull.ok')}
       />
 
       <DetailDrawerTemplate
@@ -1995,79 +2034,6 @@ const ReceiptNoticesPage: React.FC = () => {
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendReceiptNoticeItemsFromMaterials}
       />
-
-      <Modal
-        title={pullFromPurchaseOrderAction.label}
-        open={pullPreviewOpen}
-        destroyOnClose
-        width={1100}
-        onCancel={resetPullPreviewModal}
-        okText={pullFromPurchaseOrderAction.label}
-        cancelText={t('common.cancel')}
-        confirmLoading={pullPreviewConfirming}
-        onOk={() => void handlePullPreviewConfirm()}
-        okButtonProps={{
-          disabled:
-            pullPreviewLoading ||
-            !pullPreviewData ||
-            !!pullPreviewData?.has_blocking_issues,
-        }}
-      >
-        {pullPreviewLoading ? (
-          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-            <Spin />
-            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
-          </div>
-        ) : pullPreviewData ? (
-          <div>
-            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
-            {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
-              <Alert
-                type="warning"
-                showIcon
-                style={{ marginBottom: 12 }}
-                message={
-                  purchaseOrderCapabilityReasonMessage(pullPreviewData.blocking_reason, t) ||
-                  t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
-                    source: pullFromPurchaseOrderAction.sourceLabel,
-                    target: pullFromPurchaseOrderAction.targetLabel,
-                  })
-                }
-              />
-            ) : null}
-            {pullPreviewData.items?.length > 0 ? (
-              <Table
-                size="small"
-                dataSource={pullPreviewData.items}
-                rowKey={(row) => String(row.item_id)}
-                pagination={false}
-                scroll={{ x: 960 }}
-                rowSelection={{
-                  selectedRowKeys: pullSelectedItemIds.map(String),
-                  onChange: (keys) => setPullSelectedItemIds(keys.map((k) => Number(k))),
-                  getCheckboxProps: (row) => ({
-                    disabled: Number(row.max_push_quantity ?? 0) <= 0,
-                  }),
-                }}
-                columns={[
-                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
-                ]}
-              />
-            ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.receiptNotice.pull.previewNoLines')} />
-            )}
-            {pullPreviewData.tip ? (
-              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-                {pullPreviewData.tip}
-              </Typography.Paragraph>
-            ) : null}
-          </div>
-        ) : null}
-      </Modal>
 
       <Modal
         title={t('app.kuaizhizao.shipmentNotice.notifyWarehouse')}

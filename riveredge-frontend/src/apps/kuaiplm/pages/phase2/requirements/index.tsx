@@ -12,6 +12,7 @@ import {
   ProFormText,
   ProFormTextArea,
   ProFormDigit,
+  ProFormDependency,
 } from '@ant-design/pro-components';
 import { App, Button, Alert } from 'antd';
 import { LinkOutlined } from '@ant-design/icons';
@@ -28,7 +29,7 @@ import {
   type RdRequirement,
 } from '../../../services/phase2';
 import { buildPurchaseInquiryUrl } from '../../../services/master-data-links';
-import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { testGenerateCode } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
@@ -40,6 +41,8 @@ import {
   PLM_PHASE2_PINNED_STATUS_FIELD,
   resolvePhase2RequirementListParams,
 } from '../../../utils/plmListCore';
+import Phase2ProjectSelect from '../../../components/Phase2ProjectSelect';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
   buildPhase2PriorityValueEnum,
   buildPhase2RequirementStatusValueEnum,
@@ -48,11 +51,27 @@ import {
   renderPhase2RequirementStatusTag,
 } from '../../../components/phase2Meta';
 
+const validateRequirementPayload = (
+  values: Record<string, unknown>,
+  messageApi: { warning: (msg: string) => void },
+  t: (key: string) => string,
+) => {
+  if (values.source_type === 'purchase_inquiry') {
+    const sourceId = Number(values.source_id);
+    if (!Number.isFinite(sourceId) || sourceId <= 0) {
+      messageApi.warning(t('app.kuaiplm.phase2.requirements.form.purchaseInquiryIdRequired'));
+      return false;
+    }
+  }
+  return true;
+};
+
 const PAGE_CODE = 'kuaiplm-rd-requirement';
 
 const RequirementsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
+  const perms = useResourcePermissions('kuaiplm.requirement');
   const [searchParams] = useSearchParams();
   const projectIdFilter = searchParams.get('project_id');
   const filterProjectId = projectIdFilter ? Number(projectIdFilter) : undefined;
@@ -321,7 +340,7 @@ const RequirementsPage: React.FC = () => {
             return { data: [], total: 0, success: false };
           }
         }}
-        showCreateButton
+        showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaiplm.phase2.requirements.createButton') + NEW_SHORTCUT_HINT}
         onCreate={handleCreate}
         showDeleteButton
@@ -362,10 +381,12 @@ const RequirementsPage: React.FC = () => {
           setCreateOpen(false);
           setPreviewCode(null);
         }}
+        initialValues={{ project_id: filterProjectId, priority: 'normal' }}
         onFinish={async (values) => {
+          if (!validateRequirementPayload(values, messageApi, t)) return;
           await createRequirement({
             ...values,
-            project_id: filterProjectId,
+            project_id: values.project_id ?? filterProjectId,
           });
           messageApi.success(t('common.createSuccess'));
           setCreateOpen(false);
@@ -389,10 +410,10 @@ const RequirementsPage: React.FC = () => {
           label={t('app.kuaiplm.phase2.requirements.form.title')}
           rules={[{ required: true }]}
         />
+        <Phase2ProjectSelect initialValue={filterProjectId} />
         <ProFormSelect
           name="priority"
           label={t('app.kuaiplm.phase2.requirements.form.priority')}
-          initialValue="normal"
           options={[
             { value: 'high', label: t('app.kuaiplm.phase2.common.priority.high') },
             { value: 'normal', label: t('app.kuaiplm.phase2.common.priority.normal') },
@@ -408,6 +429,18 @@ const RequirementsPage: React.FC = () => {
             { value: 'internal', label: t('app.kuaiplm.phase2.common.source.internal') },
           ]}
         />
+        <ProFormDependency name={['source_type']}>
+          {({ source_type }) =>
+            source_type === 'purchase_inquiry' ? (
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+                title={t('app.kuaiplm.phase2.requirements.form.purchaseInquiryHint')}
+              />
+            ) : null
+          }
+        </ProFormDependency>
         <ProFormDigit
           name="source_id"
           label={t('app.kuaiplm.phase2.requirements.form.sourceId')}
@@ -425,6 +458,7 @@ const RequirementsPage: React.FC = () => {
         initialValues={editingRecord || {}}
         onFinish={async (values) => {
           if (!editingRecord?.id) return;
+          if (!validateRequirementPayload(values, messageApi, t)) return;
           await updateRequirement(editingRecord.id, values);
           messageApi.success(t('common.updateSuccess'));
           setEditingRecord(null);
@@ -436,6 +470,7 @@ const RequirementsPage: React.FC = () => {
           label={t('app.kuaiplm.phase2.requirements.form.title')}
           rules={[{ required: true }]}
         />
+        <Phase2ProjectSelect />
         <ProFormSelect
           name="priority"
           label={t('app.kuaiplm.phase2.requirements.form.priority')}

@@ -65,6 +65,7 @@ export interface ReportingDetailedStatistics {
 
 export interface ReportingRecord {
   id?: number;
+  work_order_id?: number;
   work_order_code?: string;
   work_order_name?: string;
   operation_name?: string;
@@ -130,6 +131,7 @@ export interface ReportingPullCandidateListResponse {
 export const reportingApi = {
   listPullCandidates: async (params?: {
     keyword?: string;
+    work_order_code?: string;
     /** reportable=仅可报工（默认）；all=全部 */
     scope?: 'reportable' | 'all' | string;
     skip?: number;

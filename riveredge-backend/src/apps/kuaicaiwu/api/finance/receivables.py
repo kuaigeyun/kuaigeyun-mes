@@ -152,6 +152,11 @@ async def list_receivables(
     updated_end_date: Optional[str] = Query(None),
     sort_field: Optional[str] = Query(None),
     sort_order: Optional[str] = Query(None),
+    aging_bucket: Optional[str] = Query(
+        None,
+        description="账龄区间（within_30/31_60/61_90/over_90，与 aging 分析一致）",
+    ),
+    overdue_only: bool = Query(False, description="仅返回已逾期且未结清的单据"),
     _auth: object = Depends(require_permission_codes("kuaicaiwu:receivable:read")),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -176,6 +181,8 @@ async def list_receivables(
         updated_end_date=updated_end_date,
         sort_field=sort_field,
         sort_order=sort_order,
+        aging_bucket=aging_bucket,
+        overdue_only=overdue_only,
     )
     enriched = await receivable_pull_service.enrich_push_receipt_capabilities(tenant_id, receivables)
     enriched = await receivable_pull_service.enrich_push_sales_invoice_capabilities(

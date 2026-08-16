@@ -107,11 +107,13 @@ export const FreightOrderDetailDrawer: React.FC<FreightOrderDetailDrawerProps> =
           dataIndex: 'origin_address',
           span: 3,
         },
+        { title: t('app.kuaizhizao.logistics.field.senderPhone'), dataIndex: 'sender_phone' },
         {
           title: t('app.kuaizhizao.logistics.field.destinationAddress'),
           dataIndex: 'destination_address',
           span: 3,
         },
+        { title: t('app.kuaizhizao.logistics.field.recipientPhone'), dataIndex: 'recipient_phone' },
         ...(receipt?.signed_by
           ? [
               {

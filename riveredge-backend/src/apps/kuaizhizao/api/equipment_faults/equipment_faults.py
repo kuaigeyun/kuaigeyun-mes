@@ -71,6 +71,7 @@ async def list_equipment_faults(
     fault_end_date: Optional[str] = Query(None, description="故障结束日期 YYYY-MM-DD"),
     created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
     created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    uuid: Optional[str] = Query(None, description="故障记录 UUID（精确匹配）"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -93,6 +94,7 @@ async def list_equipment_faults(
         fault_end_date=fault_end_date,
         created_start_date=created_start_date,
         created_end_date=created_end_date,
+        uuid=uuid,
     )
     
     items = [EquipmentFaultResponse.model_validate(fault) for fault in faults]

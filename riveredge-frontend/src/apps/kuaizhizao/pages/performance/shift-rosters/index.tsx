@@ -15,8 +15,11 @@ import { factoryListItems, workGroupApi } from '../../../../master-data/services
 import type { WorkGroup } from '../../../../master-data/types/factory';
 import { formatDateTime } from '../../../../../utils/format';
 import { normalizePerformanceListResponse } from '../../../utils/performanceListCore';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
 dayjs.extend(isoWeek);
+
+const ROSTER_RESOURCE = 'kuaizhizao:performance-shift-rosters';
 
 type RosterScopeType = 'work_group' | 'employee';
 
@@ -47,6 +50,7 @@ const WEEKDAY_KEYS = [
 const ShiftRostersPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const rosterPerms = useResourcePermissions(ROSTER_RESOURCE);
   const [scopeType, setScopeType] = useState<RosterScopeType>('work_group');
   const [workGroups, setWorkGroups] = useState<WorkGroup[]>([]);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
@@ -305,7 +309,7 @@ const ShiftRostersPage: React.FC = () => {
               style={{ width: '100%' }}
               allowClear
               placeholder="—"
-              disabled={roster?.status === 'published'}
+              disabled={roster?.status === 'published' || !rosterPerms.canUpdate}
               options={shiftOptions}
               value={selectVal}
               onChange={(v) => handleCellChange(record.employeeId, d, v ?? REST_VALUE)}
@@ -315,7 +319,7 @@ const ShiftRostersPage: React.FC = () => {
       });
     });
     return base;
-  }, [weekDates, shiftOptions, roster?.status, t]);
+  }, [weekDates, shiftOptions, roster?.status, rosterPerms.canUpdate, t]);
 
   return (
     <ListPageTemplate>
@@ -374,15 +378,34 @@ const ShiftRostersPage: React.FC = () => {
               {roster.updatedAt ? formatDateTime(roster.updatedAt, 'YYYY-MM-DD HH:mm') : '-'}
             </Typography.Text>
           ) : null}
-          <Button type="primary" loading={saving} disabled={!scopeReady || roster?.status === 'published'} onClick={handleSave}>
-            {t('app.kuaizhizao.performance.common.actions.saveDraft')}
-          </Button>
-          <Button loading={saving} disabled={!scopeReady || roster?.status === 'published'} onClick={handlePublish}>
-            {t('app.kuaizhizao.performance.common.actions.publish')}
-          </Button>
-          <Button loading={saving} disabled={!scopeReady || roster?.status === 'published'} onClick={handleCopyPrevious}>
-            {t('app.kuaizhizao.performance.common.actions.copyPreviousWeek')}
-          </Button>
+          {rosterPerms.canUpdate ? (
+            <Button
+              type="primary"
+              loading={saving}
+              disabled={!scopeReady || roster?.status === 'published'}
+              onClick={handleSave}
+            >
+              {t('app.kuaizhizao.performance.common.actions.saveDraft')}
+            </Button>
+          ) : null}
+          {rosterPerms.canCreate ? (
+            <Button
+              loading={saving}
+              disabled={!scopeReady || roster?.status === 'published'}
+              onClick={handlePublish}
+            >
+              {t('app.kuaizhizao.performance.common.actions.publish')}
+            </Button>
+          ) : null}
+          {rosterPerms.canCreate ? (
+            <Button
+              loading={saving}
+              disabled={!scopeReady || roster?.status === 'published'}
+              onClick={handleCopyPrevious}
+            >
+              {t('app.kuaizhizao.performance.common.actions.copyPreviousWeek')}
+            </Button>
+          ) : null}
           <Button onClick={loadRoster} disabled={!scopeReady}>
             {t('app.kuaizhizao.performance.common.actions.refresh')}
           </Button>

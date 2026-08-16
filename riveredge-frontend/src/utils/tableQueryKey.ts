@@ -52,6 +52,21 @@ export function extractProTableSort(
   }
 }
 
+/** 报表列头排序：未点击列时不传 order_by，保留后端默认序 */
+export function extractReportProTableSort(
+  sort: Record<string, 'ascend' | 'descend' | null | undefined>,
+): { sortBy?: string; sortOrder?: 'asc' | 'desc' } {
+  const entries = Object.entries(sort || {}).filter(
+    ([, v]) => v === 'ascend' || v === 'descend',
+  ) as [string, 'ascend' | 'descend'][]
+  if (entries.length === 0) return {}
+  const [field, order] = entries[0]
+  return {
+    sortBy: field,
+    sortOrder: order === 'ascend' ? 'asc' : 'desc',
+  }
+}
+
 /** ProTable 列 dataIndex → 工艺主数据列表接口 sortBy（后端 snake_case） */
 export function mapProcessListSortField(sortBy?: string): string | undefined {
   if (!sortBy) return undefined

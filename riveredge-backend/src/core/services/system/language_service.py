@@ -352,44 +352,32 @@ class LanguageService:
 
         logger.info(f"开始为组织 {tenant_id} 初始化系统语言")
 
-        # 系统预设语言配置：code, name, native_name, is_default, sort_order
+        # 当前注册的系统语言。ja-JP / vi-VN 语言包已就绪，见 UNREGISTERED_SYSTEM_LANGUAGE_CODES。
         SYSTEM_LANGUAGES = [
             {
                 "code": "zh-CN",
                 "name": "简体中文",
-                "native_name": "中文",
+                "native_name": "简体中文",
                 "is_default": True,
                 "sort_order": 0,
-            },
-            {
-                "code": "en-US",
-                "name": "English",
-                "native_name": "English",
-                "is_default": False,
-                "sort_order": 1,
             },
             {
                 "code": "zh-Hant",
                 "name": "繁體中文",
                 "native_name": "繁體中文",
                 "is_default": False,
+                "sort_order": 1,
+            },
+            {
+                "code": "en-US",
+                "name": "English",
+                "native_name": "English",
+                "is_default": False,
                 "sort_order": 2,
             },
-            {
-                "code": "ja-JP",
-                "name": "Japanese",
-                "native_name": "日本語",
-                "is_default": False,
-                "sort_order": 3,
-            },
-            {
-                "code": "vi-VN",
-                "name": "Vietnamese",
-                "native_name": "Tiếng Việt",
-                "is_default": False,
-                "sort_order": 4,
-            },
         ]
+        # 不删除记录；停用已注册项。启用时移入 SYSTEM_LANGUAGES 并设 is_active=True。
+        UNREGISTERED_SYSTEM_LANGUAGE_CODES = ("ja-JP", "vi-VN")
 
         created_count = 0
         skipped_count = 0
@@ -404,6 +392,21 @@ class LanguageService:
                 ).first()
 
                 if existing:
+                    desired_order = int(lang_config["sort_order"])
+                    desired_name = str(lang_config["name"])
+                    desired_native = str(lang_config["native_name"])
+                    changed = False
+                    if existing.sort_order != desired_order:
+                        existing.sort_order = desired_order
+                        changed = True
+                    if existing.name != desired_name:
+                        existing.name = desired_name
+                        changed = True
+                    if existing.native_name != desired_native:
+                        existing.native_name = desired_native
+                        changed = True
+                    if changed:
+                        await existing.save()
                     logger.info(f"系统语言 {lang_config['code']} 已存在，UUID: {existing.uuid}")
                     skipped_count += 1
                     continue
@@ -429,6 +432,32 @@ class LanguageService:
                 # 将首次异常向外抛出，便于前端展示真实错误（如：表不存在、权限问题等）
                 if created_count == 0 and skipped_count == 0:
                     raise
+
+        deactivated_count = await Language.filter(
+            tenant_id=tenant_id,
+            code__in=list(UNREGISTERED_SYSTEM_LANGUAGE_CODES),
+            deleted_at__isnull=True,
+        ).update(is_active=False, is_default=False)
+        if deactivated_count:
+            still_default = await Language.filter(
+                tenant_id=tenant_id,
+                is_default=True,
+                is_active=True,
+                deleted_at__isnull=True,
+            ).first()
+            if not still_default:
+                fallback = await Language.filter(
+                    tenant_id=tenant_id,
+                    code="zh-CN",
+                    deleted_at__isnull=True,
+                ).first()
+                if fallback:
+                    fallback.is_default = True
+                    fallback.is_active = True
+                    await fallback.save()
+            logger.info(
+                f"组织 {tenant_id} 已停用未注册系统语言 {UNREGISTERED_SYSTEM_LANGUAGE_CODES}，共 {deactivated_count} 条"
+            )
 
         logger.info(f"组织 {tenant_id} 系统语言初始化完成！创建 {created_count} 个，跳过 {skipped_count} 个已存在")
         return {

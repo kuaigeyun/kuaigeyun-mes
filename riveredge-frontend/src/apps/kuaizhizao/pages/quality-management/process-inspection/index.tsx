@@ -576,7 +576,7 @@ const ProcessInspectionPage: React.FC = () => {
         const res = await qualityApi.processInspection.listWorkOrderPullCandidates({
           skip: 0,
           limit: 100,
-          keyword: keyword.trim() || undefined,
+          code: keyword.trim() || undefined,
         });
         const rows = (res.data || []) as ProcessPullWorkOrderCandidate[];
         const filtered = filterByPullScope(rows, scope, isPullProcessInspectionSelectable);
@@ -1220,6 +1220,7 @@ const ProcessInspectionPage: React.FC = () => {
         confirmLoading={pullFromWorkOrderQuery.confirmLoading}
         selectionType={pullFromWorkOrderQuery.selectionType}
         selectedRowKeys={pullFromWorkOrderQuery.selectedRowKeys}
+        selectedRows={pullFromWorkOrderQuery.selectedRows}
         onSelectedRowKeysChange={pullFromWorkOrderQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromWorkOrderQuery.isRowDisabled}
         searchDraft={pullFromWorkOrderQuery.searchDraft}
@@ -1227,7 +1228,7 @@ const ProcessInspectionPage: React.FC = () => {
         onSearchApply={pullFromWorkOrderQuery.handleSearchApply}
         onSearchClear={pullFromWorkOrderQuery.handleSearchClear}
         appliedKeyword={pullFromWorkOrderQuery.appliedKeyword}
-        searchPlaceholder={t('components.uniPullQuery.searchPlaceholder')}
+        searchPlaceholder={t('app.kuaizhizao.quality.common.label.workOrderCode')}
         page={pullFromWorkOrderQuery.page}
         pageSize={pullFromWorkOrderQuery.pageSize}
         total={pullFromWorkOrderQuery.total}

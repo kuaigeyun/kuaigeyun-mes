@@ -72,6 +72,10 @@ async function loadReportingApi() {
   const { reportingApi } = await import('../../apps/kuaizhizao/services/reporting');
   return reportingApi;
 }
+async function loadEmployeePerformanceApi() {
+  const { employeePerformanceApi } = await import('../../apps/kuaizhizao/services/performance');
+  return employeePerformanceApi;
+}
 async function loadApiRequest() {
   const { apiRequest } = await import('../../services/api');
   return apiRequest;
@@ -996,6 +1000,60 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
           dataIndex: 'unqualified_quantity',
           width: 96,
           render: (v: unknown) => qtyFmt(v),
+        },
+      ];
+      return { basics, columns, rows };
+    }
+    case 'performance_summary': {
+      const api = await loadEmployeePerformanceApi();
+      const summary = await api.getSummary(documentId);
+      const detail = await api.getDetail({
+        period: summary.period,
+        employee_id: summary.employee_id,
+      });
+      const basics: BriefModel['basics'] = [
+        { key: 'employee', label: '员工', value: dash(summary.employee_name ?? summary.employee_id) },
+        { key: 'period', label: '周期', value: dash(summary.period) },
+        { key: 'status', label: '状态', value: briefDocStatus(summary.status) },
+        {
+          key: 'total_hours',
+          label: '总工时',
+          value: summary.total_hours != null ? String(summary.total_hours) : '—',
+        },
+        {
+          key: 'total_pieces',
+          label: '总件数',
+          value: summary.total_pieces != null ? String(summary.total_pieces) : '—',
+        },
+        {
+          key: 'total_amount',
+          label: '应发总额',
+          value: summary.total_amount != null ? String(summary.total_amount) : '—',
+        },
+      ];
+      const rows = (detail.items ?? []).slice(0, 8).map((item, idx) => ({
+        key: String(item.reporting_record_id ?? idx),
+        work_order_code: item.work_order_code,
+        operation_name: item.operation_name,
+        qualified_quantity: item.qualified_quantity,
+        work_hours: item.work_hours,
+      }));
+      const columns: BriefModel['columns'] = [
+        { title: '工单', dataIndex: 'work_order_code', width: 120, ellipsis: true },
+        { title: '工序', dataIndex: 'operation_name', width: 100, ellipsis: true },
+        {
+          title: '合格数量',
+          dataIndex: 'qualified_quantity',
+          width: 88,
+          align: 'right',
+          render: (v: unknown) => formatQuantity(v),
+        },
+        {
+          title: '工时',
+          dataIndex: 'work_hours',
+          width: 72,
+          align: 'right',
+          render: (v: unknown) => (v != null && v !== '' ? String(v) : '—'),
         },
       ];
       return { basics, columns, rows };

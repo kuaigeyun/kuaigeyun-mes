@@ -53,6 +53,21 @@ from apps.kuaizhizao.models.outsource_order import OutsourceOrder
 from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
 from apps.kuaizhizao.models.packing_binding import PackingBinding
 from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
+from apps.kuaizhizao.models.logistics import FreightOrder, FreightOrderSource
+from apps.kuaizhizao.models.after_sales_ticket import AfterSalesTicket
+from apps.kuaizhizao.models.install_execution_job import InstallExecutionJob
+from apps.kuaizhizao.models.after_sales_service import (
+    AfterSalesSparePartRequisition,
+    CustomerReturnVisit,
+    RepairOrder,
+    ServiceAsset,
+    ServiceDispatchOrder,
+    ServiceSettlement,
+    ServiceSettlementItem,
+)
+from apps.kuaizhizao.models.other_inbound import OtherInbound
+from apps.kuaizhizao.models.stocktaking import Stocktaking
+from apps.kuaizhizao.models.inventory_transfer import InventoryTransfer
 from apps.kuaizhizao.models.equipment import Equipment
 from apps.kuaizhizao.models.equipment_fault import EquipmentFault
 from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan
@@ -71,6 +86,18 @@ from core.utils.timezone_utils import to_api_isoformat
 def _order_display_name(order: Any) -> Optional[str]:
     """销售/采购订单 ORM 无 order_name，展示名唯一真源为 order_code。"""
     return getattr(order, "order_code", None)
+
+
+def _rel_doc(doc_type: str, row: Any, code_field: str, name: Optional[str] = None) -> Dict[str, Any]:
+    created_at = getattr(row, "created_at", None)
+    return {
+        "document_type": doc_type,
+        "document_id": row.id,
+        "document_code": getattr(row, code_field, None),
+        "document_name": name,
+        "status": getattr(row, "status", None),
+        "created_at": to_api_isoformat(created_at) if created_at else None,
+    }
 
 
 def _dedupe_relation_documents(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -138,6 +165,22 @@ class DocumentRelationService:
         "outsource_work_order": {"model": OutsourceWorkOrder, "code_field": "code", "name_field": "name"},
         "packing_binding": {"model": PackingBinding, "code_field": "uuid", "name_field": None},
         "receipt_notice": {"model": ReceiptNotice, "code_field": "notice_code", "name_field": None},
+        "other_inbound": {"model": OtherInbound, "code_field": "inbound_code", "name_field": None},
+        "stocktaking": {"model": Stocktaking, "code_field": "code", "name_field": None},
+        "inventory_transfer": {"model": InventoryTransfer, "code_field": "code", "name_field": None},
+        "freight_order": {"model": FreightOrder, "code_field": "order_code", "name_field": None},
+        "after_sales_ticket": {"model": AfterSalesTicket, "code_field": "ticket_code", "name_field": None},
+        "install_execution": {"model": InstallExecutionJob, "code_field": "job_code", "name_field": None},
+        "service_asset": {"model": ServiceAsset, "code_field": "asset_code", "name_field": None},
+        "repair_order": {"model": RepairOrder, "code_field": "order_code", "name_field": None},
+        "service_dispatch": {"model": ServiceDispatchOrder, "code_field": "dispatch_code", "name_field": None},
+        "spare_part_requisition": {
+            "model": AfterSalesSparePartRequisition,
+            "code_field": "requisition_code",
+            "name_field": None,
+        },
+        "service_settlement": {"model": ServiceSettlement, "code_field": "settlement_code", "name_field": None},
+        "customer_return_visit": {"model": CustomerReturnVisit, "code_field": "visit_code", "name_field": None},
         "sales_return": {"model": SalesReturn, "code_field": "return_code", "name_field": None},
         "shipment_notice": {"model": ShipmentNotice, "code_field": "notice_code", "name_field": None},
         "equipment": {"model": Equipment, "code_field": "code", "name_field": "name"},
@@ -713,6 +756,22 @@ class DocumentRelationService:
                                     "created_at": to_api_isoformat(sales_order.created_at) if sales_order.created_at else None
                                 })
 
+        # 关联收货通知（下推入库来源）
+        notice = await ReceiptNotice.get_or_none(
+            tenant_id=tenant_id,
+            purchase_receipt_id=receipt_id,
+            deleted_at__isnull=True,
+        )
+        if notice:
+            upstream.append({
+                "document_type": "receipt_notice",
+                "document_id": notice.id,
+                "document_code": notice.notice_code,
+                "document_name": None,
+                "status": notice.status,
+                "created_at": to_api_isoformat(notice.created_at) if notice.created_at else None,
+            })
+
         return upstream
 
     async def _get_purchase_return_upstream(
@@ -797,6 +856,48 @@ class DocumentRelationService:
             "status": wo.status if hasattr(wo, "status") else None,
             "created_at": to_api_isoformat(wo.created_at) if wo.created_at else None,
         }]
+
+    def _performance_summary_trace_dict(self, summary: PerformanceSummary) -> Dict[str, Any]:
+        """追溯树中的绩效汇总节点：周期 + 员工姓名。"""
+        max_len = self.TRACE_RELATION_RESPONSE_CODE_MAX_LEN
+        period = (summary.period or "").strip()
+        name = (summary.employee_name or "").strip()
+        code = f"{period} {name}".strip() or period or f"PS{summary.id}"
+        if len(code) > max_len:
+            code = code[:max_len]
+        ts = summary.updated_at or summary.created_at
+        return {
+            "document_type": "performance_summary",
+            "document_id": summary.id,
+            "document_code": code,
+            "document_name": period or None,
+            "status": summary.status if hasattr(summary, "status") else None,
+            "created_at": to_api_isoformat(ts) if ts else None,
+        }
+
+    async def _get_reporting_record_downstream(
+        self,
+        tenant_id: int,
+        record_id: int,
+    ) -> List[Dict[str, Any]]:
+        """报工记录下游：已审核且指定操作工时可关联当月绩效汇总。"""
+        rec = await ReportingRecord.get_or_none(
+            tenant_id=tenant_id, id=record_id, deleted_at__isnull=True
+        )
+        if not rec or rec.status != "approved" or not rec.worker_id or not rec.reported_at:
+            return []
+        from apps.master_data.services.performance_calc_service import PerformanceCalcService
+
+        period = PerformanceCalcService._period_from_reported_at(rec.reported_at)
+        summary = await PerformanceSummary.filter(
+            tenant_id=tenant_id,
+            employee_id=int(rec.worker_id),
+            period=period,
+            deleted_at__isnull=True,
+        ).first()
+        if not summary:
+            return []
+        return [self._performance_summary_trace_dict(summary)]
 
     async def _get_outsource_order_upstream(
         self,
@@ -914,23 +1015,28 @@ class DocumentRelationService:
         tenant_id: int,
         notice_id: int,
     ) -> List[Dict[str, Any]]:
-        """收货通知单下游：已生成时关联采购入库单"""
+        """收货通知单下游：采购入库单、货运单"""
+        downstream: List[Dict[str, Any]] = []
         rn = await ReceiptNotice.get_or_none(
             tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
         )
-        if not rn or not rn.purchase_receipt_id:
+        if not rn:
             return []
-        pr = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=rn.purchase_receipt_id)
-        if not pr:
-            return []
-        return [{
-            "document_type": "purchase_receipt",
-            "document_id": pr.id,
-            "document_code": pr.receipt_code,
-            "document_name": None,
-            "status": pr.status if hasattr(pr, "status") else None,
-            "created_at": to_api_isoformat(pr.created_at) if pr.created_at else None,
-        }]
+        if rn.purchase_receipt_id:
+            pr = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=rn.purchase_receipt_id)
+            if pr:
+                downstream.append({
+                    "document_type": "purchase_receipt",
+                    "document_id": pr.id,
+                    "document_code": pr.receipt_code,
+                    "document_name": None,
+                    "status": pr.status if hasattr(pr, "status") else None,
+                    "created_at": to_api_isoformat(pr.created_at) if pr.created_at else None,
+                })
+        downstream.extend(
+            await self._freight_orders_for_source(tenant_id, "receipt_notice", notice_id)
+        )
+        return _dedupe_relation_documents(downstream)
 
     async def _get_sales_return_upstream(
         self,
@@ -966,6 +1072,13 @@ class DocumentRelationService:
                     "status": so.status if hasattr(so, "status") else None,
                     "created_at": to_api_isoformat(so.created_at) if so.created_at else None,
                 })
+        tickets = await AfterSalesTicket.filter(
+            tenant_id=tenant_id,
+            sales_return_id=return_id,
+            deleted_at__isnull=True,
+        ).limit(10)
+        for ticket in tickets:
+            upstream.append(_rel_doc("after_sales_ticket", ticket, "ticket_code"))
         return upstream
 
     async def _get_shipment_notice_upstream(
@@ -1334,6 +1447,92 @@ class DocumentRelationService:
 
         return upstream
 
+    async def _freight_orders_for_source(
+        self,
+        tenant_id: int,
+        source_type: str,
+        source_id: int,
+    ) -> List[Dict[str, Any]]:
+        """来源单据关联的未取消货运单（下游）。"""
+        sources = await FreightOrderSource.filter(
+            tenant_id=tenant_id,
+            source_type=source_type,
+            source_id=int(source_id),
+        )
+        if not sources:
+            return []
+        out: List[Dict[str, Any]] = []
+        seen: set[int] = set()
+        for src in sources:
+            order = await FreightOrder.get_or_none(
+                tenant_id=tenant_id,
+                id=src.freight_order_id,
+                deleted_at__isnull=True,
+            )
+            if not order or order.status == "cancelled" or order.id in seen:
+                continue
+            seen.add(int(order.id))
+            out.append({
+                "document_type": "freight_order",
+                "document_id": order.id,
+                "document_code": order.order_code,
+                "document_name": None,
+                "status": order.status,
+                "created_at": to_api_isoformat(order.created_at) if order.created_at else None,
+            })
+        return out
+
+    async def _get_freight_order_upstream(
+        self,
+        tenant_id: int,
+        order_id: int,
+    ) -> List[Dict[str, Any]]:
+        """货运单上游：来源销售出库/送货单/收货通知。"""
+        sources = await FreightOrderSource.filter(
+            tenant_id=tenant_id,
+            freight_order_id=int(order_id),
+        )
+        upstream: List[Dict[str, Any]] = []
+        for src in sources:
+            if src.source_type == "sales_delivery":
+                sd = await SalesDelivery.get_or_none(tenant_id=tenant_id, id=src.source_id)
+                if sd:
+                    upstream.append({
+                        "document_type": "sales_delivery",
+                        "document_id": sd.id,
+                        "document_code": sd.delivery_code,
+                        "document_name": None,
+                        "status": sd.status if hasattr(sd, "status") else None,
+                        "created_at": to_api_isoformat(sd.created_at) if sd.created_at else None,
+                    })
+            elif src.source_type == "delivery_notice":
+                dn = await DeliveryNotice.get_or_none(
+                    tenant_id=tenant_id, id=src.source_id, deleted_at__isnull=True
+                )
+                if dn:
+                    upstream.append({
+                        "document_type": "delivery_notice",
+                        "document_id": dn.id,
+                        "document_code": dn.notice_code,
+                        "document_name": None,
+                        "status": dn.status,
+                        "created_at": to_api_isoformat(dn.created_at) if dn.created_at else None,
+                    })
+            elif src.source_type == "receipt_notice":
+                rn = await ReceiptNotice.get_or_none(
+                    tenant_id=tenant_id, id=src.source_id, deleted_at__isnull=True
+                )
+                if rn:
+                    upstream.append({
+                        "document_type": "receipt_notice",
+                        "document_id": rn.id,
+                        "document_code": rn.notice_code,
+                        "document_name": None,
+                        "status": rn.status,
+                        "created_at": to_api_isoformat(rn.created_at) if rn.created_at else None,
+                    })
+        return _dedupe_relation_documents(upstream)
+
     async def _get_sales_delivery_downstream(
         self,
         tenant_id: int,
@@ -1390,7 +1589,12 @@ class DocumentRelationService:
                 "created_at": to_api_isoformat(sr.created_at) if sr.created_at else None
             })
 
-        return downstream
+        downstream.extend(
+            await self._freight_orders_for_source(tenant_id, "sales_delivery", delivery_id)
+        )
+        downstream.extend(await self._after_sales_for_sales_delivery(tenant_id, delivery_id))
+
+        return _dedupe_relation_documents(downstream)
 
     async def _get_receivable_upstream(
         self,
@@ -2048,7 +2252,336 @@ class DocumentRelationService:
                     "created_at": to_api_isoformat(inv.created_at) if inv.created_at else None,
                 })
 
+        downstream.extend(await self._after_sales_for_sales_order(tenant_id, order_id))
+
         return _dedupe_relation_documents(downstream)
+
+    async def _after_sales_for_sales_order(
+        self, tenant_id: int, order_id: int
+    ) -> List[Dict[str, Any]]:
+        docs: List[Dict[str, Any]] = []
+        tickets = await AfterSalesTicket.filter(
+            tenant_id=tenant_id, sales_order_id=order_id, deleted_at__isnull=True
+        ).limit(20)
+        docs.extend(_rel_doc("after_sales_ticket", row, "ticket_code") for row in tickets)
+        jobs = await InstallExecutionJob.filter(
+            tenant_id=tenant_id, sales_order_id=order_id, deleted_at__isnull=True
+        ).limit(20)
+        docs.extend(_rel_doc("install_execution", row, "job_code") for row in jobs)
+        return docs
+
+    async def _after_sales_for_sales_delivery(
+        self, tenant_id: int, delivery_id: int
+    ) -> List[Dict[str, Any]]:
+        docs: List[Dict[str, Any]] = []
+        tickets = await AfterSalesTicket.filter(
+            tenant_id=tenant_id, sales_delivery_id=delivery_id, deleted_at__isnull=True
+        ).limit(20)
+        docs.extend(_rel_doc("after_sales_ticket", row, "ticket_code") for row in tickets)
+        jobs = await InstallExecutionJob.filter(
+            tenant_id=tenant_id, sales_delivery_id=delivery_id, deleted_at__isnull=True
+        ).limit(20)
+        docs.extend(_rel_doc("install_execution", row, "job_code") for row in jobs)
+        return docs
+
+    async def _after_sales_by_source(
+        self,
+        tenant_id: int,
+        model: Any,
+        source_type: str,
+        source_id: int,
+        doc_type: str,
+        code_field: str,
+    ) -> List[Dict[str, Any]]:
+        rows = await model.filter(
+            tenant_id=tenant_id,
+            source_type=source_type,
+            source_id=source_id,
+            deleted_at__isnull=True,
+        ).limit(20)
+        return [_rel_doc(doc_type, row, code_field) for row in rows]
+
+    async def _settlements_for_source(
+        self, tenant_id: int, source_type: str, source_id: int
+    ) -> List[Dict[str, Any]]:
+        items = await ServiceSettlementItem.filter(
+            tenant_id=tenant_id,
+            source_type=source_type,
+            source_id=source_id,
+            deleted_at__isnull=True,
+        ).limit(20)
+        settlement_ids = {row.settlement_id for row in items}
+        if not settlement_ids:
+            return []
+        rows = await ServiceSettlement.filter(
+            tenant_id=tenant_id,
+            id__in=list(settlement_ids),
+            deleted_at__isnull=True,
+        )
+        return [_rel_doc("service_settlement", row, "settlement_code") for row in rows]
+
+    async def _sales_doc_node(
+        self, tenant_id: int, doc_type: str, doc_id: Optional[int]
+    ) -> Optional[Dict[str, Any]]:
+        if not doc_id:
+            return None
+        if doc_type == "sales_order":
+            row = await SalesOrder.get_or_none(
+                tenant_id=tenant_id, id=doc_id, deleted_at__isnull=True
+            )
+            return _rel_doc("sales_order", row, "order_code", _order_display_name(row)) if row else None
+        if doc_type == "sales_delivery":
+            row = await SalesDelivery.get_or_none(
+                tenant_id=tenant_id, id=doc_id, deleted_at__isnull=True
+            )
+            return _rel_doc("sales_delivery", row, "delivery_code") if row else None
+        if doc_type == "sales_return":
+            row = await SalesReturn.get_or_none(
+                tenant_id=tenant_id, id=doc_id, deleted_at__isnull=True
+            )
+            return _rel_doc("sales_return", row, "return_code") if row else None
+        return None
+
+    async def _get_after_sales_ticket_upstream(
+        self, tenant_id: int, ticket_id: int
+    ) -> List[Dict[str, Any]]:
+        row = await AfterSalesTicket.get_or_none(
+            tenant_id=tenant_id, id=ticket_id, deleted_at__isnull=True
+        )
+        if not row:
+            return []
+        upstream: List[Dict[str, Any]] = []
+        for doc_type, doc_id in (
+            ("sales_order", row.sales_order_id),
+            ("sales_delivery", row.sales_delivery_id),
+            ("sales_return", row.sales_return_id),
+        ):
+            node = await self._sales_doc_node(tenant_id, doc_type, doc_id)
+            if node:
+                upstream.append(node)
+        return upstream
+
+    async def _get_after_sales_ticket_downstream(
+        self, tenant_id: int, ticket_id: int
+    ) -> List[Dict[str, Any]]:
+        row = await AfterSalesTicket.get_or_none(
+            tenant_id=tenant_id, id=ticket_id, deleted_at__isnull=True
+        )
+        if not row:
+            return []
+        downstream: List[Dict[str, Any]] = []
+        if row.sales_return_id:
+            node = await self._sales_doc_node(tenant_id, "sales_return", row.sales_return_id)
+            if node:
+                downstream.append(node)
+        repairs = await RepairOrder.filter(
+            tenant_id=tenant_id, after_sales_ticket_id=ticket_id, deleted_at__isnull=True
+        ).limit(10)
+        downstream.extend(_rel_doc("repair_order", item, "order_code") for item in repairs)
+        downstream.extend(
+            await self._after_sales_by_source(
+                tenant_id,
+                CustomerReturnVisit,
+                "after_sales_ticket",
+                ticket_id,
+                "customer_return_visit",
+                "visit_code",
+            )
+        )
+        return _dedupe_relation_documents(downstream)
+
+    async def _get_install_execution_upstream(
+        self, tenant_id: int, job_id: int
+    ) -> List[Dict[str, Any]]:
+        row = await InstallExecutionJob.get_or_none(
+            tenant_id=tenant_id, id=job_id, deleted_at__isnull=True
+        )
+        if not row:
+            return []
+        upstream: List[Dict[str, Any]] = []
+        for doc_type, doc_id in (
+            ("sales_order", row.sales_order_id),
+            ("sales_delivery", row.sales_delivery_id),
+        ):
+            node = await self._sales_doc_node(tenant_id, doc_type, doc_id)
+            if node:
+                upstream.append(node)
+        return upstream
+
+    async def _get_install_execution_downstream(
+        self, tenant_id: int, job_id: int
+    ) -> List[Dict[str, Any]]:
+        assets = await ServiceAsset.filter(
+            tenant_id=tenant_id, install_execution_id=job_id, deleted_at__isnull=True
+        ).limit(10)
+        downstream = [_rel_doc("service_asset", row, "asset_code") for row in assets]
+        downstream.extend(
+            await self._after_sales_by_source(
+                tenant_id, ServiceDispatchOrder, "install_execution", job_id, "service_dispatch", "dispatch_code"
+            )
+        )
+        downstream.extend(
+            await self._after_sales_by_source(
+                tenant_id,
+                AfterSalesSparePartRequisition,
+                "install_execution",
+                job_id,
+                "spare_part_requisition",
+                "requisition_code",
+            )
+        )
+        downstream.extend(await self._settlements_for_source(tenant_id, "install_execution", job_id))
+        return _dedupe_relation_documents(downstream)
+
+    async def _get_service_asset_upstream(
+        self, tenant_id: int, asset_id: int
+    ) -> List[Dict[str, Any]]:
+        row = await ServiceAsset.get_or_none(
+            tenant_id=tenant_id, id=asset_id, deleted_at__isnull=True
+        )
+        if not row:
+            return []
+        upstream: List[Dict[str, Any]] = []
+        for doc_type, doc_id in (
+            ("sales_order", row.sales_order_id),
+            ("sales_delivery", row.sales_delivery_id),
+        ):
+            node = await self._sales_doc_node(tenant_id, doc_type, doc_id)
+            if node:
+                upstream.append(node)
+        if row.install_execution_id:
+            job = await InstallExecutionJob.get_or_none(
+                tenant_id=tenant_id, id=row.install_execution_id, deleted_at__isnull=True
+            )
+            if job:
+                upstream.append(_rel_doc("install_execution", job, "job_code"))
+        return upstream
+
+    async def _get_service_asset_downstream(
+        self, tenant_id: int, asset_id: int
+    ) -> List[Dict[str, Any]]:
+        repairs = await RepairOrder.filter(
+            tenant_id=tenant_id, service_asset_id=asset_id, deleted_at__isnull=True
+        ).limit(10)
+        return [_rel_doc("repair_order", row, "order_code") for row in repairs]
+
+    async def _get_repair_order_upstream(
+        self, tenant_id: int, order_id: int
+    ) -> List[Dict[str, Any]]:
+        row = await RepairOrder.get_or_none(
+            tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+        )
+        if not row:
+            return []
+        upstream: List[Dict[str, Any]] = []
+        if row.after_sales_ticket_id:
+            ticket = await AfterSalesTicket.get_or_none(
+                tenant_id=tenant_id, id=row.after_sales_ticket_id, deleted_at__isnull=True
+            )
+            if ticket:
+                upstream.append(_rel_doc("after_sales_ticket", ticket, "ticket_code"))
+        if row.service_asset_id:
+            asset = await ServiceAsset.get_or_none(
+                tenant_id=tenant_id, id=row.service_asset_id, deleted_at__isnull=True
+            )
+            if asset:
+                upstream.append(_rel_doc("service_asset", asset, "asset_code"))
+        return upstream
+
+    async def _get_repair_order_downstream(
+        self, tenant_id: int, order_id: int
+    ) -> List[Dict[str, Any]]:
+        downstream: List[Dict[str, Any]] = []
+        downstream.extend(
+            await self._after_sales_by_source(
+                tenant_id, ServiceDispatchOrder, "repair_order", order_id, "service_dispatch", "dispatch_code"
+            )
+        )
+        downstream.extend(
+            await self._after_sales_by_source(
+                tenant_id,
+                AfterSalesSparePartRequisition,
+                "repair_order",
+                order_id,
+                "spare_part_requisition",
+                "requisition_code",
+            )
+        )
+        downstream.extend(await self._settlements_for_source(tenant_id, "repair_order", order_id))
+        downstream.extend(
+            await self._after_sales_by_source(
+                tenant_id, CustomerReturnVisit, "repair_order", order_id, "customer_return_visit", "visit_code"
+            )
+        )
+        return _dedupe_relation_documents(downstream)
+
+    async def _get_after_sales_source_upstream(
+        self, tenant_id: int, source_type: Optional[str], source_id: Optional[int]
+    ) -> List[Dict[str, Any]]:
+        st = (source_type or "").strip()
+        if not st or not source_id:
+            return []
+        if st == "after_sales_ticket":
+            row = await AfterSalesTicket.get_or_none(
+                tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
+            )
+            return [_rel_doc("after_sales_ticket", row, "ticket_code")] if row else []
+        if st == "repair_order":
+            row = await RepairOrder.get_or_none(
+                tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
+            )
+            return [_rel_doc("repair_order", row, "order_code")] if row else []
+        if st == "install_execution":
+            row = await InstallExecutionJob.get_or_none(
+                tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
+            )
+            return [_rel_doc("install_execution", row, "job_code")] if row else []
+        return []
+
+    async def _get_service_dispatch_upstream(
+        self, tenant_id: int, dispatch_id: int
+    ) -> List[Dict[str, Any]]:
+        row = await ServiceDispatchOrder.get_or_none(
+            tenant_id=tenant_id, id=dispatch_id, deleted_at__isnull=True
+        )
+        if not row:
+            return []
+        return await self._get_after_sales_source_upstream(tenant_id, row.source_type, row.source_id)
+
+    async def _get_spare_part_requisition_upstream(
+        self, tenant_id: int, requisition_id: int
+    ) -> List[Dict[str, Any]]:
+        row = await AfterSalesSparePartRequisition.get_or_none(
+            tenant_id=tenant_id, id=requisition_id, deleted_at__isnull=True
+        )
+        if not row:
+            return []
+        return await self._get_after_sales_source_upstream(tenant_id, row.source_type, row.source_id)
+
+    async def _get_service_settlement_upstream(
+        self, tenant_id: int, settlement_id: int
+    ) -> List[Dict[str, Any]]:
+        items = await ServiceSettlementItem.filter(
+            tenant_id=tenant_id, settlement_id=settlement_id, deleted_at__isnull=True
+        ).limit(20)
+        upstream: List[Dict[str, Any]] = []
+        for item in items:
+            upstream.extend(
+                await self._get_after_sales_source_upstream(
+                    tenant_id, item.source_type, item.source_id
+                )
+            )
+        return _dedupe_relation_documents(upstream)
+
+    async def _get_customer_return_visit_upstream(
+        self, tenant_id: int, visit_id: int
+    ) -> List[Dict[str, Any]]:
+        row = await CustomerReturnVisit.get_or_none(
+            tenant_id=tenant_id, id=visit_id, deleted_at__isnull=True
+        )
+        if not row:
+            return []
+        return await self._get_after_sales_source_upstream(tenant_id, row.source_type, row.source_id)
 
     async def get_change_impact_sales_order(
         self,
@@ -2911,16 +3444,32 @@ class DocumentRelationService:
                 "created_at": to_api_isoformat(pr.created_at) if pr.created_at else None
             })
 
-        return downstream
+        # 来料检验
+        incoming_inspections = await IncomingInspection.filter(
+            tenant_id=tenant_id,
+            purchase_receipt_id=receipt_id,
+            deleted_at__isnull=True,
+        ).limit(10)
+        for inspection in incoming_inspections:
+            downstream.append({
+                "document_type": "incoming_inspection",
+                "document_id": inspection.id,
+                "document_code": inspection.inspection_code,
+                "document_name": None,
+                "status": inspection.status if hasattr(inspection, "status") else None,
+                "created_at": to_api_isoformat(inspection.created_at) if inspection.created_at else None,
+            })
+
+        return _dedupe_relation_documents(downstream)
 
     async def _get_equipment_downstream(
         self,
         tenant_id: int,
         equipment_id: int,
     ) -> List[Dict[str, Any]]:
-        """设备台账下游：故障记录、保养计划"""
-        from apps.kuaizhizao.models.equipment_fault import EquipmentFault
-        from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan
+        """设备台账下游：故障记录、保养计划、维修记录、保养执行"""
+        from apps.kuaizhizao.models.equipment_fault import EquipmentFault, EquipmentRepair
+        from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan, MaintenanceExecution
 
         downstream: List[Dict[str, Any]] = []
         faults = await EquipmentFault.filter(
@@ -2947,6 +3496,30 @@ class DocumentRelationService:
                 "status": p.status,
                 "created_at": to_api_isoformat(p.created_at) if p.created_at else None,
             })
+        repairs = await EquipmentRepair.filter(
+            tenant_id=tenant_id, equipment_id=equipment_id, deleted_at__isnull=True
+        ).all()
+        for r in repairs:
+            downstream.append({
+                "document_type": "equipment_repair",
+                "document_id": r.id,
+                "document_code": r.repair_no,
+                "document_name": None,
+                "status": r.status,
+                "created_at": to_api_isoformat(r.created_at) if r.created_at else None,
+            })
+        executions = await MaintenanceExecution.filter(
+            tenant_id=tenant_id, equipment_id=equipment_id, deleted_at__isnull=True
+        ).all()
+        for e in executions:
+            downstream.append({
+                "document_type": "maintenance_execution",
+                "document_id": e.id,
+                "document_code": e.execution_no,
+                "document_name": None,
+                "status": e.status,
+                "created_at": to_api_isoformat(e.created_at) if e.created_at else None,
+            })
         return downstream
 
     async def _get_equipment_fault_upstream(
@@ -2956,21 +3529,54 @@ class DocumentRelationService:
     ) -> List[Dict[str, Any]]:
         from apps.kuaizhizao.models.equipment_fault import EquipmentFault
         from apps.kuaizhizao.models.equipment import Equipment
+        from apps.kuaizhizao.models.equipment_ops import EquipmentSpotCheck, EquipmentRoutePatrol
 
         fault = await EquipmentFault.get_or_none(tenant_id=tenant_id, id=fault_id)
         if not fault:
             return []
+        upstream: List[Dict[str, Any]] = []
         eq = await Equipment.get_or_none(tenant_id=tenant_id, id=fault.equipment_id)
-        if not eq:
-            return []
-        return [{
-            "document_type": "equipment",
-            "document_id": eq.id,
-            "document_code": eq.code,
-            "document_name": eq.name,
-            "status": eq.status,
-            "created_at": to_api_isoformat(eq.created_at) if eq.created_at else None,
-        }]
+        if eq:
+            upstream.append({
+                "document_type": "equipment",
+                "document_id": eq.id,
+                "document_code": eq.code,
+                "document_name": eq.name,
+                "status": eq.status,
+                "created_at": to_api_isoformat(eq.created_at) if eq.created_at else None,
+            })
+        source_uuid = (fault.source_uuid or "").strip()
+        if source_uuid and fault.source_type == "spot_check":
+            sc = await EquipmentSpotCheck.filter(
+                tenant_id=tenant_id,
+                uuid=source_uuid,
+                deleted_at__isnull=True,
+            ).first()
+            if sc:
+                upstream.append({
+                    "document_type": "equipment_spot_check",
+                    "document_id": sc.id,
+                    "document_code": sc.document_no,
+                    "document_name": sc.equipment_name,
+                    "status": sc.status,
+                    "created_at": to_api_isoformat(sc.created_at) if sc.created_at else None,
+                })
+        elif source_uuid and fault.source_type == "route_patrol":
+            rp = await EquipmentRoutePatrol.filter(
+                tenant_id=tenant_id,
+                uuid=source_uuid,
+                deleted_at__isnull=True,
+            ).first()
+            if rp:
+                upstream.append({
+                    "document_type": "equipment_route_patrol",
+                    "document_id": rp.id,
+                    "document_code": rp.document_no,
+                    "document_name": rp.route_name,
+                    "status": rp.status,
+                    "created_at": to_api_isoformat(rp.created_at) if rp.created_at else None,
+                })
+        return upstream
 
     async def _get_maintenance_plan_upstream(
         self,
@@ -3176,7 +3782,8 @@ def _build_document_relation_strategies() -> Dict[str, Any]:
 
     async def strat_reporting_record(svc: DocumentRelationService, tenant_id: int, document_id: int):
         upstream_documents = await svc._get_reporting_record_upstream(tenant_id, document_id)
-        return upstream_documents, []
+        downstream_documents = await svc._get_reporting_record_downstream(tenant_id, document_id)
+        return upstream_documents, downstream_documents
 
     async def strat_outsource_order(svc: DocumentRelationService, tenant_id: int, document_id: int):
         upstream_documents = await svc._get_outsource_order_upstream(tenant_id, document_id)
@@ -3246,7 +3853,50 @@ def _build_document_relation_strategies() -> Dict[str, Any]:
 
     async def strat_delivery_notice(svc: DocumentRelationService, tenant_id: int, document_id: int):
         upstream_documents = await svc._get_delivery_notice_upstream(tenant_id, document_id)
+        downstream_documents = await svc._freight_orders_for_source(
+            tenant_id, "delivery_notice", document_id
+        )
+        return upstream_documents, downstream_documents
+
+    async def strat_freight_order(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_freight_order_upstream(tenant_id, document_id)
         return upstream_documents, []
+
+    async def strat_after_sales_ticket(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return (
+            await svc._get_after_sales_ticket_upstream(tenant_id, document_id),
+            await svc._get_after_sales_ticket_downstream(tenant_id, document_id),
+        )
+
+    async def strat_install_execution(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return (
+            await svc._get_install_execution_upstream(tenant_id, document_id),
+            await svc._get_install_execution_downstream(tenant_id, document_id),
+        )
+
+    async def strat_service_asset(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return (
+            await svc._get_service_asset_upstream(tenant_id, document_id),
+            await svc._get_service_asset_downstream(tenant_id, document_id),
+        )
+
+    async def strat_repair_order(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return (
+            await svc._get_repair_order_upstream(tenant_id, document_id),
+            await svc._get_repair_order_downstream(tenant_id, document_id),
+        )
+
+    async def strat_service_dispatch(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return await svc._get_service_dispatch_upstream(tenant_id, document_id), []
+
+    async def strat_spare_part_requisition(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return await svc._get_spare_part_requisition_upstream(tenant_id, document_id), []
+
+    async def strat_service_settlement(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return await svc._get_service_settlement_upstream(tenant_id, document_id), []
+
+    async def strat_customer_return_visit(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return await svc._get_customer_return_visit_upstream(tenant_id, document_id), []
 
     async def strat_shipment_notice(svc: DocumentRelationService, tenant_id: int, document_id: int):
         upstream_documents = await svc._get_shipment_notice_upstream(tenant_id, document_id)
@@ -3282,6 +3932,34 @@ def _build_document_relation_strategies() -> Dict[str, Any]:
         return [], []
 
     async def strat_performance_summary(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        summary = await PerformanceSummary.filter(
+            id=document_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not summary:
+            return [], []
+        from core.utils.timezone_utils import site_period_bounds_utc
+
+        start_dt, end_dt = site_period_bounds_utc(summary.period)
+        records = await ReportingRecord.filter(
+            tenant_id=tenant_id,
+            worker_id=summary.employee_id,
+            reported_at__gte=start_dt,
+            reported_at__lt=end_dt,
+            status="approved",
+            deleted_at__isnull=True,
+        ).order_by("reported_at").limit(svc.REPORTING_RECORD_TRACE_LIMIT).all()
+        upstream = [svc._reporting_record_trace_dict(r) for r in records]
+        return upstream, []
+
+    async def strat_other_inbound(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return [], []
+
+    async def strat_stocktaking(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return [], []
+
+    async def strat_inventory_transfer(svc: DocumentRelationService, tenant_id: int, document_id: int):
         return [], []
 
     return {
@@ -3318,6 +3996,15 @@ def _build_document_relation_strategies() -> Dict[str, Any]:
         "finished_goods_inspection": strat_finished_goods_inspection,
         "sales_delivery": strat_sales_delivery,
         "delivery_notice": strat_delivery_notice,
+        "freight_order": strat_freight_order,
+        "after_sales_ticket": strat_after_sales_ticket,
+        "install_execution": strat_install_execution,
+        "service_asset": strat_service_asset,
+        "repair_order": strat_repair_order,
+        "service_dispatch": strat_service_dispatch,
+        "spare_part_requisition": strat_spare_part_requisition,
+        "service_settlement": strat_service_settlement,
+        "customer_return_visit": strat_customer_return_visit,
         "shipment_notice": strat_shipment_notice,
         "equipment": strat_equipment,
         "equipment_fault": strat_equipment_fault,
@@ -3328,6 +4015,9 @@ def _build_document_relation_strategies() -> Dict[str, Any]:
         "performance_skill": strat_performance_skill,
         "performance_holiday": strat_performance_holiday,
         "performance_summary": strat_performance_summary,
+        "other_inbound": strat_other_inbound,
+        "stocktaking": strat_stocktaking,
+        "inventory_transfer": strat_inventory_transfer,
     }
 
 

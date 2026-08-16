@@ -131,7 +131,11 @@ import {
   normalizeResourceKey,
 } from './components/roleGrantedResourceScope';
 import { resolveFieldPermissionLabel } from '../../../utils/fieldPermissionI18n';
-import { resolvePermissionLabel } from '../../../utils/permissionContract';
+import {
+  isBaselinePermissionCode,
+  mergeBaselinePermissionCodes,
+  resolvePermissionLabel,
+} from '../../../utils/permissionContract';
 
 const ROLE_FUNCTIONAL_DOMAIN_I18N: Record<string, string> = {
   sales: 'field.role.functionalDomainSales',
@@ -809,16 +813,16 @@ const RolesPermissionsPage: React.FC = () => {
       const next = new Set(prev);
       codes.forEach((c) => {
         if (checked) next.add(c);
-        else next.delete(c);
+        else if (!isBaselinePermissionCode(c)) next.delete(c);
       });
-      return Array.from(next);
+      return mergeBaselinePermissionCodes(next);
     });
   }, []);
 
   const loadFunctionGrantsForRole = useCallback(async (roleUuid: string) => {
     const data = await getRoleFunctionGrants(roleUuid);
     setFunctionGrants(data);
-    setGrantedCodes(data.granted_codes || []);
+    setGrantedCodes(mergeBaselinePermissionCodes(data.granted_codes || []));
     if (!initializedExpandRef.current && data.tree?.length) {
       setPermissionTreeExpandedKeys(collectMenuExpandKeysFromGrantTree(data.tree, 1));
       initializedExpandRef.current = true;
@@ -1140,7 +1144,9 @@ const RolesPermissionsPage: React.FC = () => {
    */
   const handleApplyTemplate = useCallback(
     (templateKey: string) => {
-      const codes = filterPermissionCodesByTemplate(templateKey, functionGrantPermissionCodes);
+      const codes = mergeBaselinePermissionCodes(
+        filterPermissionCodesByTemplate(templateKey, functionGrantPermissionCodes),
+      );
       setGrantedCodes(codes);
       const template = PERMISSION_TEMPLATES.find((tmpl) => tmpl.key === templateKey);
       messageApi.success(t('pages.system.roles.templateApplied', { name: template?.name || templateKey, count: codes.length }));
@@ -1309,7 +1315,7 @@ const RolesPermissionsPage: React.FC = () => {
       if (permissionLayer === 'function') {
         const refreshed = await replaceRoleFunctionGrants(selectedRole.uuid, grantedCodes);
         setFunctionGrants(refreshed);
-        setGrantedCodes(refreshed.granted_codes || []);
+        setGrantedCodes(mergeBaselinePermissionCodes(refreshed.granted_codes || []));
         const roleFieldPolicies = await getRoleFieldPolicies(selectedRole.uuid);
         setFieldPolicies(roleFieldPolicies);
         messageApi.success(t('pages.system.roles.functionGrantSuccess', { count: refreshed.granted_codes?.length ?? 0, defaultValue: `功能权限保存成功：${refreshed.granted_codes?.length ?? 0} 项` }));
@@ -1401,9 +1407,10 @@ const RolesPermissionsPage: React.FC = () => {
     try {
       setCopying(true);
       const sourceGrants = await getRoleFunctionGrants(sourceRoleUuid);
-      setGrantedCodes(sourceGrants.granted_codes || []);
+      const mergedCodes = mergeBaselinePermissionCodes(sourceGrants.granted_codes || []);
+      setGrantedCodes(mergedCodes);
       setFunctionGrants((prev) =>
-        prev ? { ...prev, granted_codes: sourceGrants.granted_codes } : prev
+        prev ? { ...prev, granted_codes: mergedCodes } : prev
       );
       messageApi.success(t('pages.system.roles.copySuccess'));
       setCopyModalVisible(false);
@@ -1481,13 +1488,17 @@ const RolesPermissionsPage: React.FC = () => {
 
   const selectAllVisibleFunctionPermissions = useCallback(() => {
     if (!visibleFunctionPermissionCodes.length) return;
-    setGrantedCodes((prev) => Array.from(new Set([...prev, ...visibleFunctionPermissionCodes])));
+    setGrantedCodes((prev) =>
+      mergeBaselinePermissionCodes([...prev, ...visibleFunctionPermissionCodes]),
+    );
   }, [visibleFunctionPermissionCodes]);
 
   const clearVisibleFunctionPermissions = useCallback(() => {
     if (!visibleFunctionPermissionCodes.length) return;
     const target = new Set(visibleFunctionPermissionCodes);
-    setGrantedCodes((prev) => prev.filter((c) => !target.has(c)));
+    setGrantedCodes((prev) =>
+      mergeBaselinePermissionCodes(prev.filter((c) => !target.has(c) || isBaselinePermissionCode(c))),
+    );
   }, [visibleFunctionPermissionCodes]);
 
   const invertVisibleFunctionPermissions = useCallback(() => {
@@ -1496,10 +1507,14 @@ const RolesPermissionsPage: React.FC = () => {
     setGrantedCodes((prev) => {
       const curr = new Set(prev);
       visible.forEach((c) => {
+        if (isBaselinePermissionCode(c)) {
+          curr.add(c);
+          return;
+        }
         if (curr.has(c)) curr.delete(c);
         else curr.add(c);
       });
-      return Array.from(curr);
+      return mergeBaselinePermissionCodes(curr);
     });
   }, [visibleFunctionPermissionCodes]);
 
@@ -1514,12 +1529,12 @@ const RolesPermissionsPage: React.FC = () => {
         filterPermissionCodesByTemplate(templateKey, functionGrantPermissionCodes)
       );
       setGrantedCodes((prev) => {
-        const kept = prev.filter((c) => !visible.has(c));
+        const kept = prev.filter((c) => !visible.has(c) || isBaselinePermissionCode(c));
         const next = [...kept];
         visible.forEach((code) => {
-          if (templateCodes.has(code)) next.push(code);
+          if (templateCodes.has(code) || isBaselinePermissionCode(code)) next.push(code);
         });
-        return Array.from(new Set(next));
+        return mergeBaselinePermissionCodes(next);
       });
       const template = PERMISSION_TEMPLATES.find((item) => item.key === templateKey);
       const name =
@@ -1551,12 +1566,13 @@ const RolesPermissionsPage: React.FC = () => {
       >
         {/* 左侧角色列表：固定宽度不参与收缩，由右侧区域伸缩 */}
         <div
+          className="two-column-layout-left"
           style={{
             width: '300px',
             minWidth: '300px',
             flexShrink: 0,
             borderRight: `1px solid ${token.colorBorder}`,
-            backgroundColor: token.colorFillAlter || '#fafafa',
+            backgroundColor: token.colorBgLayout,
             display: 'flex',
             flexDirection: 'column',
             height: '100%',

@@ -12,7 +12,13 @@ import { DeleteOutlined, EditOutlined, PlusOutlined, ThunderboltOutlined } from 
 import { UniTable } from '../../../../../components/uni-table';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
-import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  UniPullQueryModal,
+  UNI_PULL_QUERY_MAX_FETCH_LIMIT,
+  pagePullCandidates,
+  renderPullQueryDocStatus,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -215,16 +221,14 @@ const PurchaseOrderChangesPage: React.FC = () => {
     loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const result = await listPurchaseOrders({
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
+          skip: 0,
+          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
           keyword: keyword.trim() || undefined,
-          pullable_only: scope === 'pullable',
-          pull_target: 'purchase_order_change',
         });
         const rows = (result.data || []).filter(
           (order): order is PullPurchaseOrderCandidate => order.id != null && !!order.order_code,
         );
-        return { data: rows, total: Number(result.total ?? rows.length) };
+        return pagePullCandidates(rows, scope, page, pageSize, isPullChangeOrderSourceSelectable);
       } catch (error: unknown) {
         message.error(getApiErrorMessage(error, t('app.kuaizhizao.orderChange.loadPurchaseOrdersFailed')));
         return { data: [], total: 0 };
@@ -278,7 +282,8 @@ const PurchaseOrderChangesPage: React.FC = () => {
         title: t('common.status'),
         dataIndex: 'status',
         width: 100,
-        render: (value: string) => value || '-',
+        align: 'center' as const,
+        render: (v) => renderPullQueryDocStatus(t, v),
       },
     ],
     [t],
@@ -754,6 +759,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
         confirmLoading={pullFromPurchaseOrderQuery.confirmLoading}
         selectionType={pullFromPurchaseOrderQuery.selectionType}
         selectedRowKeys={pullFromPurchaseOrderQuery.selectedRowKeys}
+        selectedRows={pullFromPurchaseOrderQuery.selectedRows}
         onSelectedRowKeysChange={pullFromPurchaseOrderQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromPurchaseOrderQuery.isRowDisabled}
         searchDraft={pullFromPurchaseOrderQuery.searchDraft}

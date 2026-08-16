@@ -17,6 +17,7 @@ from apps.kuaiplm.schemas.change_desk import (
     ChangeBatchApproveRequest,
     ChangeBatchDeleteRequest,
     ChangeBatchExecuteRequest,
+    ChangeCreateRequest,
     ChangeDeskListResponse,
     ChangeExecuteRequest,
     ChangeSubmitRequest,
@@ -25,7 +26,7 @@ from apps.kuaiplm.services.change_desk_service import ChangeDeskService
 from core.api.deps.access import require_access
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
-from infra.exceptions.exceptions import ValidationError
+from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
 router = APIRouter(prefix="/changes", tags=["App - Kuaiplm - Change Desk"])
@@ -41,7 +42,7 @@ def _err(status_code: int, message: str, route: str) -> HTTPException:
 @router.get("", response_model=ChangeDeskListResponse, summary="List BOM and route changes")
 async def list_changes(
     status: Optional[str] = Query(None),
-    change_type: Optional[str] = Query(None, description="bom | process_route"),
+    change_type: Optional[str] = Query(None, description="bom | process_route | drawing"),
     keyword: Optional[str] = Query(None),
     change_code: Optional[str] = Query(None),
     target_name: Optional[str] = Query(None),
@@ -70,6 +71,37 @@ async def list_changes(
     )
 
 
+@router.post("", summary="Create drawing change on the desk")
+async def create_change(
+    data: ChangeCreateRequest,
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_access("kuaiplm.change", "create", required_permissions=["kuaiplm:change:create"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        result = await service.create_change(tenant_id, data, current_user.id)
+        return {"success": True, "data": result}
+    except (ValueError, ValidationError) as e:
+        raise _err(400, str(e), "/changes")
+    except NotFoundError as e:
+        raise _err(404, str(e), "/changes")
+
+
+@router.get("/{change_uuid}", summary="Get one change")
+async def get_change(
+    change_uuid: str = Path(...),
+    change_type: str = Query(..., description="bom | process_route | drawing"),
+    _auth=Depends(require_access("kuaiplm.change", "read", required_permissions=["kuaiplm:change:read"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.get_change(tenant_id, change_uuid, change_type)
+    except (ValueError, ValidationError) as e:
+        raise _err(400, str(e), f"/changes/{change_uuid}")
+    except NotFoundError as e:
+        raise _err(404, str(e), f"/changes/{change_uuid}")
+
+
 @router.post("/{change_uuid}/submit", summary="Submit change for approval")
 async def submit_change(
     data: ChangeSubmitRequest,
@@ -96,7 +128,7 @@ async def approve_change(
     try:
         result = await service.approve_change(tenant_id, change_uuid, data, current_user.id)
         return {"success": True, "data": result}
-    except ValueError as e:
+    except (ValueError, ValidationError) as e:
         raise _err(400, str(e), f"/changes/{change_uuid}/approve")
 
 
@@ -111,14 +143,14 @@ async def execute_change(
     try:
         result = await service.execute_change(tenant_id, change_uuid, data, current_user.id)
         return {"success": True, "data": result}
-    except ValueError as e:
+    except (ValueError, ValidationError) as e:
         raise _err(400, str(e), f"/changes/{change_uuid}/execute")
 
 
 @router.delete("/{change_uuid}", summary="Delete change")
 async def delete_change(
     change_uuid: str = Path(...),
-    change_type: str = Query(..., description="bom | process_route"),
+    change_type: str = Query(..., description="bom | process_route | drawing"),
     _auth=Depends(require_access("kuaiplm.change", "update", required_permissions=["kuaiplm:change:update"])),
     tenant_id: int = Depends(get_current_tenant),
 ):
