@@ -8,7 +8,7 @@ from tortoise.transactions import in_transaction
 
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.logistics import FreightBill, FreightBillItem, FreightOrder, LogisticsCarrier
-from apps.kuaizhizao.schemas.logistics import FreightBillCreate
+from apps.kuaizhizao.schemas.logistics import FreightBillCreate, FreightBillItemInput, FreightBillUpdate
 from core.utils.timezone_utils import resolve_business_datetime, today_site_str, to_site_date
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 from infra.services.business_config_service import BusinessConfigService
@@ -26,10 +26,63 @@ class FreightBillService(AppBaseService):
         return bill
 
     async def _build_response(self, bill: FreightBill) -> Dict[str, Any]:
-        items = await FreightBillItem.filter(tenant_id=bill.tenant_id, freight_bill_id=bill.id)
+        items = await FreightBillItem.filter(tenant_id=bill.tenant_id, freight_bill_id=bill.id).order_by("id")
+        order_ids = [int(item.freight_order_id) for item in items if item.freight_order_id]
+        tracking_by_order: Dict[int, Optional[str]] = {}
+        if order_ids:
+            orders = await FreightOrder.filter(
+                tenant_id=bill.tenant_id,
+                id__in=order_ids,
+                deleted_at__isnull=True,
+            )
+            tracking_by_order = {
+                int(order.id): (order.tracking_number or None) for order in orders
+            }
         data = {field: getattr(bill, field) for field in bill._meta.fields_map.keys()}
-        data["items"] = items
+        data["items"] = [
+            {
+                "id": item.id,
+                "freight_order_id": item.freight_order_id,
+                "freight_order_code": item.freight_order_code,
+                "fee_type": item.fee_type,
+                "amount": item.amount,
+                "remark": item.remark,
+                "tracking_number": tracking_by_order.get(int(item.freight_order_id)),
+            }
+            for item in items
+        ]
         return data
+
+    async def _replace_items(
+        self,
+        tenant_id: int,
+        bill_id: int,
+        items: List[FreightBillItemInput],
+    ) -> Decimal:
+        if not items:
+            raise BusinessLogicError("请至少添加一条运费明细")
+        total = sum((item.amount for item in items), Decimal("0"))
+        if total <= 0:
+            raise BusinessLogicError("运费总额必须大于 0")
+        await FreightBillItem.filter(tenant_id=tenant_id, freight_bill_id=bill_id).delete()
+        for item in items:
+            order = await FreightOrder.get_or_none(
+                id=item.freight_order_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            if not order:
+                raise NotFoundError(f"货运单不存在: {item.freight_order_id}")
+            await FreightBillItem.create(
+                tenant_id=tenant_id,
+                freight_bill_id=bill_id,
+                freight_order_id=order.id,
+                freight_order_code=order.order_code,
+                fee_type=item.fee_type,
+                amount=item.amount,
+                remark=item.remark,
+            )
+        return total
 
     async def list_bills(
         self,
@@ -67,14 +120,9 @@ class FreightBillService(AppBaseService):
         *,
         created_by: Optional[int] = None,
     ) -> Dict[str, Any]:
-        if not data.items:
-            raise BusinessLogicError("请至少添加一条运费明细")
         carrier = await LogisticsCarrier.get_or_none(id=data.carrier_id, tenant_id=tenant_id, deleted_at__isnull=True)
         if not carrier:
             raise NotFoundError("承运商不存在")
-        total = sum((item.amount for item in data.items), Decimal("0"))
-        if total <= 0:
-            raise BusinessLogicError("运费总额必须大于 0")
         bill_code = await self.generate_code(tenant_id, "FREIGHT_BILL_CODE", prefix=f"FB{today_site_str()}")
         async with in_transaction():
             bill = await FreightBill.create(
@@ -84,30 +132,54 @@ class FreightBillService(AppBaseService):
                 carrier_name=carrier.name,
                 period_start=data.period_start,
                 period_end=data.period_end,
-                total_amount=total,
+                total_amount=Decimal("0"),
                 status="draft",
                 review_status="draft",
                 remark=data.remark,
                 created_by=created_by,
             )
-            for item in data.items:
-                order = await FreightOrder.get_or_none(
-                    id=item.freight_order_id,
-                    tenant_id=tenant_id,
-                    deleted_at__isnull=True,
-                )
-                if not order:
-                    raise NotFoundError(f"货运单不存在: {item.freight_order_id}")
-                await FreightBillItem.create(
-                    tenant_id=tenant_id,
-                    freight_bill_id=bill.id,
-                    freight_order_id=order.id,
-                    freight_order_code=order.order_code,
-                    fee_type=item.fee_type,
-                    amount=item.amount,
-                    remark=item.remark,
-                )
+            total = await self._replace_items(tenant_id, int(bill.id), data.items)
+            bill.total_amount = total
+            await bill.save()
         return await self.get_bill(tenant_id, int(bill.id))
+
+    async def update_bill(
+        self,
+        tenant_id: int,
+        bill_id: int,
+        data: FreightBillUpdate,
+        *,
+        updated_by: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        bill = await self._get_bill(tenant_id, bill_id)
+        if bill.review_status not in {"draft", "rejected"}:
+            raise BusinessLogicError("仅草稿或已驳回运费单可编辑")
+
+        dump = data.model_dump(exclude_unset=True)
+        items_payload = dump.pop("items", None)
+        carrier_id = dump.get("carrier_id", bill.carrier_id)
+        carrier = await LogisticsCarrier.get_or_none(id=carrier_id, tenant_id=tenant_id, deleted_at__isnull=True)
+        if not carrier:
+            raise NotFoundError("承运商不存在")
+
+        async with in_transaction():
+            bill.carrier_id = carrier.id
+            bill.carrier_name = carrier.name
+            if "period_start" in dump:
+                bill.period_start = dump.get("period_start")
+            if "period_end" in dump:
+                bill.period_end = dump.get("period_end")
+            if "remark" in dump:
+                bill.remark = (dump.get("remark") or "").strip() or None
+            if items_payload is not None:
+                bill.total_amount = await self._replace_items(tenant_id, bill_id, data.items or [])
+            bill.updated_by = updated_by
+            # 驳回后再编辑回到草稿
+            if bill.review_status == "rejected":
+                bill.review_status = "draft"
+                bill.status = "draft"
+            await bill.save()
+        return await self.get_bill(tenant_id, bill_id)
 
     async def delete_bill(self, tenant_id: int, bill_id: int) -> None:
         bill = await self._get_bill(tenant_id, bill_id)

@@ -254,63 +254,75 @@ const LogisticsTrackingPage: React.FC = () => {
           style={{
             flex: 1,
             minHeight: 0,
+            overflow: 'hidden',
             display: 'grid',
             gridTemplateColumns: '260px minmax(0, 1fr) minmax(380px, 420px)',
             gap: 12,
+            alignItems: 'stretch',
           }}
         >
           <Card
             size="small"
             title={t('app.kuaizhizao.logistics.tracking.listTitle')}
-            styles={{ body: { padding: 0, height: '100%' } }}
-            style={{ minHeight: 0, display: 'flex', flexDirection: 'column' }}
+            styles={{
+              body: {
+                padding: 0,
+                flex: 1,
+                minHeight: 0,
+                overflow: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+              },
+            }}
+            style={{ minHeight: 0, height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
           >
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-              <List<FreightOrder>
-                loading={listLoading}
-                locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('common.noData')} /> }}
-                dataSource={orders}
-                rowKey="id"
-                renderItem={(row) => {
-                  const active = selectedId === row.id;
-                  return (
-                    <List.Item
-                      onClick={() => handleSelectOrder(row)}
-                      style={{
-                        cursor: 'pointer',
-                        paddingInline: 12,
-                        background: active ? 'var(--ant-color-primary-bg)' : undefined,
-                      }}
-                    >
-                      <List.Item.Meta
-                        title={
-                          <Space size={8} wrap>
-                            <Typography.Text strong={active}>{row.order_code}</Typography.Text>
-                            {renderFreightOrderStatusTag(t, row.status)}
-                          </Space>
-                        }
-                        description={
-                          <Space orientation="vertical" size={2}>
-                            <Typography.Text type="secondary" ellipsis>
-                              {row.carrier_name || '-'}
-                              {row.tracking_number ? ` / ${row.tracking_number}` : ''}
-                            </Typography.Text>
-                            {renderLogisticsBusinessDirectionTag(t, row.business_direction)}
-                          </Space>
-                        }
-                      />
-                    </List.Item>
-                  );
-                }}
-              />
-            </div>
+            <List<FreightOrder>
+              loading={listLoading}
+              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('common.noData')} /> }}
+              dataSource={orders}
+              rowKey="id"
+              style={{ flex: 1, minHeight: 0 }}
+              renderItem={(row) => {
+                const active = selectedId === row.id;
+                return (
+                  <List.Item
+                    onClick={() => handleSelectOrder(row)}
+                    style={{
+                      cursor: 'pointer',
+                      paddingInline: 12,
+                      background: active ? 'var(--ant-color-primary-bg)' : undefined,
+                    }}
+                  >
+                    <List.Item.Meta
+                      title={
+                        <Space size={8} wrap>
+                          <Typography.Text strong={active}>{row.order_code}</Typography.Text>
+                          {renderFreightOrderStatusTag(t, row.status)}
+                        </Space>
+                      }
+                      description={
+                        <Space orientation="vertical" size={2}>
+                          <Typography.Text type="secondary" ellipsis>
+                            {row.carrier_name || '-'}
+                            {row.tracking_number ? ` / ${row.tracking_number}` : ''}
+                          </Typography.Text>
+                          {renderLogisticsBusinessDirectionTag(t, row.business_direction)}
+                        </Space>
+                      }
+                    />
+                  </List.Item>
+                );
+              }}
+            />
           </Card>
 
           <Card
             size="small"
             title={t('app.kuaizhizao.logistics.tracking.mapTitle')}
-            styles={{ body: { padding: 0, height: '100%' } }}
-            style={{ minHeight: 0, display: 'flex', flexDirection: 'column' }}
+            styles={{
+              body: { padding: 0, flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' },
+            }}
+            style={{ minHeight: 0, height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
           >
             <LogisticsTrackingMap
               mapConfig={mapConfig}

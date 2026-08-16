@@ -1,14 +1,10 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Button, message } from 'antd';
+import { App, Button } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-  UniTableStackedPrimaryCell,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
@@ -25,6 +21,7 @@ const RESOURCE = 'kuaizhizao:service-asset';
 
 const ServiceAssetsPage: React.FC = () => {
   const { t } = useTranslation();
+  const { message: messageApi, modal } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
   const actionRef = useRef<ActionType>();
   const [modalOpen, setModalOpen] = useState(false);
@@ -44,6 +41,21 @@ const ServiceAssetsPage: React.FC = () => {
     const full = await serviceAssetApi.get(row.id);
     setEditing(full);
     setModalOpen(true);
+  };
+
+  const confirmDelete = (row: ServiceAsset) => {
+    modal.confirm({
+      title: t('common.confirmDelete'),
+      onOk: async () => {
+        await serviceAssetApi.delete(row.id);
+        messageApi.success(t('common.deleteSuccess'));
+        if (detail?.id === row.id) {
+          setDetailOpen(false);
+          setDetail(null);
+        }
+        actionRef.current?.reload();
+      },
+    });
   };
 
   const loadDetail = useCallback(async (id: number) => {
@@ -73,22 +85,22 @@ const ServiceAssetsPage: React.FC = () => {
         [
           {
             title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.assetCode'),
-            key: 'after_sales_asset_stacked',
             dataIndex: 'asset_code',
-            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            width: 148,
+            minWidth: 148,
+            uniTableKeepWidth: true,
+            resizable: false,
             fixed: 'left',
-            render: (_, row) => (
-              <UniTableStackedPrimaryCell
-                primary={String(row.asset_code ?? '').trim() || '-'}
-                secondary={String(row.customer_name ?? '').trim() || '-'}
-                secondaryCopyable={false}
-              />
-            ),
+            copyable: true,
           },
           {
             title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.customerName'),
             dataIndex: 'customer_name',
-            hideInTable: true,
+            width: 148,
+            minWidth: 148,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
           },
           {
             title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.materialName'),
@@ -97,19 +109,17 @@ const ServiceAssetsPage: React.FC = () => {
             minWidth: 168,
             uniTableKeepWidth: true,
             resizable: false,
-            render: (_, row) => (
-              <UniTableStackedPrimaryCell
-                primary={String(row.material_name ?? '').trim() || '-'}
-                secondary={String(row.serial_number ?? '').trim() || '-'}
-                secondaryCopyable={Boolean(String(row.serial_number ?? '').trim())}
-                primaryBold={false}
-              />
-            ),
+            ellipsis: true,
           },
           {
             title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.serialNumber'),
             dataIndex: 'serial_number',
-            hideInTable: true,
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            copyable: true,
           },
           {
             title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.status'),
@@ -131,12 +141,15 @@ const ServiceAssetsPage: React.FC = () => {
               perms.canUpdate ? (
                 <Button {...rowActionKind('update')} key="edit" onClick={() => void openEdit(row)} />
               ) : null,
+              perms.canDelete ? (
+                <Button {...rowActionKind('delete')} key="delete" onClick={() => confirmDelete(row)} />
+              ) : null,
             ],
           },
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [perms.canUpdate, t],
+    [messageApi, modal, perms.canDelete, perms.canUpdate, t],
   );
 
   return (
@@ -144,7 +157,7 @@ const ServiceAssetsPage: React.FC = () => {
       <UniTable<ServiceAsset>
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.service-assets.v1"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.service-assets.v3"
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.service-assets')}
         request={async (params) => {
@@ -163,7 +176,7 @@ const ServiceAssetsPage: React.FC = () => {
         showDeleteButton={perms.canDelete}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => serviceAssetApi.delete(Number(key))));
-          message.success(t('common.batchDeleteSuccess', { count: keys.length }));
+          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
           actionRef.current?.reload();
         }}
       />
@@ -178,10 +191,10 @@ const ServiceAssetsPage: React.FC = () => {
         onSubmit={async (payload) => {
           if (editing) {
             await serviceAssetApi.update(editing.id, payload);
-            message.success(t('common.saveSuccess'));
+            messageApi.success(t('common.saveSuccess'));
           } else {
             await serviceAssetApi.create(payload);
-            message.success(t('common.createSuccess'));
+            messageApi.success(t('common.createSuccess'));
           }
           actionRef.current?.reload();
         }}

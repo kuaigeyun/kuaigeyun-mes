@@ -27,7 +27,7 @@ import {
   updateDesignReview,
   type RdDesignReview,
 } from '../../../services/phase2';
-import { materialApi } from '../../../master-data/services/material';
+import { materialApi } from '../../../../master-data/services/material';
 import Phase2ProjectSelect from '../../../components/Phase2ProjectSelect';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -89,6 +89,7 @@ const DesignReviewsPage: React.FC = () => {
         const ruleCode = getPageRuleCode(PAGE_CODE);
         if (!ruleCode) {
           setPreviewCode(null);
+          messageApi.warning(t('app.kuaiplm.phase2.designReviews.codeRuleMissing'));
           return;
         }
         const res = await testGenerateCode({ rule_code: ruleCode });
@@ -96,9 +97,10 @@ const DesignReviewsPage: React.FC = () => {
         createFormRef.current?.setFieldsValue({ review_code: res.code });
       } catch {
         setPreviewCode(null);
+        messageApi.warning(t('app.kuaiplm.phase2.designReviews.codePreviewFailed'));
       }
     })();
-  }, [createOpen]);
+  }, [createOpen, messageApi, t]);
 
   const toReviewIds = (keys: React.Key[]) =>
     keys.map((key) => Number(key)).filter((id) => Number.isFinite(id) && id > 0);
@@ -359,9 +361,17 @@ const DesignReviewsPage: React.FC = () => {
           setPreviewCode(null);
         }}
         onFinish={async (values) => {
-          const { review_date: reviewDate, _material_pick, ...rest } = values as Record<string, unknown>;
+          const { review_date: reviewDate, _material_pick, review_code: formCode, ...rest } =
+            values as Record<string, unknown>;
+          const manualCode = String(formCode || '').trim();
           await createDesignReview({
             ...rest,
+            // 自动编号：不传预览码，由后端 generate_code 正式占号
+            ...(isAutoGenerateEnabled(PAGE_CODE)
+              ? {}
+              : manualCode
+                ? { review_code: manualCode }
+                : {}),
             project_id: (rest.project_id as number | undefined) ?? filterProjectId,
             review_date: reviewDate ? dayjs(reviewDate as string).format('YYYY-MM-DD') : undefined,
           });

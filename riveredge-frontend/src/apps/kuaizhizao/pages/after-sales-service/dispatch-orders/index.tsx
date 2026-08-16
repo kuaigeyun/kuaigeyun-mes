@@ -1,15 +1,11 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Button, message } from 'antd';
+import { App, Button } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-  UniTableStackedPrimaryCell,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { SourceDocumentCode } from '../../../../../components/linked-document-code/SourceDocumentCode';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { formatDateTime } from '../../../../../utils/format';
@@ -26,6 +22,7 @@ const RESOURCE = 'kuaizhizao:service-dispatch';
 
 const DispatchOrdersPage: React.FC = () => {
   const { t } = useTranslation();
+  const { message: messageApi, modal } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
   const actionRef = useRef<ActionType>();
   const [modalOpen, setModalOpen] = useState(false);
@@ -57,6 +54,26 @@ const DispatchOrdersPage: React.FC = () => {
     void loadDetail(row.id);
   };
 
+  const openEdit = async (row: ServiceDispatchOrder) => {
+    setEditing(await serviceDispatchApi.get(row.id));
+    setModalOpen(true);
+  };
+
+  const confirmDelete = (row: ServiceDispatchOrder) => {
+    modal.confirm({
+      title: t('common.confirmDelete'),
+      onOk: async () => {
+        await serviceDispatchApi.delete(row.id);
+        messageApi.success(t('common.deleteSuccess'));
+        if (detail?.id === row.id) {
+          setDetailOpen(false);
+          setDetail(null);
+        }
+        actionRef.current?.reload();
+      },
+    });
+  };
+
   const columns: ProColumns<ServiceDispatchOrder>[] = useMemo(
     () =>
       alignProColumns<ServiceDispatchOrder>(
@@ -64,20 +81,21 @@ const DispatchOrdersPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.afterSalesService.dispatchOrder.field.dispatchCode'),
             dataIndex: 'dispatch_code',
-            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            width: 148,
+            minWidth: 148,
+            uniTableKeepWidth: true,
+            resizable: false,
             fixed: 'left',
-            render: (_, row) => (
-              <UniTableStackedPrimaryCell
-                primary={String(row.dispatch_code ?? '').trim() || '-'}
-                secondary={String(row.customer_name ?? '').trim() || '-'}
-                secondaryCopyable={false}
-              />
-            ),
+            copyable: true,
           },
           {
             title: t('app.kuaizhizao.afterSalesService.dispatchOrder.field.customerName'),
             dataIndex: 'customer_name',
-            hideInTable: true,
+            width: 148,
+            minWidth: 148,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
           },
           {
             title: t('app.kuaizhizao.afterSalesService.dispatchOrder.field.sourceCode'),
@@ -129,14 +147,18 @@ const DispatchOrdersPage: React.FC = () => {
             hideInSearch: true,
             render: (_, row) => [
               <Button {...rowActionKind('read')} key="read" onClick={() => openDetail(row)} />,
-              perms.canUpdate ? (
+              perms.canUpdate && row.status !== '已取消' ? (
                 <Button
                   {...rowActionKind('update')}
                   key="edit"
-                  onClick={async () => {
-                    setEditing(await serviceDispatchApi.get(row.id));
-                    setModalOpen(true);
-                  }}
+                  onClick={() => void openEdit(row)}
+                />
+              ) : null,
+              perms.canDelete && (row.status === '待接单' || row.status === '已取消') ? (
+                <Button
+                  {...rowActionKind('delete')}
+                  key="delete"
+                  onClick={() => confirmDelete(row)}
                 />
               ) : null,
             ],
@@ -144,7 +166,7 @@ const DispatchOrdersPage: React.FC = () => {
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [perms.canUpdate, t],
+    [messageApi, modal, perms.canDelete, perms.canUpdate, t],
   );
 
   return (
@@ -152,7 +174,7 @@ const DispatchOrdersPage: React.FC = () => {
       <UniTable<ServiceDispatchOrder>
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.dispatch-orders.v1"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.dispatch-orders.v3"
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.dispatch-orders')}
         request={async (params) => {
@@ -174,7 +196,7 @@ const DispatchOrdersPage: React.FC = () => {
         showDeleteButton={perms.canDelete}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => serviceDispatchApi.delete(Number(key))));
-          message.success(t('common.batchDeleteSuccess', { count: keys.length }));
+          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
           actionRef.current?.reload();
         }}
       />
@@ -189,10 +211,10 @@ const DispatchOrdersPage: React.FC = () => {
         onSubmit={async (payload) => {
           if (editing) {
             await serviceDispatchApi.update(editing.id, payload);
-            message.success(t('common.saveSuccess'));
+            messageApi.success(t('common.saveSuccess'));
           } else {
             await serviceDispatchApi.create(payload);
-            message.success(t('common.createSuccess'));
+            messageApi.success(t('common.createSuccess'));
           }
           actionRef.current?.reload();
         }}
@@ -216,9 +238,23 @@ const DispatchOrdersPage: React.FC = () => {
           <DetailDrawerActions
             items={[
               {
+                key: 'edit',
+                visible: Boolean(detail && perms.canUpdate && detail.status !== '已取消'),
+                render: (
+                  <Button
+                    onClick={() => {
+                      if (!detail) return;
+                      void openEdit(detail);
+                    }}
+                  >
+                    {t('common.edit')}
+                  </Button>
+                ),
+              },
+              {
                 key: 'assign',
-                visible: Boolean(detail && perms.canAction?.('assign')),
-                render: () => (
+                visible: Boolean(detail && perms.canAction?.('assign') && detail.status !== '已取消'),
+                render: (
                   <Button
                     onClick={async () => {
                       if (!detail) return;
@@ -227,6 +263,7 @@ const DispatchOrdersPage: React.FC = () => {
                       });
                       setDetail(await serviceDispatchApi.get(detail.id));
                       actionRef.current?.reload();
+                      messageApi.success(t('app.kuaizhizao.afterSalesService.dispatchOrder.assignSuccess'));
                     }}
                   >
                     {t('app.kuaizhizao.afterSalesService.dispatchOrder.actionAssign')}
@@ -236,7 +273,7 @@ const DispatchOrdersPage: React.FC = () => {
               {
                 key: 'close',
                 visible: Boolean(detail && perms.canAction?.('close') && detail.status !== '已取消'),
-                render: () => (
+                render: (
                   <Button
                     type="primary"
                     onClick={async () => {
@@ -244,6 +281,7 @@ const DispatchOrdersPage: React.FC = () => {
                       await serviceDispatchApi.close(detail.id);
                       setDetail(await serviceDispatchApi.get(detail.id));
                       actionRef.current?.reload();
+                      messageApi.success(t('app.kuaizhizao.afterSalesService.dispatchOrder.closeSuccess'));
                     }}
                   >
                     {t('app.kuaizhizao.afterSalesService.dispatchOrder.actionClose')}

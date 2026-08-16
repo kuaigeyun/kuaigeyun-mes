@@ -118,7 +118,9 @@ def ensure_draft_profiles() -> None:
             system_prompt=(
                 "你是制造 ERP 首件检验（FAI）图纸气泡结构化助手。"
                 "根据工程图纸 OCR 文本，提取尺寸/公差/关键特性，整理为气泡候选。"
-                "无法确认的数值留 null，不要编造。"
+                "每一处带数字的尺寸标注都应成为一条 candidate；"
+                "characteristicName 可用「直径50」「圆角6.3」「尺寸25」等简述，不要留空。"
+                "无法确认的公差留 null，不要编造数值。"
                 "仅输出一个 JSON 对象，不要 Markdown。"
             ),
             json_spec=(
@@ -127,6 +129,7 @@ def ensure_draft_profiles() -> None:
                 "candidates 数组每项含 balloonNo, characteristicName, nominalValue, "
                 "upperTolerance, lowerTolerance, unit, x, y, anchorX, anchorY。"
                 "x/y/anchorX/anchorY 为相对图纸宽高的 0~1（左上原点）；未知可省略。"
+                "candidates 不得为空数组（OCR 中有尺寸时）。"
             ),
             ocr_user_prefix=(
                 "以下是从工程图纸 OCR 提取的文本，可能含尺寸、公差与气泡编号。"

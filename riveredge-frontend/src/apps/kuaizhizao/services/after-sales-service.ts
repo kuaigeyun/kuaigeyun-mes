@@ -359,6 +359,8 @@ export const serviceSettlementApi = {
       method: 'PUT',
       body: payload,
     }),
+  submit: (id: number) =>
+    apiRequest<ServiceSettlement>(`${BASE}/service-settlements/${id}/submit`, { method: 'POST' }),
   audit: (id: number, payload?: { review_remarks?: string }) =>
     apiRequest<ServiceSettlement>(`${BASE}/service-settlements/${id}/audit`, {
       method: 'POST',

@@ -286,9 +286,22 @@ class FreightBillCreate(BaseModel):
     items: List[FreightBillItemInput] = Field(default_factory=list)
 
 
+class FreightBillUpdate(BaseModel):
+    carrier_id: Optional[int] = None
+    period_start: Optional[date] = None
+    period_end: Optional[date] = None
+    remark: Optional[str] = None
+    items: Optional[List[FreightBillItemInput]] = None
+
+
+class FreightBillReject(BaseModel):
+    rejection_reason: Optional[str] = None
+
+
 class FreightBillItemResponse(FreightBillItemInput):
     id: int
     freight_order_code: str
+    tracking_number: Optional[str] = None
 
     class Config:
         from_attributes = True

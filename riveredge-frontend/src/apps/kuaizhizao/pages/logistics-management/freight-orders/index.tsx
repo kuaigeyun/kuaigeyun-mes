@@ -24,10 +24,6 @@ import {
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { FreightOrderDetailDrawer } from './components/FreightOrderDetailDrawer';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-  UniTableStackedPrimaryCell,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { SourceDocumentCode } from '../../../../../components/linked-document-code/SourceDocumentCode';
 import {
   UNI_PULL_QUERY_MAX_FETCH_LIMIT,
@@ -345,20 +341,22 @@ const FreightOrdersPage: React.FC = () => {
         {
           title: t('app.kuaizhizao.logistics.field.orderCode'),
           dataIndex: 'order_code',
-          ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+          width: 148,
+          minWidth: 148,
+          uniTableKeepWidth: true,
+          resizable: false,
           fixed: 'left',
-          render: (_, row) => (
-            <UniTableStackedPrimaryCell
-              primary={String(row.order_code ?? '').trim() || '-'}
-              secondary={String(row.tracking_number ?? '').trim() || '-'}
-              secondaryCopyable={Boolean(String(row.tracking_number ?? '').trim())}
-            />
-          ),
+          copyable: true,
         },
         {
           title: t('app.kuaizhizao.logistics.field.trackingNumber'),
           dataIndex: 'tracking_number',
-          hideInTable: true,
+          width: 148,
+          minWidth: 148,
+          uniTableKeepWidth: true,
+          resizable: false,
+          ellipsis: true,
+          copyable: true,
         },
         {
           title: t('app.kuaizhizao.logistics.field.sourceCode'),
@@ -423,51 +421,54 @@ const FreightOrdersPage: React.FC = () => {
           render: (_, row) => row.carrier_name || '-',
         },
         {
-          title: t('app.kuaizhizao.logistics.field.vehicleDriver'),
-          key: 'logistics_vehicle_driver_stacked',
+          title: t('app.kuaizhizao.logistics.field.plateNumber'),
           dataIndex: 'vehicle_plate',
-          width: 140,
-          minWidth: 140,
+          width: 110,
+          minWidth: 110,
           uniTableKeepWidth: true,
           resizable: false,
-          render: (_, row) => (
-            <UniTableStackedPrimaryCell
-              primary={String(row.vehicle_plate ?? '').trim() || '-'}
-              secondary={String(row.driver_name ?? '').trim() || '-'}
-              primaryBold={false}
-            />
-          ),
-        },
-        {
-          title: t('app.kuaizhizao.logistics.field.route'),
-          key: 'freight_route_stacked',
-          dataIndex: 'origin_address',
-          width: 200,
-          minWidth: 200,
           ellipsis: true,
-          render: (_, row) => (
-            <UniTableStackedPrimaryCell
-              primary={String(row.origin_address ?? '').trim() || '-'}
-              secondary={String(row.destination_address ?? '').trim() || '-'}
-              primaryBold={false}
-            />
-          ),
         },
         {
-          title: t('app.kuaizhizao.logistics.field.plannedSchedule'),
-          key: 'planned_depart_at',
+          title: t('app.kuaizhizao.logistics.field.driverName'),
+          dataIndex: 'driver_name',
+          width: 100,
+          minWidth: 100,
+          uniTableKeepWidth: true,
+          resizable: false,
+          ellipsis: true,
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.originAddress'),
+          dataIndex: 'origin_address',
+          width: 160,
+          minWidth: 160,
+          ellipsis: true,
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.destinationAddress'),
+          dataIndex: 'destination_address',
+          width: 160,
+          minWidth: 160,
+          ellipsis: true,
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.plannedDepartAt'),
           dataIndex: 'planned_depart_at',
           width: 168,
           minWidth: 168,
           uniTableKeepWidth: true,
           resizable: false,
-          render: (_, row) => (
-            <UniTableStackedPrimaryCell
-              primary={formatDateTimeBySiteSetting(row.planned_depart_at)}
-              secondary={formatDateTimeBySiteSetting(row.planned_arrive_at)}
-              primaryBold={false}
-            />
-          ),
+          render: (_, row) => formatDateTimeBySiteSetting(row.planned_depart_at),
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.plannedArriveAt'),
+          dataIndex: 'planned_arrive_at',
+          width: 168,
+          minWidth: 168,
+          uniTableKeepWidth: true,
+          resizable: false,
+          render: (_, row) => formatDateTimeBySiteSetting(row.planned_arrive_at),
         },
         {
           title: t('app.kuaizhizao.logistics.field.status'),
@@ -517,7 +518,7 @@ const FreightOrdersPage: React.FC = () => {
       <UniTable<FreightOrder>
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-orders.v3"
+        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-orders.v4"
         rowKey="id"
         request={async (params) => {
           const res = await listFreightOrders({

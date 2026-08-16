@@ -1,16 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Form, Input, InputNumber, Modal, Select } from 'antd';
-import { DatePicker } from 'antd';
+import { App, Button, DatePicker, Form, Input, Modal, Rate, Select } from 'antd';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-  UniTableStackedPrimaryCell,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { SourceDocumentCode } from '../../../../../components/linked-document-code/SourceDocumentCode';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { formDateFormItemProps } from '../../../../../utils/formDate';
@@ -21,7 +16,6 @@ import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/eq
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 import type { Customer } from '../../../../master-data/types/supply-chain';
-import { MarkerTag } from '../../../../../constants/statusBadges';
 import { renderAfterSalesTypeMarker } from '../shared/afterSalesListPresentation';
 import { AfterSalesSourceDocumentSelect } from '../shared/AfterSalesSourceDocumentSelect';
 import {
@@ -43,7 +37,7 @@ const VISIT_METHODS = ['电话', '现场', '在线'];
 
 const ReturnVisitsPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
   const actionRef = useRef<ActionType>();
   const [modalOpen, setModalOpen] = useState(false);
@@ -125,6 +119,21 @@ const ReturnVisitsPage: React.FC = () => {
     setModalOpen(true);
   };
 
+  const confirmDelete = (row: CustomerReturnVisit) => {
+    modal.confirm({
+      title: t('common.confirmDelete'),
+      onOk: async () => {
+        await customerReturnVisitApi.delete(row.id);
+        message.success(t('common.deleteSuccess'));
+        if (detail?.id === row.id) {
+          setDetailOpen(false);
+          setDetail(null);
+        }
+        actionRef.current?.reload();
+      },
+    });
+  };
+
   const columns: ProColumns<CustomerReturnVisit>[] = useMemo(
     () =>
       alignProColumns<CustomerReturnVisit>(
@@ -132,20 +141,21 @@ const ReturnVisitsPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.afterSalesService.returnVisit.field.visitCode'),
             dataIndex: 'visit_code',
-            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            width: 148,
+            minWidth: 148,
+            uniTableKeepWidth: true,
+            resizable: false,
             fixed: 'left',
-            render: (_, row) => (
-              <UniTableStackedPrimaryCell
-                primary={String(row.visit_code ?? '').trim() || '-'}
-                secondary={String(row.customer_name ?? '').trim() || '-'}
-                secondaryCopyable={false}
-              />
-            ),
+            copyable: true,
           },
           {
             title: t('app.kuaizhizao.afterSalesService.returnVisit.field.customerName'),
             dataIndex: 'customer_name',
-            hideInTable: true,
+            width: 148,
+            minWidth: 148,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
           },
           {
             title: t('app.kuaizhizao.afterSalesService.returnVisit.field.sourceCode'),
@@ -174,14 +184,14 @@ const ReturnVisitsPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.afterSalesService.returnVisit.field.satisfactionScore'),
             dataIndex: 'satisfaction_score',
-            width: 88,
-            minWidth: 88,
+            width: 132,
+            minWidth: 132,
             uniTableKeepWidth: true,
             resizable: false,
             align: 'center',
             render: (_, row) =>
               row.satisfaction_score != null ? (
-                <MarkerTag color="success">{row.satisfaction_score}</MarkerTag>
+                <Rate disabled value={Number(row.satisfaction_score)} count={5} style={{ fontSize: 14 }} />
               ) : (
                 '-'
               ),
@@ -210,12 +220,15 @@ const ReturnVisitsPage: React.FC = () => {
               perms.canUpdate ? (
                 <Button {...rowActionKind('update')} key="edit" onClick={() => void openEdit(row)} />
               ) : null,
+              perms.canDelete ? (
+                <Button {...rowActionKind('delete')} key="delete" onClick={() => confirmDelete(row)} />
+              ) : null,
             ],
           },
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [perms.canUpdate, t],
+    [perms.canDelete, perms.canUpdate, t],
   );
 
   return (
@@ -223,7 +236,7 @@ const ReturnVisitsPage: React.FC = () => {
       <UniTable<CustomerReturnVisit>
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.return-visits.v1"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.return-visits.v4"
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.return-visits')}
         request={async (params) => {
@@ -321,7 +334,7 @@ const ReturnVisitsPage: React.FC = () => {
             name="satisfaction_score"
             label={t('app.kuaizhizao.afterSalesService.returnVisit.field.satisfactionScore')}
           >
-            <InputNumber min={1} max={5} style={{ width: '100%' }} />
+            <Rate count={5} />
           </Form.Item>
           <Form.Item
             name="visited_at_picker"

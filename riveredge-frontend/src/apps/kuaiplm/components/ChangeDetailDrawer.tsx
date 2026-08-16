@@ -20,11 +20,10 @@ import {
   buildRouteChangeCreateUrl,
 } from '../services/master-data-links';
 import {
-  getKuaiplmChangeStatusText,
   renderPlmChangeCategoryMarker,
   renderPlmChangeStatusTag,
   renderPlmChangeTypeMarker,
-} from './kuaiplmMeta';
+} from '../utils/plmListPresentation';
 import type { ChangeDeskCategory, UnifiedChangeRow } from '../services/change-desk';
 
 type DrawingChangeDetail = {

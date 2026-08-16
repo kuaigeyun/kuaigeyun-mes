@@ -322,6 +322,64 @@ export function renderNcLedgerStatusTag(t: TFunction, status?: string | null): R
   return React.createElement(StatusTag, resolveStatusTagDisplayProps({ text, color }), text);
 }
 
+/** 首件检验 FAI 流程状态（solid StatusTag） */
+const FAI_STATUS_COLORS: Record<string, string> = {
+  draft: RE_STATUS_BADGE_DRAFT,
+  in_progress: 'processing',
+  submitted: 'warning',
+  approved: 'success',
+  rejected: 'error',
+  closed: 'default',
+};
+
+const FAI_STATUS_I18N: Record<string, string> = {
+  draft: 'app.kuaizhizao.quality.fai.status.draft',
+  in_progress: 'app.kuaizhizao.quality.fai.status.inProgress',
+  submitted: 'app.kuaizhizao.quality.fai.status.submitted',
+  approved: 'app.kuaizhizao.quality.fai.status.approved',
+  rejected: 'app.kuaizhizao.quality.fai.status.rejected',
+  closed: 'app.kuaizhizao.quality.fai.status.closed',
+};
+
+const FAI_CONCLUSION_I18N: Record<string, string> = {
+  pending: 'app.kuaizhizao.quality.fai.conclusion.pending',
+  pass: 'app.kuaizhizao.quality.fai.conclusion.pass',
+  fail: 'app.kuaizhizao.quality.fai.conclusion.fail',
+};
+
+const FAI_CONCLUSION_COLORS: Record<string, string> = {
+  pending: 'warning',
+  pass: 'success',
+  fail: 'error',
+};
+
+export function getFaiStatusText(t: TFunction, status?: string | null): string {
+  if (!status) return '-';
+  const key = FAI_STATUS_I18N[status];
+  return key ? t(key) : status;
+}
+
+export function getFaiConclusionText(t: TFunction, conclusion?: string | null): string {
+  if (!conclusion) return '-';
+  const key = FAI_CONCLUSION_I18N[conclusion];
+  return key ? t(key) : conclusion;
+}
+
+export function renderFaiStatusTag(t: TFunction, status?: string | null): React.ReactNode {
+  const text = getFaiStatusText(t, status);
+  if (text === '-') return '-';
+  const color = FAI_STATUS_COLORS[String(status)] ?? 'default';
+  return React.createElement(StatusTag, resolveStatusTagDisplayProps({ text, color }), text);
+}
+
+/** 结论为结果标识，用 MarkerTag filled，不抢流程状态焦点 */
+export function renderFaiConclusionTag(t: TFunction, conclusion?: string | null): React.ReactNode {
+  if (!conclusion) return '-';
+  const text = getFaiConclusionText(t, conclusion);
+  const color = FAI_CONCLUSION_COLORS[String(conclusion)] ?? 'default';
+  return React.createElement(MarkerTag, { color }, text);
+}
+
 const QUALITY_EXCEPTION_TYPE_I18N: Record<string, string> = {
   inspection_failure: 'app.kuaizhizao.productionException.quality.exceptionType.inspectionFailure',
   process_deviation: 'app.kuaizhizao.productionException.quality.exceptionType.processDeviation',

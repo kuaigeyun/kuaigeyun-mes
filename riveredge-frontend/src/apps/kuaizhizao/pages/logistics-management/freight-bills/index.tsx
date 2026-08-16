@@ -1,19 +1,24 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import { ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Col, Form, InputNumber, Row, theme } from 'antd';
+import { App, Button, Col, Form, Input, InputNumber, Modal, Row, theme } from 'antd';
+import { CheckOutlined, CloseOutlined, SendOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { FormModalTemplate, MODAL_CONFIG, MultiTabListPageTemplate } from '../../../../../components/layout-templates';
-import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates/constants';
-import { UniTable } from '../../../../../components/uni-table';
 import {
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-  UniTableStackedPrimaryCell,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
+  DetailDrawerActions,
+  FormModalTemplate,
+  MODAL_CONFIG,
+  MultiTabListPageTemplate,
+} from '../../../../../components/layout-templates';
+import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates/constants';
+import { rowActionKind } from '../../../../../components/uni-action';
+import { UniTable } from '../../../../../components/uni-table';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { hasReviewPermission } from '../../../../../utils/permissionContract';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import {
@@ -22,13 +27,21 @@ import {
 } from '../shared/logisticsListPresentation';
 import { CarrierSelectDropdown } from '../shared/CarrierSelectDropdown';
 import {
+  auditFreightBill,
   createFreightBill,
   deleteFreightBill,
+  getFreightBill,
   listFreightBills,
   listPendingFreightOrdersForBill,
+  rejectFreightBill,
+  submitFreightBill,
+  updateFreightBill,
   type FreightBill,
   type FreightOrder,
 } from '../../../services/logistics';
+import { FreightBillDetailDrawer } from './components/FreightBillDetailDrawer';
+
+const RESOURCE = 'kuaizhizao:freight-bill';
 
 type FreightBillFormItem = {
   freight_order_id: number;
@@ -41,16 +54,30 @@ function BillItemReadonlyText({ value }: { value?: string }) {
   return <>{String(value ?? '').trim() || '-'}</>;
 }
 
+function canEditFreightBill(reviewStatus?: string | null) {
+  return reviewStatus === 'draft' || reviewStatus === 'rejected';
+}
+
 const FreightBillsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
-  const perms = useResourcePermissions('kuaizhizao:freight-bill');
+  const perms = useResourcePermissions(RESOURCE);
+  const currentUser = useCurrentUser();
+  const canReview = hasReviewPermission(currentUser ?? undefined, RESOURCE);
   const [activeTabKey, setActiveTabKey] = useState('bills');
   const billsActionRef = useRef<ActionType>();
   const pendingActionRef = useRef<ActionType>();
   const formRef = useRef<ProFormInstance>();
-  const [createOpen, setCreateOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<FreightBill | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detail, setDetail] = useState<FreightBill | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryIdRef = useRef<number | null>(null);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectRemarks, setRejectRemarks] = useState('');
   const pullModalZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET;
 
   const selectedOrderIds = () => {
@@ -95,26 +122,119 @@ const FreightBillsPage: React.FC = () => {
     isRowDisabled: (row) => selectedOrderIds().has(row.id),
   });
 
+  const loadDetail = useCallback(
+    async (id: number) => {
+      setDetailLoading(true);
+      setDetailError(null);
+      try {
+        setDetail(await getFreightBill(id));
+      } catch (error) {
+        setDetail(null);
+        setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.logistics.message.loadBillDetailFailed')));
+      } finally {
+        setDetailLoading(false);
+      }
+    },
+    [t],
+  );
+
+  const openDetail = (row: FreightBill) => {
+    detailRetryIdRef.current = row.id;
+    setDetailOpen(true);
+    setDetail(null);
+    setDetailError(null);
+    void loadDetail(row.id);
+  };
+
+  const refreshDetail = async (id: number) => {
+    setDetail(await getFreightBill(id));
+    billsActionRef.current?.reload();
+  };
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const openEdit = async (row: FreightBill) => {
+    try {
+      const full = await getFreightBill(row.id);
+      setEditing(full);
+      setFormOpen(true);
+    } catch (error) {
+      messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.logistics.message.loadBillDetailFailed')));
+    }
+  };
+
+  const closeForm = () => {
+    setFormOpen(false);
+    setEditing(null);
+  };
+
+  const openPull = () => {
+    const carrierId = formRef.current?.getFieldValue('carrier_id');
+    if (!carrierId) {
+      messageApi.warning(t('app.kuaizhizao.logistics.message.selectCarrierFirst'));
+      return;
+    }
+    pullFreightOrders.openModal();
+  };
+
+  const handleSave = async (values: {
+    carrier_id: number;
+    remark?: string;
+    items?: FreightBillFormItem[];
+  }) => {
+    const items = (values.items ?? []).filter((item) => Number(item.amount) > 0);
+    if (!items.length) {
+      messageApi.warning(t('app.kuaizhizao.logistics.message.billItemRequired'));
+      return;
+    }
+    const payload = {
+      carrier_id: values.carrier_id,
+      remark: values.remark,
+      items: items.map((item) => ({
+        freight_order_id: item.freight_order_id,
+        fee_type: 'base',
+        amount: item.amount,
+      })),
+    };
+    try {
+      if (editing) {
+        await updateFreightBill(editing.id, payload);
+        messageApi.success(t('common.saveSuccess'));
+      } else {
+        await createFreightBill(payload);
+        messageApi.success(t('common.createSuccess'));
+      }
+      closeForm();
+      billsActionRef.current?.reload();
+    } catch (error) {
+      messageApi.error(getApiErrorMessage(error, editing ? t('common.saveFailed') : t('common.createFailed')));
+    }
+  };
+
   const billColumns: ProColumns<FreightBill>[] = useMemo(
     () =>
       alignProColumns<FreightBill>([
         {
           title: t('app.kuaizhizao.logistics.field.billCode'),
           dataIndex: 'bill_code',
-          ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+          width: 148,
+          minWidth: 148,
+          uniTableKeepWidth: true,
+          resizable: false,
           fixed: 'left',
-          render: (_, row) => (
-            <UniTableStackedPrimaryCell
-              primary={String(row.bill_code ?? '').trim() || '-'}
-              secondary={String(row.carrier_name ?? '').trim() || '-'}
-              secondaryCopyable={false}
-            />
-          ),
+          copyable: true,
         },
         {
           title: t('app.kuaizhizao.logistics.field.carrierName'),
           dataIndex: 'carrier_name',
-          hideInTable: true,
+          width: 140,
+          minWidth: 140,
+          uniTableKeepWidth: true,
+          resizable: false,
+          ellipsis: true,
         },
         {
           title: t('app.kuaizhizao.logistics.field.totalAmount'),
@@ -148,8 +268,70 @@ const FreightBillsPage: React.FC = () => {
           hideInSearch: true,
           render: (_, row) => renderFreightBillReviewStatusTag(t, row.review_status),
         },
+        {
+          title: t('common.action'),
+          key: 'action',
+          valueType: 'option',
+          fixed: 'right',
+          hideInSearch: true,
+          render: (_, row) => [
+            <Button
+              key="read"
+              {...rowActionKind('read')}
+              type="link"
+              size="small"
+              onClick={() => openDetail(row)}
+            />,
+            perms.canUpdate && canEditFreightBill(row.review_status) ? (
+              <Button
+                key="edit"
+                {...rowActionKind('update')}
+                type="link"
+                size="small"
+                onClick={() => void openEdit(row)}
+              />
+            ) : null,
+            perms.canAction?.('submit') && canEditFreightBill(row.review_status) ? (
+              <Button
+                key="submit"
+                type="link"
+                size="small"
+                icon={<SendOutlined />}
+                onClick={async () => {
+                  try {
+                    await submitFreightBill(row.id);
+                    messageApi.success(t('app.kuaizhizao.logistics.message.submitBillSuccess'));
+                    billsActionRef.current?.reload();
+                  } catch (error) {
+                    messageApi.error(getApiErrorMessage(error, t('common.saveFailed')));
+                  }
+                }}
+              >
+                {t('components.uniAction.submit')}
+              </Button>
+            ) : null,
+            perms.canDelete && canEditFreightBill(row.review_status) ? (
+              <Button
+                key="delete"
+                {...rowActionKind('delete')}
+                type="link"
+                size="small"
+                onClick={() => {
+                  Modal.confirm({
+                    title: t('common.confirmDelete'),
+                    onOk: async () => {
+                      await deleteFreightBill(row.id);
+                      messageApi.success(t('common.deleteSuccess'));
+                      billsActionRef.current?.reload();
+                    },
+                  });
+                }}
+              />
+            ) : null,
+          ],
+        },
       ]),
-    [t],
+    [messageApi, perms, t],
   );
 
   const pendingColumns: ProColumns<FreightOrder>[] = useMemo(
@@ -158,20 +340,31 @@ const FreightBillsPage: React.FC = () => {
         {
           title: t('app.kuaizhizao.logistics.field.orderCode'),
           dataIndex: 'order_code',
-          ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+          width: 148,
+          minWidth: 148,
+          uniTableKeepWidth: true,
+          resizable: false,
           fixed: 'left',
-          render: (_, row) => (
-            <UniTableStackedPrimaryCell
-              primary={String(row.order_code ?? '').trim() || '-'}
-              secondary={String(row.tracking_number ?? '').trim() || '-'}
-              secondaryCopyable={Boolean(String(row.tracking_number ?? '').trim())}
-            />
-          ),
+          copyable: true,
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.trackingNumber'),
+          dataIndex: 'tracking_number',
+          width: 148,
+          minWidth: 148,
+          uniTableKeepWidth: true,
+          resizable: false,
+          ellipsis: true,
+          copyable: true,
         },
         {
           title: t('app.kuaizhizao.logistics.field.carrierName'),
           dataIndex: 'carrier_name',
-          hideInTable: true,
+          width: 140,
+          minWidth: 140,
+          uniTableKeepWidth: true,
+          resizable: false,
+          ellipsis: true,
         },
         {
           title: t('app.kuaizhizao.logistics.field.status'),
@@ -247,46 +440,19 @@ const FreightBillsPage: React.FC = () => {
     [t],
   );
 
-  const openCreate = () => {
-    setCreateOpen(true);
-  };
-
-  const openPull = () => {
-    const carrierId = formRef.current?.getFieldValue('carrier_id');
-    if (!carrierId) {
-      messageApi.warning(t('app.kuaizhizao.logistics.message.selectCarrierFirst'));
-      return;
-    }
-    pullFreightOrders.openModal();
-  };
-
-  const handleCreate = async (values: {
-    carrier_id: number;
-    remark?: string;
-    items?: FreightBillFormItem[];
-  }) => {
-    const items = (values.items ?? []).filter((item) => Number(item.amount) > 0);
-    if (!items.length) {
-      messageApi.warning(t('app.kuaizhizao.logistics.message.billItemRequired'));
-      return;
-    }
-    try {
-      await createFreightBill({
-        carrier_id: values.carrier_id,
-        remark: values.remark,
-        items: items.map((item) => ({
-          freight_order_id: item.freight_order_id,
-          fee_type: 'base',
-          amount: item.amount,
-        })),
-      });
-      messageApi.success(t('common.createSuccess'));
-      setCreateOpen(false);
-      billsActionRef.current?.reload();
-    } catch (error) {
-      messageApi.error(getApiErrorMessage(error, t('common.createFailed')));
-    }
-  };
+  const formInitialValues = useMemo(() => {
+    if (!editing) return { items: [] as FreightBillFormItem[] };
+    return {
+      carrier_id: editing.carrier_id,
+      remark: editing.remark,
+      items: (editing.items ?? []).map((item) => ({
+        freight_order_id: item.freight_order_id,
+        freight_order_code: item.freight_order_code ?? '',
+        tracking_number: item.tracking_number ?? undefined,
+        amount: item.amount != null ? Number(item.amount) : undefined,
+      })),
+    };
+  }, [editing]);
 
   return (
     <>
@@ -302,7 +468,7 @@ const FreightBillsPage: React.FC = () => {
               <UniTable<FreightBill>
                 actionRef={billsActionRef}
                 columns={billColumns}
-                columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-bills.v1"
+                columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-bills.v3"
                 rowKey="id"
                 request={async (params) => {
                   const res = await listFreightBills({
@@ -333,7 +499,7 @@ const FreightBillsPage: React.FC = () => {
                 actionRef={pendingActionRef}
                 search={false}
                 columns={pendingColumns}
-                columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-bills.pending.v2"
+                columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-bills.pending.v3"
                 rowKey="id"
                 request={async () => {
                   const res = await listPendingFreightOrdersForBill({ limit: 100 });
@@ -346,17 +512,22 @@ const FreightBillsPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title={t('app.kuaizhizao.logistics.action.createFreightBill')}
-        open={createOpen}
-        isEdit={false}
+        key={editing?.id ?? 'create'}
+        title={
+          editing
+            ? t('app.kuaizhizao.logistics.action.editFreightBill')
+            : t('app.kuaizhizao.logistics.action.createFreightBill')
+        }
+        open={formOpen}
+        isEdit={Boolean(editing)}
         grid={false}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
-        initialValues={{ items: [] }}
-        onClose={() => setCreateOpen(false)}
-        onFinish={handleCreate}
+        initialValues={formInitialValues}
+        onClose={closeForm}
+        onFinish={handleSave}
         onValuesChange={(changed) => {
-          if ('carrier_id' in changed) {
+          if ('carrier_id' in changed && !editing) {
             formRef.current?.setFieldsValue({ items: [] });
           }
         }}
@@ -368,7 +539,7 @@ const FreightBillsPage: React.FC = () => {
               label={t('app.kuaizhizao.logistics.field.carrierName')}
               rules={[{ required: true }]}
             >
-              <CarrierSelectDropdown modalZIndex={token.zIndexPopupBase} />
+              <CarrierSelectDropdown modalZIndex={token.zIndexPopupBase} disabled={Boolean(editing)} />
             </Form.Item>
           </Col>
         </Row>
@@ -395,6 +566,114 @@ const FreightBillsPage: React.FC = () => {
           </Col>
         </Row>
       </FormModalTemplate>
+
+      <FreightBillDetailDrawer
+        open={detailOpen}
+        onClose={() => {
+          setDetailOpen(false);
+          setDetail(null);
+          setDetailError(null);
+        }}
+        bill={detail}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryIdRef.current;
+          if (id != null) void loadDetail(id);
+        }}
+        extra={
+          <DetailDrawerActions
+            items={[
+              {
+                key: 'edit',
+                visible: Boolean(detail && perms.canUpdate && canEditFreightBill(detail.review_status)),
+                render: (
+                  <Button
+                    onClick={() => {
+                      if (!detail) return;
+                      void openEdit(detail);
+                    }}
+                  >
+                    {t('common.edit')}
+                  </Button>
+                ),
+              },
+              {
+                key: 'submit',
+                visible: Boolean(detail && perms.canAction?.('submit') && canEditFreightBill(detail.review_status)),
+                render: (
+                  <Button
+                    icon={<SendOutlined />}
+                    onClick={async () => {
+                      if (!detail) return;
+                      await submitFreightBill(detail.id);
+                      await refreshDetail(detail.id);
+                      messageApi.success(t('app.kuaizhizao.logistics.message.submitBillSuccess'));
+                    }}
+                  >
+                    {t('components.uniAction.submit')}
+                  </Button>
+                ),
+              },
+              {
+                key: 'audit',
+                visible: Boolean(detail && detail.review_status === 'pending' && canReview),
+                render: (
+                  <Button
+                    type="primary"
+                    icon={<CheckOutlined />}
+                    onClick={async () => {
+                      if (!detail) return;
+                      await auditFreightBill(detail.id);
+                      await refreshDetail(detail.id);
+                      messageApi.success(t('app.kuaizhizao.logistics.message.auditBillSuccess'));
+                    }}
+                  >
+                    {t('components.uniAction.audit')}
+                  </Button>
+                ),
+              },
+              {
+                key: 'reject',
+                visible: Boolean(detail && detail.review_status === 'pending' && canReview),
+                render: (
+                  <Button
+                    danger
+                    icon={<CloseOutlined />}
+                    onClick={() => {
+                      setRejectRemarks('');
+                      setRejectOpen(true);
+                    }}
+                  >
+                    {t('components.uniAction.reject')}
+                  </Button>
+                ),
+              },
+            ]}
+          />
+        }
+      />
+
+      <Modal
+        open={rejectOpen}
+        title={t('app.kuaizhizao.logistics.action.rejectFreightBill')}
+        onCancel={() => setRejectOpen(false)}
+        onOk={async () => {
+          if (!detail) return;
+          await rejectFreightBill(detail.id, rejectRemarks);
+          setRejectOpen(false);
+          await refreshDetail(detail.id);
+          messageApi.success(t('app.kuaizhizao.logistics.message.rejectBillSuccess'));
+        }}
+        destroyOnHidden
+      >
+        <Input.TextArea
+          rows={3}
+          value={rejectRemarks}
+          onChange={(e) => setRejectRemarks(e.target.value)}
+          placeholder={t('app.kuaizhizao.logistics.message.rejectBillPlaceholder')}
+        />
+      </Modal>
 
       <UniPullQueryModal<FreightOrder>
         open={pullFreightOrders.open}

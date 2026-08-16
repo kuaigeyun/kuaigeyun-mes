@@ -1,0 +1,1 @@
+import{w as t}from"./clearSessionQueries-DydS5DPK.js";async function i(a=7){return t(`/apps/kuaiai/catalog/capabilities?days=${a}`,{method:"GET"})}async function n(){return t("/apps/kuaiai/catalog/agents",{method:"GET"})}async function o(a){return t("/apps/kuaiai/actions/execute",{method:"POST",body:JSON.stringify({confirm_token:a})})}export{n as a,o as e,i as f};

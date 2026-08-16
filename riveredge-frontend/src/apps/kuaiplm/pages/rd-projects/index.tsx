@@ -10,6 +10,7 @@ import { EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../components/uni-batch';
 import { UniUserSelect } from '../../../../components/uni-user-select';

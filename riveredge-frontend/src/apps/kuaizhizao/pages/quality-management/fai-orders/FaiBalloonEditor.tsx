@@ -1,20 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   App,
+  Alert,
   Button,
   Empty,
   Input,
   InputNumber,
-  Modal,
   Space,
   Table,
   Upload,
+  theme,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { DeleteOutlined } from '@ant-design/icons';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { getFileDownloadUrlWithToken, uploadFile } from '../../../../../services/file';
+import { useThemeStore } from '../../../../../stores/themeStore';
 import { faiOrderApi, FaiBalloonCandidate, FaiOrder } from '../../../services/fai-order';
+import FaiDrawingPickerModal from './FaiDrawingPickerModal';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -52,7 +55,6 @@ function normalizeCandidates(raw: unknown[]): FaiBalloonCandidate[] {
 }
 
 export type FaiBalloonEditorProps = {
-  open: boolean;
   order: FaiOrder;
   editable: boolean;
   onClose: () => void;
@@ -60,7 +62,6 @@ export type FaiBalloonEditorProps = {
 };
 
 export const FaiBalloonEditor: React.FC<FaiBalloonEditorProps> = ({
-  open,
   order,
   editable,
   onClose,
@@ -68,6 +69,8 @@ export const FaiBalloonEditor: React.FC<FaiBalloonEditorProps> = ({
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
+  const isDark = useThemeStore((s) => s.resolved.isDark);
   const stageRef = useRef<HTMLDivElement>(null);
   const [drawingRef, setDrawingRef] = useState(order.drawing_file_url || '');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -77,15 +80,15 @@ export const FaiBalloonEditor: React.FC<FaiBalloonEditorProps> = ({
   const [placeMode, setPlaceMode] = useState(true);
   const [saving, setSaving] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
+  const [drawingPickerOpen, setDrawingPickerOpen] = useState(false);
   const dragRef = useRef<{ id: string; moved: boolean } | null>(null);
 
   useEffect(() => {
-    if (!open) return;
     setDrawingRef(order.drawing_file_url || '');
     setCandidates(normalizeCandidates(order.balloon_candidates || []));
     setSelectedId(null);
     setPlaceMode(true);
-  }, [open, order.id, order.drawing_file_url, order.balloon_candidates]);
+  }, [order.id, order.drawing_file_url, order.balloon_candidates]);
 
   useEffect(() => {
     let cancelled = false;
@@ -197,6 +200,38 @@ export const FaiBalloonEditor: React.FC<FaiBalloonEditorProps> = ({
     return false;
   };
 
+  const handlePickFromDrawingLibrary = async (picked: {
+    fileUuid: string;
+    drawingCode: string;
+    drawingRevision: string;
+  }) => {
+    if (!editable) return;
+    try {
+      setDrawingRef(picked.fileUuid);
+      const updated = await faiOrderApi.update(order.id, {
+        drawing_file_url: picked.fileUuid,
+        drawing_no: picked.drawingCode,
+        drawing_revision: picked.drawingRevision,
+      });
+      const withCandidates = await faiOrderApi.saveBalloonCandidates(
+        order.id,
+        candidates,
+        picked.fileUuid,
+      );
+      onApplied({
+        ...updated,
+        ...withCandidates,
+        drawing_file_url: picked.fileUuid,
+        drawing_no: picked.drawingCode,
+        drawing_revision: picked.drawingRevision,
+      });
+      setDrawingPickerOpen(false);
+      messageApi.success(t('app.kuaizhizao.quality.fai.balloon.messages.pickDrawingSuccess'));
+    } catch (err: any) {
+      messageApi.error(err?.message || t('app.kuaizhizao.quality.fai.balloon.messages.drawingUploadFailed'));
+    }
+  };
+
   const handleOcr = async (file?: File) => {
     if (!editable) return;
     setOcrLoading(true);
@@ -214,6 +249,11 @@ export const FaiBalloonEditor: React.FC<FaiBalloonEditorProps> = ({
       const next = normalizeCandidates(result.candidates || []);
       setCandidates(next);
       if (next[0]?.id) setSelectedId(next[0].id);
+      onApplied({
+        ...order,
+        balloon_candidates: next,
+        drawing_file_url: drawingRef || order.drawing_file_url,
+      });
       messageApi.success(
         t('app.kuaizhizao.quality.fai.balloon.messages.ocrSuccess', { count: next.length }),
       );
@@ -363,17 +403,75 @@ export const FaiBalloonEditor: React.FC<FaiBalloonEditorProps> = ({
   ];
 
   return (
-    <Modal
-      open={open}
-      title={t('app.kuaizhizao.quality.fai.balloon.editorTitle', { code: order.fai_code })}
-      width="92vw"
-      styles={{ body: { paddingTop: 12, maxHeight: '78vh', overflow: 'auto' } }}
-      destroyOnHidden
-      mask={{ closable: false }}
-      onCancel={onClose}
-      footer={
-        <Space>
-          <Button onClick={onClose}>{t('common.cancel')}</Button>
+    <div
+      className="kuaiiot-fai-balloon-page"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        minHeight: 0,
+        gap: 12,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap',
+          flexShrink: 0,
+        }}
+      >
+        <Space wrap>
+          <Button disabled={!editable} onClick={() => setDrawingPickerOpen(true)}>
+            {t('app.kuaizhizao.quality.fai.balloon.pickDrawing')}
+          </Button>
+          <Upload
+            accept="image/png,image/jpeg,image/webp"
+            showUploadList={false}
+            disabled={!editable}
+            beforeUpload={handleUploadDrawing}
+          >
+            <Button disabled={!editable}>{t('app.kuaizhizao.quality.fai.balloon.uploadDrawing')}</Button>
+          </Upload>
+          <Upload
+            accept="image/png,image/jpeg,image/webp"
+            showUploadList={false}
+            disabled={!editable}
+            beforeUpload={(file) => {
+              void handleOcr(file);
+              return false;
+            }}
+          >
+            <Button disabled={!editable} loading={ocrLoading}>
+              {t('app.kuaizhizao.quality.fai.balloon.ocrFromFile')}
+            </Button>
+          </Upload>
+          <Button
+            disabled={!editable || !imageUrl}
+            loading={ocrLoading}
+            onClick={() => void handleOcr()}
+          >
+            {t('app.kuaizhizao.quality.fai.balloon.ocrCurrent')}
+          </Button>
+          <Button
+            disabled={!editable}
+            type={placeMode ? 'primary' : 'default'}
+            onClick={() => setPlaceMode((v) => !v)}
+          >
+            {placeMode
+              ? t('app.kuaizhizao.quality.fai.balloon.placeModeOn')
+              : t('app.kuaizhizao.quality.fai.balloon.placeModeOff')}
+          </Button>
+          <span style={{ color: token.colorTextSecondary }}>
+            {editable
+              ? t('app.kuaizhizao.quality.fai.balloon.hint')
+              : t('app.kuaizhizao.quality.fai.balloon.readOnlyHint')}
+          </span>
+        </Space>
+        <Space wrap>
+          <Button onClick={onClose}>{t('common.back')}</Button>
           {editable ? (
             <>
               <Button loading={saving} onClick={handleSave}>
@@ -385,50 +483,37 @@ export const FaiBalloonEditor: React.FC<FaiBalloonEditorProps> = ({
             </>
           ) : null}
         </Space>
-      }
-    >
-      <Space wrap style={{ marginBottom: 12 }}>
-        {editable ? (
-          <>
-            <Upload accept="image/png,image/jpeg,image/webp" showUploadList={false} beforeUpload={handleUploadDrawing}>
-              <Button>{t('app.kuaizhizao.quality.fai.balloon.uploadDrawing')}</Button>
-            </Upload>
-            <Upload
-              accept="image/png,image/jpeg,image/webp"
-              showUploadList={false}
-              beforeUpload={(file) => {
-                void handleOcr(file);
-                return false;
-              }}
-            >
-              <Button loading={ocrLoading}>{t('app.kuaizhizao.quality.fai.balloon.ocrFromFile')}</Button>
-            </Upload>
-            <Button loading={ocrLoading} disabled={!imageUrl} onClick={() => void handleOcr()}>
-              {t('app.kuaizhizao.quality.fai.balloon.ocrCurrent')}
-            </Button>
-            <Button type={placeMode ? 'primary' : 'default'} onClick={() => setPlaceMode((v) => !v)}>
-              {placeMode
-                ? t('app.kuaizhizao.quality.fai.balloon.placeModeOn')
-                : t('app.kuaizhizao.quality.fai.balloon.placeModeOff')}
-            </Button>
-          </>
-        ) : null}
-        <span style={{ color: 'var(--ant-color-text-secondary)' }}>
-          {t('app.kuaizhizao.quality.fai.balloon.hint')}
-        </span>
-      </Space>
+      </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(320px, 1fr)', gap: 16 }}>
+      {!editable ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ flexShrink: 0 }}
+          title={t('app.kuaizhizao.quality.fai.balloon.readOnlyTitle')}
+        />
+      ) : null}
+
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1.4fr) minmax(320px, 1fr)',
+          gap: 16,
+        }}
+      >
         <div
           ref={stageRef}
           onClick={onStageClick}
           style={{
             position: 'relative',
-            minHeight: 420,
-            maxHeight: '58vh',
+            minHeight: 0,
+            height: '100%',
             overflow: 'auto',
-            border: '1px solid var(--ant-color-border)',
-            background: '#1a1a1a',
+            border: `1px solid ${token.colorBorder}`,
+            borderRadius: token.borderRadiusLG ?? 8,
+            background: isDark ? token.colorFillSecondary : token.colorFillQuaternary,
             cursor: editable && placeMode ? 'crosshair' : 'default',
           }}
         >
@@ -503,21 +588,21 @@ export const FaiBalloonEditor: React.FC<FaiBalloonEditorProps> = ({
           )}
         </div>
 
-        <div>
+        <div style={{ minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <Table
             size="small"
             pagination={false}
             rowKey={(r) => r.id || r.balloon_no || String(Math.random())}
             dataSource={candidates}
             columns={columns as any}
-            scroll={{ y: 360, x: 480 }}
+            scroll={{ y: 'calc(100vh - 320px)', x: 480 }}
             onRow={(row) => ({
               onClick: () => setSelectedId(row.id || null),
               style: row.id === selectedId ? { background: 'var(--ant-color-primary-bg)' } : undefined,
             })}
           />
           {selected && editable ? (
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 12, flexShrink: 0 }}>
               <div style={{ marginBottom: 4 }}>{t('app.kuaizhizao.quality.fai.balloon.anchorHint')}</div>
               <Space>
                 <Button
@@ -556,7 +641,14 @@ export const FaiBalloonEditor: React.FC<FaiBalloonEditorProps> = ({
           ) : null}
         </div>
       </div>
-    </Modal>
+
+      <FaiDrawingPickerModal
+        open={drawingPickerOpen}
+        currentFileUuid={drawingRef}
+        onCancel={() => setDrawingPickerOpen(false)}
+        onSelect={handlePickFromDrawingLibrary}
+      />
+    </div>
   );
 };
 

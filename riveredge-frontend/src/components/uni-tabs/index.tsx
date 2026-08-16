@@ -1637,12 +1637,16 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
             linear-gradient(var(--ant-colorBorder, var(--ant-color-border, #d9d9d9)), var(--ant-colorBorder, var(--ant-color-border, #d9d9d9))) bottom / 100% 1px no-repeat,
             ${tabsBgColor} !important;
           flex-shrink: 0;
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
           padding-bottom: 0;
           margin-bottom: 0px; /* 移除底部间距，由内容区控制 */
           position: sticky;
           top: 56px; /* ProLayout 顶栏高度 */
           z-index: 10;
-          overflow: visible !important;
+          overflow: hidden !important;
           border-bottom: none !important;
         }
         div.uni-tabs-header {
@@ -1790,24 +1794,30 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         * {
           scrollbar-gutter: auto !important;
         }
-        /* 标签栏头部包装器 - 包含滚动按钮 */
+        /* 标签栏头部包装器 - 包含滚动按钮；宽度锁在视口内，中间标签区可缩可滚 */
         .uni-tabs-header-wrapper {
           display: flex;
           align-items: center;
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
           position: relative;
           background: transparent !important;
           border: none !important;
           box-shadow: none !important;
-          overflow: visible !important;
-          overflow-x: visible !important;
-          overflow-y: visible !important;
+          overflow: hidden !important;
           margin-bottom: 0 !important;
           padding-bottom: 0 !important;
+          /* 右侧为全屏按钮预留固定槽位，避免标签把按钮挤出视口 */
+          padding-right: ${onToggleFullscreen ? '40px' : '0'} !important;
           z-index: 1;
           pointer-events: none;
         }
         /* 允许按钮和标签栏接收点击事件 */
         .uni-tabs-header-wrapper .uni-tabs-scroll-button,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button-wrapper,
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button-wrapper,
         .uni-tabs-header-wrapper .uni-tabs-container {
           pointer-events: auto;
         }
@@ -2006,7 +2016,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         .uni-tabs-header-wrapper.can-scroll-right:has(.uni-tabs-fullscreen-button-wrapper):has(.uni-tabs-scroll-button-right)::after {
           right: 64px; /* 右按钮 24px + 全屏按钮 40px */
         }
-        /* 全屏按钮容器样式 - 统一大小和padding，与按钮宽度高度一致 */
+        /* 全屏按钮容器：绝对贴右，不参与标签行伸缩，永不挤出视口 */
         .uni-tabs-fullscreen-button-wrapper {
           display: flex;
           align-items: center;
@@ -2017,10 +2027,13 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           padding-bottom: 0 !important;
           padding-top: 0 !important;
           border-bottom: none !important;
-          position: relative;
+          position: absolute;
+          right: 0;
+          top: 0;
           overflow: visible; /* 确保分割线可以显示 */
           flex-shrink: 0; /* 防止被压缩 */
-          z-index: 2;
+          z-index: 3;
+          background: ${tabsBgColor};
         }
         /* 全屏按钮左侧分割线 - 与标签页分割线样式一致，等高，根据标签栏背景色自动适配 */
         .uni-tabs-fullscreen-button-wrapper::before {
@@ -2066,12 +2079,26 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn-text:hover .anticon {
           color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 1)' : 'var(--ant-colorPrimaryHover)'} !important;
         }
-        /* 标签栏容器：外圆角需要溢出可见；横向滚动交给 nav-wrap */
+        /* 标签栏容器：flex 可收缩，避免标签总宽把全屏按钮挤出视口；横向滚动交给 nav-wrap */
         .uni-tabs-container {
-          flex: 1;
+          flex: 1 1 0%;
+          min-width: 0;
+          max-width: 100%;
           overflow: visible !important;
           position: relative;
           z-index: 1;
+        }
+        .uni-tabs-container.ant-tabs,
+        .uni-tabs-container > .ant-tabs-nav {
+          min-width: 0 !important;
+          max-width: 100% !important;
+        }
+        .uni-tabs-container > .ant-tabs-nav {
+          width: 100% !important;
+        }
+        .uni-tabs-container .ant-tabs-nav-wrap {
+          flex: 1 1 0% !important;
+          min-width: 0 !important;
         }
         /* 强制隐藏 tabs nav 的滚动条 */
         .uni-tabs-container .ant-tabs-nav::-webkit-scrollbar {
@@ -2135,6 +2162,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           display: flex;
           flex-direction: column;
           height: 100%;
+          width: 100%;
+          min-width: 0;
+          max-width: 100%;
           overflow: hidden;
         }
 

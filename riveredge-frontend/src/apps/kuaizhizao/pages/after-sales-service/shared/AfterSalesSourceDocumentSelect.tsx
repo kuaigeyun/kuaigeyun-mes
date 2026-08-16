@@ -17,6 +17,7 @@ export type AfterSalesSourceOptionState = {
 };
 
 type SourceOption = { value: number; label: string; code: string; customerId?: number; customerName?: string };
+export type AfterSalesSourceOption = SourceOption;
 
 type Props = {
   sourceTypeField?: string;
@@ -31,7 +32,7 @@ type Props = {
   onPicked?: (option: SourceOption | undefined) => void;
 };
 
-async function loadSourceOptions(
+export async function loadAfterSalesSourceOptions(
   sourceType: AfterSalesSourceKind,
   customerId?: number | null,
 ): Promise<SourceOption[]> {
@@ -99,7 +100,7 @@ export const AfterSalesSourceDocumentSelect: React.FC<Props> = ({
     }
     let cancelled = false;
     setLoading(true);
-    void loadSourceOptions(sourceType, customerId)
+    void loadAfterSalesSourceOptions(sourceType, customerId)
       .then((rows) => {
         if (!cancelled) setOptions(rows);
       })

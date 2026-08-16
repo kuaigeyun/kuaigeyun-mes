@@ -202,15 +202,17 @@ async def extract_text_from_image(
     b64: str,
     prompt: str = DEFAULT_IMAGE_TEXT_EXTRACT_PROMPT,
     max_tokens: int = 4096,
+    image_detail: str = "high",
 ) -> str:
     ocr_base_url = config.get("ocr_base_url")
     ocr_model = config.get("ocr_model")
     if not ocr_base_url or not ocr_model:
         raise ValidationError(OCR_NOT_CONFIGURED_MSG)
 
+    detail = image_detail if image_detail in ("low", "high", "auto") else "high"
     image_part: Dict[str, Any] = {
         "type": "image_url",
-        "image_url": {"url": f"data:{mime};base64,{b64}", "detail": "high"},
+        "image_url": {"url": f"data:{mime};base64,{b64}", "detail": detail},
     }
     ocr_prompt = prompt
     if is_deepseek_ocr_model(str(ocr_model)):

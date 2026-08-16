@@ -41,10 +41,6 @@ import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { EditOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
-import {
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-  UniTableStackedPrimaryCell,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -743,19 +739,29 @@ const EquipmentPage: React.FC = () => {
       search: { order: 25 } as ProColumns['search'],
     },
     {
-      title: t('app.kuaizhizao.equipment.colNameCode'),
+      title: t('app.kuaizhizao.equipment.colCode'),
       dataIndex: 'code',
-      key: 'name_code',
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       fixed: 'left',
       sorter: true,
       search: { order: 30 } as ProColumns['search'],
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       render: (_, r) => (
-        <UniTableStackedPrimaryCell
-          primary={String(r.name ?? '')}
-          secondary={String(r.code ?? '')}
-        />
+        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
+          {r.code ?? '-'}
+        </Typography.Text>
       ),
+    },
+    {
+      title: t('app.kuaizhizao.equipment.colName'),
+      dataIndex: 'name',
+      width: 200,
+      ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.equipment.colPhoto'),
@@ -898,7 +904,7 @@ const EquipmentPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<Equipment>
           headerTitle={t('app.kuaizhizao.equipment.title')}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment.v2"
           actionRef={actionRef}
           formRef={searchFormRef}
           rowKey="uuid"

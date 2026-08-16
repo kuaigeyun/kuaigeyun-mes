@@ -639,9 +639,18 @@
                         "permission": "kuaizhizao:quality-management-incoming-inspection:read"
                     },
                     {
+                        "title": "app.kuaizhizao.menu.quality-management.fai-orders",
+                        "path": "/apps/kuaizhizao/quality-management/fai-orders",
+                        "sort_order": 2,
+                        "meta": {
+                            "module": "quality"
+                        },
+                        "permission": "kuaizhizao:quality-management-fai-orders:read"
+                    },
+                    {
                         "title": "app.kuaizhizao.menu.quality-management.process-inspection",
                         "path": "/apps/kuaizhizao/quality-management/process-inspection",
-                        "sort_order": 2,
+                        "sort_order": 3,
                         "meta": {
                             "module": "quality"
                         },
@@ -650,56 +659,29 @@
                     {
                         "title": "app.kuaizhizao.menu.quality-management.finished-goods-inspection",
                         "path": "/apps/kuaizhizao/quality-management/finished-goods-inspection",
-                        "sort_order": 3,
+                        "sort_order": 4,
                         "meta": {
                             "module": "quality"
                         },
                         "permission": "kuaizhizao:quality-management-finished-goods-inspection:read"
                     },
                     {
-                        "title": "app.kuaizhizao.menu.quality-management.nonconforming-ledger",
-                        "path": "/apps/kuaizhizao/quality-management/nonconforming-ledger",
-                        "sort_order": 9,
-                        "meta": {
-                            "module": "quality"
-                        },
-                        "permission": "kuaizhizao:quality-management-nonconforming-ledger:read"
-                    },
-                    {
-                        "title": "app.kuaizhizao.menu.quality-management.traceability",
-                        "path": "/apps/kuaizhizao/quality-management/traceability",
-                        "sort_order": 10,
-                        "meta": {
-                            "module": "quality"
-                        },
-                        "permission": "kuaizhizao:quality-management-traceability:read"
-                    },
-                    {
-                        "title": "app.kuaizhizao.menu.quality-management.inspection-plans",
-                        "path": "/apps/kuaizhizao/quality-management/inspection-plans",
-                        "sort_order": 11,
-                        "meta": {
-                            "module": "quality"
-                        },
-                        "permission": "kuaizhizao:quality-management-inspection-plans:read"
-                    },
-                    {
-                        "title": "app.kuaizhizao.menu.quality-management.eight-d-reports",
-                        "path": "/apps/kuaizhizao/quality-management/eight-d-reports",
-                        "sort_order": 8,
-                        "meta": {
-                            "module": "quality"
-                        },
-                        "permission": "kuaizhizao:quality-management-eight-d-reports:read"
-                    },
-                    {
                         "title": "app.kuaizhizao.menu.quality-management.oqc-inspection",
                         "path": "/apps/kuaizhizao/quality-management/oqc-inspection",
-                        "sort_order": 4,
+                        "sort_order": 5,
                         "meta": {
                             "module": "quality"
                         },
                         "permission": "kuaizhizao:quality-management-oqc-inspection:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.quality-management.nonconforming-ledger",
+                        "path": "/apps/kuaizhizao/quality-management/nonconforming-ledger",
+                        "sort_order": 6,
+                        "meta": {
+                            "module": "quality"
+                        },
+                        "permission": "kuaizhizao:quality-management-nonconforming-ledger:read"
                     },
                     {
                         "title": "app.kuaizhizao.menu.quality-management.spc-monitor",
@@ -711,18 +693,36 @@
                         "permission": "kuaizhizao:quality-management-spc-monitor:read"
                     },
                     {
-                        "title": "app.kuaizhizao.menu.quality-management.fai-orders",
-                        "path": "/apps/kuaizhizao/quality-management/fai-orders",
-                        "sort_order": 5,
+                        "title": "app.kuaizhizao.menu.quality-management.eight-d-reports",
+                        "path": "/apps/kuaizhizao/quality-management/eight-d-reports",
+                        "sort_order": 8,
                         "meta": {
                             "module": "quality"
                         },
-                        "permission": "kuaizhizao:quality-management-fai-orders:read"
+                        "permission": "kuaizhizao:quality-management-eight-d-reports:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.quality-management.traceability",
+                        "path": "/apps/kuaizhizao/quality-management/traceability",
+                        "sort_order": 9,
+                        "meta": {
+                            "module": "quality"
+                        },
+                        "permission": "kuaizhizao:quality-management-traceability:read"
+                    },
+                    {
+                        "title": "app.kuaizhizao.menu.quality-management.inspection-plans",
+                        "path": "/apps/kuaizhizao/quality-management/inspection-plans",
+                        "sort_order": 10,
+                        "meta": {
+                            "module": "quality"
+                        },
+                        "permission": "kuaizhizao:quality-management-inspection-plans:read"
                     },
                     {
                         "title": "app.kuaizhizao.menu.quality-management.quality-system",
                         "icon": "safety-certificate",
-                        "sort_order": 12,
+                        "sort_order": 11,
                         "meta": {
                             "module": "quality"
                         },
@@ -756,7 +756,7 @@
                     {
                         "title": "app.kuaizhizao.menu.quality-management.reports",
                         "icon": "fileText",
-                        "sort_order": 13,
+                        "sort_order": 12,
                         "children": [
                             {
                                 "title": "app.kuaizhizao.menu.reports.incoming-inspection-report",

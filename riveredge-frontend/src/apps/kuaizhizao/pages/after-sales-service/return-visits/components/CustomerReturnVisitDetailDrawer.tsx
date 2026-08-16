@@ -3,9 +3,9 @@
  */
 
 import React, { useMemo } from 'react';
+import { Rate } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { MarkerTag } from '../../../../../../constants/statusBadges';
 import type { CustomerReturnVisit } from '../../../../services/after-sales-service';
 import { renderAfterSalesTypeMarker } from '../../shared/afterSalesListPresentation';
 import { SourceDocumentCode } from '../../../../../../components/linked-document-code/SourceDocumentCode';
@@ -71,7 +71,7 @@ export const CustomerReturnVisitDetailDrawer: React.FC<CustomerReturnVisitDetail
           dataIndex: 'satisfaction_score',
           render: (_, row) =>
             row.satisfaction_score != null ? (
-              <MarkerTag color="success">{row.satisfaction_score}</MarkerTag>
+              <Rate disabled value={Number(row.satisfaction_score)} count={5} />
             ) : (
               '-'
             ),

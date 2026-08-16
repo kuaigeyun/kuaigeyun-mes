@@ -3,9 +3,15 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from pydantic import BaseModel
 
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
-from apps.kuaizhizao.schemas.logistics import FreightBillCreate, FreightBillListResponse
+from apps.kuaizhizao.schemas.logistics import (
+    FreightBillCreate,
+    FreightBillListResponse,
+    FreightBillReject,
+    FreightBillUpdate,
+)
 from apps.kuaizhizao.services.freight_bill_service import FreightBillService
 from core.api.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
@@ -17,6 +23,10 @@ router = APIRouter(
     tags=["App - Kuaige Zhizao - Freight Bill"],
     dependencies=[Depends(require_kuaizhizao_module_access("freight-bill"))],
 )
+
+
+class FreightBillAuditBody(BaseModel):
+    review_remarks: Optional[str] = None
 
 
 @router.get("/pending-freight-orders")
@@ -59,6 +69,66 @@ async def create_freight_bill(
 ):
     try:
         return await service.create_bill(tenant_id, data, created_by=current_user.id)
+    except (BusinessLogicError, NotFoundError) as e:
+        code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=str(e))
+
+
+@router.put("/{bill_id}")
+async def update_freight_bill(
+    data: FreightBillUpdate,
+    bill_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.update_bill(tenant_id, bill_id, data, updated_by=current_user.id)
+    except (BusinessLogicError, NotFoundError) as e:
+        code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=str(e))
+
+
+@router.post("/{bill_id}/submit")
+async def submit_freight_bill(
+    bill_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.submit_freight_bill(tenant_id, bill_id, submitted_by=current_user.id)
+    except (BusinessLogicError, NotFoundError) as e:
+        code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=str(e))
+
+
+@router.post("/{bill_id}/audit")
+async def audit_freight_bill(
+    bill_id: int = Path(...),
+    body: FreightBillAuditBody = FreightBillAuditBody(),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.approve_freight_bill(tenant_id, bill_id, approver_id=current_user.id)
+    except (BusinessLogicError, NotFoundError) as e:
+        code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=str(e))
+
+
+@router.post("/{bill_id}/reject")
+async def reject_freight_bill(
+    bill_id: int = Path(...),
+    body: FreightBillReject = FreightBillReject(),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.reject_freight_bill(
+            tenant_id,
+            bill_id,
+            approver_id=current_user.id,
+            rejection_reason=body.rejection_reason,
+        )
     except (BusinessLogicError, NotFoundError) as e:
         code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=code, detail=str(e))

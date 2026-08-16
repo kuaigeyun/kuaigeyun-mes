@@ -91,6 +91,7 @@ const InternalAuditsPage = lazy(() => import('./pages/quality-management/interna
 const ManagementReviewsPage = lazy(() => import('./pages/quality-management/management-reviews'));
 const IsoClausesPage = lazy(() => import('./pages/quality-management/iso-clauses'));
 const FaiOrdersPage = lazy(() => import('./pages/quality-management/fai-orders'));
+const FaiBalloonPage = lazy(() => import('./pages/quality-management/fai-orders/balloon'));
 
 // 设备管理页面
 const EquipmentDashboardPage = lazy(() => import('./pages/equipment-management/dashboard'));
@@ -379,6 +380,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="quality-management/system-documents" element={withPageSuspense(SystemDocumentsPage)} />
       <Route path="quality-management/internal-audits" element={withPageSuspense(InternalAuditsPage)} />
       <Route path="quality-management/management-reviews" element={withPageSuspense(ManagementReviewsPage)} />
+      <Route path="quality-management/fai-orders/:id/balloon" element={withPageSuspense(FaiBalloonPage)} />
       <Route path="quality-management/fai-orders" element={withPageSuspense(FaiOrdersPage)} />
 
       {/* 设备管理路由 */}

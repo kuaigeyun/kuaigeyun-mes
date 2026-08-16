@@ -1,1 +1,0 @@
-import{ap as a,j as s,a6 as e}from"./vendor-DDW-N5Dq.js";import{b as o}from"./ModuleTrendLine-BvhgrOfV.js";function l({children:r,columns:n=2}){const t=a.useBreakpoint().lg?n:1;return s.jsx(e,{span:24,children:s.jsx("div",{style:{display:"grid",gridTemplateColumns:`repeat(${t}, minmax(0, 1fr))`,gap:o,alignItems:"start"},children:r})})}export{l as M};

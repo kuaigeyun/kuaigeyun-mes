@@ -257,8 +257,8 @@ const ReportingStatisticsPage: React.FC = () => {
 
         {statistics ? (
           <>
-            <Row gutter={16} style={{ marginBottom: 12 }}>
-              <Col span={6}>
+            <Row gutter={[16, 12]} style={{ marginBottom: 12 }}>
+              <Col span={8}>
                 <Card>
                   <Statistic
                     title={t('app.kuaizhizao.workReporting.statistics.statTotalCount')}
@@ -267,7 +267,7 @@ const ReportingStatisticsPage: React.FC = () => {
                   />
                 </Card>
               </Col>
-              <Col span={6}>
+              <Col span={8}>
                 <Card>
                   <Statistic
                     title={t('app.kuaizhizao.workReporting.statistics.statTotalReportedQty')}
@@ -277,7 +277,7 @@ const ReportingStatisticsPage: React.FC = () => {
                   />
                 </Card>
               </Col>
-              <Col span={6}>
+              <Col span={8}>
                 <Card>
                   <Statistic
                     title={t('app.kuaizhizao.workReporting.statistics.statQualificationRate')}
@@ -297,7 +297,7 @@ const ReportingStatisticsPage: React.FC = () => {
                   />
                 </Card>
               </Col>
-              <Col span={6}>
+              <Col span={8}>
                 <Card>
                   <Statistic
                     title={t('app.kuaizhizao.workReporting.statistics.statTotalWorkHours')}
@@ -307,10 +307,7 @@ const ReportingStatisticsPage: React.FC = () => {
                   />
                 </Card>
               </Col>
-            </Row>
-
-            <Row gutter={16} style={{ marginBottom: 12 }}>
-              <Col span={6}>
+              <Col span={8}>
                 <Card>
                   <Statistic
                     title={t('app.kuaizhizao.workReporting.statistics.statPending')}
@@ -319,7 +316,7 @@ const ReportingStatisticsPage: React.FC = () => {
                   />
                 </Card>
               </Col>
-              <Col span={6}>
+              <Col span={8}>
                 <Card>
                   <Statistic
                     title={t('app.kuaizhizao.workReporting.statistics.statApproved')}
@@ -328,7 +325,7 @@ const ReportingStatisticsPage: React.FC = () => {
                   />
                 </Card>
               </Col>
-              <Col span={6}>
+              <Col span={8}>
                 <Card>
                   <Tooltip title={t('app.kuaizhizao.workReporting.statistics.firstPassYieldTooltip')}>
                     <Statistic
@@ -350,7 +347,7 @@ const ReportingStatisticsPage: React.FC = () => {
                   </Tooltip>
                 </Card>
               </Col>
-              <Col span={6}>
+              <Col span={8}>
                 <Card>
                   <Statistic
                     title={t('app.kuaizhizao.workReporting.statistics.statUnqualifiedRate')}
@@ -370,10 +367,7 @@ const ReportingStatisticsPage: React.FC = () => {
                   />
                 </Card>
               </Col>
-            </Row>
-
-            <Row gutter={16} style={{ marginBottom: 12 }}>
-              <Col span={6}>
+              <Col span={8}>
                 <Card>
                   <Statistic
                     title={t('app.kuaizhizao.workReporting.statistics.statAvgEfficiency')}

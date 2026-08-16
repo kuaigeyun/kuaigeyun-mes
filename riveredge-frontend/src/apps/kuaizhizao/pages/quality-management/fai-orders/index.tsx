@@ -7,12 +7,13 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Col, Empty, Input, InputNumber, Row, Space, Table, Tag } from 'antd';
+import { App, Button, Col, Empty, Input, InputNumber, Row, Space, Table } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import CodeField from '../../../../../components/code-field';
 import { UniTable } from '../../../../../components/uni-table';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -20,10 +21,11 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { faiOrderApi, FaiCharacteristic, FaiOrder } from '../../../services/fai-order';
 import { inspectionPlanApi } from '../../../services/production';
-import FaiBalloonEditor from './FaiBalloonEditor';
+import { renderFaiConclusionTag, renderFaiStatusTag } from '../components/qualityMeta';
+import { faiBalloonPath } from './paths';
 
 const RESOURCE = 'kuaizhizao:quality-management-fai-orders';
 
@@ -62,8 +64,8 @@ const FaiOrdersPage: React.FC = () => {
   const [editing, setEditing] = useState<FaiOrder | null>(null);
   const [chars, setChars] = useState<FaiCharacteristic[]>([emptyChar(1)]);
   const [importPlanId, setImportPlanId] = useState<number | null>(null);
-  const [balloonOpen, setBalloonOpen] = useState(false);
-  const { canCreate, canUpdate, canDelete, canAction } = useResourcePermissions(RESOURCE);
+  const { canCreate, canUpdate, canDelete, canRead, canAction } = useResourcePermissions(RESOURCE);
+  const navigate = useNavigate();
   const canSubmit = !!canAction?.('submit');
   const canApprove = !!canAction?.('approve');
   const canReject = !!canAction?.('reject');
@@ -102,6 +104,13 @@ const FaiOrdersPage: React.FC = () => {
       });
     }, 0);
   };
+
+  const openBalloon = useCallback(
+    (row: FaiOrder) => {
+      navigate(faiBalloonPath(row.id));
+    },
+    [navigate],
+  );
 
   const columns: ProColumns<FaiOrder>[] = useMemo(
     () =>
@@ -142,35 +151,61 @@ const FaiOrdersPage: React.FC = () => {
             title: t('app.kuaizhizao.quality.fai.conclusion'),
             dataIndex: 'conclusion',
             width: 88,
+            minWidth: 88,
+            uniTableKeepWidth: true,
             hideInSearch: true,
-            render: (_, r) => {
-              const key = `app.kuaizhizao.quality.fai.conclusion.${r.conclusion}`;
-              const label = t(key);
-              return <Tag>{label === key ? r.conclusion : label}</Tag>;
-            },
+            render: (_, r) => renderFaiConclusionTag(t, r.conclusion),
           },
           {
             title: t('app.kuaizhizao.quality.fai.status'),
             dataIndex: 'status',
-            width: 110,
+            hideInTable: true,
             valueEnum: statusEnum,
-            render: (_, r) => <Tag>{statusEnum[r.status]?.text || r.status}</Tag>,
+          },
+          {
+            title: t('app.kuaizhizao.quality.fai.status'),
+            key: 'lifecycle',
+            dataIndex: 'status',
+            fixed: 'right',
+            hideInSearch: true,
+            width: 96,
+            minWidth: 96,
+            uniTableKeepWidth: true,
+            render: (_, r) => renderFaiStatusTag(t, r.status),
           },
           {
             title: t('common.actions'),
+            key: 'action',
             valueType: 'option',
-            width: 280,
             fixed: 'right',
             render: (_, row) => [
-              <a key="view" className={rowActionKind('view')} onClick={() => void openEdit(row)}>
+              <Button
+                key="view"
+                {...rowActionKind(
+                  canUpdate && ['draft', 'in_progress', 'rejected'].includes(row.status)
+                    ? 'update'
+                    : 'read',
+                )}
+                onClick={() => void openEdit(row)}
+              >
                 {canUpdate && ['draft', 'in_progress', 'rejected'].includes(row.status)
                   ? t('common.edit')
                   : t('common.view')}
-              </a>,
+              </Button>,
+              canRead || canUpdate ? (
+                <Button
+                  key="balloon"
+                  {...rowActionKind('update')}
+                  {...rowActionLabelKeep()}
+                  onClick={() => openBalloon(row)}
+                >
+                  {t('app.kuaizhizao.quality.fai.actions.balloon')}
+                </Button>
+              ) : null,
               canSubmit && ['draft', 'in_progress', 'rejected'].includes(row.status) ? (
-                <a
+                <Button
                   key="submit"
-                  className={rowActionKind('execute')}
+                  {...rowActionKind('submit')}
                   onClick={async () => {
                     await faiOrderApi.submit(row.id);
                     messageApi.success(t('app.kuaizhizao.quality.fai.messages.submitSuccess'));
@@ -178,12 +213,12 @@ const FaiOrdersPage: React.FC = () => {
                   }}
                 >
                   {t('app.kuaizhizao.quality.fai.actions.submit')}
-                </a>
+                </Button>
               ) : null,
               canApprove && row.status === 'submitted' ? (
-                <a
+                <Button
                   key="approve"
-                  className={rowActionKind('execute')}
+                  {...rowActionKind('approve')}
                   onClick={async () => {
                     await faiOrderApi.approve(row.id);
                     messageApi.success(t('app.kuaizhizao.quality.fai.messages.approveSuccess'));
@@ -191,12 +226,12 @@ const FaiOrdersPage: React.FC = () => {
                   }}
                 >
                   {t('app.kuaizhizao.quality.fai.actions.approve')}
-                </a>
+                </Button>
               ) : null,
               canReject && row.status === 'submitted' ? (
-                <a
+                <Button
                   key="reject"
-                  className={rowActionKind('danger')}
+                  {...rowActionKind('reject')}
                   onClick={async () => {
                     await faiOrderApi.reject(row.id);
                     messageApi.success(t('app.kuaizhizao.quality.fai.messages.rejectSuccess'));
@@ -204,12 +239,13 @@ const FaiOrdersPage: React.FC = () => {
                   }}
                 >
                   {t('app.kuaizhizao.quality.fai.actions.reject')}
-                </a>
+                </Button>
               ) : null,
               canExport ? (
-                <a
+                <Button
                   key="export"
-                  className={rowActionKind('view')}
+                  {...rowActionKind('export')}
+                  {...rowActionLabelKeep()}
                   onClick={async () => {
                     const fair = await faiOrderApi.fairExport(row.id);
                     const blob = new Blob([JSON.stringify(fair, null, 2)], {
@@ -224,12 +260,12 @@ const FaiOrdersPage: React.FC = () => {
                   }}
                 >
                   {t('app.kuaizhizao.quality.fai.actions.exportFair')}
-                </a>
+                </Button>
               ) : null,
               canDelete && ['draft', 'rejected'].includes(row.status) ? (
-                <a
+                <Button
                   key="delete"
-                  className={rowActionKind('danger')}
+                  {...rowActionKind('delete')}
                   onClick={async () => {
                     await faiOrderApi.delete(row.id);
                     messageApi.success(t('common.deleteSuccess'));
@@ -237,14 +273,26 @@ const FaiOrdersPage: React.FC = () => {
                   }}
                 >
                   {t('common.delete')}
-                </a>
+                </Button>
               ) : null,
             ],
           },
         ],
-        SALES_DOC_LIST_FIELD_RANK,
+        GLOBAL_DOC_LIST_FIELD_RANK,
       ),
-    [canApprove, canDelete, canExport, canReject, canSubmit, canUpdate, messageApi, statusEnum, t],
+    [
+      canApprove,
+      canDelete,
+      canExport,
+      canRead,
+      canReject,
+      canSubmit,
+      canUpdate,
+      messageApi,
+      openBalloon,
+      statusEnum,
+      t,
+    ],
   );
 
   const charColumns = [
@@ -400,7 +448,7 @@ const FaiOrdersPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.fai-orders"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.fai-orders.list-v3"
           toolBarRender={() =>
             canCreate
               ? [
@@ -588,16 +636,7 @@ const FaiOrdersPage: React.FC = () => {
 
             {editing?.id ? (
               <Space style={{ marginTop: 8 }}>
-                <Button
-                  type="primary"
-                  onClick={() => {
-                    const drawing = formRef.current?.getFieldValue?.('drawing_file_url');
-                    if (drawing && drawing !== editing.drawing_file_url) {
-                      setEditing({ ...editing, drawing_file_url: drawing });
-                    }
-                    setBalloonOpen(true);
-                  }}
-                >
+                <Button type="primary" onClick={() => openBalloon(editing)}>
                   {t('app.kuaizhizao.quality.fai.balloon.openEditor')}
                 </Button>
                 <span style={{ color: 'var(--ant-color-text-secondary)' }}>
@@ -611,23 +650,6 @@ const FaiOrdersPage: React.FC = () => {
             )}
           </div>
         </FormModalTemplate>
-
-        {editing?.id ? (
-          <FaiBalloonEditor
-            open={balloonOpen}
-            order={editing}
-            editable={editable && !!canUpdate}
-            onClose={() => setBalloonOpen(false)}
-            onApplied={(updated) => {
-              setEditing(updated);
-              setChars(updated.characteristics?.length ? updated.characteristics : chars);
-              formRef.current?.setFieldsValue({
-                drawing_file_url: updated.drawing_file_url,
-              });
-              actionRef.current?.reload();
-            }}
-          />
-        ) : null}
       </ListPageTemplate>
     </PermissionGuard>
   );

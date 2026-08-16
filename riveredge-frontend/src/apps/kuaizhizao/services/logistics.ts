@@ -124,6 +124,7 @@ export type FreightBillItem = {
   id?: number;
   freight_order_id: number;
   freight_order_code?: string;
+  tracking_number?: string | null;
   fee_type: string;
   amount: number;
   remark?: string;
@@ -140,6 +141,9 @@ export type FreightBill = {
   total_amount: number;
   status: string;
   review_status: string;
+  reviewer_id?: number | null;
+  reviewer_name?: string | null;
+  reviewed_at?: string | null;
   payable_id?: number;
   payable_code?: string;
   remark?: string;
@@ -302,8 +306,31 @@ export async function listFreightBills(params: ListParams & { review_status?: st
   return apiRequest<{ items: FreightBill[]; total: number }>(`${BASE}/freight-bills`, { method: 'GET', params });
 }
 
+export async function getFreightBill(id: number) {
+  return apiRequest<FreightBill>(`${BASE}/freight-bills/${id}`, { method: 'GET' });
+}
+
 export async function createFreightBill(data: Record<string, unknown>) {
   return apiRequest<FreightBill>(`${BASE}/freight-bills`, { method: 'POST', data });
+}
+
+export async function updateFreightBill(id: number, data: Record<string, unknown>) {
+  return apiRequest<FreightBill>(`${BASE}/freight-bills/${id}`, { method: 'PUT', data });
+}
+
+export async function submitFreightBill(id: number) {
+  return apiRequest<FreightBill>(`${BASE}/freight-bills/${id}/submit`, { method: 'POST' });
+}
+
+export async function auditFreightBill(id: number) {
+  return apiRequest<FreightBill>(`${BASE}/freight-bills/${id}/audit`, { method: 'POST', data: {} });
+}
+
+export async function rejectFreightBill(id: number, rejection_reason?: string) {
+  return apiRequest<FreightBill>(`${BASE}/freight-bills/${id}/reject`, {
+    method: 'POST',
+    data: { rejection_reason },
+  });
 }
 
 export async function deleteFreightBill(id: number) {

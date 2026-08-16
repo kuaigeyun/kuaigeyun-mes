@@ -98,6 +98,7 @@ const RequirementsPage: React.FC = () => {
         const ruleCode = getPageRuleCode(PAGE_CODE);
         if (!ruleCode) {
           setPreviewCode(null);
+          messageApi.warning(t('app.kuaiplm.phase2.requirements.codeRuleMissing'));
           return;
         }
         const res = await testGenerateCode({ rule_code: ruleCode });
@@ -105,9 +106,10 @@ const RequirementsPage: React.FC = () => {
         createFormRef.current?.setFieldsValue({ requirement_code: res.code });
       } catch {
         setPreviewCode(null);
+        messageApi.warning(t('app.kuaiplm.phase2.requirements.codePreviewFailed'));
       }
     })();
-  }, [createOpen]);
+  }, [createOpen, messageApi, t]);
 
   const toRequirementIds = (keys: React.Key[]) =>
     keys.map((key) => Number(key)).filter((id) => Number.isFinite(id) && id > 0);
@@ -384,9 +386,16 @@ const RequirementsPage: React.FC = () => {
         initialValues={{ project_id: filterProjectId, priority: 'normal' }}
         onFinish={async (values) => {
           if (!validateRequirementPayload(values, messageApi, t)) return;
+          const { requirement_code: formCode, ...rest } = values as Record<string, unknown>;
+          const manualCode = String(formCode || '').trim();
           await createRequirement({
-            ...values,
-            project_id: values.project_id ?? filterProjectId,
+            ...rest,
+            ...(isAutoGenerateEnabled(PAGE_CODE)
+              ? {}
+              : manualCode
+                ? { requirement_code: manualCode }
+                : {}),
+            project_id: (rest.project_id as number | undefined) ?? filterProjectId,
           });
           messageApi.success(t('common.createSuccess'));
           setCreateOpen(false);

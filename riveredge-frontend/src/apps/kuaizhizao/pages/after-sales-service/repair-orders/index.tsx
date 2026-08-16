@@ -1,15 +1,11 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Button, message } from 'antd';
+import { App, Button } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-  UniTableStackedPrimaryCell,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
@@ -26,6 +22,7 @@ const RESOURCE = 'kuaizhizao:repair-order';
 
 const RepairOrdersPage: React.FC = () => {
   const { t } = useTranslation();
+  const { message: messageApi, modal } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
   const actionRef = useRef<ActionType>();
   const [modalOpen, setModalOpen] = useState(false);
@@ -57,6 +54,26 @@ const RepairOrdersPage: React.FC = () => {
     void loadDetail(row.id);
   };
 
+  const openEdit = async (row: RepairOrder) => {
+    setEditing(await repairOrderApi.get(row.id));
+    setModalOpen(true);
+  };
+
+  const confirmDelete = (row: RepairOrder) => {
+    modal.confirm({
+      title: t('common.confirmDelete'),
+      onOk: async () => {
+        await repairOrderApi.delete(row.id);
+        messageApi.success(t('common.deleteSuccess'));
+        if (detail?.id === row.id) {
+          setDetailOpen(false);
+          setDetail(null);
+        }
+        actionRef.current?.reload();
+      },
+    });
+  };
+
   const columns: ProColumns<RepairOrder>[] = useMemo(
     () =>
       alignProColumns<RepairOrder>(
@@ -64,20 +81,21 @@ const RepairOrdersPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.afterSalesService.repairOrder.field.orderCode'),
             dataIndex: 'order_code',
-            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            width: 148,
+            minWidth: 148,
+            uniTableKeepWidth: true,
+            resizable: false,
             fixed: 'left',
-            render: (_, row) => (
-              <UniTableStackedPrimaryCell
-                primary={String(row.order_code ?? '').trim() || '-'}
-                secondary={String(row.customer_name ?? '').trim() || '-'}
-                secondaryCopyable={false}
-              />
-            ),
+            copyable: true,
           },
           {
             title: t('app.kuaizhizao.afterSalesService.repairOrder.field.customerName'),
             dataIndex: 'customer_name',
-            hideInTable: true,
+            width: 148,
+            minWidth: 148,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
           },
           {
             title: t('app.kuaizhizao.afterSalesService.repairOrder.field.repairMode'),
@@ -114,14 +132,18 @@ const RepairOrdersPage: React.FC = () => {
             hideInSearch: true,
             render: (_, row) => [
               <Button {...rowActionKind('read')} key="read" onClick={() => openDetail(row)} />,
-              perms.canUpdate ? (
+              perms.canUpdate && row.status !== '已关闭' ? (
                 <Button
                   {...rowActionKind('update')}
                   key="edit"
-                  onClick={async () => {
-                    setEditing(await repairOrderApi.get(row.id));
-                    setModalOpen(true);
-                  }}
+                  onClick={() => void openEdit(row)}
+                />
+              ) : null,
+              perms.canDelete && row.status === '待派工' ? (
+                <Button
+                  {...rowActionKind('delete')}
+                  key="delete"
+                  onClick={() => confirmDelete(row)}
                 />
               ) : null,
             ],
@@ -129,7 +151,7 @@ const RepairOrdersPage: React.FC = () => {
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [perms.canUpdate, t],
+    [messageApi, modal, perms.canDelete, perms.canUpdate, t],
   );
 
   return (
@@ -137,7 +159,7 @@ const RepairOrdersPage: React.FC = () => {
       <UniTable<RepairOrder>
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.repair-orders.v1"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.repair-orders.v3"
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.repair-orders')}
         request={async (params) => {
@@ -159,7 +181,7 @@ const RepairOrdersPage: React.FC = () => {
         showDeleteButton={perms.canDelete}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => repairOrderApi.delete(Number(key))));
-          message.success(t('common.batchDeleteSuccess', { count: keys.length }));
+          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
           actionRef.current?.reload();
         }}
       />
@@ -174,10 +196,10 @@ const RepairOrdersPage: React.FC = () => {
         onSubmit={async (payload) => {
           if (editing) {
             await repairOrderApi.update(editing.id, payload);
-            message.success(t('common.saveSuccess'));
+            messageApi.success(t('common.saveSuccess'));
           } else {
             await repairOrderApi.create(payload);
-            message.success(t('common.createSuccess'));
+            messageApi.success(t('common.createSuccess'));
           }
           actionRef.current?.reload();
         }}
@@ -201,9 +223,23 @@ const RepairOrdersPage: React.FC = () => {
           <DetailDrawerActions
             items={[
               {
+                key: 'edit',
+                visible: Boolean(detail && perms.canUpdate && detail.status !== '已关闭'),
+                render: (
+                  <Button
+                    onClick={() => {
+                      if (!detail) return;
+                      void openEdit(detail);
+                    }}
+                  >
+                    {t('common.edit')}
+                  </Button>
+                ),
+              },
+              {
                 key: 'close',
                 visible: Boolean(detail && perms.canAction?.('close') && detail.status !== '已关闭'),
-                render: () => (
+                render: (
                   <Button
                     type="primary"
                     onClick={async () => {
@@ -211,7 +247,7 @@ const RepairOrdersPage: React.FC = () => {
                       await repairOrderApi.close(detail.id);
                       setDetail(await repairOrderApi.get(detail.id));
                       actionRef.current?.reload();
-                      message.success(t('app.kuaizhizao.afterSalesService.repairOrder.closeSuccess'));
+                      messageApi.success(t('app.kuaizhizao.afterSalesService.repairOrder.closeSuccess'));
                     }}
                   >
                     {t('app.kuaizhizao.afterSalesService.repairOrder.actionClose')}

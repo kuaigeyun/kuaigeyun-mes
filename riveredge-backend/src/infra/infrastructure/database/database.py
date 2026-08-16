@@ -394,12 +394,15 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.quality_standard",  # 质量标准模型
                 "apps.kuaizhizao.models.quotation",  # 报价单模型
                 "apps.kuaizhizao.models.receipt_notice",  # 收货通知模型
+                "apps.kuaizhizao.models.receipt_notice_item",  # 收货通知明细
                 "apps.kuaizhizao.models.replenishment_suggestion",  # 补货建议模型
                 "apps.kuaizhizao.models.customer_follow_up",  # 客户跟进记录模型
                 "apps.kuaizhizao.models.customer_collaborator",  # 客户池协作人
                 "apps.kuaizhizao.models.scheduling_config",  # 排程配置模型
                 "apps.kuaizhizao.models.work_order_score",  # 工单综合打分快照
                 "apps.kuaizhizao.models.shipment_notice",  # 发货通知模型
+                "apps.kuaizhizao.models.shipment_notice_item",  # 发货通知明细
+                "apps.kuaizhizao.models.delivery_notice_item",  # 送货单明细
                 "apps.kuaizhizao.models.logistics",  # 承运商/货运单/轨迹
                 "apps.kuaizhizao.models.spare_part",  # 备品备件模型
                 "apps.kuaizhizao.models.state_transition",  # 状态流转规则模型

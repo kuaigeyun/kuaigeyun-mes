@@ -1343,6 +1343,20 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         generateCode(groupId, sourceType, name, false);
       }
     }
+
+    // 开启批号/序列号管理时，若未选手动规则则回填「系统默认」，避免必填感缺失却提交失败
+    if (changedValues.batchManaged === true) {
+      const cur = allValues.defaultBatchRuleId;
+      if (cur == null || cur === '') {
+        formRef.current?.setFieldsValue({ defaultBatchRuleId: SYSTEM_DEFAULT_RULE_VALUE });
+      }
+    }
+    if (changedValues.serialManaged === true) {
+      const cur = allValues.defaultSerialRuleId;
+      if (cur == null || cur === '') {
+        formRef.current?.setFieldsValue({ defaultSerialRuleId: SYSTEM_DEFAULT_RULE_VALUE });
+      }
+    }
   };
 
   const formTitle = isEdit

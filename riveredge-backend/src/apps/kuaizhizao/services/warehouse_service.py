@@ -3624,7 +3624,11 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 sales_order_code=receipt_data.sales_order_code,
                 warehouse_id=receipt_data.warehouse_id,
                 warehouse_name=receipt_data.warehouse_name,
-                receipt_time=receipt_data.receipt_time,
+                receipt_time=(
+                    resolve_business_datetime(receipt_data.receipt_time)
+                    if receipt_data.receipt_time
+                    else None
+                ),
                 receiver_id=receipt_data.receiver_id,
                 receiver_name=receipt_data.receiver_name,
                 reviewer_id=receipt_data.reviewer_id,
@@ -3863,9 +3867,15 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             )
 
             # 3. 执行入库确认（更新状态和时间）
+            # 确认未传入库时间时保留建单所选业务时刻，禁止一律写成「此刻」
             confirmer_name = await self.get_user_name(confirmed_by)
+            confirm_receipt_time = (
+                confirmation_data.receipt_time
+                if confirmation_data and confirmation_data.receipt_time
+                else None
+            )
             receipt_time = resolve_business_datetime(
-                confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None
+                confirm_receipt_time or getattr(receipt, "receipt_time", None)
             )
 
             await FinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(

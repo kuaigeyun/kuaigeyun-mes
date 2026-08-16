@@ -65,6 +65,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   purchase_receipt_code: 10,
   /** 质量检验单号（来料/工序/成品/OQC） */
   inspection_code: 10,
+  /** 首件检验 FAI 单号 */
+  fai_code: 10,
   receipt_code: 10,
   /** 轻财务单据主标识叠列（伙伴名 + 单号） */
   finance_doc_partner_stacked: 10,
@@ -839,6 +841,8 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   severity: 21.7,
   quality_status: 21.75,
   inspection_result: 21.85,
+  /** 首件检验结论（合格/不合格，MarkerTag） */
+  conclusion: 21.84,
   defect_type: 21.86,
   disposition: 21.87,
   release_decision: 21.9,

@@ -1,0 +1,1 @@
+import{w as t}from"./clearSessionQueries-DydS5DPK.js";async function n(a,i,r){const s=new URLSearchParams({token:a,uuid:i});r?.size!=null&&s.set("size",String(r.size));const e=await t(`/apps/kuaireport/dashboards/shared/file-preview?${s.toString()}`,{method:"GET"});if(!e.success||!e.preview_url)throw new Error(e.message||"预览加载失败");return e.preview_url}export{n as g};

@@ -1,1 +1,0 @@
-const e="pullable",L="all",_=100;function u(t){return(t||e)!==L}function c(t,n,l){return u(n)?t.filter(l):t}function i(t,n,l){const a=Math.max(0,(n-1)*l);return{data:t.slice(a,a+l),total:t.length}}export{_ as U,c as f,u as i,i as p};

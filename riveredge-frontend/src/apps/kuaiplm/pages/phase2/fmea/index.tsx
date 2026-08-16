@@ -97,6 +97,7 @@ const FmeaPage: React.FC = () => {
         const ruleCode = getPageRuleCode(PAGE_CODE);
         if (!ruleCode) {
           setPreviewCode(null);
+          messageApi.warning(t('app.kuaiplm.phase2.fmea.codeRuleMissing'));
           return;
         }
         const res = await testGenerateCode({ rule_code: ruleCode });
@@ -104,9 +105,10 @@ const FmeaPage: React.FC = () => {
         createFormRef.current?.setFieldsValue({ fmea_code: res.code });
       } catch {
         setPreviewCode(null);
+        messageApi.warning(t('app.kuaiplm.phase2.fmea.codePreviewFailed'));
       }
     })();
-  }, [createOpen]);
+  }, [createOpen, messageApi, t]);
 
   const toFmeaIds = (keys: React.Key[]) =>
     keys.map((key) => Number(key)).filter((id) => Number.isFinite(id) && id > 0);
@@ -350,9 +352,15 @@ const FmeaPage: React.FC = () => {
         }}
         onFinish={async (values) => {
           try {
-            const { risk_items_json, ...rest } = values as Record<string, unknown>;
+            const { risk_items_json, fmea_code: formCode, ...rest } = values as Record<string, unknown>;
+            const manualCode = String(formCode || '').trim();
             await createFmeaRecord({
               ...rest,
+              ...(isAutoGenerateEnabled(PAGE_CODE)
+                ? {}
+                : manualCode
+                  ? { fmea_code: manualCode }
+                  : {}),
               project_id: (rest.project_id as number | undefined) ?? filterProjectId,
               risk_items: parseRiskItemsInput(
                 risk_items_json,

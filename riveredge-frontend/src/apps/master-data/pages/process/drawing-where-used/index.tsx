@@ -224,21 +224,23 @@ const DrawingWhereUsedPage: React.FC = () => {
         onExport={handleExport}
         search={false}
         beforeSearchButtons={
-          <Space wrap>
-            <Segmented
-              value={direction}
-              options={[
-                { label: t('app.master-data.drawingWhereUsed.forward'), value: 'forward' },
-                { label: t('app.master-data.drawingWhereUsed.reverse'), value: 'reverse' },
-              ]}
-              onChange={(value) => {
-                const next = value as Direction;
-                setDirection(next);
-                const nextKind: QueryKind = next === 'reverse' ? 'drawing' : 'material';
-                setKind(nextKind);
-                setEntityUuid(undefined);
-              }}
-            />
+          <Segmented
+            value={direction}
+            options={[
+              { label: t('app.master-data.drawingWhereUsed.forward'), value: 'forward' },
+              { label: t('app.master-data.drawingWhereUsed.reverse'), value: 'reverse' },
+            ]}
+            onChange={(value) => {
+              const next = value as Direction;
+              setDirection(next);
+              const nextKind: QueryKind = next === 'reverse' ? 'drawing' : 'material';
+              setKind(nextKind);
+              setEntityUuid(undefined);
+            }}
+          />
+        }
+        toolBarRender={() => [
+          <Space key="where-used-query" wrap>
             {direction === 'forward' ? (
               <Select
                 style={{ width: 140 }}
@@ -269,8 +271,8 @@ const DrawingWhereUsedPage: React.FC = () => {
             <Button type="primary" icon={<SearchOutlined />} onClick={runQuery}>
               {t('common.search')}
             </Button>
-          </Space>
-        }
+          </Space>,
+        ]}
         request={async () => {
           const q = queryRef.current;
           if (!q.entityUuid) {
