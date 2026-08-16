@@ -12,8 +12,10 @@ export interface UniTableScrollPolicyInput {
   allowCustomScrollY: boolean
   /** 页面传入的 scroll.y（allowCustomScrollY 为 true 时生效） */
   restTableScrollY?: unknown
-  /** 始终占满视口剩余高度（报表等场景，忽略「当前页未装满」natural-height 规则） */
+  /** 始终占满视口剩余高度（非报表；报表走 uniReportScrollPolicy） */
   fillViewportBody?: boolean
+  /** 报表账表：不参与列表页 pageSize / vh 公式，限高只走 uniReportScrollPolicy */
+  reportLayout?: boolean
   virtualized: boolean
   restTableVirtual: boolean
   /** 当前页表格行数（树表为根节点数） */
@@ -31,6 +33,7 @@ export interface UniTableScrollPolicyInput {
  * 由 UniTable 的 `viewportScrollForced` 补开 scroll.y（见 measureTableBodyOverflowsViewport）。
  */
 export function shouldUseUniTableNaturalHeight(input: UniTableScrollPolicyInput): boolean {
+  if (input.reportLayout) return true
   if (input.fillViewportBody) return false
   if (input.allowCustomScrollY) return false
   if (input.virtualized || input.restTableVirtual) return false
@@ -45,6 +48,7 @@ export function shouldUseUniTableNaturalHeight(input: UniTableScrollPolicyInput)
 
 /** 是否向 ProTable 注入 scroll.y（限高模式） */
 export function shouldEnableUniTableBodyScrollY(input: UniTableScrollPolicyInput): boolean {
+  if (input.reportLayout) return false
   if (input.fillViewportBody) return true
   if (input.allowCustomScrollY && input.restTableScrollY != null) return true
   if (input.virtualized || input.restTableVirtual) return true
@@ -53,6 +57,58 @@ export function shouldEnableUniTableBodyScrollY(input: UniTableScrollPolicyInput
 
 const VIEWPORT_SCROLL_MEASURE_BOTTOM_GAP_PX = 16
 const VIEWPORT_SCROLL_MIN_AVAILABLE_PX = 80
+const FILL_VIEWPORT_SCROLL_GAP_PX = 8
+/** 分页尚未挂载时的占位（mini 行高 + margin-block 16×2） */
+const FILL_VIEWPORT_PAGINATION_BLOCK_FALLBACK_PX = 56
+
+function measureElementHeight(el: Element | null | undefined): number {
+  if (!el) return 0
+  return el.getBoundingClientRect().height
+}
+
+/** 含 margin-block 的占位高度（分页区须计入 margin，否则 scroll.y 过大裁切分页） */
+function measureElementBlockHeight(el: Element | null | undefined): number {
+  if (!el || !(el instanceof HTMLElement)) return 0
+  const style = getComputedStyle(el)
+  const marginTop = parseFloat(style.marginTop) || 0
+  const marginBottom = parseFloat(style.marginBottom) || 0
+  return el.getBoundingClientRect().height + marginTop + marginBottom
+}
+
+/**
+ * fillViewportBody：按 UniTable 容器实测高度扣减工具栏/表头/吸底合计/分页，得到 scroll.y。
+ * 避免 100vh 扣减未计入报表标题区与合计行导致分页挤出视口。
+ */
+export function measureFillViewportTableBodyScrollY(root: HTMLElement | null): number | undefined {
+  if (!root) return undefined
+  const total = root.clientHeight
+  if (total <= 0) return undefined
+
+  const wrapper = root.querySelector('.ant-table-wrapper') as HTMLElement | null
+  if (!wrapper) return undefined
+
+  let chrome = 0
+  chrome += measureElementHeight(root.querySelector('.pro-table-button-container'))
+  chrome += measureElementHeight(root.querySelector('.ant-pro-table-list-toolbar'))
+
+  const cardBody = root.querySelector('.ant-pro-card-body') as HTMLElement | null
+  if (cardBody) {
+    const style = getComputedStyle(cardBody)
+    chrome += parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
+  }
+
+  chrome += measureElementHeight(wrapper.querySelector('.ant-table-header'))
+  chrome += measureElementHeight(wrapper.querySelector('.ant-table-summary'))
+  const pager = root.querySelector('.ant-table-pagination')
+  chrome += pager
+    ? measureElementBlockHeight(pager)
+    : FILL_VIEWPORT_PAGINATION_BLOCK_FALLBACK_PX
+
+  return Math.max(
+    VIEWPORT_SCROLL_MIN_AVAILABLE_PX,
+    Math.floor(total - chrome - FILL_VIEWPORT_SCROLL_GAP_PX),
+  )
+}
 
 /**
  * 实测表体是否超出可视区域（多行单元格、树表展开等）。

@@ -332,10 +332,14 @@ export const LIST_PAGE_TABLE_SCROLL = {
   /** MultiTabListPageTemplate 相对标准列表：Ant Design Card 的 Tab 栏及结构增量 */
   MULTI_TAB_CARD_EXTRA_PX: 78,
   /**
-   * UniReport 报表标题区（UniReportMetaHeader：标题 32 + 副标题行约 26 + marginBottom 12 ≈ 70）
-   * 另预留卡片底边/横向滚动条等 6px，避免 fillMain overflow:hidden 吞底边。
+   * UniReportMetaHeader 占高（与组件样式同一组数，禁止再加底边/滚动条预留）：
+   * 标题行 + 副标题（间距 + 行高）+ marginBottom。
    */
-  REPORT_META_HEADER_EXTRA_PX: 76,
+  REPORT_META_TITLE_PX: 32,
+  REPORT_META_SUBTITLE_GAP_PX: 4,
+  REPORT_META_SUBTITLE_LINE_PX: 22,
+  REPORT_META_MARGIN_BOTTOM_PX: 12,
+  REPORT_META_HEADER_EXTRA_PX: 32 + 4 + 22 + 12,
   /** UniTable 无模板变量时使用的默认回退（312 + 136） */
   DEFAULT_FALLBACK_OFFSET_PX: 448,
 } as const;
@@ -365,9 +369,7 @@ export function getListPageTableScrollOffsetPx(options: ListPageTableBodyScrollY
   if (layout === 'multiTab') {
     sub += LIST_PAGE_TABLE_SCROLL.MULTI_TAB_CARD_EXTRA_PX;
   }
-  if (layout === 'report') {
-    sub += LIST_PAGE_TABLE_SCROLL.REPORT_META_HEADER_EXTRA_PX;
-  }
+  // layout === 'report'：报表限高不走本公式，真源见 uniReportScrollPolicy
   return sub;
 }
 

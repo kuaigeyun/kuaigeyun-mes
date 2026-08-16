@@ -35,6 +35,31 @@ export interface ReportFilterConfig {
   label: string;
   operator?: string;
   default_value?: unknown;
+  required?: boolean;
+  control?: string;
+  options?: Array<{ label: string; value: string | number }>;
+}
+
+export interface ReportParameterConfig {
+  key: string;
+  label: string;
+  control?: string;
+  default_value?: unknown;
+  required?: boolean;
+  options?: Array<{ label: string; value: string | number }>;
+  maps_to_filter?: string;
+}
+
+export interface ReportDrilldownConfig {
+  enabled?: boolean;
+  dimension_field?: string;
+  detail_chart_type?: string;
+  title?: string;
+}
+
+export interface ReportInteractionConfig {
+  global_filter_keys?: string[];
+  drilldown?: ReportDrilldownConfig;
 }
 
 /** 快报表 report_config（与后端 ReportConfigSchema 对齐） */
@@ -44,6 +69,8 @@ export interface ReportConfigSchema {
   dataset_code?: string;
   fields?: ReportFieldMapping[];
   filters?: ReportFilterConfig[];
+  parameters?: ReportParameterConfig[];
+  interaction?: ReportInteractionConfig;
   page_size?: number;
   extra?: {
     uni_report?: UniReportExtraConfig;
@@ -100,6 +127,10 @@ export type UniReportProps<T = Record<string, unknown>> = {
   rowKey?: string | keyof T;
   actionRef?: React.MutableRefObject<ActionType | undefined>;
   children?: ReactNode;
+  /** 功能区：模糊搜索之前（报表视图切换 Segmented） */
+  beforeSearchButtons?: ReactNode;
+  /** 并入 ProTable params；变更会重取（报表视图切换） */
+  params?: Record<string, unknown>;
   /** 报表头左侧操作（如返回），与标题同一行 */
   headerLeft?: ReactNode;
   /** config 模式（快报表） */
@@ -113,6 +144,10 @@ export type UniReportProps<T = Record<string, unknown>> = {
   showPrintButton?: boolean;
   showExportButton?: boolean;
   skipFuzzyPinyinClientFilter?: boolean;
+  /** 工具栏期间筛选（默认开启 page 模式） */
+  periodFilter?: boolean;
+  /** 列头排序/筛选（默认开启 page 模式） */
+  enableColumnQuery?: boolean;
 };
 
 export type SummaryFieldMeta = {

@@ -8,18 +8,31 @@ import { useTranslation } from 'react-i18next';
 import { getProColumnStateKey } from '../uni-table/uniTableLayoutEngine';
 import type { SummaryFieldMeta } from './types';
 
+/** 与 ProTable `valueType: 'money'`（pro-field Money / zh-Hans-CN + CNY）同一套，含币种符号 */
+const REPORT_MONEY_INTL = new Intl.NumberFormat('zh-Hans-CN', {
+  currency: 'CNY',
+  style: 'currency',
+});
+
 function formatSummaryValue(value: number, format?: string, precision = 2): string {
   if (Number.isNaN(value)) return '-';
   if (format === 'money') {
-    return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return REPORT_MONEY_INTL.format(value);
   }
   if (format === 'percent') {
     return `${(value * 100).toFixed(precision)}%`;
   }
   if (format === 'digit' || format === 'number') {
-    return value.toLocaleString(undefined, { maximumFractionDigits: precision });
+    return value.toLocaleString('zh-CN', { maximumFractionDigits: precision });
   }
   return String(value);
+}
+
+function resolveSummaryAlign(col: ProColumns): 'left' | 'right' | 'center' | undefined {
+  if (col.align === 'left' || col.align === 'right' || col.align === 'center') return col.align;
+  const valueType = String(col.valueType ?? '');
+  if (valueType === 'money' || valueType === 'digit' || valueType === 'percent') return 'right';
+  return undefined;
 }
 
 function sumPageField(data: Record<string, unknown>[], field: string): number {
@@ -91,39 +104,7 @@ function buildSummarySlots(
   return slots;
 }
 
-/**
- * 表尾合计：ProTable summary 行（本页合计 + 全量合计提示）
- */
-export function buildUniReportSummaryFooter(options: BuildSummaryFooterOptions) {
-  const {
-    columns,
-    summaryFields,
-    pageData,
-    globalSummary,
-    fieldMeta = [],
-    showIndexColumn,
-  } = options;
-
-  if (!summaryFields.length) return undefined;
-
-  const metaMap = new Map(fieldMeta.map((m) => [m.field, m]));
-
-  return (pageRows: readonly Record<string, unknown>[]) => {
-    const rows = pageRows.length ? [...pageRows] : pageData;
-    return (
-      <SummaryRowInner
-        columns={columns}
-        summaryFields={summaryFields}
-        rows={rows}
-        globalSummary={globalSummary}
-        metaMap={metaMap}
-        showIndexColumn={showIndexColumn}
-      />
-    );
-  };
-}
-
-type SummaryRowInnerProps = {
+type SummaryRowCellsProps = {
   columns: ProColumns[];
   summaryFields: string[];
   rows: Record<string, unknown>[];
@@ -132,7 +113,14 @@ type SummaryRowInnerProps = {
   showIndexColumn?: boolean;
 };
 
-const SummaryRowInner: React.FC<SummaryRowInnerProps> = ({
+const STACK_SECONDARY_STYLE: React.CSSProperties = {
+  fontSize: 11,
+  color: '#888',
+  lineHeight: '16px',
+};
+
+/** 合计单元格行：须作为 Table.Summary 子节点，不可再包一层自定义组件当 summary 根 */
+const SummaryRowCells: React.FC<SummaryRowCellsProps> = ({
   columns,
   summaryFields,
   rows,
@@ -160,38 +148,76 @@ const SummaryRowInner: React.FC<SummaryRowInnerProps> = ({
   let cellIndex = 0;
 
   return (
-    <Table.Summary fixed>
-      <Table.Summary.Row>
-        <Table.Summary.Cell index={cellIndex++} colSpan={firstSummaryIdx}>
-          <strong style={{ whiteSpace: 'nowrap' }}>{t('components.uniReport.pageSubtotal')}</strong>
-        </Table.Summary.Cell>
-        {slots.slice(firstSummaryIdx).map((slot, i) => {
-          if (slot.kind === 'summary') {
-            const { dataIndex, col } = slot;
-            const meta = metaMap.get(dataIndex);
-            const pageSum = sumPageField(rows, dataIndex);
-            const globalVal = globalSummary?.[dataIndex];
-            const showGlobal =
-              globalVal !== undefined && globalVal !== null && globalVal !== pageSum;
-            return (
-              <Table.Summary.Cell index={cellIndex++} key={dataIndex || i}>
-                <div>
-                  <strong>{formatSummaryValue(pageSum, meta?.format ?? (col.valueType as string))}</strong>
-                  {showGlobal && (
-                    <div style={{ fontSize: 11, color: '#888' }}>
-                      {t('components.uniReport.grandTotal')}:{' '}
-                      {formatSummaryValue(Number(globalVal), meta?.format ?? (col.valueType as string))}
-                    </div>
-                  )}
-                </div>
-              </Table.Summary.Cell>
-            );
-          }
-          return <Table.Summary.Cell index={cellIndex++} key={`empty-${i}`} />;
-        })}
-      </Table.Summary.Row>
-    </Table.Summary>
+    <Table.Summary.Row>
+      <Table.Summary.Cell index={cellIndex++} colSpan={firstSummaryIdx}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, whiteSpace: 'nowrap' }}>
+          <strong>{t('components.uniReport.pageSubtotal')}</strong>
+          <span style={STACK_SECONDARY_STYLE}>{t('components.uniReport.allTotal')}</span>
+        </div>
+      </Table.Summary.Cell>
+      {slots.slice(firstSummaryIdx).map((slot, i) => {
+        if (slot.kind === 'summary') {
+          const { dataIndex, col } = slot;
+          const meta = metaMap.get(dataIndex);
+          const pageSum = sumPageField(rows, dataIndex);
+          const globalRaw = globalSummary?.[dataIndex];
+          const globalVal =
+            globalRaw !== undefined && globalRaw !== null ? Number(globalRaw) : pageSum;
+          const format = meta?.format ?? (col.valueType as string);
+          return (
+            <Table.Summary.Cell
+              index={cellIndex++}
+              key={dataIndex || i}
+              align={resolveSummaryAlign(col)}
+            >
+              <div style={{ whiteSpace: 'nowrap' }}>
+                <strong>{formatSummaryValue(pageSum, format)}</strong>
+                <div style={STACK_SECONDARY_STYLE}>{formatSummaryValue(globalVal, format)}</div>
+              </div>
+            </Table.Summary.Cell>
+          );
+        }
+        return <Table.Summary.Cell index={cellIndex++} key={`empty-${i}`} />;
+      })}
+    </Table.Summary.Row>
   );
 };
+
+/**
+ * 表尾合计：单行内堆叠本页合计 + 全部合计
+ *
+ * rc-table 仅当 summary 回调直接返回 `<Table.Summary fixed>` 时才吸底固定；
+ * 不可再外包自定义组件。
+ */
+export function buildUniReportSummaryFooter(options: BuildSummaryFooterOptions) {
+  const {
+    columns,
+    summaryFields,
+    pageData,
+    globalSummary,
+    fieldMeta = [],
+    showIndexColumn,
+  } = options;
+
+  if (!summaryFields.length) return undefined;
+
+  const metaMap = new Map(fieldMeta.map((m) => [m.field, m]));
+
+  return (pageRows: readonly Record<string, unknown>[]) => {
+    const rows = pageRows.length ? [...pageRows] : pageData;
+    return (
+      <Table.Summary fixed>
+        <SummaryRowCells
+          columns={columns}
+          summaryFields={summaryFields}
+          rows={rows}
+          globalSummary={globalSummary}
+          metaMap={metaMap}
+          showIndexColumn={showIndexColumn}
+        />
+      </Table.Summary>
+    );
+  };
+}
 
 export default buildUniReportSummaryFooter;

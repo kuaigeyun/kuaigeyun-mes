@@ -1,6 +1,7 @@
 import React from 'react';
 import { Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { LIST_PAGE_TABLE_SCROLL } from '../layout-templates/constants';
 
 const { Title, Text } = Typography;
 
@@ -32,7 +33,11 @@ export const UniReportMetaHeader: React.FC<UniReportMetaHeaderProps> = ({
   return (
     <div
       className={className}
-      style={{ marginBottom: 12, padding: '0 4px', position: 'relative' }}
+      style={{
+        marginBottom: LIST_PAGE_TABLE_SCROLL.REPORT_META_MARGIN_BOTTOM_PX,
+        padding: '0 4px',
+        position: 'relative',
+      }}
       data-uni-report-meta
     >
       {extraLeft ? (
@@ -44,17 +49,30 @@ export const UniReportMetaHeader: React.FC<UniReportMetaHeaderProps> = ({
             zIndex: 1,
             display: 'flex',
             alignItems: 'center',
-            minHeight: 32,
+            minHeight: LIST_PAGE_TABLE_SCROLL.REPORT_META_TITLE_PX,
           }}
         >
           {extraLeft}
         </div>
       ) : null}
-      <Title level={4} style={{ margin: 0, textAlign: 'center', lineHeight: '32px' }}>
+      <Title
+        level={4}
+        style={{
+          margin: 0,
+          textAlign: 'center',
+          lineHeight: `${LIST_PAGE_TABLE_SCROLL.REPORT_META_TITLE_PX}px`,
+        }}
+      >
         {title}
       </Title>
       {(subtitle || timeLabel) && (
-        <div style={{ marginTop: 4, textAlign: 'center' }}>
+        <div
+          style={{
+            marginTop: LIST_PAGE_TABLE_SCROLL.REPORT_META_SUBTITLE_GAP_PX,
+            textAlign: 'center',
+            lineHeight: `${LIST_PAGE_TABLE_SCROLL.REPORT_META_SUBTITLE_LINE_PX}px`,
+          }}
+        >
           {subtitle && (
             <Text type="secondary" style={{ marginRight: subtitle ? 16 : 0 }}>
               {subtitle}

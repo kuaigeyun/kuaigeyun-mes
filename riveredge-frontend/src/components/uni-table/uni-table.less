@@ -23,6 +23,83 @@
 .uni-table-container.uni-table-fill-viewport {
   flex: 1;
   min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  > div {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  [data-uni-table-body-pane] {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .uni-table-pro-table {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .uni-table-pro-table > .ant-pro-card {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .uni-table-pro-table .ant-pro-card-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .uni-table-pro-table .ant-pro-table-list-toolbar {
+    flex-shrink: 0;
+  }
+
+  .uni-table-pro-table .ant-spin-nested-loading,
+  .uni-table-pro-table .ant-spin-container {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .uni-table-pro-table .ant-spin-container > .ant-table-wrapper {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .uni-table-pro-table .ant-spin-container > .ant-table-pagination {
+    flex-shrink: 0;
+  }
+}
+
+/* 分页区：ProCard body 底内边距 + 分页 margin-bottom 叠加会致下留白偏大 */
+.uni-table-container:not(.uni-table-embedded) .uni-table-pro-table .ant-pro-card-body {
+  padding-block-end: 0;
+}
+
+.uni-table-container .ant-table-wrapper .ant-table-pagination.ant-pagination {
+  margin-block: 16px;
+  margin-inline: 0;
 }
 
 .uni-table-container:not(.uni-table-embedded) .uni-table-pro-table.ant-pro-table > .ant-pro-card.ant-pro-card-border,
@@ -32,10 +109,66 @@
   /* 禁止 overflow:hidden：会切断 antd sticky 固定列的 containing block */
 }
 
-.uni-table-container:not(.uni-table-embedded) .uni-table-pro-table .ant-table-container {
+.uni-table-container:not(.uni-table-embedded):not(.uni-table-report) .uni-table-pro-table .ant-table-container {
   border: 1px solid var(--ant-colorBorderSecondary, var(--ant-colorBorder));
   border-radius: var(--ant-borderRadius, 6px);
   /* 禁止 overflow:hidden：会干扰 sticky 右固定列的 containing block，纵条插到滚动区与右固定列之间 */
+}
+
+/* 报表账表：仅表体直角；外层 ProCard 托盘仍保留圆角；高度随内容，不撑满视口 */
+.uni-table-container.uni-table-report:not(.uni-table-embedded):not(.uni-table-fill-viewport) {
+  flex: 0 1 auto;
+  height: auto;
+  width: 100%;
+
+  .uni-table-pro-table .ant-table-container {
+    border: 1px solid var(--ant-colorBorderSecondary, var(--ant-colorBorder));
+    border-radius: 0 !important;
+  }
+
+  .ant-table-wrapper {
+    .ant-table,
+    .ant-table-header,
+    .ant-table-title,
+    .ant-table-footer,
+    .ant-table-container {
+      border-radius: 0 !important;
+    }
+
+    .ant-table-container,
+    .ant-table-header {
+      border-start-start-radius: 0 !important;
+      border-start-end-radius: 0 !important;
+      border-end-start-radius: 0 !important;
+      border-end-end-radius: 0 !important;
+
+      &::before,
+      &::after {
+        border-start-start-radius: 0 !important;
+        border-start-end-radius: 0 !important;
+        border-end-start-radius: 0 !important;
+        border-end-end-radius: 0 !important;
+      }
+    }
+
+    .ant-table-thead > tr > th:first-child,
+    table > thead > tr:first-child > *:first-child {
+      border-start-start-radius: 0 !important;
+    }
+
+    .ant-table-thead > tr > th:last-child,
+    table > thead > tr:first-child > *:last-child {
+      border-start-end-radius: 0 !important;
+    }
+
+    .ant-table-summary > tr > *:first-child {
+      border-end-start-radius: 0 !important;
+    }
+
+    .ant-table-summary > tr > *:last-child {
+      border-end-end-radius: 0 !important;
+    }
+  }
 }
 
 .uni-table-container.uni-table-embedded .ant-pro-card {
@@ -95,6 +228,16 @@
 .uni-table-container .ant-table-thead > tr > th,
 .uni-table-container .uni-table-pro-table .ant-table-thead .ant-table-column-title {
   color: var(--ant-color-text);
+}
+
+/*
+ * 左固定末列 + ellipsis：rc-table 会把表头整格（含筛选漏斗）包进
+ * .ant-table-cell-content 并 overflow:hidden。隔壁未固定列没有这层，
+ * 漏斗不会被裁成一块底。只放开表头这层，表体仍裁长码。
+ */
+.uni-table-container .ant-table-wrapper .ant-table-thead > tr > th.ant-table-cell-ellipsis.ant-table-cell-fix-start-shadow > .ant-table-cell-content {
+  overflow: visible;
+  text-overflow: clip;
 }
 
 /*

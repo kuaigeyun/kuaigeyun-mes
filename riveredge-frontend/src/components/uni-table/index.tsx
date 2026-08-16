@@ -129,7 +129,9 @@ import { useNewShortcut } from '../../hooks/useNewShortcut'
 import { usePagePermissionResource } from '../../hooks/usePagePermissionResource'
 import { useResourcePermissions } from '../../hooks/useResourcePermissions'
 import { withSingleNewShortcutHint } from '../../utils/globalNewShortcut'
+import { MaterialUnitLabel } from '../material-unit-label'
 import { DictionaryLabel } from '../dictionary-label'
+import { resolveSystemDictionaryFieldCode } from '../../utils/systemDictionaryFields'
 import { stableJsonForQueryKey } from '../../utils/tableQueryKey'
 import {
   isUniTableOperationColumn,
@@ -141,7 +143,9 @@ import { LIST_PAGE_TABLE_SCROLL, getViewportHeightExpr } from '../layout-templat
 import {
   shouldEnableUniTableBodyScrollY,
   measureTableBodyOverflowsViewport,
+  measureFillViewportTableBodyScrollY,
 } from './uniTableScrollPolicy'
+import { resolveUniReportTableBodyScrollY } from '../uni-report/uniReportScrollPolicy'
 import {
   getUniTableLifecycleCellClassName,
   isUniTableDetailProgressColumn,
@@ -526,6 +530,12 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * 高级搜索按钮后的自定义按钮
    */
   afterSearchButtons?: ReactNode
+  /**
+   * 重置搜索时保留的默认条件（如报表期间默认本月）
+   */
+  searchResetSeed?: Record<string, unknown> | (() => Record<string, unknown>)
+  /** 搜索重置完成后回调（同步外部期间控件等） */
+  onSearchReset?: () => void
   /**
    * 是否启用行选择（默认：false）
    */
@@ -988,9 +998,13 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
   allowCustomScrollY?: boolean
   /**
    * 表体始终占满视口剩余高度（忽略「当前页未装满」时的 natural-height）。
-   * UniReport 等固定布局报表页使用；须配合 ListPageTemplate `tableScrollLayout="report"`。
+   * 非报表场景；报表限高只走 `reportLayout` + `uniReportScrollPolicy`。
    */
   fillViewportBody?: boolean
+  /**
+   * 报表账表：直角表体 + 限高唯一路径 `uniReportScrollPolicy`（有固定合计 / 无合计）。
+   */
+  reportLayout?: boolean
   /**
    * 是否允许页面层自定义 `scroll.x`（默认 false）。
    * 为 false 时，UniTable 会忽略调用方传入的 `scroll.x`，统一使用内容自适应横向策略。
@@ -1069,6 +1083,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   beforeSearchButtons,
   betweenFuzzyAndAdvancedButtons,
   afterSearchButtons,
+  searchResetSeed,
+  onSearchReset,
   enableRowSelection = false,
   onRowSelectionChange,
   onTableDataChange,
@@ -1146,6 +1162,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   virtualTableBodyMaxHeight = 520,
   allowCustomScrollY = false,
   fillViewportBody = false,
+  reportLayout = false,
   allowCustomScrollX = false,
   actionRef: externalActionRef,
   formRef: externalFormRef,
@@ -1211,6 +1228,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const [tableData, setTableData] = useState<T[]>([])
   const [requestInFlight, setRequestInFlight] = useState(true)
   const [containerLayoutWidth, setContainerLayoutWidth] = useState(0)
+  const [fillViewportMeasuredScrollY, setFillViewportMeasuredScrollY] = useState<number | undefined>()
+  const [reportMeasuredScrollY, setReportMeasuredScrollY] = useState<number | undefined>()
+  const reportMeasuredScrollYRef = React.useRef<number | undefined>(undefined)
+  const tableSummaryProp = (restProps as { summary?: unknown }).summary
+  const reportHasFixedSummary = reportLayout && tableSummaryProp != null
   /** 当前分页大小：用于判断当前页是否未装满（未装满则不注入 scroll.y） */
   const [currentPageSize, setCurrentPageSize] = useState<number>(defaultPageSize)
   // ⭐ 关键：使用 useProTableSearch Hook 管理搜索参数
@@ -1469,12 +1491,28 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         }
       }
       
-      // 自动处理“单位”列的展示（全局优化：始终显示数据字典标签值）
+      // 系统字典列：systemDictionary.{code}.item.{value}.label（禁止裸码、禁止页面第二套 map）
+      if (typeof col.dataIndex === 'string' && !col.render) {
+        const dictionaryCode = resolveSystemDictionaryFieldCode(col.dataIndex)
+        if (dictionaryCode) {
+          return {
+            ...col,
+            render: (val: unknown) => (
+              <DictionaryLabel dictionaryCode={dictionaryCode} value={val as string} />
+            ),
+          }
+        }
+      }
+      // 单位列：主数据单位目录为唯一真源（禁止 DictionaryLabel "unit"，该码不存在会渲染空串）
       const unitFields = ['material_unit', 'unit', 'baseUnit', 'base_unit'];
       if (typeof col.dataIndex === 'string' && unitFields.includes(col.dataIndex) && !col.render) {
+        const unitWidth = typeof col.width === 'number' ? col.width : 80
         return {
           ...col,
-          render: (val: any) => <DictionaryLabel dictionaryCode="unit" value={val} />,
+          width: unitWidth,
+          minWidth: typeof col.minWidth === 'number' ? col.minWidth : unitWidth,
+          uniTableKeepWidth: true,
+          render: (val: unknown) => <MaterialUnitLabel value={val as string | null} />,
         }
       }
       /** 列表头表进度列：全局 80px，禁止页面/持久化漂移 */
@@ -1982,16 +2020,19 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       debounceTimerRef.current = null
     }
     setFuzzySearchKeyword('')
-    // 清空高级搜索 / 钉住条件写入的 searchParamsRef，否则仅删 keyword 时阶段筛选仍会生效
-    searchParamsRef.current = undefined
+    const seed =
+      typeof searchResetSeed === 'function' ? searchResetSeed() : searchResetSeed
+    searchParamsRef.current =
+      seed && Object.keys(seed).length > 0 ? { ...seed } : undefined
     setPinnedSearchUiEpoch((e) => e + 1)
     try {
       formRef.current?.resetFields?.()
     } catch {
       /* ignore */
     }
+    onSearchReset?.()
     reloadAndRestWithTanstackCacheBust()
-  }, [reloadAndRestWithTanstackCacheBust])
+  }, [onSearchReset, reloadAndRestWithTanstackCacheBust, searchResetSeed])
 
   /**
    * 组件卸载：清搜索/loading 防抖；列/视图偏好防抖改为立即 flush，禁止丢弃未上传的账号偏好
@@ -2720,15 +2761,24 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   const handleClearSelection = clearAllRowSelection
 
-  const memoizedPagination = React.useMemo(() => ({
-    defaultPageSize,
-    showSizeChanger: true,
-    showQuickJumper: true,
-    pageSizeOptions: ['10', '20', '50', '100'],
-    showTotal: (total: number, range: [number, number]) =>
-      t('components.uniTable.paginationTotal', { total, start: range[0], end: range[1] }),
-    ...(restProps.pagination as Record<string, unknown> | undefined),
-  }), [defaultPageSize, t, restProps.pagination])
+  const memoizedPagination = React.useMemo(() => {
+    const restPagination = restProps.pagination as Record<string, unknown> | undefined
+    const restSizeChanger = restPagination?.showSizeChanger
+    const hasCustomPageSizeOptions =
+      restSizeChanger != null &&
+      typeof restSizeChanger === 'object' &&
+      Array.isArray((restSizeChanger as { options?: unknown }).options)
+
+    return {
+      defaultPageSize,
+      showSizeChanger: true,
+      ...(hasCustomPageSizeOptions ? {} : { pageSizeOptions: ['10', '20', '50', '100'] }),
+      showQuickJumper: true,
+      showTotal: (total: number, range: [number, number]) =>
+        t('components.uniTable.paginationTotal', { total, start: range[0], end: range[1] }),
+      ...restPagination,
+    }
+  }, [defaultPageSize, t, restProps.pagination])
   const effectiveTableAlertRender = (restProps as any).tableAlertRender ?? false
   const restTableVirtual = (restProps as any).virtual === true
   const restTableScrollY = (restProps as any).scroll?.y
@@ -2738,6 +2788,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       allowCustomScrollY,
       restTableScrollY,
       fillViewportBody,
+      reportLayout,
       virtualized,
       restTableVirtual,
       tableDataLength: tableData.length,
@@ -2748,6 +2799,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       allowCustomScrollY,
       restTableScrollY,
       fillViewportBody,
+      reportLayout,
       virtualized,
       restTableVirtual,
       tableData.length,
@@ -2763,7 +2815,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   )
   /** 实测表体超出视口时补开 scroll.y（多行单元格、树表展开等） */
   const [viewportScrollForced, setViewportScrollForced] = useState(false)
-  const proTableBodyScrollYEnabled = policyScrollYEnabled || viewportScrollForced
+  const proTableBodyScrollYEnabled = reportLayout
+    ? reportMeasuredScrollY != null
+    : policyScrollYEnabled || viewportScrollForced
   /** 仅数据/分页/视图变化时允许关回 natural；列宽与 loading 重跑不得当关限高的理由 */
   const viewportRemeasureKey = `${currentViewType}|${currentPageSize}|${tableData.length}`
   const viewportRemeasureKeyRef = React.useRef(viewportRemeasureKey)
@@ -2877,16 +2931,136 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   const listPageScrollY = React.useMemo(() => {
     if (!proTableBodyScrollYEnabled) return undefined
+    if (reportLayout) return reportMeasuredScrollY
+    if (fillViewportBody && fillViewportMeasuredScrollY != null) {
+      return fillViewportMeasuredScrollY
+    }
     const offsetPx = statCardsCtx?.tableScrollOffsetPx
     if (offsetPx != null) {
       return getViewportHeightExpr(offsetPx, { compensateHeaderInFullscreen: true })
     }
     return `calc(100vh - var(--uni-table-scroll-offset, ${LIST_PAGE_TABLE_SCROLL.DEFAULT_FALLBACK_OFFSET_PX}px) + (${LIST_PAGE_TABLE_SCROLL.HEADER_HEIGHT_PX}px - var(--header-height, ${LIST_PAGE_TABLE_SCROLL.HEADER_HEIGHT_PX}px)))`
-  }, [proTableBodyScrollYEnabled, statCardsCtx?.tableScrollOffsetPx])
+  }, [
+    proTableBodyScrollYEnabled,
+    reportLayout,
+    reportMeasuredScrollY,
+    fillViewportBody,
+    fillViewportMeasuredScrollY,
+    statCardsCtx?.tableScrollOffsetPx,
+  ])
+
+  React.useLayoutEffect(() => {
+    if (!fillViewportBody || !proTableBodyScrollYEnabled) {
+      setFillViewportMeasuredScrollY(undefined)
+      return
+    }
+    const root = containerRef.current
+    if (!root) return
+
+    const measure = () => {
+      const next = measureFillViewportTableBodyScrollY(root)
+      if (next == null) return
+      setFillViewportMeasuredScrollY((prev) => (prev === next ? prev : next))
+    }
+
+    measure()
+    const ro =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measure()) : null
+    ro?.observe(root)
+    const wrapper = root.querySelector('.ant-table-wrapper')
+    if (ro && wrapper) ro.observe(wrapper)
+    const summaryEl = root.querySelector('.ant-table-summary')
+    if (ro && summaryEl) ro.observe(summaryEl)
+    const pager = root.querySelector('.ant-table-pagination')
+    if (ro && pager) ro.observe(pager)
+    window.addEventListener('resize', measure)
+    return () => {
+      ro?.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [
+    fillViewportBody,
+    proTableBodyScrollYEnabled,
+    tableData.length,
+    showDelayedLoading,
+    columnStructureSig,
+    tableSummaryProp,
+    currentViewType,
+  ])
+
+  React.useLayoutEffect(() => {
+    if (!reportLayout) {
+      reportMeasuredScrollYRef.current = undefined
+      setReportMeasuredScrollY(undefined)
+      return
+    }
+    if (currentViewType !== 'table' && currentViewType !== 'detailTable') {
+      reportMeasuredScrollYRef.current = undefined
+      setReportMeasuredScrollY(undefined)
+      return
+    }
+
+    const root = containerRef.current
+    if (!root) return
+
+    const allowTurnOff = viewportRemeasureKeyRef.current !== viewportRemeasureKey
+    viewportRemeasureKeyRef.current = viewportRemeasureKey
+
+    const applyMeasure = (canTurnOff: boolean) => {
+      const next = resolveUniReportTableBodyScrollY(root, reportHasFixedSummary)
+      setReportMeasuredScrollY((prev) => {
+        if (next == null) {
+          if (prev == null) return prev
+          if (canTurnOff) {
+            reportMeasuredScrollYRef.current = undefined
+            return undefined
+          }
+          return prev
+        }
+        if (prev === next) return prev
+        reportMeasuredScrollYRef.current = next
+        return next
+      })
+    }
+
+    applyMeasure(allowTurnOff)
+    const ro =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => applyMeasure(false))
+        : null
+    ro?.observe(root)
+    const wrapper = root.querySelector('.ant-table-wrapper')
+    if (ro && wrapper) ro.observe(wrapper)
+    const summaryEl = root.querySelector('.ant-table-summary')
+    if (ro && summaryEl) ro.observe(summaryEl)
+    const pager = root.querySelector('.ant-table-pagination')
+    if (ro && pager) ro.observe(pager)
+    const scrollBody = root.querySelector('.ant-table-body')
+    if (ro && scrollBody) ro.observe(scrollBody)
+    const onWindowResize = () => applyMeasure(true)
+    window.addEventListener('resize', onWindowResize)
+    return () => {
+      ro?.disconnect()
+      window.removeEventListener('resize', onWindowResize)
+    }
+  }, [
+    reportLayout,
+    reportHasFixedSummary,
+    viewportRemeasureKey,
+    currentViewType,
+    columnStructureSig,
+    showDelayedLoading,
+    tableSummaryProp,
+  ])
 
   React.useLayoutEffect(() => {
     const turnOffForced = () => setViewportScrollForced((prev) => (prev ? false : prev))
     const turnOnForced = () => setViewportScrollForced((prev) => (prev ? prev : true))
+
+    if (reportLayout) {
+      turnOffForced()
+      return
+    }
 
     if (policyScrollYEnabled) {
       viewportRemeasureKeyRef.current = viewportRemeasureKey
@@ -2947,6 +3121,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     currentViewType,
     columnStructureSig,
     showDelayedLoading,
+    reportLayout,
   ])
 
   /**
@@ -3233,6 +3408,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           emptyTableHasFixedColumns ? 'uni-table-empty-has-fixed' : '',
           hasListToolbarActions ? 'uni-table-has-list-toolbar' : '',
           fillViewportBody ? 'uni-table-fill-viewport' : '',
+          reportLayout ? 'uni-table-report' : '',
           isMobile ? 'uni-table-mobile' : '',
         ]
           .filter(Boolean)
@@ -3273,10 +3449,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           <ConfigProvider getPopupContainer={() => document.body}>
             <div
               ref={tableBodyPaneRef}
+              data-uni-table-body-pane={fillViewportBody ? '' : undefined}
               style={{
-                display: isTableLikeView && !isMobile ? 'block' : 'none',
+                display: isTableLikeView && !isMobile ? (fillViewportBody ? 'flex' : 'block') : 'none',
+                flexDirection: fillViewportBody ? 'column' : undefined,
                 width: '100%',
                 position: 'relative',
+                ...(fillViewportBody ? { flex: 1, minHeight: 0 } : {}),
               }}
             >
               <ProTable<T>
@@ -3290,7 +3469,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               rowKey={rowKey}
               search={false}
               tableLayout="fixed"
-              style={{ margin: 0, padding: 0 }}
+              style={{
+                margin: 0,
+                padding: 0,
+                ...(fillViewportBody
+                  ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' as const }
+                  : {}),
+              }}
               bordered={false}
               cardBordered={!embedded}
               {...(!showLoading ? { loading: false } : loadingDelay > 0 ? { loading: showDelayedLoading } : {})}

@@ -186,6 +186,7 @@ function isUniTableFlexTextColumn(col: Record<string, unknown>): boolean {
   if (UNI_TABLE_SHORT_NAME_FIELDS.has(dataIndex)) return false
   if (col.valueType && UNI_TABLE_STRUCTURED_VALUE_TYPES.has(String(col.valueType))) return false
   if (/(^code$|_code$)/.test(dataIndex)) return false
+  if (/(^unit$|_unit$)/.test(dataIndex)) return false
 
   if (
     /_(name|title|remark|description|desc|note|notes|comment|address|specification)$|^(name|title|remark|description|note|comment)$/.test(
