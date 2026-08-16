@@ -1146,8 +1146,36 @@ function Ensure-SensitiveLexiconPack {
     Write-LogOk '敏感词 lexicon.pack 已就绪'
 }
 
+function Ensure-TimezoneEnv {
+    if (-not (Test-Path $script:EnvFile)) {
+        Copy-Item (Join-Path $script:BackendDir '.env.example') $script:EnvFile
+    }
+    $tz = Read-EnvValue 'TIMEZONE'
+    $useTz = Read-EnvValue 'USE_TZ'
+    $changed = $false
+    $tzNorm = if ($null -eq $tz) { '' } else { $tz.Trim().ToLowerInvariant() }
+    $useNorm = if ($null -eq $useTz) { '' } else { $useTz.Trim().ToLowerInvariant() }
+    if ($tzNorm -in @('', 'utc', 'gmt', 'etc/utc', 'etc/gmt')) {
+        Set-EnvValue 'TIMEZONE' 'Asia/Shanghai'
+        Write-LogWarn "已纠正 TIMEZONE=$(if ([string]::IsNullOrEmpty($tz)) { '<空>' } else { $tz }) → Asia/Shanghai（旧 .env.example 误写 UTC）"
+        $changed = $true
+    }
+    if ($useNorm -in @('', 'false', '0', 'no')) {
+        Set-EnvValue 'USE_TZ' 'true'
+        Write-LogWarn "已纠正 USE_TZ=$(if ([string]::IsNullOrEmpty($useTz)) { '<空>' } else { $useTz }) → true"
+        $changed = $true
+    }
+    if ($changed) {
+        $script:ForceBackendRestart = $true
+        Write-LogOk "时区环境已校正：TIMEZONE=$(Read-EnvValue 'TIMEZONE') USE_TZ=$(Read-EnvValue 'USE_TZ')；将强制重启后端"
+    } else {
+        Write-LogInfo "时区环境 OK：TIMEZONE=$tz USE_TZ=$useTz"
+    }
+}
+
 function Invoke-Migrate {
     Sync-BackendDeps
+    Ensure-TimezoneEnv
     Ensure-SensitiveLexiconPack
     Write-LogInfo '执行数据库迁移...'
     $uv = Resolve-Uv
@@ -1338,6 +1366,7 @@ function Start-ProcessBackground([string]$Name, [string]$FilePath, [string[]]$Ar
 }
 
 function Start-BackendDev {
+    Ensure-TimezoneEnv
     Ensure-SensitiveLexiconPack
     if (Test-BgEnabled) {
         Initialize-BgState
@@ -1402,6 +1431,7 @@ function Start-FrontendDev {
 }
 
 function Start-BackendProd {
+    Ensure-TimezoneEnv
     Ensure-SensitiveLexiconPack
     if (Test-BgEnabled) {
         Initialize-BgState
@@ -1409,9 +1439,13 @@ function Start-BackendProd {
         return
     }
     $pidf = Join-Path $script:LogsDir 'backend.pid'
-    if (Test-Path $pidf) {
+    if (-not $script:ForceBackendRestart -and (Test-Path $pidf)) {
         $pid = [int](Get-Content $pidf -Raw).Trim()
         if (Get-Process -Id $pid -ErrorAction SilentlyContinue) { Write-LogInfo '后端已在运行'; return }
+    }
+    if ($script:ForceBackendRestart -and (Test-Path $pidf)) {
+        Write-LogInfo '时区已校正，强制重启后端...'
+        Stop-ServiceByPidFile 'backend'
     }
     Sync-BackendDeps
     Write-LogInfo "启动后端 (prod, :$($script:BACKEND_PORT))..."

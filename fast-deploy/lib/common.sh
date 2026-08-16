@@ -1262,6 +1262,36 @@ ensure_env_file() {
     fi
 }
 
+# 纠正历史 .env.example 误写的 TIMEZONE=UTC / USE_TZ=false（时区契约收口后会差 8 小时）。
+# 仅改已知错误值；已是 Asia/Shanghai 或其他显式业务时区则不动。
+ensure_timezone_env() {
+    ensure_env_file
+    local tz use_tz changed=0
+    tz="$(read_env_value TIMEZONE 2>/dev/null || true)"
+    use_tz="$(read_env_value USE_TZ 2>/dev/null || true)"
+    case "$(printf '%s' "$tz" | tr '[:upper:]' '[:lower:]')" in
+        ''|utc|gmt|etc/utc|etc/gmt)
+            set_env_value TIMEZONE "Asia/Shanghai"
+            log_warn "已纠正 TIMEZONE=${tz:-<空>} → Asia/Shanghai（旧 .env.example 误写 UTC）"
+            changed=1
+            ;;
+    esac
+    case "$(printf '%s' "$use_tz" | tr '[:upper:]' '[:lower:]')" in
+        ''|false|0|no)
+            set_env_value USE_TZ "true"
+            log_warn "已纠正 USE_TZ=${use_tz:-<空>} → true"
+            changed=1
+            ;;
+    esac
+    if [ "$changed" -eq 1 ]; then
+        # 进程仍持有旧环境变量；启动路径须强制重启
+        export FORCE_BACKEND_RESTART=1
+        log_ok "时区环境已校正：TIMEZONE=$(read_env_value TIMEZONE) USE_TZ=$(read_env_value USE_TZ)；将强制重启后端"
+    else
+        log_info "时区环境 OK：TIMEZONE=${tz} USE_TZ=${use_tz}"
+    fi
+}
+
 db_target_is_remote() {
     [ "$(read_env_value DB_TARGET 2>/dev/null || true)" = "remote" ]
 }
@@ -2472,6 +2502,7 @@ ensure_sensitive_lexicon_pack() {
 
 cmd_migrate() {
     sync_backend_deps
+    ensure_timezone_env
     ensure_postgresql_pgvector || { log_error "pgvector 未就绪，无法执行依赖 vector 的迁移"; exit 1; }
     ensure_vector_extension_created || { log_error "无法在应用库创建 vector 扩展（需要超级用户）"; exit 1; }
     ensure_sensitive_lexicon_pack || { log_error "敏感词 lexicon.pack 未就绪，后端无法启动"; exit 1; }
@@ -2758,6 +2789,7 @@ ensure_linux_caddy_ready() {
 }
 
 start_backend_dev() {
+    ensure_timezone_env
     ensure_sensitive_lexicon_pack || { log_error "敏感词 lexicon.pack 未就绪，后端无法启动"; exit 1; }
     if bg_enabled; then
         bg_init_state
@@ -2829,6 +2861,7 @@ start_frontend_dev() {
 }
 
 start_backend_prod() {
+    ensure_timezone_env
     ensure_sensitive_lexicon_pack || { log_error "敏感词 lexicon.pack 未就绪，后端无法启动"; exit 1; }
     if bg_enabled; then
         bg_init_state
