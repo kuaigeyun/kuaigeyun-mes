@@ -3,16 +3,13 @@
  * 数据源：record.audit.phase（由 audit_phase.py 派生）
  *
  * 审核关闭（audit.enabled=false / mode=auto）= 提交后自动通过，仍须展示相位，不得显示为「无审核」。
- * 状态类徽章：统一 solid（见 constants/statusBadges）。
+ * 配色与执行状态同一真源：`constants/documentStatusColors.ts`（待审核=warning，与生命周期「待审核」同色）。
  */
 
 import React from 'react';
-import { Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
-import {
-  RE_STATUS_BADGE_DRAFT,
-  resolveStatusTagDisplayProps,
-} from '../../constants/statusBadges';
+import { resolveAuditPhaseTagColor } from '../../constants/documentStatusColors';
+import { StatusTag } from '../../constants/statusBadges';
 
 export type AuditPhase = 'draft' | 'pending' | 'approved' | 'rejected' | 'none' | string;
 
@@ -33,14 +30,6 @@ const PHASE_I18N: Record<string, string> = {
   approved: 'components.uniAudit.phaseApproved',
   rejected: 'components.uniAudit.phaseRejected',
   none: 'components.uniAudit.phaseNone',
-};
-
-const PHASE_COLOR: Record<string, string> = {
-  draft: RE_STATUS_BADGE_DRAFT,
-  pending: 'processing',
-  approved: 'success',
-  rejected: 'error',
-  none: 'default',
 };
 
 const PHASE_FALLBACK: Record<string, string> = {
@@ -92,7 +81,7 @@ export function AuditPhaseBadge({
   const label = i18nKey
     ? t(i18nKey, { defaultValue: PHASE_FALLBACK[phase] ?? phase })
     : (PHASE_FALLBACK[phase] ?? phase);
-  const color = PHASE_COLOR[phase] ?? 'default';
+  const color = resolveAuditPhaseTagColor(phase);
 
-  return <Tag {...resolveStatusTagDisplayProps({ text: label, color })}>{label}</Tag>;
+  return <StatusTag color={color}>{label}</StatusTag>;
 }

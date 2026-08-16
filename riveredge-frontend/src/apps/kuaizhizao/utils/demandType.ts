@@ -11,6 +11,8 @@ export function normalizeDemandTypeKey(v: string | undefined | null): string {
   return (v ?? '').trim().toLowerCase().replace(/-/g, '_');
 }
 
+export const DEMAND_TYPE_CODES = ['sales_forecast', 'sales_order', 'demand_plan'] as const;
+
 export const DEMAND_TYPE_LABEL: Record<string, string> = {
   sales_forecast: '销售预测',
   sales_order: '销售订单',

@@ -1,4 +1,5 @@
 import type { TFunction } from 'i18next';
+import { DEMAND_TYPE_CODES, translateDemandType } from './demandType';
 
 /** 报表 valueEnum：只有汉字，不要 status 彩点 */
 export function reportTextEnum(entries: Record<string, string>): Record<string, { text: string }> {
@@ -260,17 +261,13 @@ export function salesBillTypeEnum(t: TFunction) {
 }
 
 export function demandTypeEnum(t: TFunction) {
-  return reportTextEnum({
-    sales_forecast: t('app.kuaizhizao.reports.demandType.sales_forecast'),
-    sales_order: t('app.kuaizhizao.reports.demandType.sales_order'),
-  });
+  return reportTextEnum(
+    Object.fromEntries(DEMAND_TYPE_CODES.map((code) => [code, translateDemandType(t, code)])),
+  );
 }
 
 export function reportDemandTypeText(t: TFunction, value: unknown): string {
-  const raw = String(value ?? '').trim();
-  if (!raw) return '-';
-  const enumMap = demandTypeEnum(t);
-  return enumMap[raw]?.text ?? raw;
+  return translateDemandType(t, value == null ? null : String(value));
 }
 
 export function inventoryAlertStatusEnum(t: TFunction) {

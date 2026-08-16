@@ -5,6 +5,7 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { StatusTag } from '../../../../../constants/statusBadges';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { maintenancePlanApi } from '../../../services/equipment';
 
@@ -20,13 +21,6 @@ interface MaintenancePlanItem {
   status?: string;
 }
 
-const STATUS_COLOR: Record<string, string> = {
-  草稿: 'default',
-  已发布: 'blue',
-  执行中: 'processing',
-  已完成: 'success',
-  已取消: 'error',
-};
 
 const MaintenancePlanCalendarPage: React.FC = () => {
   const { t } = useTranslation();
@@ -135,7 +129,7 @@ const MaintenancePlanCalendarPage: React.FC = () => {
                     title={
                       <>
                         {item.plan_no ?? item.plan_name}{' '}
-                        <StatusTag color={STATUS_COLOR[item.status ?? ''] ?? 'default'}>{item.status}</StatusTag>
+                        {renderDocumentStatusTag(item.status, item.status)}
                       </>
                     }
                     description={`${item.equipment_name ?? '-'} - ${item.plan_name ?? ''}`}

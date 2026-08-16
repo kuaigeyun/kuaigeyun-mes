@@ -9,13 +9,14 @@
   --river-divider-color: #d9d9d9;
   /**
    * 全局「草稿」状态徽章（Ant Tag 使用类名 `re-status-badge-draft`）
-   * 由主题文字色与填充色混合，避免页面硬编码；暗色主题见下方覆盖
+   * 由主题文字色与填充色混合，避免页面硬编码；暗色主题见下方覆盖。
+   * 取中灰实心：勿近黑抢焦点，也勿过淡难辨；与 `--re-badge-default-solid-*` 同档。
    *
    * Tag 变体：ConfigProvider 默认 solid（状态类）；分类/模式等标识须显式 variant="filled"。
    */
   --re-badge-draft-bg: color-mix(
     in srgb,
-    var(--ant-color-text, rgba(0, 0, 0, 0.88)) 78%,
+    var(--ant-color-text-secondary, rgba(0, 0, 0, 0.45)) 72%,
     var(--ant-color-fill-tertiary, #f5f5f5)
   );
   --re-badge-draft-color: var(--ant-color-text-light-solid, #ffffff);
@@ -32,7 +33,7 @@
   --river-divider-color: #303030;
   --re-badge-draft-bg: color-mix(
     in srgb,
-    var(--ant-color-text, rgba(255, 255, 255, 0.85)) 62%,
+    var(--ant-color-text-secondary, rgba(255, 255, 255, 0.45)) 58%,
     var(--ant-color-fill-tertiary, #303030)
   );
   --re-badge-default-solid-bg: #595959;
@@ -41,7 +42,7 @@
 
 /* 与 src/constants/statusBadges.ts 中 RE_STATUS_BADGE_DRAFT_CLASS 配套 */
 .ant-tag.re-status-badge-draft {
-  background: #f5f5f5; /* ⚠️ 兼容性修复：Safari < 16.2 不支持 color-mix */
+  background: #8c8c8c; /* Safari < 16.2 无 color-mix：中灰实心，白字可读 */
   background: var(--re-badge-draft-bg) !important;
   color: var(--re-badge-draft-color) !important;
   border-color: var(--re-badge-draft-border) !important;

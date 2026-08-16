@@ -76,9 +76,19 @@ class PurchaseRequisitionBase(BaseSchema):
     attachments: Optional[list] = None
 
 
+class PullComputationItemRequiredDate(BaseModel):
+    """下推采购申请时按明细覆盖要求到货日期"""
+    item_id: int = Field(..., description="需求计算明细 id")
+    required_date: date = Field(..., description="要求到货日期")
+
+
 class PullFromDemandComputationItemsRequest(BaseModel):
     """从需求计算开口行创建采购申请"""
     selected_item_ids: List[int] = Field(..., min_length=1, description="需求计算明细 id，可跨计算单")
+    item_required_dates: Optional[List[PullComputationItemRequiredDate]] = Field(
+        None,
+        description="按明细覆盖要求到货日期；缺日期的行必须传入",
+    )
 
 
 class PullFromRequisitionItemsRequest(BaseModel):

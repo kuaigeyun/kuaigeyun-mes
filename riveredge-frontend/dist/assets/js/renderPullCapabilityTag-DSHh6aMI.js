@@ -1,1 +1,0 @@
-import{j as r}from"./vendor-DbPimlg3.js";import{M as o}from"./statusBadges-DBJkJnT5.js";function t(e,i,n){return e?r.jsx(o,{color:"success",children:i}):r.jsx(o,{color:"warning",children:n})}export{t as r};

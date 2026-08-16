@@ -13,6 +13,7 @@ import { EditOutlined, DeleteOutlined, SendOutlined, CheckOutlined, CloseOutline
 import dayjs from 'dayjs';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { StatusTag } from '../../../../../constants/statusBadges';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -56,12 +57,6 @@ interface MoldScrapApplication {
   updated_at?: string;
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  草稿: 'default',
-  已提交: 'processing',
-  已审核: 'success',
-  已驳回: 'error',
-};
 
 const MoldScrapApplicationsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -188,9 +183,7 @@ const MoldScrapApplicationsPage: React.FC = () => {
       {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
-        render: (_, r) => (
-          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
-        ),
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
       { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
     ],
@@ -256,9 +249,7 @@ const MoldScrapApplicationsPage: React.FC = () => {
         width: 90,
         hideInSearch: true,
         fixed: 'right',
-        render: (_, r) => (
-          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
-        ),
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
       {
         title: t('common.actions'),

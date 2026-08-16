@@ -101,10 +101,16 @@ export async function createPurchaseRequisition(data: Partial<PurchaseRequisitio
 
 export async function pullPurchaseRequisitionFromDemandComputationItems(
   selectedItemIds: number[],
+  itemRequiredDates?: Array<{ item_id: number; required_date: string }>,
 ): Promise<{ success: boolean; message: string; target_document?: { id: number; code: string } }> {
   return apiRequest('/apps/kuaizhizao/purchase-requisitions/pull-from-demand-computation-items', {
     method: 'POST',
-    data: { selected_item_ids: selectedItemIds },
+    data: {
+      selected_item_ids: selectedItemIds,
+      ...(itemRequiredDates?.length
+        ? { item_required_dates: itemRequiredDates }
+        : {}),
+    },
   });
 }
 

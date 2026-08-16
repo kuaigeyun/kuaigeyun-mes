@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormSelect } from '@ant-design/pro-components';
 import { App, Button, Descriptions, Modal, Typography } from 'antd';
 import { StatusTag } from '../../../../../constants/statusBadges';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { CheckOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -57,11 +58,6 @@ interface EquipmentRepair {
   updated_by_name?: string;
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  进行中: 'processing',
-  已完成: 'success',
-  已取消: 'default',
-};
 
 const EquipmentRepairsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -155,9 +151,7 @@ const EquipmentRepairsPage: React.FC = () => {
       {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
-        render: (_, r) => (
-          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
-        ),
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
       { title: t(`${P}.col.repairResult`), dataIndex: 'repair_result' },
       { title: t(`${P}.col.repairDescription`), dataIndex: 'repair_description', span: 2 },
@@ -267,9 +261,7 @@ const EquipmentRepairsPage: React.FC = () => {
         dataIndex: 'status',
         hideInSearch: true,
         fixed: 'right',
-        render: (_, r) => (
-          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
-        ),
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
       {
         title: t('common.actions'),

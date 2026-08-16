@@ -81,6 +81,11 @@ async def pull_from_demand_computation_items(
             tenant_id=tenant_id,
             selected_item_ids=data.selected_item_ids,
             created_by=current_user.id,
+            item_required_dates={
+                int(row.item_id): row.required_date
+                for row in (data.item_required_dates or [])
+            }
+            or None,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

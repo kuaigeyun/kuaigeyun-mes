@@ -299,6 +299,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const [pullSourceComputationId, setPullSourceComputationId] = useState<number | undefined>();
   const pullSourceComputationIdRef = useRef<number | undefined>(undefined);
   const [pullSourceOptions, setPullSourceOptions] = useState<Array<{ value: number; label: string }>>([]);
+  const [pullDateConfirmOpen, setPullDateConfirmOpen] = useState(false);
+  const [pullDateConfirming, setPullDateConfirming] = useState(false);
+  const [pullDateConfirmRows, setPullDateConfirmRows] = useState<
+    Array<PullDemandComputationCandidate & { required_date?: string | null }>
+  >([]);
+  const [pullBulkRequiredDate, setPullBulkRequiredDate] = useState<dayjs.Dayjs | null>(null);
 
   const [prTrackingRefreshKey, setPrTrackingRefreshKey] = useState(0);
 
@@ -771,25 +777,77 @@ const PurchaseRequisitionsPage: React.FC = () => {
     },
     isRowDisabled: (record) => !isPullComputationSelectable(record),
     onConfirm: async (_keys, rows) => {
-      const selectedIds = rows
-        .filter((row) => isPullComputationSelectable(row))
-        .map((row) => Number(row.id))
-        .filter((id) => id > 0);
-      if (!selectedIds.length) {
+      const selectedRows = rows.filter((row) => isPullComputationSelectable(row));
+      if (!selectedRows.length) {
         messageApi.warning(t('app.kuaizhizao.purchaseRequisition.pull.selectLinesFirst'));
         return;
       }
-      try {
-        const res = await pullPurchaseRequisitionFromDemandComputationItems(selectedIds);
-        messageApi.success(res?.message || t('app.kuaizhizao.purchaseRequisition.pull.success'));
-        pullFromComputationQuery.closeModal();
-        actionRef.current?.reload();
-        invalidateMenuBadgeCounts();
-      } catch (error: unknown) {
-        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.pull.failed')));
-      }
+      setPullBulkRequiredDate(null);
+      setPullDateConfirmRows(
+        selectedRows.map((row) => ({
+          ...row,
+          required_date: row.required_date ? String(row.required_date).slice(0, 10) : null,
+        })),
+      );
+      pullFromComputationQuery.closeModal();
+      setPullDateConfirmOpen(true);
     },
   });
+
+  const resetPullDateConfirmModal = useCallback(() => {
+    setPullDateConfirmOpen(false);
+    setPullDateConfirming(false);
+    setPullDateConfirmRows([]);
+    setPullBulkRequiredDate(null);
+  }, []);
+
+  const handlePullBulkDateApply = useCallback(() => {
+    if (!pullBulkRequiredDate) {
+      messageApi.warning(t('app.kuaizhizao.purchaseRequisition.pull.bulkDateRequired'));
+      return;
+    }
+    const dateStr = pullBulkRequiredDate.format('YYYY-MM-DD');
+    setPullDateConfirmRows((prev) => prev.map((row) => ({ ...row, required_date: dateStr })));
+  }, [messageApi, pullBulkRequiredDate, t]);
+
+  const handlePullDateConfirmCreate = useCallback(async () => {
+    const missing = pullDateConfirmRows.filter((row) => !row.required_date);
+    if (missing.length > 0) {
+      messageApi.warning(t('app.kuaizhizao.purchaseRequisition.pull.dateRequired'));
+      return;
+    }
+    const selectedIds = pullDateConfirmRows
+      .map((row) => Number(row.id))
+      .filter((id) => id > 0);
+    if (!selectedIds.length) {
+      messageApi.warning(t('app.kuaizhizao.purchaseRequisition.pull.selectLinesFirst'));
+      return;
+    }
+    setPullDateConfirming(true);
+    try {
+      const res = await pullPurchaseRequisitionFromDemandComputationItems(
+        selectedIds,
+        pullDateConfirmRows.map((row) => ({
+          item_id: Number(row.id),
+          required_date: String(row.required_date),
+        })),
+      );
+      messageApi.success(res?.message || t('app.kuaizhizao.purchaseRequisition.pull.success'));
+      resetPullDateConfirmModal();
+      actionRef.current?.reload();
+      invalidateMenuBadgeCounts();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.pull.failed')));
+    } finally {
+      setPullDateConfirming(false);
+    }
+  }, [
+    invalidateMenuBadgeCounts,
+    messageApi,
+    pullDateConfirmRows,
+    resetPullDateConfirmModal,
+    t,
+  ]);
 
   const mapItemsForApi = (
     validItems: Array<{
@@ -2311,8 +2369,94 @@ const PurchaseRequisitionsPage: React.FC = () => {
         scopeOptions={pullFromComputationQuery.scopeOptions}
         scope={pullFromComputationQuery.scope}
         onScopeChange={pullFromComputationQuery.handleScopeChange}
-        okText={t('app.kuaizhizao.purchaseRequisition.pull.ok')}
+        okText={t('app.kuaizhizao.purchaseRequisition.pull.next')}
       />
+
+      <Modal
+        title={t('app.kuaizhizao.purchaseRequisition.pull.confirmDateTitle')}
+        open={pullDateConfirmOpen}
+        destroyOnHidden
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        onCancel={resetPullDateConfirmModal}
+        okText={t('app.kuaizhizao.purchaseRequisition.pull.ok')}
+        cancelText={t('common.cancel')}
+        confirmLoading={pullDateConfirming}
+        onOk={() => void handlePullDateConfirmCreate()}
+        okButtonProps={{ disabled: pullDateConfirmRows.length === 0 }}
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={t('app.kuaizhizao.purchaseRequisition.pull.dateConfirmHint')}
+        />
+        <Space wrap style={{ marginBottom: 12 }}>
+          <span>{t('app.kuaizhizao.purchaseRequisition.pull.bulkRequiredDate')}</span>
+          <DatePicker
+            value={pullBulkRequiredDate}
+            onChange={(value) => setPullBulkRequiredDate(value)}
+          />
+          <Button type="default" onClick={handlePullBulkDateApply}>
+            {t('app.kuaizhizao.purchaseRequisition.pull.applyBulkDate')}
+          </Button>
+        </Space>
+        <Table
+          size="small"
+          rowKey="id"
+          pagination={false}
+          scroll={{ y: 360 }}
+          dataSource={pullDateConfirmRows}
+          columns={[
+            {
+              title: t('app.kuaizhizao.purchaseRequisition.pull.computationCode'),
+              dataIndex: 'computation_code',
+              width: 168,
+              ellipsis: true,
+            },
+            {
+              title: t('app.kuaizhizao.salesOrder.materialName'),
+              dataIndex: 'material_name',
+              ellipsis: true,
+              render: (_: unknown, record: PullDemandComputationCandidate) => (
+                <MaterialStackedCell
+                  material_name={record.material_name}
+                  material_code={record.material_code}
+                  material_spec={record.material_spec}
+                />
+              ),
+            },
+            {
+              title: t('app.kuaizhizao.salesOrder.colShippableQty'),
+              dataIndex: 'remaining_quantity',
+              width: 100,
+              align: 'right' as const,
+              render: (v: unknown) => formatQuantity(v),
+            },
+            {
+              title: t('app.kuaizhizao.purchaseRequisition.col.requiredDate'),
+              dataIndex: 'required_date',
+              width: 160,
+              render: (_: unknown, record: PullDemandComputationCandidate & { required_date?: string | null }) => (
+                <DatePicker
+                  style={{ width: '100%' }}
+                  value={record.required_date ? dayjs(record.required_date) : null}
+                  status={record.required_date ? undefined : 'error'}
+                  onChange={(value) => {
+                    const dateStr = value ? value.format('YYYY-MM-DD') : null;
+                    setPullDateConfirmRows((prev) =>
+                      prev.map((row) =>
+                        Number(row.id) === Number(record.id)
+                          ? { ...row, required_date: dateStr }
+                          : row,
+                      ),
+                    );
+                  }}
+                />
+              ),
+            },
+          ]}
+        />
+      </Modal>
 
       <Modal
         title={pushToPurchaseOrderAction.label}

@@ -3,7 +3,8 @@ import { Tag } from 'antd';
 import type { ProColumns } from '@ant-design/pro-components';
 import type { TFunction } from 'i18next';
 import { MaterialUnitLabel } from '../../../../../components/material-unit-label';
-import { MarkerTag, RE_STATUS_BADGE_DRAFT, resolveStatusTagDisplayProps, StatusTag } from '../../../../../constants/statusBadges';
+import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
+import { resolveDocumentStatusTagColor } from '../../../../../constants/documentStatusColors';
 import { reportPercent, reportTextEnum } from '../../../utils/reportPresentation';
 
 export const QUALITY_DISPOSAL_I18N: Record<string, string> = {
@@ -92,14 +93,6 @@ export const QUALITY_NC_LEDGER_STATUS_I18N: Record<string, string> = {
   draft: 'app.kuaizhizao.quality.common.status.draft',
   processed: 'app.kuaizhizao.quality.nc.status.processed',
   cancelled: 'app.kuaizhizao.quality.common.status.cancelled',
-};
-
-const DOC_STATUS_COLORS: Record<string, string> = {
-  草稿: 'default',
-  已审核: 'processing',
-  已完成: 'success',
-  已取消: 'error',
-  待检验: 'default',
 };
 
 /** 检验结果徽章色（结果/结论标识，filled；与审核状态 solid 区分） */
@@ -289,8 +282,8 @@ export function renderQualityResultTag(t: TFunction, result?: string | null): Re
 
 export function renderQualityDocStatusTag(t: TFunction, status?: string | null): React.ReactNode {
   const text = getQualityDocStatusText(t, status);
-  const color = DOC_STATUS_COLORS[String(status)] ?? 'default';
-  return React.createElement(Tag, { color, variant: 'solid' }, text);
+  const color = resolveDocumentStatusTagColor(status);
+  return React.createElement(StatusTag, { color }, text);
 }
 
 export function renderQualityQualityStatusTag(t: TFunction, status?: string | null): React.ReactNode {
@@ -317,21 +310,11 @@ export function renderReleaseDecisionTag(t: TFunction, decision?: string | null)
 
 export function renderNcLedgerStatusTag(t: TFunction, status?: string | null): React.ReactNode {
   const text = getQualityNcLedgerStatusText(t, status);
-  const color =
-    status === 'processed' ? 'success' : status === 'cancelled' ? 'default' : RE_STATUS_BADGE_DRAFT;
-  return React.createElement(StatusTag, resolveStatusTagDisplayProps({ text, color }), text);
+  const color = resolveDocumentStatusTagColor(status === 'processed' ? '已完成' : status);
+  return React.createElement(StatusTag, { color }, text);
 }
 
 /** 首件检验 FAI 流程状态（solid StatusTag） */
-const FAI_STATUS_COLORS: Record<string, string> = {
-  draft: RE_STATUS_BADGE_DRAFT,
-  in_progress: 'processing',
-  submitted: 'warning',
-  approved: 'success',
-  rejected: 'error',
-  closed: 'default',
-};
-
 const FAI_STATUS_I18N: Record<string, string> = {
   draft: 'app.kuaizhizao.quality.fai.status.draft',
   in_progress: 'app.kuaizhizao.quality.fai.status.inProgress',
@@ -368,8 +351,7 @@ export function getFaiConclusionText(t: TFunction, conclusion?: string | null): 
 export function renderFaiStatusTag(t: TFunction, status?: string | null): React.ReactNode {
   const text = getFaiStatusText(t, status);
   if (text === '-') return '-';
-  const color = FAI_STATUS_COLORS[String(status)] ?? 'default';
-  return React.createElement(StatusTag, resolveStatusTagDisplayProps({ text, color }), text);
+  return React.createElement(StatusTag, { color: resolveDocumentStatusTagColor(status) }, text);
 }
 
 /** 结论为结果标识，用 MarkerTag filled，不抢流程状态焦点 */

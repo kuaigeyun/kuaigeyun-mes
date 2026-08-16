@@ -10,6 +10,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { App, Button, Modal, Row, Col, Input, Table, InputNumber, Select } from 'antd';
 import { StatusTag } from '../../../../../constants/statusBadges';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { SendOutlined, CheckOutlined, CloseOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -62,12 +63,6 @@ interface SparePartRequisition {
   lines?: RequisitionLine[];
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  草稿: 'default',
-  已提交: 'processing',
-  已审核: 'success',
-  已驳回: 'error',
-};
 
 const SparePartRequisitionsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -207,9 +202,7 @@ const SparePartRequisitionsPage: React.FC = () => {
       {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
-        render: (_, r) => (
-          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
-        ),
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
       { title: t(`${P}.form.remark`, { defaultValue: '备注' }), dataIndex: 'remark', span: 2 },
       { title: t(`${P}.form.rejectReason`, { defaultValue: '驳回原因' }), dataIndex: 'reject_reason', span: 2 },
@@ -287,9 +280,7 @@ const SparePartRequisitionsPage: React.FC = () => {
         dataIndex: 'status',
         hideInSearch: true,
         fixed: 'right',
-        render: (_, r) => (
-          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
-        ),
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
       {
         title: t('common.actions'),

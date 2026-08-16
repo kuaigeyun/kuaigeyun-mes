@@ -82,8 +82,8 @@ const FALLBACK_STATUS_DISPLAY: Record<string, { text: string; color: string }> =
   [DocumentStatus.CONFIRMED]: { text: '已确认', color: 'success' },
   [DocumentStatus.CANCELLED]: { text: '已取消', color: 'error' },
   [DocumentStatus.RELEASED]: { text: '已下达', color: 'processing' },
-  [DocumentStatus.IN_PROGRESS]: { text: '执行中', color: 'cyan' },
-  [DocumentStatus.COMPLETED]: { text: '已完成', color: 'gold' },
+  [DocumentStatus.IN_PROGRESS]: { text: '执行中', color: 'processing' },
+  [DocumentStatus.COMPLETED]: { text: '已完成', color: 'success' },
   [DocumentStatus.PARTIAL_CONVERTED]: { text: '部分转单', color: 'warning' },
   [DocumentStatus.FULL_CONVERTED]: { text: '全部转单', color: 'success' },
 };

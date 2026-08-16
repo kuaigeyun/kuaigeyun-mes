@@ -322,22 +322,6 @@ const defaultMilestone = {
   notes: '',
 };
 
-const STATUS_COLOR: Record<string, string> = {
-
-  草稿: 'default',
-
-  待审核: 'processing',
-
-  已生效: 'success',
-
-  执行中: 'blue',
-
-  已关闭: 'default',
-
-  已到期: 'warning',
-
-};
-
 
 type ContractPushTarget = 'sales_order' | 'work_order';
 

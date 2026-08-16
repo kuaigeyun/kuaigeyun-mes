@@ -3,12 +3,13 @@
  */
 
 import React from 'react';
-import { Alert, Button, Descriptions, Form, Input, Space, Typography } from 'antd';
+import { Alert, Button, Descriptions, Form, Input, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { DetailDrawerSection } from '../../../../../components/layout-templates';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { formatDateTime } from '../../../../../utils/format';
 import type { SalesReview, SalesReviewDeptCode } from '../../../services/sales-review';
+import { renderSalesReviewDeptOpinionResultTag } from '../../../utils/salesReviewPresentation';
 
 export const SALES_REVIEW_DEPT_CODES: SalesReviewDeptCode[] = [
   'tech',
@@ -66,9 +67,7 @@ export const SalesReviewDeptOpinionsPanel: React.FC<SalesReviewDeptOpinionsPanel
             {isAnswered && existing ? (
               <Descriptions size="small" column={2}>
                 <Descriptions.Item label={t('app.kuaizhizao.salesReview.colOpinionResult')}>
-                  {existing.result === 'pass'
-                    ? t('app.kuaizhizao.salesReview.opinionPass')
-                    : t('app.kuaizhizao.salesReview.opinionFail')}
+                  {renderSalesReviewDeptOpinionResultTag(t, existing.result)}
                 </Descriptions.Item>
                 <Descriptions.Item label={t('app.kuaizhizao.salesReview.colReviewedBy')}>
                   {existing.reviewed_by_name || '—'}
@@ -121,9 +120,7 @@ export const SalesReviewDeptOpinionsPanel: React.FC<SalesReviewDeptOpinionsPanel
                 </Button>
               </Form>
             ) : (
-              <Typography.Text type="secondary">
-                {t('app.kuaizhizao.salesReview.deptPending')}
-              </Typography.Text>
+              renderSalesReviewDeptOpinionResultTag(t, 'pending')
             )}
           </DetailDrawerSection>
         );

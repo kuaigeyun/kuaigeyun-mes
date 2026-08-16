@@ -4,7 +4,9 @@
  * 约定（唯一路径，禁止逐页补丁）：
  * - `app.tsx` ConfigProvider：`tag={{ variant: 'solid' }}` —— 状态类默认实心
  * - 分类 / 模式 / 编组 / 版本 / 计数等**非状态**标识：显式 `variant="filled"`
- * - 草稿类不要写死色值，使用 `RE_STATUS_BADGE_DRAFT` + `resolveStatusTagDisplayProps` / `StatusTag`
+ * - 草稿：`color={RE_STATUS_BADGE_DRAFT}` 或 `resolveStatusTagDisplayProps`；`StatusTag` 内自动换全局类名
+ * - 草稿色只改 `global.less` 的 `--re-badge-draft-*`，禁止页面覆写
+ * - 执行/审核状态色：`constants/documentStatusColors.ts`（唯一语义色板）
  */
 
 import React from 'react';
@@ -39,9 +41,17 @@ export function resolveStatusTagDisplayProps(display: {
 
 /**
  * 状态类徽章（默认 solid，与全局 ConfigProvider 一致）。
+ * `color={RE_STATUS_BADGE_DRAFT}` 时自动挂草稿类名，勿把占位符当 antd 预设色。
  */
-export function StatusTag({ variant = STATUS_TAG_VARIANT, ...rest }: TagProps) {
-  return React.createElement(Tag, { variant, ...rest });
+export function StatusTag({ variant = STATUS_TAG_VARIANT, color, className, ...rest }: TagProps) {
+  if (color === RE_STATUS_BADGE_DRAFT) {
+    return React.createElement(Tag, {
+      ...rest,
+      variant,
+      className: [RE_STATUS_BADGE_DRAFT_CLASS, className].filter(Boolean).join(' ') || undefined,
+    });
+  }
+  return React.createElement(Tag, { variant, color, className, ...rest });
 }
 
 /**

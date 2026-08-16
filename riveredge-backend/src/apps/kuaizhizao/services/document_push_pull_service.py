@@ -342,6 +342,7 @@ class DocumentPushPullService:
         selected_item_ids: Optional[List[int]],
         created_by: int,
         computation_id: Optional[int] = None,
+        item_required_dates: Optional[Dict[int, Any]] = None,
     ) -> Dict[str, Any]:
         """按计算明细 id 建一张采购申请，可跨多张已完成需求计算。"""
         from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
@@ -359,6 +360,13 @@ class DocumentPushPullService:
             selected_ids = {int(v) for v in selected_item_ids if v is not None}
             if not selected_ids:
                 raise BusinessLogicError("请至少选择一条可下推采购明细")
+
+        date_override_by_item: Dict[int, Any] = {}
+        if item_required_dates:
+            for raw_id, raw_date in item_required_dates.items():
+                if raw_id is None or raw_date is None:
+                    continue
+                date_override_by_item[int(raw_id)] = raw_date
 
         if computation_id is not None:
             computation_ids = [int(computation_id)]
@@ -405,6 +413,16 @@ class DocumentPushPullService:
             else []
         )
         material_by_id = {m.id: m for m in material_rows}
+
+        date_override_by_material: Dict[int, Any] = {}
+        if selected_ids and date_override_by_item:
+            for item in buy_items:
+                if item.id not in selected_ids or item.material_id is None:
+                    continue
+                mid = int(item.material_id)
+                override = date_override_by_item.get(int(item.id))
+                if override is not None and mid not in date_override_by_material:
+                    date_override_by_material[mid] = override
 
         req_items = []
         required_dates = []
@@ -467,6 +485,16 @@ class DocumentPushPullService:
                     if not material_unit:
                         material_unit = str(getattr(material, "base_unit", "") or "").strip()
 
+                line_required_date = (
+                    date_override_by_material.get(mid)
+                    or date_override_by_item.get(int(item.id))
+                    or item.procurement_completion_date
+                )
+                if line_required_date is None:
+                    raise BusinessLogicError(
+                        f"物料 {material_code or mid} 缺少要求到货日期，请确认后再创建"
+                    )
+
                 req_items.append(PurchaseRequisitionItemCreate(
                     material_id=item.material_id,
                     material_code=material_code or f"M{item.material_id}",
@@ -475,12 +503,11 @@ class DocumentPushPullService:
                     unit=material_unit or "件",
                     quantity=Decimal(str(remaining)),
                     suggested_unit_price=Decimal("0"),
-                    required_date=item.procurement_completion_date,
+                    required_date=line_required_date,
                     demand_computation_item_id=item.id,
                     supplier_id=supplier_id,
                 ))
-                if item.procurement_completion_date:
-                    required_dates.append(item.procurement_completion_date)
+                required_dates.append(line_required_date)
                 used_computation_ids.add(cid)
 
         if not req_items:

@@ -1466,14 +1466,13 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             if qty <= 0:
                 continue
             if target == "purchase_order":
+                # 转单占用仅以 purchase_order_id 为准；converted_quantity_* 是详情 Schema 派生字段，非 ORM 列
                 if item.purchase_order_id:
                     remaining = 0.0
                     pushed = qty
                 else:
-                    pushed = float(item.converted_quantity_draft or 0) + float(
-                        item.converted_quantity_confirmed or 0
-                    )
-                    remaining = max(0.0, qty - pushed)
+                    pushed = 0.0
+                    remaining = qty
             else:
                 in_active = int(item.id) in blocked_ids if item.id is not None else False
                 if item.purchase_order_id or in_active:

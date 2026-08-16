@@ -7,7 +7,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { App, Button, Descriptions, Empty, Modal, Result, Space, Spin, Table } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { DetailDrawerSection } from '../../../../../components/layout-templates';
-import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { formatBusinessDateOnly } from '../../../../../utils/format';
 import {
@@ -16,19 +15,15 @@ import {
   type SalesReviewItem,
 } from '../../../services/sales-review';
 import {
+  renderSalesReviewRiskMarkerTag,
+  renderSalesReviewStatusTag,
+  renderSalesReviewUrgencyMarkerTag,
+} from '../../../utils/salesReviewPresentation';
+import {
   SalesReviewDeptOpinionsPanel,
   validateDeptOpinionForm,
   type DeptOpinionFormState,
 } from './DeptOpinionsPanel';
-
-const STATUS_COLOR: Record<string, string> = {
-  draft: 'default',
-  reviewing: 'processing',
-  rejected: 'error',
-  passed: 'success',
-  closed: 'default',
-  cancelled: 'default',
-};
 
 export type SalesReviewReviewModalProps = {
   open: boolean;
@@ -52,22 +47,6 @@ export const SalesReviewReviewModal: React.FC<SalesReviewReviewModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [review, setReview] = useState<SalesReview | null>(null);
   const [opinionForms, setOpinionForms] = useState<Record<string, DeptOpinionFormState>>({});
-
-  const statusLabel = useCallback(
-    (status?: string) =>
-      t(`app.kuaizhizao.salesReview.status.${status || 'draft'}`, { defaultValue: status || '—' }),
-    [t],
-  );
-  const urgencyLabel = useCallback(
-    (v?: string) =>
-      t(`app.kuaizhizao.salesReview.urgency.${v || 'normal'}`, { defaultValue: v || '—' }),
-    [t],
-  );
-  const riskLabel = useCallback(
-    (v?: string) =>
-      t(`app.kuaizhizao.salesReview.risk.${v || 'medium'}`, { defaultValue: v || '—' }),
-    [t],
-  );
 
   const load = useCallback(
     async (id: number) => {
@@ -226,18 +205,16 @@ export const SalesReviewReviewModal: React.FC<SalesReviewReviewModalProps> = ({
                 {Number.isFinite(totalAmount) ? totalAmount.toFixed(2) : '—'}
               </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.salesReview.fieldUrgency')}>
-                <MarkerTag>{urgencyLabel(review.urgency)}</MarkerTag>
+                {renderSalesReviewUrgencyMarkerTag(t, review.urgency)}
               </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.salesReview.fieldRiskLevel')}>
-                <MarkerTag>{riskLabel(review.risk_level)}</MarkerTag>
+                {renderSalesReviewRiskMarkerTag(t, review.risk_level)}
               </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.salesReview.colSalesman')}>
                 {review.salesman_name || '—'}
               </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.salesReview.colStatus')}>
-                <StatusTag color={STATUS_COLOR[review.status] || 'default'}>
-                  {statusLabel(review.status)}
-                </StatusTag>
+                {renderSalesReviewStatusTag(t, review.status)}
               </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.salesReview.fieldSettlement')}>
                 {review.settlement_method || '—'}

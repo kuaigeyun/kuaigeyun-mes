@@ -13,6 +13,7 @@ import { EditOutlined, DeleteOutlined, EyeOutlined, SendOutlined, CheckOutlined,
 import dayjs from 'dayjs';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { StatusTag } from '../../../../../constants/statusBadges';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -56,12 +57,6 @@ interface ToolScrapApplication {
   updated_at?: string;
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  草稿: 'default',
-  已提交: 'processing',
-  已审核: 'success',
-  已驳回: 'error',
-};
 
 const ToolScrapApplicationsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -195,9 +190,7 @@ const ToolScrapApplicationsPage: React.FC = () => {
       {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
-        render: (_, r) => (
-          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
-        ),
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
       { title: t(`${P}.form.rejectReason`), dataIndex: 'reject_reason', span: 2 },
       { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
@@ -264,9 +257,7 @@ const ToolScrapApplicationsPage: React.FC = () => {
         width: 90,
         hideInSearch: true,
         fixed: 'right',
-        render: (_, r) => (
-          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
-        ),
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
       {
         title: t('common.actions'),

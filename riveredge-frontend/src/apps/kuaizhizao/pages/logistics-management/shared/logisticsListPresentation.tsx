@@ -1,32 +1,9 @@
 /**
- * 物流管理列表展示：状态 solid / 类型·归属·启用 filled；文案与颜色唯一入口。
+ * 物流管理列表展示：状态 solid / 类型·归属·启用 filled；状态色走 documentStatusColors。
  */
 import type { TFunction } from 'i18next';
+import { resolveDocumentStatusTagColor } from '../../../../../constants/documentStatusColors';
 import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
-
-const FREIGHT_ORDER_STATUS_COLOR: Record<string, string> = {
-  draft: 'default',
-  scheduled: 'processing',
-  shipped: 'blue',
-  in_transit: 'cyan',
-  arrived: 'orange',
-  signed: 'success',
-  cancelled: 'error',
-};
-
-const VEHICLE_STATUS_COLOR: Record<string, string> = {
-  idle: 'success',
-  in_transit: 'processing',
-  maintenance: 'warning',
-  disabled: 'default',
-};
-
-const REVIEW_STATUS_COLOR: Record<string, string> = {
-  draft: 'default',
-  pending: 'warning',
-  approved: 'success',
-  rejected: 'error',
-};
 
 export function freightOrderStatusLabel(t: TFunction, status?: string | null): string {
   const code = String(status ?? '').trim();
@@ -62,7 +39,7 @@ export function renderFreightOrderStatusTag(t: TFunction, status?: string | null
   const code = String(status ?? '').trim();
   if (!code) return '-';
   return (
-    <StatusTag color={FREIGHT_ORDER_STATUS_COLOR[code] || 'default'}>
+    <StatusTag color={resolveDocumentStatusTagColor(code)}>
       {freightOrderStatusLabel(t, code)}
     </StatusTag>
   );
@@ -72,7 +49,7 @@ export function renderVehicleStatusTag(t: TFunction, status?: string | null) {
   const code = String(status ?? '').trim();
   if (!code) return '-';
   return (
-    <StatusTag color={VEHICLE_STATUS_COLOR[code] || 'default'}>
+    <StatusTag color={resolveDocumentStatusTagColor(code)}>
       {vehicleStatusLabel(t, code)}
     </StatusTag>
   );
@@ -82,7 +59,7 @@ export function renderFreightBillReviewStatusTag(t: TFunction, status?: string |
   const code = String(status ?? '').trim();
   if (!code) return '-';
   return (
-    <StatusTag color={REVIEW_STATUS_COLOR[code] || 'default'}>
+    <StatusTag color={resolveDocumentStatusTagColor(code)}>
       {freightBillReviewStatusLabel(t, code)}
     </StatusTag>
   );

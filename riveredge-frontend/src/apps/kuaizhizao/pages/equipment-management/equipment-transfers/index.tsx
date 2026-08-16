@@ -11,6 +11,7 @@ import {
 } from '@ant-design/pro-components';
 import { App, Button, Modal, Row, Col, Input } from 'antd';
 import { StatusTag } from '../../../../../constants/statusBadges';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { SendOutlined, CheckOutlined, CloseOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
@@ -60,12 +61,6 @@ interface TransferApplication {
   updated_at?: string;
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  草稿: 'default',
-  已提交: 'processing',
-  已审核: 'success',
-  已驳回: 'error',
-};
 
 const EQUIPMENT_STATUS_OPTIONS = ['正常', '故障', '维修中', '停用', '校验中'].map((s) => ({ label: s, value: s }));
 
@@ -188,9 +183,7 @@ const EquipmentTransfersPage: React.FC = () => {
       {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
-        render: (_, r) => (
-          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
-        ),
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
       { title: t(`${P}.form.reason`), dataIndex: 'reason', span: 2 },
       { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
@@ -285,9 +278,7 @@ const EquipmentTransfersPage: React.FC = () => {
         dataIndex: 'status',
         hideInSearch: true,
         fixed: 'right',
-        render: (_, r) => (
-          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
-        ),
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
       {
         title: t('common.actions'),

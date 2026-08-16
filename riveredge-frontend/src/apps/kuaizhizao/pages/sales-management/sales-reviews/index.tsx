@@ -12,12 +12,11 @@ import {
   Empty,
   Input,
   Modal,
+  Popconfirm,
   Result,
   Space,
   Spin,
   Table,
-  Tag,
-  Typography,
 } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -49,7 +48,11 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
-import { StatusTag, MarkerTag, RE_STATUS_BADGE_DRAFT } from '../../../../../constants/statusBadges';
+import {
+  renderSalesReviewRiskMarkerTag,
+  renderSalesReviewStatusTag,
+  renderSalesReviewUrgencyMarkerTag,
+} from '../../../utils/salesReviewPresentation';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
@@ -124,17 +127,13 @@ type PullQuotationCandidate = {
 const isPullQuotationSelectable = (record: PullQuotationCandidate): boolean =>
   quotationCapabilityAllowed(record as Quotation, 'convert_to_sales_review');
 
-const STATUS_COLOR: Record<string, string> = {
-  draft: RE_STATUS_BADGE_DRAFT,
-  reviewing: 'processing',
-  rejected: 'error',
-  passed: 'success',
-  closed: 'default',
-  cancelled: 'default',
-};
-
 function canEditStatus(status?: string): boolean {
   return status === 'draft' || status === 'rejected';
+}
+
+/** 与后端 delete 允许状态一致 */
+function canDeleteStatus(status?: string): boolean {
+  return status === 'draft' || status === 'rejected' || status === 'cancelled';
 }
 
 const SalesReviewsPage: React.FC = () => {
@@ -169,24 +168,6 @@ const SalesReviewsPage: React.FC = () => {
   const [reviewModalId, setReviewModalId] = useState<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
-  const statusLabel = useCallback(
-    (status?: string) => {
-      const key = `app.kuaizhizao.salesReview.status.${status || 'draft'}`;
-      return t(key, { defaultValue: status || '—' });
-    },
-    [t],
-  );
-
-  const urgencyLabel = useCallback(
-    (v?: string) => t(`app.kuaizhizao.salesReview.urgency.${v || 'normal'}`, { defaultValue: v || '—' }),
-    [t],
-  );
-
-  const riskLabel = useCallback(
-    (v?: string) => t(`app.kuaizhizao.salesReview.risk.${v || 'medium'}`, { defaultValue: v || '—' }),
-    [t],
-  );
-
   const reloadTable = () => actionRef.current?.reload();
 
   const clearTableSelection = useCallback(() => {
@@ -207,7 +188,7 @@ const SalesReviewsPage: React.FC = () => {
     () =>
       Boolean(perms.canDelete) &&
       selectedRecordsForBatch.length > 0 &&
-      selectedRecordsForBatch.some((row) => canEditStatus(row.status)),
+      selectedRecordsForBatch.some((row) => canDeleteStatus(row.status)),
     [perms.canDelete, selectedRecordsForBatch],
   );
 
@@ -324,29 +305,27 @@ const SalesReviewsPage: React.FC = () => {
     setOpinionForms({});
   };
 
-  const handleDelete = (record: { id: number }, options?: { closeDrawer?: boolean }) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.salesReview.deleteConfirm'),
-      onOk: async () => {
-        try {
-          await salesReviewApi.remove(record.id);
-          message.success(t('common.deleteSuccess'));
-          if (options?.closeDrawer) closeDetail();
-          clearTableSelection();
-          reloadTable();
-        } catch (err) {
-          message.error(getApiErrorMessage(err, t('common.deleteFailed')));
-        }
-      },
-    });
-  };
+  const handleDelete = useCallback(
+    async (record: { id: number }, options?: { closeDrawer?: boolean }) => {
+      try {
+        await salesReviewApi.remove(record.id);
+        message.success(t('common.deleteSuccess'));
+        if (options?.closeDrawer) closeDetail();
+        clearTableSelection();
+        reloadTable();
+      } catch (err) {
+        message.error(getApiErrorMessage(err, t('common.deleteFailed')));
+      }
+    },
+    [clearTableSelection, message, t],
+  );
 
   const handleBatchDelete = useCallback(
     async (keys: React.Key[]) => {
       if (!perms.canDelete) return;
       const deletable = keys
         .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
-        .filter((row): row is SalesReviewListItem => row != null && canEditStatus(row.status));
+        .filter((row): row is SalesReviewListItem => row != null && canDeleteStatus(row.status));
       if (deletable.length === 0) return;
       let success = 0;
       let failed = 0;
@@ -807,7 +786,7 @@ const SalesReviewsPage: React.FC = () => {
             minWidth: 72,
             uniTableKeepWidth: true,
             resizable: false,
-            render: (_, row) => <MarkerTag>{urgencyLabel(row.urgency)}</MarkerTag>,
+            render: (_, row) => renderSalesReviewUrgencyMarkerTag(t, row.urgency),
           },
           {
             title: t('app.kuaizhizao.salesReview.colRiskLevel'),
@@ -817,7 +796,7 @@ const SalesReviewsPage: React.FC = () => {
             minWidth: 80,
             uniTableKeepWidth: true,
             resizable: false,
-            render: (_, row) => <MarkerTag>{riskLabel(row.risk_level)}</MarkerTag>,
+            render: (_, row) => renderSalesReviewRiskMarkerTag(t, row.risk_level),
           },
           {
             title: t('app.kuaizhizao.salesReview.colDeliveryDate'),
@@ -847,9 +826,7 @@ const SalesReviewsPage: React.FC = () => {
             hideInSearch: true,
             width: 110,
             uniTableKeepWidth: true,
-            render: (_, row) => (
-              <StatusTag color={STATUS_COLOR[row.status] || 'default'}>{statusLabel(row.status)}</StatusTag>
-            ),
+            render: (_, row) => renderSalesReviewStatusTag(t, row.status),
           },
           {
             title: t('app.kuaizhizao.salesReview.colSalesman'),
@@ -905,13 +882,18 @@ const SalesReviewsPage: React.FC = () => {
                   />,
                 );
               }
-              if (perms.canDelete && canEditStatus(record.status)) {
+              if (perms.canDelete && canDeleteStatus(record.status)) {
                 parts.push(
-                  <Button
-                    {...rowActionKind('delete')}
+                  <Popconfirm
                     key="del"
-                    onClick={() => handleDelete(record)}
-                  />,
+                    {...rowActionKind('delete')}
+                    title={t('app.kuaizhizao.salesReview.deleteConfirm')}
+                    onConfirm={() => void handleDelete(record)}
+                    okText={t('common.confirm')}
+                    cancelText={t('common.cancel')}
+                  >
+                    <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+                  </Popconfirm>,
                 );
               }
               return parts;
@@ -924,13 +906,11 @@ const SalesReviewsPage: React.FC = () => {
     loadDetail,
     openReviewModal,
     handleIssueFromList,
+    handleDelete,
     canApprove,
     canSubmit,
     perms.canUpdate,
     perms.canDelete,
-    statusLabel,
-    urgencyLabel,
-    riskLabel,
   ]);
 
   const detailBasicColumns: ProDescriptionsItemProps<SalesReview>[] = useMemo(() => {
@@ -953,12 +933,12 @@ const SalesReviewsPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.salesReview.fieldUrgency'),
             dataIndex: 'urgency',
-            render: (_, row) => urgencyLabel(row.urgency),
+            render: (_, row) => renderSalesReviewUrgencyMarkerTag(t, row.urgency),
           },
           {
             title: t('app.kuaizhizao.salesReview.fieldRiskLevel'),
             dataIndex: 'risk_level',
-            render: (_, row) => riskLabel(row.risk_level),
+            render: (_, row) => renderSalesReviewRiskMarkerTag(t, row.risk_level),
           },
           { title: t('app.kuaizhizao.salesReview.fieldSettlement'), dataIndex: 'settlement_method' },
           { title: t('app.kuaizhizao.salesReview.fieldPaymentCycle'), dataIndex: 'payment_cycle' },
@@ -973,16 +953,14 @@ const SalesReviewsPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.salesReview.colStatus'),
             dataIndex: 'status',
-            render: (_, row) => (
-              <StatusTag color={STATUS_COLOR[row.status] || 'default'}>{statusLabel(row.status)}</StatusTag>
-            ),
+            render: (_, row) => renderSalesReviewStatusTag(t, row.status),
           },
           { title: t('app.kuaizhizao.salesReview.colSalesman'), dataIndex: 'salesman_name' },
           { title: t('app.kuaizhizao.salesReview.colSalesOrder'), dataIndex: 'sales_order_code' },
           { title: t('app.kuaizhizao.salesReview.fieldRemarks'), dataIndex: 'remarks', span: 3 },
     ];
     return alignDescriptionColumns(cols as any, GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK) as ProDescriptionsItemProps<SalesReview>[];
-  }, [t, statusLabel, urgencyLabel, riskLabel]);
+  }, [t]);
 
   const lineColumns = useMemo(
     () => [
@@ -1025,10 +1003,17 @@ const SalesReviewsPage: React.FC = () => {
           {t('common.edit')}
         </Button>
       ) : null}
-      {perms.canDelete && canEditStatus(detail.status) ? (
-        <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(detail, { closeDrawer: true })}>
-          {t('common.delete')}
-        </Button>
+      {perms.canDelete && canDeleteStatus(detail.status) ? (
+        <Popconfirm
+          title={t('app.kuaizhizao.salesReview.deleteConfirm')}
+          onConfirm={() => void handleDelete(detail, { closeDrawer: true })}
+          okText={t('common.confirm')}
+          cancelText={t('common.cancel')}
+        >
+          <Button danger icon={<DeleteOutlined />}>
+            {t('common.delete')}
+          </Button>
+        </Popconfirm>
       ) : null}
       {perms.canPrint ? (
         <Button icon={<PrinterOutlined />} onClick={() => openPrintForReview(detail)}>

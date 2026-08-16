@@ -10,6 +10,7 @@ import {
 } from '@ant-design/pro-components';
 import { App, Button, Modal, Row, Col, Input } from 'antd';
 import { StatusTag } from '../../../../../constants/statusBadges';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { SendOutlined, CheckOutlined, CloseOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
@@ -56,12 +57,6 @@ interface ScrapApplication {
   updated_at?: string;
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  草稿: 'default',
-  已提交: 'processing',
-  已审核: 'success',
-  已驳回: 'error',
-};
 
 const EquipmentScrapPage: React.FC = () => {
   const { t } = useTranslation();
@@ -208,9 +203,7 @@ const EquipmentScrapPage: React.FC = () => {
       {
         title: t(`${P}.col.status`),
         dataIndex: 'status',
-        render: (_, r) => (
-          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
-        ),
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
       { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
       { title: t(`${P}.form.rejectReason`), dataIndex: 'reject_reason', span: 2 },
@@ -295,9 +288,7 @@ const EquipmentScrapPage: React.FC = () => {
         dataIndex: 'status',
         hideInSearch: true,
         fixed: 'right',
-        render: (_, r) => (
-          <StatusTag color={STATUS_COLORS[r.status ?? ''] ?? 'default'}>{r.status ?? '-'}</StatusTag>
-        ),
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
       {
         title: t('common.actions'),

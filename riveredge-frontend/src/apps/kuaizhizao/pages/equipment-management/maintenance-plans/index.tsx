@@ -25,6 +25,7 @@ import {
 } from '@ant-design/pro-components';
 import { App, Button, Modal, Row, Col, Descriptions, Typography, Empty, Spin, theme as AntdTheme, Checkbox, Table, Select, InputNumber, Input } from 'antd';
 import { StatusTag } from '../../../../../constants/statusBadges';
+import { resolveDocumentStatusTagColor } from '../../../../../constants/documentStatusColors';
 import { PlusOutlined } from '@ant-design/icons';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
@@ -76,14 +77,6 @@ const PLAN_STATUS_KEYS: Record<string, string> = {
   执行中: `${P}.status.running`,
   已完成: `${P}.status.completed`,
   已取消: `${P}.status.cancelled`,
-};
-
-const PLAN_STATUS_COLORS: Record<string, string> = {
-  草稿: 'default',
-  已发布: 'blue',
-  执行中: 'processing',
-  已完成: 'success',
-  已取消: 'error',
 };
 
 const EXECUTABLE_PLAN_STATUSES = new Set(['草稿', '已发布', '执行中']);
@@ -505,7 +498,7 @@ const MaintenancePlansPage: React.FC = () => {
         const status = record.status;
         const key = status ? PLAN_STATUS_KEYS[status] : undefined;
         const text = key ? t(key) : (status || '-');
-        const color = status ? (PLAN_STATUS_COLORS[status] || 'default') : 'default';
+        const color = status ? resolveDocumentStatusTagColor(status) : 'default';
         return <StatusTag color={color}>{text}</StatusTag>;
       },
     },
