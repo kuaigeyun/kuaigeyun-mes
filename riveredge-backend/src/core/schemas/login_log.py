@@ -9,6 +9,8 @@ from typing import Optional
 from datetime import datetime
 from uuid import UUID
 
+from core.schemas.base import BaseSchema
+
 
 class LoginLogBase(BaseModel):
     """登录日志基础 Schema"""
@@ -28,8 +30,8 @@ class LoginLogCreate(LoginLogBase):
     pass
 
 
-class LoginLogResponse(LoginLogBase):
-    """登录日志响应 Schema"""
+class LoginLogResponse(LoginLogBase, BaseSchema):
+    """登录日志响应 Schema（API JSON 走 BaseSchema 站点墙钟）"""
     uuid: UUID = Field(..., description="登录日志UUID")
     tenant_id: Optional[int] = Field(None, description="组织ID")
     created_at: datetime = Field(..., description="创建时间")
