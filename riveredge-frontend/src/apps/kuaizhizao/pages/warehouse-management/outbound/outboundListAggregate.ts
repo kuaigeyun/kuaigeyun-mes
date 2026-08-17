@@ -82,38 +82,68 @@ export async function fetchOutboundHubList(
     updated_end_date: params.updated_end_date,
   };
 
-  const [pickingRes, deliveryRes, outsourceRes, otherRes, borrowRes] = await Promise.all([
-    fetchPicking
-      ? warehouseApi.productionPicking.list({
-          ...baseParams,
-          status: sourceStatus(hubStatus, '待领料', '已领料'),
-        })
-      : Promise.resolve(emptyList),
-    fetchDelivery
-      ? warehouseApi.salesDelivery.list({
-          ...baseParams,
-          status: sourceStatus(hubStatus, '待出库', '已出库'),
-        })
-      : Promise.resolve(emptyList),
-    fetchOutsource
-      ? outsourceMaterialIssueApi.list({
-          ...baseParams,
-          status: sourceStatus(hubStatus, 'draft', 'completed'),
-        })
-      : Promise.resolve(emptyList),
-    fetchOther
-      ? warehouseApi.otherOutbound.list({
-          ...baseParams,
-          status: sourceStatus(hubStatus, '待出库', '已出库'),
-        })
-      : Promise.resolve(emptyList),
-    fetchBorrow
-      ? warehouseApi.materialBorrow.list({
-          ...baseParams,
-          status: sourceStatus(hubStatus, '待借出', '已借出'),
-        })
-      : Promise.resolve(emptyList),
-  ]);
+  const [pickingSettled, deliverySettled, outsourceSettled, otherSettled, borrowSettled] =
+    await Promise.allSettled([
+      fetchPicking
+        ? warehouseApi.productionPicking.list({
+            ...baseParams,
+            status: sourceStatus(hubStatus, '待领料', '已领料'),
+          })
+        : Promise.resolve(emptyList),
+      fetchDelivery
+        ? warehouseApi.salesDelivery.list({
+            ...baseParams,
+            status: sourceStatus(hubStatus, '待出库', '已出库'),
+          })
+        : Promise.resolve(emptyList),
+      fetchOutsource
+        ? outsourceMaterialIssueApi.list({
+            ...baseParams,
+            status: sourceStatus(hubStatus, 'draft', 'completed'),
+          })
+        : Promise.resolve(emptyList),
+      fetchOther
+        ? warehouseApi.otherOutbound.list({
+            ...baseParams,
+            status: sourceStatus(hubStatus, '待出库', '已出库'),
+          })
+        : Promise.resolve(emptyList),
+      fetchBorrow
+        ? warehouseApi.materialBorrow.list({
+            ...baseParams,
+            status: sourceStatus(hubStatus, '待借出', '已借出'),
+          })
+        : Promise.resolve(emptyList),
+    ]);
+
+  const settledOrEmpty = (settled: PromiseSettledResult<unknown>) => {
+    if (settled.status === 'fulfilled') return settled.value;
+    return emptyList;
+  };
+  const anySourceFailed = [
+    pickingSettled,
+    deliverySettled,
+    outsourceSettled,
+    otherSettled,
+    borrowSettled,
+  ].some((s) => s.status === 'rejected');
+  if (anySourceFailed) {
+    const firstReject = [
+      pickingSettled,
+      deliverySettled,
+      outsourceSettled,
+      otherSettled,
+      borrowSettled,
+    ].find((s): s is PromiseRejectedResult => s.status === 'rejected');
+    // 保留首个失败原因，供调用方决定是否提示；不中断其它来源数据合并
+    console.warn('[outboundHub] partial list source failed', firstReject?.reason);
+  }
+
+  const pickingRes = settledOrEmpty(pickingSettled);
+  const deliveryRes = settledOrEmpty(deliverySettled);
+  const outsourceRes = settledOrEmpty(outsourceSettled);
+  const otherRes = settledOrEmpty(otherSettled);
+  const borrowRes = settledOrEmpty(borrowSettled);
 
   const pickingData = fetchPicking
     ? await enrichers.enrichProductionPickingRecordsWithCustomFields(
@@ -193,9 +223,9 @@ export async function fetchOutboundHubList(
     (fetchBorrow ? toList(borrowRes).total : 0);
 
   if (typed) {
-    return { data: sorted, success: true, total: sourceTotal };
+    return { data: sorted, success: !anySourceFailed, total: sourceTotal };
   }
 
   const page = sorted.slice(skip, skip + limit);
-  return { data: page, success: true, total: sourceTotal };
+  return { data: page, success: !anySourceFailed, total: sourceTotal };
 }

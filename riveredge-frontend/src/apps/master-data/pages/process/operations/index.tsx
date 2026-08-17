@@ -65,6 +65,7 @@ import {
   renderOperationOverReportModeMarker,
   renderOperationPersonnelMarkers,
   renderOperationReportingTypeMarker,
+  resolveOperationDefaultPersonnelLabels,
 } from '../../../utils/operationMeta';
 
 /**
@@ -223,10 +224,8 @@ const OperationsPage: React.FC = () => {
         title: t('field.operation.defaultPersonnelConfigs'),
         dataIndex: 'defaultOperatorNames',
         span: 2,
-        render: (_: unknown, record: Operation) => {
-          const names = record.defaultOperatorNames ?? record.default_operator_names ?? [];
-          return renderOperationPersonnelMarkers(Array.isArray(names) ? names : [], 99);
-        },
+        render: (_: unknown, record: Operation) =>
+          renderOperationPersonnelMarkers(resolveOperationDefaultPersonnelLabels(record), 99),
       },
       { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
       { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
@@ -648,10 +647,8 @@ const OperationsPage: React.FC = () => {
       width: 180,
       hideInSearch: true,
       ellipsis: true,
-      render: (_: any, record: Operation) => {
-        const names = record.defaultOperatorNames ?? record.default_operator_names ?? [];
-        return renderOperationPersonnelMarkers(Array.isArray(names) ? names : []);
-      },
+      render: (_: any, record: Operation) =>
+        renderOperationPersonnelMarkers(resolveOperationDefaultPersonnelLabels(record)),
     },
     {
       title: t('app.master-data.operations.isActive'),

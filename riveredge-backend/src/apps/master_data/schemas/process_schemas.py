@@ -266,6 +266,7 @@ class OperationResponse(OperationBase):
     default_operator_uuids: List[str] = Field(default_factory=list, alias="defaultOperatorUuids", description="默认生产人员 UUID列表")
     default_operator_names: List[str] = Field(default_factory=list, alias="defaultOperatorNames", description="默认生产人员姓名列表")
     default_team_ids: List[int] = Field(default_factory=list, alias="defaultTeamIds", description="默认工作小组 ID 列表")
+    default_team_names: List[str] = Field(default_factory=list, alias="defaultTeamNames", description="默认工作小组名称列表")
     default_workshop_ids: List[int] = Field(default_factory=list, alias="defaultWorkshopIds", description="默认车间 ID 列表")
     default_work_center_ids: List[int] = Field(default_factory=list, alias="defaultWorkCenterIds", description="默认工作中心 ID 列表")
     default_station_ids: List[int] = Field(default_factory=list, alias="defaultStationIds", description="默认工位 ID 列表")

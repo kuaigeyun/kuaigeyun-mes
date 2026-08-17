@@ -83,7 +83,10 @@ import { useGlobalStore } from '../../../../../stores';
 import type { User } from '../../../../../services/user';
 import { getRemainingReportableQuantity, getStatusReportingCompleteQuantity, resolveDefaultReportingQuantityFields } from '../../../utils/workOrderReporting';
 import { coerceReportingCreateStrings } from '../../../utils/reportingPayload';
-import { resolveReportingWorkTimeForSubmit } from '../../../utils/reportingWorkTime';
+import {
+  resolveReportingWorkTimeForSubmit,
+  toReportingDayjs,
+} from '../../../utils/reportingWorkTime';
 import ReportableQuantityPanel from '../../../components/ReportableQuantityPanel';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import ReportingInboundWarehouseField from '../../../components/ReportingInboundWarehouseField';
@@ -447,6 +450,7 @@ const ReportingPage: React.FC = () => {
   // 数据修正Modal状态
   const [correctModalVisible, setCorrectModalVisible] = useState(false);
   const [currentReportingRecordForCorrect, setCurrentReportingRecordForCorrect] = useState<ReportingRecord | null>(null);
+  const [correctFormInitialValues, setCorrectFormInitialValues] = useState<Record<string, unknown> | undefined>();
   const correctFormRef = useRef<any>(null);
 
   // 新建报工状态（工单、工序列表）
@@ -1041,17 +1045,18 @@ const ReportingPage: React.FC = () => {
   const handleCorrectReporting = async (record: ReportingRecord) => {
     try {
       const detail = await reportingApi.get(record.id!.toString());
-      setCurrentReportingRecordForCorrect(detail as ReportingRecord);
+      const d = detail as ReportingRecord;
+      setCorrectFormInitialValues({
+        reported_quantity: d.reported_quantity,
+        qualified_quantity: d.qualified_quantity,
+        unqualified_quantity: d.unqualified_quantity,
+        work_hours: d.work_hours,
+        work_start_time: toReportingDayjs(d.work_start_time),
+        work_end_time: toReportingDayjs(d.work_end_time),
+        remarks: d.remarks,
+      });
+      setCurrentReportingRecordForCorrect(d);
       setCorrectModalVisible(true);
-      setTimeout(() => {
-        correctFormRef.current?.setFieldsValue({
-          reported_quantity: (detail as any).reported_quantity ?? (detail as any).reportedQuantity,
-          qualified_quantity: (detail as any).qualified_quantity ?? (detail as any).qualifiedQuantity,
-          unqualified_quantity: (detail as any).unqualified_quantity ?? (detail as any).unqualifiedQuantity,
-          work_hours: (detail as any).work_hours ?? (detail as any).workHours,
-          remarks: (detail as any).remarks,
-        });
-      }, 100);
     } catch (error) {
       messageApi.error(t('app.kuaizhizao.workReporting.loadDetailFailed'));
     }
@@ -1072,22 +1077,22 @@ const ReportingPage: React.FC = () => {
       }
 
       const correctedId = currentReportingRecordForCorrect.id;
+      const workTime = resolveReportingWorkTimeForSubmit(values);
 
-      const correctPayload = { ...values };
-      const wh = correctPayload.work_hours;
-      if (wh === undefined || wh === null || wh === '') {
-        delete correctPayload.work_hours;
-      } else {
-        correctPayload.work_hours = Number(wh);
-      }
-
-      await reportingApi.correct(
-        currentReportingRecordForCorrect.id.toString(),
-        correctPayload
-      );
+      await reportingApi.correct(currentReportingRecordForCorrect.id.toString(), {
+        correction_reason: values.correction_reason,
+        reported_quantity: values.reported_quantity,
+        qualified_quantity: values.qualified_quantity,
+        unqualified_quantity: values.unqualified_quantity,
+        work_hours: workTime.work_hours,
+        work_start_time: workTime.work_start_time ?? null,
+        work_end_time: workTime.work_end_time ?? null,
+        remarks: values.remarks,
+      });
       messageApi.success(t('app.kuaizhizao.workReporting.correctSuccess'));
       setCorrectModalVisible(false);
       setCurrentReportingRecordForCorrect(null);
+      setCorrectFormInitialValues(undefined);
       correctFormRef.current?.resetFields();
       invalidateMenuBadgeCounts();
 
@@ -2129,10 +2134,12 @@ const ReportingPage: React.FC = () => {
         onClose={() => {
           setCorrectModalVisible(false);
           setCurrentReportingRecordForCorrect(null);
+          setCorrectFormInitialValues(undefined);
           correctFormRef.current?.resetFields();
         }}
         onFinish={handleSubmitCorrect}
         formRef={correctFormRef}
+        initialValues={correctFormInitialValues}
         {...MODAL_CONFIG}
       >
         {currentReportingRecordForCorrect && (
@@ -2182,13 +2189,7 @@ const ReportingPage: React.FC = () => {
               min={0}
               fieldProps={{ precision: 2 }}
             />
-            <ProFormDigit
-              name="work_hours"
-              label={t('app.kuaizhizao.workReporting.colWorkHours')}
-              placeholder={t('app.kuaizhizao.workReporting.formWorkHoursPlaceholder')}
-              min={0}
-              fieldProps={{ precision: 2, step: 0.1 }}
-            />
+            <ReportingWorkTimeFields colProps={{ span: 24 }} />
             <ProFormTextArea
               name="correction_reason"
               label={t('app.kuaizhizao.workReporting.correctionReason')}

@@ -45,7 +45,9 @@ class InspectionPlan(BaseModel):
             ("is_active",),
             ("created_at",),
         ]
-        unique_together = [("tenant_id", "plan_code")]
+        # 唯一约束由部分唯一索引实现（WHERE deleted_at IS NULL），
+        # 支持软删除后重用编码；见迁移 600_20260817200000_inspection_plan_partial_unique_plan_code
+        # unique_together = [("tenant_id", "plan_code")]
 
     id = fields.IntField(pk=True, description="主键ID")
     plan_code = fields.CharField(max_length=50, description="方案编码")

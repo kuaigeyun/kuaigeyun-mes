@@ -57,13 +57,17 @@ class SalesReviewDeptOpinionResponse(BaseSchema):
 class SalesReviewDeptOpinionSubmit(BaseSchema):
     result: str = Field(..., description="pass 或 fail")
     opinion: Optional[str] = Field(None, description="评审意见；fail 时建议填写原因")
+    reviewed_by: Optional[int] = Field(
+        None, description="评审人用户ID；缺省为当前操作人"
+    )
 
     @model_validator(mode="after")
     def _validate_result(self):
         r = (self.result or "").strip().lower()
         if r not in ("pass", "fail"):
             raise ValueError("评审结果须为 pass 或 fail")
-        self.result = r
+        # BaseSchema.validate_assignment=True：禁止 self.result= 触发二次校验递归
+        object.__setattr__(self, "result", r)
         if r == "fail" and not (self.opinion or "").strip():
             raise ValueError("不通过时须填写评审意见")
         return self

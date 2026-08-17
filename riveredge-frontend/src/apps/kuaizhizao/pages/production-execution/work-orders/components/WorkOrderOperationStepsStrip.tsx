@@ -15,6 +15,8 @@ export interface WorkOrderOperationStepsStripProps {
   steps?: WorkOrderOperationStep[] | null;
   /** 节点视觉尺寸 */
   compact?: boolean;
+  /** 覆盖单槽宽度（px）；默认 compact=56 / 展开=64 */
+  slotWidth?: number;
 }
 
 function stepsSignature(steps?: WorkOrderOperationStep[] | null): string {
@@ -27,6 +29,7 @@ function stepsSignature(steps?: WorkOrderOperationStep[] | null): string {
 function WorkOrderOperationStepsStripInner({
   steps,
   compact = true,
+  slotWidth: slotWidthProp,
 }: WorkOrderOperationStepsStripProps) {
   const { token } = theme.useToken();
 
@@ -39,7 +42,7 @@ function WorkOrderOperationStepsStripInner({
   const progressFontSize = compact ? 9 : 10;
   const labelFontSize = compact ? 11 : 12;
   const labelGap = compact ? 2 : 4;
-  const slotWidth = compact ? 56 : 64;
+  const slotWidth = slotWidthProp ?? (compact ? 56 : 64);
 
   const doneColor = token.colorSuccess;
   const activeColor = token.colorPrimary;
@@ -187,6 +190,7 @@ function stripPropsAreEqual(
 ): boolean {
   return (
     (prev.compact ?? true) === (next.compact ?? true) &&
+    prev.slotWidth === next.slotWidth &&
     stepsSignature(prev.steps) === stepsSignature(next.steps)
   );
 }

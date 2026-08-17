@@ -12,6 +12,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { infraSuperAdminLogin } from '../../services/infraAdmin';
 import { setToken, setUserInfo, setTenantId } from '../../utils/auth';
 import { useGlobalStore } from '../../stores';
+import { useConfigStore } from '../../stores/configStore';
 import { theme } from 'antd';
 import { getPlatformSettingsPublic } from '../../services/platformSettings';
 import { useTranslation } from 'react-i18next';
@@ -59,7 +60,7 @@ export default function PlatformLoginPage() {
   // 登录请求
   const loginMutation = useMutation({
     mutationFn: (data: LoginFormData) => infraSuperAdminLogin(data),
-    onSuccess: (response) => {
+    onSuccess: async (response) => {
       captureLoginEntryFromCurrentUrl('infra');
       // 保存认证信息
       setToken(response.access_token);
@@ -72,6 +73,19 @@ export default function PlatformLoginPage() {
       // 设置默认租户 ID（如果返回了默认租户）
       if (response.default_tenant_id) {
         setTenantId(response.default_tenant_id);
+      }
+
+      // 平台超管进入壳层前必须先有 configs.timezone（运营看板等会 formatDateTime）
+      const platformTz =
+        platformSettings?.timezone != null ? String(platformSettings.timezone).trim() : '';
+      if (platformTz) {
+        const store = useConfigStore.getState();
+        useConfigStore.setState({
+          configs: { ...store.configs, timezone: platformTz },
+          initialized: true,
+        });
+      } else {
+        await useConfigStore.getState().ensureTimezoneFromPlatform();
       }
 
       // 设置当前用户信息到全局状态

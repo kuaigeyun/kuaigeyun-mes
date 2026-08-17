@@ -101,6 +101,8 @@ export interface Operation {
   default_operator_ids?: number[];
   defaultTeamIds?: number[];
   default_team_ids?: number[];
+  defaultTeamNames?: string[];
+  default_team_names?: string[];
   default_workshop_ids?: number[];
   defaultWorkshopIds?: number[];
   defaultWorkCenterIds?: number[];

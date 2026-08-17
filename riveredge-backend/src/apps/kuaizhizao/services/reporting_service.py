@@ -750,17 +750,16 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     reporting_data.unqualified_quantity = Decimal("0")
 
             if not allow_jump:
-                # 不允许跳转：检查前序工序的报工数量
+                # 不允许跳转：检查前序工序（须排除软删除行，否则下工单时删掉的工序仍会挡住报工）
                 previous_operations = await WorkOrderOperation.filter(
                     tenant_id=tenant_id,
                     work_order_id=reporting_data.work_order_id,
                     sequence__lt=work_order_operation.sequence,
-
-                ).order_by('sequence').all()
+                    deleted_at__isnull=True,
+                ).order_by('-sequence').limit(1).all()
 
                 if previous_operations:
-                    # 获取前一道工序（sequence最大的前序工序）
-                    previous_operation = previous_operations[-1]
+                    previous_operation = previous_operations[0]
 
                     # 按状态报工且报「完成」：紧邻上道须已 completed
                     if reporting_type == "status" and reported_quantity_dec > 0:

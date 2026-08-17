@@ -23,6 +23,7 @@ import { DetailDrawerInlineFullChain,
 import { detailDrawerDescriptionItems } from './detailDrawerDescriptionItems';
 import { DetailAuditPhaseTitleExtra } from '../uni-audit/DetailAuditPhaseRow';
 import type { AuditPhaseRecord } from '../uni-audit/AuditPhaseBadge';
+import { useDetailDrawerFeatures } from '../../hooks/useDetailDrawerFeatures';
 import './drawerSlideMotion.css';
 
 export interface DetailDrawerTemplateProps<T extends Record<string, any> = Record<string, unknown>> {
@@ -219,6 +220,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
 }: DetailDrawerTemplateProps<T>) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
+  const { fullChainEnabled, fullChainShowCreatedAt, operationLogEnabled } = useDetailDrawerFeatures();
   const drawerSize = size ?? width;
   const isPresetDrawerSize = drawerSize === 'default' || drawerSize === 'large';
   const isNumericDrawerSize = typeof drawerSize === 'number';
@@ -261,7 +263,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   }, [collaborationAuditRecord, collaborationTitleExtra]);
 
   const isOpen = open ?? visible ?? false;
-  const hasTraceDocument = Boolean(traceDocument?.documentId);
+  const hasTraceDocument = fullChainEnabled && Boolean(traceDocument?.documentId);
   const hasHistoryTab = historyTab != null && historyTab.children != null && historyTab.children !== false;
 
   const [activeTab, setActiveTab] = useState<string>(DETAIL_TAB_KEY);
@@ -317,7 +319,9 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
 
   const hasTimelineContent = timeline != null && timeline !== false;
   const showTimeline =
-    timelineVisible !== false && (timelineVisible === true || hasTimelineContent);
+    operationLogEnabled &&
+    timelineVisible !== false &&
+    (timelineVisible === true || hasTimelineContent);
 
   const usesStructuredSections =
     showBasic ||
@@ -393,6 +397,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
         selfDocumentId={traceDocument.selfDocumentId}
         height={traceDocument.height}
         renderBriefActions={traceDocument.renderBriefActions}
+        showCreatedAt={fullChainShowCreatedAt}
       />
     ) : null;
 

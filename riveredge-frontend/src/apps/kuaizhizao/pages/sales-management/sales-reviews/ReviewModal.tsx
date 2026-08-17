@@ -82,6 +82,7 @@ export const SalesReviewReviewModal: React.FC<SalesReviewReviewModalProps> = ({
     const invalid = validateDeptOpinionForm(
       formState,
       t('app.kuaizhizao.salesReview.failOpinionRequired'),
+      t('app.kuaizhizao.salesReview.reviewerRequired'),
     );
     if (invalid) {
       message.error(invalid);
@@ -92,6 +93,7 @@ export const SalesReviewReviewModal: React.FC<SalesReviewReviewModalProps> = ({
       const row = await salesReviewApi.submitDeptOpinion(review.id, deptCode, {
         result: formState.result,
         opinion: formState.opinion || null,
+        reviewed_by: formState.reviewed_by ?? null,
       });
       setReview(row);
       message.success(t('app.kuaizhizao.salesReview.deptOpinionSuccess'));

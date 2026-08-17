@@ -3566,10 +3566,15 @@ class DemandComputationService(AppBaseService):
             if generate_mode == "outsource_only" and source_type != SOURCE_TYPE_OUTSOURCE:
                 continue
 
-            if use_group_by_demand_item and source_type in (
-                SOURCE_TYPE_MAKE,
-                SOURCE_TYPE_OUTSOURCE,
-                SOURCE_TYPE_CONFIGURE,
+            # 未选明细时工单组路径已生成生产/委外；有 selected 时走下方按物料补推，不可再跳过
+            if (
+                use_group_by_demand_item
+                and selected_material_ids is None
+                and source_type in (
+                    SOURCE_TYPE_MAKE,
+                    SOURCE_TYPE_OUTSOURCE,
+                    SOURCE_TYPE_CONFIGURE,
+                )
             ):
                 continue
 
@@ -5070,6 +5075,7 @@ class DemandComputationService(AppBaseService):
 
         def _append_row(
             *,
+            item_id: int,
             material_id: int,
             material_code: str,
             material_name: str,
@@ -5083,7 +5089,8 @@ class DemandComputationService(AppBaseService):
             remaining = max(0.0, quantity - pushed_quantity)
             preview_items.append(
                 {
-                    "item_id": material_id,
+                    # 与 generate_orders / _resolve_production_selected_material_ids 一致：计算明细 id
+                    "item_id": item_id,
                     "material_id": material_id,
                     "material_code": material_code or f"M{material_id}",
                     "material_name": material_name or material_code or f"物料{material_id}",
@@ -5149,6 +5156,7 @@ class DemandComputationService(AppBaseService):
                         else "work_order"
                     )
                     _append_row(
+                        item_id=int(comp_item.id),
                         material_id=mid,
                         material_code=str(node.get("material_code") or comp_item.material_code or ""),
                         material_name=str(node.get("material_name") or comp_item.material_name or ""),

@@ -1665,27 +1665,30 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
 
             score_svc = WorkOrderScoreService()
-            if await score_svc.is_score_enabled(tenant_id):
-                wo_ids = [p.work_order_id for p in rows if p.work_order_id]
-                score_map = await score_svc.batch_ensure_scores(
-                    tenant_id, wo_ids, "picking", include_kitting=True
-                )
-                enriched: List[ProductionPickingListResponse] = []
-                for row in rows:
-                    cached = score_map.get(row.work_order_id)
-                    if cached:
-                        enriched.append(
-                            row.model_copy(
-                                update={
-                                    "picking_score": cached.composite_score,
-                                    "picking_rank_band": cached.rank_band,
-                                    "picking_score_breakdown": cached.breakdown,
-                                }
+            try:
+                if await score_svc.is_score_enabled(tenant_id):
+                    wo_ids = [int(p.work_order_id) for p in rows if p.work_order_id]
+                    # 列表只读已落库快照；禁止 batch_ensure / 齐套重算（否则出库 Hub 易超时或 500）
+                    score_map = await score_svc.batch_get_scores(tenant_id, wo_ids, "picking")
+                    enriched: List[ProductionPickingListResponse] = []
+                    for row in rows:
+                        cached = score_map.get(row.work_order_id) if row.work_order_id else None
+                        if cached:
+                            enriched.append(
+                                row.model_copy(
+                                    update={
+                                        "picking_score": cached.composite_score,
+                                        "picking_rank_band": cached.rank_band,
+                                        "picking_score_breakdown": cached.breakdown,
+                                    }
+                                )
                             )
-                        )
-                    else:
-                        enriched.append(row)
-                rows = enriched
+                        else:
+                            enriched.append(row)
+                    rows = enriched
+            except Exception as e:
+                # 列表主路径不得因评分失败整体 500（出库 Hub 会连带整表空白）
+                logger.warning(f"生产领料列表评分 enrichment 失败，已跳过: {e}")
 
         if rows:
             from core.services.approval.audit_record_enricher import audit_enabled_for, enrich_items
@@ -11011,56 +11014,165 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
         ).annotate(cnt=Count("id")).group_by("return_id").values("return_id", "cnt")
         return {int(r["return_id"]): int(r["cnt"] or 0) > 0 for r in rows}
 
+    @staticmethod
+    def _purchase_return_line_amount(
+        qty: Any,
+        unit_price: Any,
+        total_amount: Any = None,
+    ) -> Decimal:
+        """行金额真源：数量 × 单价；仅当显式总金额与之一致或单价为 0 时保留传入值。"""
+        q = Decimal(str(qty or 0))
+        p = Decimal(str(unit_price or 0))
+        computed = (q * p).quantize(Decimal("0.01"))
+        if total_amount is None:
+            return computed
+        given = Decimal(str(total_amount or 0)).quantize(Decimal("0.01"))
+        if given == 0 and computed != 0:
+            return computed
+        return given
+
+    async def _purchase_return_totals_by_id(
+        self,
+        tenant_id: int,
+        return_ids: List[int],
+    ) -> dict[int, tuple[Decimal, Decimal]]:
+        """按退货单汇总明细数量/金额（列表头表金额真源）。"""
+        if not return_ids:
+            return {}
+        from tortoise.functions import Sum
+
+        rows = (
+            await PurchaseReturnItem.filter(tenant_id=tenant_id, return_id__in=return_ids)
+            .group_by("return_id")
+            .annotate(qty_sum=Sum("return_quantity"), amt_sum=Sum("total_amount"))
+            .values("return_id", "qty_sum", "amt_sum")
+        )
+        return {
+            int(r["return_id"]): (
+                Decimal(str(r["qty_sum"] or 0)),
+                Decimal(str(r["amt_sum"] or 0)),
+            )
+            for r in rows
+        }
+
+    async def _sync_purchase_return_header_totals(
+        self,
+        tenant_id: int,
+        return_id: int,
+        *,
+        persist: bool = True,
+    ) -> tuple[Decimal, Decimal]:
+        """用明细重算头表总数量/总金额；可选写回库（修复历史头表明细不同步）。"""
+        items = await PurchaseReturnItem.filter(tenant_id=tenant_id, return_id=return_id).all()
+        total_quantity = Decimal("0")
+        total_amount = Decimal("0")
+        for item in items:
+            qty = Decimal(str(item.return_quantity or 0))
+            line_amt = self._purchase_return_line_amount(
+                qty, item.unit_price, item.total_amount
+            )
+            if Decimal(str(item.total_amount or 0)).quantize(Decimal("0.01")) != line_amt:
+                item.total_amount = line_amt
+                if persist:
+                    await item.save(update_fields=["total_amount"])
+            total_quantity += qty
+            total_amount += line_amt
+        if persist:
+            await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(
+                total_quantity=total_quantity,
+                total_amount=total_amount,
+            )
+        return total_quantity, total_amount
+
     async def _enrich_purchase_return_response(
         self,
         tenant_id: int,
         return_obj: PurchaseReturn,
         response: PurchaseReturnResponse,
+        *,
+        audit_required: bool = False,
     ) -> PurchaseReturnResponse:
+        from apps.kuaizhizao.schemas.warehouse import PurchaseReturnItemResponse
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             enrich_purchase_return_capabilities_on_response,
         )
 
-        item_count = await PurchaseReturnItem.filter(tenant_id=tenant_id, return_id=return_obj.id).count()
-        return enrich_purchase_return_capabilities_on_response(
+        total_quantity, total_amount = await self._sync_purchase_return_header_totals(
+            tenant_id, int(return_obj.id), persist=True
+        )
+        return_obj.total_quantity = total_quantity
+        return_obj.total_amount = total_amount
+
+        items = (
+            await PurchaseReturnItem.filter(tenant_id=tenant_id, return_id=return_obj.id)
+            .order_by("id")
+            .all()
+        )
+        if items:
+            await _hydrate_item_material_snapshot(tenant_id, items)
+        item_responses = [PurchaseReturnItemResponse.model_validate(i) for i in items]
+        enriched = enrich_purchase_return_capabilities_on_response(
             return_obj,
             response,
-            has_items=item_count > 0,
+            has_items=len(item_responses) > 0,
+            audit_required=audit_required,
         )
+        updates: Dict[str, Any] = {
+            "items": item_responses,
+            "total_quantity": total_quantity,
+            "total_amount": total_amount,
+        }
+        if hasattr(enriched, "model_copy"):
+            return enriched.model_copy(update=updates)
+        enriched.items = item_responses
+        enriched.total_quantity = total_quantity
+        enriched.total_amount = total_amount
+        return enriched
 
     async def create_purchase_return(self, tenant_id: int, return_data: PurchaseReturnCreate, created_by: int) -> PurchaseReturnResponse:
         """创建采购退货单"""
+        user_info = await self.get_user_info(created_by)
+        # 编码在短事务内 FOR UPDATE；勿嵌套在创建单据长事务里
+        if return_data.return_code:
+            code = return_data.return_code
+        else:
+            today = today_site_str()
+            code = await self.generate_code(tenant_id, "PURCHASE_RETURN_CODE", prefix=f"PRT{today}")
+
+        # 从return_data中提取items（如果存在）
+        items = getattr(return_data, 'items', None) or []
+
+        # 计算总数量和总金额（行金额按数量×单价归一，避免头表/明细脱节）
+        normalized_line_amounts: List[Decimal] = []
+        total_quantity = Decimal("0")
+        total_amount = Decimal("0")
+        for item in items:
+            qty = Decimal(str(getattr(item, "return_quantity", 0) or 0))
+            line_amt = self._purchase_return_line_amount(
+                qty,
+                getattr(item, "unit_price", 0),
+                getattr(item, "total_amount", None),
+            )
+            normalized_line_amounts.append(line_amt)
+            total_quantity += qty
+            total_amount += line_amt
+
+        # 如果关联了采购入库单，获取相关信息
+        purchase_receipt_id = return_data.purchase_receipt_id
+        purchase_receipt_code = return_data.purchase_receipt_code
+        purchase_order_id = return_data.purchase_order_id
+        purchase_order_code = return_data.purchase_order_code
+
+        # 如果提供了purchase_receipt_id但没有purchase_receipt_code，尝试获取
+        if purchase_receipt_id and not purchase_receipt_code:
+            receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=purchase_receipt_id)
+            if receipt:
+                purchase_receipt_code = receipt.receipt_code
+                if not purchase_order_id:
+                    purchase_order_id = receipt.purchase_order_id
+                    purchase_order_code = receipt.purchase_order_code
+
         async with in_transaction():
-            user_info = await self.get_user_info(created_by)
-            # 如果未提供return_code，则自动生成
-            if return_data.return_code:
-                code = return_data.return_code
-            else:
-                today = today_site_str()
-                code = await self.generate_code(tenant_id, "PURCHASE_RETURN_CODE", prefix=f"PRT{today}")
-
-            # 从return_data中提取items（如果存在）
-            items = getattr(return_data, 'items', None) or []
-            
-            # 计算总数量和总金额
-            total_quantity = sum(item.return_quantity for item in items) if items else 0
-            total_amount = sum(item.total_amount for item in items) if items else 0
-
-            # 如果关联了采购入库单，获取相关信息
-            purchase_receipt_id = return_data.purchase_receipt_id
-            purchase_receipt_code = return_data.purchase_receipt_code
-            purchase_order_id = return_data.purchase_order_id
-            purchase_order_code = return_data.purchase_order_code
-            
-            # 如果提供了purchase_receipt_id但没有purchase_receipt_code，尝试获取
-            if purchase_receipt_id and not purchase_receipt_code:
-                receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=purchase_receipt_id)
-                if receipt:
-                    purchase_receipt_code = receipt.receipt_code
-                    if not purchase_order_id:
-                        purchase_order_id = receipt.purchase_order_id
-                        purchase_order_code = receipt.purchase_order_code
-            
             return_obj = await PurchaseReturn.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -11079,7 +11191,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                 reviewer_id=return_data.reviewer_id,
                 reviewer_name=return_data.reviewer_name,
                 review_time=return_data.review_time,
-                review_status=return_data.review_status,
+                review_status="草稿",
                 review_remarks=return_data.review_remarks,
                 return_reason=return_data.return_reason,
                 return_type=return_data.return_type,
@@ -11095,12 +11207,12 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                 updated_by=user_info.get("id"),
                 updated_by_name=user_info.get("name", ""),
             )
-            
+
             # 创建退货单明细
             if items:
                 from apps.master_data.models.material import Material
                 location_required, _ = await _get_warehouse_policy_flags(tenant_id)
-                for item_data in items:
+                for item_data, line_amt in zip(items, normalized_line_amounts):
                     material = await Material.get_or_none(
                         tenant_id=tenant_id,
                         id=item_data.material_id
@@ -11132,7 +11244,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                         serial_numbers_json = serial_numbers if isinstance(serial_numbers, str) else None
                     else:
                         serial_numbers_json = None
-                    
+
                     await PurchaseReturnItem.create(
                         tenant_id=tenant_id,
                         return_id=return_obj.id,
@@ -11147,7 +11259,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                         material_unit=item_data.material_unit,
                         return_quantity=item_data.return_quantity,
                         unit_price=item_data.unit_price,
-                        total_amount=item_data.total_amount,
+                        total_amount=line_amt,
                         location_id=getattr(item_data, 'location_id', None),
                         location_code=getattr(item_data, 'location_code', None),
                         batch_number=getattr(item_data, 'batch_number', None),
@@ -11158,36 +11270,36 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                         notes=getattr(item_data, 'notes', None),
                     )
 
-            # 建立采购入库→采购退货 的 DocumentRelation
-            if purchase_receipt_id:
-                try:
-                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        # 单据关联在提交后建立，避免再嵌套 in_transaction
+        if purchase_receipt_id:
+            try:
+                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
 
-                    receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=purchase_receipt_id)
-                    if receipt:
-                        rel_svc = DocumentRelationNewService()
-                        await rel_svc.create_relation(
-                            tenant_id=tenant_id,
-                            relation_data=DocumentRelationCreate(
-                                source_type="purchase_receipt",
-                                source_id=purchase_receipt_id,
-                                source_code=receipt.receipt_code,
-                                source_name=None,
-                                target_type="purchase_return",
-                                target_id=return_obj.id,
-                                target_code=return_obj.return_code,
-                                target_name=None,
-                                relation_type="source",
-                                relation_mode="push",
-                                relation_desc="采购入库创建采购退货单",
-                            ),
-                            created_by=created_by,
-                        )
-                except Exception as e:
-                    logger.warning("建立采购入库→采购退货 单据关联失败: %s", e)
-            
-            return PurchaseReturnResponse.model_validate(return_obj)
+                receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=purchase_receipt_id)
+                if receipt:
+                    rel_svc = DocumentRelationNewService()
+                    await rel_svc.create_relation(
+                        tenant_id=tenant_id,
+                        relation_data=DocumentRelationCreate(
+                            source_type="purchase_receipt",
+                            source_id=purchase_receipt_id,
+                            source_code=receipt.receipt_code,
+                            source_name=None,
+                            target_type="purchase_return",
+                            target_id=return_obj.id,
+                            target_code=return_obj.return_code,
+                            target_name=None,
+                            relation_type="source",
+                            relation_mode="push",
+                            relation_desc="采购入库创建采购退货单",
+                        ),
+                        created_by=created_by,
+                    )
+            except Exception as e:
+                logger.warning("建立采购入库→采购退货 单据关联失败: %s", e)
+
+        return await self.get_purchase_return_by_id(tenant_id, return_obj.id)
 
     async def pull_from_purchase_order(
         self,
@@ -11556,6 +11668,225 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             "returns": returns_out,
         }
 
+    async def submit_purchase_return(
+        self,
+        tenant_id: int,
+        return_id: int,
+        submitted_by: int,
+    ) -> PurchaseReturnResponse:
+        from apps.kuaizhizao.services.document_action_policy.purchase_return import (
+            assert_purchase_return_capability,
+        )
+
+        return_obj = await PurchaseReturn.get_or_none(
+            id=return_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not return_obj:
+            raise NotFoundError(f"采购退货单不存在: {return_id}")
+
+        item_count = await PurchaseReturnItem.filter(tenant_id=tenant_id, return_id=return_id).count()
+        audit_required = await BusinessConfigService().check_audit_required(tenant_id, "purchase_return")
+        assert_purchase_return_capability(
+            return_obj,
+            "submit",
+            has_items=item_count > 0,
+            audit_required=audit_required,
+        )
+
+        review = str(return_obj.review_status or "").strip()
+        if review == "待审核":
+            from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+            status = await ApprovalInstanceService.get_approval_status(
+                tenant_id=tenant_id,
+                entity_type="purchase_return",
+                entity_id=return_id,
+            )
+            if status.get("has_flow"):
+                return await self.get_purchase_return_by_id(tenant_id, return_id)
+
+        if not audit_required:
+            submitter_name = await self.get_user_name(submitted_by)
+            await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(
+                review_status="审核通过",
+                reviewer_id=submitted_by,
+                reviewer_name=submitter_name,
+                review_time=resolve_business_datetime(),
+                updated_by=submitted_by,
+            )
+            return await self.get_purchase_return_by_id(tenant_id, return_id)
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        instance = await ApprovalInstanceService.start_approval_for_node(
+            tenant_id=tenant_id,
+            user_id=submitted_by,
+            node_key="purchase_return",
+            entity_type="purchase_return",
+            entity_id=return_obj.id,
+            entity_uuid=str(return_obj.uuid),
+            title=f"采购退货审批: {return_obj.return_code}",
+            content=f"供应商: {return_obj.supplier_name}, 金额: {return_obj.total_amount}",
+        )
+        if not instance:
+            raise BusinessLogicError(
+                "采购退货审核已开启但未找到可用的审批流程，请在配置中心检查 purchase_return 审批流程是否已激活"
+            )
+        await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(
+            review_status="待审核",
+            updated_by=submitted_by,
+        )
+        return await self.get_purchase_return_by_id(tenant_id, return_id)
+
+    async def approve_purchase_return(
+        self,
+        tenant_id: int,
+        return_id: int,
+        approver_id: int,
+    ) -> PurchaseReturnResponse:
+        from apps.kuaizhizao.services.document_action_policy.purchase_return import (
+            assert_purchase_return_capability,
+        )
+
+        return_obj = await PurchaseReturn.get_or_none(
+            id=return_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not return_obj:
+            raise NotFoundError(f"采购退货单不存在: {return_id}")
+
+        audit_required = await BusinessConfigService().check_audit_required(tenant_id, "purchase_return")
+        assert_purchase_return_capability(return_obj, "approve", audit_required=audit_required)
+
+        approver_name = await self.get_user_name(approver_id)
+        await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(
+            review_status="审核通过",
+            reviewer_id=approver_id,
+            reviewer_name=approver_name,
+            review_time=resolve_business_datetime(),
+            updated_by=approver_id,
+        )
+        return await self.get_purchase_return_by_id(tenant_id, return_id)
+
+    async def reject_purchase_return(
+        self,
+        tenant_id: int,
+        return_id: int,
+        approver_id: int,
+        *,
+        rejection_reason: Optional[str] = None,
+    ) -> PurchaseReturnResponse:
+        from apps.kuaizhizao.services.document_action_policy.purchase_return import (
+            assert_purchase_return_capability,
+        )
+
+        return_obj = await PurchaseReturn.get_or_none(
+            id=return_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not return_obj:
+            raise NotFoundError(f"采购退货单不存在: {return_id}")
+
+        audit_required = await BusinessConfigService().check_audit_required(tenant_id, "purchase_return")
+        assert_purchase_return_capability(return_obj, "reject", audit_required=audit_required)
+
+        await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(
+            review_status="审核驳回",
+            review_remarks=rejection_reason,
+            reviewer_id=approver_id,
+            review_time=resolve_business_datetime(),
+            updated_by=approver_id,
+        )
+        return await self.get_purchase_return_by_id(tenant_id, return_id)
+
+    async def withdraw_purchase_return_submit(
+        self,
+        tenant_id: int,
+        return_id: int,
+        operator_id: int,
+    ) -> PurchaseReturnResponse:
+        from apps.kuaizhizao.services.document_action_policy.purchase_return import (
+            assert_purchase_return_capability,
+        )
+
+        return_obj = await PurchaseReturn.get_or_none(
+            id=return_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not return_obj:
+            raise NotFoundError(f"采购退货单不存在: {return_id}")
+
+        audit_required = await BusinessConfigService().check_audit_required(tenant_id, "purchase_return")
+        assert_purchase_return_capability(return_obj, "withdraw_submit", audit_required=audit_required)
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        await ApprovalInstanceService.cancel_approval(
+            tenant_id=tenant_id,
+            entity_type="purchase_return",
+            entity_id=return_id,
+            operator_id=operator_id,
+        )
+        await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(
+            review_status="草稿",
+            reviewer_id=None,
+            reviewer_name=None,
+            review_time=None,
+            review_remarks=None,
+            updated_by=operator_id,
+        )
+        return await self.get_purchase_return_by_id(tenant_id, return_id)
+
+    async def revoke_purchase_return_approval(
+        self,
+        tenant_id: int,
+        return_id: int,
+        operator_id: int,
+    ) -> PurchaseReturnResponse:
+        from apps.kuaizhizao.services.document_action_policy.purchase_return import (
+            assert_purchase_return_capability,
+        )
+        from core.services.approval.audit_transition import resolve_revoke_landing_phase
+        from core.services.approval.uni_audit_service import UniAuditService
+
+        return_obj = await PurchaseReturn.get_or_none(
+            id=return_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not return_obj:
+            raise NotFoundError(f"采购退货单不存在: {return_id}")
+
+        audit_required = await BusinessConfigService().check_audit_required(tenant_id, "purchase_return")
+        assert_purchase_return_capability(return_obj, "revoke_approval", audit_required=audit_required)
+
+        landing = resolve_revoke_landing_phase(manual_audit_enabled=audit_required)
+        target_review = "待审核" if landing == "pending" else "草稿"
+
+        async def _do_revoke() -> PurchaseReturnResponse:
+            await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(
+                review_status=target_review,
+                reviewer_id=None,
+                reviewer_name=None,
+                review_time=None,
+                review_remarks=None,
+                updated_by=operator_id,
+            )
+            return await self.get_purchase_return_by_id(tenant_id, return_id)
+
+        return await UniAuditService.revoke_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="purchase_return",
+            entity_id=return_id,
+            operator_id=operator_id,
+            flow_revoke=_do_revoke,
+        )
+
     async def get_purchase_return_by_id(self, tenant_id: int, return_id: int) -> PurchaseReturnResponse:
         """根据ID获取采购退货单"""
         return_obj = await PurchaseReturn.get_or_none(tenant_id=tenant_id, id=return_id)
@@ -11569,7 +11900,15 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
 
         milestones = await get_document_milestones(tenant_id, "purchase_return", return_id)
         response.lifecycle = get_purchase_return_lifecycle(return_obj, milestones=milestones)
-        return await self._enrich_purchase_return_response(tenant_id, return_obj, response)
+        from core.services.approval.audit_record_enricher import audit_enabled_for, enrich_record
+
+        audit_required = await audit_enabled_for(tenant_id, "purchase_return")
+        response = await enrich_record(
+            tenant_id, "purchase_return", response, audit_enabled=audit_required
+        )
+        return await self._enrich_purchase_return_response(
+            tenant_id, return_obj, response, audit_required=audit_required
+        )
 
     async def get_purchase_return_statistics(self, tenant_id: int) -> Dict[str, Any]:
         """采购退货列表页指标：状态计数 + 近 7 日按创建日分布（用于趋势图）"""
@@ -11694,23 +12033,52 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     PurchaseReturnItemResponse.model_validate(it)
                 )
         has_items_by_id = await self._purchase_return_has_items_map(tenant_id, return_ids)
-        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_purchase_return_list_capabilities
+        totals_by_id = await self._purchase_return_totals_by_id(tenant_id, return_ids)
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            enrich_purchase_return_capabilities_on_response,
+        )
         from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_return_lifecycle
+        from core.services.approval.audit_record_enricher import audit_enabled_for, enrich_items
 
         list_responses: List[PurchaseReturnResponse] = []
         for return_obj in return_list:
             resp = PurchaseReturnResponse.model_validate(return_obj)
+            rid = int(return_obj.id)
+            qty_sum, amt_sum = totals_by_id.get(rid, (Decimal("0"), Decimal("0")))
+            header_qty = Decimal(str(return_obj.total_quantity or 0))
+            header_amt = Decimal(str(return_obj.total_amount or 0))
+            if qty_sum != header_qty or amt_sum != header_amt:
+                await PurchaseReturn.filter(tenant_id=tenant_id, id=rid).update(
+                    total_quantity=qty_sum,
+                    total_amount=amt_sum,
+                )
+                return_obj.total_quantity = qty_sum
+                return_obj.total_amount = amt_sum
+            resp = resp.model_copy(
+                update={"total_quantity": qty_sum, "total_amount": amt_sum}
+            )
             resp.lifecycle = get_purchase_return_lifecycle(return_obj)
             if include_items:
-                resp.items = items_by_return.get(int(return_obj.id), [])
+                resp.items = items_by_return.get(rid, [])
             list_responses.append(resp)
-        enriched = enrich_purchase_return_list_capabilities(
-            return_list,
-            list_responses,
-            has_items_by_id=has_items_by_id,
+
+        audit_required = await audit_enabled_for(tenant_id, "purchase_return")
+        audited = await enrich_items(
+            tenant_id, "purchase_return", list_responses, audit_enabled=audit_required
         )
+        gated: List[PurchaseReturnResponse] = []
+        for return_obj, resp in zip(return_list, audited):
+            rid = int(return_obj.id)
+            gated.append(
+                enrich_purchase_return_capabilities_on_response(
+                    return_obj,
+                    resp,
+                    has_items=has_items_by_id.get(rid, True),
+                    audit_required=audit_required,
+                )
+            )
         return {
-            'data': enriched,
+            'data': gated,
             'total': total,
             'success': True,
         }
@@ -11728,7 +12096,15 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             )
 
             item_count = await PurchaseReturnItem.filter(tenant_id=tenant_id, return_id=return_id).count()
-            assert_purchase_return_capability(return_obj, "confirm", has_items=item_count > 0)
+            audit_required = await BusinessConfigService().check_audit_required(
+                tenant_id, "purchase_return"
+            )
+            assert_purchase_return_capability(
+                return_obj,
+                "confirm",
+                has_items=item_count > 0,
+                audit_required=audit_required,
+            )
 
             returner_name = await self.get_user_name(confirmed_by)
 
@@ -11740,6 +12116,11 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                 updated_by=confirmed_by,
                 updated_by_name=returner_name,
             )
+            await PurchaseReturnItem.filter(tenant_id=tenant_id, return_id=return_id).update(
+                status="已退货",
+            )
+            # 确认前用明细重算头表金额，保证红字应付与列表金额一致
+            await self._sync_purchase_return_header_totals(tenant_id, return_id, persist=True)
 
             # 更新库存（扣减，采购退货出库）
             try:
@@ -11873,8 +12254,14 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             )
             if not return_obj:
                 raise NotFoundError(f"采购退货单不存在: {return_id}")
-            if return_obj.status not in ("待退货", "草稿"):
-                raise BusinessLogicError("仅「待退货」或「草稿」状态的采购退货单可编辑")
+            from apps.kuaizhizao.services.document_action_policy.purchase_return import (
+                assert_purchase_return_capability,
+            )
+
+            audit_required = await BusinessConfigService().check_audit_required(
+                tenant_id, "purchase_return"
+            )
+            assert_purchase_return_capability(return_obj, "update", audit_required=audit_required)
 
             if not isinstance(return_data, PurchaseReturnUpdate):
                 return_data = PurchaseReturnUpdate.model_validate(return_data)
@@ -11934,7 +12321,11 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                         material_unit=item_data.material_unit,
                         return_quantity=item_data.return_quantity,
                         unit_price=item_data.unit_price,
-                        total_amount=item_data.total_amount,
+                        total_amount=self._purchase_return_line_amount(
+                            item_data.return_quantity,
+                            item_data.unit_price,
+                            item_data.total_amount,
+                        ),
                         location_id=getattr(item_data, "location_id", None),
                         location_code=getattr(item_data, "location_code", None),
                         batch_number=batch_number,
@@ -11944,8 +12335,13 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                         return_time=getattr(item_data, "return_time", None),
                         notes=getattr(item_data, "notes", None),
                     )
+                    line_amt = self._purchase_return_line_amount(
+                        item_data.return_quantity,
+                        item_data.unit_price,
+                        item_data.total_amount,
+                    )
                     total_quantity += Decimal(str(item_data.return_quantity or 0))
-                    total_amount += Decimal(str(item_data.total_amount or 0))
+                    total_amount += line_amt
                 return_obj.total_quantity = total_quantity
                 return_obj.total_amount = total_amount
 
@@ -11998,15 +12394,24 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                 returner_name=None,
                 updated_by=updated_by,
             )
+            await PurchaseReturnItem.filter(tenant_id=tenant_id, return_id=return_id).update(
+                status="待退货",
+            )
             return await self.get_purchase_return_by_id(tenant_id, return_id)
 
     async def delete_purchase_return(self, tenant_id: int, return_id: int) -> bool:
         """删除采购退货单（软删除，仅待退货状态可删）"""
+        from apps.kuaizhizao.services.document_action_policy.purchase_return import (
+            assert_purchase_return_capability,
+        )
+
         return_obj = await PurchaseReturn.get_or_none(tenant_id=tenant_id, id=return_id, deleted_at__isnull=True)
         if not return_obj:
             raise NotFoundError(f"采购退货单不存在: {return_id}")
-        if return_obj.status != "待退货":
-            raise BusinessLogicError("只有待退货状态的采购退货单才能删除")
+        audit_required = await BusinessConfigService().check_audit_required(
+            tenant_id, "purchase_return"
+        )
+        assert_purchase_return_capability(return_obj, "delete", audit_required=audit_required)
         await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(
             deleted_at=resolve_business_datetime()
         )

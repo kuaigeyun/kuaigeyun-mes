@@ -39,6 +39,7 @@ class SalesOrderCapabilities(BaseModel):
     submit: ActionCapability
     approve: ActionCapability
     close: ActionCapability
+    reopen: ActionCapability
     print: ActionCapability
     withdraw_submit: ActionCapability
     revoke_approval: ActionCapability
@@ -205,6 +206,10 @@ class PurchaseReturnCapabilities(BaseModel):
     confirm: ActionCapability
     withdraw: ActionCapability
     print: ActionCapability
+    submit: ActionCapability
+    withdraw_submit: ActionCapability
+    approve: ActionCapability
+    revoke_approval: ActionCapability
 
 
 class WorkOrderCapabilities(BaseModel):
@@ -212,6 +217,7 @@ class WorkOrderCapabilities(BaseModel):
     delete: ActionCapability
     release: ActionCapability
     revoke: ActionCapability
+    withdraw_manual_complete: ActionCapability
     freeze: ActionCapability
     unfreeze: ActionCapability
     cancel: ActionCapability
@@ -384,6 +390,8 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "sales_order.close.pending_review": "待审核订单不能关闭，请先撤回或完成审核",
     "sales_order.close.rejected": "已驳回订单不能关闭",
     "sales_order.close.not_approved": "只有已审核通过的订单才能关闭",
+    "sales_order.reopen.not_allowed": "当前状态不可撤回关闭",
+    "sales_order.reopen.not_closed": "仅已关闭的订单可撤回关闭",
     "sales_order.withdraw_submit.not_allowed": "只能撤回已提交且未审核的订单（待审核或已生效）",
     "sales_order.withdraw_submit.computation_pushed": "订单已下推需求计算，请先在「下推」菜单中撤回计算后再撤回提交",
     "sales_order.approve.not_pending": "只有待审核状态的订单可审核",
@@ -550,7 +558,13 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "purchase_return.confirm.no_items": "采购退货单无明细，无法确认退货",
     "purchase_return.confirm.already_returned": "采购退货单已确认退货",
     "purchase_return.confirm.cancelled": "已取消的采购退货单不能确认退货",
+    "purchase_return.confirm.not_audited": "采购退货单须审核通过后才能确认退货",
     "purchase_return.withdraw.not_returned": "只有已退货状态的采购退货单才能撤回",
+    "purchase_return.submit.not_draft": "仅未提交审核的采购退货单可提交审核",
+    "purchase_return.submit.no_items": "采购退货单无明细，无法提交审核",
+    "purchase_return.withdraw_submit.not_pending": "仅待审核状态的采购退货单可撤回提交",
+    "purchase_return.approve.not_pending": "仅待审核状态的采购退货单可审核",
+    "purchase_return.revoke_approval.not_allowed": "当前状态不可撤销审核",
     "work_order.not_applicable": "该行不是可操作的工单",
     "work_order.update.not_draft": "仅草稿状态工单可编辑",
     "work_order.delete.not_allowed": "当前状态不可删除工单",
@@ -563,6 +577,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "work_order.revoke.not_allowed": "当前状态不可撤回工单",
     "work_order.revoke.has_work": "工单已有完工数量，不允许撤回",
     "work_order.revoke.has_downstream": "工单已有下游单据（如报工/领料/入库），不允许撤回",
+    "work_order.withdraw_manual_complete.not_allowed": "仅指定结束的工单可撤回指定结束",
     "work_order.freeze.already_frozen": "工单已冻结，不能重复冻结",
     "work_order.freeze.not_allowed": "当前状态不可冻结工单",
     "work_order.unfreeze.not_frozen": "工单未冻结，不能解冻",
@@ -657,7 +672,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "quality_inspection.revoke_conduct.need_revoke_approval": "请先撤销审核，再撤回检验",
     "quality_inspection.revoke_conduct.has_downstream": "该检验单已有下游单据，请先处理后再撤回检验",
     "quality_inspection.create_defect.not_allowed": "只有已检验且不合格的检验单才能登记不良",
-    "quality_inspection.push_purchase_return.not_allowed": "只有不合格的来料检验单才能下推采购退货单",
+    "quality_inspection.push_purchase_return.not_allowed": "只有已检验或已审核且存在不合格数量的来料检验单才能下推采购退货单",
     "quality_inspection.push_purchase_return.already_pushed": "不合格数量已全部下推采购退货，删除待退货单后可再次下推",
     "incoming_inspection.pull_from_purchase_receipt.not_allowed": "当前状态的采购入库单不可加载来料检验",
     "incoming_inspection.pull_from_purchase_receipt.no_lines": "采购入库单无需要来料检验的明细",

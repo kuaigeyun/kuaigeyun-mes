@@ -1,18 +1,20 @@
 /**
  * 应收/应付合并收款（付款）与合并开票预览 Modal
+ *
+ * 有明细表：FormModalTemplate grid={false}，表头手写 Row/Col，Table 在 Row 外。
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   App,
+  Col,
   Form,
   InputNumber,
-  Modal,
+  Row,
   Table,
   Typography,
 } from 'antd';
 import {
-  ProForm,
   ProFormDatePicker,
   ProFormDigit,
   ProFormSelect,
@@ -22,6 +24,10 @@ import {
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import {
+  FormModalTemplate,
+  MODAL_CONFIG,
+} from '../../../components/layout-templates';
 import {
   LedgerAccountFormFields,
   resolveLedgerAccountNote,
@@ -150,35 +156,34 @@ export const MergeFinanceDocsModal: React.FC<Props> = ({
     [amounts],
   );
 
-  const handleOk = async () => {
+  const handleFinish = async (values: Record<string, any>) => {
+    if (sources.length === 0) {
+      messageApi.warning(t('app.kuaicaiwu.mergeFinance.needSelection'));
+      return;
+    }
+    for (const row of sources) {
+      const amt = Number(amounts[row.id] || 0);
+      if (!(amt > 0)) {
+        messageApi.error(t('app.kuaicaiwu.mergeFinance.amountMustPositive', { code: row.code }));
+        return;
+      }
+      if (amt > Number(row.availableAmount || 0) + 1e-9) {
+        messageApi.error(t('app.kuaicaiwu.mergeFinance.amountExceeds', { code: row.code }));
+        return;
+      }
+    }
+    if (!(totalAmount > 0)) {
+      messageApi.error(t('app.kuaicaiwu.mergeFinance.totalMustPositive'));
+      return;
+    }
+
+    const allocations = sources.map((row) => ({
+      source_id: row.id,
+      amount: Number(Number(amounts[row.id] || 0).toFixed(2)),
+    }));
+
+    setSubmitting(true);
     try {
-      const values = await form.validateFields();
-      if (sources.length === 0) {
-        messageApi.warning(t('app.kuaicaiwu.mergeFinance.needSelection'));
-        return;
-      }
-      for (const row of sources) {
-        const amt = Number(amounts[row.id] || 0);
-        if (!(amt > 0)) {
-          messageApi.error(t('app.kuaicaiwu.mergeFinance.amountMustPositive', { code: row.code }));
-          return;
-        }
-        if (amt > Number(row.availableAmount || 0) + 1e-9) {
-          messageApi.error(t('app.kuaicaiwu.mergeFinance.amountExceeds', { code: row.code }));
-          return;
-        }
-      }
-      if (!(totalAmount > 0)) {
-        messageApi.error(t('app.kuaicaiwu.mergeFinance.totalMustPositive'));
-        return;
-      }
-
-      const allocations = sources.map((row) => ({
-        source_id: row.id,
-        amount: Number(Number(amounts[row.id] || 0).toFixed(2)),
-      }));
-
-      setSubmitting(true);
       let result: MergeFinanceVoucherResult;
 
       if (mode === 'merge_receipt') {
@@ -238,25 +243,24 @@ export const MergeFinanceDocsModal: React.FC<Props> = ({
       onSuccess?.();
       navigate(meta.listPath);
     } catch (error: any) {
-      if (error?.errorFields) return;
       messageApi.error(error?.message || t('app.kuaicaiwu.mergeFinance.submitFailed'));
+      throw error;
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <Modal
+    <FormModalTemplate
       title={t(meta.title)}
       open={open}
-      onCancel={() => onOpenChange(false)}
-      onOk={handleOk}
-      confirmLoading={submitting}
-      okText={t('common.confirm')}
-      cancelText={t('common.cancel')}
-      width={720}
-      destroyOnHidden
-      mask={{ closable: !submitting }}
+      onOpenChange={onOpenChange}
+      onFinish={handleFinish}
+      form={form}
+      width={MODAL_CONFIG.LARGE_WIDTH}
+      grid={false}
+      loading={submitting}
+      submitText={t('common.confirm')}
     >
       <Alert
         type="info"
@@ -269,11 +273,19 @@ export const MergeFinanceDocsModal: React.FC<Props> = ({
         pagination={false}
         rowKey="id"
         dataSource={sources}
-        style={{ marginBottom: 16 }}
+        style={{ width: '100%', marginBottom: 16 }}
         columns={[
           {
             title: t('app.kuaicaiwu.mergeFinance.col.sourceCode'),
             dataIndex: 'code',
+          },
+          {
+            title:
+              mode === 'merge_payment' || mode === 'merge_purchase_invoice'
+                ? t('app.kuaicaiwu.common.supplier')
+                : t('app.kuaicaiwu.common.customer'),
+            dataIndex: 'partnerName',
+            ellipsis: true,
           },
           {
             title: t('app.kuaicaiwu.mergeFinance.col.available'),
@@ -318,42 +330,89 @@ export const MergeFinanceDocsModal: React.FC<Props> = ({
         )}
       />
 
-      <ProForm form={form} submitter={false} layout="vertical">
-        <ProFormDatePicker
-          name="voucher_date"
-          label={
-            isSettlementMode(mode)
-              ? mode === 'merge_receipt'
-                ? t('app.kuaicaiwu.receivable.receiptDate')
-                : t('app.kuaicaiwu.payable.paymentDate')
-              : t('app.kuaicaiwu.mergeFinance.invoiceDate')
-          }
-          rules={[{ required: true }]}
-          fieldProps={{ style: { width: '100%' } }}
-        />
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormDatePicker
+            name="voucher_date"
+            label={
+              isSettlementMode(mode)
+                ? mode === 'merge_receipt'
+                  ? t('app.kuaicaiwu.receivable.receiptDate')
+                  : t('app.kuaicaiwu.payable.paymentDate')
+                : t('app.kuaicaiwu.mergeFinance.invoiceDate')
+            }
+            rules={[{ required: true }]}
+            fieldProps={{ style: { width: '100%' } }}
+          />
+        </Col>
         {isSettlementMode(mode) ? (
           <>
-            <ProFormSelect
-              name="payment_method"
-              label={
-                mode === 'merge_receipt'
-                  ? t('app.kuaicaiwu.receipt.col.paymentMethod')
-                  : t('app.kuaicaiwu.payment.col.paymentMethod')
-              }
-              options={paymentMethodOptions}
-              rules={[{ required: true }]}
-            />
-            <ProFormSelect
-              name="settlement_type"
-              label={
-                mode === 'merge_receipt'
-                  ? t('app.kuaicaiwu.receipt.settlementType.label')
-                  : t('app.kuaicaiwu.payment.settlementType.label')
-              }
-              options={settlementTypeOptions}
-              initialValue="normal"
-            />
+            <Col span={12}>
+              <ProFormSelect
+                name="payment_method"
+                label={
+                  mode === 'merge_receipt'
+                    ? t('app.kuaicaiwu.receipt.col.paymentMethod')
+                    : t('app.kuaicaiwu.payment.col.paymentMethod')
+                }
+                options={paymentMethodOptions}
+                rules={[{ required: true }]}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormSelect
+                name="settlement_type"
+                label={
+                  mode === 'merge_receipt'
+                    ? t('app.kuaicaiwu.receipt.settlementType.label')
+                    : t('app.kuaicaiwu.payment.settlementType.label')
+                }
+                options={settlementTypeOptions}
+                initialValue="normal"
+              />
+            </Col>
+          </>
+        ) : null}
+        {isInvoiceMode(mode) ? (
+          <>
+            <Col span={12}>
+              <ProFormText
+                name="invoice_number"
+                label={t('app.kuaicaiwu.mergeFinance.invoiceNumber')}
+                rules={
+                  mode === 'merge_purchase_invoice'
+                    ? [{ required: true, message: t('app.kuaicaiwu.mergeFinance.invoiceNumberRequired') }]
+                    : undefined
+                }
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormSelect
+                name="invoice_type"
+                label={t('app.kuaicaiwu.mergeFinance.invoiceType')}
+                options={invoiceTypeOptions}
+                rules={[{ required: true }]}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormDigit
+                name="tax_rate"
+                label={t('app.kuaicaiwu.mergeFinance.taxRate')}
+                min={0}
+                max={100}
+                fieldProps={{ precision: 2, addonAfter: '%' }}
+                rules={[{ required: true }]}
+              />
+            </Col>
+          </>
+        ) : null}
+      </Row>
+
+      {isSettlementMode(mode) ? (
+        <Row gutter={16}>
+          <Col span={24}>
             <LedgerAccountFormFields
+              omitColProps
               accounts={bankAccounts}
               accountLabel={
                 mode === 'merge_receipt'
@@ -366,42 +425,20 @@ export const MergeFinanceDocsModal: React.FC<Props> = ({
                   : t('app.kuaicaiwu.payment.outAccountNote')
               }
             />
-          </>
-        ) : null}
-        {isInvoiceMode(mode) ? (
-          <>
-            <ProFormText
-              name="invoice_number"
-              label={t('app.kuaicaiwu.mergeFinance.invoiceNumber')}
-              rules={
-                mode === 'merge_purchase_invoice'
-                  ? [{ required: true, message: t('app.kuaicaiwu.mergeFinance.invoiceNumberRequired') }]
-                  : undefined
-              }
-            />
-            <ProFormSelect
-              name="invoice_type"
-              label={t('app.kuaicaiwu.mergeFinance.invoiceType')}
-              options={invoiceTypeOptions}
-              rules={[{ required: true }]}
-            />
-            <ProFormDigit
-              name="tax_rate"
-              label={t('app.kuaicaiwu.mergeFinance.taxRate')}
-              min={0}
-              max={100}
-              fieldProps={{ precision: 2, addonAfter: '%' }}
-              rules={[{ required: true }]}
-            />
-          </>
-        ) : null}
-        <ProFormTextArea
-          name="notes"
-          label={t('app.kuaicaiwu.common.notes')}
-          fieldProps={{ rows: 2 }}
-        />
-      </ProForm>
-    </Modal>
+          </Col>
+        </Row>
+      ) : null}
+
+      <Row gutter={16}>
+        <Col span={24}>
+          <ProFormTextArea
+            name="notes"
+            label={t('app.kuaicaiwu.common.notes')}
+            fieldProps={{ rows: 2 }}
+          />
+        </Col>
+      </Row>
+    </FormModalTemplate>
   );
 };
 

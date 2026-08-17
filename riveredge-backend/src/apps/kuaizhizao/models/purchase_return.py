@@ -45,7 +45,7 @@ class PurchaseReturn(BaseModel):
     reviewer_id = fields.IntField(null=True, description="审核人ID")
     reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")
     review_time = fields.DatetimeField(null=True, description="审核时间")
-    review_status = fields.CharField(max_length=20, default="待审核", description="审核状态")
+    review_status = fields.CharField(max_length=20, default="草稿", description="审核状态")
     review_remarks = fields.TextField(null=True, description="审核备注")
 
     # 退货原因

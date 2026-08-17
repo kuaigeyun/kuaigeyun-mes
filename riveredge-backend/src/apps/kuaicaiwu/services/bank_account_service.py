@@ -21,6 +21,52 @@ from core.utils.timezone_utils import now_utc
 _ACCOUNT_TYPES = frozenset({"bank", "cash"})
 _BANK_TRANSFER_METHOD = "银行转账"
 _CASH_METHOD = "现金"
+_SUMMARY_MAX_LEN = 500
+
+
+def clip_bank_summary(text: Optional[str], max_len: int = _SUMMARY_MAX_LEN) -> Optional[str]:
+    value = (text or "").strip()
+    if not value:
+        return None
+    if len(value) <= max_len:
+        return value
+    return value[: max_len - 1] + "…"
+
+
+def build_voucher_bank_summary(
+    *,
+    voucher_kind: str,
+    voucher_code: Optional[str] = None,
+    partner_name: Optional[str] = None,
+    source_codes: Optional[List[str]] = None,
+    notes: Optional[str] = None,
+) -> Optional[str]:
+    """收/付款确认写入银行流水时的摘要。备注优先；否则拼单号、往来与关联应收/应付单号。"""
+    notes_text = (notes or "").strip()
+    if notes_text:
+        return clip_bank_summary(notes_text)
+
+    codes = [str(c).strip() for c in (source_codes or []) if str(c or "").strip()]
+    code = (voucher_code or "").strip()
+    partner = (partner_name or "").strip()
+    kind = (voucher_kind or "").strip().lower()
+    if kind == "receipt":
+        label = "合并收款" if len(codes) > 1 else "收款"
+        source_label = "应收"
+    elif kind == "payment":
+        label = "合并付款" if len(codes) > 1 else "付款"
+        source_label = "应付"
+    else:
+        return None
+
+    parts: List[str] = [label]
+    if code:
+        parts.append(code)
+    if partner:
+        parts.append(partner)
+    if codes:
+        parts.append(f"{source_label} {','.join(codes)}")
+    return clip_bank_summary(" ".join(parts))
 
 
 class BankAccountService:
@@ -307,6 +353,7 @@ class BankAccountService:
         )
         total = await q.count()
         rows = await q.offset(skip).limit(limit).order_by(order_expr, "-id")
+        await self._backfill_blank_voucher_summaries(tenant_id, rows)
         return rows, total
 
     async def sync_from_confirmed_voucher(
@@ -320,13 +367,21 @@ class BankAccountService:
         """收付款单确认时写入银行流水（需指定 bank_account_id）。"""
         from apps.kuaicaiwu.models.receipt import Receipt
         from apps.kuaicaiwu.models.payment import Payment
+        from apps.kuaicaiwu.models.bank_transaction import BankTransaction
 
         if voucher_type == "receipt":
             row = await Receipt.get_or_none(tenant_id=tenant_id, id=voucher_id, deleted_at__isnull=True)
             if not row or not row.bank_account_id:
                 return None
-            exists = await self._transaction_exists(tenant_id, "receipt", voucher_id)
-            if exists:
+            summary = await self._resolve_voucher_bank_summary(tenant_id, "receipt", row)
+            existing = await BankTransaction.filter(
+                tenant_id=tenant_id,
+                source_doc_type="receipt",
+                source_doc_id=voucher_id,
+                deleted_at__isnull=True,
+            ).first()
+            if existing:
+                await self._fill_transaction_summary_if_blank(existing, summary)
                 return None
             return await self.record_transaction(
                 tenant_id,
@@ -337,15 +392,22 @@ class BankAccountService:
                 source_doc_type="receipt",
                 source_doc_id=row.id,
                 source_doc_code=row.receipt_code,
-                summary=row.notes,
+                summary=summary,
                 operator_id=operator_id or getattr(row, "updated_by", None) or getattr(row, "created_by", None),
             )
 
         row = await Payment.get_or_none(tenant_id=tenant_id, id=voucher_id, deleted_at__isnull=True)
         if not row or not row.bank_account_id:
             return None
-        exists = await self._transaction_exists(tenant_id, "payment", voucher_id)
-        if exists:
+        summary = await self._resolve_voucher_bank_summary(tenant_id, "payment", row)
+        existing = await BankTransaction.filter(
+            tenant_id=tenant_id,
+            source_doc_type="payment",
+            source_doc_id=voucher_id,
+            deleted_at__isnull=True,
+        ).first()
+        if existing:
+            await self._fill_transaction_summary_if_blank(existing, summary)
             return None
         return await self.record_transaction(
             tenant_id,
@@ -356,9 +418,99 @@ class BankAccountService:
             source_doc_type="payment",
             source_doc_id=row.id,
             source_doc_code=row.payment_code,
-            summary=row.notes,
+            summary=summary,
             operator_id=operator_id or getattr(row, "updated_by", None) or getattr(row, "created_by", None),
         )
+
+    async def _related_source_codes(
+        self,
+        tenant_id: int,
+        *,
+        source_type: str,
+        target_type: str,
+        target_id: int,
+    ) -> List[str]:
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+        rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type=source_type,
+            target_type=target_type,
+            target_id=target_id,
+        ).order_by("id")
+        codes: List[str] = []
+        for rel in rels:
+            code = str(getattr(rel, "source_code", None) or "").strip()
+            if code and code not in codes:
+                codes.append(code)
+        return codes
+
+    async def _resolve_voucher_bank_summary(self, tenant_id: int, voucher_type: str, row: Any) -> Optional[str]:
+        if voucher_type == "receipt":
+            codes = await self._related_source_codes(
+                tenant_id,
+                source_type="receivable",
+                target_type="receipt",
+                target_id=int(row.id),
+            )
+            return build_voucher_bank_summary(
+                voucher_kind="receipt",
+                voucher_code=getattr(row, "receipt_code", None),
+                partner_name=getattr(row, "customer_name", None),
+                source_codes=codes,
+                notes=getattr(row, "notes", None),
+            )
+        codes = await self._related_source_codes(
+            tenant_id,
+            source_type="payable",
+            target_type="payment",
+            target_id=int(row.id),
+        )
+        return build_voucher_bank_summary(
+            voucher_kind="payment",
+            voucher_code=getattr(row, "payment_code", None),
+            partner_name=getattr(row, "supplier_name", None),
+            source_codes=codes,
+            notes=getattr(row, "notes", None),
+        )
+
+    @staticmethod
+    async def _fill_transaction_summary_if_blank(tx: Any, summary: Optional[str]) -> bool:
+        if not summary or (getattr(tx, "summary", None) or "").strip():
+            return False
+        tx.summary = summary
+        await tx.save(update_fields=["summary", "updated_at"])
+        return True
+
+    async def _backfill_blank_voucher_summaries(self, tenant_id: int, rows: List[Any]) -> None:
+        """列表页回填：历史上空摘要的收/付款流水补关联单号。"""
+        from apps.kuaicaiwu.models.receipt import Receipt
+        from apps.kuaicaiwu.models.payment import Payment
+
+        for tx in rows:
+            if (getattr(tx, "summary", None) or "").strip():
+                continue
+            source_type = str(getattr(tx, "source_doc_type", None) or "").strip()
+            source_id = getattr(tx, "source_doc_id", None)
+            if source_id is None:
+                continue
+            if source_type == "receipt":
+                voucher = await Receipt.get_or_none(
+                    tenant_id=tenant_id, id=int(source_id), deleted_at__isnull=True
+                )
+                if not voucher:
+                    continue
+                summary = await self._resolve_voucher_bank_summary(tenant_id, "receipt", voucher)
+            elif source_type == "payment":
+                voucher = await Payment.get_or_none(
+                    tenant_id=tenant_id, id=int(source_id), deleted_at__isnull=True
+                )
+                if not voucher:
+                    continue
+                summary = await self._resolve_voucher_bank_summary(tenant_id, "payment", voucher)
+            else:
+                continue
+            await self._fill_transaction_summary_if_blank(tx, summary)
 
     async def _transaction_exists(self, tenant_id: int, source_doc_type: str, source_doc_id: int) -> bool:
         from apps.kuaicaiwu.models.bank_transaction import BankTransaction

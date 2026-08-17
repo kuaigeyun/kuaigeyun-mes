@@ -28,6 +28,7 @@ import {
 } from './configTree';
 import AuditSettingsPanel from './AuditSettingsPanel';
 import { TRIAL_RUN_MODE_QUERY_KEY } from '../../../hooks/useTrialRunMode';
+import { DETAIL_DRAWER_FEATURES_QUERY_KEY } from '../../../hooks/useDetailDrawerFeatures';
 import { qualityApi } from '../../../apps/kuaizhizao/services/quality-execution';
 
 import type { Color } from 'antd/es/color-picker';
@@ -377,6 +378,7 @@ const ConfigCenterPage: React.FC = () => {
       messageApi.success(t('pages.system.configCenter.saveSuccess'));
       await refetchBusinessConfig();
       await queryClient.invalidateQueries({ queryKey: TRIAL_RUN_MODE_QUERY_KEY });
+      await queryClient.invalidateQueries({ queryKey: DETAIL_DRAWER_FEATURES_QUERY_KEY });
     } catch (error: any) {
       if (!error?.errorFields) messageApi.error(error.message || t('pages.system.configCenter.saveFailed'));
     } finally {

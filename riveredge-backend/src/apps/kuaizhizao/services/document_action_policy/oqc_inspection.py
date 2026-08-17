@@ -38,7 +38,7 @@ def derive_oqc_inspection_capabilities(inspection: Any) -> OQCInspectionCapabili
     review_status = _norm(getattr(inspection, "review_status", None))
     inspection_result = _norm(getattr(inspection, "inspection_result", None))
 
-    conduct_allowed = can_conduct_quality_inspection(status, inspection_result)
+    conduct_allowed = can_conduct_quality_inspection(status, inspection_result, review_status)
     conduct_cap = _cap(
         conduct_allowed,
         "oqc_inspection.conduct.approved_locked" if not conduct_allowed else None,

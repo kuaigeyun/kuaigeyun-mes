@@ -104,6 +104,7 @@ export interface SalesOrderCapabilities {
   submit?: ActionCapability;
   approve?: ActionCapability;
   close?: ActionCapability;
+  reopen?: ActionCapability;
   print?: ActionCapability;
   withdraw_submit?: ActionCapability;
   revoke_approval?: ActionCapability;
@@ -886,6 +887,29 @@ export async function bulkCloseSalesOrders(ids: number[]): Promise<{
   return apiRequest('/apps/kuaizhizao/sales-orders/batch-close', {
     method: 'POST',
     data: ids,
+  });
+}
+
+/**
+ * 批量撤回关闭销售订单（恢复关闭前状态）
+ */
+export async function bulkReopenSalesOrders(ids: number[]): Promise<{
+  success_count: number;
+  failed_count: number;
+  failed_items: { id: number; reason: string }[];
+}> {
+  return apiRequest('/apps/kuaizhizao/sales-orders/batch-reopen', {
+    method: 'POST',
+    data: ids,
+  });
+}
+
+/**
+ * 撤回关闭销售订单
+ */
+export async function reopenSalesOrder(id: number): Promise<SalesOrder> {
+  return apiRequest(`/apps/kuaizhizao/sales-orders/${id}/reopen`, {
+    method: 'POST',
   });
 }
 

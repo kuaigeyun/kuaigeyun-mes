@@ -2,6 +2,12 @@
 厂级工作时段：在工作日 + 每日工作窗口（含加班）内累加净工时，得到墙钟起止。
 
 节假日、工作时段、加班窗口唯一真源：绩效工作日历（WorkCalendarService）。
+
+时区契约（与 ``timezone-contract.mdc`` / ``timezone_utils`` 一致）：
+- 工作时段 HH:MM、业务日历日一律按 **站点墙钟** 解释；
+- 禁止把 UTC aware 的 ``tzinfo`` 贴到 08:00/17:00 上（否则会显示成 16:00 / 次日 01:00）；
+- aware 入参先转到站点墙钟做数学，结果再 ``coerce_business_datetime_to_utc`` 落库；
+- naive 入参视为站点墙钟，结果保持 naive（兼容单测与旧调用）。
 """
 
 from __future__ import annotations
@@ -11,6 +17,12 @@ from datetime import date, datetime, time, timedelta
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from apps.kuaizhizao.utils.work_calendar import is_workday
+from core.utils.timezone_utils import (
+    coerce_business_datetime_to_utc,
+    now_utc,
+    to_site_date,
+    to_site_timezone,
+)
 
 
 DEFAULT_WORK_DAY_START = "08:00"
@@ -47,15 +59,31 @@ def _parse_hhmm(value: Any, *, default: Optional[str] = None) -> Optional[time]:
     return time(hour, minute, second)
 
 
-def _combine(day: date, t: time, tzinfo: Any = None) -> datetime:
-    dt = datetime.combine(day, t)
-    if tzinfo is not None:
-        return dt.replace(tzinfo=tzinfo)
-    return dt
+def _combine(day: date, t: time) -> datetime:
+    """站点业务日历日 + 墙钟时刻 → naive 站点墙钟（排产内部运算口径）。"""
+    return datetime.combine(day, t)
 
 
-def _with_tz(template: datetime, day: date, t: time) -> datetime:
-    return _combine(day, t, getattr(template, "tzinfo", None))
+def _normalize_for_work_math(dt: datetime) -> Tuple[datetime, bool]:
+    """入参 → (naive 站点墙钟, 原是否 aware)。"""
+    if dt.tzinfo is not None:
+        return to_site_timezone(dt).replace(tzinfo=None, microsecond=0), True
+    if getattr(dt, "microsecond", 0):
+        return dt.replace(microsecond=0), False
+    return dt, False
+
+
+def _export_work_result(result_naive: datetime, *, was_aware: bool) -> datetime:
+    """内部 naive 站点墙钟 → 与入参同形态（naive 墙钟或 UTC aware）。"""
+    if not was_aware:
+        return result_naive
+    coerced = coerce_business_datetime_to_utc(result_naive)
+    assert coerced is not None
+    return coerced
+
+
+def _with_site_clock(day: date, t: time) -> datetime:
+    return _combine(day, t)
 
 
 def _merge_windows(
@@ -152,7 +180,7 @@ class WorkHoursConfig:
         return max(0.0, total)
 
     def base_windows_for_day(
-        self, day: date, *, tzinfo: Any = None
+        self, day: date
     ) -> List[Tuple[datetime, datetime]]:
         if self.day_windows is not None:
             slots = self.day_windows.get(day) or []
@@ -162,14 +190,14 @@ class WorkHoursConfig:
                 end_t = _naive_time(end_t) if isinstance(end_t, time) else end_t
                 if end_t <= start_t:
                     continue
-                out.append((_combine(day, start_t, tzinfo), _combine(day, end_t, tzinfo)))
+                out.append((_combine(day, start_t), _combine(day, end_t)))
             return out
-        day_start = _combine(day, self.start, tzinfo)
-        day_end = _combine(day, self.end, tzinfo)
+        day_start = _combine(day, self.start)
+        day_end = _combine(day, self.end)
         if self.break_start is None or self.break_end is None:
             return [(day_start, day_end)]
-        b0 = _combine(day, self.break_start, tzinfo)
-        b1 = _combine(day, self.break_end, tzinfo)
+        b0 = _combine(day, self.break_start)
+        b1 = _combine(day, self.break_end)
         windows: List[Tuple[datetime, datetime]] = []
         if b0 > day_start:
             windows.append((day_start, b0))
@@ -242,7 +270,7 @@ async def load_scheduling_work_context(
     """加载排产用节假日、厂级工作时段与加班窗口。"""
     from apps.master_data.services.work_calendar_service import WorkCalendarService
 
-    center = around or date.today()
+    center = around or to_site_date(now_utc())
     from_date = center - timedelta(days=span_days)
     to_date = center + timedelta(days=span_days)
     cfg_row, holidays, overtime = await WorkCalendarService.get_effective_calendar(
@@ -263,10 +291,14 @@ def iter_work_windows(
     tzinfo: Any = None,
 ) -> List[Tuple[datetime, datetime]]:
     """
-    返回某日可排窗口：
+    返回某日可排窗口（naive 站点墙钟）：
     - 工作日：基础窗口 + 加班窗口（合并重叠）
     - 节假日/非工作日：仅加班窗口（有则开放）
+
+    ``tzinfo`` 已废弃：工作时段固定按站点墙钟组合，忽略调用方传入的 UTC tzinfo，
+    避免 08:00 被贴成 UTC 后展示成 16:00。
     """
+    del tzinfo  # 保留形参兼容旧调用，不得再用于贴钟
     cfg = config or WorkHoursConfig.defaults()
     ot_windows: List[Tuple[datetime, datetime]] = []
     for start_t, end_t in (overtime or {}).get(day, []) or []:
@@ -274,10 +306,10 @@ def iter_work_windows(
         end_t = _naive_time(end_t) if isinstance(end_t, time) else end_t
         if end_t <= start_t:
             continue
-        ot_windows.append((_combine(day, start_t, tzinfo), _combine(day, end_t, tzinfo)))
+        ot_windows.append((_combine(day, start_t), _combine(day, end_t)))
 
     if is_workday(day, holidays):
-        return _merge_windows(cfg.base_windows_for_day(day, tzinfo=tzinfo) + ot_windows)
+        return _merge_windows(cfg.base_windows_for_day(day) + ot_windows)
     return _merge_windows(ot_windows)
 
 
@@ -290,14 +322,14 @@ def is_within_working_hours(
 ) -> bool:
     """开工时刻是否落在某工作窗口内（含起点，不含终点）。"""
     cfg = config or WorkHoursConfig.defaults()
+    local, _ = _normalize_for_work_math(dt)
     for start, end in iter_work_windows(
-        dt.date(),
+        local.date(),
         holidays=holidays,
         config=cfg,
         overtime=overtime,
-        tzinfo=dt.tzinfo,
     ):
-        if start <= dt < end:
+        if start <= local < end:
             return True
     return False
 
@@ -312,7 +344,8 @@ def snap_to_working_start(
 ) -> datetime:
     """若已在工作窗口内则原样返回；否则推到下一工作窗口起点。"""
     cfg = config or WorkHoursConfig.defaults()
-    cursor_day = dt.date()
+    local, was_aware = _normalize_for_work_math(dt)
+    cursor_day = local.date()
     for offset in range(max_scan_days + 1):
         day = cursor_day + timedelta(days=offset)
         windows = iter_work_windows(
@@ -320,16 +353,15 @@ def snap_to_working_start(
             holidays=holidays,
             config=cfg,
             overtime=overtime,
-            tzinfo=dt.tzinfo,
         )
         for start, end in windows:
             if offset == 0:
-                if dt < start:
-                    return start
-                if start <= dt < end:
-                    return dt
+                if local < start:
+                    return _export_work_result(start, was_aware=was_aware)
+                if start <= local < end:
+                    return _export_work_result(local, was_aware=was_aware)
                 continue
-            return start
+            return _export_work_result(start, was_aware=was_aware)
     raise ValueError(f"自 {dt} 起 {max_scan_days} 天内未找到工作时段")
 
 
@@ -344,6 +376,7 @@ def add_working_hours(
 ) -> datetime:
     """从 start_dt（先 snap）起消耗净工时 hours，返回墙钟结束时刻。"""
     cfg = config or WorkHoursConfig.defaults()
+    _, was_aware = _normalize_for_work_math(start_dt)
     remaining = float(hours or 0.0)
     if remaining <= 0:
         return snap_to_working_start(
@@ -353,13 +386,13 @@ def add_working_hours(
     cursor = snap_to_working_start(
         start_dt, holidays=holidays, config=cfg, overtime=overtime
     )
+    cursor, _ = _normalize_for_work_math(cursor)
     for _ in range(max_scan_days * 4 + 1):
         windows = iter_work_windows(
             cursor.date(),
             holidays=holidays,
             config=cfg,
             overtime=overtime,
-            tzinfo=cursor.tzinfo,
         )
         placed = False
         for win_start, win_end in windows:
@@ -370,16 +403,19 @@ def add_working_hours(
                 continue
             available = (win_end - seg_start).total_seconds() / 3600.0
             if remaining <= available + 1e-9:
-                return seg_start + timedelta(hours=remaining)
+                return _export_work_result(
+                    seg_start + timedelta(hours=remaining), was_aware=was_aware
+                )
             remaining -= available
             cursor = win_end
             placed = True
         # 当日窗口耗尽 → 下一自然日再 snap（含加班日）
         next_day = cursor.date() + timedelta(days=1)
-        cursor = _with_tz(cursor, next_day, time(0, 0))
+        cursor = _with_site_clock(next_day, time(0, 0))
         cursor = snap_to_working_start(
             cursor, holidays=holidays, config=cfg, overtime=overtime
         )
+        cursor, _ = _normalize_for_work_math(cursor)
         if not placed and remaining <= 0:
             break
     raise ValueError(f"无法在 {max_scan_days} 天内安排 {hours} 小时工作时间")
@@ -396,11 +432,12 @@ def subtract_working_hours(
 ) -> datetime:
     """自 end_dt 向前回退净工时 hours，返回墙钟开始时刻。"""
     cfg = config or WorkHoursConfig.defaults()
+    local, was_aware = _normalize_for_work_math(end_dt)
     remaining = float(hours or 0.0)
     if remaining <= 0:
         return end_dt
 
-    cursor = end_dt
+    cursor = local
     if not is_within_working_hours(
         cursor, holidays=holidays, config=cfg, overtime=overtime
     ) and not any(
@@ -410,16 +447,16 @@ def subtract_working_hours(
             holidays=holidays,
             config=cfg,
             overtime=overtime,
-            tzinfo=cursor.tzinfo,
         )
     ):
-        cursor = _snap_to_previous_working_end(
+        snapped = _snap_to_previous_working_end(
             cursor,
             holidays=holidays,
             config=cfg,
             overtime=overtime,
             max_scan_days=max_scan_days,
         )
+        cursor, _ = _normalize_for_work_math(snapped)
 
     for _ in range(max_scan_days * 4 + 1):
         windows = list(
@@ -429,7 +466,6 @@ def subtract_working_hours(
                     holidays=holidays,
                     config=cfg,
                     overtime=overtime,
-                    tzinfo=cursor.tzinfo,
                 )
             )
         )
@@ -442,20 +478,23 @@ def subtract_working_hours(
                 continue
             available = (seg_end - win_start).total_seconds() / 3600.0
             if remaining <= available + 1e-9:
-                return seg_end - timedelta(hours=remaining)
+                return _export_work_result(
+                    seg_end - timedelta(hours=remaining), was_aware=was_aware
+                )
             remaining -= available
             cursor = win_start
             moved = True
         if not moved:
             prev_day = cursor.date() - timedelta(days=1)
-            cursor = _with_tz(cursor, prev_day, time(23, 59, 59))
-            cursor = _snap_to_previous_working_end(
+            cursor = _with_site_clock(prev_day, time(23, 59, 59))
+            snapped = _snap_to_previous_working_end(
                 cursor,
                 holidays=holidays,
                 config=cfg,
                 overtime=overtime,
                 max_scan_days=max_scan_days,
             )
+            cursor, _ = _normalize_for_work_math(snapped)
     raise ValueError(f"无法在 {max_scan_days} 天内回退 {hours} 小时工作时间")
 
 
@@ -469,13 +508,16 @@ def snap_to_previous_working_end(
 ) -> datetime:
     """若已在窗口终点或窗口内则收到不晚于 dt 的窗口内点；否则推到上一工作窗口终点。"""
     cfg = config or WorkHoursConfig.defaults()
-    return _snap_to_previous_working_end(
-        dt,
+    local, was_aware = _normalize_for_work_math(dt)
+    snapped = _snap_to_previous_working_end(
+        local,
         holidays=holidays,
         config=cfg,
         overtime=overtime,
         max_scan_days=max_scan_days,
     )
+    snapped_local, _ = _normalize_for_work_math(snapped)
+    return _export_work_result(snapped_local, was_aware=was_aware)
 
 
 def _snap_to_previous_working_end(
@@ -486,21 +528,21 @@ def _snap_to_previous_working_end(
     overtime: Optional[OvertimeByDate] = None,
     max_scan_days: int,
 ) -> datetime:
+    local, _ = _normalize_for_work_math(dt)
     for offset in range(max_scan_days + 1):
-        day = dt.date() - timedelta(days=offset)
+        day = local.date() - timedelta(days=offset)
         windows = iter_work_windows(
             day,
             holidays=holidays,
             config=config,
             overtime=overtime,
-            tzinfo=dt.tzinfo,
         )
         if not windows:
             continue
         if offset == 0:
             for start, end in reversed(windows):
-                if dt > start:
-                    return min(dt, end)
+                if local > start:
+                    return min(local, end)
             continue
         return windows[-1][1]
     raise ValueError(f"自 {dt} 向前 {max_scan_days} 天内未找到工作时段")
@@ -528,8 +570,13 @@ def find_earliest_working_slot(
     """
     cfg = config or WorkHoursConfig.defaults()
     capacity = max(1, int(max_parallel or 1))
+    _, was_aware = _normalize_for_work_math(earliest)
     sorted_iv = sorted(
-        [(s, e) for s, e, oid in intervals if oid != exclude_op_id],
+        [
+            (_normalize_for_work_math(s)[0], _normalize_for_work_math(e)[0])
+            for s, e, oid in intervals
+            if oid != exclude_op_id
+        ],
         key=lambda x: x[0],
     )
     cursor = earliest
@@ -544,10 +591,21 @@ def find_earliest_working_slot(
             config=cfg,
             overtime=overtime,
         )
-        overlapping = [(s, e) for s, e in sorted_iv if _intervals_overlap(start, end, s, e)]
+        start_local, _ = _normalize_for_work_math(start)
+        end_local, _ = _normalize_for_work_math(end)
+        overlapping = [
+            (s, e)
+            for s, e in sorted_iv
+            if _intervals_overlap(start_local, end_local, s, e)
+        ]
         if len(overlapping) < capacity:
-            return start, end
-        cursor = min(e for _, e in overlapping)
+            return (
+                _export_work_result(start_local, was_aware=was_aware),
+                _export_work_result(end_local, was_aware=was_aware),
+            )
+        cursor = _export_work_result(
+            min(e for _, e in overlapping), was_aware=was_aware
+        )
     raise ValueError("无法找到不冲突的工作时段槽位")
 
 
@@ -568,8 +626,13 @@ def find_latest_working_slot(
     """
     cfg = config or WorkHoursConfig.defaults()
     capacity = max(1, int(max_parallel or 1))
+    _, was_aware = _normalize_for_work_math(latest)
     sorted_iv = sorted(
-        [(s, e) for s, e, oid in intervals if oid != exclude_op_id],
+        [
+            (_normalize_for_work_math(s)[0], _normalize_for_work_math(e)[0])
+            for s, e, oid in intervals
+            if oid != exclude_op_id
+        ],
         key=lambda x: x[0],
     )
     cursor = latest
@@ -584,9 +647,20 @@ def find_latest_working_slot(
             config=cfg,
             overtime=overtime,
         )
-        overlapping = [(s, e) for s, e in sorted_iv if _intervals_overlap(start, end, s, e)]
+        start_local, _ = _normalize_for_work_math(start)
+        end_local, _ = _normalize_for_work_math(end)
+        overlapping = [
+            (s, e)
+            for s, e in sorted_iv
+            if _intervals_overlap(start_local, end_local, s, e)
+        ]
         if len(overlapping) < capacity:
-            return start, end
+            return (
+                _export_work_result(start_local, was_aware=was_aware),
+                _export_work_result(end_local, was_aware=was_aware),
+            )
         # 向前避开：推到重叠区间最早起点之前
-        cursor = min(s for s, _ in overlapping)
+        cursor = _export_work_result(
+            min(s for s, _ in overlapping), was_aware=was_aware
+        )
     raise ValueError("无法找到不冲突的倒排工作时段槽位")

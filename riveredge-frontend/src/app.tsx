@@ -30,6 +30,7 @@ import {
   isTokenExpired,
   getTokenRemainingTime,
 } from './utils/auth';
+import { resolveIsInfraSuperAdminSession } from './utils/infraSuperAdminSession';
 import { getSessionCurrentUser } from './utils/sessionCurrentUser';
 import { buildRestoredUserFromStorage, seedCurrentUserFromAuthStorage } from './utils/restoredUser';
 import { isEquivalentCurrentUser } from './utils/currentUserSnapshot';
@@ -157,6 +158,36 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     userId: currentUser?.id,
     enabled: shouldFetchUser && !!currentUser && tenantId != null && currentUser.id != null,
   });
+
+  const [infraTimezoneReady, setInfraTimezoneReady] = useState(true);
+
+  // 平台超管可能无租户、拉不到 site-settings：须从平台公开设置补齐 configs.timezone
+  useEffect(() => {
+    if (isPublicPath || !shouldFetchUser) {
+      setInfraTimezoneReady(true);
+      return;
+    }
+    if (!resolveIsInfraSuperAdminSession()) {
+      setInfraTimezoneReady(true);
+      return;
+    }
+    const tz = useConfigStore.getState().configs?.timezone;
+    if (tz != null && String(tz).trim() !== '') {
+      setInfraTimezoneReady(true);
+      return;
+    }
+    let cancelled = false;
+    setInfraTimezoneReady(false);
+    void useConfigStore
+      .getState()
+      .ensureTimezoneFromPlatform()
+      .finally(() => {
+        if (!cancelled) setInfraTimezoneReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isPublicPath, shouldFetchUser, currentUser?.id, tenantId]);
 
   // 处理用户信息加载成功（唯一数据源：/auth/me）
   useEffect(() => {
@@ -536,6 +567,8 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   const shouldShowLoading =
     hasToken && !isPublicPath && !hasAuthenticatedUser && (loading || isLoading);
   const shouldRedirect = redirectTarget !== null;
+  const shouldWaitInfraTimezone =
+    hasToken && !isPublicPath && resolveIsInfraSuperAdminSession() && !infraTimezoneReady;
 
   if (shouldBypassAuth) {
     return <>{children}</>;
@@ -545,7 +578,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     return <Navigate to={redirectTarget} replace />;
   }
 
-  if (shouldShowLoading) {
+  if (shouldShowLoading || shouldWaitInfraTimezone) {
     return <DelayedFallback delayMs={0} fullHeight />;
   }
 

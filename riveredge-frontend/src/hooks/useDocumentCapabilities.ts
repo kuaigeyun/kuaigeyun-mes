@@ -224,6 +224,8 @@ export const SALES_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'sales_order.close.pending_review': '待审核订单不能关闭，请先撤回或完成审核',
   'sales_order.close.rejected': '已驳回订单不能关闭',
   'sales_order.close.not_approved': '只有已审核通过的订单才能关闭',
+  'sales_order.reopen.not_allowed': '当前状态不可撤回关闭',
+  'sales_order.reopen.not_closed': '仅已关闭的订单可撤回关闭',
   'sales_order.withdraw_submit.not_allowed': '只能撤回已提交且未审核的订单（待审核或已生效）',
   'sales_order.withdraw_submit.computation_pushed': '订单已下推需求计算，请先在「下推」菜单中撤回计算后再撤回提交',
   'sales_order.revoke_approval.not_allowed': '只能撤销审核已审核或已驳回的订单',
@@ -311,6 +313,7 @@ export function useSalesOrderCapabilities(
       submit: capView(caps?.submit, salesOrderPerms.canAction?.('submit') ?? false, permDeniedTitle, t),
       approve: capView(caps?.approve, salesOrderPerms.canAction?.('audit') ?? false, permDeniedTitle, t),
       close: capView(caps?.close, salesOrderPerms.canUpdate, permDeniedTitle, t),
+      reopen: capView(caps?.reopen, salesOrderPerms.canUpdate, permDeniedTitle, t),
       print: capView(caps?.print, salesOrderPerms.canPrint, permDeniedTitle, t),
       withdrawSubmit: capView(
         caps?.withdraw_submit,
@@ -355,6 +358,10 @@ export function batchSomeCapabilityAllowed<T>(
 
 export function salesOrderBatchCloseAllowed(records: SalesOrder[], canUpdate: boolean): boolean {
   return batchSomeCapabilityAllowed(records, canUpdate, (r) => r.capabilities?.close);
+}
+
+export function salesOrderBatchReopenAllowed(records: SalesOrder[], canUpdate: boolean): boolean {
+  return batchSomeCapabilityAllowed(records, canUpdate, (r) => r.capabilities?.reopen);
 }
 
 /** 是否存在任一可执行的下推类动作（工具栏下推按钮显隐） */

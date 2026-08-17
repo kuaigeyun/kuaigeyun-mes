@@ -87,19 +87,7 @@ export async function fetchInboundHubList(
     return hubStatus;
   };
 
-  const [
-    purchaseRes,
-    finishedRes,
-    semiRes,
-    returnRes,
-    customerMaterialRes,
-    salesReturnRes,
-    outsourceReceiptRes,
-    outsourceMaterialReturnRes,
-    outsourceProductReturnRes,
-    otherInboundRes,
-    materialReturnRes,
-  ] = await Promise.all([
+  const settled = await Promise.allSettled([
     fetchPurchase
       ? warehouseApi.purchaseReceipt.list({ ...baseParams, status: sourceStatus('待入库', '已入库') })
       : Promise.resolve(emptyList),
@@ -134,6 +122,28 @@ export async function fetchInboundHubList(
       ? warehouseApi.materialReturn.list({ ...baseParams, status: sourceStatus('待退料', '已退料') })
       : Promise.resolve(emptyList),
   ]);
+
+  const anySourceFailed = settled.some((s) => s.status === 'rejected');
+  if (anySourceFailed) {
+    const firstReject = settled.find((s): s is PromiseRejectedResult => s.status === 'rejected');
+    console.warn('[inboundHub] partial list source failed', firstReject?.reason);
+  }
+  const settledOrEmpty = (s: PromiseSettledResult<unknown>) =>
+    s.status === 'fulfilled' ? s.value : emptyList;
+
+  const [
+    purchaseRes,
+    finishedRes,
+    semiRes,
+    returnRes,
+    customerMaterialRes,
+    salesReturnRes,
+    outsourceReceiptRes,
+    outsourceMaterialReturnRes,
+    outsourceProductReturnRes,
+    otherInboundRes,
+    materialReturnRes,
+  ] = settled.map(settledOrEmpty);
 
   const purchaseListed = toList(purchaseRes);
   const purchaseData = await enrichers.enrichPurchaseReceiptRecordsWithCustomFields(
@@ -332,9 +342,9 @@ export async function fetchInboundHubList(
     (fetchMaterialReturn ? toList(materialReturnRes).total : 0);
 
   if (typed) {
-    return { data: sorted, success: true, total: sourceTotal };
+    return { data: sorted, success: !anySourceFailed, total: sourceTotal };
   }
 
   const page = sorted.slice(skip, skip + limit);
-  return { data: page, success: true, total: sourceTotal };
+  return { data: page, success: !anySourceFailed, total: sourceTotal };
 }

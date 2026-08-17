@@ -15,7 +15,7 @@ from tortoise.exceptions import IntegrityError
 from core.models.site_setting import SiteSetting
 from core.schemas.site_setting import SiteSettingUpdate
 from infra.exceptions.exceptions import NotFoundError
-from core.utils.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc, site_timezone_name
 
 # 新建站点设置时的默认安全项（inactivity_timeout=0 表示不启用「无操作自动退出」）
 _DEFAULT_SITE_SECURITY: Dict[str, Any] = {
@@ -180,6 +180,19 @@ class SiteSettingService:
         return ""
 
     @staticmethod
+    def _ensure_timezone_in_settings(settings_dict: Dict[str, Any]) -> bool:
+        """
+        保证 settings.timezone 存在：缺省时写入 infra_settings.TIMEZONE（配置定义真源）。
+        返回是否发生变更（调用方决定是否落库）。
+        """
+        raw = settings_dict.get("timezone")
+        name = str(raw).strip() if raw is not None else ""
+        if name:
+            return False
+        settings_dict["timezone"] = site_timezone_name()
+        return True
+
+    @staticmethod
     async def get_settings(tenant_id: int) -> SiteSetting:
         """
         获取站点设置（如果不存在则创建）
@@ -202,15 +215,19 @@ class SiteSettingService:
             changed = migrate_legacy_ai_integrations(settings_dict)
             if await migrate_llm_providers_to_connections(tenant_id, settings_dict):
                 changed = True
+            if SiteSettingService._ensure_timezone_in_settings(settings_dict):
+                changed = True
             if changed:
                 site_settings.settings = settings_dict
                 await site_settings.save(update_fields=["settings", "updated_at"])
             return site_settings
 
         try:
+            initial = {"security": {**_DEFAULT_SITE_SECURITY}}
+            SiteSettingService._ensure_timezone_in_settings(initial)
             return await SiteSetting.create(
                 tenant_id=tenant_id,
-                settings={"security": {**_DEFAULT_SITE_SECURITY}},
+                settings=initial,
             )
         except IntegrityError:
             rows = await SiteSettingService._active_settings_for_tenant(tenant_id)
@@ -219,6 +236,8 @@ class SiteSettingService:
                 settings_dict = dict(site_settings.settings or {})
                 changed = migrate_legacy_ai_integrations(settings_dict)
                 if await migrate_llm_providers_to_connections(tenant_id, settings_dict):
+                    changed = True
+                if SiteSettingService._ensure_timezone_in_settings(settings_dict):
                     changed = True
                 if changed:
                     site_settings.settings = settings_dict
@@ -239,6 +258,7 @@ class SiteSettingService:
         """
         site_settings = await SiteSettingService.get_settings(tenant_id)
         tenant_settings = dict(site_settings.settings or {})
+        SiteSettingService._ensure_timezone_in_settings(tenant_settings)
 
         # 获取平台设置用于回退（新租户未设置时显示平台级默认）
         from infra.models.platform_settings import PlatformSettings
@@ -272,6 +292,7 @@ class SiteSettingService:
             tenant_id,
             tenant_settings.get("company_seal"),
         )
+        SiteSettingService._ensure_timezone_in_settings(tenant_settings)
 
         return tenant_settings
     

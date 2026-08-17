@@ -1494,7 +1494,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         /* 激活标签背景色与内容区一致，仿 Chrome 浏览器样式 - 使用主题背景色 */
         /* 参考：https://juejin.cn/post/6986827061461516324 */
         .uni-tabs-container .ant-tabs-nav-list > .ant-tabs-tab.ant-tabs-tab-active {
-          --uni-tab-line: var(--ant-colorBorder, var(--ant-color-border, #d9d9d9));
+          --uni-tab-line: var(--uni-tabs-rail, var(--ant-colorBorder, var(--ant-color-border, #d9d9d9)));
           --uni-tab-fill: ${tabFillColor};
           background: var(--uni-tab-fill) !important;
           border-color: var(--uni-tab-line) !important;
@@ -1633,16 +1633,19 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         }
         /* 标签栏总背景：唯一着色层（支持半透明）；子节点一律透明避免叠色 */
         .uni-tabs-header {
+          --uni-tabs-rail: var(--riveredge-layout-frame-color, var(--ant-colorBorder, var(--ant-color-border, #d9d9d9)));
           background:
-            linear-gradient(var(--ant-colorBorder, var(--ant-color-border, #d9d9d9)), var(--ant-colorBorder, var(--ant-color-border, #d9d9d9))) bottom / 100% 1px no-repeat,
+            linear-gradient(var(--uni-tabs-rail), var(--uni-tabs-rail)) bottom / 100% 1px no-repeat,
             ${tabsBgColor} !important;
           flex-shrink: 0;
-          width: 100%;
-          max-width: 100%;
-          min-width: 0;
+          /* 锁定 40px，与侧栏搜索条同高；向左 1px 与搜索条底线在侧栏右边框处重合 */
+          height: 40px;
           box-sizing: border-box;
-          padding-bottom: 0;
-          margin-bottom: 0px; /* 移除底部间距，由内容区控制 */
+          margin: 0 0 0 -1px;
+          padding: 0 0 0 1px;
+          width: calc(100% + 1px);
+          max-width: none;
+          min-width: 0;
           position: sticky;
           top: 56px; /* ProLayout 顶栏高度 */
           z-index: 10;
@@ -1651,7 +1654,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         }
         div.uni-tabs-header {
           background:
-            linear-gradient(var(--ant-colorBorder, var(--ant-color-border, #d9d9d9)), var(--ant-colorBorder, var(--ant-color-border, #d9d9d9))) bottom / 100% 1px no-repeat,
+            linear-gradient(var(--uni-tabs-rail), var(--uni-tabs-rail)) bottom / 100% 1px no-repeat,
             ${tabsBgColor} !important;
         }
         .uni-tabs-container,
@@ -2022,7 +2025,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           align-items: center;
           justify-content: center;
           width: 40px; /* 按钮宽度 40px，容器宽度也设置为 40px */
-          height: 40px; /* 与按钮高度一致 */
+          height: 40px; /* 与标签栏总高一致 */
           margin-left: 0;
           padding-bottom: 0 !important;
           padding-top: 0 !important;
@@ -2030,20 +2033,23 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           position: absolute;
           right: 0;
           top: 0;
-          overflow: visible; /* 确保分割线可以显示 */
+          overflow: hidden; /* 与标签栏同高，底线由本层背景绘制 */
           flex-shrink: 0; /* 防止被压缩 */
           z-index: 3;
-          background: ${tabsBgColor};
+          /* 实心底会盖住 .uni-tabs-header 的底边渐变线，此处重绘同一框线色 */
+          background:
+            linear-gradient(var(--uni-tabs-rail, var(--ant-colorBorder, var(--ant-color-border, #d9d9d9))), var(--uni-tabs-rail, var(--ant-colorBorder, var(--ant-color-border, #d9d9d9)))) bottom / 100% 1px no-repeat,
+            ${tabsBgColor} !important;
         }
-        /* 全屏按钮左侧分割线 - 与标签页分割线样式一致，等高，根据标签栏背景色自动适配 */
+        /* 全屏按钮左侧分割线 - 与标签页分割线样式一致，止于底边框线之上 */
         .uni-tabs-fullscreen-button-wrapper::before {
           content: '';
           position: absolute;
           left: 0;
-          top: -1px;
-          bottom: 0; /* 确保分割线到底部 */
+          top: 0;
+          bottom: 1px; /* 留给底边框线 */
           width: 1px;
-          background: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.06)'} !important;
+          background: var(--uni-tabs-rail, var(--ant-colorBorder, var(--ant-color-border, #d9d9d9))) !important;
           z-index: 1;
           opacity: 1 !important;
         }

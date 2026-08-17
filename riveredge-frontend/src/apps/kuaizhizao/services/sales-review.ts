@@ -184,6 +184,8 @@ export type SalesReviewUpdatePayload = Partial<Omit<SalesReviewCreatePayload, 'i
 export interface SalesReviewDeptOpinionSubmit {
   result: 'pass' | 'fail';
   opinion?: string | null;
+  /** 评审人用户 ID；缺省由后端记为当前操作人 */
+  reviewed_by?: number | null;
 }
 
 export interface SalesReviewPushPreview {

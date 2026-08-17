@@ -1667,6 +1667,43 @@ async def bulk_close_sales_orders(
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "批量关闭失败", "/sales-orders/batch-close", tenant_id)
 
 
+@router.post("/batch-reopen", response_model=Dict[str, Any], summary="Batch reopen closed sales orders")
+async def bulk_reopen_sales_orders(
+    ids: List[int] = Body(..., description="订单ID列表"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """批量撤回关闭销售订单：恢复关闭前状态，继续履约。"""
+    try:
+        return await sales_order_service.bulk_reopen_sales_orders(
+            tenant_id=tenant_id,
+            sales_order_ids=ids,
+            reopened_by=current_user.id,
+        )
+    except Exception as e:
+        logger.error(f"批量撤回关闭失败: {e}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "批量撤回关闭失败",
+            "/sales-orders/batch-reopen",
+            tenant_id,
+        )
+
+
+@router.post("/{sales_order_id}/reopen", response_model=SalesOrderResponse, summary="Reopen closed sales order")
+async def reopen_sales_order(
+    sales_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """撤回关闭：将已关闭订单恢复为关闭前状态。"""
+    return await sales_order_service.reopen_sales_order(
+        tenant_id=tenant_id,
+        sales_order_id=sales_order_id,
+        reopened_by=current_user.id,
+    )
+
+
 @router.post("/batch-delete", response_model=Dict[str, Any], summary="Batch delete sales orders")
 async def bulk_delete_sales_orders(
     ids: List[int] = Body(..., description="要删除的销售订单ID列表"),

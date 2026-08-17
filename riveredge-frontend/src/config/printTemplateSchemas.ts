@@ -398,6 +398,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
       { key: 'total_amount', label: '总金额', type: 'number' },
       { key: 'status', label: '状态', type: 'string' },
       { key: 'deliverer_name', label: '发货人', type: 'string' },
+      { key: 'delivery_date', label: '出库日期', type: 'date' },
       { key: 'delivery_time', label: '发货时间', type: 'date' },
       { key: 'created_at', label: '创建时间', type: 'date' },
       {

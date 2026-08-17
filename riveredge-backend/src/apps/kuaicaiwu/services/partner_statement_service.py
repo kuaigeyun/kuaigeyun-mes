@@ -661,6 +661,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             "lines": lines,
             "partner_snapshot": partner,
             "excluded_from_period": excluded_from_period,
+            # 仅提示：同月可有多张对账单；是否可生成看 lines 是否仍有未纳入单据
             "existing_period_statement_id": existing.id if existing else None,
             "existing_period_statement_code": existing.statement_code if existing else None,
             "existing_period": stmt_period if existing else None,
@@ -673,20 +674,31 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         partner_type: str,
         statement_period: str,
     ) -> Optional[PartnerStatement]:
-        """库唯一约束 uidx_partner_stmt_tenant_partner_period：同一往来同一 YYYY-MM 仅一张未删除对账单。"""
-        return await PartnerStatement.get_or_none(
-            tenant_id=tenant_id,
-            partner_id=partner_id,
-            partner_type=partner_type,
-            statement_period=statement_period,
-            deleted_at__isnull=True,
+        """同往来同月份最近一张未删除对账单（仅作预览提示，不拦截再生成）。"""
+        return (
+            await PartnerStatement.filter(
+                tenant_id=tenant_id,
+                partner_id=partner_id,
+                partner_type=partner_type,
+                statement_period=statement_period,
+                deleted_at__isnull=True,
+            )
+            .order_by("-id")
+            .first()
         )
 
-    def _period_already_exists_message(self, period: str, statement_code: str) -> str:
-        return (
-            f"该往来单位在 {period} 已有对账单 {statement_code}，同一期间不能重复生成。"
-            f"请打开已有对账单，或删除草稿后重新生成"
-        )
+    def _no_remaining_lines_message(
+        self,
+        period_label: str,
+        *,
+        existing_code: Optional[str] = None,
+    ) -> str:
+        if existing_code:
+            return (
+                f"该往来单位在 {period_label} 的单据已全部纳入对账单 "
+                f"{existing_code}，没有可再生成的明细"
+            )
+        return f"该往来单位在 {period_label} 没有可纳入对账单的已审核应收/应付或已确认收/付款"
 
     async def _generate_statement_code(self, tenant_id: int) -> str:
         today = today_site_str()
@@ -708,40 +720,23 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             if end_date < start_date:
                 raise ValidationError("结束日期不能早于起始日期")
             period_label = f"{to_api_isoformat(start_date)}~{to_api_isoformat(end_date)}"
-            # 列表「对账期间」与库唯一约束均为起始月 YYYY-MM（uidx_partner_stmt_tenant_partner_period）
+            # 列表「对账期间」展示用起始月 YYYY-MM；同月允许多张（按单据去重）
             stmt_period = period or start_date.strftime("%Y-%m")
         else:
             start_date, end_date = period_to_date_range(period)
             period_label = period
             stmt_period = period
 
-        existing_period = await self._get_active_period_statement(
-            tenant_id, partner_id, partner_type, stmt_period
-        )
-        if existing_period:
-            raise BusinessLogicError(
-                self._period_already_exists_message(stmt_period, existing_period.statement_code)
-            )
-
         preview = await self.preview_statement(
             tenant_id, partner_id, partner_type, start_date, end_date
         )
         if not (preview.get("lines") or []):
-            exists = await PartnerStatement.get_or_none(
-                tenant_id=tenant_id,
-                partner_id=partner_id,
-                partner_type=partner_type,
-                start_date=start_date,
-                end_date=end_date,
-                deleted_at__isnull=True,
-            )
-            if exists:
-                raise BusinessLogicError(
-                    f"该往来单位在 {period_label} 的单据已全部纳入对账单 "
-                    f"{exists.statement_code}，没有可再生成的明细"
-                )
+            existing_code = preview.get("existing_period_statement_code")
             raise BusinessLogicError(
-                f"该往来单位在 {period_label} 没有可纳入对账单的已审核应收/应付或已确认收/付款"
+                self._no_remaining_lines_message(
+                    period_label,
+                    existing_code=str(existing_code) if existing_code else None,
+                )
             )
 
         code = await self._generate_statement_code(tenant_id)

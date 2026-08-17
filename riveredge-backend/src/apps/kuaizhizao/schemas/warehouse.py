@@ -1023,7 +1023,7 @@ class PurchaseReturnBase(BaseSchema):
     reviewer_id: Optional[int] = Field(None, description="审核人ID")
     reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
     review_time: Optional[datetime] = Field(None, description="审核时间")
-    review_status: str = Field("待审核", max_length=20, description="审核状态")
+    review_status: str = Field("草稿", max_length=20, description="审核状态")
     review_remarks: Optional[str] = Field(None, description="审核备注")
     
     # 退货原因
@@ -1048,6 +1048,7 @@ class PurchaseReturnCreate(PurchaseReturnBase):
 class PurchaseReturnUpdate(PurchaseReturnBase):
     """采购退货单更新schema"""
     return_code: Optional[str] = Field(None, max_length=50, description="退货单编码")
+    items: Optional[List["PurchaseReturnItemCreate"]] = Field(None, description="退货明细列表")
 
 
 class PurchaseReturnResponse(PurchaseReturnBase):
@@ -1064,7 +1065,10 @@ class PurchaseReturnResponse(PurchaseReturnBase):
         None,
         description="业务态动作 capabilities（不含 RBAC，与 service 门禁一致）",
     )
-    items: Optional[List["PurchaseReturnItemResponse"]] = Field(None, description="退货明细（include_items 时返回）")
+    items: Optional[List["PurchaseReturnItemResponse"]] = Field(
+        default_factory=list,
+        description="退货明细（详情接口始终返回；列表仅 include_items 时填充）",
+    )
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycle/Stepper 展示）")
 
     class Config:

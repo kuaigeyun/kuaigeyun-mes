@@ -107,7 +107,10 @@ class EngineeringDrawing(BaseModel):
 
 
 class DrawingUserClearance(BaseModel):
-    """用户图档密级授权。无行时服务按 public 解释，不在此表兜底。"""
+    """用户图档密级授权。无行时服务按 public 解释，不在此表兜底。
+
+    审计人字段（created_by / created_by_name / updated_by / updated_by_name）继承自 BaseModel。
+    """
 
     class Meta:
         table = "apps_master_data_drawing_user_clearances"
@@ -122,8 +125,6 @@ class DrawingUserClearance(BaseModel):
         max_length=20,
         description="授权密级：public/internal/secret/confidential",
     )
-    updated_by = fields.IntField(null=True, description="更新人ID")
-    updated_by_name = fields.CharField(max_length=100, null=True, description="更新人姓名")
 
     def __str__(self) -> str:
         return f"{self.user_name}:{self.security_level}"

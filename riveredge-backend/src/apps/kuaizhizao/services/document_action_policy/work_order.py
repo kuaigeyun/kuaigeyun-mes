@@ -48,9 +48,11 @@ def _is_list_work_order_row(wo: Any) -> bool:
 def _revoke_status_allowed(wo: Any, *, status: str) -> bool:
     is_released = status in _RELEASED
     is_in_progress = status in _IN_PROGRESS
-    is_completed = status in _COMPLETED
-    manually_completed = bool(getattr(wo, "manually_completed", False))
-    return is_released or is_in_progress or (is_completed and manually_completed)
+    return is_released or is_in_progress
+
+
+def _is_manual_complete(wo: Any, *, status: str) -> bool:
+    return status in _COMPLETED and bool(getattr(wo, "manually_completed", False))
 
 
 def derive_work_order_capabilities(
@@ -67,6 +69,7 @@ def derive_work_order_capabilities(
             delete=deny,
             release=deny,
             revoke=deny,
+            withdraw_manual_complete=deny,
             freeze=deny,
             unfreeze=deny,
             cancel=deny,
@@ -136,6 +139,14 @@ def derive_work_order_capabilities(
         revoke_cap = _cap(False, "work_order.revoke.has_downstream")
     else:
         revoke_cap = _cap(True)
+
+    withdraw_manual_complete_allowed = _is_manual_complete(wo, status=status)
+    withdraw_manual_complete_cap = _cap(
+        withdraw_manual_complete_allowed,
+        "work_order.withdraw_manual_complete.not_allowed"
+        if not withdraw_manual_complete_allowed
+        else None,
+    )
 
     freeze_allowed = not is_terminal and not is_completed and not is_frozen
     freeze_cap = _cap(
@@ -219,6 +230,7 @@ def derive_work_order_capabilities(
         delete=delete_cap,
         release=release_cap,
         revoke=revoke_cap,
+        withdraw_manual_complete=withdraw_manual_complete_cap,
         freeze=freeze_cap,
         unfreeze=unfreeze_cap,
         cancel=cancel_cap,
@@ -249,6 +261,7 @@ def assert_work_order_capability(
         "delete": caps.delete,
         "release": caps.release,
         "revoke": caps.revoke,
+        "withdraw_manual_complete": caps.withdraw_manual_complete,
         "freeze": caps.freeze,
         "unfreeze": caps.unfreeze,
         "cancel": caps.cancel,

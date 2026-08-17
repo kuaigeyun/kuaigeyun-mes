@@ -1122,8 +1122,13 @@ def enrich_purchase_return_capabilities_on_response(
     response: T,
     *,
     has_items: bool = True,
+    audit_required: bool = False,
 ) -> T:
-    caps = derive_purchase_return_capabilities(return_doc, has_items=has_items)
+    caps = derive_purchase_return_capabilities(
+        return_doc,
+        has_items=has_items,
+        audit_required=audit_required,
+    )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
     return response
@@ -1134,12 +1139,17 @@ def enrich_purchase_return_list_capabilities(
     responses: List[T],
     *,
     has_items_by_id: Optional[dict[int, bool]] = None,
+    audit_required: bool = False,
 ) -> List[T]:
     items_map = has_items_by_id or {}
     out: List[T] = []
     for doc, resp in zip(return_docs, responses):
         rid = int(getattr(doc, "id", 0) or 0)
-        caps = derive_purchase_return_capabilities(doc, has_items=items_map.get(rid, True))
+        caps = derive_purchase_return_capabilities(
+            doc,
+            has_items=items_map.get(rid, True),
+            audit_required=audit_required,
+        )
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))
         else:

@@ -9,7 +9,7 @@ Date: 2026-01-06
 
 from fastapi import APIRouter, Query
 
-from core.utils.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc, site_timezone_name
 from loguru import logger
 
 from infra.schemas.platform_settings import PlatformSettingsResponse
@@ -36,6 +36,7 @@ DEFAULT_PLATFORM_SETTINGS = PlatformSettingsResponse(
     theme_color="#1890ff",
     default_tenant_id=None,
     enable_register=True,
+    timezone=site_timezone_name(),
     created_at=now_utc(),
     updated_at=now_utc(),
 )

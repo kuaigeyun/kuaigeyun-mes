@@ -25,7 +25,6 @@ import {
 import {
   App,
   Button,
-  Tag,
   Table,
   Typography,
   Descriptions,
@@ -44,7 +43,7 @@ import {
 import { EyeOutlined, CheckCircleOutlined, EditOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable, readPersistedUniTableViewType, type UniTableRequestMeta} from '../../../../../components/uni-table';
-import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
+import { UniCapabilityBatchButton, UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
@@ -96,12 +95,16 @@ import { qualityApi, warehouseApi } from '../../../services/production';
 import { listPurchaseOrders } from '../../../services/purchase';
 import type { PurchaseReturnPullLine } from '../../../services/warehouse-execution';
 import type { PurchaseReturn, PurchaseReturnDetail, PurchaseReturnItem } from '../../../services/purchase-return';
+import type { PurchaseReturnListParams } from '../../../services/purchase-return';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
   purchaseReturnBatchConfirmAllowed,
   purchaseReturnBatchWithdrawAllowed,
 } from '../../../../../hooks/useDocumentCapabilities';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { isManualAuditEnabled } from '../../../../../utils/auditMode';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import { supplierApi, getDictionaryOptions } from '../../../../master-data/services/supply-chain';
 import { initializeSystemDictionaries } from '../../../../../services/dataDictionary';
@@ -112,6 +115,7 @@ import {
   resolvePurchaseReturnListLifecycleParams,
 } from '../../../utils/purchaseReturnLifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
+import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -128,7 +132,6 @@ import {
   buildDocumentReturnListImportTemplate,
   parseDocumentReturnListImport,
 } from '../../shared/documentReturnListImport';
-import type { PurchaseReturnListParams } from '../../../services/purchase-return';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
@@ -145,7 +148,13 @@ import { getAntdModal } from '../../../../../utils/antdAppApis';
 const PURCHASE_RETURN_RESOURCE = 'kuaizhizao:purchase-return';
 
 const PURCHASE_RETURN_LIST_PERSISTENCE_ID =
-  'apps.kuaizhizao.pages.purchase-management.purchase-returns.v2';
+  'apps.kuaizhizao.pages.purchase-management.purchase-returns.v3';
+
+/** 与后端 review_status 对齐，供 UniWorkflowActions 识别 */
+const PR_WORKFLOW_DRAFT_STATUSES = ['草稿', 'draft'];
+const PR_WORKFLOW_PENDING_STATUSES = ['待审核', 'pending_review', 'pending_approval', 'PENDING'];
+const PR_WORKFLOW_APPROVED_STATUSES = ['审核通过', '已通过', 'approved', 'APPROVED'];
+const PR_WORKFLOW_REJECTED_STATUSES = ['审核驳回', '已驳回', 'rejected', 'REJECTED'];
 
 type PurchaseReturnItemRow = PurchaseReturnItem & {
   _rowKey: string;
@@ -160,6 +169,7 @@ type PurchaseReturnItemRow = PurchaseReturnItem & {
   review_status?: string;
   lifecycle?: Record<string, unknown>;
   capabilities?: PurchaseReturn['capabilities'];
+  audit?: PurchaseReturn['audit'];
 };
 
 const PURCHASE_RETURN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_purchase_returns';
@@ -204,6 +214,27 @@ function buildDictFallbackOptions(t: TFunction, values: string[]) {
       value,
     };
   });
+}
+
+/** 行/抽屉「确认退货」：capabilities + 业务态双重门禁（已退货/已取消不得再点）。 */
+function canShowPurchaseReturnConfirm(
+  record: { status?: string | null; capabilities?: PurchaseReturn['capabilities'] },
+  canSubmit: boolean,
+): boolean {
+  if (!canSubmit) return false;
+  if (record.capabilities?.confirm?.allowed !== true) return false;
+  const status = String(record.status ?? '').trim();
+  if (
+    status === '已退货' ||
+    status === '已取消' ||
+    status === 'completed' ||
+    status === 'RETURNED' ||
+    status === 'cancelled' ||
+    status === 'CANCELLED'
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function getImportRowValue(row: Record<string, unknown>, keys: string[]) {
@@ -270,6 +301,7 @@ const PurchaseReturnsPage: React.FC = () => {
   const getReviewStatusLabel = (status?: string) => {
     if (!status) return '-';
     const reviewLabelMap: Record<string, string> = {
+      '草稿': t('app.kuaizhizao.purchaseReturn.statusDraft'),
       '待审核': t('app.kuaizhizao.purchaseReturn.reviewPending'),
       '审核通过': t('app.kuaizhizao.purchaseReturn.reviewApproved'),
       '审核驳回': t('app.kuaizhizao.purchaseReturn.reviewRejected'),
@@ -283,15 +315,6 @@ const PurchaseReturnsPage: React.FC = () => {
       已退货: { text: t('app.kuaizhizao.purchaseReturn.statusReturned'), color: 'success' },
       已取消: { text: t('app.kuaizhizao.purchaseReturn.statusCancelled'), color: 'error' },
       草稿: { text: t('app.kuaizhizao.purchaseReturn.statusDraft'), color: 'default' },
-    }),
-    [t, i18n.language],
-  );
-
-  const reviewStatusMap = useMemo(
-    () => ({
-      待审核: { text: t('app.kuaizhizao.purchaseReturn.reviewPending'), color: 'default' },
-      审核通过: { text: t('app.kuaizhizao.purchaseReturn.reviewApproved'), color: 'success' },
-      审核驳回: { text: t('app.kuaizhizao.purchaseReturn.reviewRejected'), color: 'error' },
     }),
     [t, i18n.language],
   );
@@ -310,6 +333,16 @@ const PurchaseReturnsPage: React.FC = () => {
     dataViewModeRef.current = dataViewMode;
   }, [dataViewMode]);
   const purchaseReturnLifecycleValueEnum = useMemo(() => buildPurchaseReturnLifecycleValueEnum(t), [t]);
+  const purchaseReturnAuditEnabled = useAuditRequired('purchase_return', false);
+  const purchaseReturnAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<PurchaseReturn>({ t, auditEnabled: purchaseReturnAuditEnabled }),
+    [t, purchaseReturnAuditEnabled],
+  );
+  const purchaseReturnAuditBatchHandlers = useMemo(
+    () => createUniAuditBatchHandlers('purchase_return'),
+    [],
+  );
+
   const [supplierList, setSupplierList] = useState<Array<{ id: number; name?: string; code?: string }>>([]);
 
   useEffect(() => {
@@ -489,6 +522,20 @@ const PurchaseReturnsPage: React.FC = () => {
     returnDetail?.id,
     prRetTrackingRefreshKey,
   );
+
+  const handlePurchaseReturnAuditSuccess = async () => {
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+    if (returnDetail?.id != null) {
+      try {
+        const updated = await warehouseApi.purchaseReturn.get(String(returnDetail.id));
+        setReturnDetail(updated as PurchaseReturnDetail);
+        setPrRetTrackingRefreshKey((k) => k + 1);
+      } catch {
+        /* 详情刷新失败不影响列表 */
+      }
+    }
+  };
 
   const handleDetail = async (record: PurchaseReturn) => {
     try {
@@ -777,7 +824,8 @@ const PurchaseReturnsPage: React.FC = () => {
     (items || []).map((it) => {
       const qty = Number(it.return_quantity ?? 0);
       const price = Number(it.unit_price ?? 0);
-      const total = Number((it.total_amount != null ? it.total_amount : qty * price).toFixed(2));
+      // 行金额以数量×单价为准，避免表单里残留的 0 总金额覆盖真实金额
+      const total = Number((qty * price).toFixed(2));
       return {
         purchase_receipt_item_id: it.purchase_receipt_item_id ?? undefined,
         material_id: it.material_id,
@@ -1287,18 +1335,7 @@ const PurchaseReturnsPage: React.FC = () => {
         },
         formItemProps: formDateRangeFormItemProps,
       },
-      {
-        title: t('app.kuaizhizao.purchaseReturn.reviewStatus'),
-        dataIndex: 'review_status',
-        width: 96,
-        fixed: 'right',
-        align: 'center',
-        hideInSearch: true,
-        render: (status: any) => {
-          const config = reviewStatusMap[status as keyof typeof reviewStatusMap] || reviewStatusMap['待审核'];
-          return <Tag color={config.color}>{config.text}</Tag>;
-        },
-      },
+      ...(purchaseReturnAuditColumn ? [purchaseReturnAuditColumn] : []),
       {
         title: t('app.kuaizhizao.purchaseReturn.colLifecycle'),
         dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
@@ -1345,7 +1382,32 @@ const PurchaseReturnsPage: React.FC = () => {
               </Button>
             );
           }
-          if (record.capabilities?.confirm?.allowed === true && (purchaseReturnPerms.canAction?.('submit') ?? false)) {
+          parts.push(
+            <UniWorkflowActions {...rowActionKind('skip')}
+              key="workflow-actions"
+              record={record}
+              entityName={t('app.kuaizhizao.purchaseReturn.entityName')}
+              entityType="purchase_return"
+              auditNodeKey="purchase_return"
+              unifiedAudit
+              resourcePrefix={PURCHASE_RETURN_RESOURCE}
+              statusField="status"
+              reviewStatusField="review_status"
+              draftStatuses={PR_WORKFLOW_DRAFT_STATUSES}
+              pendingStatuses={PR_WORKFLOW_PENDING_STATUSES}
+              approvedStatuses={PR_WORKFLOW_APPROVED_STATUSES}
+              rejectedStatuses={PR_WORKFLOW_REJECTED_STATUSES}
+              theme="link"
+              size="small"
+              onSuccess={() => { void handlePurchaseReturnAuditSuccess(); }}
+              confirmMessages={{
+                submit: isManualAuditEnabled(record.audit)
+                  ? t('app.kuaizhizao.purchaseReturn.submitConfirmAudit')
+                  : t('app.kuaizhizao.purchaseReturn.submitConfirmAuto'),
+              }}
+            />,
+          );
+          if (canShowPurchaseReturnConfirm(record, purchaseReturnPerms.canAction?.('submit') ?? false)) {
             parts.push(
               <Button {...rowActionKind('read')}
                 key="c"
@@ -1385,11 +1447,14 @@ const PurchaseReturnsPage: React.FC = () => {
       handleConfirm,
       handleDetail,
       handleEdit,
+      handlePurchaseReturnAuditSuccess,
       handleWithdraw,
+      purchaseReturnAuditColumn,
       purchaseReturnCustomFieldColumns,
       purchaseReturnLifecycleValueEnum,
+      purchaseReturnPerms.canAction,
+      purchaseReturnPerms.canUpdate,
       purchaseReturnSupplierSearchOptions,
-      reviewStatusMap,
       t,
       i18n.language,
     ],
@@ -1875,6 +1940,7 @@ const PurchaseReturnsPage: React.FC = () => {
                   review_status: h.review_status,
                   lifecycle: h.lifecycle,
                   capabilities: h.capabilities,
+                  audit: h.audit,
                 }),
                 mapEmptyHeaderRow: (h) => ({
                   return_id: h.id ?? 0,
@@ -1888,6 +1954,7 @@ const PurchaseReturnsPage: React.FC = () => {
                   review_status: h.review_status,
                   lifecycle: h.lifecycle,
                   capabilities: h.capabilities,
+                  audit: h.audit,
                   material_code: '-',
                   material_name: '-',
                   return_quantity: 0,
@@ -1920,6 +1987,21 @@ const PurchaseReturnsPage: React.FC = () => {
           showDeleteButton={viewTypeState !== 'detailTable'}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.purchaseReturn.confirmBatchDelete', { count })}
+          toolBarActionsAfterDelete={[
+            <UniAuditBatchMenuButton
+              key="purchase-return-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedReturnsForBatch}
+              auditEnabled={purchaseReturnAuditEnabled}
+              permGates={purchaseReturnPerms}
+              handlers={purchaseReturnAuditBatchHandlers}
+              onSuccess={() => {
+                setSelectedRowKeys([]);
+                void handlePurchaseReturnAuditSuccess();
+              }}
+              toolBarButtonSize="middle"
+            />,
+          ]}
           toolBarActionsAfterBatch={[
             <UniCapabilityBatchButton
               key="purchase-return-confirm"
@@ -2266,41 +2348,64 @@ const PurchaseReturnsPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           returnDetail ? (
-            <DetailDrawerActions
-              items={[
-                {
-                  key: 'confirm',
-                  visible:
-                    returnDetail.capabilities?.confirm?.allowed === true &&
-                    (purchaseReturnPerms.canAction?.('submit') ?? false),
-                  render: () => (
-                    <Button {...rowActionKind('submit')} onClick={() => handleConfirm(returnDetail)}>
-                      {t('app.kuaizhizao.purchaseReturn.confirmReturn')}
-                    </Button>
-                  ),
-                },
-                {
-                  key: 'withdraw',
-                  visible:
-                    returnDetail.capabilities?.withdraw?.allowed === true &&
-                    (purchaseReturnPerms.canAction?.('revoke') ?? false),
-                  render: () => (
-                    <Button {...rowActionKind('revoke')} onClick={() => void handleWithdraw(returnDetail)}>
-                      {t('app.kuaizhizao.purchaseReturn.withdrawConfirm')}
-                    </Button>
-                  ),
-                },
-                {
-                  key: 'edit',
-                  visible: returnDetail.capabilities?.update?.allowed === true && purchaseReturnPerms.canUpdate,
-                  render: () => (
-                    <Button {...rowActionKind('update')} onClick={() => void handleEdit(returnDetail)}>
-                      {t('common.edit')}
-                    </Button>
-                  ),
-                },
-              ]}
-            />
+            <Space size="small">
+              <UniWorkflowActions {...rowActionKind('skip')}
+                record={returnDetail}
+                entityName={t('app.kuaizhizao.purchaseReturn.entityName')}
+                entityType="purchase_return"
+                auditNodeKey="purchase_return"
+                unifiedAudit
+                resourcePrefix={PURCHASE_RETURN_RESOURCE}
+                statusField="status"
+                reviewStatusField="review_status"
+                draftStatuses={PR_WORKFLOW_DRAFT_STATUSES}
+                pendingStatuses={PR_WORKFLOW_PENDING_STATUSES}
+                approvedStatuses={PR_WORKFLOW_APPROVED_STATUSES}
+                rejectedStatuses={PR_WORKFLOW_REJECTED_STATUSES}
+                onSuccess={() => { void handlePurchaseReturnAuditSuccess(); }}
+                confirmMessages={{
+                  submit: isManualAuditEnabled(returnDetail.audit)
+                    ? t('app.kuaizhizao.purchaseReturn.submitConfirmAudit')
+                    : t('app.kuaizhizao.purchaseReturn.submitConfirmAuto'),
+                }}
+              />
+              <DetailDrawerActions
+                items={[
+                  {
+                    key: 'confirm',
+                    visible: canShowPurchaseReturnConfirm(
+                      returnDetail,
+                      purchaseReturnPerms.canAction?.('submit') ?? false,
+                    ),
+                    render: () => (
+                      <Button {...rowActionKind('submit')} onClick={() => handleConfirm(returnDetail)}>
+                        {t('app.kuaizhizao.purchaseReturn.confirmReturn')}
+                      </Button>
+                    ),
+                  },
+                  {
+                    key: 'withdraw',
+                    visible:
+                      returnDetail.capabilities?.withdraw?.allowed === true &&
+                      (purchaseReturnPerms.canAction?.('revoke') ?? false),
+                    render: () => (
+                      <Button {...rowActionKind('revoke')} onClick={() => void handleWithdraw(returnDetail)}>
+                        {t('app.kuaizhizao.purchaseReturn.withdrawConfirm')}
+                      </Button>
+                    ),
+                  },
+                  {
+                    key: 'edit',
+                    visible: returnDetail.capabilities?.update?.allowed === true && purchaseReturnPerms.canUpdate,
+                    render: () => (
+                      <Button {...rowActionKind('update')} onClick={() => void handleEdit(returnDetail)}>
+                        {t('common.edit')}
+                      </Button>
+                    ),
+                  },
+                ]}
+              />
+            </Space>
           ) : null
         }
         collaborationTitleSuffix={

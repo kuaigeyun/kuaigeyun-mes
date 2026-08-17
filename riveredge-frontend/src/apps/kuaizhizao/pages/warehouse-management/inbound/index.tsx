@@ -2069,13 +2069,21 @@ const InboundPage: React.FC = () => {
               currentUser,
             );
             const filtered = filterInboundHubRowsByDeepLink(result.data, inboundDeepLinkRef.current);
+            if (!result.success) {
+              messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.loadListPartialFailed'));
+            }
             return {
               ...result,
               data: filtered,
               total: inboundDeepLinkRef.current ? filtered.length : result.total,
             };
-          } catch {
-            messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.loadListFailed'));
+          } catch (error: unknown) {
+            const alreadyToasted =
+              Boolean((error as { response?: { status?: number } })?.response?.status) &&
+              Number((error as { response?: { status?: number } })?.response?.status) >= 500;
+            if (!alreadyToasted) {
+              messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.loadListFailed'));
+            }
             return { data: [], success: false, total: 0 };
           }
         }}

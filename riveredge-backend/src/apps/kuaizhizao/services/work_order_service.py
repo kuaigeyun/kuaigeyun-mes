@@ -22,6 +22,7 @@ from core.utils.timezone_utils import (
     now_utc,
     resolve_business_datetime,
     to_api_isoformat,
+    to_site_date,
     today_site_str,
 )
 
@@ -307,6 +308,137 @@ async def _resolve_assigned_worker_fields(
     if not ordered_ids:
         return [], None, None
     return ordered_ids, ordered_ids[0], ("、".join(names) if names else None)
+
+
+def _first_positive_int(*candidates: Any) -> Optional[int]:
+    for raw in candidates:
+        if raw is None or raw == "":
+            continue
+        values = raw if isinstance(raw, (list, tuple)) else [raw]
+        for item in values:
+            if item is None or item == "":
+                continue
+            try:
+                value = int(item)
+            except (TypeError, ValueError):
+                continue
+            if value > 0:
+                return value
+    return None
+
+
+def _route_step_by_operation_id(operation_sequence: Any) -> Dict[int, Dict[str, Any]]:
+    """将产品工艺/路线 sequence 按 operation_id 建索引，供手工开单补默认派工。"""
+    out: Dict[int, Dict[str, Any]] = {}
+    if not isinstance(operation_sequence, dict):
+        return out
+    for step in operation_sequence.get("operations") or []:
+        if not isinstance(step, dict):
+            continue
+        oid = step.get("operation_id") or step.get("operationId")
+        try:
+            op_id = int(oid) if oid is not None else 0
+        except (TypeError, ValueError):
+            op_id = 0
+        if op_id > 0:
+            out[op_id] = step
+    return out
+
+
+async def _resolve_wo_op_assignment_for_create(
+    tenant_id: int,
+    operation: Any,
+    *,
+    assigned_worker_ids: Any = None,
+    assigned_worker_id: Optional[int] = None,
+    assigned_worker_name: Optional[str] = None,
+    assigned_team_id: Optional[int] = None,
+    assigned_team_name: Optional[str] = None,
+    assigned_station_id: Optional[int] = None,
+    assigned_station_name: Optional[str] = None,
+    assigned_equipment_id: Optional[int] = None,
+    assigned_equipment_name: Optional[str] = None,
+    route_step: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    开单写入工序派工字段：请求值 → 产品工艺行 → 工序档案默认。
+    与路线自动展开路径对齐，避免手工带 operations 时丢失预绑定人员。
+    """
+    step = route_step if isinstance(route_step, dict) else {}
+
+    worker_ids = _parse_assigned_worker_ids(assigned_worker_ids, assigned_worker_id)
+    if not worker_ids:
+        worker_ids = _parse_assigned_worker_ids(
+            step.get("operator_ids") or step.get("operatorIds") or step.get("assigned_worker_ids"),
+            step.get("assigned_worker_id") or step.get("assignedWorkerId"),
+        )
+    if not worker_ids:
+        worker_ids = _parse_assigned_worker_ids(getattr(operation, "default_operator_ids", None))
+
+    resolved_ids, primary_id, joined_name = await _resolve_assigned_worker_fields(
+        tenant_id, worker_ids
+    )
+    if not joined_name and assigned_worker_name:
+        joined_name = str(assigned_worker_name).strip() or None
+
+    team_id = _first_positive_int(
+        assigned_team_id,
+        step.get("assigned_team_id"),
+        step.get("assignedTeamId"),
+        step.get("team_ids"),
+        step.get("teamIds"),
+        getattr(operation, "default_team_ids", None),
+    )
+    station_id = _first_positive_int(
+        assigned_station_id,
+        step.get("assigned_station_id"),
+        step.get("assignedStationId"),
+        step.get("station_ids"),
+        step.get("stationIds"),
+        getattr(operation, "default_station_ids", None),
+    )
+    equipment_id = _first_positive_int(
+        assigned_equipment_id,
+        step.get("assigned_equipment_id"),
+        step.get("assignedEquipmentId"),
+        step.get("equipment_ids"),
+        step.get("equipmentIds"),
+        getattr(operation, "default_equipment_ids", None),
+    )
+
+    team_name = (str(assigned_team_name).strip() if assigned_team_name else None) or None
+    station_name = (str(assigned_station_name).strip() if assigned_station_name else None) or None
+    equipment_name = (
+        str(assigned_equipment_name).strip() if assigned_equipment_name else None
+    ) or None
+
+    if team_id and not team_name:
+        team = await WorkGroup.get_or_none(
+            tenant_id=tenant_id, id=team_id, deleted_at__isnull=True
+        )
+        team_name = team.name if team else None
+    if station_id and not station_name:
+        station = await Workstation.get_or_none(
+            tenant_id=tenant_id, id=station_id, deleted_at__isnull=True
+        )
+        station_name = station.name if station else None
+    if equipment_id and not equipment_name:
+        equipment = await Equipment.get_or_none(
+            tenant_id=tenant_id, id=equipment_id, deleted_at__isnull=True
+        )
+        equipment_name = equipment.name if equipment else None
+
+    return {
+        "assigned_worker_ids": resolved_ids,
+        "assigned_worker_id": primary_id,
+        "assigned_worker_name": joined_name,
+        "assigned_team_id": team_id,
+        "assigned_team_name": team_name,
+        "assigned_station_id": station_id,
+        "assigned_station_name": station_name,
+        "assigned_equipment_id": equipment_id,
+        "assigned_equipment_name": equipment_name,
+    }
 
 
 async def _resolve_sales_order_snapshot_fields(
@@ -889,8 +1021,24 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             work_center_id = extra_data.get("work_center_id") or (operation.default_work_center_ids[0] if operation.default_work_center_ids else None) or work_order.work_center_id
             work_center_name = extra_data.get("work_center_name") or center_names.get(work_center_id) or work_order.work_center_name
 
-            assigned_worker_id = extra_data.get("assigned_worker_id") or (operation.default_operator_ids[0] if operation.default_operator_ids else None)
-            assigned_worker_name = extra_data.get("assigned_worker_name") or user_names.get(assigned_worker_id)
+            assigned_worker_ids = _parse_assigned_worker_ids(
+                extra_data.get("operator_ids")
+                or extra_data.get("operatorIds")
+                or extra_data.get("assigned_worker_ids"),
+                extra_data.get("assigned_worker_id"),
+            )
+            if not assigned_worker_ids and operation.default_operator_ids:
+                assigned_worker_ids = _parse_assigned_worker_ids(operation.default_operator_ids)
+            assigned_worker_id = assigned_worker_ids[0] if assigned_worker_ids else None
+            assigned_worker_name = extra_data.get("assigned_worker_name") or (
+                "、".join(
+                    str(user_names[uid])
+                    for uid in assigned_worker_ids
+                    if uid in user_names and user_names[uid]
+                )
+                if assigned_worker_ids
+                else None
+            ) or (user_names.get(assigned_worker_id) if assigned_worker_id else None)
 
             assigned_team_id = extra_data.get("assigned_team_id") or (operation.default_team_ids[0] if operation.default_team_ids else None)
             assigned_team_name = extra_data.get("assigned_team_name") or team_names.get(assigned_team_id)
@@ -918,6 +1066,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             if outsource_meta["outsource_kind"] != "none":
                 assigned_station_id = None
                 assigned_station_name = None
+                assigned_worker_ids = []
                 assigned_worker_id = None
                 assigned_worker_name = None
                 assigned_equipment_id = None
@@ -948,6 +1097,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 "workshop_name": workshop_name,
                 "work_center_id": work_center_id,
                 "work_center_name": work_center_name,
+                "assigned_worker_ids": assigned_worker_ids,
                 "assigned_worker_id": assigned_worker_id,
                 "assigned_worker_name": assigned_worker_name,
                 "assigned_team_id": assigned_team_id,
@@ -972,7 +1122,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         from apps.kuaizhizao.utils.working_time import load_scheduling_work_context
         _anchor = work_order.planned_start_date or work_order.planned_end_date
-        _around = _anchor.date() if _anchor else None
+        _around = to_site_date(_anchor) if _anchor else None
         _holidays, _work_hours, _overtime = await load_scheduling_work_context(tenant_id, around=_around)
         time_slots = build_operation_time_slots(
             [row["total_hours"] for row in prepared_ops],
@@ -1002,6 +1152,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 workshop_name=row["workshop_name"],
                 work_center_id=row["work_center_id"],
                 work_center_name=row["work_center_name"],
+                assigned_worker_ids=row.get("assigned_worker_ids") or [],
                 assigned_worker_id=row["assigned_worker_id"],
                 assigned_worker_name=row["assigned_worker_name"],
                 assigned_team_id=row["assigned_team_id"],
@@ -1010,8 +1161,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 assigned_station_name=row["assigned_station_name"],
                 assigned_equipment_id=row["assigned_equipment_id"],
                 assigned_equipment_name=row["assigned_equipment_name"],
-                planned_start_date=planned_start_date,
-                planned_end_date=planned_end_date,
+                planned_start_date=resolve_business_datetime(planned_start_date),
+                planned_end_date=resolve_business_datetime(planned_end_date),
                 standard_time=Decimal(str(row["standard_hours_per_unit"])) if row["standard_hours_per_unit"] else None,
                 setup_time=Decimal(str(row["setup_hours"])) if row["setup_hours"] else None,
                 reporting_type=row["reporting_type"],
@@ -1032,9 +1183,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         
         # 更新工单计划时间：有交期锚点时保持 planned_end 不后移
         if work_order_operations and time_slots:
-            work_order.planned_start_date = time_slots[0][0]
+            work_order.planned_start_date = resolve_business_datetime(time_slots[0][0])
             if work_order.planned_end_date is None:
-                work_order.planned_end_date = time_slots[-1][1]
+                work_order.planned_end_date = resolve_business_datetime(time_slots[-1][1])
             await work_order.save()
         
         logger.info(f"为工单 {work_order.code} 自动生成了 {len(work_order_operations)} 个工序单")
@@ -1070,7 +1221,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         ]
         from apps.kuaizhizao.utils.working_time import load_scheduling_work_context
         _anchor = work_order.planned_start_date or work_order.planned_end_date
-        _around = _anchor.date() if _anchor else None
+        _around = to_site_date(_anchor) if _anchor else None
         _holidays, _work_hours, _overtime = await load_scheduling_work_context(tenant_id, around=_around)
         time_slots = build_operation_time_slots(
             durations,
@@ -1089,14 +1240,17 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 tenant_id=tenant_id,
                 id=op.id,
             ).update(
-                planned_start_date=planned_start_date,
-                planned_end_date=planned_end_date,
+                planned_start_date=resolve_business_datetime(planned_start_date),
+                planned_end_date=resolve_business_datetime(planned_end_date),
             )
 
         if time_slots:
-            wo_updates: Dict[str, Any] = {"planned_start_date": time_slots[0][0], "updated_by": updated_by}
+            wo_updates: Dict[str, Any] = {
+                "planned_start_date": resolve_business_datetime(time_slots[0][0]),
+                "updated_by": updated_by,
+            }
             if work_order.planned_end_date is None:
-                wo_updates["planned_end_date"] = time_slots[-1][1]
+                wo_updates["planned_end_date"] = resolve_business_datetime(time_slots[-1][1])
             await WorkOrder.filter(tenant_id=tenant_id, id=work_order.id).update(**wo_updates)
 
     async def create_work_order(
@@ -1433,6 +1587,24 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     route_empty = (OVER_REPORT_NONE, Decimal("0"))
                     wo_head_t = tuple_from_model(work_order)
 
+                    # 手工带工序时仍解析产品工艺/路线默认派工，避免预绑定人员丢失
+                    route_step_by_op_id: Dict[int, Dict[str, Any]] = {}
+                    pr_for_defaults = process_route_resolved
+                    if pr_for_defaults is None:
+                        pr_for_defaults = await self._match_process_route_for_material(
+                            tenant_id=tenant_id,
+                            material_id=product_id,
+                        )
+                    if pr_for_defaults is not None:
+                        seq_for_defaults, _ = (
+                            await MaterialProductProcessService.resolve_sequence_for_material(
+                                tenant_id,
+                                product_id,
+                                pr_for_defaults,
+                            )
+                        )
+                        route_step_by_op_id = _route_step_by_operation_id(seq_for_defaults)
+
                     for idx, op_data in enumerate(operations, 1):
                         # 验证工序是否存在
                         operation = await Operation.get_or_none(
@@ -1503,6 +1675,41 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             line_explicit,
                         )
 
+                        assignment = await _resolve_wo_op_assignment_for_create(
+                            tenant_id,
+                            operation,
+                            assigned_worker_ids=getattr(op_data, "assigned_worker_ids", None),
+                            assigned_worker_id=getattr(op_data, "assigned_worker_id", None),
+                            assigned_worker_name=getattr(op_data, "assigned_worker_name", None),
+                            assigned_team_id=getattr(op_data, "assigned_team_id", None),
+                            assigned_team_name=getattr(op_data, "assigned_team_name", None),
+                            assigned_station_id=getattr(op_data, "assigned_station_id", None),
+                            assigned_station_name=getattr(op_data, "assigned_station_name", None),
+                            assigned_equipment_id=getattr(op_data, "assigned_equipment_id", None),
+                            assigned_equipment_name=getattr(op_data, "assigned_equipment_name", None),
+                            route_step=route_step_by_op_id.get(int(operation.id)),
+                        )
+                        if not workshop_id:
+                            workshop_id = _first_positive_int(
+                                (route_step_by_op_id.get(int(operation.id)) or {}).get("workshop_id"),
+                                (route_step_by_op_id.get(int(operation.id)) or {}).get("workshop_ids"),
+                                getattr(operation, "default_workshop_ids", None),
+                            ) or workshop_id
+                            if workshop_id and not workshop_name:
+                                ws = await Workshop.get_or_none(
+                                    tenant_id=tenant_id, id=workshop_id, deleted_at__isnull=True
+                                )
+                                workshop_name = ws.name if ws else workshop_name
+                        if not work_center_id:
+                            work_center_id = _first_positive_int(
+                                getattr(operation, "default_work_center_ids", None),
+                            ) or work_center_id
+                            if work_center_id and not work_center_name:
+                                wc = await WorkCenter.get_or_none(
+                                    tenant_id=tenant_id, id=work_center_id, deleted_at__isnull=True
+                                )
+                                work_center_name = wc.name if wc else work_center_name
+
                         work_order_op = await WorkOrderOperation.create(
                             tenant_id=tenant_id,
                             uuid=str(uuid.uuid4()),
@@ -1516,6 +1723,15 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             workshop_name=workshop_name,
                             work_center_id=work_center_id,
                             work_center_name=work_center_name,
+                            assigned_worker_ids=assignment["assigned_worker_ids"] or [],
+                            assigned_worker_id=assignment["assigned_worker_id"],
+                            assigned_worker_name=assignment["assigned_worker_name"],
+                            assigned_team_id=assignment["assigned_team_id"],
+                            assigned_team_name=assignment["assigned_team_name"],
+                            assigned_station_id=assignment["assigned_station_id"],
+                            assigned_station_name=assignment["assigned_station_name"],
+                            assigned_equipment_id=assignment["assigned_equipment_id"],
+                            assigned_equipment_name=assignment["assigned_equipment_name"],
                             planned_start_date=planned_start_date,
                             planned_end_date=planned_end_date,
                             standard_time=op_data.standard_time,
@@ -3156,9 +3372,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         rolling_svc = RollingScheduleService()
         from apps.kuaizhizao.utils.working_time import load_scheduling_work_context
-        next_day = await rolling_svc.get_next_workday(tenant_id, now.date())
+        next_day = await rolling_svc.get_next_workday(tenant_id, to_site_date(now))
         _holidays, _work_hours, _overtime = await load_scheduling_work_context(tenant_id, around=next_day)
-        anchor_start = datetime.combine(next_day, _work_hours.start)
+        anchor_start = resolve_business_datetime(datetime.combine(next_day, _work_hours.start))
 
         wos = await WorkOrder.filter(
             tenant_id=tenant_id,
@@ -4469,6 +4685,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 over_report_value=op.over_report_value,
                 assigned_worker_id=op.assigned_worker_id,
                 assigned_worker_name=op.assigned_worker_name,
+                assigned_worker_ids=getattr(op, "assigned_worker_ids", None) or [],
                 assigned_team_id=op.assigned_team_id,
                 assigned_team_name=op.assigned_team_name,
                 assigned_station_id=op.assigned_station_id,
@@ -5372,6 +5589,19 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         line_t,
                         line_explicit,
                     )
+                    assignment = await _resolve_wo_op_assignment_for_create(
+                        tenant_id,
+                        master_op,
+                        assigned_worker_ids=getattr(op_data, "assigned_worker_ids", None),
+                        assigned_worker_id=getattr(op_data, "assigned_worker_id", None),
+                        assigned_worker_name=getattr(op_data, "assigned_worker_name", None),
+                        assigned_team_id=getattr(op_data, "assigned_team_id", None),
+                        assigned_team_name=getattr(op_data, "assigned_team_name", None),
+                        assigned_station_id=getattr(op_data, "assigned_station_id", None),
+                        assigned_station_name=getattr(op_data, "assigned_station_name", None),
+                        assigned_equipment_id=getattr(op_data, "assigned_equipment_id", None),
+                        assigned_equipment_name=getattr(op_data, "assigned_equipment_name", None),
+                    )
                     new_op = await WorkOrderOperation.create(
                         tenant_id=tenant_id,
                         uuid=str(uuid.uuid4()),
@@ -5385,6 +5615,15 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         workshop_name=op_data.workshop_name,
                         work_center_id=op_data.work_center_id,
                         work_center_name=op_data.work_center_name,
+                        assigned_worker_ids=assignment["assigned_worker_ids"] or [],
+                        assigned_worker_id=assignment["assigned_worker_id"],
+                        assigned_worker_name=assignment["assigned_worker_name"],
+                        assigned_team_id=assignment["assigned_team_id"],
+                        assigned_team_name=assignment["assigned_team_name"],
+                        assigned_station_id=assignment["assigned_station_id"],
+                        assigned_station_name=assignment["assigned_station_name"],
+                        assigned_equipment_id=assignment["assigned_equipment_id"],
+                        assigned_equipment_name=assignment["assigned_equipment_name"],
                         planned_start_date=op_data.planned_start_date,
                         planned_end_date=op_data.planned_end_date,
                         standard_time=op_data.standard_time,
@@ -5695,6 +5934,109 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             if worker_ids and not op_payload.get("assigned_worker_id"):
                 op_payload["assigned_worker_id"] = worker_ids[0]
             op_payload["max_reportable_quantity"] = _max_reportable_quantity_for_op(work_order, work_order_operation)
+            dmap = await _batch_default_operators_snapshots_by_master_operation_id(
+                tenant_id, [work_order_operation.operation_id]
+            )
+            op_payload["default_operators"] = dmap.get(work_order_operation.operation_id, [])
+            return WorkOrderOperationResponse.model_validate(op_payload)
+
+    async def withdraw_work_order_operation_start(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        operation_id: int,
+        withdrawn_by: int,
+    ) -> WorkOrderOperationResponse:
+        """
+        撤回工序开始：工序已开始且尚无报工时，恢复为待开工。
+
+        若工单上已无其他进行中/已完成工序，且工单为执行中，则回退为已下达。
+        """
+        async with in_transaction():
+            work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+            if getattr(work_order, "is_frozen", False):
+                raise BusinessLogicError(
+                    f"工单已冻结，不能撤回开工。冻结原因：{getattr(work_order, 'freeze_reason', None) or '无'}"
+                )
+
+            work_order_operation = await WorkOrderOperation.get_or_none(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                id=operation_id,
+                deleted_at__isnull=True,
+            )
+            if not work_order_operation:
+                raise NotFoundError(
+                    f"工单工序不存在: 工单ID={work_order_id}, 工序ID={operation_id}"
+                )
+
+            status = str(work_order_operation.status or "").strip()
+            if status not in ("in_progress", "processing"):
+                raise BusinessLogicError("仅「进行中」且未报工的工序可撤回开始")
+
+            completed = Decimal(str(work_order_operation.completed_quantity or 0))
+            qualified = Decimal(str(work_order_operation.qualified_quantity or 0))
+            unqualified = Decimal(str(work_order_operation.unqualified_quantity or 0))
+            if completed > 0 or qualified > 0 or unqualified > 0:
+                raise BusinessLogicError("该工序已有报工数量，不允许撤回开始")
+
+            has_reports = await ReportingRecord.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            ).filter(
+                Q(operation_id=int(work_order_operation.operation_id))
+                | Q(operation_id=int(work_order_operation.id))
+            ).exists()
+            if has_reports:
+                raise BusinessLogicError("该工序已有报工记录，不允许撤回开始")
+
+            user_info = await self.get_user_info(withdrawn_by)
+            work_order_operation.status = "pending"
+            work_order_operation.actual_start_date = None
+            work_order_operation.actual_end_date = None
+            work_order_operation.completed_quantity = Decimal("0")
+            work_order_operation.qualified_quantity = Decimal("0")
+            work_order_operation.unqualified_quantity = Decimal("0")
+            work_order_operation.updated_by = withdrawn_by
+            work_order_operation.updated_by_name = user_info["name"]
+            await work_order_operation.save()
+
+            # 无其它已开工/完成工序时，工单从执行中回退为已下达
+            other_active = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            ).exclude(id=work_order_operation.id).filter(
+                status__in=["in_progress", "processing", "paused", "completed"]
+            ).exists()
+            if (
+                not other_active
+                and str(work_order.status or "").strip() in ("in_progress", "执行中")
+            ):
+                wo_completed = Decimal(str(work_order.completed_quantity or 0))
+                if wo_completed <= 0:
+                    work_order.status = "released"
+                    work_order.actual_start_date = None
+                    work_order.updated_by = withdrawn_by
+                    work_order.updated_by_name = user_info["name"]
+                    await work_order.save()
+
+            op_payload = {
+                f: getattr(work_order_operation, f, None)
+                for f in WorkOrderOperationResponse.model_fields
+                if hasattr(work_order_operation, f)
+            }
+            worker_ids = _parse_assigned_worker_ids(
+                op_payload.get("assigned_worker_ids"),
+                op_payload.get("assigned_worker_id"),
+            )
+            op_payload["assigned_worker_ids"] = worker_ids
+            if worker_ids and not op_payload.get("assigned_worker_id"):
+                op_payload["assigned_worker_id"] = worker_ids[0]
+            op_payload["max_reportable_quantity"] = _max_reportable_quantity_for_op(
+                work_order, work_order_operation
+            )
             dmap = await _batch_default_operators_snapshots_by_master_operation_id(
                 tenant_id, [work_order_operation.operation_id]
             )
@@ -6912,24 +7254,12 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         revoked_by: int
     ) -> WorkOrderResponse:
         """
-        撤回工单（从已下达或指定结束状态撤回为草稿状态）
+        撤回下达（从已下达 / 执行中撤回为草稿状态）
 
         撤回条件：
-        - 工单状态为 'released'（已下达）或 'completed'（已完成且为指定结束）
+        - 工单状态为 'released'（已下达）或 'in_progress'（执行中，仅开工未报工）
         - 工单没有产生过报工记录及领料/入库等下游单据
-
-        Args:
-            tenant_id: 组织ID
-            work_order_id: 工单ID
-            revoked_by: 撤回人ID
-
-        Returns:
-            WorkOrderResponse: 更新后的工单信息
-
-        Raises:
-            NotFoundError: 工单不存在
-            ValidationError: 不允许撤回的工单状态
-            BusinessLogicError: 工单已有报工记录，不允许撤回
+        指定结束的撤回请使用 withdraw_manual_complete_work_order。
         """
         async with in_transaction():
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
@@ -6952,10 +7282,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 actual_end_date=None
             )
 
-            # 同步重置所有工序的状态和时间
+            # 同步重置所有未删除工序的状态和时间
             await WorkOrderOperation.filter(
                 tenant_id=tenant_id,
-                work_order_id=work_order_id
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
             ).update(
                 status='pending',
                 actual_start_date=None,
@@ -6977,12 +7308,12 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         node_code="released",
                         operator_id=revoked_by,
                     )
-                elif original_status == 'completed':
+                elif original_status == 'in_progress':
                     await timing_service.record_node_end(
                         tenant_id=tenant_id,
                         document_type="work_order",
                         document_id=work_order_id,
-                        node_code="completed",
+                        node_code="in_progress",
                         operator_id=revoked_by,
                     )
             except Exception as e:
@@ -6997,6 +7328,69 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             logger.info(f"工单 {work_order.code} 已撤回为草稿状态")
             return WorkOrderResponse.model_validate(work_order)
+
+    async def withdraw_manual_complete_work_order(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        withdrawn_by: int,
+    ) -> WorkOrderResponse:
+        """
+        撤回指定结束：清除手动完工标记，恢复为已下达或执行中，保留报工与工序进度。
+        """
+        async with in_transaction():
+            work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+            assert_work_order_capability(work_order, "withdraw_manual_complete")
+
+            ops = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            ).all()
+            started_statuses = {"in_progress", "completed", "执行中", "已完成"}
+            has_started_op = any(
+                str(getattr(op, "status", "") or "").strip() in started_statuses
+                or getattr(op, "actual_start_date", None) is not None
+                for op in ops
+            )
+            restore_status = (
+                "in_progress"
+                if has_started_op or getattr(work_order, "actual_start_date", None)
+                else "released"
+            )
+
+            work_order = await self.update_with_user(
+                tenant_id=tenant_id,
+                record_id=work_order_id,
+                updated_by=withdrawn_by,
+                status=restore_status,
+                manually_completed=False,
+                actual_end_date=None,
+            )
+
+            try:
+                timing_service = DocumentTimingService()
+                await timing_service.record_node_end(
+                    tenant_id=tenant_id,
+                    document_type="work_order",
+                    document_id=work_order_id,
+                    node_code="completed",
+                    operator_id=withdrawn_by,
+                )
+                await timing_service.record_node_start(
+                    tenant_id=tenant_id,
+                    document_type="work_order",
+                    document_id=work_order_id,
+                    node_code=restore_status,
+                    operator_id=withdrawn_by,
+                )
+            except Exception as e:
+                logger.warning(f"记录工单撤回指定结束节点时间失败: {e}")
+
+            logger.info(
+                f"工单 {work_order.code} 已撤回指定结束，恢复为 {restore_status}"
+            )
+            return await self.get_work_order_by_id(tenant_id, work_order_id)
 
     async def manually_complete_work_order(
         self,

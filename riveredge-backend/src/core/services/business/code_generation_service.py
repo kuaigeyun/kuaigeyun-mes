@@ -2,9 +2,9 @@
 编码生成服务模块
 
 提供根据编码规则生成编码的功能。
-支持序列号校准：从库中取当前最大已用序号，使新生成的序号为 max+1（按最大号往后排）。
+支持序列号校准：从库中取当前最大已用序号，使新生成的序号不低于 max+1（按最大号往后排）。
 - 导入较大序号后会与序号表对齐，避免冲突。
-- 删除较大序号后序号表会随库中最大号回落；中间号删除后按当前最大号+1（不刻意填洞）。
+- 删除较大序号后不回落填洞（避免合并发号等「先 generate 后落库」场景撞号）。
 - 规则无固定前缀（仅流水/表单字段+流水）时，仍从物料 main_code 末尾解析数字做校准。
 - 物料主编码若含分组等表单字段：用「序号前完整前缀」（与生成规则一致，如分组码 0303）在库内取该分组下最大流水，再 +1；不按全库/不按洞填号。
 """
@@ -927,8 +927,11 @@ class CodeGenerationService:
     ) -> None:
         """
         根据库中已有编码的最大序号校准 current_seq。
-        在能解析出 max_from_db 时，始终令 current_seq = max_from_db（下次 += step 即为 max+1），
-        这样删除最大序号后序号会回落；仅曾「只上调、不下调」时会在删除后仍发大号。
+
+        仅当 max_from_db > current_seq 时上调，使下次 += step 不低于库中已用最大号+1。
+        禁止把 current_seq 下调到 max_from_db：合并收款等场景会在落库前连续 generate 多次，
+        若每次都回落到「库中最大号」会发号重复并撞唯一约束。
+        删除最大号后允许留号空隙，不以复用已删号为目标。
         """
         static_p = CodeGenerationService._get_prefix_for_rule(rule, components) or ""
         log_prefix = _resolve_scan_prefix_for_sequence(
@@ -966,7 +969,7 @@ class CodeGenerationService:
             )
             return
 
-        if sequence.current_seq != max_from_db:
+        if max_from_db > sequence.current_seq:
             logger.info(
                 "code_sequence_recalibrate rule_code={} prefix={} effective_prefix={} scope_key={} max_from_db={} current_seq_before={}",
                 request_rule_code,
@@ -980,7 +983,7 @@ class CodeGenerationService:
             await sequence.save()
         else:
             logger.debug(
-                "code_sequence_recalibrate_skip rule_code={} current_seq={} max_from_db={} reason=already_ok",
+                "code_sequence_recalibrate_skip rule_code={} current_seq={} max_from_db={} reason=already_ok_or_ahead",
                 request_rule_code,
                 sequence.current_seq,
                 max_from_db,

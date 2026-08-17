@@ -75,7 +75,12 @@ import {
 import { formatDateTime, todaySiteDateString } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-import { formDateFormItemProps, formDateRangeFormItemProps, toApiDateString } from '../../../../../utils/formDate';
+import {
+  formDateFormItemProps,
+  formDateRangeFormItemProps,
+  parseSpreadsheetDateToApiString,
+  toApiDateString,
+} from '../../../../../utils/formDate';
 import {
   buildActiveStatusValueEnum,
   buildEquipmentNatureValueEnum,
@@ -972,11 +977,7 @@ const EquipmentPage: React.FC = () => {
               if (idx === undefined) return '';
               return String(row[idx] ?? '').trim();
             };
-            const parseDate = (raw: string): string | undefined => {
-              if (!raw) return undefined;
-              const d = dayjs(raw);
-              return d.isValid() ? d.format('YYYY-MM-DD') : undefined;
-            };
+            const parseDate = (raw: string): string | undefined => parseSpreadsheetDateToApiString(raw);
             const parseActive = (raw: string): boolean | undefined => {
               if (!raw) return undefined;
               const v = raw.toLowerCase();

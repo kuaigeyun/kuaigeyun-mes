@@ -169,6 +169,7 @@ import {
   bulkWithdrawSalesOrders,
   bulkUnapproveSalesOrders,
   bulkCloseSalesOrders,
+  bulkReopenSalesOrders,
   deleteSalesOrder,
   getSalesOrderStatistics,
   SalesOrder,
@@ -189,6 +190,7 @@ import {
   quotationCapabilityReasonMessage,
   useSalesOrderCapabilities,
   salesOrderBatchCloseAllowed,
+  salesOrderBatchReopenAllowed,
   salesOrderCapabilityReasonMessage,
   salesContractCapabilityReasonMessage,
 } from '../../../../../hooks/useDocumentCapabilities';
@@ -4794,6 +4796,29 @@ const SalesOrdersPage: React.FC = () => {
                   t('app.kuaizhizao.salesOrder.batchCloseConfirmDescription', { count: c }),
               }}
               icon={<StopOutlined />}
+              size="middle"
+            />,
+            <UniCapabilityBatchButton
+              key="sales-order-batch-reopen"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedOrdersForBatch}
+              capabilityKey="reopen"
+              permAllowed={salesOrderPerms.canUpdate}
+              batchAllowed={(records, perm) => salesOrderBatchReopenAllowed(records, perm)}
+              onRunBulk={bulkReopenSalesOrders}
+              onSuccess={handleBulkCapabilityBatchSuccess}
+              resolveId={(key) => resolveSalesOrderBatchId(key)}
+              notAllowedMessage={t('app.kuaizhizao.salesOrder.batchReopenNotAllowed')}
+              requireConfirm
+              labels={{
+                single: t('app.kuaizhizao.salesOrder.batchReopen'),
+                batch: t('app.kuaizhizao.salesOrder.batchReopen'),
+                singleConfirmTitle: t('app.kuaizhizao.salesOrder.batchReopenConfirmTitle'),
+                batchConfirmTitle: t('app.kuaizhizao.salesOrder.batchReopenConfirmTitle'),
+                batchConfirmDescription: (c) =>
+                  t('app.kuaizhizao.salesOrder.batchReopenConfirmDescription', { count: c }),
+              }}
+              icon={<RollbackOutlined />}
               size="middle"
             />,
             <UniBatchButton

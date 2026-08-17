@@ -92,46 +92,13 @@ echo ""
 # 启动服务（启用热重载，监控 src 目录）
 # 使用 UV 运行，自动使用 .venv 虚拟环境
 # 主机和端口从环境变量读取（HOST 和 PORT），未设置时使用配置文件默认值
-# 优化热重载配置：
-#   --reload-exclude: 排除不需要监听的文件/目录，减少不必要的重启
-#   --reload-delay: 增加检测间隔到 1.0 秒，减少频繁检测（Windows 上更稳定）
-#   --reload-include: 只监听 .py 文件，忽略其他文件类型
+# Windows Git Bash + uv run 会把未妥善保护的 ** 通配展开成海量路径塞进 uvicorn，
+# 导致 "Got unexpected extra arguments (...__pycache__...)"。此处仅监控 src，不再堆 exclude 通配。
 PYTHONPATH="${PYTHONPATH}:$(pwd)/src" uv run uvicorn server.main:app \
   --host "${BACKEND_HOST}" \
   --port "${BACKEND_PORT}" \
   --reload \
   --reload-dir src \
-  --reload-include "*.py" \
-  --reload-exclude "**/__pycache__/**" \
-  --reload-exclude "**/*.pyc" \
-  --reload-exclude "**/*.pyo" \
-  --reload-exclude "**/*.pyd" \
-  --reload-exclude "**/.git/**" \
-  --reload-exclude "**/.venv/**" \
-  --reload-exclude "**/venv*/**" \
-  --reload-exclude "**/node_modules/**" \
-  --reload-exclude "**/.mypy_cache/**" \
-  --reload-exclude "**/.pytest_cache/**" \
-  --reload-exclude "**/.ruff_cache/**" \
-  --reload-exclude "**/*.log" \
-  --reload-exclude "**/*.tmp" \
-  --reload-exclude "**/.DS_Store" \
-  --reload-exclude "**/Thumbs.db" \
-  --reload-exclude "**/.vscode/**" \
-  --reload-exclude "**/.idea/**" \
-  --reload-exclude "**/migrations/**" \
-  --reload-exclude "**/tests/**" \
-  --reload-exclude "**/test_*.py" \
-  --reload-exclude "**/*_test.py" \
-  --reload-exclude "**/conftest.py" \
-  --reload-exclude "**/.logs/**" \
-  --reload-exclude "**/logs/**" \
-  --reload-exclude "**/static/**" \
-  --reload-exclude "**/templates/**" \
-  --reload-exclude "**/*.sql" \
-  --reload-exclude "**/*.sqlite" \
-  --reload-exclude "**/*.db" \
-  --reload-exclude "**/scripts/**" \
   --reload-delay 1.0
 
 

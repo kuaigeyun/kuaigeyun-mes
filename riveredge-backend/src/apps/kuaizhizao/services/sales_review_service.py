@@ -612,10 +612,16 @@ class SalesReviewService(AppBaseService):
             raise BusinessLogicError("本轮部门意见槽位不存在，请重新下达")
 
         now = resolve_business_datetime()
-        name = await self.get_user_name(current_user.id)
+        reviewer_id = int(body.reviewed_by) if body.reviewed_by else int(current_user.id)
+        reviewer = await User.get_or_none(
+            id=reviewer_id, tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        if not reviewer:
+            raise ValidationError("所选评审人不存在或不属于当前租户")
+        name = await self.get_user_name(reviewer_id)
         opinion.result = body.result
         opinion.opinion = body.opinion
-        opinion.reviewed_by = current_user.id
+        opinion.reviewed_by = reviewer_id
         opinion.reviewed_by_name = name
         opinion.reviewed_at = now
         apply_update_audit(opinion, current_user)

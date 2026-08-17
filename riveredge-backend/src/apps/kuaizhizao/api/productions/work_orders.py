@@ -880,6 +880,30 @@ async def start_work_order_operation(
 
 
 @router.post(
+    "/work-orders/{work_order_id}/operations/{operation_id}/withdraw-start",
+    response_model=WorkOrderOperationResponse,
+    summary="Withdraw work order operation start",
+)
+async def withdraw_work_order_operation_start(
+    work_order_id: int,
+    operation_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderOperationResponse:
+    """
+    撤回工序开始
+
+    工序已开始且尚无报工时，恢复为待开工；若工单无其它已开工工序则回退为已下达。
+    """
+    return await WorkOrderService().withdraw_work_order_operation_start(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        operation_id=operation_id,
+        withdrawn_by=current_user.id,
+    )
+
+
+@router.post(
     "/work-orders/{work_order_id}/operations/{operation_id}/pause",
     summary="Pause work order operation (station downtime)",
 )
@@ -2089,12 +2113,11 @@ async def revoke_work_order(
     tenant_id: int = Depends(get_current_tenant),
 ) -> WorkOrderResponse:
     """
-    撤回工单
+    撤回下达
 
-    将已下达或指定结束的工单撤回为草稿状态。
-    撤回条件：
-    - 工单状态为 'released'（已下达）或 'completed'（已完成且为指定结束）
-    - 工单没有产生过报工记录
+    将已下达 / 执行中（仅开工未报工）的工单撤回为草稿。
+    条件：尚无报工记录，且无领料/入库等下游单据。
+    指定结束请使用 withdraw-manual-complete。
 
     - **work_order_id**: 工单ID
     """
@@ -2102,6 +2125,28 @@ async def revoke_work_order(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
         revoked_by=current_user.id
+    )
+
+
+@router.post(
+    "/work-orders/{work_order_id}/withdraw-manual-complete",
+    response_model=WorkOrderResponse,
+    summary="Withdraw force-complete work order",
+)
+async def withdraw_manual_complete_work_order(
+    work_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderResponse:
+    """
+    撤回指定结束
+
+    清除手动完工标记，恢复为已下达或执行中，保留报工与工序进度。
+    """
+    return await WorkOrderService().withdraw_manual_complete_work_order(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        withdrawn_by=current_user.id,
     )
 
 

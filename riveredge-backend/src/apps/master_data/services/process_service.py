@@ -179,6 +179,34 @@ async def _operation_to_response_data(op: Operation) -> Dict[str, Any]:
                         default_operator_names.append(u.full_name or u.username)
         except Exception:
             pass
+
+    default_team_ids: List[int] = []
+    default_team_names: List[str] = []
+    tids = getattr(op, "default_team_ids", None)
+    if tids:
+        try:
+            if isinstance(tids, list):
+                default_team_ids = [int(tid) for tid in tids if tid]
+            elif isinstance(tids, str):
+                import json
+                parsed = json.loads(tids) if tids else []
+                default_team_ids = [int(tid) for tid in parsed if tid]
+            if default_team_ids:
+                from apps.master_data.models.factory import WorkGroup
+
+                groups = await WorkGroup.filter(
+                    tenant_id=op.tenant_id,
+                    id__in=default_team_ids,
+                    deleted_at__isnull=True,
+                ).all()
+                wg_map = {g.id: g for g in groups}
+                for tid in default_team_ids:
+                    g = wg_map.get(tid)
+                    if g:
+                        default_team_names.append(g.name)
+        except Exception:
+            pass
+
     plan_id = getattr(op, "default_inspection_plan_id", None)
     # 质检模式字段后加：旧数据库中可能为 NULL/none，但有绑定不良品或默认方案，响应中按关联推断以便前后端一致
     _im_raw = getattr(op, "inspection_mode", None)
@@ -210,7 +238,8 @@ async def _operation_to_response_data(op: Operation) -> Dict[str, Any]:
         "default_operator_ids": default_operator_ids,
         "default_operator_uuids": default_operator_uuids,
         "default_operator_names": default_operator_names,
-        "default_team_ids": getattr(op, "default_team_ids", []) or [],
+        "default_team_ids": default_team_ids,
+        "default_team_names": default_team_names,
         "default_workshop_ids": getattr(op, "default_workshop_ids", []) or [],
         "default_work_center_ids": getattr(op, "default_work_center_ids", []) or [],
         "default_station_ids": getattr(op, "default_station_ids", []) or [],

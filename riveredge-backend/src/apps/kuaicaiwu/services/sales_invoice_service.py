@@ -116,11 +116,86 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         receivable_ids: List[int],
         code_by_id: Dict[int, str],
     ) -> Dict[int, Decimal]:
+        from collections import defaultdict
+
+        from apps.kuaicaiwu.services.invoice_source_allocation import (
+            accumulate_attributed,
+            attribute_invoice_total_to_sources,
+            parse_relation_allocated_amount,
+        )
+
         result: Dict[int, Decimal] = {rid: Decimal("0") for rid in receivable_ids}
         if not receivable_ids:
             return result
 
         counted_invoice_ids: set[int] = set()
+        id_set = set(int(x) for x in receivable_ids)
+
+        # 先按当前页源单找到相关发票，再拉这些发票的全部源单关联（避免分页只见一张时把整票记到该单）
+        seed_relations = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="receivable",
+            source_id__in=receivable_ids,
+            target_type="sales_invoice",
+        ).all()
+        invoice_ids = sorted(
+            {int(r.target_id) for r in seed_relations if r.target_id}
+        )
+
+        by_invoice: Dict[int, List[DocumentRelation]] = defaultdict(list)
+        all_source_ids: set[int] = set()
+        if invoice_ids:
+            full_relations = await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="receivable",
+                target_type="sales_invoice",
+                target_id__in=invoice_ids,
+            ).all()
+            for rel in full_relations:
+                if not rel.target_id or not rel.source_id:
+                    continue
+                by_invoice[int(rel.target_id)].append(rel)
+                all_source_ids.add(int(rel.source_id))
+
+        inv_map: Dict[int, Invoice] = {}
+        if invoice_ids:
+            linked = await Invoice.filter(
+                tenant_id=tenant_id,
+                id__in=invoice_ids,
+                category="OUT",
+                deleted_at__isnull=True,
+            ).exclude(status__in=list(self._EXCLUDED_INVOICE_STATUSES))
+            inv_map = {int(inv.id): inv for inv in linked}
+
+        doc_id_list = sorted(all_source_ids | id_set)
+        doc_totals: Dict[int, Decimal] = {
+            int(row["id"]): Decimal(str(row.get("total_amount") or 0))
+            for row in await Receivable.filter(
+                tenant_id=tenant_id, id__in=doc_id_list
+            ).values("id", "total_amount")
+        } if doc_id_list else {}
+
+        for iid, rels in by_invoice.items():
+            inv = inv_map.get(iid)
+            if not inv:
+                continue
+            counted_invoice_ids.add(iid)
+            entries = [
+                (int(r.source_id), parse_relation_allocated_amount(getattr(r, "notes", None)))
+                for r in rels
+            ]
+            if not entries:
+                continue
+            attributed = attribute_invoice_total_to_sources(
+                Decimal(str(inv.total_amount or 0)),
+                entries,
+                doc_totals,
+            )
+            # 只回填当前列表关心的源单
+            accumulate_attributed(
+                result,
+                ((sid, amt) for sid, amt in attributed.items() if sid in id_set),
+            )
 
         direct_rows = await Invoice.filter(
             tenant_id=tenant_id,
@@ -129,35 +204,12 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             deleted_at__isnull=True,
         ).exclude(status__in=list(self._EXCLUDED_INVOICE_STATUSES))
         for inv in direct_rows:
+            if int(inv.id) in counted_invoice_ids:
+                continue
             rid = int(inv.receivable_id)
             if rid in result:
                 result[rid] = result.get(rid, Decimal("0")) + Decimal(str(inv.total_amount or 0))
                 counted_invoice_ids.add(int(inv.id))
-
-        relations = await DocumentRelation.filter(
-            tenant_id=tenant_id,
-            source_type="receivable",
-            source_id__in=receivable_ids,
-            target_type="sales_invoice",
-        ).all()
-        relation_by_invoice: Dict[int, int] = {
-            int(r.target_id): int(r.source_id) for r in relations if r.target_id and r.source_id
-        }
-        orphan_invoice_ids = [
-            iid for iid in relation_by_invoice if iid not in counted_invoice_ids
-        ]
-        if orphan_invoice_ids:
-            linked = await Invoice.filter(
-                tenant_id=tenant_id,
-                id__in=orphan_invoice_ids,
-                category="OUT",
-                deleted_at__isnull=True,
-            ).exclude(status__in=list(self._EXCLUDED_INVOICE_STATUSES))
-            for inv in linked:
-                sid = relation_by_invoice.get(int(inv.id))
-                if sid is not None:
-                    result[sid] = result.get(sid, Decimal("0")) + Decimal(str(inv.total_amount or 0))
-                    counted_invoice_ids.add(int(inv.id))
 
         codes = [c for c in code_by_id.values() if c]
         if codes:
@@ -691,10 +743,17 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         invoice_id: int,
         invoice_code: str,
         created_by: int,
+        allocated_amount: Optional[Decimal] = None,
     ) -> None:
         from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
         from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        from apps.kuaicaiwu.services.invoice_source_allocation import encode_relation_allocated_amount
 
+        notes = (
+            encode_relation_allocated_amount(allocated_amount)
+            if allocated_amount is not None
+            else None
+        )
         rel_svc = DocumentRelationNewService()
         await rel_svc.create_relation(
             tenant_id=tenant_id,
@@ -710,6 +769,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 relation_type="source",
                 relation_mode="pull",
                 relation_desc="加载创建销项发票",
+                notes=notes,
             ),
             created_by=created_by,
         )

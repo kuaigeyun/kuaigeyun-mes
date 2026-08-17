@@ -1455,6 +1455,9 @@ class DocumentPrintService:
             }
             for i in items
         ]
+        delivery_time = (
+            to_api_isoformat(delivery.delivery_time) if delivery.delivery_time else None
+        )
         return {
             "document_type": "sales_delivery",
             "code": delivery.delivery_code,
@@ -1465,7 +1468,13 @@ class DocumentPrintService:
             "total_amount": str(delivery.total_amount),
             "status": delivery.status,
             "deliverer_name": delivery.deliverer_name,
-            "delivery_time": to_api_isoformat(delivery.delivery_time) if delivery.delivery_time else None,
+            "delivery_time": delivery_time,
+            # 预设模板字段名为 delivery_date，与 delivery_time 同源
+            "delivery_date": delivery_time,
+            "shipping_method": getattr(delivery, "shipping_method", None) or "",
+            "tracking_number": getattr(delivery, "tracking_number", None) or "",
+            "shipping_address": getattr(delivery, "shipping_address", None) or "",
+            "notes": getattr(delivery, "notes", None) or "",
             "created_at": to_api_isoformat(delivery.created_at) if delivery.created_at else None,
             "items": items_data,
         }

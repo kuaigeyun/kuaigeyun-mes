@@ -13,6 +13,10 @@ export interface PurchaseReturnCapabilities {
   confirm?: ActionCapability;
   withdraw?: ActionCapability;
   print?: ActionCapability;
+  submit?: ActionCapability;
+  withdraw_submit?: ActionCapability;
+  approve?: ActionCapability;
+  revoke_approval?: ActionCapability;
 }
 
 export interface PurchaseReturn {
@@ -49,6 +53,11 @@ export interface PurchaseReturn {
   updated_at?: string;
   lifecycle?: Record<string, unknown>;
   capabilities?: PurchaseReturnCapabilities;
+  audit?: {
+    phase?: string;
+    enabled?: boolean;
+    mode?: string;
+  } | null;
   items?: PurchaseReturnItem[];
 }
 

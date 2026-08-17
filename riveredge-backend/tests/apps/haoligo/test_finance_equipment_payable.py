@@ -115,48 +115,122 @@ async def test_unpaid_amount_and_overpay_guard_logic():
 
 
 @pytest.mark.asyncio
-async def test_submit_requires_invoice_acceptance_location():
+async def test_submit_allows_missing_invoice_and_acceptance():
+    """允许先提交财务再补发票/验收单。"""
     from apps.haoligo.api.routes_finance_equipment_payable import submit_equipment_payable
-    from apps.haoligo.constants.finance_equipment_payable import WORKFLOW_DRAFT
+    from apps.haoligo.constants.finance_equipment_payable import WORKFLOW_DRAFT, WORKFLOW_SUBMITTED
 
-    def make_row(**overrides):
-        base = dict(
-            id=3,
+    row = SimpleNamespace(
+        id=3,
+        tenant_id=1,
+        workflow_status=WORKFLOW_DRAFT,
+        install_location=None,
+        invoice_file_uuids=[],
+        acceptance_file_uuids=[],
+        acceptance_uploaded_at=None,
+        reporter_user_id=1,
+        submitted_by_user_id=None,
+        submitted_at=None,
+        save=AsyncMock(),
+    )
+    out = SimpleNamespace(id=3, workflow_status=WORKFLOW_SUBMITTED)
+    with patch(
+        "apps.haoligo.api.routes_finance_equipment_payable.tenant_alive",
+        return_value=_qs_first(row),
+    ), patch(
+        "apps.haoligo.api.routes_finance_equipment_payable.resolve_business_datetime",
+        return_value=datetime(2026, 8, 17, 12, 0, 0, tzinfo=timezone.utc),
+    ), patch(
+        "apps.haoligo.api.routes_finance_equipment_payable.batch_lookup_user_names",
+        new=AsyncMock(return_value={1: "甲", 9: "乙"}),
+    ), patch(
+        "apps.haoligo.api.routes_finance_equipment_payable._serialize_payable",
+        new=AsyncMock(return_value=out),
+    ):
+        result = await submit_equipment_payable(
+            payable_id=3,
             tenant_id=1,
-            workflow_status=WORKFLOW_DRAFT,
-            install_location=None,
-            invoice_file_uuids=[],
-            acceptance_file_uuids=[],
-            acceptance_uploaded_at=None,
-            reporter_user_id=1,
-            submitted_by_user_id=None,
-            save=AsyncMock(),
+            user=SimpleNamespace(id=9),
         )
-        base.update(overrides)
-        return SimpleNamespace(**base)
+    assert result is out
+    assert row.workflow_status == WORKFLOW_SUBMITTED
+    assert row.submitted_by_user_id == 9
+    row.save.assert_awaited()
 
-    async def _run(row):
-        with patch(
-            "apps.haoligo.api.routes_finance_equipment_payable.tenant_alive",
-            return_value=_qs_first(row),
-        ):
+
+@pytest.mark.asyncio
+async def test_update_payable_allowed_after_submit():
+    """已提交后仍可补传位置/发票/验收单。"""
+    from apps.haoligo.api.routes_finance_equipment_payable import (
+        EquipmentPayableUpdate,
+        update_equipment_payable,
+    )
+    from apps.haoligo.constants.finance_equipment_payable import WORKFLOW_SUBMITTED
+
+    row = SimpleNamespace(
+        id=5,
+        tenant_id=1,
+        workflow_status=WORKFLOW_SUBMITTED,
+        install_location=None,
+        invoice_file_uuids=[],
+        acceptance_file_uuids=[],
+        acceptance_uploaded_at=None,
+        reporter_user_id=1,
+        submitted_by_user_id=2,
+        save=AsyncMock(),
+    )
+    out = SimpleNamespace(id=5)
+    body = EquipmentPayableUpdate(
+        install_location="二车间",
+        invoice_file_uuids=["inv-1"],
+        acceptance_file_uuids=["acc-1"],
+    )
+    with patch(
+        "apps.haoligo.api.routes_finance_equipment_payable.tenant_alive",
+        return_value=_qs_first(row),
+    ), patch(
+        "apps.haoligo.api.routes_finance_equipment_payable.batch_lookup_user_names",
+        new=AsyncMock(return_value={}),
+    ), patch(
+        "apps.haoligo.api.routes_finance_equipment_payable._serialize_payable",
+        new=AsyncMock(return_value=out),
+    ):
+        result = await update_equipment_payable(
+            payable_id=5,
+            body=body,
+            tenant_id=1,
+            _=SimpleNamespace(id=1),
+        )
+    assert result is out
+    assert row.install_location == "二车间"
+    assert row.invoice_file_uuids == ["inv-1"]
+    assert row.acceptance_file_uuids == ["acc-1"]
+    row.save.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_submit_rejects_duplicate():
+    from apps.haoligo.api.routes_finance_equipment_payable import submit_equipment_payable
+    from apps.haoligo.constants.finance_equipment_payable import WORKFLOW_SUBMITTED
+
+    row = SimpleNamespace(
+        id=3,
+        tenant_id=1,
+        workflow_status=WORKFLOW_SUBMITTED,
+        save=AsyncMock(),
+    )
+    with patch(
+        "apps.haoligo.api.routes_finance_equipment_payable.tenant_alive",
+        return_value=_qs_first(row),
+    ):
+        with pytest.raises(HTTPException) as exc:
             await submit_equipment_payable(
                 payable_id=3,
                 tenant_id=1,
                 user=SimpleNamespace(id=9),
             )
-
-    with pytest.raises(HTTPException) as e1:
-        await _run(make_row())
-    assert "位置" in str(e1.value.detail)
-
-    with pytest.raises(HTTPException) as e2:
-        await _run(make_row(install_location="一车间"))
-    assert "发票" in str(e2.value.detail)
-
-    with pytest.raises(HTTPException) as e3:
-        await _run(make_row(install_location="一车间", invoice_file_uuids=["inv-1"]))
-    assert "验收" in str(e3.value.detail)
+    assert exc.value.status_code == 400
+    assert "勿重复" in str(exc.value.detail)
 
 
 def test_equipment_payable_routes_importable():

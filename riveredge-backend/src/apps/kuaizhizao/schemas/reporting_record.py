@@ -154,6 +154,8 @@ class ReportingRecordListResponse(BaseSchema):
     qualified_quantity: Decimal = Field(..., description="合格数量")
     unqualified_quantity: Decimal = Field(..., description="不合格数量")
     work_hours: Decimal = Field(..., description="工时（小时）")
+    work_start_time: Optional[datetime] = Field(None, description="工序开始时间")
+    work_end_time: Optional[datetime] = Field(None, description="工序完成时间")
     status: str = Field(..., description="审核状态")
     reported_at: datetime = Field(..., description="报工时间")
     created_at: datetime = Field(..., description="创建时间")

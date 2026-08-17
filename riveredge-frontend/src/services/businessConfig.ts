@@ -60,6 +60,30 @@ export function isTrialRunModeEnabled(config: BusinessConfig | null | undefined)
   return Boolean(config?.parameters?.common?.trial_run_mode);
 }
 
+/** 详情抽屉全链路模式：关闭 / 只显示单据（不展示节点创建时间） */
+export type DetailFullChainMode = 'off' | 'documents_only';
+
+export function resolveDetailFullChainMode(
+  config: BusinessConfig | null | undefined,
+): DetailFullChainMode {
+  const common = config?.parameters?.common;
+  const raw = common?.detail_full_chain_mode ?? common?.detail_full_chain_enabled;
+  if (typeof raw === 'boolean') return raw ? 'documents_only' : 'off';
+  if (raw === 'off' || raw === 'documents_only') return raw;
+  return 'documents_only';
+}
+
+/** 详情抽屉是否展示全链路跟踪 Tab（mode !== off；默认展示） */
+export function isDetailFullChainEnabled(config: BusinessConfig | null | undefined): boolean {
+  return resolveDetailFullChainMode(config) !== 'off';
+}
+
+/** 详情抽屉是否展示操作记录（默认 true） */
+export function isDetailOperationLogEnabled(config: BusinessConfig | null | undefined): boolean {
+  const raw = config?.parameters?.common?.detail_operation_log_enabled;
+  return raw === undefined ? true : Boolean(raw);
+}
+
 /** 与当前库字段 decimal_places 对齐的配置上限（配置页 max 同源） */
 export const NUMERIC_PRECISION_STORAGE_CEILING = {
   quantity: 2,

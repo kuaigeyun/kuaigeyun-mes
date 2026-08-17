@@ -536,6 +536,7 @@ interface WorkOrder {
   capabilities?: {
     release?: { allowed: boolean; reason?: string | null }
     revoke?: { allowed: boolean; reason?: string | null }
+    withdraw_manual_complete?: { allowed: boolean; reason?: string | null }
     freeze?: { allowed: boolean; reason?: string | null }
     cancel?: { allowed: boolean; reason?: string | null }
     set_priority?: { allowed: boolean; reason?: string | null }
@@ -1811,6 +1812,18 @@ const WorkOrdersPage: React.FC = () => {
               operationList.find((o: any) => o.id === ln.operationId) ??
               operationList.find((o: any) => (o.uuid ?? '') === ln.operationUuid)
             if (!op) return null
+            const operatorIds = Array.isArray(ln.operatorIds)
+              ? ln.operatorIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0)
+              : []
+            const teamIds = Array.isArray(ln.teamIds)
+              ? ln.teamIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0)
+              : []
+            const equipmentIds = Array.isArray(ln.equipmentIds)
+              ? ln.equipmentIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0)
+              : []
+            const workshopIds = Array.isArray(ln.workshopIds)
+              ? ln.workshopIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0)
+              : []
             return {
               operation_id: op.id,
               operation_code: ln.code ?? op.code,
@@ -1821,6 +1834,11 @@ const WorkOrdersPage: React.FC = () => {
                 ln.reportingType ?? op.reportingType ?? (op as any).reporting_type ?? 'quantity',
               over_report_mode: ln.overReportMode ?? 'none',
               over_report_value: ln.overReportValue ?? 0,
+              assigned_worker_ids: operatorIds,
+              assigned_worker_id: operatorIds[0],
+              assigned_team_id: teamIds[0],
+              assigned_equipment_id: equipmentIds[0],
+              workshop_id: workshopIds[0],
             }
           })
           .filter(Boolean) as ReturnType<typeof parseOperationSequence>
@@ -4175,84 +4193,131 @@ const WorkOrdersPage: React.FC = () => {
               const canStart =
                 operation.status === 'pending' && !isSplitParentWorkOrder(workOrder)
               const canReport = isInProgress && !isCompleted
-              const footerActionClickable = canStart || canReport
-              return (
-            <div
-              onClick={
-                canStart
-                  ? async () => {
-                      if (!isWorkOrderReleasedForStart(workOrder.status)) {
-                        messageApi.warning(t('app.kuaizhizao.workOrder.msgReleaseBeforeStart'))
-                        return
-                      }
-                      try {
-                        await workOrderApi.startOperation(
-                          getWorkOrderOperationApiId(workOrder),
-                          operation.id,
-                        )
-                        messageApi.success(t('app.kuaizhizao.workOrder.kioskOpStarted'))
-                        const panelId = Number(workOrder.id)
-                        const sourceId = getWorkOrderOperationSourceId(workOrder) ?? panelId
-                        const bundle = await syncWorkOrderRowExpand(
-                          queryClient,
-                          panelId,
-                          sourceId,
-                          expandedWorkOrderDetailMap[panelId]?.manufacturing_mode || 'fabrication',
-                        )
-                        applyWorkOrderExpandBundle(panelId, bundle, workOrder)
-                        invalidateStatistics(); actionRef.current?.reload()
-                      } catch (error: any) {
-                        const detail = error?.response?.data?.detail || error?.message || ''
-                        if (
-                          typeof detail === 'string' &&
-                          (detail.includes('只能开始已下达') || detail.includes('需要先下达'))
-                        ) {
-                          messageApi.warning(t('app.kuaizhizao.workOrder.msgReleaseBeforeStart'))
-                        } else {
-                          messageApi.error(detail || t('app.kuaizhizao.workOrder.msgStartOperationFailed'))
-                        }
-                      }
-                    }
-                  : canReport
-                    ? () => openQuickReportingFromOperationCard(operation, workOrder)
-                    : undefined
+              const canWithdrawStart =
+                isInProgress &&
+                !isCompleted &&
+                !isSplitParentWorkOrder(workOrder) &&
+                Number(operation.completed_quantity || 0) <= 0 &&
+                Number(operation.qualified_quantity || 0) <= 0 &&
+                Number((operation as { unqualified_quantity?: number }).unqualified_quantity || 0) <= 0
+              const refreshOpCard = async () => {
+                const panelId = Number(workOrder.id)
+                const sourceId = getWorkOrderOperationSourceId(workOrder) ?? panelId
+                const bundle = await syncWorkOrderRowExpand(
+                  queryClient,
+                  panelId,
+                  sourceId,
+                  expandedWorkOrderDetailMap[panelId]?.manufacturing_mode || 'fabrication',
+                )
+                applyWorkOrderExpandBundle(panelId, bundle, workOrder)
+                invalidateStatistics()
+                actionRef.current?.reload()
               }
-              style={{
+              const footerActionClickable = canStart || canReport || canWithdrawStart
+              const actionBtnStyle = (clickable: boolean): React.CSSProperties => ({
                 flex: 1,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 padding: '8px 4px',
                 fontSize: 13,
-                fontWeight: footerActionClickable ? 600 : 500,
+                fontWeight: clickable ? 600 : 500,
                 color: isCompleted
                   ? token.colorSuccess
-                  : footerActionClickable
+                  : clickable
                     ? footerAccent
                     : token.colorTextSecondary,
                 backgroundColor: 'transparent',
-                cursor: footerActionClickable ? 'pointer' : 'default',
+                cursor: clickable ? 'pointer' : 'default',
                 transition: 'background-color 0.2s',
-              }}
-              onMouseEnter={(e) => {
-                if (footerActionClickable) {
-                  e.currentTarget.style.backgroundColor = footerHoverBg
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent'
-              }}
-            >
-              {canStart ? <PlayCircleOutlined style={{ marginRight: 4, fontSize: 13 }} /> : null}
-              {canReport ? <FileTextOutlined style={{ marginRight: 4, fontSize: 13 }} /> : null}
-              {isCompleted
-                ? '已完成'
-                : canReport
-                  ? t('app.kuaizhizao.workOrder.actionReport')
-                  : canStart
-                    ? '开始'
-                    : '待开始'}
-            </div>
+              })
+              const bindHover = (clickable: boolean) => ({
+                onMouseEnter: (e: React.MouseEvent<HTMLDivElement>) => {
+                  if (clickable) e.currentTarget.style.backgroundColor = footerHoverBg
+                },
+                onMouseLeave: (e: React.MouseEvent<HTMLDivElement>) => {
+                  e.currentTarget.style.backgroundColor = 'transparent'
+                },
+              })
+              return (
+                <>
+                  {canWithdrawStart ? (
+                    <div
+                      onClick={async () => {
+                        try {
+                          await workOrderApi.withdrawOperationStart(
+                            getWorkOrderOperationApiId(workOrder),
+                            operation.id,
+                          )
+                          messageApi.success(t('app.kuaizhizao.workOrder.kioskOpStartWithdrawn'))
+                          await refreshOpCard()
+                        } catch (error: any) {
+                          const detail = error?.response?.data?.detail || error?.message || ''
+                          messageApi.error(
+                            (typeof detail === 'string' && detail) ||
+                              t('app.kuaizhizao.workOrder.msgWithdrawStartFailed'),
+                          )
+                        }
+                      }}
+                      style={{
+                        ...actionBtnStyle(true),
+                        borderRight: `1px solid ${token.colorBorderSecondary}`,
+                      }}
+                      {...bindHover(true)}
+                    >
+                      <CloseCircleOutlined style={{ marginRight: 4, fontSize: 13 }} />
+                      {t('app.kuaizhizao.workOrder.actionWithdrawStart')}
+                    </div>
+                  ) : null}
+                  <div
+                    onClick={
+                      canStart
+                        ? async () => {
+                            if (!isWorkOrderReleasedForStart(workOrder.status)) {
+                              messageApi.warning(t('app.kuaizhizao.workOrder.msgReleaseBeforeStart'))
+                              return
+                            }
+                            try {
+                              await workOrderApi.startOperation(
+                                getWorkOrderOperationApiId(workOrder),
+                                operation.id,
+                              )
+                              messageApi.success(t('app.kuaizhizao.workOrder.kioskOpStarted'))
+                              await refreshOpCard()
+                            } catch (error: any) {
+                              const detail = error?.response?.data?.detail || error?.message || ''
+                              if (
+                                typeof detail === 'string' &&
+                                (detail.includes('只能开始已下达') || detail.includes('需要先下达'))
+                              ) {
+                                messageApi.warning(t('app.kuaizhizao.workOrder.msgReleaseBeforeStart'))
+                              } else {
+                                messageApi.error(
+                                  detail || t('app.kuaizhizao.workOrder.msgStartOperationFailed'),
+                                )
+                              }
+                            }
+                          }
+                        : canReport
+                          ? () => openQuickReportingFromOperationCard(operation, workOrder)
+                          : undefined
+                    }
+                    style={actionBtnStyle(canStart || canReport)}
+                    {...bindHover(canStart || canReport)}
+                  >
+                    {canStart ? <PlayCircleOutlined style={{ marginRight: 4, fontSize: 13 }} /> : null}
+                    {canReport ? <FileTextOutlined style={{ marginRight: 4, fontSize: 13 }} /> : null}
+                    {isCompleted
+                      ? '已完成'
+                      : canReport
+                        ? t('app.kuaizhizao.workOrder.actionReport')
+                        : canStart
+                          ? t('app.kuaizhizao.workOrder.actionStart')
+                          : footerActionClickable
+                            ? t('app.kuaizhizao.workOrder.actionReport')
+                            : '待开始'}
+                  </div>
+                </>
               )
             })()}
           </div>
@@ -4749,7 +4814,7 @@ const WorkOrdersPage: React.FC = () => {
           }
         })
       } else if (selectedOperations.length > 0) {
-        // 使用从工艺路线加载或用户在工单上调整后的工序（含允许跳转、节点）
+        // 使用从工艺路线加载或用户在工单上调整后的工序（含允许跳转、节点、预绑定派工）
         values.operations = selectedOperations.map((op: any, i: number) => ({
           operation_id: op.operation_id,
           operation_code: op.operation_code,
@@ -4760,6 +4825,15 @@ const WorkOrdersPage: React.FC = () => {
           is_node_operation: op.is_node_operation ?? false,
           over_report_mode: op.over_report_mode ?? 'none',
           over_report_value: Number(op.over_report_value ?? 0) || 0,
+          ...(Array.isArray(op.assigned_worker_ids) && op.assigned_worker_ids.length
+            ? { assigned_worker_ids: op.assigned_worker_ids }
+            : {}),
+          ...(op.assigned_worker_id != null ? { assigned_worker_id: op.assigned_worker_id } : {}),
+          ...(op.assigned_team_id != null ? { assigned_team_id: op.assigned_team_id } : {}),
+          ...(op.assigned_equipment_id != null
+            ? { assigned_equipment_id: op.assigned_equipment_id }
+            : {}),
+          ...(op.workshop_id != null ? { workshop_id: op.workshop_id } : {}),
         }))
       } else {
         // 没有选择工序，删除该字段，让后端自动匹配
@@ -4834,6 +4908,14 @@ const WorkOrdersPage: React.FC = () => {
           is_node_operation: op.is_node_operation ?? false,
           over_report_mode: op.over_report_mode ?? 'none',
           over_report_value: Number(op.over_report_value ?? 0) || 0,
+          ...(Array.isArray(op.assigned_worker_ids) && op.assigned_worker_ids.length
+            ? { assigned_worker_ids: op.assigned_worker_ids }
+            : {}),
+          ...(op.assigned_worker_id != null ? { assigned_worker_id: op.assigned_worker_id } : {}),
+          ...(op.assigned_team_id != null ? { assigned_team_id: op.assigned_team_id } : {}),
+          ...(op.assigned_equipment_id != null
+            ? { assigned_equipment_id: op.assigned_equipment_id }
+            : {}),
         }))
         await workOrderApi.updateOperations(currentWorkOrder.id.toString(), {
           operations: opsPayload,
@@ -5163,14 +5245,33 @@ const WorkOrdersPage: React.FC = () => {
   const handleRevoke = async (record: WorkOrder) => {
     getAntdModal().confirm({
       title: t('app.kuaizhizao.workOrder.modalConfirmRevoke'),
-      content: `确定要撤回工单"${record.code}"吗？撤回后工单将变为草稿状态。`,
+      content: t('app.kuaizhizao.workOrder.modalRevokeContent', { code: record.code }),
       onOk: async () => {
         try {
           await workOrderApi.revoke(record.id!.toString())
-          messageApi.success('工单撤回成功')
+          messageApi.success(t('app.kuaizhizao.workOrder.msgRevokeSuccess'))
           invalidateStatistics(); actionRef.current?.reload()
         } catch (error: any) {
-          messageApi.error(error.message || '工单撤回失败')
+          messageApi.error(error.message || t('app.kuaizhizao.workOrder.msgRevokeFailed'))
+        }
+      },
+    })
+  }
+
+  /**
+   * 撤回指定结束
+   */
+  const handleWithdrawManualComplete = async (record: WorkOrder) => {
+    getAntdModal().confirm({
+      title: t('app.kuaizhizao.workOrder.modalConfirmWithdrawManualComplete'),
+      content: t('app.kuaizhizao.workOrder.modalWithdrawManualCompleteContent', { code: record.code }),
+      onOk: async () => {
+        try {
+          await workOrderApi.withdrawManualComplete(record.id!.toString())
+          messageApi.success(t('app.kuaizhizao.workOrder.msgWithdrawManualCompleteSuccess'))
+          invalidateStatistics(); actionRef.current?.reload()
+        } catch (error: any) {
+          messageApi.error(error.message || t('app.kuaizhizao.workOrder.msgWithdrawManualCompleteFailed'))
         }
       },
     })
@@ -5194,7 +5295,7 @@ const WorkOrdersPage: React.FC = () => {
     }
     getAntdModal().confirm({
       title: t('app.kuaizhizao.workOrder.modalConfirmComplete'),
-      content: `确定要指定结束工单"${record.code}"吗？指定结束的工单如果没有报工记录，可以撤回。`,
+      content: t('app.kuaizhizao.workOrder.modalCompleteContent', { code: record.code }),
       onOk: async () => {
         try {
           await workOrderApi.complete(record.id!.toString())
@@ -7113,9 +7214,14 @@ const WorkOrdersPage: React.FC = () => {
 
         const hasWork = Number(record.completed_quantity || 0) > 0
 
-        // 撤回：以后端 capabilities.revoke 为准（含报工/领料/入库等下游单据）
+        // 撤回下达：以后端 capabilities.revoke 为准（含报工/领料/入库等下游单据）
         const canRevoke =
           record.capabilities?.revoke?.allowed === true &&
+          (workOrderPerms.canAction?.('revoke') ?? false)
+
+        // 撤回指定结束
+        const canWithdrawManualComplete =
+          record.capabilities?.withdraw_manual_complete?.allowed === true &&
           (workOrderPerms.canAction?.('revoke') ?? false)
 
         // 删除条件：草稿；已下达且未开工；拆分子工单同上；无子单的已拆分主工单
@@ -7217,6 +7323,16 @@ const WorkOrdersPage: React.FC = () => {
         if (canComplete) {
           statusControlItems.push(
             makeItem('complete', t('app.kuaizhizao.workOrder.actionComplete'), () => handleComplete(record), { icon: <StopOutlined /> }),
+          )
+        }
+        if (canWithdrawManualComplete) {
+          statusControlItems.push(
+            makeItem(
+              'withdrawManualComplete',
+              t('app.kuaizhizao.workOrder.actionWithdrawManualComplete'),
+              () => handleWithdrawManualComplete(record),
+              { icon: <CloseCircleOutlined />, danger: true },
+            ),
           )
         }
         if (canRevoke) {
@@ -9508,6 +9624,17 @@ const WorkOrdersPage: React.FC = () => {
                   render: () => (
                     <Button danger onClick={() => handleRevoke(workOrderDetail)}>
                       {t('app.kuaizhizao.workOrder.actionRevoke')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'withdraw-manual-complete',
+                  visible:
+                    workOrderDetail.capabilities?.withdraw_manual_complete?.allowed === true &&
+                    (workOrderPerms.canAction?.('revoke') ?? false),
+                  render: () => (
+                    <Button danger onClick={() => handleWithdrawManualComplete(workOrderDetail)}>
+                      {t('app.kuaizhizao.workOrder.actionWithdrawManualComplete')}
                     </Button>
                   ),
                 },

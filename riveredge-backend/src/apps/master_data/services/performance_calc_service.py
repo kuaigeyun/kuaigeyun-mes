@@ -11,6 +11,7 @@ import io
 from datetime import datetime, date
 from decimal import Decimal
 from typing import List, Optional, Dict, Any, Tuple
+from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.master_data.models.employee_performance import (
     PerformanceSummary,

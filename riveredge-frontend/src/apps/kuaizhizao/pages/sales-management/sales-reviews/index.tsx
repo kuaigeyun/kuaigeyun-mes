@@ -528,6 +528,7 @@ const SalesReviewsPage: React.FC = () => {
     const invalid = validateDeptOpinionForm(
       formState,
       t('app.kuaizhizao.salesReview.failOpinionRequired'),
+      t('app.kuaizhizao.salesReview.reviewerRequired'),
     );
     if (invalid) {
       message.error(invalid);
@@ -538,6 +539,7 @@ const SalesReviewsPage: React.FC = () => {
       const row = await salesReviewApi.submitDeptOpinion(detail.id, deptCode, {
         result: formState.result,
         opinion: formState.opinion || null,
+        reviewed_by: formState.reviewed_by ?? null,
       });
       setDetail(row);
       message.success(t('app.kuaizhizao.salesReview.deptOpinionSuccess'));

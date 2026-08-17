@@ -13,6 +13,7 @@ from typing import List, Optional
 
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
+from tortoise.exceptions import IntegrityError
 
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.inspection_plan import InspectionPlan, InspectionPlanStep
@@ -82,7 +83,7 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
                     material_code=plan_data.material_code or "",
                 )
             else:
-                plan_code = plan_data.plan_code
+                plan_code = str(plan_data.plan_code).strip()
 
             existing = await InspectionPlan.filter(
                 tenant_id=tenant_id,
@@ -104,7 +105,10 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
                 plan_dict["created_by_name"] = user_info["name"]
                 plan_dict["updated_by"] = created_by
                 plan_dict["updated_by_name"] = user_info["name"]
-            plan = await InspectionPlan.create(**plan_dict)
+            try:
+                plan = await InspectionPlan.create(**plan_dict)
+            except IntegrityError as exc:
+                raise ValidationError(f"质检方案编码 '{plan_code}' 已存在") from exc
 
             if plan_data.steps:
                 prepared_steps = [

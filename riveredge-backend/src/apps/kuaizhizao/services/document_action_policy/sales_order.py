@@ -194,6 +194,13 @@ def derive_sales_order_capabilities(
         close_allowed = True
     close_cap = _cap(close_allowed, close_reason if not close_allowed else None)
 
+    # reopen — 撤回关闭：仅已关闭可恢复
+    reopen_allowed = _is_closed(status)
+    reopen_cap = _cap(
+        reopen_allowed,
+        "sales_order.reopen.not_closed" if not reopen_allowed else None,
+    )
+
     # print — 无业务态限制（RBAC 门控）
     print_cap = _cap(True)
 
@@ -357,6 +364,7 @@ def derive_sales_order_capabilities(
         submit=submit_cap,
         approve=approve_cap,
         close=close_cap,
+        reopen=reopen_cap,
         print=print_cap,
         withdraw_submit=withdraw_submit_cap,
         revoke_approval=revoke_cap,
@@ -398,6 +406,7 @@ def assert_sales_order_capability(
         "submit": caps.submit,
         "approve": caps.approve,
         "close": caps.close,
+        "reopen": caps.reopen,
         "print": caps.print,
         "withdraw_submit": caps.withdraw_submit,
         "revoke_approval": caps.revoke_approval,

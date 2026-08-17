@@ -285,6 +285,32 @@ async def _dispatch_sales_return(
     _unsupported("sales_return", action)
 
 
+async def _dispatch_purchase_return(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.warehouse_service import PurchaseReturnService
+
+    svc = PurchaseReturnService()
+    if action == "submit":
+        return await svc.submit_purchase_return(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_purchase_return(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_purchase_return(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_purchase_return_submit(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_purchase_return_approval(tenant_id, entity_id, user_id)
+    _unsupported("purchase_return", action)
+
+
 async def _dispatch_sales_contract_change(
     action: str,
     *,
@@ -916,6 +942,7 @@ HANDLERS: Dict[str, DispatchFn] = {
     "production_picking": _dispatch_production_picking,
     "work_order": _dispatch_work_order,
     "sales_return": _dispatch_sales_return,
+    "purchase_return": _dispatch_purchase_return,
     "sales_contract_change": _dispatch_sales_contract_change,
     "demand": _dispatch_demand,
     "purchase_order": _dispatch_purchase_order,

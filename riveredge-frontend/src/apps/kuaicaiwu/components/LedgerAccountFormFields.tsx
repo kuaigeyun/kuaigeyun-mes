@@ -22,6 +22,10 @@ type Props = {
   noteName?: string;
   accountColProps?: { span: number };
   noteColProps?: { span: number };
+  /**
+   * 父级已用 `grid={false}` + 手写 Row/Col 时开启：不再传 ProForm colProps，避免嵌套 Col 裁切标签。
+   */
+  omitColProps?: boolean;
   /** 承兑汇票时关联票据台账 */
   acceptanceNoteDirection?: FinanceNoteDirection;
   partnerFieldName?: 'customer_id' | 'supplier_id';
@@ -72,10 +76,13 @@ export const LedgerAccountFormFields: React.FC<Props> = ({
   noteName = 'bank_account',
   accountColProps = { span: 12 },
   noteColProps = { span: 12 },
+  omitColProps = false,
   acceptanceNoteDirection,
   partnerFieldName = 'customer_id',
 }) => {
   const { t } = useTranslation();
+  const accountCols = omitColProps ? undefined : accountColProps;
+  const noteCols = omitColProps ? undefined : noteColProps;
 
   return (
     <>
@@ -89,7 +96,7 @@ export const LedgerAccountFormFields: React.FC<Props> = ({
                   direction={acceptanceNoteDirection}
                   partnerFieldName={partnerFieldName}
                   noteName={noteName}
-                  colProps={noteColProps}
+                  colProps={noteCols}
                 />
               );
             }
@@ -97,7 +104,7 @@ export const LedgerAccountFormFields: React.FC<Props> = ({
               <ProFormText
                 name={noteName}
                 label={t('app.kuaicaiwu.common.referenceNumber')}
-                colProps={noteColProps}
+                colProps={noteCols}
                 placeholder={t('app.kuaicaiwu.common.referenceNumberPlaceholder')}
                 rules={[{ required: true, message: t('app.kuaicaiwu.common.referenceNumberRequired') }]}
               />
@@ -126,7 +133,7 @@ export const LedgerAccountFormFields: React.FC<Props> = ({
               <ProFormSelect
                 name="bank_account_id"
                 label={accountLabel}
-                colProps={accountColProps}
+                colProps={accountCols}
                 options={options}
                 placeholder={placeholder}
                 showSearch
@@ -148,7 +155,7 @@ export const LedgerAccountFormFields: React.FC<Props> = ({
               <ProFormText
                 name={noteName}
                 label={noteLabel}
-                colProps={noteColProps}
+                colProps={noteCols}
                 placeholder={t('app.kuaicaiwu.receipt.bankAccountNotePlaceholder')}
               />
             </>

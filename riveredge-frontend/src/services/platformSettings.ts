@@ -44,6 +44,8 @@ export interface PlatformSettings {
   login_client_android_enabled?: boolean;
   login_quick_enabled?: boolean;
   enable_register?: boolean;
+  /** 站点时区（infra_settings.TIMEZONE，只读；写入 configs.timezone） */
+  timezone?: string;
   created_at?: string;
   updated_at?: string;
 }

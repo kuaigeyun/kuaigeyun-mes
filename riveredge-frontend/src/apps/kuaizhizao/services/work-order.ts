@@ -133,6 +133,8 @@ export const workOrderApi = {
       params: options?.ignoreShortage ? { ignore_shortage: true } : undefined,
     }),
   revoke: async (id: string) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/revoke`, { method: 'POST' }),
+  withdrawManualComplete: async (id: string) =>
+    apiRequest(`/apps/kuaizhizao/work-orders/${id}/withdraw-manual-complete`, { method: 'POST' }),
   complete: async (id: string, data?: { confirmed_batch_no?: string; confirmed_serial_no?: string }) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${id}/complete`, { method: 'POST', data: data ?? {} }),
   confirmTracking: async (
@@ -161,6 +163,10 @@ export const workOrderApi = {
   updateOperations: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/operations`, { method: 'PUT', data }),
   startOperation: async (workOrderId: string, operationId: number) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/start`, { method: 'POST' }),
+  withdrawOperationStart: async (workOrderId: string, operationId: number) =>
+    apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/withdraw-start`, {
+      method: 'POST',
+    }),
   dispatchOperation: async (workOrderId: string, operationId: number, data: any) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/dispatch`, { method: 'POST', data }),
   getExecutionConfig: async () =>

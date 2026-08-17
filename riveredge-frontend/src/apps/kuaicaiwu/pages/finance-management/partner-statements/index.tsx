@@ -550,7 +550,7 @@ const PartnerStatementsPage: React.FC = () => {
             key="ok"
             type="primary"
             loading={submitting}
-            disabled={!preview || Boolean(preview.existing_period_statement_code)}
+            disabled={!preview || !(preview.lines && preview.lines.length > 0)}
             onClick={() => void handleCreate()}
           >
             {t(`${PS}.generate`)}
@@ -591,11 +591,21 @@ const PartnerStatementsPage: React.FC = () => {
 
           {preview ? (
             <>
-              {preview.existing_period_statement_code ? (
+              {preview.existing_period_statement_code && (preview.lines?.length ?? 0) > 0 ? (
+                <Alert
+                  type="info"
+                  showIcon
+                  title={t(`${PS}.periodHasPriorStatement`, {
+                    period: preview.existing_period,
+                    code: preview.existing_period_statement_code,
+                  })}
+                />
+              ) : null}
+              {preview.existing_period_statement_code && !(preview.lines?.length) ? (
                 <Alert
                   type="warning"
                   showIcon
-                  title={t(`${PS}.periodAlreadyExists`, {
+                  title={t(`${PS}.periodFullyStated`, {
                     period: preview.existing_period,
                     code: preview.existing_period_statement_code,
                   })}

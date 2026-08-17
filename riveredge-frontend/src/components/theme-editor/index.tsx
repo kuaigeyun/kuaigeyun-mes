@@ -29,6 +29,12 @@ import {
   SIDEBAR_MENU_LAYOUT_PREF_KEY,
   type SidebarMenuLayout,
 } from '../../layouts/basicLayout/sidebarMenuLayout';
+import {
+  DEFAULT_SIDEBAR_SEARCH_BG_FOLLOW,
+  SIDEBAR_SEARCH_BG_FOLLOW_PREF_KEY,
+  readSidebarSearchBgFollowPref,
+  type SidebarSearchBgFollow,
+} from '../../layouts/basicLayout/sidebarSearchBgFollow';
 import '../layout-templates/drawerSlideMotion.css';
 
 const { Text } = Typography;
@@ -456,6 +462,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         uiPrefs?.sidebar_menu_layout === 'split' || prefs[SIDEBAR_MENU_LAYOUT_PREF_KEY] === 'split'
           ? 'split'
           : DEFAULT_SIDEBAR_MENU_LAYOUT;
+      const loadedSidebarSearchBgFollow = readSidebarSearchBgFollowPref(prefs);
 
       const formValues = {
         colorPrimary: colorPrimaryValue,
@@ -467,6 +474,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         tabBgColor: applied.tabBgColor || '',
         colorMode: userThemeMode,
         tabsPersistence,
+        sidebarSearchBgFollow: loadedSidebarSearchBgFollow,
         layoutMode: 'mix',
         themeStyle: loadedThemeStyle,
         sidebarMenuLayout: loadedSidebarMenuLayout,
@@ -670,6 +678,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       const tabsPersistenceValue = Boolean(form.getFieldValue('tabsPersistence'));
       const sidebarMenuLayoutValue: SidebarMenuLayout =
         form.getFieldValue('sidebarMenuLayout') === 'split' ? 'split' : DEFAULT_SIDEBAR_MENU_LAYOUT;
+      const sidebarSearchBgFollowValue: SidebarSearchBgFollow =
+        form.getFieldValue('sidebarSearchBgFollow') === 'tabs' ? 'tabs' : DEFAULT_SIDEBAR_SEARCH_BG_FOLLOW;
 
       const { themeMode, themeConfigForPreference } = buildThemeConfigFromForm(
         values,
@@ -686,6 +696,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         theme_config: cleanedThemeConfig,
         tabs_persistence: tabsPersistenceValue,
         [SIDEBAR_MENU_LAYOUT_PREF_KEY]: sidebarMenuLayoutValue,
+        [SIDEBAR_SEARCH_BG_FOLLOW_PREF_KEY]: sidebarSearchBgFollowValue,
       });
 
       useThemeStore.getState().applyTheme(themeMode, cleanedThemeConfig);
@@ -742,6 +753,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         ...defaultThemeConfig,
         colorMode: 'light',
         tabsPersistence: true,
+        sidebarSearchBgFollow: DEFAULT_SIDEBAR_SEARCH_BG_FOLLOW,
         layoutMode: 'mix',
         themeStyle: 'vivid',
         sidebarMenuLayout: DEFAULT_SIDEBAR_MENU_LAYOUT,
@@ -759,6 +771,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         tabs_persistence: true,
         theme_config: defaultThemeConfig,
         [SIDEBAR_MENU_LAYOUT_PREF_KEY]: DEFAULT_SIDEBAR_MENU_LAYOUT,
+        [SIDEBAR_SEARCH_BG_FOLLOW_PREF_KEY]: DEFAULT_SIDEBAR_SEARCH_BG_FOLLOW,
       });
 
       useThemeStore.getState().applyTheme('light', defaultThemeConfig);
@@ -843,6 +856,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               layoutMode: 'mix',
               themeStyle: 'vivid',
               sidebarMenuLayout: DEFAULT_SIDEBAR_MENU_LAYOUT,
+              sidebarSearchBgFollow: DEFAULT_SIDEBAR_SEARCH_BG_FOLLOW,
             }}
           >
             {/* 颜色模式 */}
@@ -1665,19 +1679,51 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               style={{ marginBottom: 16 }}
               styles={{ body: { padding: '16px' } }}
             >
-              <Form.Item
-                name="tabsPersistence"
-                label={t('components.themeEditor.tabsPersistence.label')}
-                valuePropName="checked"
-                extra={
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {t('components.themeEditor.tabsPersistence.desc')}
-                  </Text>
-                }
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                  gap: 16,
+                }}
               >
-                <Switch />
-              </Form.Item>
-
+                <Form.Item
+                  name="tabsPersistence"
+                  label={t('components.themeEditor.tabsPersistence.label')}
+                  valuePropName="checked"
+                  style={{ marginBottom: 0 }}
+                  extra={
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {t('components.themeEditor.tabsPersistence.desc')}
+                    </Text>
+                  }
+                >
+                  <Switch />
+                </Form.Item>
+                <Form.Item
+                  name="sidebarSearchBgFollow"
+                  label={t('components.themeEditor.sidebarSearchBgFollow.label')}
+                  style={{ marginBottom: 0 }}
+                  extra={
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {t('components.themeEditor.sidebarSearchBgFollow.desc')}
+                    </Text>
+                  }
+                >
+                  <Segmented
+                    block
+                    options={[
+                      {
+                        label: t('components.themeEditor.sidebarSearchBgFollow.tabs'),
+                        value: 'tabs',
+                      },
+                      {
+                        label: t('components.themeEditor.sidebarSearchBgFollow.sider'),
+                        value: 'sider',
+                      },
+                    ]}
+                  />
+                </Form.Item>
+              </div>
             </Card>
           </Form>
 

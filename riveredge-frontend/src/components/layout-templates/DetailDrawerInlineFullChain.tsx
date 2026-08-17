@@ -32,6 +32,8 @@ export interface DetailDrawerInlineFullChainProps {
   selfDocumentId?: number;
   height?: number;
   renderBriefActions?: (doc: TraceBriefDocument) => ReactNode;
+  /** 节点是否展示创建时间；详情抽屉「只显示单据」模式为 false */
+  showCreatedAt?: boolean;
 }
 
 export const DetailDrawerInlineFullChain: React.FC<DetailDrawerInlineFullChainProps> = ({
@@ -41,6 +43,7 @@ export const DetailDrawerInlineFullChain: React.FC<DetailDrawerInlineFullChainPr
   selfDocumentId,
   height = DETAIL_DRAWER_INLINE_FULL_CHAIN_HEIGHT,
   renderBriefActions,
+  showCreatedAt = true,
 }) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
@@ -87,6 +90,7 @@ export const DetailDrawerInlineFullChain: React.FC<DetailDrawerInlineFullChainPr
           onDocumentClick={onDocumentClick}
           compact
           hideInlineRefresh
+          showCreatedAt={showCreatedAt}
         />
       </div>
       {briefDoc ? (

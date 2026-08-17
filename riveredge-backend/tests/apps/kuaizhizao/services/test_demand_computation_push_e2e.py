@@ -204,6 +204,25 @@ def test_resolve_production_selected_material_ids_empty_raises():
         assert "不可下推" in str(e)
 
 
+def test_resolve_production_selected_rejects_material_ids_as_item_ids():
+    """预览若误把 item_id 写成 material_id，下推会全部判定不可选。"""
+    svc = DemandComputationService()
+    items = [
+        SimpleNamespace(
+            id=11,
+            material_id=101,
+            material_source_type=SOURCE_TYPE_MAKE,
+            suggested_work_order_quantity=10.0,
+        ),
+    ]
+    try:
+        svc._resolve_production_selected_material_ids(items, [101])
+        assert False, "expected BusinessLogicError"
+    except BusinessLogicError as e:
+        assert "不可下推" in str(e)
+    assert svc._resolve_production_selected_material_ids(items, [11]) == {101}
+
+
 def test_buy_remaining_unchanged_with_work_order_exclusions():
     """采购剩余数量计算不受工单占用字段影响。"""
     items = [
@@ -304,3 +323,60 @@ def test_resolve_purchase_push_lines_splits():
     lines = DemandComputationService._resolve_purchase_push_lines(item, 100.0)
     assert len(lines) == 2
     assert [line["qty"] for line in lines] == [40, 60]
+
+
+def test_group_preview_item_id_is_computation_item_id(monkeypatch):
+    """工单组预览行的 item_id 必须是 DemandComputationItem.id，不能写成 material_id。"""
+    import asyncio
+
+    from apps.kuaizhizao.services import work_order_group_service as wogs
+
+    class _FakeGroupSvc:
+        async def should_group_by_demand_item(self, tenant_id: int) -> bool:
+            return True
+
+        async def collect_pushed_keys(self, tenant_id: int, computation_id: int):
+            return set()
+
+    monkeypatch.setattr(wogs, "WorkOrderGroupService", _FakeGroupSvc)
+
+    computation = SimpleNamespace(
+        id=16,
+        demand_item_bom_trees=[
+            {
+                "demand_item_id": 1,
+                "material_id": 101,
+                "material_code": "FG-01",
+                "material_name": "成品",
+                "source_type": SOURCE_TYPE_MAKE,
+                "required_quantity": 10,
+                "children": [],
+            }
+        ],
+    )
+    items = [
+        SimpleNamespace(
+            id=55,
+            material_id=101,
+            material_code="FG-01",
+            material_name="成品",
+            material_source_type=SOURCE_TYPE_MAKE,
+            gross_requirement=10,
+            required_quantity=10,
+            suggested_work_order_quantity=10,
+        )
+    ]
+
+    async def _run():
+        return await DemandComputationService()._build_work_order_pull_preview_items(
+            tenant_id=1,
+            computation=computation,
+            items=items,
+            generate_mode="work_order_only",
+        )
+
+    rows = asyncio.run(_run())
+    assert len(rows) == 1
+    assert rows[0]["item_id"] == 55
+    assert rows[0]["material_id"] == 101
+    assert rows[0]["max_push_quantity"] == 10

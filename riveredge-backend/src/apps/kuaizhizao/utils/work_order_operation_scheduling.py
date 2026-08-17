@@ -45,9 +45,9 @@ def normalize_schedule_anchor(value: Any, *, end_of_day: bool = False) -> dateti
     if isinstance(value, datetime):
         return value
     if isinstance(value, date):
-        if end_of_day:
-            return datetime.combine(value, time(23, 59, 59))
-        return datetime.combine(value, time.min)
+        # date → 站点墙钟日界，再转 UTC（禁止把日历日当 UTC 午夜）
+        wall = datetime.combine(value, time(23, 59, 59) if end_of_day else time.min)
+        return resolve_business_datetime(wall)
     return resolve_business_datetime()
 
 

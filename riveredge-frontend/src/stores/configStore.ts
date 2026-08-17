@@ -43,6 +43,11 @@ interface ConfigState {
    * 标记 initialized=true 后，后续 fetchConfigs 会短路，避免重复请求 /site-setting。
    */
   hydrateFromSettings: (settings: Record<string, any> | null | undefined) => void;
+  /**
+   * 平台超管无租户 / 站点设置缺 timezone 时：从公开平台设置补齐 configs.timezone
+   *（真源仍为 infra_settings.TIMEZONE，经 /platform-settings/public 下发）
+   */
+  ensureTimezoneFromPlatform: () => Promise<void>;
   updateConfig: (key: string, value: any) => Promise<void>;
   updateConfigs: (settings: Record<string, any>) => Promise<void>;
   getConfig: <T>(key: string, defaultValue: T) => T;
@@ -133,9 +138,14 @@ export const useConfigStore = create<ConfigState>()(
             },
             initialized: true,
           });
+          const tz = backendConfigs.timezone;
+          if (tz == null || String(tz).trim() === '') {
+            await get().ensureTimezoneFromPlatform();
+          }
         } catch (error) {
           console.error('获取系统配置失败:', error);
           set({ initialized: true });
+          await get().ensureTimezoneFromPlatform();
         } finally {
           set({ loading: false });
         }
@@ -150,6 +160,29 @@ export const useConfigStore = create<ConfigState>()(
           },
           initialized: true,
         });
+      },
+
+      ensureTimezoneFromPlatform: async () => {
+        const existing = get().configs?.timezone;
+        if (existing != null && String(existing).trim() !== '') {
+          return;
+        }
+        try {
+          const { getPlatformSettingsPublic } = await import('../services/platformSettings');
+          const platform = await getPlatformSettingsPublic();
+          const tz = platform?.timezone != null ? String(platform.timezone).trim() : '';
+          if (!tz) {
+            console.error('平台公开设置未下发 timezone');
+            return;
+          }
+          const { configs } = get();
+          set({
+            configs: { ...configs, timezone: tz },
+            initialized: true,
+          });
+        } catch (error) {
+          console.error('补齐站点时区失败:', error);
+        }
       },
       
       updateConfig: async (key, value) => {

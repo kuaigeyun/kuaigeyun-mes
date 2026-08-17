@@ -23,6 +23,10 @@ export type BasicLayoutStyleContext = {
   startMenuBaseRadius: number;
   startMenuPanelRadius: number;
   startMenuTheme: Record<string, any>;
+  /** 侧栏搜索条背景跟随：tabs=标签栏 / sider=菜单栏 */
+  sidebarSearchBgFollow: 'tabs' | 'sider';
+  sidebarSearchStripBg: string;
+  sidebarSearchStripUsesLightText: boolean;
 };
 
 export function buildShellLayoutStyles(ctx: BasicLayoutStyleContext): string {
@@ -338,11 +342,25 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
     startMenuBaseRadius,
     startMenuPanelRadius,
     startMenuTheme,
+    sidebarSearchBgFollow,
+    sidebarSearchStripBg,
+    sidebarSearchStripUsesLightText,
   } = ctx;
   const siderDividerColor =
     isDarkMode || siderTextColor === '#ffffff'
       ? 'rgba(255, 255, 255, 0.15)'
       : 'rgba(0, 0, 0, 0.12)';
+  const searchStripIconColor = isDarkMode
+    ? 'rgba(255,255,255,0.65)'
+    : sidebarSearchStripUsesLightText
+      ? 'rgba(255,255,255,0.65)'
+      : 'rgba(0,0,0,0.45)';
+  const searchStripPlaceholderColor = isDarkMode
+    ? 'rgba(255, 255, 255, 0.45)'
+    : sidebarSearchStripUsesLightText
+      ? 'rgba(255, 255, 255, 0.58)'
+      : 'rgba(0, 0, 0, 0.25)';
+  const searchStripFollowTabs = sidebarSearchBgFollow === 'tabs';
   /** 顶栏右侧圆形/胶囊按钮底：深色顶栏略提亮，避免与海军蓝底糊成一片 */
   const headerActionChipBg = isLightModeLightBg
     ? 'rgba(0, 0, 0, 0.10)'
@@ -360,11 +378,14 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           --ant-colorBorderSecondary: ${token.colorBorderSecondary ?? token.colorBorder};
           --ant-borderRadius: ${token.borderRadius}px;
           --ant-borderRadiusLG: ${token.borderRadiusLG ?? token.borderRadius + 2}px;
+          /* 布局框线唯一色：顶栏底 / 侧栏右 / 搜索底 / 标签底轨 / 配置按钮顶 */
+          --riveredge-layout-frame-color: ${token.colorBorder};
         }
-        /* 侧栏分割线：与底栏/搜索框等同层级，随侧栏明暗适配 */
+        /* 侧栏内部分割（非主框线）仍随侧栏明暗适配 */
         .ant-pro-layout .ant-pro-sider,
         .ant-pro-layout .ant-layout-sider {
           --riveredge-sider-divider-color: ${siderDividerColor};
+          --riveredge-layout-frame-color: ${token.colorBorder};
         }
         /* ==================== PageContainer 相关 ==================== */
         .ant-pro-page-container .ant-page-header .ant-page-header-breadcrumb,
@@ -813,14 +834,14 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           margin-bottom: 0 !important;
           padding-bottom: 16px !important;
         }
-        /* 侧边栏底部收起按钮区域样式 - 根据菜单栏背景色自动适配 */
+        /* 侧边栏底部配置/收起区顶边：与顶栏底、侧栏右、标签底轨同色 */
         .ant-pro-layout .ant-pro-sider-footer,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer,
         /* 覆盖 collapsedButtonRender 返回的 div */
         .ant-pro-layout .ant-pro-sider-footer > div,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div,
         .ant-pro-layout .riveredge-sider-footer-bar {
-          border-top: 1px solid var(--riveredge-sider-divider-color) !important;
+          border-top: 1px solid var(--riveredge-layout-frame-color, var(--ant-colorBorder, #d9d9d9)) !important;
         }
         /* 侧边栏底部收起按钮样式 - 根据菜单栏背景色自动适配 */
         .ant-pro-layout .ant-pro-sider-footer .ant-btn,
@@ -1240,11 +1261,11 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           --ant-colorBgContainer: ${token.colorBgContainer};
           --ant-colorBgElevated: ${token.colorBgElevated};
         }
-        /* 顶栏背景色（支持透明度） */
+        /* 顶栏背景色（支持透明度）；底边与标签栏/搜索条/配置钮顶边统一 */
         .ant-pro-layout .ant-pro-layout-header,
         .ant-pro-layout .ant-layout-header {
           background: ${headerBgColor} !important;
-          border-bottom: 1px solid ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.12)'} !important;
+          border-bottom: 1px solid var(--riveredge-layout-frame-color, var(--ant-colorBorder, #d9d9d9)) !important;
         }
         /* ==================== 顶栏文字颜色自动适配（根据背景色亮度反色处理） ==================== */
         /* 顶栏文字颜色 - 根据背景色亮度自动适配 */
@@ -2003,7 +2024,22 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           display: flex !important;
           align-items: center !important;
           flex-shrink: 0 !important;
-          border-bottom: 1px solid var(--riveredge-sider-divider-color) !important;
+          position: relative !important;
+          background: ${searchStripFollowTabs ? sidebarSearchStripBg : 'transparent'} !important;
+          /* 不用 border-bottom：与 UniTabs 同为底边 1px 渐变/伪元素，避免盒模型错位 */
+          border-bottom: none !important;
+        }
+        /* 搜索条底线：与标签栏底线同色同高；向右伸出 1px 盖住侧栏右边框，与激活标签底轨无缝衔接 */
+        .ant-layout-sider .riveredge-sidebar-search-wrapper::after {
+          content: '';
+          position: absolute;
+          left: 0;
+          right: -1px;
+          bottom: 0;
+          height: 1px;
+          background: var(--riveredge-layout-frame-color, var(--ant-colorBorder, var(--ant-color-border, #d9d9d9)));
+          pointer-events: none;
+          z-index: 2;
         }
         html[data-sidebar-menu-layout="flat"] .ant-pro-sider .ant-pro-sider-extra {
           margin: 0 !important;
@@ -2055,13 +2091,13 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           outline: none !important;
         }
         .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-prefix .anticon {
-          color: ${isDarkMode ? 'rgba(255,255,255,0.65)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.45)')} !important;
+          color: ${searchStripIconColor} !important;
           font-size: 14px !important;
         }
-        /* 侧栏搜索框占位字符颜色：适配“明亮模式 + 深色背景” */
+        /* 侧栏搜索框占位字符颜色：适配搜索条背景（跟随菜单栏或标签栏） */
         .riveredge-sidebar-search-wrapper input::placeholder,
         .riveredge-sidebar-search-wrapper .ant-input::placeholder {
-          color: ${isDarkMode ? 'rgba(255, 255, 255, 0.45)' : (siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.58)' : 'rgba(0, 0, 0, 0.25)')} !important;
+          color: ${searchStripPlaceholderColor} !important;
         }
         /* 侧栏搜索框快捷键（拟物按键）：框线/底影与搜索条底边一致，不用浅色主题的 --river-border-color */
         .riveredge-sidebar-search-wrapper .topbar-search-shortcut-key {
@@ -2072,17 +2108,25 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           min-width: 18px !important;
           line-height: 1 !important;
           margin-block: 0 !important;
-          color: ${isDarkMode ? 'rgba(255,255,255,0.28)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.28)' : (token?.colorBorder ?? '#d9d9d9'))} !important;
-          background: ${isDarkMode ? 'rgba(255,255,255,0.10)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.10)' : (token?.colorFillQuaternary ?? '#f5f5f5'))} !important;
+          color: ${
+            isDarkMode || sidebarSearchStripUsesLightText
+              ? 'rgba(255,255,255,0.28)'
+              : (token?.colorBorder ?? '#d9d9d9')
+          } !important;
+          background: ${
+            isDarkMode || sidebarSearchStripUsesLightText
+              ? 'rgba(255,255,255,0.10)'
+              : (token?.colorFillQuaternary ?? '#f5f5f5')
+          } !important;
           border: 1px solid ${
-            siderTextColor === '#ffffff'
+            sidebarSearchStripUsesLightText
               ? 'rgba(255, 255, 255, 0.15)'
               : isDarkMode
                 ? 'rgba(255, 255, 255, 0.12)'
                 : (token?.colorBorder ?? 'rgba(0, 0, 0, 0.15)')
           } !important;
           box-shadow: 0 1px 0 ${
-            siderTextColor === '#ffffff'
+            sidebarSearchStripUsesLightText
               ? 'rgba(255, 255, 255, 0.12)'
               : isDarkMode
                 ? 'rgba(255, 255, 255, 0.10)'
@@ -2471,7 +2515,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           overflow-x: hidden;
           overflow-y: auto;
           scrollbar-width: none !important;
-          border-inline-end: 1px solid var(--riveredge-sider-divider-color);
+          border-inline-end: 1px solid var(--riveredge-layout-frame-color, var(--ant-colorBorder, #d9d9d9));
           background: ${siderBgColor} !important;
         }
         html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-primary::-webkit-scrollbar {
@@ -2695,6 +2739,9 @@ export function useBasicLayoutInlineStyles(ctx: BasicLayoutStyleContext) {
       startMenuBaseRadius,
       startMenuPanelRadius,
       startMenuTheme,
+      ctx.sidebarSearchBgFollow,
+      ctx.sidebarSearchStripBg,
+      ctx.sidebarSearchStripUsesLightText,
     ],
   );
 }

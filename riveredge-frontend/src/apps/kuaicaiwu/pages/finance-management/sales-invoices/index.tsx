@@ -1119,7 +1119,7 @@ const SalesInvoicesPage: React.FC = () => {
               : pullFromSalesOrderAction.label
         }
         open={pullPreviewOpen}
-        destroyOnClose
+        destroyOnHidden
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         onCancel={resetPullPreview}
         okText={pullPreviewTargetLabel}
@@ -1149,7 +1149,10 @@ const SalesInvoicesPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={salesInvoiceCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
+                title={
+                  salesInvoiceCapabilityReasonMessage(pullPreviewData.blocking_reason, t)
+                  || t(`${P}.pullPreviewBlocked`)
+                }
               />
             ) : null}
             {pullPreviewData.items?.length > 0 ? (

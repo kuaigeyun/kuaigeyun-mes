@@ -67,6 +67,10 @@ import {
   readSidebarMenuLayoutPref,
   SPLIT_SIDEBAR_WIDTH,
 } from './basicLayout/sidebarMenuLayout';
+import {
+  readSidebarSearchBgFollowPref,
+  type SidebarSearchBgFollow,
+} from './basicLayout/sidebarSearchBgFollow';
 import dayjs from 'dayjs';
 import { nextSiteLogoUrlAfterImageError } from '../constants/siteAssets';
 import { useSiteLogoUrl } from '../hooks/useSiteLogoUrl';
@@ -845,6 +849,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const sidebarMenuLayoutPref = useUserPreferenceStore((s) =>
     readSidebarMenuLayoutPref(s.preferences as Record<string, unknown> | undefined),
   );
+  const sidebarSearchBgFollowPref = useUserPreferenceStore((s) =>
+    readSidebarSearchBgFollowPref(s.preferences as Record<string, unknown> | undefined),
+  );
 
   // 侧边栏折叠状态
   const [collapsed, setCollapsed] = useState<boolean>(false);
@@ -878,6 +885,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       useSplitSidebarMenu ? 'split' : 'flat',
     );
   }, [useSplitSidebarMenu]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute(
+      'data-sidebar-search-bg-follow',
+      sidebarSearchBgFollowPref,
+    );
+  }, [sidebarSearchBgFollowPref]);
 
   // 工作区最大化模式 (由 UniTab 控制)
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -1660,6 +1674,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const storeSiderBg = useThemeStore((s) => s.resolved.siderBgColor);
   const storeHeaderBg = useThemeStore((s) => s.resolved.headerBgColor);
   const storeTabBg = useThemeStore((s) => s.resolved.tabBgColor);
+  const storeTabsBg = useThemeStore((s) => s.resolved.tabsBgColor);
   const isDarkMode = useThemeStore((s) => s.resolved.isDark);
 
   useEffect(() => {
@@ -1683,6 +1698,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     if (isDarkMode) return token.colorBgLayout || '#141414';
     return storeTabBg || token.colorBgLayout || '#f5f5f5';
   }, [storeTabBg, token.colorBgLayout, isDarkMode]);
+
+  /** 标签栏背景（菜单搜索条可跟随） */
+  const tabsBarBgColor = React.useMemo(() => {
+    if (isDarkMode) return token.colorBgContainer;
+    return storeTabsBg || token.colorBgContainer;
+  }, [storeTabsBg, token.colorBgContainer, isDarkMode]);
 
   // 根据顶栏背景色计算文字颜色（参考左侧菜单栏的实现）
   const headerTextColor = React.useMemo(() => {
@@ -1724,6 +1745,23 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
     return 'var(--ant-colorText)';
   }, [storeSiderBg, isDarkMode]);
+
+  /** 侧栏搜索条背景：跟随标签栏或菜单栏 */
+  const sidebarSearchStripBg = React.useMemo(() => {
+    return sidebarSearchBgFollowPref === 'tabs' ? tabsBarBgColor : siderBgColor;
+  }, [sidebarSearchBgFollowPref, tabsBarBgColor, siderBgColor]);
+
+  const sidebarSearchStripUsesLightText = React.useMemo(() => {
+    if (isDarkMode) return false;
+    if (sidebarSearchBgFollowPref === 'sider') {
+      return siderTextColor === '#ffffff';
+    }
+    const custom = storeTabsBg;
+    if (custom) {
+      return calculateColorBrightness(custom) < 128;
+    }
+    return false;
+  }, [isDarkMode, sidebarSearchBgFollowPref, siderTextColor, storeTabsBg]);
 
   // 浅色模式 + 深色侧栏：菜单统一白字
   const isLightModeDarkSider = React.useMemo(
@@ -2577,6 +2615,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       startMenuBaseRadius,
       startMenuPanelRadius,
       startMenuTheme,
+      sidebarSearchBgFollow: sidebarSearchBgFollowPref,
+      sidebarSearchStripBg,
+      sidebarSearchStripUsesLightText,
     }),
     [
       token,
@@ -2593,6 +2634,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       startMenuBaseRadius,
       startMenuPanelRadius,
       startMenuTheme,
+      sidebarSearchBgFollowPref,
+      sidebarSearchStripBg,
+      sidebarSearchStripUsesLightText,
     ],
   );
   const { shellStyles, themeStyles } = useBasicLayoutInlineStyles(layoutStyleContext);

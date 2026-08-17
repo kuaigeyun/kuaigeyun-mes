@@ -155,16 +155,12 @@
   box-sizing: border-box;
 }
 
-/* 表单内 Segmented：与 Input/Select 默认高度一致（Modal + 独立表单页） */
-.form-modal-template,
-.form-modal-template-fixed-footer,
-.document-form-page-body {
-  .form-field-segmented.ant-segmented {
-    .ant-segmented-item-label {
-      min-height: var(--ant-control-height);
-      line-height: calc(var(--ant-control-height) - 2px);
-      padding-inline: calc(var(--ant-control-padding-horizontal) - 1px);
-    }
+/* 表单内 Segmented：与 Input/Select 默认高度一致（任意 Modal / 表单，勿限 form-modal-template） */
+.form-field-segmented.ant-segmented {
+  .ant-segmented-item-label {
+    min-height: var(--ant-control-height);
+    line-height: calc(var(--ant-control-height) - 2px);
+    padding-inline: calc(var(--ant-control-padding-horizontal) - 1px);
   }
 }
 
@@ -1419,7 +1415,8 @@ code {
    只作用于本卡片标题，不穿透到嵌套 Card（如订单评审部门意见） */
 .ant-modal .ant-modal-header .ant-modal-title,
 .detail-drawer-section-title-accent > .ant-card-head .ant-card-head-title,
-.detail-drawer-section-title-accent > .ant-pro-card-head .ant-pro-card-title {
+/* ProCard 真源类名为 *-header（非 *-head）；ModuleActionPanel 等瀑布流事项卡依赖此项 */
+.detail-drawer-section-title-accent > .ant-pro-card-header .ant-pro-card-title {
   position: relative;
   padding-left: 14px;
 
@@ -2302,12 +2299,12 @@ code {
   --dashboard-card-shadow: var(--ant-box-shadow-tertiary);
 }
 
-/* ProLayout 主分割线：与看板/工作台卡片边框一致（默认 colorSplit 过浅） */
+/* ProLayout 主框线：顶栏底 / 侧栏右 — 与标签底轨、搜索底、配置钮顶同色 */
 .ant-pro-layout .ant-layout-header.ant-pro-layout-header {
-  border-block-end: 1px solid var(--dashboard-card-border-color) !important;
+  border-block-end: 1px solid var(--riveredge-layout-frame-color, var(--ant-colorBorder, var(--ant-color-border, #d9d9d9))) !important;
 }
 .ant-pro-layout .ant-pro-sider .ant-layout-sider-children {
-  border-inline-end: 1px solid var(--dashboard-card-border-color) !important;
+  border-inline-end: 1px solid var(--riveredge-layout-frame-color, var(--ant-colorBorder, var(--ant-color-border, #d9d9d9))) !important;
 }
 
 .dashboard-section__card.ant-card,

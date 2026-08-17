@@ -3921,6 +3921,89 @@ class SalesOrderService:
             tenant_id, sales_order_ids, closed_by, self.close_sales_order
         )
 
+    async def _resolve_status_before_close(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+    ) -> str:
+        """从关闭流转日志恢复关闭前状态；无日志时回落到已审核。"""
+        closed_states = (
+            DocumentStatus.CLOSED.value,
+            "CLOSED",
+            "closed",
+            "已关闭",
+        )
+        log = (
+            await StateTransitionLog.filter(
+                tenant_id=tenant_id,
+                entity_type="sales_order",
+                entity_id=sales_order_id,
+                to_state__in=list(closed_states),
+            )
+            .order_by("-transition_time", "-id")
+            .first()
+        )
+        from_state = str(getattr(log, "from_state", "") or "").strip() if log else ""
+        if from_state and not self._is_closed(from_state):
+            return from_state
+        return DocumentStatus.AUDITED.value
+
+    async def reopen_sales_order(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        reopened_by: int,
+        reason: Optional[str] = None,
+    ) -> SalesOrderResponse:
+        """撤回关闭：将已关闭订单恢复为关闭前状态，继续履约。"""
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        await self._assert_sales_order_capability_for_order(tenant_id, order, "reopen")
+
+        from apps.common.base_service import AppBaseService
+
+        operator_name = await AppBaseService().get_user_name(reopened_by)
+        old_status = order.status
+        restore_status = await self._resolve_status_before_close(tenant_id, sales_order_id)
+        reopen_reason = reason or "撤回关闭，恢复订单继续履约"
+
+        async with in_transaction():
+            await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
+                status=restore_status,
+                updated_by=reopened_by,
+            )
+            await self._log_state_transition(
+                tenant_id,
+                sales_order_id,
+                old_status,
+                restore_status,
+                reopened_by,
+                operator_name,
+                reopen_reason,
+            )
+
+        try:
+            return await self.get_sales_order_by_id(tenant_id, sales_order_id)
+        except Exception as e:
+            logger.warning("reopen_sales_order 后详情组装失败，返回轻量结果: {}", e)
+            return await self.get_sales_order_by_id(
+                tenant_id, sales_order_id, view="options"
+            )
+
+    async def bulk_reopen_sales_orders(
+        self,
+        tenant_id: int,
+        sales_order_ids: List[int],
+        reopened_by: int,
+    ) -> Dict[str, Any]:
+        """批量撤回关闭销售订单"""
+        return await self._bulk_operation_wrapper(
+            tenant_id, sales_order_ids, reopened_by, self.reopen_sales_order
+        )
+
     async def bulk_delete_sales_orders(
         self,
         tenant_id: int,

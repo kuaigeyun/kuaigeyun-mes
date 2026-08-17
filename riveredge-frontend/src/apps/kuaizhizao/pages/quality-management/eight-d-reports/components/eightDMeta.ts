@@ -95,8 +95,8 @@ export function buildEightDListStepNodes(
   });
 }
 
-/** 与 WorkOrderOperationStepsStrip compact 单槽宽一致；9 节点完整展开列宽 */
-export const EIGHT_D_LIST_STEP_SLOT_PX = 56;
+/** 与 WorkOrderOperationStepsStrip compact 默认单槽宽对齐略宽；9 节点完整展开列宽 */
+export const EIGHT_D_LIST_STEP_SLOT_PX = 60;
 export const EIGHT_D_LIST_STAGE_COLUMN_WIDTH = EIGHT_D_STATUS_ORDER.length * EIGHT_D_LIST_STEP_SLOT_PX;
 
 export function resolveEightDSourceDisplay(

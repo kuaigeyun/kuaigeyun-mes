@@ -121,7 +121,7 @@ class DocumentStateEngine:
     async def _reverse_work_order_state(
         self, tenant_id: int, document_id: int, operator_id: int, reason: Optional[str]
     ) -> Dict[str, Any]:
-        """工单：状态撤回（已下达/指定结束→草稿）"""
+        """工单：状态撤回（已下达/执行中→草稿）"""
         from apps.kuaizhizao.services.work_order_service import WorkOrderService
 
         svc = WorkOrderService()

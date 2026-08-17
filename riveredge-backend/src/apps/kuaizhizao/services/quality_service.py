@@ -9,6 +9,7 @@ Date: 2025-12-30
 
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
+import json
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
 from loguru import logger
@@ -1259,135 +1260,163 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             assert_quality_inspection_capability,
         )
 
-        async with in_transaction():
-            inspection = await IncomingInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
-            if not inspection:
-                raise NotFoundError(f"来料检验单不存在: {inspection_id}")
-            pushed = await self._pushed_purchase_return_quantity_for_inspection(tenant_id, inspection_id)
-            assert_quality_inspection_capability(
-                inspection,
-                "push_purchase_return",
-                supports_purchase_return=True,
-                pushed_purchase_return_quantity=pushed,
-            )
+        # 不要外层 in_transaction：create_purchase_return / generate_code / create_relation
+        # 各自开事务；嵌套会与编码 FOR UPDATE 叠加，易卡死或被 reload 打断后表现为 502/503。
+        inspection = await IncomingInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
+        if not inspection:
+            raise NotFoundError(f"来料检验单不存在: {inspection_id}")
+        pushed = await self._pushed_purchase_return_quantity_for_inspection(tenant_id, inspection_id)
+        assert_quality_inspection_capability(
+            inspection,
+            "push_purchase_return",
+            supports_purchase_return=True,
+            pushed_purchase_return_quantity=pushed,
+        )
 
-            unqualified = float(inspection.unqualified_quantity or 0)
-            max_push = max(0.0, unqualified - pushed)
-            if max_push <= 0:
-                raise BusinessLogicError("不合格数量已全部下推采购退货，无可下推数量")
+        unqualified = float(inspection.unqualified_quantity or 0)
+        max_push = max(0.0, unqualified - pushed)
+        if max_push <= 0:
+            raise BusinessLogicError("不合格数量已全部下推采购退货，无可下推数量")
 
-            if quantity is None:
-                push_qty = max_push
-            else:
-                push_qty = float(quantity)
-            if push_qty <= 0:
-                raise BusinessLogicError("退货数量必须大于 0")
-            if push_qty > max_push:
-                raise BusinessLogicError(f"退货数量不能超过可下推数量 {max_push}")
+        if quantity is None:
+            push_qty = max_push
+        else:
+            push_qty = float(quantity)
+        if push_qty <= 0:
+            raise BusinessLogicError("退货数量必须大于 0")
+        if push_qty > max_push:
+            raise BusinessLogicError(f"退货数量不能超过可下推数量 {max_push}")
 
-            from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
-            from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
-            from apps.kuaizhizao.services.warehouse_service import (
-                PurchaseReturnService,
-                _resolve_warehouse_name_by_id,
-            )
-            from apps.kuaizhizao.schemas.warehouse import PurchaseReturnCreate, PurchaseReturnItemCreate
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+        from apps.kuaizhizao.services.warehouse_service import (
+            PurchaseReturnService,
+            _resolve_warehouse_name_by_id,
+        )
+        from apps.kuaizhizao.schemas.warehouse import PurchaseReturnCreate, PurchaseReturnItemCreate
 
-            if not inspection.purchase_receipt_id:
-                raise BusinessLogicError("来料检验单未关联采购入库单，无法下推采购退货单")
+        if not inspection.purchase_receipt_id:
+            raise BusinessLogicError("来料检验单未关联采购入库单，无法下推采购退货单")
 
-            receipt = await PurchaseReceipt.get_or_none(
+        receipt = await PurchaseReceipt.get_or_none(
+            tenant_id=tenant_id,
+            id=int(inspection.purchase_receipt_id),
+            deleted_at__isnull=True,
+        )
+        if not receipt:
+            raise NotFoundError(f"采购入库单不存在: {inspection.purchase_receipt_id}")
+
+        receipt_item = await PurchaseReceiptItem.filter(
+            tenant_id=tenant_id,
+            receipt_id=receipt.id,
+            material_id=inspection.material_id,
+            deleted_at__isnull=True,
+        ).order_by("id").first()
+
+        unit_price = float(receipt_item.unit_price or 0) if receipt_item else 0.0
+        if unit_price <= 0 and receipt_item is not None:
+            poi_id = getattr(receipt_item, "purchase_order_item_id", None)
+            if poi_id:
+                from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+                poi = await PurchaseOrderItem.get_or_none(tenant_id=tenant_id, id=int(poi_id))
+                if poi is not None:
+                    unit_price = float(poi.unit_price or 0)
+        total_amount = float(push_qty) * unit_price
+
+        supplier_id = inspection.supplier_id or receipt.supplier_id
+        supplier_name = str(inspection.supplier_name or receipt.supplier_name or "").strip()
+        if not supplier_id or not supplier_name:
+            raise BusinessLogicError("来料检验单缺少供应商信息，无法下推采购退货单")
+
+        if not receipt.warehouse_id:
+            raise BusinessLogicError("采购入库单缺少仓库信息，无法下推采购退货单")
+        warehouse_id = int(receipt.warehouse_id)
+        warehouse_name = await _resolve_warehouse_name_by_id(
+            tenant_id, warehouse_id, receipt.warehouse_name
+        )
+
+        defect_reason = str(inspection.nonconformance_reason or "质量检验不合格").strip()
+        receipt_serials = None
+        if receipt_item is not None:
+            raw_serials = getattr(receipt_item, "serial_numbers", None)
+            if isinstance(raw_serials, list):
+                receipt_serials = [str(x).strip() for x in raw_serials if str(x).strip()]
+            elif isinstance(raw_serials, str) and raw_serials.strip():
+                try:
+                    parsed = json.loads(raw_serials)
+                    if isinstance(parsed, list):
+                        receipt_serials = [str(x).strip() for x in parsed if str(x).strip()]
+                except Exception:
+                    receipt_serials = None
+
+        item_data = PurchaseReturnItemCreate(
+            purchase_receipt_item_id=receipt_item.id if receipt_item else None,
+            material_id=inspection.material_id,
+            material_code=inspection.material_code,
+            material_name=inspection.material_name,
+            material_spec=getattr(inspection, "material_spec", None),
+            material_unit=inspection.material_unit or "个",
+            return_quantity=push_qty,
+            unit_price=unit_price,
+            total_amount=total_amount,
+            location_id=getattr(receipt_item, "location_id", None) if receipt_item else None,
+            location_code=getattr(receipt_item, "location_code", None) if receipt_item else None,
+            batch_number=getattr(receipt_item, "batch_number", None) if receipt_item else None,
+            serial_numbers=receipt_serials,
+            notes=defect_reason,
+        )
+
+        return_svc = PurchaseReturnService()
+        return_data = PurchaseReturnCreate(
+            purchase_receipt_id=receipt.id,
+            purchase_receipt_code=receipt.receipt_code,
+            purchase_order_id=receipt.purchase_order_id,
+            purchase_order_code=receipt.purchase_order_code,
+            supplier_id=int(supplier_id),
+            supplier_name=supplier_name,
+            warehouse_id=warehouse_id,
+            warehouse_name=warehouse_name,
+            return_reason=defect_reason,
+            return_type="质量问题",
+            status="待退货",
+            notes=f"由来料检验单 {inspection.inspection_code} 不合格项自动生成",
+            items=[item_data],
+        )
+
+        ret_bill = await return_svc.create_purchase_return(
+            tenant_id=tenant_id,
+            return_data=return_data,
+            created_by=created_by,
+        )
+
+        # 建立 质检 -> 采购退货单 的关联（独立事务，勿包在创建退货单事务外层）
+        try:
+            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+            rel_svc = DocumentRelationNewService()
+            await rel_svc.create_relation(
                 tenant_id=tenant_id,
-                id=int(inspection.purchase_receipt_id),
-                deleted_at__isnull=True,
-            )
-            if not receipt:
-                raise NotFoundError(f"采购入库单不存在: {inspection.purchase_receipt_id}")
-
-            receipt_item = await PurchaseReceiptItem.filter(
-                tenant_id=tenant_id,
-                receipt_id=receipt.id,
-                material_id=inspection.material_id,
-                deleted_at__isnull=True,
-            ).order_by("id").first()
-
-            unit_price = float(receipt_item.unit_price or 0) if receipt_item else 0.0
-            total_amount = float(push_qty) * unit_price
-
-            supplier_id = inspection.supplier_id or receipt.supplier_id
-            supplier_name = str(inspection.supplier_name or receipt.supplier_name or "").strip()
-            if not supplier_id or not supplier_name:
-                raise BusinessLogicError("来料检验单缺少供应商信息，无法下推采购退货单")
-
-            warehouse_id = int(receipt.warehouse_id)
-            warehouse_name = await _resolve_warehouse_name_by_id(
-                tenant_id, warehouse_id, receipt.warehouse_name
-            )
-
-            defect_reason = str(inspection.nonconformance_reason or "质量检验不合格").strip()
-            item_data = PurchaseReturnItemCreate(
-                purchase_receipt_item_id=receipt_item.id if receipt_item else None,
-                material_id=inspection.material_id,
-                material_code=inspection.material_code,
-                material_name=inspection.material_name,
-                material_spec=getattr(inspection, "material_spec", None),
-                material_unit=inspection.material_unit or "个",
-                return_quantity=push_qty,
-                unit_price=unit_price,
-                total_amount=total_amount,
-                notes=defect_reason,
-            )
-
-            return_svc = PurchaseReturnService()
-            return_data = PurchaseReturnCreate(
-                purchase_receipt_id=receipt.id,
-                purchase_receipt_code=receipt.receipt_code,
-                purchase_order_id=receipt.purchase_order_id,
-                purchase_order_code=receipt.purchase_order_code,
-                supplier_id=int(supplier_id),
-                supplier_name=supplier_name,
-                warehouse_id=warehouse_id,
-                warehouse_name=warehouse_name,
-                return_reason=defect_reason,
-                return_type="质量问题",
-                status="待退货",
-                notes=f"由来料检验单 {inspection.inspection_code} 不合格项自动生成",
-                items=[item_data],
-            )
-
-            ret_bill = await return_svc.create_purchase_return(
-                tenant_id=tenant_id,
-                return_data=return_data,
+                relation_data=DocumentRelationCreate(
+                    source_type="incoming_inspection",
+                    source_id=inspection_id,
+                    source_code=inspection.inspection_code,
+                    source_name=None,
+                    target_type="purchase_return",
+                    target_id=ret_bill.id,
+                    target_code=ret_bill.return_code,
+                    target_name=None,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc="来料检验不合格生成采购退货单",
+                ),
                 created_by=created_by,
             )
-            
-            # 建立 质检 -> 采购退货单 的关联
-            try:
-                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
-                
-                rel_svc = DocumentRelationNewService()
-                await rel_svc.create_relation(
-                    tenant_id=tenant_id,
-                    relation_data=DocumentRelationCreate(
-                        source_type="incoming_inspection",
-                        source_id=inspection_id,
-                        source_code=inspection.inspection_code,
-                        source_name=None,
-                        target_type="purchase_return",
-                        target_id=ret_bill.id,
-                        target_code=ret_bill.return_code,
-                        target_name=None,
-                        relation_type="source",
-                        relation_mode="push",
-                        relation_desc="来料检验不合格生成采购退货单",
-                    ),
-                    created_by=created_by,
-                )
-            except Exception as rel_e:
-                logger.warning(f"建立质检->采购退货单关联失败: {rel_e}")
+        except Exception as rel_e:
+            logger.warning(f"建立质检->采购退货单关联失败: {rel_e}")
 
-            return {"return_id": ret_bill.id, "return_code": ret_bill.return_code}
+        return {"return_id": ret_bill.id, "return_code": ret_bill.return_code}
 
     async def approve_inspection(self, tenant_id: int, inspection_id: int, approved_by: int, rejection_reason: Optional[str] = None) -> IncomingInspectionResponse:
         """审核检验单"""

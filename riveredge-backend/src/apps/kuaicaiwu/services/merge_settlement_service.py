@@ -106,10 +106,22 @@ class MergeSettlementService:
         customer_id = next(iter(partner_ids))
         customer_name = str(previews[0].get("customer_name") or "")
         total_amount = sum((amt for _, amt in lines), Decimal("0")).quantize(_TWOPLACES)
+        source_codes = [
+            str(p.get("source_code") or "").strip()
+            for p in previews
+            if str(p.get("source_code") or "").strip()
+        ]
+        from apps.kuaicaiwu.services.bank_account_service import build_voucher_bank_summary
 
         today = today_site_str()
         count = await Receipt.filter(tenant_id=tenant_id).count()
         code = f"SK{today}{count + 1:04d}"
+        merge_notes = (data.notes or "").strip() or build_voucher_bank_summary(
+            voucher_kind="receipt",
+            voucher_code=code,
+            partner_name=customer_name,
+            source_codes=source_codes,
+        )
         biz_day = resolve_business_datetime()
         settlement_codes = [
             await self.settlement.generate_code(
@@ -133,7 +145,7 @@ class MergeSettlementService:
                 "bank_account_id": data.bank_account_id,
                 "settlement_type": data.settlement_type or "normal",
                 "status": "Draft",
-                "notes": data.notes,
+                "notes": merge_notes,
                 "attachments": data.attachments,
             }
             apply_create_audit(receipt_payload, current_user)
@@ -219,10 +231,22 @@ class MergeSettlementService:
         supplier_id = next(iter(partner_ids))
         supplier_name = str(previews[0].get("supplier_name") or "")
         total_amount = sum((amt for _, amt in lines), Decimal("0")).quantize(_TWOPLACES)
+        source_codes = [
+            str(p.get("source_code") or "").strip()
+            for p in previews
+            if str(p.get("source_code") or "").strip()
+        ]
+        from apps.kuaicaiwu.services.bank_account_service import build_voucher_bank_summary
 
         today = today_site_str()
         count = await Payment.filter(tenant_id=tenant_id).count()
         code = f"FK{today}{count + 1:04d}"
+        merge_notes = (data.notes or "").strip() or build_voucher_bank_summary(
+            voucher_kind="payment",
+            voucher_code=code,
+            partner_name=supplier_name,
+            source_codes=source_codes,
+        )
         biz_day = resolve_business_datetime()
         settlement_codes = [
             await self.settlement.generate_code(
@@ -246,7 +270,7 @@ class MergeSettlementService:
                 "bank_account_id": data.bank_account_id,
                 "settlement_type": data.settlement_type or "normal",
                 "status": "Draft",
-                "notes": data.notes,
+                "notes": merge_notes,
                 "attachments": data.attachments,
             }
             apply_create_audit(payment_payload, current_user)
@@ -336,8 +360,17 @@ class MergeSettlementService:
             tax_amount = (total_with_tax - invoice_amount).quantize(_TWOPLACES)
 
         primary = previews[0]
-        receivable_id = int(primary.get("receivable_id") or lines[0][0])
-        receivable_code = str(primary.get("receivable_code") or primary.get("source_code") or "")
+        if len(lines) == 1:
+            receivable_id = int(primary.get("receivable_id") or lines[0][0])
+            receivable_code = str(primary.get("receivable_code") or primary.get("source_code") or "")
+            source_document_code = receivable_code
+        else:
+            receivable_id = None
+            receivable_code = None
+            source_document_code = ",".join(
+                str(p.get("source_code") or p.get("receivable_code") or sid)
+                for (sid, _), p in zip(lines, previews)
+            )[:100]
 
         code = await self.purchase_invoice_svc.generate_code(
             tenant_id, "SALES_INVOICE_CODE", prefix=f"SI{today_site_str()}"
@@ -357,7 +390,7 @@ class MergeSettlementService:
                 "amount_excluding_tax": invoice_amount,
                 "tax_amount": tax_amount,
                 "total_amount": total_with_tax,
-                "source_document_code": receivable_code,
+                "source_document_code": source_document_code,
                 "receivable_id": receivable_id,
                 "receivable_code": receivable_code,
                 "description": data.notes,
@@ -376,6 +409,7 @@ class MergeSettlementService:
                     invoice_id=int(invoice.id),
                     invoice_code=str(invoice.invoice_code),
                     created_by=current_user.id,
+                    allocated_amount=amount,
                 )
                 receivable_update: dict = {
                     "invoice_issued": True,
@@ -441,8 +475,12 @@ class MergeSettlementService:
             tax_amount = (total_with_tax - invoice_amount).quantize(_TWOPLACES)
 
         primary = previews[0]
-        payable_id = int(primary.get("payable_id") or lines[0][0])
-        payable_code = str(primary.get("payable_code") or primary.get("source_code") or "")
+        if len(lines) == 1:
+            payable_id = int(primary.get("payable_id") or lines[0][0])
+            payable_code = str(primary.get("payable_code") or primary.get("source_code") or "")
+        else:
+            payable_id = int(primary.get("payable_id") or lines[0][0])
+            payable_code = None
 
         create_data = PurchaseInvoiceCreate(
             supplier_id=supplier_id,
@@ -454,11 +492,11 @@ class MergeSettlementService:
             invoice_amount=invoice_amount,
             tax_amount=tax_amount,
             total_amount=total_with_tax,
-            payable_id=payable_id,
+            payable_id=payable_id if len(lines) == 1 else None,
             payable_code=payable_code,
             notes=data.notes,
-            source_type="payable",
-            source_id=payable_id,
+            source_type="payable" if len(lines) == 1 else None,
+            source_id=payable_id if len(lines) == 1 else None,
         )
 
         allocated_code = await self.purchase_invoice_svc.generate_code(
@@ -475,11 +513,15 @@ class MergeSettlementService:
                 invoice_code=allocated_code,
             )
             invoice_id = int(invoice.id)
-            await PurchaseInvoice.filter(tenant_id=tenant_id, id=invoice_id).update(
-                invoice_amount=invoice_amount,
-                tax_amount=tax_amount,
-                total_amount=total_with_tax,
-            )
+            update_fields: Dict[str, Any] = {
+                "invoice_amount": invoice_amount,
+                "tax_amount": tax_amount,
+                "total_amount": total_with_tax,
+            }
+            if len(lines) > 1:
+                update_fields["payable_id"] = None
+                update_fields["payable_code"] = None
+            await PurchaseInvoice.filter(tenant_id=tenant_id, id=invoice_id).update(**update_fields)
 
             settled_pairs: List[Dict[str, Any]] = []
             for (sid, amount), preview in zip(lines, previews):
@@ -491,6 +533,7 @@ class MergeSettlementService:
                     invoice_id=invoice_id,
                     invoice_code=str(invoice.invoice_code),
                     created_by=current_user.id,
+                    allocated_amount=amount,
                 )
                 payable_update: dict = {
                     "invoice_received": True,

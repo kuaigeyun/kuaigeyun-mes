@@ -240,3 +240,30 @@ def test_fifty_hours_spans_multiple_workdays():
     # 9h/day → Mon–Fri 45h，剩余 5h → 下周一 13:00
     assert end == datetime(2026, 8, 3, 13, 0, 0)
     assert (end - start).total_seconds() / 3600 > 50
+
+
+def test_utc_aware_input_uses_site_wall_clock_not_utc_hhmm():
+    """库内 UTC aware 不得把 08:00 工作窗贴成 UTC（展示成 16:00）。"""
+    from datetime import timezone
+
+    # 站点 2026-06-05 08:00 Asia/Shanghai == 2026-06-05 00:00 UTC
+    stored = datetime(2026, 6, 5, 0, 0, tzinfo=timezone.utc)
+    snapped = snap_to_working_start(stored, holidays=set(), config=CFG)
+    assert snapped == stored
+
+    # 若误把 08:00 贴 UTC，会得到 08:00 UTC；契约要求仍为 00:00 UTC（墙钟 08:00）
+    bad_utc_stamp = datetime(2026, 6, 5, 8, 0, tzinfo=timezone.utc)
+    assert snapped != bad_utc_stamp
+
+    end = add_working_hours(stored, 9.0, holidays=set(), config=CFG)
+    # 当日 08:00–17:00 满 9h → 墙钟 17:00 = 09:00 UTC
+    assert end == datetime(2026, 6, 5, 9, 0, tzinfo=timezone.utc)
+
+    slots = build_operation_time_slots(
+        [1.0],
+        planned_start=stored,
+        holidays=set(),
+        work_hours=CFG,
+    )
+    assert slots[0][0] == stored
+    assert slots[0][1] == datetime(2026, 6, 5, 1, 0, tzinfo=timezone.utc)

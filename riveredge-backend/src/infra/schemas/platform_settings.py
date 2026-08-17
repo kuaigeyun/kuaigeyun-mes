@@ -11,6 +11,7 @@ from typing import Optional
 from datetime import datetime
 from pydantic import Field
 from core.schemas.base import BaseSchema
+from core.utils.timezone_utils import site_timezone_name
 
 
 class PlatformSettingsBase(BaseSchema):
@@ -93,7 +94,10 @@ class PlatformSettingsResponse(PlatformSettingsBase):
     id: int = Field(..., description="设置ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    timezone: str = Field(
+        default_factory=site_timezone_name,
+        description="站点时区（infra_settings.TIMEZONE，只读下发；与 configs.timezone 一致）",
+    )
     
     class Config:
         from_attributes = True
-

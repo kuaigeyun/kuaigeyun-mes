@@ -42,7 +42,12 @@ import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDa
 import dayjs from 'dayjs';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-import { formDateFormItemProps, formDateRangeFormItemProps, toApiDateString } from '../../../../../utils/formDate';
+import {
+  formDateFormItemProps,
+  formDateRangeFormItemProps,
+  parseSpreadsheetDateToApiString,
+  toApiDateString,
+} from '../../../../../utils/formDate';
 import {
   MASTER_DATA_PINNED_ACTIVE_FIELD,
   buildActiveStatusValueEnum,
@@ -432,11 +437,7 @@ const ToolLedgerPage: React.FC = () => {
               if (idx === undefined) return '';
               return String(row[idx] ?? '').trim();
             };
-            const parseDate = (raw: string): string | undefined => {
-              if (!raw) return undefined;
-              const d = dayjs(raw);
-              return d.isValid() ? d.format('YYYY-MM-DD') : undefined;
-            };
+            const parseDate = (raw: string): string | undefined => parseSpreadsheetDateToApiString(raw);
             const parseIntField = (raw: string): number | undefined => {
               if (!raw) return undefined;
               const n = Number(raw);

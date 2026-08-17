@@ -1,6 +1,63 @@
 import dayjs from 'dayjs';
 import { getTimezoneFromSiteSetting } from './format';
 
+/** Excel 1900 日期系统起点（含 Lotus 闰年兼容：序列日 0 = 1899-12-30） */
+const EXCEL_SERIAL_EPOCH = dayjs('1899-12-30');
+
+function isPlausibleBusinessYear(year: number): boolean {
+  return year >= 1900 && year <= 2100;
+}
+
+function pad2(n: number | string): string {
+  return String(n).padStart(2, '0');
+}
+
+/**
+ * 导入表格日期 → API `YYYY-MM-DD`。
+ * xlsx 原始读出常为 Excel 序列日数字符串（如 `45444`）；`dayjs('45444')` 会误成 4544 年。
+ */
+export function parseSpreadsheetDateToApiString(raw: unknown): string | undefined {
+  if (raw == null) return undefined;
+  const s = String(raw).trim();
+  if (!s) return undefined;
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const d = dayjs(s.slice(0, 10));
+    return d.isValid() && isPlausibleBusinessYear(d.year()) ? d.format('YYYY-MM-DD') : undefined;
+  }
+
+  const slash = s.match(/^(\d{4})[/.](\d{1,2})[/.](\d{1,2})/);
+  if (slash) {
+    const d = dayjs(`${slash[1]}-${pad2(slash[2])}-${pad2(slash[3])}`);
+    return d.isValid() && isPlausibleBusinessYear(d.year()) ? d.format('YYYY-MM-DD') : undefined;
+  }
+
+  // 紧凑 YYYYMMDD（须先于 Excel 序列判断，避免 8 位被当成序列）
+  if (/^\d{8}$/.test(s)) {
+    const y = Number(s.slice(0, 4));
+    const m = Number(s.slice(4, 6));
+    const day = Number(s.slice(6, 8));
+    if (isPlausibleBusinessYear(y) && m >= 1 && m <= 12 && day >= 1 && day <= 31) {
+      const d = dayjs(`${y}-${pad2(m)}-${pad2(day)}`);
+      if (d.isValid()) return d.format('YYYY-MM-DD');
+    }
+    return undefined;
+  }
+
+  // Excel 序列日（含小数时间）；常见约 1～60000（1900–2064）
+  if (/^\d+(\.\d+)?$/.test(s)) {
+    const n = Number(s);
+    if (Number.isFinite(n) && n >= 1 && n < 100000) {
+      const d = EXCEL_SERIAL_EPOCH.add(Math.floor(n), 'day');
+      return d.isValid() && isPlausibleBusinessYear(d.year()) ? d.format('YYYY-MM-DD') : undefined;
+    }
+  }
+
+  const d = dayjs(s);
+  if (!d.isValid() || !isPlausibleBusinessYear(d.year())) return undefined;
+  return d.format('YYYY-MM-DD');
+}
+
 /**
  * Form / DatePicker 唯一日期读取规范。
  * rc-picker 要求值为 dayjs；字符串、Date、Moment-like 对象会直接触发 isValid is not a function。

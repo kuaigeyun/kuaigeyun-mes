@@ -23,6 +23,7 @@ import { WorkOrderOperationStepsStrip } from '../../production-execution/work-or
 import {
   buildEightDListStepNodes,
   EIGHT_D_LIST_STAGE_COLUMN_WIDTH,
+  EIGHT_D_LIST_STEP_SLOT_PX,
   resolveEightDSeverityDisplay,
   resolveEightDSourceDisplay,
 } from './components/eightDMeta';
@@ -179,6 +180,7 @@ const EightDReportsPage: React.FC = () => {
       render: (_, row) => (
         <WorkOrderOperationStepsStrip
           steps={buildEightDListStepNodes(t, row.status, row.lifecycle_stages)}
+          slotWidth={EIGHT_D_LIST_STEP_SLOT_PX}
         />
       ),
     },
@@ -335,7 +337,7 @@ const EightDReportsPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           permissionResource={EIGHT_D_RESOURCE}
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.eight-d-reports.stage-source-v5"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.eight-d-reports.stage-source-v6"
           showAdvancedSearch
           pinnedTabsField={EIGHT_D_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter

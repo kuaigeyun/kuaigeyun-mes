@@ -36,6 +36,12 @@ const TRACE_FLOW_NODE_BASE_SIZE: Record<'compact' | 'normal', [number, number]> 
   normal: [216, 58],
 };
 
+/** 不展示创建时间时节点略矮 */
+const TRACE_FLOW_NODE_SIZE_NO_TIME: Record<'compact' | 'normal', [number, number]> = {
+  compact: [172, 40],
+  normal: [216, 46],
+};
+
 /**
  * 仅 1 个节点时 fitView 会把缩放拉得很高，节点在屏幕上过宽；
  * 限制首次适配后的 zoom 上限（约等于「节点视窗宽度不超过该像素」）。
@@ -116,6 +122,7 @@ interface TraceDocumentFlowNodeProps {
   /** 关联单据已删除 */
   is_deleted?: boolean;
   compact: boolean;
+  showCreatedAt?: boolean;
 }
 
 /** 参照 UniFlowNode：顶栏浅色底 + 左侧色条 + 图标 + 类型标签 + 主文案 */
@@ -129,6 +136,7 @@ const TraceDocumentFlowNode: React.FC<TraceDocumentFlowNodeProps> = ({
   selected,
   is_deleted = false,
   compact,
+  showCreatedAt = true,
 }) => {
   const { token } = useToken();
   const { t } = useTranslation();
@@ -293,19 +301,25 @@ const TraceDocumentFlowNode: React.FC<TraceDocumentFlowNodeProps> = ({
               {displaySubtitle}
             </div>
           ) : null}
-          <div
-            style={{
-              fontSize: compact ? 9 : 10,
-              color: token.colorTextTertiary,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              lineHeight: 1.3,
-            }}
-            title={`创建时间: ${createdAtText}`}
-          >
-            创建: {createdAtText}
-          </div>
+          {showCreatedAt ? (
+            <div
+              style={{
+                fontSize: compact ? 9 : 10,
+                color: token.colorTextTertiary,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                lineHeight: 1.3,
+              }}
+              title={t('components.documentTrackingPanel.traceNodeCreatedAt', {
+                time: createdAtText,
+              })}
+            >
+              {t('components.documentTrackingPanel.traceNodeCreatedAtShort', {
+                time: createdAtText,
+              })}
+            </div>
+          ) : null}
         </div>
       </div>
       </div>
@@ -326,6 +340,8 @@ export interface DocumentTraceFlowGraphProps {
   hideInlineRefresh?: boolean;
   /** 追溯接口加载状态（便于外层刷新按钮展示 loading） */
   onTraceLoadingChange?: (loading: boolean) => void;
+  /** 节点是否展示创建时间（默认 true；详情抽屉「只显示单据」为 false） */
+  showCreatedAt?: boolean;
 }
 
 export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
@@ -337,6 +353,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
   compact = false,
   hideInlineRefresh = false,
   onTraceLoadingChange,
+  showCreatedAt = true,
 }) => {
   const { t } = useTranslation();
   const { token } = useToken();
@@ -497,7 +514,10 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
     const flowKey = `${documentType}-${documentId}-${nodes.length}-${edges.length}-${refreshKey}-${traceLoadSeq}`;
     const viewportPadding = compact ? TRACE_FLOW_VIEWPORT_PADDING.compact : TRACE_FLOW_VIEWPORT_PADDING.normal;
     const layoutMode = compact ? 'compact' : 'normal';
-    const [nodeBaseWidth] = TRACE_FLOW_NODE_BASE_SIZE[layoutMode];
+    const nodeSize = showCreatedAt
+      ? TRACE_FLOW_NODE_BASE_SIZE[layoutMode]
+      : TRACE_FLOW_NODE_SIZE_NO_TIME[layoutMode];
+    const [nodeBaseWidth] = nodeSize;
     const singleNodeFitMaxZoom =
       TRACE_FLOW_SINGLE_NODE_MAX_VIEW_WIDTH_PX[layoutMode] / nodeBaseWidth;
     const dagreRankSep = 48;
@@ -522,7 +542,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
         nodes: nodes.map((n) => ({
           id: n.id,
           style: {
-            size: n.flowNodeSize ?? TRACE_FLOW_NODE_BASE_SIZE[layoutMode],
+            size: n.flowNodeSize ?? nodeSize,
           },
           data: {
             label: n.label,
@@ -552,7 +572,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
       /** React 自定义节点（对齐 UniFlowNode 层次）；勿改为 rect，否则不走 React 挂载链路 */
       node: {
         style: {
-          size: TRACE_FLOW_NODE_BASE_SIZE[layoutMode],
+          size: nodeSize,
           component: (data: NodeData) => {
             const datum = data?.data as {
               label?: string;
@@ -578,6 +598,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
                 is_deleted={!!datum?.is_deleted}
                 selected={nid !== '' && nid === selectedGraphNodeId}
                 compact={compact}
+                showCreatedAt={showCreatedAt}
               />
             );
           },
@@ -628,7 +649,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
       flowKey,
       graphConfig: config,
     };
-  }, [trace, formatLabel, documentType, documentId, refreshKey, traceLoadSeq, compact, selectedGraphNodeId, handleTraceFlowNodeClick, traceCanvasActive]);
+  }, [trace, formatLabel, documentType, documentId, refreshKey, traceLoadSeq, compact, selectedGraphNodeId, handleTraceFlowNodeClick, traceCanvasActive, showCreatedAt]);
 
   if (!enabled) {
     return <div style={{ minHeight: compact ? 0 : 400 }} />;

@@ -18,6 +18,8 @@ export const DocumentTrackingRelationsTabsBody: React.FC<{
   compact?: boolean;
   hideInlineRefresh?: boolean;
   onTraceLoadingChange?: (loading: boolean) => void;
+  /** 节点是否展示创建时间（默认 true） */
+  showCreatedAt?: boolean;
 }> = ({
   documentType,
   documentId,
@@ -26,6 +28,7 @@ export const DocumentTrackingRelationsTabsBody: React.FC<{
   compact,
   hideInlineRefresh,
   onTraceLoadingChange,
+  showCreatedAt = true,
 }) => (
   <Suspense
     fallback={
@@ -43,6 +46,7 @@ export const DocumentTrackingRelationsTabsBody: React.FC<{
       compact={compact}
       hideInlineRefresh={hideInlineRefresh}
       onTraceLoadingChange={onTraceLoadingChange}
+      showCreatedAt={showCreatedAt}
     />
   </Suspense>
 );

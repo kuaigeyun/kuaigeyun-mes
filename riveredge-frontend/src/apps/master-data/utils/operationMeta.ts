@@ -143,6 +143,21 @@ export function renderOperationPersonnelMarkers(
   );
 }
 
+/** 列表/详情：合并默认人员姓名与工作小组名称（与编辑表单人员/小组配置一致） */
+export function resolveOperationDefaultPersonnelLabels(record: {
+  defaultOperatorNames?: string[] | null;
+  default_operator_names?: string[] | null;
+  defaultTeamNames?: string[] | null;
+  default_team_names?: string[] | null;
+}): string[] {
+  const operators = record.defaultOperatorNames ?? record.default_operator_names ?? [];
+  const teams = record.defaultTeamNames ?? record.default_team_names ?? [];
+  return [
+    ...(Array.isArray(operators) ? operators : []),
+    ...(Array.isArray(teams) ? teams : []),
+  ].filter((name): name is string => Boolean(name && String(name).trim()));
+}
+
 export function renderOperationActiveStatusTag(
   t: TFunction,
   isActive?: boolean | null,

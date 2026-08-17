@@ -4151,112 +4151,38 @@ async def export_sales_deliveries(
 )
 async def print_sales_delivery(
     delivery_id: int,
-    template_uuid: Optional[str] = Query(None, description="打印模板UUID（可选，如果不提供则使用默认模板）"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """
-    打印销售出库单
-    
-    使用打印模板服务渲染销售出库单，支持自定义模板。
-    如果不提供模板UUID，将使用默认的销售出库单打印模板。
-    
-    Args:
-        delivery_id: 销售出库单ID
-        template_uuid: 打印模板UUID（可选）
-        current_user: 当前用户（依赖注入）
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        dict: 打印结果（包含渲染后的内容）
-    """
-    from core.services.print.print_template_service import PrintTemplateService
-    from core.schemas.print_template import PrintTemplateRenderRequest
-    from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
-    
+    """打印销售出库单（与其它仓储单据一致，走 DocumentPrintService）"""
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=delivery_id,
+    )
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
     try:
-        await _assert_sales_delivery_visible(
+        result = await DocumentPrintService().print_document(
             tenant_id=tenant_id,
-            current_user=current_user,
-            delivery_id=delivery_id,
+            document_type="sales_delivery",
+            document_id=delivery_id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
         )
-        # 获取销售出库单详情
-        service = SalesDeliveryService()
-        delivery = await service.get_sales_delivery_by_id(tenant_id, delivery_id)
-        
-        # 获取出库单明细
-        items = await SalesDeliveryItem.filter(
-            tenant_id=tenant_id,
-            delivery_id=delivery_id
-        ).all()
-        
-        # 构建打印数据
-        print_data = {
-            "delivery_code": delivery.delivery_code,
-            "sales_order_code": delivery.sales_order_code or "",
-            "customer_name": delivery.customer_name or "",
-            "warehouse_name": delivery.warehouse_name or "",
-            "delivery_time": to_api_isoformat(delivery.delivery_time) if delivery.delivery_time else "",
-            "status": delivery.status,
-            "total_quantity": str(delivery.total_quantity) if delivery.total_quantity else "0",
-            "total_amount": str(delivery.total_amount) if delivery.total_amount else "0",
-            "shipping_method": delivery.shipping_method or "",
-            "tracking_number": delivery.tracking_number or "",
-            "shipping_address": delivery.shipping_address or "",
-            "notes": delivery.notes or "",
-            "items": [
-                {
-                    "material_code": item.material_code,
-                    "material_name": item.material_name,
-                    "delivery_quantity": str(item.delivery_quantity),
-                    "material_unit": item.material_unit,
-                    "unit_price": str(item.unit_price),
-                    "total_amount": str(item.total_amount),
-                    "batch_number": item.batch_number or "",
-                    "location_code": item.location_code or "",
-                }
-                for item in items
-            ],
-            "created_at": to_api_isoformat(delivery.created_at) if delivery.created_at else "",
-        }
-        
-        # 如果没有提供模板UUID，尝试查找默认模板
-        if not template_uuid:
-            # TODO: 从配置或数据库查找默认的销售出库单打印模板
-            # 这里暂时返回打印数据，前端可以自行处理
-            return {
-                "success": True,
-                "data": print_data,
-                "message": "打印数据已准备，请在前端使用打印模板渲染"
-            }
-        
-        # 使用指定的模板渲染
-        render_request = PrintTemplateRenderRequest(
-            data=print_data,
-            output_format="html",  # 默认HTML格式，前端可以转换为PDF
-            async_execution=False
-        )
-        
-        result = await PrintTemplateService.render_print_template(
-            tenant_id=tenant_id,
-            uuid=template_uuid,
-            data=render_request
-        )
-        
-        return {
-            "success": True,
-            "content": result.get("rendered_content", ""),
-            "data": print_data
-        }
-        
-    except Exception as e:
-        logger.error(f"打印销售出库单失败: {str(e)}")
-        raise _http_exception_with_trace(
-            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            f"打印失败: {str(e)}",
-            "/sales-deliveries/{delivery_id}/print",
-            tenant_id,
-        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
 
 
 # ==================== 销售退货API ====================

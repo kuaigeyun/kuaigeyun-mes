@@ -140,6 +140,19 @@ PARAMETER_REGISTRY_CATEGORY_META: Dict[str, Dict[str, str]] = {
 
 # 参数控件元数据（默认 boolean，可按 full key 覆盖为 number/string/color 并附 min/max）
 REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
+    "parameters.common.detail_full_chain_mode": {
+        "type": "select",
+        "options": [
+            {
+                "value": "off",
+                "labelKey": "pages.system.configCenter.param.common_detail_full_chain_mode_opt_off",
+            },
+            {
+                "value": "documents_only",
+                "labelKey": "pages.system.configCenter.param.common_detail_full_chain_mode_opt_documents_only",
+            },
+        ],
+    },
     "parameters.work_order.last_operation_auto_inbound_mode": {
         "type": "select",
         "options": [
@@ -288,6 +301,8 @@ PROCESS_KEYS = {
 # 参数设置：具体业务值（数值、阈值、功能开关）
 PARAMETER_KEYS = {
     "parameters.common.trial_run_mode",
+    "parameters.common.detail_full_chain_mode",
+    "parameters.common.detail_operation_log_enabled",
     "parameters.common.quantity_decimal_places",
     "parameters.common.price_decimal_places",
     "parameters.common.amount_decimal_places",
@@ -350,6 +365,8 @@ PARAMETER_KEYS = {
 # 已实装并在后端有明确生效点的配置项（用于前端禁用"假开关"）
 IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.common.trial_run_mode",
+    "parameters.common.detail_full_chain_mode",
+    "parameters.common.detail_operation_log_enabled",
     "parameters.common.quantity_decimal_places",
     "parameters.common.price_decimal_places",
     "parameters.common.amount_decimal_places",
@@ -444,9 +461,41 @@ DEFAULT_PRODUCTION_PICKING_CONFIRM_ROLE_CODES = {
 # 纯参数默认值（替代旧 SIMPLE/FULL_MODE_CONFIG.parameters 兜底）
 # 仅保留真实有默认值语义的键；未列出的键由业务 getter 自行定义 fallback。
 # ============================================================
+
+DETAIL_FULL_CHAIN_MODES = frozenset({"off", "documents_only"})
+
+
+def coerce_detail_full_chain_mode(raw: Any) -> str:
+    """将全链路模式规范化为 off / documents_only（兼容旧布尔 detail_full_chain_enabled）。"""
+    if isinstance(raw, bool):
+        return "documents_only" if raw else "off"
+    if isinstance(raw, str) and raw in DETAIL_FULL_CHAIN_MODES:
+        return raw
+    return "documents_only"
+
+
+def coerce_common_detail_drawer_params(common: Dict[str, Any]) -> Dict[str, Any]:
+    """规范化 common 下详情抽屉相关参数（就地并返回）。"""
+    if "detail_full_chain_mode" in common:
+        common["detail_full_chain_mode"] = coerce_detail_full_chain_mode(
+            common.get("detail_full_chain_mode")
+        )
+    elif "detail_full_chain_enabled" in common:
+        common["detail_full_chain_mode"] = coerce_detail_full_chain_mode(
+            common.pop("detail_full_chain_enabled")
+        )
+    else:
+        common["detail_full_chain_mode"] = "documents_only"
+    common.pop("detail_full_chain_enabled", None)
+    return common
+
+
 DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
     "common": {
         "trial_run_mode": False,
+        # 详情抽屉全链路：off 隐藏 Tab；documents_only 仅展示单据节点（不展示创建时间）
+        "detail_full_chain_mode": "documents_only",
+        "detail_operation_log_enabled": True,
         # 数量/单价/金额小数位（ERP 惯例分项；默认 2；上限对齐当前库字段）
         "quantity_decimal_places": 2,
         "price_decimal_places": 2,
@@ -791,6 +840,9 @@ class BusinessConfigService:
         if "finance" in merged:
             merged["finance"] = coerce_finance_parameter_dict(merged["finance"])
 
+        if "common" in merged:
+            merged["common"] = coerce_common_detail_drawer_params(dict(merged["common"] or {}))
+
         return {"parameters": merged}
 
     async def get_bom_multi_version_allowed(self, tenant_id: int) -> bool:
@@ -801,6 +853,22 @@ class BusinessConfigService:
         """是否开启试运营模式（试运营期间部分业务校验可放宽，具体规则由各领域按需接入）。"""
         config = await self.get_business_config(tenant_id)
         return bool(config["parameters"].get("common", {}).get("trial_run_mode", False))
+
+    async def get_detail_full_chain_mode(self, tenant_id: int) -> str:
+        """详情抽屉全链路模式：off | documents_only（默认 documents_only）。"""
+        config = await self.get_business_config(tenant_id)
+        return coerce_detail_full_chain_mode(
+            config["parameters"].get("common", {}).get("detail_full_chain_mode")
+        )
+
+    async def is_detail_full_chain_enabled(self, tenant_id: int) -> bool:
+        """详情抽屉是否展示全链路跟踪 Tab（mode != off）。"""
+        return (await self.get_detail_full_chain_mode(tenant_id)) != "off"
+
+    async def is_detail_operation_log_enabled(self, tenant_id: int) -> bool:
+        """详情抽屉是否展示操作记录区块（默认开启）。"""
+        config = await self.get_business_config(tenant_id)
+        return bool(config["parameters"].get("common", {}).get("detail_operation_log_enabled", True))
 
     async def _get_decimal_places_param(
         self,

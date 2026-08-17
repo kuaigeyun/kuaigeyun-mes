@@ -90,6 +90,38 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = createCategories({
       type: 'boolean',
     },
     {
+      key: 'common.detail_full_chain_mode',
+      nameKey: 'pages.system.configCenter.param.common_detail_full_chain_mode',
+      descriptionKey: 'pages.system.configCenter.param.common_detail_full_chain_mode_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.common.detail_full_chain_mode',
+      type: 'select',
+      selectOptions: [
+        {
+          value: 'off',
+          labelKey: 'pages.system.configCenter.param.common_detail_full_chain_mode_opt_off',
+        },
+        {
+          value: 'documents_only',
+          labelKey: 'pages.system.configCenter.param.common_detail_full_chain_mode_opt_documents_only',
+        },
+      ],
+      groupKey: 'common.detail_drawer',
+      groupNameKey: 'pages.system.configCenter.paramGroup.common_detail_drawer',
+      groupDescriptionKey: 'pages.system.configCenter.paramGroup.common_detail_drawer_desc',
+    },
+    {
+      key: 'common.detail_operation_log_enabled',
+      nameKey: 'pages.system.configCenter.param.common_detail_operation_log_enabled',
+      descriptionKey: 'pages.system.configCenter.param.common_detail_operation_log_enabled_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.common.detail_operation_log_enabled',
+      type: 'boolean',
+      groupKey: 'common.detail_drawer',
+      groupNameKey: 'pages.system.configCenter.paramGroup.common_detail_drawer',
+      groupDescriptionKey: 'pages.system.configCenter.paramGroup.common_detail_drawer_desc',
+    },
+    {
       key: 'common.quantity_decimal_places',
       nameKey: 'pages.system.configCenter.param.common_quantity_decimal_places',
       descriptionKey: 'pages.system.configCenter.param.common_quantity_decimal_places_desc',

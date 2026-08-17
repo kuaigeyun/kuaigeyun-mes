@@ -1299,13 +1299,22 @@ const OutboundPage: React.FC = () => {
               currentUser,
             );
             const filtered = filterOutboundHubRowsByDeepLink(result.data, outboundDeepLinkRef.current);
+            if (!result.success) {
+              messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.loadListPartialFailed'));
+            }
             return {
               ...result,
               data: filtered,
               total: outboundDeepLinkRef.current ? filtered.length : result.total,
             };
-          } catch {
-            messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.loadListFailed'));
+          } catch (error: unknown) {
+            // apiRequest 对 5xx 已弹过「服务器内部错误」；此处只补列表失败提示，避免重复堆叠无意义文案
+            const alreadyToasted =
+              Boolean((error as { response?: { status?: number } })?.response?.status) &&
+              Number((error as { response?: { status?: number } })?.response?.status) >= 500;
+            if (!alreadyToasted) {
+              messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.loadListFailed'));
+            }
             return { data: [], success: false, total: 0 };
           }
         }}
