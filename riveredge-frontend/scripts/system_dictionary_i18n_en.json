@@ -375,11 +375,11 @@
       },
       "订单退货": {
         "label": "Order Return",
-        "desc": "Return created by pushing from a sales or purchase order"
+        "desc": "Return order created by push-down from a sales order or a purchase order"
       },
       "出库退货": {
         "label": "Outbound Return",
-        "desc": "Return created by pushing from a sales outbound document"
+        "desc": "Return order created by push-down from a sales outbound order"
       },
       "OTHER": {
         "label": "Other",
@@ -498,6 +498,10 @@
       "停用": {
         "label": "Inactive",
         "desc": "Deactivated or out of service"
+      },
+      "校验中": {
+        "label": "Under Calibration",
+        "desc": "Under calibration"
       },
       "报废": {
         "label": "Scrapped",
@@ -1176,6 +1180,96 @@
       "其他": {
         "label": "Other",
         "desc": "Other outbound reason"
+      }
+    }
+  },
+  "EQUIPMENT_NATURE": {
+    "name": "Equipment Nature",
+    "desc": "Equipment nature used for grouping and classifying the equipment ledger",
+    "items": {
+      "通用设备": {
+        "label": "General Equipment",
+        "desc": "General-purpose production equipment"
+      },
+      "测量设备": {
+        "label": "Measuring Equipment",
+        "desc": "Metrology and measuring equipment"
+      },
+      "特种设备": {
+        "label": "Special Equipment",
+        "desc": "Special equipment under statutory supervision"
+      },
+      "其他": {
+        "label": "Other",
+        "desc": "Other nature"
+      }
+    }
+  },
+  "HAOLIGO_QUALITY_ISSUE_TYPE": {
+    "name": "Quality Issue Type",
+    "desc": "Quality issue types used in HaoliGO quality issue registration (maintainable in the data dictionary; common issues can be added directly in the form)",
+    "items": {
+      "外观不良": {
+        "label": "Appearance Defect",
+        "desc": ""
+      },
+      "尺寸超差": {
+        "label": "Dimension Out of Tolerance",
+        "desc": ""
+      },
+      "功能异常": {
+        "label": "Functional Failure",
+        "desc": ""
+      },
+      "装配不良": {
+        "label": "Assembly Defect",
+        "desc": ""
+      },
+      "材料不良": {
+        "label": "Material Defect",
+        "desc": ""
+      },
+      "工艺偏差": {
+        "label": "Process Deviation",
+        "desc": ""
+      },
+      "漏检流出": {
+        "label": "Inspection Omission",
+        "desc": ""
+      },
+      "客户反馈": {
+        "label": "Customer Feedback",
+        "desc": ""
+      },
+      "其他": {
+        "label": "Other",
+        "desc": ""
+      }
+    }
+  },
+  "INSTALL_EXECUTION_STAGE": {
+    "name": "Installation Execution Stage",
+    "desc": "Progress stages of installation execution orders, maintainable in the system data dictionary",
+    "items": {
+      "arrival_confirm": {
+        "label": "Arrival Confirmation",
+        "desc": "Equipment and materials confirmed on site"
+      },
+      "installation": {
+        "label": "Positioning and Installation",
+        "desc": "On-site positioning and installation"
+      },
+      "commissioning": {
+        "label": "Commissioning",
+        "desc": "System commissioning"
+      },
+      "trial_run": {
+        "label": "Trial Run",
+        "desc": "Trial run verification"
+      },
+      "customer_acceptance": {
+        "label": "Customer Acceptance",
+        "desc": "Customer acceptance sign-off"
       }
     }
   }

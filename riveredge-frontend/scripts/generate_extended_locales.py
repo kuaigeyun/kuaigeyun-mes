@@ -152,7 +152,8 @@ class Translator:
         if not text or not text.strip():
             return text
         if text in self.cache:
-            return self.cache[text]
+            # 词条表是译文修正的真源：命中缓存也要重新套用，否则新增词条对已缓存的字符串永远不生效。
+            return apply_phrase_glossary(self.cache[text], self.post_glossary)
 
         protected, placeholders = protect_placeholders(text)
         result: str | None = None
@@ -198,7 +199,7 @@ class Translator:
                     save_cache(self.cache_name, self.cache)
 
         save_cache(self.cache_name, self.cache)
-        return {v: self.cache.get(v, v) for v in values}
+        return {v: apply_phrase_glossary(self.cache.get(v, v), self.post_glossary) for v in values}
 
     def flush(self) -> None:
         save_cache(self.cache_name, self.cache)
@@ -329,9 +330,10 @@ def generate_generated_modules(
     tw_phrases: dict[str, str],
     translators: dict[str, Translator],
     tw_post: dict[str, str] | None = None,
+    modules: list[str] | None = None,
 ) -> None:
     src_gen = cfg["source_generated"]
-    for module in GENERATED_MODULES:
+    for module in modules or GENERATED_MODULES:
         src_path = LOCALES / "generated" / module / f"{src_gen}.ts"
         if not src_path.exists():
             print(f"  skip missing {src_path}")
@@ -349,7 +351,12 @@ def generate_generated_modules(
         print(f"  wrote {dst_path.relative_to(ROOT)} ({len(mapped)} keys)")
 
 
-def generate_lang(lang: str, workers: int) -> None:
+def generate_lang(
+    lang: str,
+    workers: int,
+    modules: list[str] | None = None,
+    include_main: bool = True,
+) -> None:
     cfg = LANG_CONFIG[lang]
     print(f"\n=== {lang} ===")
     tw_phrases = load_json(GLOSSARY_DIR / "zh_tw_phrases.json")
@@ -365,16 +372,17 @@ def generate_lang(lang: str, workers: int) -> None:
             workers=workers,
         )
 
-    main_entries = parse_locale_entries(LOCALES / cfg["source_main"])
-    login_entries = parse_locale_entries(LOCALES / cfg["source_login"])
-
     tr = translators.get(lang)
-    main_value_map = build_value_map(lang, main_entries, tr, tw_phrases, tw_post)
-    login_value_map = build_value_map(lang, login_entries, tr, tw_phrases, tw_post)
 
-    transform_main_locale(lang, cfg, main_value_map)
-    transform_login_locale(lang, cfg, login_value_map)
-    generate_generated_modules(lang, cfg, tw_phrases, translators, tw_post)
+    if include_main:
+        main_entries = parse_locale_entries(LOCALES / cfg["source_main"])
+        login_entries = parse_locale_entries(LOCALES / cfg["source_login"])
+        main_value_map = build_value_map(lang, main_entries, tr, tw_phrases, tw_post)
+        login_value_map = build_value_map(lang, login_entries, tr, tw_phrases, tw_post)
+        transform_main_locale(lang, cfg, main_value_map)
+        transform_login_locale(lang, cfg, login_value_map)
+
+    generate_generated_modules(lang, cfg, tw_phrases, translators, tw_post, modules)
 
     if tr:
         tr.flush()
@@ -384,13 +392,30 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--langs", default="zh-Hant,ja-JP,vi-VN", help="Comma-separated locale codes")
     parser.add_argument("--workers", type=int, default=4, help="Parallel translation workers")
+    parser.add_argument(
+        "--modules",
+        default=",".join(GENERATED_MODULES),
+        help="Comma-separated generated modules to rebuild",
+    )
+    parser.add_argument(
+        "--skip-main",
+        action="store_true",
+        help="Rebuild only the generated modules, leaving the main and login bundles untouched",
+    )
     args = parser.parse_args()
 
     langs = [x.strip() for x in args.langs.split(",") if x.strip()]
     for lang in langs:
         if lang not in LANG_CONFIG:
             raise SystemExit(f"Unsupported lang: {lang}")
-        generate_lang(lang, args.workers)
+
+    modules = [x.strip() for x in args.modules.split(",") if x.strip()]
+    unknown = [m for m in modules if m not in GENERATED_MODULES]
+    if unknown:
+        raise SystemExit(f"Unsupported modules: {', '.join(unknown)}")
+
+    for lang in langs:
+        generate_lang(lang, args.workers, modules, include_main=not args.skip_main)
 
     print("\nDone.")
 
