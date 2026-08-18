@@ -59,7 +59,7 @@ const ComputationHistoryPage: React.FC = () => {
 
   const statusMap = useMemo(
     () => ({
-      进行中: { text: t('app.kuaizhizao.computationHistory.status.inProgress'), color: 'processing' },
+      待执行: { text: t('app.kuaizhizao.computationHistory.status.pending'), color: 'default' },
       计算中: { text: t('app.kuaizhizao.computationHistory.status.computing'), color: 'processing' },
       完成: { text: t('app.kuaizhizao.computationHistory.status.completed'), color: 'success' },
       失败: { text: t('app.kuaizhizao.computationHistory.status.failed'), color: 'error' },
@@ -160,7 +160,9 @@ const ComputationHistoryPage: React.FC = () => {
         hideInSearch: false,
         valueEnum: computationStatusValueEnum,
         render: (_, record) => {
-          const status = statusMap[record.computation_status as keyof typeof statusMap] || statusMap['进行中'];
+          const raw = record.computation_status ?? '';
+          // 未知状态值原样显示，便于立刻发现库内脏数据
+          const status = statusMap[raw as keyof typeof statusMap] ?? { text: raw || '-', color: 'default' };
           return <Tag color={status.color}>{status.text}</Tag>;
         },
       },

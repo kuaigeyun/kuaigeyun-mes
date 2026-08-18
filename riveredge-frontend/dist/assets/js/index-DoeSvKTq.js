@@ -1,1 +1,0 @@
-import{j as t}from"./vendor-DbPimlg3.js";import{N as a}from"./clearSessionQueries-iLnsZ5Hy.js";const e=()=>t.jsx(a,{to:"/apps/kuaicaiwu/cost-management/cost-calculations?cat=trial&sub=production",replace:!0});export{e as default};

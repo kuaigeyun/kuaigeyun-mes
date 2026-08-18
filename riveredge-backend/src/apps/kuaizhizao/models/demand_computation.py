@@ -12,6 +12,10 @@ Date: 2025-01-14
 from tortoise import fields
 from core.models.base import BaseModel
 
+from apps.kuaizhizao.constants.demand_computation_status import (
+    DEMAND_COMPUTATION_STATUS_PENDING,
+)
+
 
 class DemandComputation(BaseModel):
     """
@@ -42,7 +46,11 @@ class DemandComputation(BaseModel):
     computation_params = fields.JSONField(description="计算参数（JSON格式）")
     
     # 计算状态
-    computation_status = fields.CharField(max_length=20, default="进行中", description="计算状态")
+    computation_status = fields.CharField(
+        max_length=20,
+        default=DEMAND_COMPUTATION_STATUS_PENDING,
+        description="计算状态（待执行/计算中/完成/失败）",
+    )
     computation_start_time = fields.DatetimeField(null=True, description="计算开始时间")
     computation_end_time = fields.DatetimeField(null=True, description="计算结束时间")
     

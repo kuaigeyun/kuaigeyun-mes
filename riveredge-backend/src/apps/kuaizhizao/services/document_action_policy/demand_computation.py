@@ -6,6 +6,11 @@ from typing import Any, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError
 
+from apps.kuaizhizao.constants.demand_computation_status import (
+    DEMAND_COMPUTATION_STATUS_COMPLETED,
+    EXECUTABLE_COMPUTATION_STATUSES,
+    RECOMPUTABLE_COMPUTATION_STATUSES,
+)
 from apps.kuaizhizao.services.document_action_policy.types import (
     ActionCapability,
     CAPABILITY_REASON_MESSAGES,
@@ -22,11 +27,11 @@ def _norm(value: Any) -> str:
 
 
 def _is_executable_status(status: Any) -> bool:
-    return _norm(status) in ("进行中", "失败")
+    return _norm(status) in EXECUTABLE_COMPUTATION_STATUSES
 
 
 def _is_recomputable_status(status: Any) -> bool:
-    return _norm(status) in ("完成", "失败")
+    return _norm(status) in RECOMPUTABLE_COMPUTATION_STATUSES
 
 
 def derive_demand_computation_capabilities(computation: Any) -> DemandComputationCapabilities:
@@ -47,9 +52,9 @@ def derive_demand_computation_capabilities(computation: Any) -> DemandComputatio
     )
 
     compare_cap = _cap(
-        _norm(status) == "完成",
+        _norm(status) == DEMAND_COMPUTATION_STATUS_COMPLETED,
         "demand_computation.compare.not_completed"
-        if _norm(status) != "完成"
+        if _norm(status) != DEMAND_COMPUTATION_STATUS_COMPLETED
         else None,
     )
 

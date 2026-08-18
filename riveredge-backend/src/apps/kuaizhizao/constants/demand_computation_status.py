@@ -1,0 +1,39 @@
+"""快格轻制造 — 需求计算状态常量（唯一真源）。
+
+状态语义：
+- 待执行：已创建计算单，尚未运算。须由计划员点「执行」推进。
+- 计算中：正在运算。执行前独立提交，运算期间列表可观察到。
+- 完成：运算成功并已写入明细。
+- 失败：运算抛错，或运算期间服务中断后由启动对账回正。
+"""
+
+from __future__ import annotations
+
+DEMAND_COMPUTATION_STATUS_PENDING = "待执行"
+DEMAND_COMPUTATION_STATUS_COMPUTING = "计算中"
+DEMAND_COMPUTATION_STATUS_COMPLETED = "完成"
+DEMAND_COMPUTATION_STATUS_FAILED = "失败"
+
+DEMAND_COMPUTATION_STATUS_VALUES: tuple[str, ...] = (
+    DEMAND_COMPUTATION_STATUS_PENDING,
+    DEMAND_COMPUTATION_STATUS_COMPUTING,
+    DEMAND_COMPUTATION_STATUS_COMPLETED,
+    DEMAND_COMPUTATION_STATUS_FAILED,
+)
+
+DEMAND_COMPUTATION_STATUS_SET: frozenset[str] = frozenset(DEMAND_COMPUTATION_STATUS_VALUES)
+
+# 可执行（首次运算或失败重试）；预览与编辑同此门禁
+EXECUTABLE_COMPUTATION_STATUSES: frozenset[str] = frozenset({
+    DEMAND_COMPUTATION_STATUS_PENDING,
+    DEMAND_COMPUTATION_STATUS_FAILED,
+})
+
+# 可重算（已有结果或已失败）
+RECOMPUTABLE_COMPUTATION_STATUSES: frozenset[str] = frozenset({
+    DEMAND_COMPUTATION_STATUS_COMPLETED,
+    DEMAND_COMPUTATION_STATUS_FAILED,
+})
+
+# 运算期间服务中断的回正说明
+INTERRUPTED_COMPUTATION_ERROR_MESSAGE = "运算期间服务中断，计算未完成，请重新执行"

@@ -281,7 +281,8 @@ function buildPreviewSourceTabItems(
 
 const COMPUTATION_COMPLETED_STATUSES = new Set(['完成', '已完成', 'completed', 'success'])
 const COMPUTATION_FAILED_STATUSES = new Set(['失败', 'failed', 'error'])
-const COMPUTATION_EXECUTABLE_STATUSES = new Set(['进行中', 'pending', 'running'])
+/** 行内「执行」仅对待执行开放；失败重试走「重新计算」，计算中正在运算不得重复触发 */
+const COMPUTATION_EXECUTABLE_STATUSES = new Set(['待执行'])
 
 function isComputationCompleted(status?: string): boolean {
   return COMPUTATION_COMPLETED_STATUSES.has(normalizeComputationStatusValue(status))

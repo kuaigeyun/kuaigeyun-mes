@@ -19,7 +19,9 @@ from apps.kuaizhizao.models.demand_item import DemandItem
 from apps.kuaizhizao.models.work_order import WorkOrder
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 
-RECOMPUTABLE_COMPUTATION_STATUSES = frozenset({"完成", "失败"})
+from apps.kuaizhizao.constants.demand_computation_status import (
+    RECOMPUTABLE_COMPUTATION_STATUSES,
+)
 
 
 class DemandReplanImpactService:

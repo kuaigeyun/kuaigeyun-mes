@@ -17,6 +17,14 @@ from tortoise.transactions import in_transaction
 from loguru import logger
 
 from apps.kuaizhizao.constants import DemandStatus, ReviewStatus, DocumentStatus
+from apps.kuaizhizao.constants.demand_computation_status import (
+    DEMAND_COMPUTATION_STATUS_COMPLETED,
+    DEMAND_COMPUTATION_STATUS_COMPUTING,
+    DEMAND_COMPUTATION_STATUS_FAILED,
+    DEMAND_COMPUTATION_STATUS_PENDING,
+    EXECUTABLE_COMPUTATION_STATUSES,
+    INTERRUPTED_COMPUTATION_ERROR_MESSAGE,
+)
 from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.demand_computation import DemandComputation
 from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
@@ -897,7 +905,7 @@ class DemandComputationService(AppBaseService):
                 "business_mode": merged_business_mode,
                 "computation_type": persist_computation_type,
                 "computation_params": computation_data.computation_params,
-                "computation_status": "进行中",
+                "computation_status": DEMAND_COMPUTATION_STATUS_PENDING,
                 "computation_start_time": resolve_business_datetime(),
                 "notes": computation_data.notes,
                 "created_by": created_by,
@@ -1615,10 +1623,10 @@ class DemandComputationService(AppBaseService):
 
         assert_demand_computation_capability(computation, "execute")
 
-        # 允许执行：进行中（待执行）或 失败（重试）
-        if computation.computation_status not in ("进行中", "失败"):
+        # 允许执行：待执行（首次）或 失败（重试）
+        if computation.computation_status not in EXECUTABLE_COMPUTATION_STATUSES:
             raise BusinessLogicError(
-                f"只能执行进行中或失败状态的计算，当前状态: {computation.computation_status}"
+                f"只能执行待执行或失败状态的计算，当前状态: {computation.computation_status}"
             )
 
         # 合并临时覆盖参数到 computation_params（仅本次执行生效，不持久化）
@@ -1627,25 +1635,25 @@ class DemandComputationService(AppBaseService):
             computation.computation_params = {**base_params, **computation_params_override}
 
         operator = await User.get_or_none(id=operator_id) if operator_id else None
+        retry_from_failed = computation.computation_status == DEMAND_COMPUTATION_STATUS_FAILED
+
+        # 「计算中」在运算事务之外先提交：运算期间列表可观察到真实进度。
+        # 运算抛错由下方 except 置「失败」，服务中断由启动对账回正，不会滞留在计算中。
+        start_audit: Dict[str, Any] = {
+            "computation_status": DEMAND_COMPUTATION_STATUS_COMPUTING,
+            "computation_start_time": resolve_business_datetime(),
+        }
+        apply_update_audit(start_audit, operator)
+        await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(**start_audit)
 
         try:
             async with in_transaction():
                 # 失败重试时清理旧明细：理论上事务回滚已清理，此处为防御性保证重试从干净状态开始
-                if computation.computation_status == "失败":
+                if retry_from_failed:
                     await DemandComputationItem.filter(
                         tenant_id=tenant_id,
                         computation_id=computation_id
                     ).delete()
-
-                # 更新计算状态为计算中
-                start_audit: Dict[str, Any] = {
-                    "computation_status": "计算中",
-                    "computation_start_time": resolve_business_datetime(),
-                }
-                apply_update_audit(start_audit, operator)
-                await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(
-                    **start_audit
-                )
 
                 # 统一需求计算（原 MRP/LRP 合并为单一实现，类型字段恒为 MRP）
                 await self._execute_mrp_computation(
@@ -1684,7 +1692,7 @@ class DemandComputationService(AppBaseService):
 
                 # 更新计算状态为完成，清除失败时的错误信息
                 done_audit: Dict[str, Any] = {
-                    "computation_status": "完成",
+                    "computation_status": DEMAND_COMPUTATION_STATUS_COMPLETED,
                     "computation_end_time": resolve_business_datetime(),
                     "computation_summary": summary,
                     "error_message": None,
@@ -1712,7 +1720,7 @@ class DemandComputationService(AppBaseService):
                                SET computation_status=$1, computation_end_time=$2, error_message=$3,
                                    updated_by=$4, updated_by_name=$5, updated_at=$6
                                WHERE tenant_id=$7 AND id=$8""",
-                            "失败",
+                            DEMAND_COMPUTATION_STATUS_FAILED,
                             now,
                             err_msg,
                             int(operator.id),
@@ -1726,13 +1734,43 @@ class DemandComputationService(AppBaseService):
                             """UPDATE apps_kuaizhizao_demand_computations
                                SET computation_status=$1, computation_end_time=$2, error_message=$3
                                WHERE tenant_id=$4 AND id=$5""",
-                            "失败", now, err_msg, tenant_id, computation_id
+                            DEMAND_COMPUTATION_STATUS_FAILED, now, err_msg, tenant_id, computation_id
                         )
                 finally:
                     await conn.close()
             except Exception as update_err:
-                logger.warning(f"更新失败状态时出错: {update_err}")
+                # 写不进「失败」会让该单滞留在「计算中」，须显式暴露；下次启动由对账回正
+                logger.error(
+                    f"需求计算 {computation_id} 置失败状态失败，将滞留计算中直至启动对账: {update_err}"
+                )
             raise
+
+    @staticmethod
+    async def reconcile_interrupted_computations() -> int:
+        """启动对账：把滞留在「计算中」的计算单回正为「失败」。
+
+        需求计算只在 API 进程内同步执行（无后台任务），且 API 固定单 worker，
+        因此进程启动时不可能有正在运算的计算单；此时仍为「计算中」的只能是上次
+        进程被强杀 / 断电导致的残留。运算明细写在已回滚的事务里，不会有半成品。
+        """
+        stale = await DemandComputation.filter(
+            computation_status=DEMAND_COMPUTATION_STATUS_COMPUTING,
+        ).values_list("id", "computation_code")
+        if not stale:
+            return 0
+
+        now = resolve_business_datetime()
+        await DemandComputation.filter(
+            computation_status=DEMAND_COMPUTATION_STATUS_COMPUTING,
+        ).update(
+            computation_status=DEMAND_COMPUTATION_STATUS_FAILED,
+            computation_end_time=now,
+            error_message=INTERRUPTED_COMPUTATION_ERROR_MESSAGE,
+            updated_at=now,
+        )
+        codes = "、".join(str(code) for _, code in stale)
+        logger.warning(f"启动对账：{len(stale)} 张需求计算单运算期间服务中断，已回正为失败（{codes}）")
+        return len(stale)
 
     async def get_computation_dynamic_monitor(
         self,
@@ -2019,9 +2057,9 @@ class DemandComputationService(AppBaseService):
         computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
         if not computation:
             raise NotFoundError(f"需求计算不存在: {computation_id}")
-        if computation.computation_status not in ("进行中", "失败"):
+        if computation.computation_status not in EXECUTABLE_COMPUTATION_STATUSES:
             raise BusinessLogicError(
-                f"只能预览进行中或失败状态的计算，当前状态: {computation.computation_status}"
+                f"只能预览待执行或失败状态的计算，当前状态: {computation.computation_status}"
             )
 
         if computation_params_override:
@@ -2139,7 +2177,7 @@ class DemandComputationService(AppBaseService):
             ).delete()
             # 重置状态与错误信息，便于走执行逻辑
             reset_audit: Dict[str, Any] = {
-                "computation_status": "进行中",
+                "computation_status": DEMAND_COMPUTATION_STATUS_PENDING,
                 "computation_end_time": None,
                 "error_message": None,
                 "computation_summary": None,
@@ -3237,9 +3275,9 @@ class DemandComputationService(AppBaseService):
             if not computation:
                 raise NotFoundError(f"需求计算不存在: {computation_id}")
             
-            # 只能更新进行中或失败状态的计算
-            if computation.computation_status not in ["进行中", "失败"]:
-                raise BusinessLogicError(f"只能更新进行中或失败状态的计算，当前状态: {computation.computation_status}")
+            # 只能更新待执行或失败状态的计算
+            if computation.computation_status not in EXECUTABLE_COMPUTATION_STATUSES:
+                raise BusinessLogicError(f"只能更新待执行或失败状态的计算，当前状态: {computation.computation_status}")
             
             # 准备更新数据
             update_data = computation_data.model_dump(exclude_unset=True)

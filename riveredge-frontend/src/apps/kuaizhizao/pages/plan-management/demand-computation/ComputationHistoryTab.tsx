@@ -39,7 +39,7 @@ const ComputationHistoryTab: React.FC = () => {
 
   const statusLabels = useMemo(
     () => ({
-      进行中: t('app.kuaizhizao.demandComputation.statusInProgress'),
+      待执行: t('app.kuaizhizao.demandComputation.statusPending'),
       计算中: t('app.kuaizhizao.demandComputation.statusComputing'),
       完成: t('app.kuaizhizao.demandComputation.statusCompleted'),
       失败: t('app.kuaizhizao.demandComputation.statusFailed'),
@@ -170,12 +170,14 @@ const ComputationHistoryTab: React.FC = () => {
         valueEnum: computationStatusValueEnum,
         render: (_, record) => {
           const statusMap: Record<string, { text: string; color: string }> = {
-            进行中: { text: statusLabels['进行中'], color: 'processing' },
+            待执行: { text: statusLabels['待执行'], color: 'default' },
             计算中: { text: statusLabels['计算中'], color: 'processing' },
             完成: { text: statusLabels['完成'], color: 'success' },
             失败: { text: statusLabels['失败'], color: 'error' },
           };
-          const status = statusMap[record.computation_status || '进行中'];
+          const raw = record.computation_status || '待执行';
+          // 未知状态值原样显示，便于立刻发现库内脏数据，而不是取不到映射后崩掉
+          const status = statusMap[raw] ?? { text: raw, color: 'default' };
           return <Tag color={status.color}>{status.text}</Tag>;
         },
       },

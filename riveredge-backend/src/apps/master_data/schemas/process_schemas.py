@@ -547,7 +547,7 @@ class SOPBase(BaseModel):
     )
     version: Optional[str] = Field(None, max_length=20, description="版本号")
     content: Optional[str] = Field(None, description="SOP内容（支持富文本）")
-    attachments: Optional[Dict[str, Any]] = Field(None, description="附件列表（JSON格式）")
+    attachments: Optional[List[Dict[str, Any]]] = Field(None, description="附件列表（JSON格式）")
     flow_config: Optional[Dict[str, Any]] = Field(
         None,
         description="流程配置（ProFlow JSON格式，作业指导步骤与顺序）",
@@ -641,6 +641,8 @@ class SOPBase(BaseModel):
         if v is not None and v not in ("electronic", "paper", "hybrid"):
             raise ValueError("carrier 必须是 electronic、paper 或 hybrid")
         return v or "electronic"
+
+    @validator("code")
     def validate_code(cls, v):
         """验证编码格式"""
         if not v or not v.strip():
@@ -687,7 +689,7 @@ class SOPUpdate(BaseModel):
     )
     version: Optional[str] = Field(None, max_length=20, description="版本号")
     content: Optional[str] = Field(None, description="SOP内容（支持富文本）")
-    attachments: Optional[Dict[str, Any]] = Field(None, description="附件列表（JSON格式）")
+    attachments: Optional[List[Dict[str, Any]]] = Field(None, description="附件列表（JSON格式）")
     flow_config: Optional[Dict[str, Any]] = Field(
         None,
         description="流程配置（ProFlow JSON格式）",
@@ -857,7 +859,7 @@ class SopRevisionResponse(BaseModel):
     revision: str
     carrier: str
     content: Optional[str] = None
-    attachments: Optional[Dict[str, Any]] = None
+    attachments: Optional[List[Dict[str, Any]]] = None
     flow_config: Optional[Dict[str, Any]] = Field(
         None, validation_alias=AliasChoices("flow_config", "flowConfig")
     )

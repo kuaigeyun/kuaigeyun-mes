@@ -28,7 +28,7 @@ function resolveOrderBy(sort?: Record<string, unknown>) {
 
 export function buildComputationStatusValueEnum(t: TFunction): Record<string, { text: string }> {
   return {
-    进行中: { text: t('app.kuaizhizao.demandComputation.statusInProgress') },
+    待执行: { text: t('app.kuaizhizao.demandComputation.statusPending') },
     计算中: { text: t('app.kuaizhizao.demandComputation.statusComputing') },
     完成: { text: t('app.kuaizhizao.demandComputation.statusCompleted') },
     失败: { text: t('app.kuaizhizao.demandComputation.statusFailed') },

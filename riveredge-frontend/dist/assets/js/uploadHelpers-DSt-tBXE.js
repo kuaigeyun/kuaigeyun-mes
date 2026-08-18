@@ -1,0 +1,1 @@
+import"./clearSessionQueries-D_uOsOmr.js";function s(n){if(!Array.isArray(n))return[];const o=[];for(const i of n){const t=i,r=t?.response?.uuid??(typeof t?.uid=="string"&&/^[0-9a-f-]{36}$/i.test(t.uid)?t.uid:null);r&&o.push(r)}return o}export{s as n};

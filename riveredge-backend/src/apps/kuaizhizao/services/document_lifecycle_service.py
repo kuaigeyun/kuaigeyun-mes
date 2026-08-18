@@ -71,6 +71,12 @@ from apps.kuaizhizao.constants import (
     LEGACY_PENDING_VALUES,
     normalize_status,
 )
+from apps.kuaizhizao.constants.demand_computation_status import (
+    DEMAND_COMPUTATION_STATUS_COMPLETED,
+    DEMAND_COMPUTATION_STATUS_COMPUTING,
+    DEMAND_COMPUTATION_STATUS_FAILED,
+    DEMAND_COMPUTATION_STATUS_PENDING,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1869,11 +1875,12 @@ def _quotation_review_pending(review_status: Optional[str]) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# 需求计算生命周期（进行中→完成/失败）
+# 需求计算生命周期（待执行→计算中→完成/失败）
 # ---------------------------------------------------------------------------
 DEMAND_COMPUTATION_MAIN_STAGES = [
-    {"key": "running", "label": "进行中"},
-    {"key": "completed", "label": "完成"},
+    {"key": "pending", "label": DEMAND_COMPUTATION_STATUS_PENDING},
+    {"key": "computing", "label": DEMAND_COMPUTATION_STATUS_COMPUTING},
+    {"key": "completed", "label": DEMAND_COMPUTATION_STATUS_COMPLETED},
 ]
 
 
@@ -1881,46 +1888,50 @@ def get_demand_computation_lifecycle(
     computation: Any,
     milestones: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
-    """需求计算生命周期计算：根据 computation_status 映射"""
+    """需求计算生命周期计算：根据 computation_status 映射。
+
+    「待执行」是新建后的静止态，须由计划员点执行推进；「计算中」是运算期间的真实进行态。
+    """
     status = _norm(getattr(computation, "computation_status", None))
     milestones = milestones or []
-    status_map = {
-        "进行中": "running", "计算中": "running", "pending": "running", "running": "running",
-        "完成": "completed", "completed": "completed", "success": "completed",
-        "失败": "failed", "failed": "failed", "error": "failed",
-    }
-    key = status_map.get(status, "running")
-    stage_name = {"running": "进行中", "completed": "完成", "failed": "失败"}.get(key, status or "进行中")
-    if status in ("失败", "failed", "error"):
-        stage_name = "失败"
 
-    if key == "failed":
+    if status == DEMAND_COMPUTATION_STATUS_FAILED:
         return {
-            "current_stage_key": "running",
-            "current_stage_name": "失败",
+            "current_stage_key": "computing",
+            "current_stage_name": DEMAND_COMPUTATION_STATUS_FAILED,
             "status": "exception",
-            "main_stages": _build_main_stages(DEMAND_COMPUTATION_MAIN_STAGES, "running", is_exception=True),
+            "main_stages": _build_main_stages(DEMAND_COMPUTATION_MAIN_STAGES, "computing"),
             "sub_stages": None,
             "next_step_suggestions": ["重新计算"],
             "milestones": milestones,
         }
-    if key == "completed":
+    if status == DEMAND_COMPUTATION_STATUS_COMPLETED:
         return {
             "current_stage_key": "completed",
-            "current_stage_name": "完成",
+            "current_stage_name": DEMAND_COMPUTATION_STATUS_COMPLETED,
             "status": "success",
             "main_stages": _build_main_stages(DEMAND_COMPUTATION_MAIN_STAGES, "completed"),
             "sub_stages": None,
             "next_step_suggestions": ["下推工单", "下推采购单", "下推生产计划", "下推采购申请"],
             "milestones": milestones,
         }
+    if status == DEMAND_COMPUTATION_STATUS_COMPUTING:
+        return {
+            "current_stage_key": "computing",
+            "current_stage_name": DEMAND_COMPUTATION_STATUS_COMPUTING,
+            "status": "active",
+            "main_stages": _build_main_stages(DEMAND_COMPUTATION_MAIN_STAGES, "computing"),
+            "sub_stages": None,
+            "next_step_suggestions": ["等待计算完成"],
+            "milestones": milestones,
+        }
     return {
-        "current_stage_key": "running",
-        "current_stage_name": "进行中",
+        "current_stage_key": "pending",
+        "current_stage_name": DEMAND_COMPUTATION_STATUS_PENDING,
         "status": "normal",
-        "main_stages": _build_main_stages(DEMAND_COMPUTATION_MAIN_STAGES, "running"),
+        "main_stages": _build_main_stages(DEMAND_COMPUTATION_MAIN_STAGES, "pending"),
         "sub_stages": None,
-        "next_step_suggestions": ["等待计算完成"],
+        "next_step_suggestions": ["执行计算"],
         "milestones": milestones,
     }
 

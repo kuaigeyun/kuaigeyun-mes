@@ -14,9 +14,11 @@ from apps.kuaizhizao.models.demand_impact_record import DemandImpactRecord
 from apps.kuaizhizao.models.demand_replan_task import DemandReplanTask
 from apps.kuaizhizao.models.demand_computation import DemandComputation
 from apps.kuaizhizao.services.demand_computation_service import DemandComputationService
+from apps.kuaizhizao.constants.demand_computation_status import (
+    RECOMPUTABLE_COMPUTATION_STATUSES,
+)
 from apps.kuaizhizao.services.demand_replan_impact_service import (
     DemandReplanImpactService,
-    RECOMPUTABLE_COMPUTATION_STATUSES,
 )
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
 from core.utils.timezone_utils import resolve_business_datetime

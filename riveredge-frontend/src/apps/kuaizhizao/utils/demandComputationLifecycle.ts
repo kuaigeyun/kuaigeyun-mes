@@ -1,6 +1,8 @@
 /**
  * 需求计算生命周期：根据 computation_status 映射。
- * 阶段：进行中→完成/失败
+ * 阶段：待执行→计算中→完成/失败
+ *
+ * 「待执行」是新建后的静止态，须由计划员点执行推进；「计算中」才是运算期间的进行态。
  */
 
 import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycle/types';
@@ -17,20 +19,22 @@ function norm(s: string | undefined): string {
 }
 
 const STATUS_TO_STAGE: Record<string, string> = {
-  进行中: '进行中',
-  计算中: '进行中',
+  待执行: '待执行',
+  计算中: '计算中',
   完成: '完成',
   失败: '失败',
 };
 
-const MAIN_STAGE_KEYS = ['running', 'completed'] as const;
+const MAIN_STAGE_KEYS = ['pending', 'computing', 'completed'] as const;
 const MAIN_STAGE_LABELS: Record<string, string> = {
-  running: '进行中',
+  pending: '待执行',
+  computing: '计算中',
   completed: '完成',
 };
 
 const DEMAND_COMPUTATION_STAGE_I18N_BY_KEY: Record<string, string> = {
-  running: `${DC}.statusInProgress`,
+  pending: `${DC}.statusPending`,
+  computing: `${DC}.statusComputing`,
   completed: `${DC}.statusCompleted`,
 };
 
@@ -40,20 +44,20 @@ const COMPLETED_NEXT_STEP_KEYS = [
   DA.purchaseOrderFromDemandComputation,
 ] as const;
 
-function buildMainStages(currentKey: string): SubStage[] {
-  const stageToIndex: Record<string, number> = {
-    进行中: 0,
-    完成: 1,
-    失败: 0,
-  };
-  const currentIdx = stageToIndex[currentKey] ?? 0;
-  const isFailed = currentKey === '失败';
+/** 失败发生在运算途中，故与「计算中」同一节点，仅整体状态转 exception */
+const STAGE_NAME_TO_INDEX: Record<string, number> = {
+  待执行: 0,
+  计算中: 1,
+  失败: 1,
+  完成: 2,
+};
+
+function buildMainStages(currentStageName: string): SubStage[] {
+  const currentIdx = STAGE_NAME_TO_INDEX[currentStageName] ?? 0;
   return MAIN_STAGE_KEYS.map((key, idx) => {
     let status: SubStage['status'] = 'pending';
-    if (isFailed) status = idx === 0 ? 'active' : 'pending';
-    else if (currentKey === '完成') {
-      status = 'done';
-    } else if (idx < currentIdx) status = 'done';
+    if (currentStageName === '完成') status = 'done';
+    else if (idx < currentIdx) status = 'done';
     else if (idx === currentIdx) status = 'active';
     return { key, label: MAIN_STAGE_LABELS[key] ?? key, status };
   });
@@ -61,13 +65,21 @@ function buildMainStages(currentKey: string): SubStage[] {
 
 function buildClientLifecycle(record: Record<string, unknown>): BackendLifecycle {
   const computationStatus = norm(record?.computation_status as string);
-  const stageName = (STATUS_TO_STAGE[computationStatus] ?? computationStatus) || '进行中';
-  const key = stageName === '完成' ? 'completed' : 'running';
+  const stageName = (STATUS_TO_STAGE[computationStatus] ?? computationStatus) || '待执行';
+  const key =
+    stageName === '完成' ? 'completed' : STAGE_NAME_TO_INDEX[stageName] === 1 ? 'computing' : 'pending';
 
   return {
     current_stage_key: key,
     current_stage_name: stageName,
-    status: stageName === '失败' ? 'exception' : stageName === '完成' ? 'success' : 'active',
+    status:
+      stageName === '失败'
+        ? 'exception'
+        : stageName === '完成'
+          ? 'success'
+          : stageName === '计算中'
+            ? 'active'
+            : 'normal',
     main_stages: buildMainStages(stageName),
     next_step_suggestions: [],
   };
@@ -76,11 +88,20 @@ function buildClientLifecycle(record: Record<string, unknown>): BackendLifecycle
 function resolveDemandComputationNextStepKeys(record: Record<string, unknown>): string[] {
   const computationStatus = norm(record?.computation_status as string);
   const stageName = STATUS_TO_STAGE[computationStatus] ?? computationStatus;
-  if (stageName === '进行中') return [`${DC}.lifecycleNextWaitComplete`];
+  if (stageName === '待执行') return [`${DC}.lifecycleNextExecute`];
+  if (stageName === '计算中') return [`${DC}.lifecycleNextWaitComplete`];
   if (stageName === '完成') return [...COMPLETED_NEXT_STEP_KEYS];
   if (stageName === '失败') return [`${DC}.lifecycleNextRecalculate`];
   return [];
 }
+
+/** 展示名以 computation_status 为准：失败不是主轴节点，不能被活动节点名（计算中）冒充 */
+const STAGE_NAME_I18N_BY_STATUS: Record<string, string> = {
+  待执行: `${DC}.statusPending`,
+  计算中: `${DC}.statusComputing`,
+  完成: `${DC}.statusCompleted`,
+  失败: `${DC}.statusFailed`,
+};
 
 function finalizeDemandComputationLifecycle(
   result: LifecycleResult,
@@ -89,8 +110,10 @@ function finalizeDemandComputationLifecycle(
 ): LifecycleResult {
   const localized = applyLifecycleI18n(result, t, DEMAND_COMPUTATION_STAGE_I18N_BY_KEY, {});
   const nextStepKeys = resolveDemandComputationNextStepKeys(record);
+  const stageNameKey = STAGE_NAME_I18N_BY_STATUS[norm(record?.computation_status as string)];
   return {
     ...localized,
+    ...(stageNameKey ? { stageName: requireI18nText(t, stageNameKey) } : {}),
     nextStepSuggestions: nextStepKeys.map((key) => requireI18nText(t, key)),
   };
 }
@@ -119,10 +142,10 @@ export function getDemandComputationLifecycle(
   );
 }
 
-const DEMAND_COMPUTATION_LIFECYCLE_STAGE_LABELS = ['进行中', '计算中', '完成', '失败'] as const;
+const DEMAND_COMPUTATION_LIFECYCLE_STAGE_LABELS = ['待执行', '计算中', '完成', '失败'] as const;
 
 const DEMAND_COMPUTATION_LIFECYCLE_STAGE_I18N: Record<string, string> = {
-  进行中: `${DC}.statusInProgress`,
+  待执行: `${DC}.statusPending`,
   计算中: `${DC}.statusComputing`,
   完成: `${DC}.statusCompleted`,
   失败: `${DC}.statusFailed`,
@@ -137,7 +160,7 @@ export function buildDemandComputationLifecycleValueEnum(
   t: LifecycleTranslateFn,
 ): Record<string, { text: string; status?: 'Default' | 'Processing' | 'Error' | 'Success' | 'Warning' }> {
   const statusByStage: Record<string, 'Default' | 'Processing' | 'Error' | 'Success' | 'Warning'> = {
-    进行中: 'Processing',
+    待执行: 'Default',
     计算中: 'Processing',
     完成: 'Success',
     失败: 'Error',

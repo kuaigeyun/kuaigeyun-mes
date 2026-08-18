@@ -1,1 +1,0 @@
-import{r as f}from"./vendor-DbPimlg3.js";import{v as s,f as o,l as r}from"./clearSessionQueries-iLnsZ5Hy.js";function l(i=s()){const n=o(),e=r(a=>a.initialized),t=r(a=>a.configs.enable_launch_wizard!==!1);return f.useEffect(()=>{e&&(t||n(i,{replace:!0}))},[e,t,n,i]),{initialized:e,enabled:t}}export{l as u};

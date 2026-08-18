@@ -212,6 +212,11 @@ async def lifespan(app: FastAPI):
     logger.info("✅ 引用资源 DisplayProvider 已注册")
     logger.info("✅ 数据权限框架（DataScopeService）已注册")
 
+    # 需求计算启动对账：上次进程被强杀时滞留在「计算中」的计算单回正为失败，供计划员重试
+    from apps.kuaizhizao.services.demand_computation_service import DemandComputationService
+
+    await DemandComputationService.reconcile_interrupted_computations()
+
     # 确保平台超级管理员存在（表为空时从 .env 创建；未登录过的账号可与 .env 同步密码）
     try:
         from infra.models.infra_superadmin import InfraSuperAdmin
