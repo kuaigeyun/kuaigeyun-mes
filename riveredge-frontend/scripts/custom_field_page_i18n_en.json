@@ -426,6 +426,22 @@
     "kuaizhizao-warehouse-disassembly-order": {
       "pageName": "Disassembly Orders",
       "tableNameLabel": "Disassembly orders"
+    },
+    "kuaizhizao-quality-fai-order": {
+      "pageName": "First Article Inspections",
+      "tableNameLabel": "First Article Inspections"
+    },
+    "kuaizhizao-quality-internal-audit": {
+      "pageName": "Internal Audits",
+      "tableNameLabel": "Internal Audits"
+    },
+    "kuaizhizao-quality-management-review": {
+      "pageName": "Management Reviews",
+      "tableNameLabel": "Management Reviews"
+    },
+    "kuaizhizao-quality-system-document": {
+      "pageName": "System Documents",
+      "tableNameLabel": "System Documents"
     }
   }
 }

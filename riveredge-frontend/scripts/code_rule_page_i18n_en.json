@@ -632,6 +632,50 @@
     "kuaizhizao-quality-scrap-record": {
       "pageName": "Scrap Records",
       "codeFieldLabel": "Scrap record code"
+    },
+    "haoligo-equipment-documents-acceptance": {
+      "pageName": "Equipment Acceptance Orders",
+      "codeFieldLabel": "Acceptance order no."
+    },
+    "haoligo-finance-material-acceptance": {
+      "pageName": "Material Acceptance Orders",
+      "codeFieldLabel": "Acceptance no."
+    },
+    "kuaicaiwu-cost-calculations": {
+      "pageName": "Product Cost Calculations",
+      "codeFieldLabel": "Calculation no."
+    },
+    "kuaicaiwu-cost-rules": {
+      "pageName": "Cost Calculation Rules",
+      "codeFieldLabel": "Rule code"
+    },
+    "kuaizhizao-warehouse-inventory-alert": {
+      "pageName": "Inventory Alert Rules",
+      "codeFieldLabel": "Alert rule code"
+    },
+    "master-data-process-sop": {
+      "pageName": "Standard Operating Procedures",
+      "codeFieldLabel": "SOP no."
+    },
+    "kuaizhizao-quality-fai-order": {
+      "pageName": "First Article Inspections",
+      "codeFieldLabel": "FAI code"
+    },
+    "kuaizhizao-quality-internal-audit": {
+      "pageName": "Internal Audits",
+      "codeFieldLabel": "Internal audit code"
+    },
+    "kuaizhizao-quality-management-review": {
+      "pageName": "Management Reviews",
+      "codeFieldLabel": "Management review code"
+    },
+    "kuaizhizao-quality-system-document": {
+      "pageName": "System Documents",
+      "codeFieldLabel": "System document code"
+    },
+    "kuaizhizao-sales-review": {
+      "pageName": "Order Reviews",
+      "codeFieldLabel": "Review code"
     }
   }
 }
