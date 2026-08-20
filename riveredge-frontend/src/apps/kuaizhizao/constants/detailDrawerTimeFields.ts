@@ -385,6 +385,16 @@ export const DETAIL_DRAWER_TIME_GROUPS: DetailDrawerTimeGroup[] = [
     fields: [
       field('demand_computation', 'computation_start_time'),
       field('demand_computation', 'computation_end_time'),
+      field('demand_computation', 'delivery_date'),
+      field('demand_computation', 'planned_start'),
+    ],
+  },
+  {
+    documentType: 'equipment',
+    titleKey: 'app.kuaizhizao.timeconfig.group.equipment',
+    fields: [
+      field('equipment', 'created_at'),
+      field('equipment', 'updated_at'),
     ],
   },
   {

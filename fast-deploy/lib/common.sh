@@ -576,15 +576,20 @@ resolve_uv() {
         echo "${RIVEREDGE_UV}"
         return
     fi
+    is_windows_gitbash && refresh_windows_path
+    local found="" p
     if command -v uv >/dev/null 2>&1; then
-        command -v uv
-        return
+        found="$(command -v uv)"
     fi
-    local candidates=(
-        "$HOME/.local/bin/uv"
+    for p in \
+        "${found}.exe" \
+        "$found" \
+        "$HOME/.local/bin/uv.exe" \
+        "$HOME/.local/bin/uv" \
+        "$HOME/.cargo/bin/uv.exe" \
         "$HOME/.cargo/bin/uv"
-    )
-    for p in "${candidates[@]}"; do
+    do
+        [ -n "$p" ] || continue
         [ -x "$p" ] && { echo "$p"; return; }
     done
     echo "uv"

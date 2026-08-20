@@ -269,6 +269,26 @@ class StationOperationDocumentsResponse(BaseModel):
     drawings_available: bool = False
 
 
+class StationWorkOrderOperationEsopItem(BaseModel):
+    work_order_operation_id: int
+    master_operation_id: Optional[int] = None
+    sequence: Optional[int] = None
+    operation_name: Optional[str] = None
+    operation_code: Optional[str] = None
+    sops: List[StationSopDocument] = Field(default_factory=list)
+
+
+class WorkOrderRelatedEsopsResponse(BaseModel):
+    """工单详情相关 ESOP：通用 SOP + 按工序列出的全部适用 SOP。"""
+
+    work_order_id: int
+    shared_sops: List[StationSopDocument] = Field(
+        default_factory=list,
+        description="未绑工序、适用于本工单产品全部工序的 SOP",
+    )
+    operations: List[StationWorkOrderOperationEsopItem] = Field(default_factory=list)
+
+
 class StationWorkOrderDocumentFlags(BaseModel):
     work_order_id: int
     has_esop: bool = False

@@ -3418,6 +3418,27 @@ class DemandComputationService(AppBaseService):
             raise BusinessLogicError("所选明细均不可下推，请重新选择")
         return selected_material_ids
 
+    def _resolve_buy_selected_material_ids(
+        self,
+        items: List[DemandComputationItem],
+        selected_item_ids: Optional[List[int]],
+    ) -> Optional[Set[int]]:
+        """将计算明细 ID 解析为可下推采购件物料 ID；未传则不过滤。"""
+        if selected_item_ids is None:
+            return None
+        selected_ids = {int(i) for i in selected_item_ids if i is not None}
+        selected_material_ids: Set[int] = set()
+        for item in items:
+            if item.id not in selected_ids or item.material_id is None:
+                continue
+            if item.material_source_type != SOURCE_TYPE_BUY:
+                continue
+            if item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
+                selected_material_ids.add(int(item.material_id))
+        if not selected_material_ids:
+            raise BusinessLogicError("所选明细均不可下推，请重新选择")
+        return selected_material_ids
+
     async def generate_work_orders_and_purchase_orders(
         self,
         tenant_id: int,
@@ -3492,8 +3513,10 @@ class DemandComputationService(AppBaseService):
         if not items:
             raise BusinessLogicError("计算结果明细为空，无法生成工单和采购单")
 
-        selected_material_ids = self._resolve_production_selected_material_ids(
-            items, selected_item_ids
+        selected_material_ids = (
+            self._resolve_buy_selected_material_ids(items, selected_item_ids)
+            if generate_mode == "purchase_only"
+            else self._resolve_production_selected_material_ids(items, selected_item_ids)
         )
 
         # 获取已下推且仍存在的单据，用于排除重复下推
@@ -4629,7 +4652,11 @@ class DemandComputationService(AppBaseService):
         items: List[DemandComputationItem],
         exclusions: Dict[str, Any],
     ) -> float:
-        """按建议数量加权计算需求计算下推进度（0-100）。"""
+        """
+        按计算结果明细的建议数量加权计算下推进度（0-100）。
+        自制/委外/采购分叉各自累计建议数量，已下推数量取 min(建议, 该物料已生成下游数量)。
+        不是「某类单据是否已生成一张」的 0/100。
+        """
         if getattr(computation, "computation_status", None) != "完成":
             return 0.0
 
@@ -4673,7 +4700,8 @@ class DemandComputationService(AppBaseService):
             pushed += min(sug, po_qty + pr_qty)
 
         if pushable <= 0:
-            return 0.0
+            # 已完成且无建议下推量（净算后无需工单/采购）：进度视为 100，避免显示成「未下推 0%」
+            return 100.0
         progress = (pushed / pushable) * 100.0
         if progress < 0:
             return 0.0
@@ -5650,13 +5678,16 @@ class DemandComputationService(AppBaseService):
         push_mode: Optional[str] = None,
         purchase_requisition_item_ids: Optional[List[int]] = None,
         production_item_ids: Optional[List[int]] = None,
+        purchase_order_item_ids: Optional[List[int]] = None,
     ) -> Dict[str, Any]:
         """
         一键下推：按配置执行工单、采购申请/采购单、委外工单。
+        选择粒度是计算结果明细（剩余可推数量），不是「某类单据整单」。
         production: "work_order"|null
         purchase: "requisition"|"purchase_order"|null
         include_outsource: 委外工单是否包含（工单模式会生成委外工单）
         production_item_ids: 可选，仅下推所选计算明细对应生产/委外件
+        purchase_order_item_ids: 可选，仅下推所选计算明细对应采购件到采购订单
         """
         computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
         if not computation:
@@ -5733,6 +5764,7 @@ class DemandComputationService(AppBaseService):
                 created_by=created_by,
                 generate_mode="purchase_only",
                 push_mode=resolved_push_mode,
+                selected_item_ids=purchase_order_item_ids,
             )
             results["purchase_orders"] = r.get("purchase_orders", [])
 

@@ -1,10 +1,10 @@
 /**
  * 工单详情关联 ESOP（工艺作业指导，不走 KU-AI）。
- * 取数与工位端同一路径：work-order operations/{id}/documents。
+ * 取数：work-orders/{id}/related-esops（工单所含工序全部适用 SOP，非报工择一）。
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Descriptions, Drawer, Empty, List, Result, Select, Spin, Typography } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Button, Descriptions, Divider, Drawer, Empty, List, Result, Spin, Typography } from 'antd';
 import { BookOutlined, PaperClipOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { SecureImage } from '../../../../../../components/secure-image';
@@ -14,7 +14,7 @@ import {
   workOrderApi,
   type WorkOrderEsopDocument,
   type WorkOrderEsopFileItem,
-  type WorkOrderOperationDocuments,
+  type WorkOrderOperationEsopItem,
 } from '../../../../services/work-order';
 
 const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
@@ -27,45 +27,11 @@ export type WorkOrderEsopSidebarProps = {
   zIndex?: number;
 };
 
-type OperationRow = {
-  id: number;
-  label: string;
-  sopHint?: string;
-};
-
-function asOperationList(raw: unknown): Record<string, unknown>[] {
-  if (Array.isArray(raw)) return raw as Record<string, unknown>[];
-  if (raw && typeof raw === 'object') {
-    const ops = (raw as { operations?: unknown }).operations;
-    if (Array.isArray(ops)) return ops as Record<string, unknown>[];
-  }
-  return [];
-}
-
 function firstNonEmpty(...candidates: unknown[]): string | undefined {
   for (const candidate of candidates) {
     if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
   }
   return undefined;
-}
-
-function toOperationRows(raw: unknown): OperationRow[] {
-  return asOperationList(raw)
-    .map((op) => {
-      const id = Number(op.id);
-      if (!Number.isFinite(id) || id <= 0) return null;
-      const sequence = op.sequence != null ? String(op.sequence) : '';
-      const name =
-        firstNonEmpty(op.operation_name, op.operationName, op.name) || `#${id}`;
-      const code = firstNonEmpty(op.operation_code, op.operationCode);
-      const sopHint = firstNonEmpty(op.sop_name, op.sopName);
-      return {
-        id,
-        label: [sequence && `${sequence}.`, name, code && `(${code})`].filter(Boolean).join(' '),
-        sopHint,
-      };
-    })
-    .filter((row): row is OperationRow => row != null);
 }
 
 function normalizeEsop(raw: WorkOrderEsopDocument | Record<string, unknown> | null | undefined): WorkOrderEsopDocument | null {
@@ -104,12 +70,6 @@ function normalizeEsop(raw: WorkOrderEsopDocument | Record<string, unknown> | nu
       };
     }),
   };
-}
-
-function hasEsop(doc?: WorkOrderOperationDocuments | null): boolean {
-  if (!doc) return false;
-  const flag = (doc as WorkOrderOperationDocuments & { esopAvailable?: boolean }).esopAvailable;
-  return Boolean(doc.sop || doc.esop_available || flag);
 }
 
 function looksLikeImage(name?: string): boolean {
@@ -249,21 +209,47 @@ function EsopBody({ sop }: { sop: WorkOrderEsopDocument }) {
   );
 }
 
+function operationLabel(item: WorkOrderOperationEsopItem): string {
+  const sequence = item.sequence != null ? `${item.sequence}.` : '';
+  const name = firstNonEmpty(item.operation_name) || `#${item.work_order_operation_id}`;
+  const code = firstNonEmpty(item.operation_code);
+  return [sequence, name, code && `(${code})`].filter(Boolean).join(' ');
+}
+
+function EsopSection({
+  heading,
+  sops,
+}: {
+  heading: string;
+  sops: WorkOrderEsopDocument[];
+}) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <Typography.Title level={5} style={{ marginTop: 0 }}>
+        {heading}
+      </Typography.Title>
+      {sops.map((sop, index) => (
+        <div key={sop.uuid || `${heading}-${index}`} style={{ marginBottom: 16 }}>
+          {sops.length > 1 && index > 0 ? <Divider /> : null}
+          <EsopBody sop={sop} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export const WorkOrderEsopSidebar: React.FC<WorkOrderEsopSidebarProps> = ({
   open,
   onClose,
   workOrderId,
-  operations,
   zIndex,
 }) => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [docsByOpId, setDocsByOpId] = useState<Record<number, WorkOrderOperationDocuments>>({});
-  const [selectedOpId, setSelectedOpId] = useState<number | null>(null);
-  const [resolvedOps, setResolvedOps] = useState<OperationRow[]>([]);
-
-  const propOps = useMemo(() => toOperationRows(operations), [operations]);
+  const [sharedSops, setSharedSops] = useState<WorkOrderEsopDocument[]>([]);
+  const [operationItems, setOperationItems] = useState<WorkOrderOperationEsopItem[]>([]);
+  const [hasOperations, setHasOperations] = useState(true);
 
   useEffect(() => {
     if (!open || !workOrderId) return;
@@ -273,47 +259,25 @@ export const WorkOrderEsopSidebar: React.FC<WorkOrderEsopSidebarProps> = ({
       setLoading(true);
       setError(null);
       try {
-        let rows = propOps;
-        if (rows.length === 0) {
-          const fetched = await workOrderApi.getOperations(String(workOrderId));
-          rows = toOperationRows(fetched);
-        }
+        const data = await workOrderApi.getRelatedEsops(workOrderId);
         if (cancelled) return;
-        setResolvedOps(rows);
-        if (rows.length === 0) {
-          setDocsByOpId({});
-          setSelectedOpId(null);
-          return;
-        }
-        const results = await Promise.all(
-          rows.map(async (row) => {
-            try {
-              const doc = await workOrderApi.getOperationDocuments(workOrderId, row.id);
-              return [row.id, doc] as const;
-            } catch {
-              return [row.id, null] as const;
-            }
-          }),
-        );
-        if (cancelled) return;
-        const next: Record<number, WorkOrderOperationDocuments> = {};
-        let failedCount = 0;
-        for (const [id, doc] of results) {
-          if (doc) next[id] = doc;
-          else failedCount += 1;
-        }
-        setDocsByOpId(next);
-        if (failedCount === rows.length) {
-          setSelectedOpId(null);
-          setError(t('app.kuaizhizao.workOrder.esop.loadFailed'));
-          return;
-        }
-        const firstWithEsop = rows.find((row) => hasEsop(next[row.id]));
-        setSelectedOpId(firstWithEsop?.id ?? null);
+        const shared = (data.shared_sops || [])
+          .map((row) => normalizeEsop(row))
+          .filter((row): row is WorkOrderEsopDocument => row != null && Boolean(row.uuid));
+        const ops = (data.operations || []).map((item) => ({
+          ...item,
+          sops: (item.sops || [])
+            .map((row) => normalizeEsop(row))
+            .filter((row): row is WorkOrderEsopDocument => row != null && Boolean(row.uuid)),
+        }));
+        setSharedSops(shared);
+        setOperationItems(ops);
+        setHasOperations(ops.length > 0);
       } catch (e) {
         if (!cancelled) {
-          setDocsByOpId({});
-          setSelectedOpId(null);
+          setSharedSops([]);
+          setOperationItems([]);
+          setHasOperations(true);
           setError(getApiErrorMessage(e, t('app.kuaizhizao.workOrder.esop.loadFailed')));
         }
       } finally {
@@ -325,11 +289,10 @@ export const WorkOrderEsopSidebar: React.FC<WorkOrderEsopSidebarProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [open, workOrderId, propOps, t]);
+  }, [open, workOrderId, t]);
 
-  const boundOps = resolvedOps.filter((row) => hasEsop(docsByOpId[row.id]));
-  const selectedDoc = selectedOpId != null ? docsByOpId[selectedOpId] : undefined;
-  const selectedSop = normalizeEsop(selectedDoc?.sop);
+  const boundOps = operationItems.filter((item) => (item.sops || []).length > 0);
+  const hasAny = sharedSops.length > 0 || boundOps.length > 0;
 
   return (
     <Drawer
@@ -350,42 +313,27 @@ export const WorkOrderEsopSidebar: React.FC<WorkOrderEsopSidebarProps> = ({
         </div>
       ) : error ? (
         <Result status="error" title={error} />
-      ) : resolvedOps.length === 0 ? (
+      ) : !hasOperations && sharedSops.length === 0 ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description={t('app.kuaizhizao.workOrder.esop.noOperations')}
         />
-      ) : boundOps.length === 0 ? (
+      ) : !hasAny ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description={t('app.kuaizhizao.workOrder.esop.empty')}
         />
       ) : (
         <>
-          {boundOps.length > 1 ? (
-            <Select
-              style={{ width: '100%', marginBottom: 16 }}
-              value={selectedOpId ?? undefined}
-              options={boundOps.map((row) => ({
-                value: row.id,
-                label: row.sopHint ? `${row.label} / ${row.sopHint}` : row.label,
-              }))}
-              onChange={(value) => setSelectedOpId(Number(value))}
-            />
-          ) : (
-            <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
-              {boundOps[0]?.label}
-              {boundOps[0]?.sopHint ? ` / ${boundOps[0].sopHint}` : ''}
-            </Typography.Text>
-          )}
-          {selectedSop ? (
-            <EsopBody sop={selectedSop} />
-          ) : (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={t('app.kuaizhizao.workOrder.esop.empty')}
-            />
-          )}
+          {sharedSops.length > 0 ? (
+            <EsopSection heading={t('app.kuaizhizao.workOrder.esop.sharedHeading')} sops={sharedSops} />
+          ) : null}
+          {boundOps.map((item, index) => (
+            <div key={item.work_order_operation_id}>
+              {sharedSops.length > 0 || index > 0 ? <Divider /> : null}
+              <EsopSection heading={operationLabel(item)} sops={item.sops || []} />
+            </div>
+          ))}
         </>
       )}
     </Drawer>

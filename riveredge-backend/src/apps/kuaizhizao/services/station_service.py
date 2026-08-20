@@ -28,6 +28,8 @@ from apps.kuaizhizao.schemas.station import (
     StationSopStep,
     StationOperationDocumentsResponse,
     StationWorkOrderDocumentFlags,
+    StationWorkOrderOperationEsopItem,
+    WorkOrderRelatedEsopsResponse,
 )
 from apps.kuaizhizao.schemas.work_order import WorkOrderOperationResponse
 from apps.kuaizhizao.services.work_order_service import WorkOrderService, _max_reportable_quantity_for_op
@@ -218,6 +220,32 @@ def _attachment_to_doc_item(file, index: int, source: str) -> Optional[StationDo
         file_uuid=uuid or None,
         url=url,
         source=source,
+    )
+
+
+def _station_sop_document_from_orm(sop_row: Any) -> StationSopDocument:
+    sop_attachments_raw = _normalize_attachment_list(getattr(sop_row, "attachments", None))
+    sop_att_items: List[StationDocFileItem] = []
+    for i, f in enumerate(sop_attachments_raw):
+        item = _attachment_to_doc_item(f, i, "sop")
+        if item:
+            sop_att_items.append(item)
+    flow_config = getattr(sop_row, "flow_config", None)
+    if not isinstance(flow_config, dict):
+        flow_config = None
+    revision = getattr(sop_row, "current_revision", None) or getattr(sop_row, "version", None)
+    return StationSopDocument(
+        uuid=str(getattr(sop_row, "uuid", "") or ""),
+        name=getattr(sop_row, "name", None),
+        version=getattr(sop_row, "version", None),
+        current_revision=revision,
+        carrier=getattr(sop_row, "carrier", None) or "electronic",
+        storage_location=getattr(sop_row, "storage_location", None),
+        station_copy_no=None,
+        content=getattr(sop_row, "content", None),
+        steps=_sop_flow_to_steps(flow_config),
+        flow_config=flow_config,
+        attachments=sop_att_items,
     )
 
 
@@ -863,6 +891,90 @@ class StationService(WorkOrderService):
             drawings=drawings,
             esop_available=sop_doc is not None,
             drawings_available=len(drawings) > 0,
+        )
+
+    async def list_work_order_related_esops(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+    ) -> WorkOrderRelatedEsopsResponse:
+        """
+        工单详情「相关 SOP」：按工序列出全部适用已生效 SOP（非报工择一）。
+        未绑工序的物料/物料组 SOP 放在 shared_sops，避免每道工序重复。
+        """
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.master_data.models.material import Material
+        from apps.master_data.services.process_service import ProcessService
+
+        work_order = await WorkOrder.get_or_none(
+            tenant_id=tenant_id,
+            id=work_order_id,
+            deleted_at__isnull=True,
+        )
+        if not work_order:
+            raise NotFoundError(f"工单不存在: {work_order_id}")
+
+        material = await Material.filter(
+            id=work_order.product_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        material_uuid = str(material.uuid) if material else None
+
+        operations = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+        ).order_by("sequence").all()
+
+        shared_sops: List[StationSopDocument] = []
+        shared_seen: set[str] = set()
+        op_items: List[StationWorkOrderOperationEsopItem] = []
+
+        for woo in operations:
+            master_op_id = int(woo.operation_id) if woo.operation_id is not None else None
+            rows = await ProcessService.list_sops_for_material_operation(
+                tenant_id,
+                material_uuid,
+                master_op_id,
+            )
+            op_docs: List[StationSopDocument] = []
+            for row in rows:
+                doc = _station_sop_document_from_orm(row)
+                uid = doc.uuid
+                if getattr(row, "operation_id", None) is None:
+                    if uid and uid not in shared_seen:
+                        shared_seen.add(uid)
+                        shared_sops.append(doc)
+                    continue
+                op_docs.append(doc)
+            op_items.append(
+                StationWorkOrderOperationEsopItem(
+                    work_order_operation_id=int(woo.id),
+                    master_operation_id=master_op_id,
+                    sequence=int(woo.sequence) if woo.sequence is not None else None,
+                    operation_name=woo.operation_name,
+                    operation_code=getattr(woo, "operation_code", None),
+                    sops=op_docs,
+                )
+            )
+
+        if not operations and material_uuid:
+            for row in await ProcessService.list_sops_for_material_operation(
+                tenant_id, material_uuid, None
+            ):
+                if getattr(row, "operation_id", None) is not None:
+                    continue
+                doc = _station_sop_document_from_orm(row)
+                uid = doc.uuid
+                if uid and uid not in shared_seen:
+                    shared_seen.add(uid)
+                    shared_sops.append(doc)
+
+        return WorkOrderRelatedEsopsResponse(
+            work_order_id=work_order_id,
+            shared_sops=shared_sops,
+            operations=op_items,
         )
 
     async def get_work_orders_document_flags(

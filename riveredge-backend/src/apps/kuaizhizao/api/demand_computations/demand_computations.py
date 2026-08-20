@@ -962,6 +962,7 @@ async def push_all(
             push_mode=b.get("push_mode"),
             purchase_requisition_item_ids=b.get("purchase_requisition_item_ids"),
             production_item_ids=b.get("production_item_ids"),
+            purchase_order_item_ids=b.get("purchase_order_item_ids"),
         )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

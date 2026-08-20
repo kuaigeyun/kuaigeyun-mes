@@ -1651,8 +1651,7 @@ const SalesReturnsPage: React.FC = () => {
   const timeconfigBasicItems = useDetailDrawerDescriptionItems(
     detailBasicColumns.filter((col) => {
                     if (col.dataIndex !== 'notes') return true;
-                    const notes = String(returnDetail.notes ?? '').trim();
-                    return notes.length > 0;
+                    return String(returnDetail?.notes ?? '').trim().length > 0;
                   }),
                   returnDetail,
     'sales_return',

@@ -2261,13 +2261,16 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                         picking_time=picking_time,
                     )
 
-                await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(
-                    status="已领料",
-                    picker_id=confirmed_by,
-                    picker_name=confirmer_name,
-                    picking_time=picking_time,
-                    updated_by=confirmed_by,
-                )
+                # 出库人/领料人是建单时选定的业务人；确认人只写入 updated_by
+                header_update: Dict[str, Any] = {
+                    "status": "已领料",
+                    "picking_time": picking_time,
+                    "updated_by": confirmed_by,
+                }
+                if not picking.picker_id and not str(picking.picker_name or "").strip():
+                    header_update["picker_id"] = confirmed_by
+                    header_update["picker_name"] = confirmer_name
+                await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(**header_update)
             except Exception as inv_e:
                 logger.error("生产领料确认-更新库存失败: %s", inv_e)
                 raise
@@ -2351,8 +2354,6 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
 
                 await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(
                     status="待领料",
-                    picker_id=None,
-                    picker_name=None,
                     picking_time=None,
                     updated_by=updated_by,
                 )

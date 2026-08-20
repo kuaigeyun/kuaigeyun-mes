@@ -331,6 +331,34 @@ const PUSH_DEMAND_COMPUTATION_PARAMS: Record<string, unknown> = {
   consider_mold_tool_availability: false,
 }
 
+/** 下推选择粒度：计算结果明细行（剩余可推数量），不是某类下游单据整张 */
+function isDemandPushPreviewLineSelectable(
+  row: ComputationPushPreviewItem,
+  pushConfig: { production?: 'work_order'; purchase?: 'requisition' | 'purchase_order' },
+): boolean {
+  if (Number(row.max_push_quantity ?? 0) <= 0) return false
+  if (pushConfig.purchase === 'requisition' && row.target_document === 'purchase_requisition') {
+    return true
+  }
+  if (pushConfig.purchase === 'purchase_order' && row.target_document === 'purchase_order') {
+    return true
+  }
+  if (
+    pushConfig.production === 'work_order' &&
+    (row.target_document === 'work_order' || row.target_document === 'outsource_work_order')
+  ) {
+    return true
+  }
+  return false
+}
+
+function demandPushPreviewNeedsLineSelection(pushConfig: {
+  production?: 'work_order'
+  purchase?: 'requisition' | 'purchase_order'
+}): boolean {
+  return Boolean(pushConfig.purchase || pushConfig.production === 'work_order')
+}
+
 /** 净需求模式下的供需净算默认（与 PARAM_DEFAULTS 一致） */
 const NETTING_DEFAULTS_FOR_NET: Pick<
   Record<string, any>,
@@ -882,26 +910,10 @@ const DemandComputationPage: React.FC = () => {
       .then((data) => {
         setPushPreviewData(data)
         setPushPreviewLoadError(null)
-        if (pushConfig.purchase === 'requisition' || pushConfig.production === 'work_order') {
+        if (pushConfig.purchase === 'requisition' || pushConfig.purchase === 'purchase_order' || pushConfig.production === 'work_order') {
           setPushSelectedItemIds(
             (data.items || [])
-              .filter((row) => {
-                if (Number(row.max_push_quantity ?? 0) <= 0) return false
-                if (
-                  pushConfig.purchase === 'requisition' &&
-                  row.target_document === 'purchase_requisition'
-                ) {
-                  return true
-                }
-                if (
-                  pushConfig.production === 'work_order' &&
-                  (row.target_document === 'work_order' ||
-                    row.target_document === 'outsource_work_order')
-                ) {
-                  return true
-                }
-                return false
-              })
+              .filter((row) => isDemandPushPreviewLineSelectable(row, pushConfig))
               .map((row) => Number(row.item_id)),
           )
         } else {
@@ -2015,11 +2027,10 @@ const DemandComputationPage: React.FC = () => {
       if (hasProduction || hasPurchase) {
         let purchaseRequisitionItemIds: number[] | undefined
         let productionItemIds: number[] | undefined
+        let purchaseOrderItemIds: number[] | undefined
         if (pushConfig.purchase === 'requisition') {
-          const prRows = (pushPreviewData?.items || []).filter(
-            (row) =>
-              row.target_document === 'purchase_requisition' &&
-              Number(row.max_push_quantity ?? 0) > 0,
+          const prRows = (pushPreviewData?.items || []).filter((row) =>
+            isDemandPushPreviewLineSelectable(row, { purchase: 'requisition' }),
           )
           if (prRows.length > 0) {
             const selected = pushSelectedItemIds.filter((id) =>
@@ -2032,12 +2043,24 @@ const DemandComputationPage: React.FC = () => {
             purchaseRequisitionItemIds = selected
           }
         }
+        if (pushConfig.purchase === 'purchase_order') {
+          const poRows = (pushPreviewData?.items || []).filter((row) =>
+            isDemandPushPreviewLineSelectable(row, { purchase: 'purchase_order' }),
+          )
+          if (poRows.length > 0) {
+            const selected = pushSelectedItemIds.filter((id) =>
+              poRows.some((row) => Number(row.item_id) === id),
+            )
+            if (!selected.length) {
+              messageApi.warning(t('app.kuaizhizao.purchaseRequisition.pull.selectLinesFirst'))
+              return
+            }
+            purchaseOrderItemIds = selected
+          }
+        }
         if (pushConfig.production === 'work_order') {
-          const prodRows = (pushPreviewData?.items || []).filter(
-            (row) =>
-              (row.target_document === 'work_order' ||
-                row.target_document === 'outsource_work_order') &&
-              Number(row.max_push_quantity ?? 0) > 0,
+          const prodRows = (pushPreviewData?.items || []).filter((row) =>
+            isDemandPushPreviewLineSelectable(row, { production: 'work_order' }),
           )
           if (prodRows.length > 0) {
             const selected = pushSelectedItemIds.filter((id) =>
@@ -2057,6 +2080,7 @@ const DemandComputationPage: React.FC = () => {
           push_mode: pushMode,
           purchase_requisition_item_ids: purchaseRequisitionItemIds,
           production_item_ids: productionItemIds,
+          purchase_order_item_ids: purchaseOrderItemIds,
         })
         if (hasProduction && hasPurchase) {
           messageApi.success(t('app.kuaizhizao.demandComputation.pushSuccess'))
@@ -2221,7 +2245,7 @@ const DemandComputationPage: React.FC = () => {
         return (
           <DocumentPushProgressBar
             percent={percent}
-            tooltip={t('app.kuaizhizao.salesManagement.pushProgress.percentOnly', {
+            tooltip={t('app.kuaizhizao.demandComputation.pushProgressTooltip', {
               percent: Math.round(percent),
             })}
           />
@@ -3004,26 +3028,16 @@ const DemandComputationPage: React.FC = () => {
             (pushMode === 'confirm' && (pushPreviewData?.validation_failures?.length ?? 0) > 0) ||
             (() => {
               const items = pushPreviewData?.items || []
-              const prRows = items.filter(
-                (row) =>
-                  row.target_document === 'purchase_requisition' &&
-                  Number(row.max_push_quantity ?? 0) > 0,
+              const selectable = items.filter((row) =>
+                isDemandPushPreviewLineSelectable(row, pushConfig),
               )
-              const prodRows = items.filter(
-                (row) =>
-                  (row.target_document === 'work_order' ||
-                    row.target_document === 'outsource_work_order') &&
-                  Number(row.max_push_quantity ?? 0) > 0,
+              return (
+                demandPushPreviewNeedsLineSelection(pushConfig) &&
+                selectable.length > 0 &&
+                !pushSelectedItemIds.some((id) =>
+                  selectable.some((row) => Number(row.item_id) === id),
+                )
               )
-              const needPr =
-                pushConfig.purchase === 'requisition' &&
-                prRows.length > 0 &&
-                !pushSelectedItemIds.some((id) => prRows.some((row) => Number(row.item_id) === id))
-              const needProd =
-                pushConfig.production === 'work_order' &&
-                prodRows.length > 0 &&
-                !pushSelectedItemIds.some((id) => prodRows.some((row) => Number(row.item_id) === id))
-              return needPr || needProd
             })(),
         }}
         onCancel={() => {
@@ -3118,21 +3132,12 @@ const DemandComputationPage: React.FC = () => {
                     pagination={false}
                     scroll={{ x: 1000 }}
                     rowSelection={
-                      pushConfig.purchase === 'requisition' ||
-                      pushConfig.production === 'work_order'
+                      demandPushPreviewNeedsLineSelection(pushConfig)
                         ? {
                             selectedRowKeys: pushSelectedItemIds.map(String),
                             onChange: (keys) => setPushSelectedItemIds(keys.map((k) => Number(k))),
                             getCheckboxProps: (row) => ({
-                              disabled:
-                                Number(row.max_push_quantity ?? 0) <= 0 ||
-                                !(
-                                  (pushConfig.purchase === 'requisition' &&
-                                    row.target_document === 'purchase_requisition') ||
-                                  (pushConfig.production === 'work_order' &&
-                                    (row.target_document === 'work_order' ||
-                                      row.target_document === 'outsource_work_order'))
-                                ),
+                              disabled: !isDemandPushPreviewLineSelectable(row, pushConfig),
                             }),
                           }
                         : undefined

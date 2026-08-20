@@ -143,7 +143,7 @@ export const OutboundDetailDrawer: React.FC<OutboundDetailDrawerProps> = ({
           },
         },
         {
-          title: t('app.kuaizhizao.warehouseOutbound.col.operator'),
+          title: t('app.kuaizhizao.warehouseOutbound.col.operatorPerson'),
           dataIndex: 'operator_name',
           render: (_, record) => resolveOutboundHubOperator(record) || '-',
         },

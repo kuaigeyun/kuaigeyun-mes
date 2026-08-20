@@ -1701,7 +1701,7 @@ const WorkOrdersPage: React.FC = () => {
           searchFormValues,
           {
             include_readiness: !isPrefetch && heavyMetrics,
-            include_downstream_push_progress: !isPrefetch && heavyMetrics,
+            include_downstream_push_progress: !isPrefetch,
             // 工序列是展示列；prefetch 结果在 staleTime 内会直接当展示页，不能关
             include_operation_steps: true,
             persistSnapshot: !isPrefetch,

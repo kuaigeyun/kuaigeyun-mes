@@ -1365,8 +1365,7 @@ const ReworkOrdersPage: React.FC = () => {
   const timeconfigBasicItems = useDetailDrawerDescriptionItems(
     detailBasicColumns.filter((col) => {
                     if (col.dataIndex !== 'remarks') return true;
-                    const remarks = String(reworkOrderDetail.remarks ?? '').trim();
-                    return remarks.length > 0;
+                    return String(reworkOrderDetail?.remarks ?? '').trim().length > 0;
                   }),
                   reworkOrderDetail,
     'rework_order',

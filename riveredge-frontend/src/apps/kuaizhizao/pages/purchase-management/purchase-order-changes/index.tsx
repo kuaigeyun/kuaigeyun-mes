@@ -704,8 +704,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
   const timeconfigBasicItems = useDetailDrawerDescriptionItems(
     detailBasicColumns.filter((col) => {
                   if (col.dataIndex !== 'notes') return true;
-                  const notes = String(detail.notes ?? '').trim();
-                  return notes.length > 0;
+                  return String(detail?.notes ?? '').trim().length > 0;
                 }),
                 detail,
     'purchase_order_change',

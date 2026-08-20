@@ -157,6 +157,21 @@ export type WorkOrderOperationDocuments = {
   esop_available?: boolean;
 };
 
+export type WorkOrderOperationEsopItem = {
+  work_order_operation_id: number;
+  master_operation_id?: number | null;
+  sequence?: number | null;
+  operation_name?: string | null;
+  operation_code?: string | null;
+  sops?: WorkOrderEsopDocument[];
+};
+
+export type WorkOrderRelatedEsops = {
+  work_order_id: number;
+  shared_sops?: WorkOrderEsopDocument[];
+  operations?: WorkOrderOperationEsopItem[];
+};
+
 export const workOrderApi = {
   list: async (params?: any) => apiRequest('/apps/kuaizhizao/work-orders', { method: 'GET', params }),
   create: async (data: any) => apiRequest('/apps/kuaizhizao/work-orders', { method: 'POST', data }),
@@ -199,6 +214,11 @@ export const workOrderApi = {
   getOperationDocuments: async (workOrderId: string | number, operationId: string | number) =>
     apiRequest<WorkOrderOperationDocuments>(
       `/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/documents`,
+      { method: 'GET' },
+    ),
+  getRelatedEsops: async (workOrderId: string | number) =>
+    apiRequest<WorkOrderRelatedEsops>(
+      `/apps/kuaizhizao/work-orders/${workOrderId}/related-esops`,
       { method: 'GET' },
     ),
   updateOperations: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/operations`, { method: 'PUT', data }),

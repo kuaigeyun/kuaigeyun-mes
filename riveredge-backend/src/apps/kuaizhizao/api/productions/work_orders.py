@@ -22,6 +22,7 @@ from apps.kuaizhizao.services.station_service import StationService
 from apps.kuaizhizao.schemas.station import (
     StationOperationDocumentsResponse,
     StationWorkOrderDocumentFlagsResponse,
+    WorkOrderRelatedEsopsResponse,
 )
 from apps.kuaizhizao.services.rework_order_service import ReworkOrderService, REWORK_ORDER_SORTABLE_FIELDS
 from apps.kuaizhizao.services.demand_source_chain_service import DemandSourceChainService
@@ -802,6 +803,29 @@ async def get_work_order_operation_documents(
             work_order_id=work_order_id,
             operation_id=operation_id,
             current_user=current_user,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+
+
+@router.get(
+    "/work-orders/{work_order_id}/related-esops",
+    response_model=WorkOrderRelatedEsopsResponse,
+    summary="List all related ESOPs for work order operations",
+)
+async def list_work_order_related_esops(
+    work_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderRelatedEsopsResponse:
+    """
+    工单详情相关 ESOP：工单所含工序的全部适用已生效 SOP。
+    报工/工位仍走 get_sop_for_reporting（每工序择一）；本接口只用于详情浏览。
+    """
+    try:
+        return await StationService().list_work_order_related_esops(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e)) from e

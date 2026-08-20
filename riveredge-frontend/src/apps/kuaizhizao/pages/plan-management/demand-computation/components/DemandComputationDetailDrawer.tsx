@@ -61,6 +61,8 @@ import { renderAvailableInventoryCell } from './availableInventoryCell'
 import { MrpMaterialPlanPanel } from './MrpMaterialPlanPanel'
 import { mrpExceptionListHasError } from './mrpExceptionHelpers'
 import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions'
+import { useDetailDrawerFeatures } from '../../../../../../hooks/useDetailDrawerFeatures'
+import { isDetailTimeFieldHidden } from '../../../../constants/detailDrawerTimeFields'
 
 const DEMAND_COMPUTATION_RESOURCE = 'plan-management-demand-computation'
 
@@ -361,6 +363,20 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
   const { t } = useTranslation()
   const { message: messageApi, modal: modalApi } = App.useApp()
   const computationPerms = useResourcePermissions(DEMAND_COMPUTATION_RESOURCE)
+  const { timeFieldHidden, basicUpdatedAtEnabled } = useDetailDrawerFeatures()
+  const hideDeliveryDate = isDetailTimeFieldHidden(
+    'delivery_date',
+    'demand_computation',
+    timeFieldHidden,
+    basicUpdatedAtEnabled,
+  )
+  const hidePlannedStart = isDetailTimeFieldHidden(
+    'planned_start',
+    'demand_computation',
+    timeFieldHidden,
+    basicUpdatedAtEnabled,
+  )
+  const hideDeliveryRequirement = hideDeliveryDate && hidePlannedStart
   const contentReady = Boolean(computation)
   const showError = Boolean(error) && !contentReady && !loading
   const showLoading = loading || (!contentReady && !showError)
@@ -768,32 +784,51 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
                       return <Tag color={getMaterialSourceTypeTagColor(type)}>{label}</Tag>
                     },
                   },
-                  {
-                    title: t('app.kuaizhizao.demandComputation.colDeliveryRequirement'),
-                    dataIndex: 'delivery_date',
-                    width: 300,
-                    render: (date: string, record: DemandComputationItem) => {
-                      const startDate = record.production_start_date || record.procurement_start_date
-                      const isRisk = record.is_overdue_risk
-                      return (
-                        <div style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
-                          <span style={{ color: isRisk ? '#ff4d4f' : 'inherit', fontWeight: isRisk ? 'bold' : 'normal' }}>
-                            {date || '—'}
-                          </span>
-                          {isRisk ? (
-                            <Tag color="error" style={{ marginLeft: 6, fontSize: 10 }}>
-                              {t('app.kuaizhizao.demandComputation.deliveryRisk')}
-                            </Tag>
-                          ) : null}
-                          {startDate ? (
-                            <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
-                              {t('app.kuaizhizao.demandComputation.plannedStart', { date: startDate })}
-                            </span>
-                          ) : null}
-                        </div>
-                      )
-                    },
-                  },
+                  ...(hideDeliveryRequirement
+                    ? []
+                    : [
+                        {
+                          title: t('app.kuaizhizao.demandComputation.colDeliveryRequirement'),
+                          dataIndex: 'delivery_date',
+                          width: 300,
+                          render: (date: string, record: DemandComputationItem) => {
+                            const startDate = hidePlannedStart
+                              ? undefined
+                              : record.production_start_date || record.procurement_start_date
+                            const isRisk = !hideDeliveryDate && record.is_overdue_risk
+                            return (
+                              <div style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
+                                {hideDeliveryDate ? null : (
+                                  <span
+                                    style={{
+                                      color: isRisk ? '#ff4d4f' : 'inherit',
+                                      fontWeight: isRisk ? 'bold' : 'normal',
+                                    }}
+                                  >
+                                    {date || '—'}
+                                  </span>
+                                )}
+                                {isRisk ? (
+                                  <Tag color="error" style={{ marginLeft: 6, fontSize: 10 }}>
+                                    {t('app.kuaizhizao.demandComputation.deliveryRisk')}
+                                  </Tag>
+                                ) : null}
+                                {startDate ? (
+                                  <span
+                                    style={{
+                                      marginLeft: hideDeliveryDate ? 0 : 8,
+                                      fontSize: 12,
+                                      color: 'var(--ant-color-text-secondary)',
+                                    }}
+                                  >
+                                    {t('app.kuaizhizao.demandComputation.plannedStart', { date: startDate })}
+                                  </span>
+                                ) : null}
+                              </div>
+                            )
+                          },
+                        },
+                      ]),
                   {
                     title: t('app.kuaizhizao.demandComputation.colSuggestedWorkOrder'),
                     dataIndex: 'suggested_work_order_quantity',

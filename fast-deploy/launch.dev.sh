@@ -31,6 +31,50 @@ is_windows_gitbash() {
     esac
 }
 
+# Git Bash / Cursor 终端 PATH 常不含 Astral 安装目录（~/.local/bin），
+# 交互式 bash 能跑 `uv`，nohup 却报 failed to run command 'uv'。
+ensure_uv_path() {
+    local p
+    for p in \
+        "$HOME/.local/bin" \
+        "$HOME/.cargo/bin" \
+        "${USERPROFILE:-}/.local/bin" \
+        "${LOCALAPPDATA:-}/Programs/Python/Python312/Scripts" \
+        "${LOCALAPPDATA:-}/Programs/Python/Python313/Scripts"
+    do
+        if [[ "$p" == [A-Za-z]:* ]] && command -v cygpath >/dev/null 2>&1; then
+            p="$(cygpath -u "$p" 2>/dev/null || echo "$p")"
+        fi
+        [ -d "$p" ] && PATH="$p:$PATH"
+    done
+    export PATH
+}
+
+# 返回可 exec 的绝对路径。Windows 上优先 uv.exe，避免 nohup 找不到无后缀名。
+resolve_uv() {
+    if [ -n "${RIVEREDGE_UV:-}" ] && [ -x "${RIVEREDGE_UV}" ]; then
+        echo "${RIVEREDGE_UV}"
+        return 0
+    fi
+    ensure_uv_path
+    local found="" c
+    if command -v uv >/dev/null 2>&1; then
+        found="$(command -v uv)"
+    fi
+    for c in \
+        "${found}.exe" \
+        "$found" \
+        "$HOME/.local/bin/uv.exe" \
+        "$HOME/.local/bin/uv" \
+        "$HOME/.cargo/bin/uv.exe" \
+        "$HOME/.cargo/bin/uv"
+    do
+        [ -n "$c" ] || continue
+        [ -x "$c" ] && { echo "$c"; return 0; }
+    done
+    return 1
+}
+
 # Git Bash 常缺 nvm-windows 的 PATH；补齐后再跑 npx vite / expo
 ensure_nodejs_path() {
     if command -v node >/dev/null 2>&1 && command -v npx >/dev/null 2>&1; then
@@ -442,6 +486,12 @@ cleanup_backend_processes() {
 
 start_backend() {
     local skip_cleanup=${1:-0}
+    local uv_bin
+    uv_bin="$(resolve_uv)" || {
+        log_error "未找到 uv（Astral 默认装在 ~/.local/bin，当前 PATH 不含该目录）"
+        log_error "安装: powershell -c \"irm https://astral.sh/uv/install.ps1 | iex\""
+        return 1
+    }
     log_info "正在拉起后端 (${BACKEND_PORT})..."
     if [ "$skip_cleanup" != "1" ]; then
         cleanup_backend_processes || { log_error "后端端口未释放，拒绝启动"; return 1; }
@@ -454,7 +504,7 @@ start_backend() {
     export MENU_CACHE_ENABLED="${MENU_CACHE_ENABLED:-true}"
     export RIVEREDGE_DB_POOL_MIN="${RIVEREDGE_DB_POOL_MIN:-1}"
     export RIVEREDGE_DB_POOL_MAX="${RIVEREDGE_DB_POOL_MAX:-5}"
-    PYTHONPATH="src" nohup uv run --extra ocr --extra pdf uvicorn server.main:app --host 0.0.0.0 --port "${BACKEND_PORT}" --reload --reload-dir src > ../.logs/backend.log 2>&1 &
+    PYTHONPATH="src" nohup "$uv_bin" run --extra ocr --extra pdf uvicorn server.main:app --host 0.0.0.0 --port "${BACKEND_PORT}" --reload --reload-dir src > ../.logs/backend.log 2>&1 &
     local backend_launcher_pid=$!
     echo "${backend_launcher_pid}" > ../.logs/backend.pid
     cd ..
@@ -492,6 +542,11 @@ start_backend() {
 }
 
 start_worker() {
+    local uv_bin
+    uv_bin="$(resolve_uv)" || {
+        log_error "未找到 uv，无法启动 Taskiq"
+        return 1
+    }
     log_info "正在拉起 Taskiq Worker/Scheduler..."
     kill_taskiq_processes
     cd riveredge-backend
@@ -500,7 +555,7 @@ start_worker() {
     TASKIQ_WORKERS="${TASKIQ_WORKERS:-1}"
     export RIVEREDGE_TASKIQ_POOL_MIN="${RIVEREDGE_TASKIQ_POOL_MIN:-1}"
     export RIVEREDGE_TASKIQ_POOL_MAX="${RIVEREDGE_TASKIQ_POOL_MAX:-2}"
-    PYTHONPATH="src" nohup uv run --extra ocr --extra pdf taskiq worker \
+    PYTHONPATH="src" nohup "$uv_bin" run --extra ocr --extra pdf taskiq worker \
         --app-dir src \
         --workers "$TASKIQ_WORKERS" \
         core.tasks.taskiq_app:broker \
@@ -512,7 +567,7 @@ start_worker() {
     local worker_launcher_pid=$!
 
     [ -f "../.logs/scheduler.pid" ] && rm -f "../.logs/scheduler.pid"
-    PYTHONPATH="src" nohup uv run --extra ocr --extra pdf taskiq scheduler \
+    PYTHONPATH="src" nohup "$uv_bin" run --extra ocr --extra pdf taskiq scheduler \
         --app-dir src \
         core.tasks.taskiq_app:scheduler \
         core.tasks.taskiq_app > ../.logs/scheduler.log 2>&1 &

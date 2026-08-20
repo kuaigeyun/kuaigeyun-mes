@@ -524,8 +524,7 @@ export async function fetchWorkOrderListForTable(
     include_scores: false,
     /** 工序列：与运营看板同口径的步骤摘要（只读，不在列表内回写完成态） */
     include_operation_steps: options?.include_operation_steps ?? true,
-    /** 完工进度列：首屏跳过方案质检口径重算，定时刷新再补 */
-    include_downstream_push_progress: options?.include_downstream_push_progress ?? false,
+    include_downstream_push_progress: options?.include_downstream_push_progress ?? true,
   })
   const response = await workOrderApi.list(apiParams)
   const result = normalizeListResponse(response)

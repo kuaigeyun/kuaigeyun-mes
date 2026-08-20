@@ -610,6 +610,7 @@ export async function pushAll(
     push_mode?: 'draft' | 'confirm';
     purchase_requisition_item_ids?: number[];
     production_item_ids?: number[];
+    purchase_order_item_ids?: number[];
   }
 ): Promise<{ success: boolean; message: string; results: Record<string, any> }> {
   return apiRequest(`/apps/kuaizhizao/demand-computations/${id}/push-all`, {

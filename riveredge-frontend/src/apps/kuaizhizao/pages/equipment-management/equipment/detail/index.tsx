@@ -34,6 +34,7 @@ import {
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
   MODAL_CONFIG,
   MultiTabListPageTemplate,
+  filterDetailDrawerBasicColumns,
 } from '../../../../../../components/layout-templates';
 import { QRCodeGenerator } from '../../../../../../components/qrcode';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
@@ -43,6 +44,7 @@ import {
 } from '../../../../../../components/custom-fields';
 import { useCustomFieldsForList } from '../../../../../../hooks/useCustomFieldsForList';
 import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
+import { useDetailDrawerFeatures } from '../../../../../../hooks/useDetailDrawerFeatures';
 import { FutureDatePicker } from '../../../../../../utils/futureDatePickerShortcuts';
 import { uploadMultipleFiles } from '../../../../../../services/file';
 import { normalizeDocumentAttachments } from '../../../../utils/documentAttachments';
@@ -121,6 +123,7 @@ const EquipmentDetailPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const equipmentPerms = useResourcePermissions('kuaizhizao:equipment-management-equipment');
+  const { basicUpdatedAtEnabled, timeFieldHidden } = useDetailDrawerFeatures();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
 
   const activeTab = resolveEquipmentDetailTabKey(searchParams.get('tab'));
@@ -241,6 +244,15 @@ const EquipmentDetailPage: React.FC = () => {
     [t],
   );
 
+  const visibleDetailColumns = useMemo(
+    () =>
+      filterDetailDrawerBasicColumns(detailColumns, basicUpdatedAtEnabled, {
+        documentType: 'equipment',
+        timeFieldHidden,
+      }),
+    [basicUpdatedAtEnabled, detailColumns, timeFieldHidden],
+  );
+
   const calibrationResultOptions = useMemo(
     () => [
       { label: t('app.kuaizhizao.equipment.resultPass'), value: '合格' },
@@ -331,7 +343,7 @@ const EquipmentDetailPage: React.FC = () => {
                 )}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <ProDescriptions<EquipmentDetail> dataSource={equipment} column={3} columns={detailColumns} />
+                <ProDescriptions<EquipmentDetail> dataSource={equipment} column={3} columns={visibleDetailColumns} />
               </div>
               {equipment.uuid ? (
                 <div

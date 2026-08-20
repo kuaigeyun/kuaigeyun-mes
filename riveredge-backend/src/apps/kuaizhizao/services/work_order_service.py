@@ -2650,7 +2650,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     has_downstream_documents=downstream_by_wo.get(int(wo.id), False) if wo.id is not None else False,
                     audit_required=audit_required,
                 )
-                if wo.id is not None:
+                if wo.id is not None and include_downstream_push_progress:
                     item_dict["downstream_push_progress"] = push_progress_by_wo.get(int(wo.id), 0.0)
 
                 result_dicts.append(item_dict)

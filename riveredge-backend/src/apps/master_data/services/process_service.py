@@ -2363,6 +2363,68 @@ class ProcessService:
             tenant_id, material_uuid, operation_uuid=operation_uuid
         )
 
+    @staticmethod
+    async def list_sops_for_material_operation(
+        tenant_id: int,
+        material_uuid: Optional[str],
+        operation_id: Optional[int],
+    ) -> List[SOP]:
+        """
+        工单详情「相关 SOP」：列出该物料+工序全部适用且已生效的 SOP，不去重成一条。
+
+        顺序（同 uuid 只保留一次）：
+        1. 绑该物料且工序精确匹配
+        2. 绑该物料且未绑工序（适用全部工序）
+        3. 绑物料组且工序精确匹配
+        4. 绑物料组且未绑工序
+        5. 仅绑该工序
+        """
+        seen: set[int] = set()
+        ordered: List[SOP] = []
+
+        async def _add(query) -> None:
+            rows = await query.order_by("code").prefetch_related("operation").all()
+            for row in rows:
+                rid = int(row.id)
+                if rid in seen:
+                    continue
+                seen.add(rid)
+                ordered.append(row)
+
+        base = dict(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+            control_status="effective",
+        )
+        group_uuid: Optional[str] = None
+        if material_uuid:
+            material = await Material.filter(
+                tenant_id=tenant_id, uuid=material_uuid, deleted_at__isnull=True
+            ).first()
+            if material and getattr(material, "group_id", None):
+                group = await MaterialGroup.filter(
+                    id=material.group_id, tenant_id=tenant_id, deleted_at__isnull=True
+                ).first()
+                if group:
+                    group_uuid = str(group.uuid)
+
+        if material_uuid and operation_id is not None:
+            await _add(SOP.filter(**base, material_uuids__contains=[material_uuid], operation_id=operation_id))
+        if material_uuid:
+            await _add(
+                SOP.filter(**base, material_uuids__contains=[material_uuid], operation_id__isnull=True)
+            )
+        if group_uuid and operation_id is not None:
+            await _add(SOP.filter(**base, material_group_uuids__contains=[group_uuid], operation_id=operation_id))
+        if group_uuid:
+            await _add(
+                SOP.filter(**base, material_group_uuids__contains=[group_uuid], operation_id__isnull=True)
+            )
+        if operation_id is not None:
+            await _add(SOP.filter(**base, operation_id=operation_id))
+        return ordered
+
     # ==================== 工艺路线版本管理相关方法 ====================
     
     @staticmethod
