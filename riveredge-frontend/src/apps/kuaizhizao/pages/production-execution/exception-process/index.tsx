@@ -28,7 +28,7 @@ import { UNI_TABLE_OPERATION_STEPS_COLUMN_DEFAULTS } from '../../../../../compon
 import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 import { resolveUserDisplay } from '../../../../../services/user';
 import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { exceptionApi } from '../../../services/production';
 import {
   ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES,
@@ -541,6 +541,12 @@ const ExceptionProcessPage: React.FC = () => {
     [t, getExceptionTypeTag],
   );
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailDescriptionColumns,
+    currentRecord,
+    'exception_process',
+  );
+
   return (
     <>
       <ListPageTemplate>
@@ -721,7 +727,7 @@ const ExceptionProcessPage: React.FC = () => {
             <Descriptions
               column={3}
               size="small"
-              items={detailDrawerDescriptionItems(detailDescriptionColumns, currentRecord)}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

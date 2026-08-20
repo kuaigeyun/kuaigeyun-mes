@@ -20,7 +20,7 @@ import {
   ListPageTemplate,
   DetailDrawerTemplate,
   DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { rowActionKind, rowActionAddFollowUpFromDocument } from '../../../../../components/uni-action';
@@ -563,6 +563,11 @@ const CustomerFollowUpsPage: React.FC = () => {
     },
   ], SALES_DOC_LIST_FIELD_RANK);
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailBasicColumns, detailRecord,
+    'customer_follow_up',
+  );
+
   return (
     <>
       <style>{`
@@ -705,7 +710,7 @@ const CustomerFollowUpsPage: React.FC = () => {
             <Descriptions
               column={3}
               size="small"
-              items={detailDrawerDescriptionItems(detailBasicColumns, detailRecord)}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

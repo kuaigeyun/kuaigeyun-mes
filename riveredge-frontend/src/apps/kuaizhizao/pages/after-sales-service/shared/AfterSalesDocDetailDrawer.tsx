@@ -11,7 +11,7 @@ import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
   detailDrawerBasicColumn,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import { alignDescriptionColumns } from '../../sales-management/shared/documentFieldAlignment';
 
@@ -37,6 +37,7 @@ export type AfterSalesDocDetailDrawerProps<T extends Record<string, any>> = {
   timeline?: React.ReactNode;
   timelineTitle?: React.ReactNode;
   traceDocumentType?: string;
+  timeFieldDocumentType?: string;
 };
 
 export function AfterSalesDocDetailDrawer<T extends Record<string, any>>({
@@ -61,6 +62,7 @@ export function AfterSalesDocDetailDrawer<T extends Record<string, any>>({
   timeline,
   timelineTitle,
   traceDocumentType,
+  timeFieldDocumentType,
 }: AfterSalesDocDetailDrawerProps<T>) {
   const { t } = useTranslation();
 
@@ -70,6 +72,11 @@ export function AfterSalesDocDetailDrawer<T extends Record<string, any>>({
   const effective = record ?? placeholder;
   const alignedColumns = alignDescriptionColumns(
     columns as ProDescriptionsItemProps<Record<string, unknown>>[],
+  );
+  const basicItems = useDetailDrawerDescriptionItems(
+    alignedColumns,
+    effective,
+    timeFieldDocumentType ?? traceDocumentType,
   );
 
   if (!open) return null;
@@ -104,7 +111,7 @@ export function AfterSalesDocDetailDrawer<T extends Record<string, any>>({
           <Descriptions
             column={detailDrawerBasicColumn(false)}
             size="small"
-            items={detailDrawerDescriptionItems(alignedColumns, effective)}
+            items={basicItems}
           />
         ) : showError ? null : (
           <div style={{ minHeight: 80 }} />

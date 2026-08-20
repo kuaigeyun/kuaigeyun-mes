@@ -12,7 +12,7 @@ import {
   DetailDrawerTemplate,
   DetailDrawerSection,
   DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
   type TraceBriefDocument,
 } from '../../../../../../components/layout-templates';
 import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
@@ -516,6 +516,12 @@ export const DemandDetailDrawer: React.FC<DemandDetailDrawerProps> = ({
     t('app.kuaizhizao.demandManagement.detailTitle')
   );
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    basicColumns,
+    effective as Record<string, unknown>,
+    'demand',
+  );
+
   if (!open) return null;
 
   return (
@@ -589,7 +595,7 @@ export const DemandDetailDrawer: React.FC<DemandDetailDrawerProps> = ({
       collaborationAuditRecord={contentReady ? (effective as AuditPhaseRecord) : null}
       basic={
         contentReady ? (
-          <Descriptions column={3} size="small" items={detailDrawerDescriptionItems(basicColumns, effective as Record<string, unknown>)} />
+          <Descriptions column={3} size="small" items={timeconfigBasicItems} />
         ) : showError ? null : (
           <div style={{ minHeight: 80 }} />
         )

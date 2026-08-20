@@ -11,7 +11,7 @@ import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
   detailDrawerBasicColumn,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../../components/layout-templates';
 import { SourceDocumentCode } from '../../../../../../components/linked-document-code/SourceDocumentCode';
 import { alignDescriptionColumns } from '../../../sales-management/shared/documentFieldAlignment';
@@ -151,6 +151,11 @@ export const FreightOrderDetailDrawer: React.FC<FreightOrderDetailDrawerProps> =
   const code = String(effective.order_code ?? '').trim();
   const title = `${t('app.kuaizhizao.logistics.detail.freightOrderTitle')}${code ? ` - ${code}` : ''}`;
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    basicColumns, effective,
+    'freight_order',
+  );
+
   if (!open) return null;
 
   return (
@@ -182,7 +187,7 @@ export const FreightOrderDetailDrawer: React.FC<FreightOrderDetailDrawerProps> =
           <Descriptions
             column={detailDrawerBasicColumn(false)}
             size="small"
-            items={detailDrawerDescriptionItems(basicColumns, effective)}
+            items={timeconfigBasicItems}
           />
         ) : showError ? null : (
           <div style={{ minHeight: 80 }} />

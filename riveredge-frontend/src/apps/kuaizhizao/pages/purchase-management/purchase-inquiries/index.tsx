@@ -17,7 +17,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, FORM_LAYOUT, MODAL_CONFIG, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, FORM_LAYOUT, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { SourceDocumentCode } from '../../../../../components/linked-document-code/SourceDocumentCode';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -1548,6 +1548,16 @@ const PurchaseInquiriesPage: React.FC = () => {
     [t],
   );
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailBasicColumns.filter((col) => {
+                  if (col.dataIndex !== 'notes') return true;
+                  const notes = String(detail.notes ?? '').trim();
+                  return notes.length > 0;
+                }),
+                detail,
+    'purchase_inquiry',
+  );
+
   return (
     <ListPageTemplate>
       <UniTable<PurchaseInquiry>
@@ -1829,14 +1839,7 @@ const PurchaseInquiriesPage: React.FC = () => {
             <Descriptions
               column={3}
               size="small"
-              items={detailDrawerDescriptionItems(
-                detailBasicColumns.filter((col) => {
-                  if (col.dataIndex !== 'notes') return true;
-                  const notes = String(detail.notes ?? '').trim();
-                  return notes.length > 0;
-                }),
-                detail,
-              )}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

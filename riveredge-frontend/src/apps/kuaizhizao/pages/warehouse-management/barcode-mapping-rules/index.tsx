@@ -14,7 +14,7 @@ import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormS
 import { App, Tag, Button, Space, Popconfirm, Modal, Typography, Descriptions } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, detailDrawerDescriptionItems, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate,   useDetailDrawerDescriptionItems, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { customerApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
@@ -323,6 +323,10 @@ const BarcodeMappingRulesPage: React.FC = () => {
     }
   };
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailColumns, currentRecord
+  );
+
   return (
     <ListPageTemplate>
       <UniTable
@@ -509,7 +513,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
             <Descriptions
               column={2}
               size="small"
-              items={detailDrawerDescriptionItems(detailColumns, currentRecord)}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

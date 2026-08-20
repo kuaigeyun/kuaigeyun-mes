@@ -148,6 +148,10 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
                 "labelKey": "pages.system.configCenter.param.common_detail_full_chain_mode_opt_off",
             },
             {
+                "value": "on",
+                "labelKey": "pages.system.configCenter.param.common_detail_full_chain_mode_opt_on",
+            },
+            {
                 "value": "documents_only",
                 "labelKey": "pages.system.configCenter.param.common_detail_full_chain_mode_opt_documents_only",
             },
@@ -303,6 +307,7 @@ PARAMETER_KEYS = {
     "parameters.common.trial_run_mode",
     "parameters.common.detail_full_chain_mode",
     "parameters.common.detail_operation_log_enabled",
+    "parameters.common.detail_basic_updated_at_enabled",
     "parameters.common.quantity_decimal_places",
     "parameters.common.price_decimal_places",
     "parameters.common.amount_decimal_places",
@@ -367,6 +372,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.common.trial_run_mode",
     "parameters.common.detail_full_chain_mode",
     "parameters.common.detail_operation_log_enabled",
+    "parameters.common.detail_basic_updated_at_enabled",
     "parameters.common.quantity_decimal_places",
     "parameters.common.price_decimal_places",
     "parameters.common.amount_decimal_places",
@@ -462,11 +468,11 @@ DEFAULT_PRODUCTION_PICKING_CONFIRM_ROLE_CODES = {
 # 仅保留真实有默认值语义的键；未列出的键由业务 getter 自行定义 fallback。
 # ============================================================
 
-DETAIL_FULL_CHAIN_MODES = frozenset({"off", "documents_only"})
+DETAIL_FULL_CHAIN_MODES = frozenset({"off", "on", "documents_only"})
 
 
 def coerce_detail_full_chain_mode(raw: Any) -> str:
-    """将全链路模式规范化为 off / documents_only（兼容旧布尔 detail_full_chain_enabled）。"""
+    """将全链路模式规范化为 off / on / documents_only（旧布尔 true 视为 documents_only）。"""
     if isinstance(raw, bool):
         return "documents_only" if raw else "off"
     if isinstance(raw, str) and raw in DETAIL_FULL_CHAIN_MODES:
@@ -487,15 +493,28 @@ def coerce_common_detail_drawer_params(common: Dict[str, Any]) -> Dict[str, Any]
     else:
         common["detail_full_chain_mode"] = "documents_only"
     common.pop("detail_full_chain_enabled", None)
+    if "detail_basic_updated_at_enabled" in common:
+        common["detail_basic_updated_at_enabled"] = bool(common.get("detail_basic_updated_at_enabled"))
+    else:
+        common["detail_basic_updated_at_enabled"] = True
+    hidden_raw = common.get("detail_time_field_hidden")
+    if isinstance(hidden_raw, dict):
+        common["detail_time_field_hidden"] = {
+            str(key): bool(value) for key, value in hidden_raw.items() if str(key).strip()
+        }
+    else:
+        common["detail_time_field_hidden"] = {}
     return common
 
 
 DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
     "common": {
         "trial_run_mode": False,
-        # 详情抽屉全链路：off 隐藏 Tab；documents_only 仅展示单据节点（不展示创建时间）
+        # 详情抽屉全链路：off 隐藏 Tab；on 正常展示（含节点时间）；documents_only 仅单据节点
         "detail_full_chain_mode": "documents_only",
         "detail_operation_log_enabled": True,
+        "detail_basic_updated_at_enabled": True,
+        "detail_time_field_hidden": {},
         # 数量/单价/金额小数位（ERP 惯例分项；默认 2；上限对齐当前库字段）
         "quantity_decimal_places": 2,
         "price_decimal_places": 2,
@@ -855,7 +874,7 @@ class BusinessConfigService:
         return bool(config["parameters"].get("common", {}).get("trial_run_mode", False))
 
     async def get_detail_full_chain_mode(self, tenant_id: int) -> str:
-        """详情抽屉全链路模式：off | documents_only（默认 documents_only）。"""
+        """详情抽屉全链路模式：off | on | documents_only（默认 documents_only）。"""
         config = await self.get_business_config(tenant_id)
         return coerce_detail_full_chain_mode(
             config["parameters"].get("common", {}).get("detail_full_chain_mode")
@@ -869,6 +888,11 @@ class BusinessConfigService:
         """详情抽屉是否展示操作记录区块（默认开启）。"""
         config = await self.get_business_config(tenant_id)
         return bool(config["parameters"].get("common", {}).get("detail_operation_log_enabled", True))
+
+    async def is_detail_basic_updated_at_enabled(self, tenant_id: int) -> bool:
+        """详情抽屉基本信息是否展示更新时间（默认开启）。"""
+        config = await self.get_business_config(tenant_id)
+        return bool(config["parameters"].get("common", {}).get("detail_basic_updated_at_enabled", True))
 
     async def _get_decimal_places_param(
         self,
@@ -1213,6 +1237,10 @@ class BusinessConfigService:
         business_config.setdefault("parameters", {})
         for category, params in parameters.items():
             business_config["parameters"].setdefault(category, {}).update(params)
+        if "common" in business_config["parameters"]:
+            business_config["parameters"]["common"] = coerce_common_detail_drawer_params(
+                dict(business_config["parameters"]["common"] or {})
+            )
         if "quality" in parameters:
             from apps.kuaizhizao.services.inspection_policy_service import validate_quality_business_parameters
 

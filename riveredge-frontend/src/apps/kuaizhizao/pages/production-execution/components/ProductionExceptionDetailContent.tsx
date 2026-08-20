@@ -3,7 +3,7 @@ import { Descriptions } from 'antd';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import type { TFunction } from 'i18next';
 import {
-  detailDrawerDescriptionItems,
+    useDetailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import { alignDescriptionColumns } from '../../sales-management/shared/documentFieldAlignment';
 
@@ -90,19 +90,18 @@ function filterVisibleColumns<T extends Record<string, unknown>>(
   });
 }
 
-function renderDescriptions<T extends Record<string, unknown>>(
-  columns: DetailColumn<T>[],
-  record: T,
+function ExceptionDetailDescriptions<T extends Record<string, unknown>>({
+  columns,
+  record,
   column = 3,
-) {
+}: {
+  columns: DetailColumn<T>[];
+  record: T;
+  column?: number;
+}) {
   const visibleColumns = alignDescriptionColumns(filterVisibleColumns(columns, record));
-  return (
-    <Descriptions
-      column={column}
-      size="small"
-      items={detailDrawerDescriptionItems(visibleColumns, record)}
-    />
-  );
+  const items = useDetailDrawerDescriptionItems(visibleColumns, record);
+  return <Descriptions column={column} size="small" items={items} />;
 }
 
 export function MaterialShortageExceptionDetailContent({
@@ -128,7 +127,7 @@ export function MaterialShortageExceptionDetailContent({
     [t],
   );
 
-  return renderDescriptions(columns, record);
+  return <ExceptionDetailDescriptions columns={columns} record={record} />;
 }
 
 export function DeliveryDelayExceptionDetailContent({
@@ -153,7 +152,7 @@ export function DeliveryDelayExceptionDetailContent({
     [t],
   );
 
-  return renderDescriptions(columns, record);
+  return <ExceptionDetailDescriptions columns={columns} record={record} />;
 }
 
 export function QualityExceptionDetailBasicContent({
@@ -179,7 +178,7 @@ export function QualityExceptionDetailBasicContent({
     [t],
   );
 
-  return renderDescriptions(basicColumns, record);
+  return <ExceptionDetailDescriptions columns={basicColumns} record={record} />;
 }
 
 export function QualityExceptionDetailHandlingContent({
@@ -221,7 +220,7 @@ export function QualityExceptionDetailHandlingContent({
     return null;
   }
 
-  return renderDescriptions(handlingColumns, record);
+  return <ExceptionDetailDescriptions columns={handlingColumns} record={record} />;
 }
 
 export function hasQualityExceptionHandlingInfo(record: QualityExceptionDetailRecord): boolean {

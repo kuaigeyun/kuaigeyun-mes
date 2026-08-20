@@ -121,6 +121,42 @@ export interface WorkOrderSchedulingQuickActionResult {
   failed: Array<{ id: number; reason: string }>;
 }
 
+export type WorkOrderEsopStep = {
+  id: string;
+  type?: string;
+  title: string;
+  description?: string | null;
+  key_points?: string | null;
+  attachment_uuids?: string[];
+};
+
+export type WorkOrderEsopFileItem = {
+  key: string;
+  name: string;
+  file_uuid?: string | null;
+  url?: string | null;
+  source: string;
+};
+
+export type WorkOrderEsopDocument = {
+  uuid: string;
+  name?: string | null;
+  version?: string | null;
+  current_revision?: string | null;
+  carrier?: string | null;
+  storage_location?: string | null;
+  content?: string | null;
+  steps?: WorkOrderEsopStep[];
+  attachments?: WorkOrderEsopFileItem[];
+};
+
+export type WorkOrderOperationDocuments = {
+  work_order_id: number;
+  operation_id: number;
+  sop?: WorkOrderEsopDocument | null;
+  esop_available?: boolean;
+};
+
 export const workOrderApi = {
   list: async (params?: any) => apiRequest('/apps/kuaizhizao/work-orders', { method: 'GET', params }),
   create: async (data: any) => apiRequest('/apps/kuaizhizao/work-orders', { method: 'POST', data }),
@@ -160,6 +196,11 @@ export const workOrderApi = {
       method: 'GET',
       params: options?.includeMeta ? { include_meta: true } : undefined,
     }),
+  getOperationDocuments: async (workOrderId: string | number, operationId: string | number) =>
+    apiRequest<WorkOrderOperationDocuments>(
+      `/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/documents`,
+      { method: 'GET' },
+    ),
   updateOperations: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/operations`, { method: 'PUT', data }),
   startOperation: async (workOrderId: string, operationId: number) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/start`, { method: 'POST' }),

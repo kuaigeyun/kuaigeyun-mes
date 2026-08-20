@@ -12,7 +12,7 @@ import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../../components/layout-templates';
 import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
@@ -185,6 +185,11 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
       ] as ProDescriptionsItemProps<PurchaseRequisition>[]),
     [t, handleCopy],
   );
+  const basicItems = useDetailDrawerDescriptionItems(
+    basicColumns,
+    effective as Record<string, unknown>,
+    'purchase_requisition',
+  );
 
   const title = t('app.kuaizhizao.purchaseRequisition.detailTitle', {
     code: requisition?.requisition_code || '',
@@ -240,7 +245,7 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
           <Descriptions
             column={3}
             size="small"
-            items={detailDrawerDescriptionItems(basicColumns, effective as Record<string, unknown>)}
+            items={basicItems}
           />
         ) : showError ? null : (
           <div style={{ minHeight: 80 }} />

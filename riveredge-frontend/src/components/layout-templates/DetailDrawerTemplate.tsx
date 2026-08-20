@@ -220,7 +220,8 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
 }: DetailDrawerTemplateProps<T>) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
-  const { fullChainEnabled, fullChainShowCreatedAt, operationLogEnabled } = useDetailDrawerFeatures();
+  const { fullChainEnabled, fullChainShowCreatedAt, operationLogEnabled, basicUpdatedAtEnabled } =
+    useDetailDrawerFeatures();
   const drawerSize = size ?? width;
   const isPresetDrawerSize = drawerSize === 'default' || drawerSize === 'large';
   const isNumericDrawerSize = typeof drawerSize === 'number';
@@ -337,7 +338,9 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
       <Descriptions
         column={column}
         size="small"
-        items={detailDrawerDescriptionItems(columns, dataSource ?? undefined)}
+        items={detailDrawerDescriptionItems(columns, dataSource ?? undefined, {
+          showUpdatedAt: basicUpdatedAtEnabled,
+        })}
       />
     ) : null;
 

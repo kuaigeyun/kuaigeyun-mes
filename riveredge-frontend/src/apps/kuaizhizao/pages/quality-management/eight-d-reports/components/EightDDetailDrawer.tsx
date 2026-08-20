@@ -3,7 +3,7 @@ import { App, Button, Descriptions, Form, Result, Space, Typography } from 'antd
 import { MarkerTag } from '../../../../../../constants/statusBadges';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
-import { DetailDrawerTemplate, DRAWER_CONFIG, detailDrawerDescriptionItems } from '../../../../../../components/layout-templates';
+import { DetailDrawerTemplate, DRAWER_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../../components/layout-templates';
 import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
 import { qualityImprovementApi, type Quality8DHistoryEntry, type Quality8DReport } from '../../../../services/quality-improvement';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../../utils/documentAttachments';
@@ -199,6 +199,12 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
     report?.next_step_suggestions?.[0] ||
     (nextStatus ? getEightDStatusText(t, nextStatus) : undefined);
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailBasicColumns,
+    report,
+    'eight_d',
+  );
+
   if (!open) return null;
 
   return (
@@ -277,7 +283,7 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
           <Descriptions
             column={3}
             size="small"
-            items={detailDrawerDescriptionItems(detailBasicColumns, report)}
+            items={timeconfigBasicItems}
           />
         ) : showError ? null : (
           <div style={{ minHeight: 80 }} />

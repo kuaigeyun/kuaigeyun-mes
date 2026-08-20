@@ -39,7 +39,7 @@ export type { DocumentFormPageHeaderActionsProps } from './DocumentFormPageHeade
 // 详情 Drawer 模板
 export { DetailDrawerTemplate } from './DetailDrawerTemplate'
 export type { DetailDrawerTemplateProps } from './DetailDrawerTemplate'
-export { detailDrawerDescriptionItems } from './detailDrawerDescriptionItems'
+export { detailDrawerDescriptionItems, useDetailDrawerDescriptionItems } from './detailDrawerDescriptionItems'
 export { DetailDrawerSection } from './DetailDrawerSection'
 export type { DetailDrawerSectionProps } from './DetailDrawerSection'
 export { DetailDrawerLinesScroll } from './DetailDrawerLinesScroll'

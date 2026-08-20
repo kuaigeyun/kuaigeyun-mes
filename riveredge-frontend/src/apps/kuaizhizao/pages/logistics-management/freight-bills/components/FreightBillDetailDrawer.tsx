@@ -12,7 +12,7 @@ import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
   detailDrawerBasicColumn,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../../components/layout-templates';
 import { alignDescriptionColumns } from '../../../sales-management/shared/documentFieldAlignment';
 import type { FreightBill, FreightBillItem } from '../../../../services/logistics';
@@ -104,6 +104,12 @@ export const FreightBillDetailDrawer: React.FC<FreightBillDetailDrawerProps> = (
   const code = String(effective.bill_code ?? '').trim();
   const title = `${t('app.kuaizhizao.logistics.detail.freightBillTitle')}${code ? ` - ${code}` : ''}`;
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    basicColumns,
+    effective,
+    'freight_bill',
+  );
+
   if (!open) return null;
 
   return (
@@ -135,7 +141,7 @@ export const FreightBillDetailDrawer: React.FC<FreightBillDetailDrawerProps> = (
           <Descriptions
             column={detailDrawerBasicColumn(false)}
             size="small"
-            items={detailDrawerDescriptionItems(basicColumns, effective)}
+            items={timeconfigBasicItems}
           />
         ) : (
           <div style={{ minHeight: 120 }} />

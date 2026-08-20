@@ -9,7 +9,7 @@ import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 
 type LogisticsMasterDetailDrawerProps<T extends object> = {
@@ -31,6 +31,11 @@ export function LogisticsMasterDetailDrawer<T extends object>({
 }: LogisticsMasterDetailDrawerProps<T>) {
   const contentReady = Boolean(record);
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    basicColumns as ProDescriptionsItemProps<Record<string, unknown>>[],
+              record as Record<string, unknown>,
+  );
+
   if (!open) return null;
 
   return (
@@ -45,10 +50,7 @@ export function LogisticsMasterDetailDrawer<T extends object>({
           <Descriptions
             column={2}
             size="small"
-            items={detailDrawerDescriptionItems(
-              basicColumns as ProDescriptionsItemProps<Record<string, unknown>>[],
-              record as Record<string, unknown>,
-            )}
+            items={timeconfigBasicItems}
           />
         ) : (
           <div style={{ minHeight: 80 }} />

@@ -17,7 +17,7 @@ import { PlusOutlined, EyeOutlined, PlayCircleOutlined, DeleteOutlined } from '@
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, detailDrawerDescriptionItems, detailDrawerBasicColumn, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate,   useDetailDrawerDescriptionItems, detailDrawerBasicColumn, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { inventoryTransferApi } from '../../../services/inventory-transfer';
 import { getInventoryTransferLifecycle } from '../../../utils/inventoryTransferLifecycle';
@@ -743,6 +743,11 @@ const InventoryTransferPage: React.FC = () => {
     );
   }, [currentTransfer, t]);
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailBasicColumns, currentTransfer,
+    'inventory_transfer',
+  );
+
   return (
     <ListPageTemplate>
       <UniTable
@@ -1298,7 +1303,7 @@ const InventoryTransferPage: React.FC = () => {
             <Descriptions
               column={detailDrawerBasicColumn(false)}
               size="small"
-              items={detailDrawerDescriptionItems(detailBasicColumns, currentTransfer)}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

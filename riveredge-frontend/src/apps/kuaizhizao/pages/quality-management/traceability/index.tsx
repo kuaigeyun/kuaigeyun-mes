@@ -28,7 +28,7 @@ import {
   DetailDrawerTemplate,
   ListPageTemplate,
   DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { alignDescriptionColumns } from '../../sales-management/shared/documentFieldAlignment';
@@ -383,6 +383,10 @@ const TraceabilityPage: React.FC<TraceabilityPageProps> = ({
     graphView === 'flow' && (loading || (graphBundle.config && !graphViewportReady));
   const showSankeyLoading = graphView === 'sankey' && loading;
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    nodeBasicColumns, nodeDetail
+  );
+
   return (
     <ListPageTemplate>
       <div style={{ margin: -16, padding: 16 }}>
@@ -600,7 +604,7 @@ const TraceabilityPage: React.FC<TraceabilityPageProps> = ({
               <Descriptions
                 column={3}
                 size="small"
-                items={detailDrawerDescriptionItems(nodeBasicColumns, nodeDetail)}
+                items={timeconfigBasicItems}
               />
             ) : (
               <div style={{ minHeight: 80 }} />

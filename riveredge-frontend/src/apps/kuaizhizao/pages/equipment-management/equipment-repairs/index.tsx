@@ -13,7 +13,7 @@ import {
   FormModalTemplate,
   DRAWER_CONFIG,
   MODAL_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -296,6 +296,12 @@ const EquipmentRepairsPage: React.FC = () => {
 
   if (!perms.canRead) return null;
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailColumns,
+    detail,
+    'equipment_repair',
+  );
+
   return (
     <>
       <ListPageTemplate>
@@ -347,7 +353,7 @@ const EquipmentRepairsPage: React.FC = () => {
             <Descriptions
               column={2}
               size="small"
-              items={detailDrawerDescriptionItems(detailColumns, detail)}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

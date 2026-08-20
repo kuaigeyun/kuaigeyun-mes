@@ -60,8 +60,8 @@ export function isTrialRunModeEnabled(config: BusinessConfig | null | undefined)
   return Boolean(config?.parameters?.common?.trial_run_mode);
 }
 
-/** 详情抽屉全链路模式：关闭 / 只显示单据（不展示节点创建时间） */
-export type DetailFullChainMode = 'off' | 'documents_only';
+/** 详情抽屉全链路模式：关闭 / 启用（含节点时间） / 只显示单据（不展示节点创建时间） */
+export type DetailFullChainMode = 'off' | 'on' | 'documents_only';
 
 export function resolveDetailFullChainMode(
   config: BusinessConfig | null | undefined,
@@ -69,8 +69,15 @@ export function resolveDetailFullChainMode(
   const common = config?.parameters?.common;
   const raw = common?.detail_full_chain_mode ?? common?.detail_full_chain_enabled;
   if (typeof raw === 'boolean') return raw ? 'documents_only' : 'off';
-  if (raw === 'off' || raw === 'documents_only') return raw;
+  if (raw === 'off' || raw === 'on' || raw === 'documents_only') return raw;
   return 'documents_only';
+}
+
+/** 启用模式下展示节点创建时间 */
+export function isDetailFullChainShowCreatedAt(
+  config: BusinessConfig | null | undefined,
+): boolean {
+  return resolveDetailFullChainMode(config) === 'on';
 }
 
 /** 详情抽屉是否展示全链路跟踪 Tab（mode !== off；默认展示） */
@@ -82,6 +89,25 @@ export function isDetailFullChainEnabled(config: BusinessConfig | null | undefin
 export function isDetailOperationLogEnabled(config: BusinessConfig | null | undefined): boolean {
   const raw = config?.parameters?.common?.detail_operation_log_enabled;
   return raw === undefined ? true : Boolean(raw);
+}
+
+/** 详情抽屉基本信息是否展示更新时间（默认 true） */
+export function isDetailBasicUpdatedAtEnabled(config: BusinessConfig | null | undefined): boolean {
+  const raw = config?.parameters?.common?.detail_basic_updated_at_enabled;
+  return raw === undefined ? true : Boolean(raw);
+}
+
+/** 详情抽屉按字段隐藏的时间项：key 为 `{documentType}.{dataIndex}`，true 表示隐藏 */
+export function resolveDetailTimeFieldHiddenMap(
+  config: BusinessConfig | null | undefined,
+): Record<string, boolean> {
+  const raw = config?.parameters?.common?.detail_time_field_hidden;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof key === 'string' && key.trim()) out[key] = Boolean(value);
+  }
+  return out;
 }
 
 /** 与当前库字段 decimal_places 对齐的配置上限（配置页 max 同源） */

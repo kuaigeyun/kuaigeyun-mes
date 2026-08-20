@@ -1,1 +1,0 @@
-import{x as t}from"./clearSessionQueries-D_uOsOmr.js";async function n(o){return t("/core/operation-logs",{params:o})}async function r(o){return t("/core/operation-logs/statistics",{params:o})}async function a(o){return t(`/core/operation-logs/${o}`)}export{n as a,a as b,r as g};

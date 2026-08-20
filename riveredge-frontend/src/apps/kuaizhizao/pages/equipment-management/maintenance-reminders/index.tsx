@@ -16,7 +16,7 @@ import { App, Button, Space, Tag, notification, Descriptions, Typography, Empty,
 import { CheckOutlined, EyeOutlined, CheckCircleOutlined, ReloadOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { FormModalTemplate, DetailDrawerTemplate, DRAWER_CONFIG, MultiTabListPageTemplate, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
+import { FormModalTemplate, DetailDrawerTemplate, DRAWER_CONFIG, MultiTabListPageTemplate,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
 import { maintenanceReminderApi, equipmentApi } from '../../../services/equipment';
 import { ProFormTextArea } from '@ant-design/pro-components';
@@ -529,6 +529,12 @@ const MaintenanceRemindersPage: React.FC = () => {
     [t],
   );
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailBaseColumns,
+    detail,
+    'maintenance_reminder',
+  );
+
   return (
     <>
       <MultiTabListPageTemplate
@@ -643,7 +649,7 @@ const MaintenanceRemindersPage: React.FC = () => {
             <Descriptions
               column={2}
               size="small"
-              items={detailDrawerDescriptionItems(detailBaseColumns, detail)}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

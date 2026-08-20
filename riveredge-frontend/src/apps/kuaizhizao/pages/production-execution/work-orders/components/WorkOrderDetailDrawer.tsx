@@ -13,7 +13,7 @@ import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
   detailDrawerBasicColumn,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../../components/layout-templates';
 import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
@@ -381,6 +381,8 @@ export const WorkOrderDetailDrawer: React.FC<WorkOrderDetailDrawerProps> = ({
       ] as ProDescriptionsItemProps<WorkOrderDetailRecord>[]),
     [t],
   );
+  const basicItems = useDetailDrawerDescriptionItems(basicColumns, effective, 'work_order');
+  const notesItems = useDetailDrawerDescriptionItems(notesColumn, effective, 'work_order');
 
   const title = t('app.kuaizhizao.workOrder.detailTitle', { code });
 
@@ -435,7 +437,7 @@ export const WorkOrderDetailDrawer: React.FC<WorkOrderDetailDrawerProps> = ({
             <Descriptions
               column={detailDrawerBasicColumn(true)}
               size="small"
-              items={detailDrawerDescriptionItems(basicColumns, effective)}
+              items={basicItems}
             />
             {hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
               <div style={{ marginTop: 16 }}>
@@ -449,7 +451,7 @@ export const WorkOrderDetailDrawer: React.FC<WorkOrderDetailDrawerProps> = ({
               column={detailDrawerBasicColumn(true)}
               size="small"
               style={{ marginTop: 16 }}
-              items={detailDrawerDescriptionItems(notesColumn, effective)}
+              items={notesItems}
             />
           </>
         ) : showError ? null : (

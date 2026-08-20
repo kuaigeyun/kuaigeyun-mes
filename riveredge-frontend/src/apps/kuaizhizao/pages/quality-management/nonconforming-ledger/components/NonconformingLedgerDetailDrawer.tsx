@@ -7,7 +7,7 @@ import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
   detailDrawerBasicColumn,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../../components/layout-templates';
 import { qualityImprovementApi, type DefectLedgerItem } from '../../../../services/quality-improvement';
 import { nonconformingLedgerRowGates } from '../../../../../../hooks/useDocumentCapabilities';
@@ -171,6 +171,10 @@ export const NonconformingLedgerDetailDrawer: React.FC<NonconformingLedgerDetail
     [t, navigate],
   );
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    basicColumns, record
+  );
+
   if (!open) return null;
 
   return (
@@ -231,7 +235,7 @@ export const NonconformingLedgerDetailDrawer: React.FC<NonconformingLedgerDetail
           <Descriptions
             column={detailDrawerBasicColumn(false)}
             size="small"
-            items={detailDrawerDescriptionItems(basicColumns, record)}
+            items={timeconfigBasicItems}
           />
         ) : showError ? null : (
           <div style={{ minHeight: 80 }} />

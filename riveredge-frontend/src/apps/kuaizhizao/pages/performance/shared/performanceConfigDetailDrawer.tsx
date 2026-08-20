@@ -10,7 +10,7 @@ import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import {
   CustomFieldsDetailSection,
@@ -62,6 +62,10 @@ export function PerformanceConfigDetailDrawer<T extends Record<string, any>>({
   );
   const hasCustomFields = hasCustomFieldsDetailContent(customFields ?? [], customFieldValues ?? {});
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    aligned, detail
+  );
+
   if (!open) return null;
 
   return (
@@ -93,7 +97,7 @@ export function PerformanceConfigDetailDrawer<T extends Record<string, any>>({
           <Descriptions
             column={2}
             size="small"
-            items={detailDrawerDescriptionItems(aligned, detail)}
+            items={timeconfigBasicItems}
           />
         ) : showError ? null : (
           <div style={{ minHeight: 80 }} />

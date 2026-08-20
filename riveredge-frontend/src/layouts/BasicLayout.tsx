@@ -43,6 +43,7 @@ import {
   translateAppMenuItemName,
   extractAppCodeFromPath,
   findMenuTitleWithTranslation,
+  translateRegisteredPathTitle,
   resolveAppMenuGroupDisplayName,
   translateMenuItemTitle,
   getMenuDisplayNameOverride,
@@ -2230,7 +2231,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         if (tempPath) {
           const parentPath = findMenuPath(breadcrumbMenuData, tempPath);
           if (parentPath) {
-            menuPath = [...parentPath, { path: location.pathname, name: t('common.unnamedPage') }];
+            const registeredTitle = translateRegisteredPathTitle(location.pathname, t);
+            menuPath = [
+              ...parentPath,
+              { path: location.pathname, name: registeredTitle || t('common.unnamedPage') },
+            ];
           }
         }
       }

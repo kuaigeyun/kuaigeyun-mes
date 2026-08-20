@@ -64,7 +64,7 @@ import {
   DetailDrawerTemplate,
   MODAL_CONFIG,
   DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
   type StatCard,
 } from '../../../../../components/layout-templates';
 import { SimpleSparkline } from '../../../../../components';
@@ -1796,6 +1796,16 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     [localStats.draft, localStats.inProgress, localStats.total, t, token.colorPrimary, token.colorSuccess, token.colorWarning],
   );
 
+  const timeconfigBasicItems0 = useDetailDrawerDescriptionItems(
+    detailBaseColumns, workOrderDetail,
+    'outsource_work_order',
+  );
+
+  const timeconfigBasicItems1 = useDetailDrawerDescriptionItems(
+    [detailRemarksColumn], workOrderDetail,
+    'outsource_work_order',
+  );
+
   return (
     <>
       <ListPageTemplate statCards={statCards}>
@@ -2095,7 +2105,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
               <Descriptions
                 column={3}
                 size="small"
-                items={detailDrawerDescriptionItems(detailBaseColumns, workOrderDetail)}
+                items={timeconfigBasicItems0}
               />
               {hasCustomFieldsDetailContent(owoListCustomFields, owoDetailCustomFieldValues) ? (
                 <div style={{ marginTop: 16 }}>
@@ -2109,7 +2119,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
                 column={3}
                 size="small"
                 style={{ marginTop: 16 }}
-                items={detailDrawerDescriptionItems([detailRemarksColumn], workOrderDetail)}
+                items={timeconfigBasicItems1}
               />
             </>
           ) : undefined

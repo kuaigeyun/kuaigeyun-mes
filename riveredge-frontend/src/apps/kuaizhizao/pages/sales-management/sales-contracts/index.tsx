@@ -146,7 +146,7 @@ import {
   DetailDrawerSection,
 
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 
 } from '../../../../../components/layout-templates';
 import { DOCUMENT_SUBLINE_TABLE_PROPS } from '../../../../../components/document-subline-table';
@@ -3281,6 +3281,11 @@ const SalesContractsPage: React.FC = () => {
     );
   }
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    alignedDetailBasicColumns, detail,
+    'sales_contract',
+  );
+
   return (
 
     <ListPageTemplate>
@@ -3630,7 +3635,7 @@ const SalesContractsPage: React.FC = () => {
 
               size="small"
 
-              items={detailDrawerDescriptionItems(alignedDetailBasicColumns, detail)}
+              items={timeconfigBasicItems}
 
             />
 

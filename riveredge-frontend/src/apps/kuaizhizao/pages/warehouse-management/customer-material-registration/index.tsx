@@ -21,7 +21,7 @@ import {
 import { App, Button, Space, Popconfirm, Row, Col, Typography, Segmented, Input, InputNumber, Form as AntForm, Table, Descriptions, Tag } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, CloseCircleOutlined, ScanOutlined, RollbackOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, detailDrawerDescriptionItems, detailDrawerBasicColumn, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate,   useDetailDrawerDescriptionItems, detailDrawerBasicColumn, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -979,6 +979,12 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     },
   ], [t, generatingBatchIdx, generatingSerialIdx]);
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailBasicColumns,
+    currentRegistration,
+    'customer_material_registration',
+  );
+
   return (
     <ListPageTemplate>
       <UniTable
@@ -1223,7 +1229,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
             <Descriptions
               column={detailDrawerBasicColumn(false)}
               size="small"
-              items={detailDrawerDescriptionItems(detailBasicColumns, currentRegistration)}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

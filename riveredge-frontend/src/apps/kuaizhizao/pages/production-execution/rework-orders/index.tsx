@@ -33,7 +33,7 @@ import {
   renderPullQueryDocStatus,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
-import { DetailDrawerActions, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
+import { DetailDrawerActions, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { qualityApi, reworkOrderApi, workOrderApi } from '../../../services/production';
@@ -1362,6 +1362,16 @@ const ReworkOrdersPage: React.FC = () => {
     pullFromFinishedGoodsQuery.openModal();
   });
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailBasicColumns.filter((col) => {
+                    if (col.dataIndex !== 'remarks') return true;
+                    const remarks = String(reworkOrderDetail.remarks ?? '').trim();
+                    return remarks.length > 0;
+                  }),
+                  reworkOrderDetail,
+    'rework_order',
+  );
+
   return (
     <ListPageTemplate>
       <UniTable<ReworkOrder>
@@ -1970,14 +1980,7 @@ const ReworkOrdersPage: React.FC = () => {
               <Descriptions
                 column={3}
                 size="small"
-                items={detailDrawerDescriptionItems(
-                  detailBasicColumns.filter((col) => {
-                    if (col.dataIndex !== 'remarks') return true;
-                    const remarks = String(reworkOrderDetail.remarks ?? '').trim();
-                    return remarks.length > 0;
-                  }),
-                  reworkOrderDetail,
-                )}
+                items={timeconfigBasicItems}
               />
               {hasCustomFieldsDetailContent(reworkListCustomFields, reworkDetailCustomFieldValues) ? (
                 <div style={{ marginTop: 16 }}>

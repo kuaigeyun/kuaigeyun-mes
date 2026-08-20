@@ -144,7 +144,7 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
   } as const;
 
   return (
-    <Layout style={{ minHeight: 400, height: '100%', minWidth: 0, background: 'transparent' }}>
+    <Layout className="config-center-tab-layout" style={{ minHeight: 0, height: '100%', minWidth: 0, background: 'transparent' }}>
       <Layout.Sider
         width={200}
         className="config-center-category-sider"

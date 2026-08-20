@@ -7,7 +7,7 @@ import type { TFunction } from 'i18next';
 import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
   WAREHOUSE_DETAIL_TABLE_STYLES,
 } from '../../../../../components/layout-templates';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -317,6 +317,10 @@ export function MaterialCenterDetailDrawer({
 
   const title = kind && detail ? resolveDetailTitle(t, kind, detail) : t('common.detail');
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    basicColumns, detail
+  );
+
   return (
     <DetailDrawerTemplate
       title={title}
@@ -329,7 +333,7 @@ export function MaterialCenterDetailDrawer({
           <Descriptions
             column={2}
             size="small"
-            items={detailDrawerDescriptionItems(basicColumns, detail)}
+            items={timeconfigBasicItems}
           />
         ) : undefined
       }

@@ -46,6 +46,10 @@ const LANGUAGE_ALIASES: Record<string, SupportedUiLanguage> = {
   'en-us': 'en-US',
   'zh-hant': 'zh-Hant',
   'zh-tw': 'zh-Hant',
+  ja: 'ja-JP',
+  'ja-jp': 'ja-JP',
+  vi: 'vi-VN',
+  'vi-vn': 'vi-VN',
 };
 
 function resolveRegisteredUiLanguage(languageCode: string): SupportedUiLanguage {
@@ -65,6 +69,8 @@ export const LANGUAGE_MAP: Record<string, string> = {
   'zh-CN': '简体中文',
   'zh-Hant': '繁體中文',
   'en-US': 'English',
+  'ja-JP': '日本語',
+  'vi-VN': 'Tiếng Việt',
 };
 
 function resolveTenantDefaultFromCloud(

@@ -395,7 +395,7 @@ const ConfigCenterPage: React.FC = () => {
     const currentCat = categories.find(c => c.id === selectedCatId) || categories[0];
 
     return (
-      <Layout style={{ minHeight: 400, height: '100%', minWidth: 0, background: 'transparent' }}>
+      <Layout className="config-center-tab-layout" style={{ minHeight: 0, height: '100%', minWidth: 0, background: 'transparent' }}>
         <Sider
           width={200}
           className="config-center-category-sider"

@@ -10,12 +10,12 @@ import { getPersistedConfigs } from '../stores/configStore';
 import { getLanguageFromPreferenceCache } from '../stores/userPreferenceStore';
 import { getTenantId, getUserInfo } from './auth';
 
-/** 当前注册的界面语言。启用已下架语言包时，把对应 code 移回本列表。 */
-export const SUPPORTED_UI_LANGUAGES = ['zh-CN', 'zh-Hant', 'en-US'] as const;
+/** 当前注册的界面语言。下架语言包时把对应 code 移到 SHELVED_UI_LANGUAGES。 */
+export const SUPPORTED_UI_LANGUAGES = ['zh-CN', 'zh-Hant', 'en-US', 'ja-JP', 'vi-VN'] as const;
 export type SupportedUiLanguage = (typeof SUPPORTED_UI_LANGUAGES)[number];
 
-/** 语言包已就绪，当前不注册（不删文件）。启用时移入 SUPPORTED_UI_LANGUAGES。 */
-export const SHELVED_UI_LANGUAGES = ['ja-JP', 'vi-VN'] as const;
+/** 语言包已就绪但当前不注册（不删文件）。启用时移入 SUPPORTED_UI_LANGUAGES。 */
+export const SHELVED_UI_LANGUAGES = [] as const;
 
 const FALLBACK_LANGUAGE: SupportedUiLanguage = 'zh-CN';
 const GUEST_LANGUAGE_KEY = 'riveredge-guest-language';

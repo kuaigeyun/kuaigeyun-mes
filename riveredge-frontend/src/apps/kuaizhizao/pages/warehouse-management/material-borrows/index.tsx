@@ -24,7 +24,7 @@ import { UniDropdown } from '../../../../../components/uni-dropdown';
 import CodeField from '../../../../../components/code-field';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
-import { detailDrawerDescriptionItems, detailDrawerBasicColumn, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import {   useDetailDrawerDescriptionItems, detailDrawerBasicColumn, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getMaterialBorrowLifecycle } from '../../../utils/materialBorrowLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -612,6 +612,11 @@ const MaterialBorrowsPage: React.FC = () => {
     );
   }, [borrowDetail, t]);
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailColumns, borrowDetail,
+    'material_borrow',
+  );
+
   return (
     <>
       <ListPageTemplate>
@@ -714,7 +719,7 @@ const MaterialBorrowsPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           borrowDetail ? (
-            <Descriptions column={detailDrawerBasicColumn(false)} size="small" items={detailDrawerDescriptionItems(detailColumns, borrowDetail)} />
+            <Descriptions column={detailDrawerBasicColumn(false)} size="small" items={timeconfigBasicItems} />
           ) : undefined
         }
         collaboration={detailCollaboration}

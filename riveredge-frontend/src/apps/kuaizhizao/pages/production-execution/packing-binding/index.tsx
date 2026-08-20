@@ -49,7 +49,7 @@ import {
   DetailDrawerTemplate,
   MODAL_CONFIG,
   DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
   type StatCard,
 } from '../../../../../components/layout-templates';
 import { SimpleSparkline } from '../../../../../components';
@@ -1150,6 +1150,12 @@ const PackingBindingPage: React.FC = () => {
     [openCreateFromSource, packingBindingPerms.canCreate, t],
   );
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailBaseColumns,
+    currentBinding,
+    'packing_binding',
+  );
+
   return (
     <>
       <ListPageTemplate statCards={statCards}>
@@ -1362,7 +1368,7 @@ const PackingBindingPage: React.FC = () => {
             <Descriptions
               column={3}
               size="small"
-              items={detailDrawerDescriptionItems(detailBaseColumns, currentBinding)}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

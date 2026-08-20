@@ -22,7 +22,7 @@ import {
   FormModalTemplate,
   ListPageTemplate,
   MODAL_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -325,6 +325,10 @@ const IsoClausesPage: React.FC = () => {
     MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
   );
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    alignedDetailColumns, detail
+  );
+
   return (
     <PermissionGuard resource={RESOURCE} action="read">
       <ListPageTemplate>
@@ -477,7 +481,7 @@ const IsoClausesPage: React.FC = () => {
             <DetailDrawerSection title={t('common.basicInfo')}>
               <Descriptions
                 column={2}
-                items={detailDrawerDescriptionItems(alignedDetailColumns, detail)}
+                items={timeconfigBasicItems}
               />
             </DetailDrawerSection>
           ) : undefined

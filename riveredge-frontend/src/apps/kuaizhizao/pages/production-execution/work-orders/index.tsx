@@ -257,7 +257,7 @@ const LazyUniMaterialSelect = lazy(() => import('../../../../../components/uni-m
 import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus, LIST_LIFECYCLE_STAGE_FIELD, isWorkOrderPlannedEndOverdue, isWorkOrderPlannedDatesLocked } from '../../../utils/workOrderLifecycle'
 import { commitListPageSearchParams } from '../../../../../utils/listLifecycleStage'
 import { useRegisterAiContext } from '../../../../../hooks/useRegisterAiContext';
-import { WorkOrderSopSidebar } from '../../../../kuaiai/components/work-order-sop';
+import { WorkOrderEsopSidebar } from './components/WorkOrderEsopSidebar';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle'
 import {
@@ -9573,6 +9573,7 @@ const WorkOrdersPage: React.FC = () => {
         zIndex={workOrderDetailDrawerZIndex}
         onClose={() => {
           setDrawerVisible(false)
+          setSopSidebarOpen(false)
           setWorkOrderDetail(null)
           setWorkOrderOperations([])
           resetWorkOrderDetailFieldValues()
@@ -10976,11 +10977,12 @@ const WorkOrdersPage: React.FC = () => {
         }}
         onConfirm={handleConfirmCompleteTracking}
       />
-      <WorkOrderSopSidebar
+      <WorkOrderEsopSidebar
         open={sopSidebarOpen}
         onClose={() => setSopSidebarOpen(false)}
-        workOrderCode={workOrderDetail?.code}
-        productName={workOrderDetail?.product_name}
+        workOrderId={workOrderDetail?.id}
+        operations={workOrderOperations}
+        zIndex={workOrderDetailDrawerZIndex + 50}
       />
     </>
   )

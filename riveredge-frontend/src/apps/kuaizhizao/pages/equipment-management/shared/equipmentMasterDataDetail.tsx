@@ -9,7 +9,7 @@ import {
   DetailDrawerActions,
   DetailDrawerTemplate,
   DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { MarkerTag } from '../../../../../constants/statusBadges';
@@ -120,6 +120,7 @@ export function EquipmentMasterDetailDrawer<T extends Record<string, unknown>>({
     const value = detail[dataIndex];
     return typeof value === 'string' && value.trim().length > 0;
   });
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(visibleBasicColumns, detail);
 
   return (
     <DetailDrawerTemplate
@@ -134,7 +135,7 @@ export function EquipmentMasterDetailDrawer<T extends Record<string, unknown>>({
           <Descriptions
             column={2}
             size="small"
-            items={detailDrawerDescriptionItems(visibleBasicColumns, detail)}
+            items={timeconfigBasicItems}
           />
         ) : undefined
       }
@@ -177,6 +178,7 @@ export function buildDetailDrawerEditExtra(
   onEdit: () => void,
 ) {
   if (!visible) return null;
+
   return (
     <DetailDrawerActions
       items={[

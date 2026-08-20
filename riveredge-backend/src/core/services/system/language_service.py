@@ -352,7 +352,7 @@ class LanguageService:
 
         logger.info(f"开始为组织 {tenant_id} 初始化系统语言")
 
-        # 当前注册的系统语言。ja-JP / vi-VN 语言包已就绪，见 UNREGISTERED_SYSTEM_LANGUAGE_CODES。
+        # 当前注册的系统语言。下架时移入 UNREGISTERED_SYSTEM_LANGUAGE_CODES 并停用。
         SYSTEM_LANGUAGES = [
             {
                 "code": "zh-CN",
@@ -375,9 +375,23 @@ class LanguageService:
                 "is_default": False,
                 "sort_order": 2,
             },
+            {
+                "code": "ja-JP",
+                "name": "日本語",
+                "native_name": "日本語",
+                "is_default": False,
+                "sort_order": 3,
+            },
+            {
+                "code": "vi-VN",
+                "name": "Tiếng Việt",
+                "native_name": "Tiếng Việt",
+                "is_default": False,
+                "sort_order": 4,
+            },
         ]
         # 不删除记录；停用已注册项。启用时移入 SYSTEM_LANGUAGES 并设 is_active=True。
-        UNREGISTERED_SYSTEM_LANGUAGE_CODES = ("ja-JP", "vi-VN")
+        UNREGISTERED_SYSTEM_LANGUAGE_CODES: tuple[str, ...] = ()
 
         created_count = 0
         skipped_count = 0
@@ -404,6 +418,9 @@ class LanguageService:
                         changed = True
                     if existing.native_name != desired_native:
                         existing.native_name = desired_native
+                        changed = True
+                    if not existing.is_active:
+                        existing.is_active = True
                         changed = True
                     if changed:
                         await existing.save()

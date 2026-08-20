@@ -506,6 +506,45 @@ export function mapMenuTreeWithTranslatedLabels<
 }
 
 /**
+ * 仅返回已登记的路径标题（path.* / app.*.menu.*），不含末段首字母大写兜底。
+ * 隐藏页（不进菜单）靠此取标签与面包屑末级；单据详情仍走父级菜单。
+ */
+export function translateRegisteredPathTitle(
+  path: string,
+  t: (key: string, options?: { defaultValue?: string }) => string,
+): string {
+  if (!path || path === '/') return '';
+
+  const pathname = path.split('?')[0];
+  const segment = pathname.split('/').filter(Boolean).pop() || '';
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(segment)) {
+    return '';
+  }
+  if (/^\d+$/.test(segment)) {
+    return '';
+  }
+
+  const fromAppPath = translateAppMenuByPath(pathname, t);
+  if (fromAppPath) return fromAppPath;
+
+  const dotPath = pathname.replace(/^\//, '').replace(/\//g, '.');
+  const translationKeys = [
+    `path.${dotPath}`,
+    `menu.${dotPath}`,
+    `menu.${dotPath.replace('system.', '')}`,
+    `path.${segment}`,
+  ];
+
+  for (const key of translationKeys) {
+    const translated = t(key, { defaultValue: '' });
+    if (translated && translated !== key && translated.trim() !== '') {
+      return translated;
+    }
+  }
+  return '';
+}
+
+/**
  * 根据路径片段获取翻译后的标题
  *
  * @param path 完整路径
@@ -515,10 +554,10 @@ export function mapMenuTreeWithTranslatedLabels<
 export function translatePathTitle(path: string, t: any): string {
   if (!path || path === '/') return '';
 
-  // 去除查询参数，避免 dashboard-designer?id=xxx 等无法匹配翻译 key
   const pathname = path.split('?')[0];
+  const registered = translateRegisteredPathTitle(pathname, t);
+  if (registered) return registered;
 
-  // 处理 UUID / 纯数字 id（不显示在面包屑、Tab 标题中）
   const segment = pathname.split('/').filter(Boolean).pop() || '';
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(segment)) {
     return '';
@@ -527,31 +566,7 @@ export function translatePathTitle(path: string, t: any): string {
     return '';
   }
 
-  // 1. 优先尝试应用菜单翻译（针对 /apps/{app-code}/... 格式的路径）
-  const fromAppPath = translateAppMenuByPath(pathname, t);
-  if (fromAppPath) return fromAppPath;
-
-  // 2. 尝试多种前缀的翻译 (path.*, menu.*)
-  const dotPath = pathname.replace(/^\//, '').replace(/\//g, '.');
-  const translationKeys = [
-    `path.${dotPath}`,
-    `menu.${dotPath}`, 
-    `menu.${dotPath.replace('system.', '')}`, // 兼容 menu.dashboard.workplace
-  ];
-
-  for (const key of translationKeys) {
-    const translated = t(key, { defaultValue: '' });
-    if (translated && translated !== key && translated.trim() !== '') {
-      return translated;
-    }
-  }
-
-  // 3. 尝试段翻译
   if (segment) {
-    const segmentKey = `path.${segment}`;
-    const segmentTranslated = t(segmentKey, { defaultValue: '' });
-    if (segmentTranslated && segmentTranslated !== segmentKey) return segmentTranslated;
-
     return segment.charAt(0).toUpperCase() + segment.slice(1);
   }
 
@@ -634,6 +649,9 @@ export function findMenuTitleWithTranslation(
 
   const title = findInMenu(menuConfig);
   if (title) return title;
+
+  const registeredPathTitle = translateRegisteredPathTitle(normalizedPath, t);
+  if (registeredPathTitle) return registeredPathTitle;
 
   // 未注册详情页：仅向上找已入库父级菜单，禁止 path 片段兜底
   const segments = normalizedPath.split('/').filter(Boolean);

@@ -24,7 +24,7 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
@@ -823,6 +823,16 @@ const SalesOrderChangesPage: React.FC = () => {
     reloadTable();
   }, [reloadTable]);
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailBasicColumns.filter((col) => {
+                  if (col.dataIndex !== 'notes') return true;
+                  const notes = String(detail.notes ?? '').trim();
+                  return notes.length > 0;
+                }),
+                detail,
+    'sales_order_change',
+  );
+
   return (
     <ListPageTemplate>
       <UniTable<SalesOrderChange>
@@ -1018,14 +1028,7 @@ const SalesOrderChangesPage: React.FC = () => {
             <Descriptions
               column={3}
               size="small"
-              items={detailDrawerDescriptionItems(
-                detailBasicColumns.filter((col) => {
-                  if (col.dataIndex !== 'notes') return true;
-                  const notes = String(detail.notes ?? '').trim();
-                  return notes.length > 0;
-                }),
-                detail,
-              )}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

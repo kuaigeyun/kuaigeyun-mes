@@ -70,7 +70,7 @@ import {
 } from '../../../../master-data/utils/resolve-partner-material-price';
 import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
 import { parseVariantAttributesValue } from '../../../../master-data/components/VariantAttributeFields';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG, MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG, MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE, useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
@@ -2998,6 +2998,11 @@ const QuotationsPage: React.FC = () => {
     { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
   const alignedDetailBasicColumns = alignDescriptionColumns(detailBasicColumns);
+  const quotationDetailBasicItems = useDetailDrawerDescriptionItems(
+    alignedDetailBasicColumns,
+    quotationDetail,
+    'quotation',
+  );
 
   const closeQuotationDetailDrawer = useCallback(() => {
     setDetailDrawerVisible(false);
@@ -4264,7 +4269,7 @@ const QuotationsPage: React.FC = () => {
               <Descriptions
                 column={3}
                 size="small"
-                items={detailDrawerDescriptionItems(alignedDetailBasicColumns, quotationDetail)}
+                items={quotationDetailBasicItems}
               />
               {hasCustomFieldsDetailContent(quotationListCustomFields, quotationDetailCustomFieldValues) ? (
                 <div style={{ marginTop: 16 }}>

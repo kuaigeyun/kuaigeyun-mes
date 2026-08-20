@@ -3,7 +3,7 @@
  * 关联单号列与 UniTable 同一约定：自动挂嵌套抽屉链接。
  */
 
-import type { Key, ReactNode } from 'react';
+import { useMemo, type Key, type ReactNode } from 'react';
 import type { DescriptionsProps } from 'antd';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../utils/format';
@@ -12,12 +12,50 @@ import {
   shouldInjectLinkedDocumentRender,
 } from '../../apps/kuaizhizao/utils/linkedDocumentAutoLink';
 import { LinkedDocumentAutoCell } from '../linked-document-code/LinkedDocumentAutoCell';
+import { useDetailDrawerFeatures } from '../../hooks/useDetailDrawerFeatures';
+import {
+  isDetailTimeFieldHidden,
+  resolveColumnDataIndex,
+} from '../../apps/kuaizhizao/constants/detailDrawerTimeFields';
+
+function isUpdatedAtBasicColumn<T extends Record<string, any>>(col: ProDescriptionsItemProps<T>): boolean {
+  const di = col.dataIndex as string | string[] | undefined;
+  const fromIndex = typeof di === 'string' ? di : Array.isArray(di) ? String(di[di.length - 1] ?? '') : '';
+  const fromKey = col.key != null ? String(col.key) : '';
+  return fromIndex === 'updated_at' || fromIndex === 'updatedAt' || fromKey === 'updated_at' || fromKey === 'updatedAt';
+}
+
+export type DetailDrawerDescriptionItemsOptions = {
+  showUpdatedAt?: boolean;
+  documentType?: string;
+  timeFieldHidden?: Record<string, boolean>;
+};
+
+export function filterDetailDrawerBasicColumns<T extends Record<string, any>>(
+  columns: ProDescriptionsItemProps<T>[],
+  showUpdatedAt: boolean,
+  options?: Pick<DetailDrawerDescriptionItemsOptions, 'documentType' | 'timeFieldHidden'>,
+): ProDescriptionsItemProps<T>[] {
+  const hidden = options?.timeFieldHidden ?? {};
+  const documentType = options?.documentType;
+  return columns.filter((col) => {
+    const fieldKey = resolveColumnDataIndex(col);
+    if (isDetailTimeFieldHidden(fieldKey, documentType, hidden, showUpdatedAt)) return false;
+    if (!showUpdatedAt && isUpdatedAtBasicColumn(col)) return false;
+    return true;
+  });
+}
 
 export function detailDrawerDescriptionItems<T extends Record<string, any>>(
   columns: ProDescriptionsItemProps<T>[],
-  dataSource: T | null | undefined
+  dataSource: T | null | undefined,
+  options?: DetailDrawerDescriptionItemsOptions,
 ): NonNullable<DescriptionsProps['items']> {
-  return columns.map((col: ProDescriptionsItemProps<T>, index: number) => {
+  const visibleColumns = filterDetailDrawerBasicColumns(columns, options?.showUpdatedAt !== false, {
+    documentType: options?.documentType,
+    timeFieldHidden: options?.timeFieldHidden,
+  });
+  return visibleColumns.map((col: ProDescriptionsItemProps<T>, index: number) => {
     const di = col.dataIndex as string | string[] | undefined;
     const lookupKey =
       typeof di === 'string' ? di : Array.isArray(di) ? di.join('.') : undefined;
@@ -80,4 +118,22 @@ export function detailDrawerDescriptionItems<T extends Record<string, any>>(
       span: col.span ?? 1,
     };
   });
+}
+
+/** 详情抽屉基本信息：按业务配置过滤更新时间后转 Descriptions items */
+export function useDetailDrawerDescriptionItems<T extends Record<string, any>>(
+  columns: ProDescriptionsItemProps<T>[],
+  dataSource: T | null | undefined,
+  documentType?: string,
+): NonNullable<DescriptionsProps['items']> {
+  const { basicUpdatedAtEnabled, timeFieldHidden } = useDetailDrawerFeatures();
+  return useMemo(
+    () =>
+      detailDrawerDescriptionItems(columns, dataSource, {
+        showUpdatedAt: basicUpdatedAtEnabled,
+        documentType,
+        timeFieldHidden,
+      }),
+    [basicUpdatedAtEnabled, columns, dataSource, documentType, timeFieldHidden],
+  );
 }

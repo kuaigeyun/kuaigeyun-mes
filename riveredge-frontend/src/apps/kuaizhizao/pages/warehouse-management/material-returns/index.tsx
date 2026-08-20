@@ -20,7 +20,7 @@ import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import CodeField from '../../../../../components/code-field';
-import { detailDrawerDescriptionItems, detailDrawerBasicColumn, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import {   useDetailDrawerDescriptionItems, detailDrawerBasicColumn, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { getMaterialReturnLifecycle } from '../../../utils/materialReturnLifecycle';
@@ -602,6 +602,11 @@ const MaterialReturnsPage: React.FC = () => {
     [t, returnQuantities],
   );
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailColumns, returnDetail,
+    'material_return',
+  );
+
   return (
     <>
       <ListPageTemplate>
@@ -679,7 +684,7 @@ const MaterialReturnsPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           returnDetail ? (
-            <Descriptions column={detailDrawerBasicColumn(false)} size="small" items={detailDrawerDescriptionItems(detailColumns, returnDetail)} />
+            <Descriptions column={detailDrawerBasicColumn(false)} size="small" items={timeconfigBasicItems} />
           ) : undefined
         }
         collaboration={detailCollaboration}

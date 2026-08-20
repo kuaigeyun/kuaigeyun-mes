@@ -25,7 +25,7 @@ import {
   inventoryAlertBatchResolveAllowed,
 } from '../../../../../hooks/useDocumentCapabilities';
 import { UniBatchMenuButton, runCapabilityBatchLoop } from '../../../../../components/uni-batch';
-import { FormModalTemplate, DetailDrawerTemplate, detailDrawerDescriptionItems, MODAL_CONFIG, DRAWER_CONFIG, MultiTabListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
+import { FormModalTemplate, DetailDrawerTemplate,   useDetailDrawerDescriptionItems, MODAL_CONFIG, DRAWER_CONFIG, MultiTabListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { inventoryAlertApi } from '../../../services/inventory-alert';
 import { materialApi, materialGroupApi } from '../../../../master-data/services/material';
@@ -736,6 +736,12 @@ const InventoryAlertPage: React.FC = () => {
     },
   ], [t, alertTypeEnum, alertLevelEnum, alertStatusEnum]);
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailColumns,
+    currentAlert,
+    'inventory_alert',
+  );
+
   return (
     <>
       <MultiTabListPageTemplate
@@ -1167,7 +1173,7 @@ const InventoryAlertPage: React.FC = () => {
             <Descriptions
               column={2}
               size="small"
-              items={detailDrawerDescriptionItems(detailColumns, currentAlert)}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

@@ -32,7 +32,7 @@ import {
   ListPageTemplate,
   FormModalTemplate,
   DetailDrawerTemplate,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
   MODAL_CONFIG,
   DRAWER_CONFIG,
 } from '../../../../../components/layout-templates';
@@ -458,6 +458,10 @@ const InspectionPlansPage: React.FC = () => {
     [planActiveValueEnum, planTypeOptions, planTypeValueEnum, t],
   );
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailBaseColumns, planDetail
+  );
+
   return (
     <ListPageTemplate>
       <UniTable<InspectionPlan>
@@ -651,7 +655,7 @@ const InspectionPlansPage: React.FC = () => {
             <Descriptions
               column={2}
               size="small"
-              items={detailDrawerDescriptionItems(detailBaseColumns, planDetail)}
+              items={timeconfigBasicItems}
             />
           ) : detailError && !detailLoading ? null : (
             <div style={{ minHeight: 80 }} />

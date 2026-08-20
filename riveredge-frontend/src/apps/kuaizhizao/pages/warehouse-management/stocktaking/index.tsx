@@ -25,7 +25,7 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, detailDrawerDescriptionItems, detailDrawerBasicColumn, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate,   useDetailDrawerDescriptionItems, detailDrawerBasicColumn, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { stocktakingApi, inventoryReportApi } from '../../../services/stocktaking';
 import { getStocktakingLifecycle } from '../../../utils/stocktakingLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -842,6 +842,11 @@ const StocktakingPage: React.FC = () => {
     );
   }, [currentStocktaking, t]);
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailColumns, currentStocktaking,
+    'stocktaking',
+  );
+
   return (
     <ListPageTemplate>
       <UniTable
@@ -1104,7 +1109,7 @@ const StocktakingPage: React.FC = () => {
             <Descriptions
               column={detailDrawerBasicColumn(false)}
               size="small"
-              items={detailDrawerDescriptionItems(detailColumns, currentStocktaking)}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

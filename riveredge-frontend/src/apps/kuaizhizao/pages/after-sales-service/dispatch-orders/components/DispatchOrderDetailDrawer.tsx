@@ -129,6 +129,7 @@ export const DispatchOrderDetailDrawer: React.FC<DispatchOrderDetailDrawerProps>
       extra={extra}
       zIndex={zIndex}
       traceDocumentType="service_dispatch"
+      timeFieldDocumentType="dispatch_order"
     />
   );
 };

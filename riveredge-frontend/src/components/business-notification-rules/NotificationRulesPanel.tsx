@@ -668,7 +668,7 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
 
   return (
     <>
-      <Layout style={{ minHeight: 400, height: '100%', minWidth: 0, background: 'transparent' }}>
+      <Layout className="config-center-tab-layout" style={{ minHeight: 0, height: '100%', minWidth: 0, background: 'transparent' }}>
         <Content
           style={{
             padding: showPageHeader ? '14px 0 0 0' : 0,

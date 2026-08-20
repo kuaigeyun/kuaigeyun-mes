@@ -37,7 +37,7 @@ const LazyUniImport = lazy(() =>
 import type { Material } from '../../../../master-data/types/material';
 import { DocumentAmountSummaryWatch } from '../../../components/document-amount-summary/DocumentAmountSummary';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
@@ -1563,6 +1563,11 @@ const ShipmentNoticesPage: React.FC = () => {
     </>
   );
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailColumns, noticeDetail,
+    'shipment_notice',
+  );
+
   return (
     <>
       <ListPageTemplate>
@@ -1929,7 +1934,7 @@ const ShipmentNoticesPage: React.FC = () => {
             <Descriptions
               column={3}
               size="small"
-              items={detailDrawerDescriptionItems(detailColumns, noticeDetail)}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

@@ -64,7 +64,7 @@ import {
   DetailDrawerActions,
   MODAL_CONFIG,
   DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
   type StatCard,
 } from '../../../../../components/layout-templates';
 const LazyUniImport = lazy(() =>
@@ -1797,6 +1797,16 @@ const PurchaseReturnsPage: React.FC = () => {
     [purchaseReturnLifecycleValueEnum, purchaseReturnSupplierSearchOptions, t],
   );
 
+  const timeconfigBasicItems0 = useDetailDrawerDescriptionItems(
+    detailColumns, returnDetail as unknown as Record<string, unknown>,
+    'purchase_return',
+  );
+
+  const timeconfigBasicItems1 = useDetailDrawerDescriptionItems(
+    detailNotesColumn, returnDetail as unknown as Record<string, unknown>,
+    'purchase_return',
+  );
+
   return (
     <>
       <ListPageTemplate statCards={statCards}>
@@ -2423,7 +2433,7 @@ const PurchaseReturnsPage: React.FC = () => {
               <Descriptions
                 column={3}
                 size="small"
-                items={detailDrawerDescriptionItems(detailColumns, returnDetail as unknown as Record<string, unknown>)}
+                items={timeconfigBasicItems0}
               />
               {hasCustomFieldsDetailContent(purchaseReturnListCustomFields, purchaseReturnDetailCustomFieldValues) ? (
                 <div style={{ marginTop: 16 }}>
@@ -2437,7 +2447,7 @@ const PurchaseReturnsPage: React.FC = () => {
                 column={3}
                 size="small"
                 style={{ marginTop: 16 }}
-                items={detailDrawerDescriptionItems(detailNotesColumn, returnDetail as unknown as Record<string, unknown>)}
+                items={timeconfigBasicItems1}
               />
             </>
           ) : null

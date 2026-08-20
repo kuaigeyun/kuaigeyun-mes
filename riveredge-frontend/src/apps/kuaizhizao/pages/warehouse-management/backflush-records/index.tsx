@@ -14,7 +14,7 @@ import {
   MaterialStackedCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { DetailDrawerTemplate, ListPageTemplate, detailDrawerDescriptionItems, detailDrawerBasicColumn, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { DetailDrawerTemplate, ListPageTemplate,   useDetailDrawerDescriptionItems, detailDrawerBasicColumn, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
@@ -242,6 +242,10 @@ const BackflushRecordsPage: React.FC = () => {
     }
   };
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailColumns, detailRecord
+  );
+
   return (
     <ListPageTemplate>
       <UniTable<BackflushRecordItem>
@@ -272,7 +276,7 @@ const BackflushRecordsPage: React.FC = () => {
             <Descriptions
               column={detailDrawerBasicColumn(false)}
               size="small"
-              items={detailDrawerDescriptionItems(detailColumns, detailRecord)}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

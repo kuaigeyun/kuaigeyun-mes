@@ -11,7 +11,7 @@ import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
   detailDrawerBasicColumn,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../../components/layout-templates';
 import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody } from '../../../../../../components/document-tracking-panel';
@@ -132,6 +132,10 @@ export const PerformanceSummaryDetailDrawer: React.FC<PerformanceSummaryDetailDr
     period,
   });
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    columns, effective
+  );
+
   if (!open) return null;
 
   return (
@@ -163,7 +167,7 @@ export const PerformanceSummaryDetailDrawer: React.FC<PerformanceSummaryDetailDr
           <Descriptions
             column={detailDrawerBasicColumn(false)}
             size="small"
-            items={detailDrawerDescriptionItems(columns, effective)}
+            items={timeconfigBasicItems}
           />
         ) : showError ? null : (
           <div style={{ minHeight: 80 }} />

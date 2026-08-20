@@ -29,7 +29,7 @@ import {
   ListPageTemplate,
   DetailDrawerTemplate,
   DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
@@ -1049,6 +1049,12 @@ const SalesReviewsPage: React.FC = () => {
   const showError = Boolean(detailError) && !contentReady && !detailLoading;
   const showLoading = detailLoading || (!contentReady && !showError && detailOpen);
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailBasicColumns,
+    detail!,
+    'sales_review',
+  );
+
   return (
     <>
       <ListPageTemplate style={{ padding: 0 }}>
@@ -1256,7 +1262,7 @@ const SalesReviewsPage: React.FC = () => {
             <Descriptions
               column={3}
               size="small"
-              items={detailDrawerDescriptionItems(detailBasicColumns, detail!)}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

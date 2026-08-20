@@ -23,7 +23,7 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -701,6 +701,16 @@ const PurchaseOrderChangesPage: React.FC = () => {
     reloadTable();
   }, [message, t]);
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailBasicColumns.filter((col) => {
+                  if (col.dataIndex !== 'notes') return true;
+                  const notes = String(detail.notes ?? '').trim();
+                  return notes.length > 0;
+                }),
+                detail,
+    'purchase_order_change',
+  );
+
   return (
     <ListPageTemplate>
       <UniTable<PurchaseOrderChange>
@@ -883,14 +893,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
             <Descriptions
               column={3}
               size="small"
-              items={detailDrawerDescriptionItems(
-                detailBasicColumns.filter((col) => {
-                  if (col.dataIndex !== 'notes') return true;
-                  const notes = String(detail.notes ?? '').trim();
-                  return notes.length > 0;
-                }),
-                detail,
-              )}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

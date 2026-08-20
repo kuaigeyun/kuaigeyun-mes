@@ -1702,6 +1702,28 @@ code {
 [data-theme='dark'] .config-center-page .config-center-category-sider.ant-layout-sider {
   background: var(--ant-color-bg-container, #141414) !important;
 }
+
+/* 配置中心：卡片限高后右栏独立滚动，左栏分类不跟着滚走 */
+.config-center-page.multi-tab-list-page-container {
+  .multi-tab-list-page-card.ant-card > .ant-card-body.multi-tab-list-page-card-body {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .config-center-tab-layout.ant-layout {
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+  }
+
+  .config-center-scrollable-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+}
 .dashboard-bento-top-row.ant-row {
   align-items: stretch;
 }

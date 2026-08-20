@@ -58,7 +58,7 @@ import {
   MODAL_CONFIG,
   DetailDrawerTemplate,
   DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
   type StatCard,
 } from '../../../../../components/layout-templates';
 import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates/constants';
@@ -1524,6 +1524,11 @@ const ReportingPage: React.FC = () => {
   const reportingNextSteps = reportingDetailLifecycle?.nextStepSuggestions;
   const reportingShowNextInTitle = Boolean(reportingNextSteps?.length);
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    reportingDetailBaseColumns, reportingDetail,
+    'reporting',
+  );
+
   return (
     <>
       <ListPageTemplate statCards={statCards}>
@@ -2247,7 +2252,7 @@ const ReportingPage: React.FC = () => {
               <Descriptions
                 column={3}
                 size="small"
-                items={detailDrawerDescriptionItems(reportingDetailBaseColumns, reportingDetail)}
+                items={timeconfigBasicItems}
               />
               {hasCustomFieldsDetailContent(reportingListCustomFields, reportingDetailCustomFieldValues) ? (
                 <div style={{ marginTop: 16 }}>

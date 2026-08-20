@@ -20,7 +20,7 @@ import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle'
 import { DetailAuditPhaseTitleExtra } from '../../../../../../components/uni-audit/DetailAuditPhaseRow';
 import type { LifecycleResult } from '../../../../../../components/uni-lifecycle/types';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
-import { DetailDrawerSection, detailDrawerDescriptionItems, type TraceBriefDocument } from '../../../../../../components/layout-templates';
+import { DetailDrawerSection, useDetailDrawerDescriptionItems, type TraceBriefDocument } from '../../../../../../components/layout-templates';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { alignDescriptionColumns } from '../../shared/documentFieldAlignment';
 import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
@@ -378,10 +378,12 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
       ] as ProDescriptionsItemProps<SalesOrder>[]),
     [t],
   );
+  const basicItems = useDetailDrawerDescriptionItems(columns, order, 'sales_order');
+  const noteItems = useDetailDrawerDescriptionItems(noteColumns, order, 'sales_order');
 
   return (
     <>
-      <Descriptions column={3} size="small" items={detailDrawerDescriptionItems(columns, order)} />
+      <Descriptions column={3} size="small" items={basicItems} />
       {showCustomFields ? (
         <div style={{ marginTop: 16 }}>
           <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
@@ -391,7 +393,7 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
         column={3}
         size="small"
         style={{ marginTop: showCustomFields ? 16 : 0 }}
-        items={detailDrawerDescriptionItems(noteColumns, order)}
+        items={noteItems}
       />
     </>
   );

@@ -34,7 +34,7 @@ import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import CodeField from '../../../../../components/code-field';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { detailDrawerDescriptionItems, detailDrawerBasicColumn, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import {   useDetailDrawerDescriptionItems, detailDrawerBasicColumn, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getOtherInboundLifecycle } from '../../../utils/otherInboundLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -811,6 +811,17 @@ const OtherInboundPage: React.FC = () => {
     );
   }, [inboundDetail, t]);
 
+  const timeconfigBasicItems0 = useDetailDrawerDescriptionItems(
+    [detailNotesColumn],
+    inboundDetail,
+    'other_inbound',
+  );
+  const timeconfigBasicItems1 = useDetailDrawerDescriptionItems(
+    detailColumns,
+    inboundDetail,
+    'other_inbound',
+  );
+
   const detailSupplementary = useMemo(() => {
     if (!inboundDetail) return undefined;
     const nodes: React.ReactNode[] = [];
@@ -830,13 +841,13 @@ const OtherInboundPage: React.FC = () => {
           column={detailDrawerBasicColumn(false)}
           size="small"
           style={nodes.length > 0 ? { marginTop: 16 } : undefined}
-          items={detailDrawerDescriptionItems([detailNotesColumn], inboundDetail)}
+          items={timeconfigBasicItems0}
         />,
       );
     }
     if (nodes.length === 0) return undefined;
     return <>{nodes}</>;
-  }, [detailNotesColumn, inboundDetail, otherInboundDetailCustomFieldValues, otherInboundListCustomFields]);
+  }, [detailNotesColumn, inboundDetail, otherInboundDetailCustomFieldValues, otherInboundListCustomFields, timeconfigBasicItems0]);
 
   return (
     <>
@@ -922,7 +933,7 @@ const OtherInboundPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           inboundDetail ? (
-            <Descriptions column={detailDrawerBasicColumn(false)} size="small" items={detailDrawerDescriptionItems(detailColumns, inboundDetail)} />
+            <Descriptions column={detailDrawerBasicColumn(false)} size="small" items={timeconfigBasicItems1} />
           ) : undefined
         }
         collaboration={detailCollaboration}

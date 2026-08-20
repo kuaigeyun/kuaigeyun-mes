@@ -11,7 +11,7 @@ import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
   detailDrawerBasicColumn,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
@@ -134,6 +134,10 @@ export const DocumentTimingDetailDrawer: React.FC<DocumentTimingDetailDrawerProp
     [t],
   );
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    columns, record
+  );
+
   if (!open) return null;
 
   const nodes = record?.nodes ?? [];
@@ -174,7 +178,7 @@ export const DocumentTimingDetailDrawer: React.FC<DocumentTimingDetailDrawerProp
           <Descriptions
             column={detailDrawerBasicColumn(false)}
             size="small"
-            items={detailDrawerDescriptionItems(columns, record)}
+            items={timeconfigBasicItems}
           />
         ) : showError ? null : (
           <div style={{ minHeight: 80 }} />

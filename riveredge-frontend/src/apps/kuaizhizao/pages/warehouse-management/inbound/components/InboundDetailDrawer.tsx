@@ -12,7 +12,7 @@ import {
   DRAWER_CONFIG,
   WAREHOUSE_DETAIL_TABLE_STYLES,
   detailDrawerBasicColumn,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../../components/layout-templates';
 import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
@@ -277,6 +277,11 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
         }
       : undefined;
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    basicColumns, effective,
+    'inbound',
+  );
+
   if (!open) return null;
 
   return (
@@ -317,7 +322,7 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
           <Descriptions
             column={detailDrawerBasicColumn(false)}
             size="small"
-            items={detailDrawerDescriptionItems(basicColumns, effective)}
+            items={timeconfigBasicItems}
           />
         ) : showError ? null : (
           <div style={{ minHeight: 80 }} />

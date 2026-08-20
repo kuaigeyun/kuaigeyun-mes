@@ -30,7 +30,7 @@ import {
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES, detailDrawerDescriptionItems, detailDrawerBasicColumn } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES,   useDetailDrawerDescriptionItems, detailDrawerBasicColumn } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { UniPullQueryModal, isPullableScope, renderPullCapabilityTag, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
@@ -1135,6 +1135,11 @@ const DeliveryNotesPage: React.FC = () => {
     </>
   );
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailColumns, noticeDetail,
+    'delivery_note',
+  );
+
   return (
     <>
       <ListPageTemplate>
@@ -1334,7 +1339,7 @@ const DeliveryNotesPage: React.FC = () => {
             <Descriptions
               column={detailDrawerBasicColumn(false)}
               size="small"
-              items={detailDrawerDescriptionItems(detailColumns, noticeDetail)}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

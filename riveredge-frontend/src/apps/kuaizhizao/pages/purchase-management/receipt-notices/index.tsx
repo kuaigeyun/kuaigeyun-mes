@@ -56,7 +56,7 @@ import {
   FormModalTemplate,
   DRAWER_CONFIG,
   MODAL_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
   type StatCard,
 } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -1581,6 +1581,11 @@ const ReceiptNoticesPage: React.FC = () => {
     [localStats, t, token, i18n.language],
   );
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailColumns, noticeDetail as unknown as Record<string, unknown>,
+    'receipt_notice',
+  );
+
   return (
     <>
       <ListPageTemplate statCards={statCards}>
@@ -1928,7 +1933,7 @@ const ReceiptNoticesPage: React.FC = () => {
             <Descriptions
               column={3}
               size="small"
-              items={detailDrawerDescriptionItems(detailColumns, noticeDetail as unknown as Record<string, unknown>)}
+              items={timeconfigBasicItems}
             />
           ) : null
         }

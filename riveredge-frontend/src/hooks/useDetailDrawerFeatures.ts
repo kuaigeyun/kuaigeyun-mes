@@ -1,9 +1,13 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   getBusinessConfig,
+  isDetailBasicUpdatedAtEnabled,
   isDetailFullChainEnabled,
+  isDetailFullChainShowCreatedAt,
   isDetailOperationLogEnabled,
   resolveDetailFullChainMode,
+  resolveDetailTimeFieldHiddenMap,
   type DetailFullChainMode,
 } from '../services/businessConfig';
 
@@ -19,12 +23,16 @@ export function useDetailDrawerFeaturesQuery() {
 }
 
 export type DetailDrawerFeatures = {
-  /** 全链路模式：off 隐藏 Tab；documents_only 展示单据图且不显示节点时间 */
+  /** 全链路模式：off 隐藏 Tab；on 正常展示含时间；documents_only 仅单据节点 */
   fullChainMode: DetailFullChainMode;
   fullChainEnabled: boolean;
-  /** documents_only 时为 false（抽屉全链路不展示创建时间） */
+  /** 仅 on 时为 true（抽屉全链路展示节点创建时间） */
   fullChainShowCreatedAt: boolean;
   operationLogEnabled: boolean;
+  /** 基本信息是否展示更新时间 */
+  basicUpdatedAtEnabled: boolean;
+  /** 单据时间字段隐藏表（true = 不显示） */
+  timeFieldHidden: Record<string, boolean>;
 };
 
 /**
@@ -34,10 +42,13 @@ export type DetailDrawerFeatures = {
 export function useDetailDrawerFeatures(): DetailDrawerFeatures {
   const { data } = useDetailDrawerFeaturesQuery();
   const fullChainMode = resolveDetailFullChainMode(data);
+  const timeFieldHidden = useMemo(() => resolveDetailTimeFieldHiddenMap(data), [data]);
   return {
     fullChainMode,
     fullChainEnabled: isDetailFullChainEnabled(data),
-    fullChainShowCreatedAt: false,
+    fullChainShowCreatedAt: isDetailFullChainShowCreatedAt(data),
     operationLogEnabled: isDetailOperationLogEnabled(data),
+    basicUpdatedAtEnabled: isDetailBasicUpdatedAtEnabled(data),
+    timeFieldHidden,
   };
 }

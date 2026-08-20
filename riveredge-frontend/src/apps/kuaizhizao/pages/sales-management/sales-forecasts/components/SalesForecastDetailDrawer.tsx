@@ -11,7 +11,7 @@ import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
   type TraceBriefDocument,
 } from '../../../../../../components/layout-templates';
 import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
@@ -155,6 +155,11 @@ export const SalesForecastDetailDrawer: React.FC<SalesForecastDetailDrawerProps>
     forecast?.forecast_code ? ` - ${forecast.forecast_code}` : ''
   }`;
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    basicColumns, effective,
+    'sales_forecast',
+  );
+
   if (!open) return null;
 
   return (
@@ -199,7 +204,7 @@ export const SalesForecastDetailDrawer: React.FC<SalesForecastDetailDrawerProps>
       collaborationAuditRecord={contentReady ? effective : null}
       basic={
         contentReady ? (
-          <Descriptions column={3} size="small" items={detailDrawerDescriptionItems(basicColumns, effective)} />
+          <Descriptions column={3} size="small" items={timeconfigBasicItems} />
         ) : showError ? null : (
           <div style={{ minHeight: 80 }} />
         )

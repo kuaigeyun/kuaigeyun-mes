@@ -38,7 +38,7 @@ import {
   DetailDrawerTemplate,
   MODAL_CONFIG,
   DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
@@ -743,6 +743,11 @@ const MaintenancePlansPage: React.FC = () => {
     },
   ], SALES_DOC_LIST_FIELD_RANK), [t, planStatusValueEnum]);
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailBaseColumns, planDetail,
+    'maintenance_plan',
+  );
+
   return (
     <>
       <ListPageTemplate>
@@ -1174,7 +1179,7 @@ const MaintenancePlansPage: React.FC = () => {
             <Descriptions
               column={3}
               size="small"
-              items={detailDrawerDescriptionItems(detailBaseColumns, planDetail)}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

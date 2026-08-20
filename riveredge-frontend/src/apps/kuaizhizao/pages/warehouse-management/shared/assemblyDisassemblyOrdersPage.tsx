@@ -20,7 +20,7 @@ import {
   ListPageTemplate,
   MODAL_CONFIG,
   WAREHOUSE_DETAIL_TABLE_STYLES,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
   detailDrawerBasicColumn,
 } from '../../../../../components/layout-templates';
 import type { LifecycleResult } from '../../../../../components/uni-lifecycle/types';
@@ -741,6 +741,12 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
     [config.itemDoneStatus, currentOrder, t],
   );
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailColumns,
+    currentOrder,
+    'assembly_disassembly',
+  );
+
   return (
     <ListPageTemplate>
       <UniTable<OrderLike>
@@ -941,7 +947,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
             <Descriptions
               column={detailDrawerBasicColumn(false)}
               size="small"
-              items={detailDrawerDescriptionItems(detailColumns, currentOrder)}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

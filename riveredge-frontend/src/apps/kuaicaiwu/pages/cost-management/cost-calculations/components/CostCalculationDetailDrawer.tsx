@@ -11,7 +11,7 @@ import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
   detailDrawerBasicColumn,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../../components/layout-templates';
 import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
 import { StructuredCostDataView } from '../../../../../../components/structured-cost-data-view';
@@ -139,6 +139,7 @@ export const CostCalculationDetailDrawer: React.FC<CostCalculationDetailDrawerPr
       ] as ProDescriptionsItemProps<CostCalculationDetail>[]),
     [t],
   );
+  const basicItems = useDetailDrawerDescriptionItems(basicColumns, effective);
 
   const lifecycle = getCostCalculationLifecycle(effective as Record<string, unknown>, t);
   const steps = lifecycle.mainStages ?? [];
@@ -178,7 +179,7 @@ export const CostCalculationDetailDrawer: React.FC<CostCalculationDetailDrawerPr
           <Descriptions
             column={detailDrawerBasicColumn(false)}
             size="small"
-            items={detailDrawerDescriptionItems(basicColumns, effective)}
+            items={basicItems}
           />
         ) : showError ? null : (
           <div style={{ minHeight: 80 }} />

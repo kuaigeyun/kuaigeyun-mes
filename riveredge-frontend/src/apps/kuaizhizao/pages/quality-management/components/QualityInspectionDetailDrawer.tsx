@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody } from '../../../../../components/document-tracking-panel';
@@ -71,7 +71,6 @@ export function QualityInspectionDetailDrawer<T extends QualityInspectionDetailR
   renderBriefActions,
 }: QualityInspectionDetailDrawerProps<T>) {
   const { t } = useTranslation();
-  if (!open) return null;
   const contentReady = Boolean(inspection);
   const showError = Boolean(error && !contentReady && !loading);
   const lifecycle = inspection
@@ -80,7 +79,9 @@ export function QualityInspectionDetailDrawer<T extends QualityInspectionDetailR
   const mainStages = lifecycle?.mainStages ?? [];
   const nextSteps = lifecycle?.nextStepSuggestions;
   const alignedBasic = alignDescriptionColumns(basicColumns);
+  const basicItems = useDetailDrawerDescriptionItems(alignedBasic, inspection, 'quality_inspection');
   const attachments = Array.isArray(inspection?.attachments) ? inspection.attachments : [];
+  if (!open) return null;
   const hasAttachments = attachments.length > 0;
 
   return (
@@ -123,7 +124,7 @@ export function QualityInspectionDetailDrawer<T extends QualityInspectionDetailR
             <Descriptions
               column={3}
               size="small"
-              items={detailDrawerDescriptionItems(alignedBasic, inspection)}
+              items={basicItems}
             />
             {hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
               <div style={{ marginTop: 16 }}>

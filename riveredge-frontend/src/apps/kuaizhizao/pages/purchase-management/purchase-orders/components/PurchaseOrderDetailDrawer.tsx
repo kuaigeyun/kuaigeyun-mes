@@ -14,7 +14,7 @@ import {
   DetailDrawerTemplate,
   DetailDrawerSection,
   DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../../components/layout-templates';
 import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
@@ -274,6 +274,16 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
   );
 
   const title = t('app.kuaizhizao.purchaseOrder.detailTitle', { code: order?.order_code || '' });
+  const basicItems = useDetailDrawerDescriptionItems(
+    basicColumns,
+    effective as Record<string, unknown>,
+    'purchase_order',
+  );
+  const notesItems = useDetailDrawerDescriptionItems(
+    notesColumn,
+    effective as Record<string, unknown>,
+    'purchase_order',
+  );
 
   if (!open) return null;
 
@@ -323,7 +333,7 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
             <Descriptions
               column={3}
               size="small"
-              items={detailDrawerDescriptionItems(basicColumns, effective as Record<string, unknown>)}
+              items={basicItems}
             />
             {effective.fee_details && effective.fee_details.length > 0 ? (
               <>
@@ -382,7 +392,7 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
               column={3}
               size="small"
               style={{ marginTop: 16 }}
-              items={detailDrawerDescriptionItems(notesColumn, effective as Record<string, unknown>)}
+              items={notesItems}
             />
           </>
         ) : showError ? null : (

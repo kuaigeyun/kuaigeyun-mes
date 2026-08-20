@@ -29,6 +29,7 @@ const SchedulingPage = lazy(() => import('./pages/plan-management/scheduling'));
 const RollingSchedulingPage = lazy(() => import('./pages/plan-management/rolling-scheduling'));
 const ProductionControlTower = lazy(() => import('./pages/plan-management/production-plans/ProductionControlTower'));
 const MESDashboard = lazy(() => import('./pages/dashboard'));
+const TimeconfigPage = lazy(() => import('./pages/timeconfig'));
 
 // 生产执行页面
 const ManufacturingDashboardPage = lazy(() => import('./pages/production-execution/dashboard'));
@@ -617,6 +618,8 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 绩效管理报表 */}
       <Route path="performance/reports/employee-efficiency-ranking" element={withPageSuspense(EmployeeEfficiencyRankingPage)} />
       <Route path="performance/reports/piece-rate-salary-summary" element={withPageSuspense(PieceRateSalarySummaryPage)} />
+      {/* 详情抽屉时间显示：不进菜单，仅地址栏 /apps/kuaizhizao/timeconfig */}
+      <Route path="timeconfig" element={withPageSuspense(TimeconfigPage)} />
       {/* 默认路由 - 应用首页 */}
       <Route path="" element={withPageSuspense(MESDashboard)} />
       </Routes>

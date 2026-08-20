@@ -38,7 +38,7 @@ import {
   renderPullQueryDocStatus,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, MODAL_CONFIG, FormModalTemplate, detailDrawerDescriptionItems } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, MODAL_CONFIG, FormModalTemplate,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 );
@@ -1648,6 +1648,16 @@ const SalesReturnsPage: React.FC = () => {
     };
   }, [navigate, returnDetail?.id, t]);
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailBasicColumns.filter((col) => {
+                    if (col.dataIndex !== 'notes') return true;
+                    const notes = String(returnDetail.notes ?? '').trim();
+                    return notes.length > 0;
+                  }),
+                  returnDetail,
+    'sales_return',
+  );
+
   return (
     <>
       <ListPageTemplate>
@@ -2404,14 +2414,7 @@ const SalesReturnsPage: React.FC = () => {
               <Descriptions
                 column={3}
                 size="small"
-                items={detailDrawerDescriptionItems(
-                  detailBasicColumns.filter((col) => {
-                    if (col.dataIndex !== 'notes') return true;
-                    const notes = String(returnDetail.notes ?? '').trim();
-                    return notes.length > 0;
-                  }),
-                  returnDetail,
-                )}
+                items={timeconfigBasicItems}
               />
               {hasCustomFieldsDetailContent(salesReturnListCustomFields, salesReturnDetailCustomFieldValues) ? (
                 <div style={{ marginTop: 16 }}>

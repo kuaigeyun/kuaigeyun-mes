@@ -20,7 +20,7 @@ import {
   DetailDrawerTemplate,
   MODAL_CONFIG,
   DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -250,6 +250,12 @@ const MoldCalibrationsPage: React.FC = () => {
 
   if (!perms.canRead) return null;
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailColumns,
+    detail,
+    'mold_calibration',
+  );
+
   return (
     <>
     <ListPageTemplate>
@@ -349,7 +355,7 @@ const MoldCalibrationsPage: React.FC = () => {
             <Descriptions
               column={2}
               size="small"
-              items={detailDrawerDescriptionItems(detailColumns, detail)}
+              items={timeconfigBasicItems}
             />
           ) : undefined
         }

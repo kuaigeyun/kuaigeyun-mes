@@ -27,7 +27,7 @@ import {
   DetailDrawerTemplate,
   DetailDrawerSection,
   DRAWER_CONFIG,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
   type TraceBriefDocument,
 } from '../../../../../../components/layout-templates'
 import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle'
@@ -538,6 +538,11 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
     t('app.kuaizhizao.demandComputation.detailTitle')
   )
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    basicColumns, effective as Record<string, unknown>,
+    'demand_computation',
+  );
+
   if (!open) return null
 
   return (
@@ -600,7 +605,7 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
                   {t('app.kuaizhizao.demandComputation.dynamicMonitorLoading')}
                 </Typography.Text>
               ) : null}
-              <Descriptions column={3} size="small" items={detailDrawerDescriptionItems(basicColumns, effective as Record<string, unknown>)} />
+              <Descriptions column={3} size="small" items={timeconfigBasicItems} />
               {validationResults ? (
                 <div style={{ marginTop: 12 }}>
                   <Space size={16} wrap>

@@ -18,7 +18,7 @@ import {
   MaterialStackedCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
+import {   useDetailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { UniBatchMenuButton, runCapabilityBatchLoop } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
@@ -593,6 +593,12 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
     },
   ], [t]);
 
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailColumns,
+    suggestionDetail,
+    'replenishment_suggestion',
+  );
+
   return (
     <>
       <ListPageTemplate
@@ -744,7 +750,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           suggestionDetail ? (
-            <Descriptions column={2} size="small" items={detailDrawerDescriptionItems(detailColumns, suggestionDetail)} />
+            <Descriptions column={2} size="small" items={timeconfigBasicItems} />
           ) : undefined
         }
       />
