@@ -38,6 +38,31 @@ export function renderSopCarrierTag(carrier?: string) {
   return <MarkerTag color="geekblue">{CARRIER_LABELS[key] ?? key}</MarkerTag>;
 }
 
+export function resolveSopControlStatus(sop: SOP | Record<string, unknown> | null | undefined): string {
+  if (!sop) return 'draft';
+  const row = sop as SOP & { control_status?: string };
+  return String(row.controlStatus ?? row.control_status ?? 'draft');
+}
+
+export function normalizeSopRecord<T extends SOP>(row: T & Record<string, unknown>): T {
+  return {
+    ...row,
+    operationId: row.operationId ?? (row.operation_id as number | undefined),
+    isActive: (row.isActive ?? row.is_active ?? true) as boolean,
+    controlStatus: resolveSopControlStatus(row) as SOP['controlStatus'],
+    currentRevision: row.currentRevision ?? (row.current_revision as string | undefined),
+    issuedCopyCount: row.issuedCopyCount ?? (row.issued_copy_count as number | undefined) ?? 0,
+    pendingRetrieveCopyCount:
+      row.pendingRetrieveCopyCount ?? (row.pending_retrieve_copy_count as number | undefined) ?? 0,
+    storageLocation: row.storageLocation ?? (row.storage_location as string | undefined),
+    keeperName: row.keeperName ?? (row.keeper_name as string | undefined),
+    approvedAt: row.approvedAt ?? (row.approved_at as string | undefined),
+    approvedByName: row.approvedByName ?? (row.approved_by_name as string | undefined),
+    flowConfig: row.flowConfig ?? (row.flow_config as Record<string, unknown> | undefined),
+    formConfig: row.formConfig ?? (row.form_config as Record<string, unknown> | undefined),
+  };
+}
+
 export function renderSopControlStatusTag(status?: string) {
   const key = status || 'draft';
   const cfg = CONTROL_STATUS_LABELS[key] ?? { label: key, color: 'default' };
@@ -138,7 +163,7 @@ export const SopControlPanel: React.FC<SopControlPanelProps> = ({ sop, onRefresh
     }
   };
 
-  const status = sop.controlStatus ?? 'draft';
+  const status = resolveSopControlStatus(sop);
 
   return (
     <>
@@ -343,7 +368,7 @@ export const sopControlDetailFields = [
   {
     title: '文控状态',
     dataIndex: 'controlStatus',
-    render: (_: unknown, r: SOP) => renderSopControlStatusTag(r.controlStatus),
+    render: (_: unknown, r: SOP) => renderSopControlStatusTag(resolveSopControlStatus(r)),
   },
   {
     title: '现行修订',

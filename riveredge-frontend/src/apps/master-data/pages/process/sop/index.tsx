@@ -14,8 +14,10 @@ import { EditOutlined, DeleteOutlined, PlusOutlined, HighlightOutlined } from '@
 import SOPBatchCreateSteps from './SOPBatchCreateSteps';
 import {
   SopControlPanel,
+  normalizeSopRecord,
   renderSopCarrierTag,
   renderSopControlStatusTag,
+  resolveSopControlStatus,
   sopControlDetailFields,
 } from './SopControlPanel';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
@@ -394,7 +396,7 @@ const SOPPage: React.FC = () => {
     setDetailError(null);
     try {
       const detail = await sopApi.get(uuid);
-      setSopDetail(detail);
+      setSopDetail(normalizeSopRecord(detail as SOP & Record<string, unknown>));
       setCurrentSOPUuid(detail.uuid);
       if (detail.id != null) {
         await loadSopFieldValuesForDetail(detail.id);
@@ -1155,7 +1157,7 @@ const SOPPage: React.FC = () => {
       dataIndex: 'controlStatus',
       width: 96,
       hideInSearch: true,
-      render: (_, record) => renderSopControlStatusTag(record.controlStatus),
+      render: (_, record) => renderSopControlStatusTag(resolveSopControlStatus(record)),
     },
     {
       title: '受控份',
@@ -1318,11 +1320,9 @@ const SOPPage: React.FC = () => {
             const result = await sopApi.list(apiParams);
             const listData = Array.isArray(result) ? result : result?.data ?? [];
             // 列表接口为 snake_case；表格/类型用 camelCase
-            const normalized = listData.map((row: SOP & { operation_id?: number; is_active?: boolean }) => ({
-              ...row,
-              operationId: row.operationId ?? row.operation_id,
-              isActive: row.isActive ?? row.is_active ?? true,
-            }));
+            const normalized = listData.map((row: SOP & Record<string, unknown>) =>
+              normalizeSopRecord(row),
+            );
             const enrichedData = meta?.purpose === 'prefetch'
               ? normalized
               : await enrichSopRecordsWithCustomFields(normalized);
