@@ -141,6 +141,35 @@ class PrintTemplateService:
         return base[:46]
 
     @staticmethod
+    def _sql_like_escape(value: str) -> str:
+        return (value or "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+    @staticmethod
+    def code_in_preset_family(stored_code: str, canonical_code: str) -> bool:
+        """判断库内 code 是否属于某预置基名（含截断后的 _流水 族，如 ...PRINT 与 ...PR_287）。"""
+        stored = (stored_code or "").strip().upper()
+        canonical = (canonical_code or "").strip().upper()
+        if not stored or not canonical:
+            return False
+        if stored == canonical:
+            return True
+        family = PrintTemplateService._normalize_base_code(canonical)
+        if stored == family:
+            return True
+        return stored.startswith(f"{family}_")
+
+    @staticmethod
+    async def preset_code_family_exists(tenant_id: int, canonical_code: str) -> bool:
+        canonical = (canonical_code or "").strip().upper()
+        if not canonical:
+            return False
+        codes = await PrintTemplate.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).values_list("code", flat=True)
+        return any(PrintTemplateService.code_in_preset_family(c, canonical) for c in codes)
+
+    @staticmethod
     async def _generate_template_code(tenant_id: int, raw_code: str, conn: Any) -> str:
         """
         生成模板代码：<base>_<seq>（如 QUOTATION_PRINT_001）。
@@ -148,6 +177,7 @@ class PrintTemplateService:
         - 若传入已带后缀（如 XXX_003），会先剥离后缀后再按当前最大序号续增。
         - 软删除记录不参与占位。
         - 在事务内通过 pg_advisory_xact_lock 保证同 tenant+base 串行分配。
+        - LIKE 模式转义下划线，避免 HAOLIGO_MOLD_... 被当成单字符通配。
         """
         base = PrintTemplateService._normalize_base_code(raw_code)
 
@@ -155,6 +185,7 @@ class PrintTemplateService:
         lock_key = f"print_template:{tenant_id}:{base}"
         await conn.execute_query("SELECT pg_advisory_xact_lock(hashtext($1))", [lock_key])
 
+        like_family = PrintTemplateService._sql_like_escape(base) + r"\_%"
         # 同时纳入历史无后缀代码（如 QUOTATION_PRINT），按 seq=0 参与基线。
         rows = await conn.execute_query_dict(
             """
@@ -162,17 +193,16 @@ class PrintTemplateService:
             FROM core_print_templates
             WHERE tenant_id = $1
               AND deleted_at IS NULL
-              AND (UPPER(code) = $2 OR UPPER(code) LIKE $3)
+              AND (UPPER(code) = $2 OR UPPER(code) LIKE $3 ESCAPE '\\')
             FOR UPDATE
             """,
-            [tenant_id, base, f"{base}_%"],
+            [tenant_id, base, like_family],
         )
 
+        used = {str(row.get("code", "")).upper() for row in rows}
         max_seq = 0
-        for row in rows:
-            code = str(row.get("code", "")).upper()
+        for code in used:
             if code == base:
-                max_seq = max(max_seq, 0)
                 continue
             m = PrintTemplateService._CODE_SUFFIX_PATTERN.match(code)
             if not m or m.group("base") != base:
@@ -182,7 +212,14 @@ class PrintTemplateService:
             except ValueError:
                 continue
 
-        return f"{base}_{max_seq + 1:03d}"
+        seq = max_seq
+        while True:
+            seq += 1
+            candidate = f"{base}_{seq:03d}"
+            if len(candidate) > 50:
+                raise ValidationError("打印模板代码超出长度限制，请缩短基名后再创建")
+            if candidate not in used:
+                return candidate
 
     @staticmethod
     async def preview_next_template_code(tenant_id: int, raw_code: str) -> str:
@@ -316,8 +353,8 @@ class PrintTemplateService:
                 deleted_at__isnull=True,
                 code=base_code,
             ).first()
-            if exact:
-                if not is_visual_designer_config(exact.config):
+            if await PrintTemplateService.preset_code_family_exists(tenant_id, base_code):
+                if exact and not is_visual_designer_config(exact.config):
                     try:
                         exact.name = item["name"]
                         exact.description = item.get("description")
@@ -329,13 +366,6 @@ class PrintTemplateService:
                         logger.info("已升级核心打印模板为可视化: tenant={} code={}", tenant_id, base_code)
                     except Exception as e:
                         logger.warning("升级打印模板 {} 失败: {}", item["code"], e)
-                continue
-            suffix_exists = await PrintTemplate.filter(
-                tenant_id=tenant_id,
-                deleted_at__isnull=True,
-                code__startswith=f"{base_code}_",
-            ).exists()
-            if suffix_exists:
                 continue
             try:
                 data = PrintTemplateCreate(
@@ -1376,7 +1406,6 @@ class PrintTemplateService:
             if compile_mode == "asset_card_table" and "eq-asset-card" not in template_content:
                 need_rebuild = True
             if need_rebuild:
-                original_content = print_template.content
                 try:
                     rebuilt = PrintTemplateService.compile_designer_schema(
                         PrintTemplateCompileRequest(
@@ -1385,13 +1414,13 @@ class PrintTemplateService:
                             target_engine="jinja2",
                         )
                     )
-                    rebuilt_content = str(rebuilt.get("compiled_template") or "").strip()
-                    if rebuilt_content:
-                        print_template.content = rebuilt_content
-                        await print_template.save()
-                        template_content = rebuilt_content
-                except Exception:
-                    print_template.content = original_content
+                except ValidationError:
+                    raise
+                except Exception as e:
+                    raise ValidationError(f"打印模板编译失败：{e}") from e
+                rebuilt_content = str(rebuilt.get("compiled_template") or "").strip()
+                if rebuilt_content:
+                    template_content = rebuilt_content
         if data.output_format == "html" and not is_pdfme_template(template_content):
             rendered_content = render_template_to_html(
                 template_content,
@@ -1407,9 +1436,14 @@ class PrintTemplateService:
                 strict_variables=strict_variables,
             )
         
-        print_template.usage_count = (print_template.usage_count or 0) + 1
-        print_template.last_used_at = resolve_business_datetime()
-        await print_template.save()
+        await PrintTemplate.filter(
+            id=print_template.id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).update(
+            usage_count=(print_template.usage_count or 0) + 1,
+            last_used_at=resolve_business_datetime(),
+        )
         
         # TODO: 根据 output_format 生成文件（PDF、HTML等）
         # 目前只返回渲染后的内容

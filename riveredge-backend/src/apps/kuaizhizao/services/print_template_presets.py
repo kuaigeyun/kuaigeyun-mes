@@ -48,24 +48,12 @@ async def load_kuaizhizao_print_template_presets(tenant_id: int) -> int:
     created = 0
     for item in KUAIZHIZAO_PRESET_PRINT_TEMPLATES:
         base_code = str(item["code"]).strip().upper()
-        exact = await PrintTemplate.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            code=base_code,
-        ).first()
-        if exact:
+        if await PrintTemplateService.preset_code_family_exists(tenant_id, base_code):
             try:
                 if await _upgrade_non_visual_builtin_preset(tenant_id, item):
                     created += 1
             except Exception as e:
                 logger.warning("升级快制造打印模板 {} 失败: {}", item["code"], e)
-            continue
-        suffix_exists = await PrintTemplate.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            code__startswith=f"{base_code}_",
-        ).exists()
-        if suffix_exists:
             continue
         try:
             data = PrintTemplateCreate(
