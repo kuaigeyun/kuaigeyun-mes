@@ -850,11 +850,18 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
         type: 'array',
         children: [
           { key: 'line_items.0.mold_code', label: '模具代号', type: 'string' },
+          { key: 'line_items.0.mold_name', label: '模具名称', type: 'string' },
+          { key: 'line_items.0.repair_reason', label: '维修原因', type: 'string' },
           { key: 'line_items.0.repair_content', label: '维修内容', type: 'string' },
+          { key: 'line_items.0.repair_result', label: '维修结果', type: 'string' },
           { key: 'line_items.0.repair_cost', label: '维修金额', type: 'string' },
         ],
       },
+      { key: 'repair_cost_total', label: '维修费用合计', type: 'string' },
+      { key: 'applicant_name', label: '申请人', type: 'string' },
+      { key: 'department_name', label: '申请部门', type: 'string' },
       { key: 'created_at', label: '制单时间', type: 'date' },
+      { key: 'print_time', label: '打印时间', type: 'date' },
     ],
   },
   common: {
@@ -987,6 +994,9 @@ export const getSamplePreviewVariables = (type: string): Record<string, unknown>
         sampleItems.push(item);
       }
       result[arrKey] = sampleItems;
+      if (arrKey === 'line_items') {
+        result.items = sampleItems;
+      }
     } else {
       result[field.key] = getSampleValueByType(field.type, field.key, field.label);
     }

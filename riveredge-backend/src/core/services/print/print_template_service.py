@@ -1376,6 +1376,7 @@ class PrintTemplateService:
             if compile_mode == "asset_card_table" and "eq-asset-card" not in template_content:
                 need_rebuild = True
             if need_rebuild:
+                original_content = print_template.content
                 try:
                     rebuilt = PrintTemplateService.compile_designer_schema(
                         PrintTemplateCompileRequest(
@@ -1386,11 +1387,11 @@ class PrintTemplateService:
                     )
                     rebuilt_content = str(rebuilt.get("compiled_template") or "").strip()
                     if rebuilt_content:
-                        template_content = rebuilt_content
                         print_template.content = rebuilt_content
                         await print_template.save()
+                        template_content = rebuilt_content
                 except Exception:
-                    pass
+                    print_template.content = original_content
         if data.output_format == "html" and not is_pdfme_template(template_content):
             rendered_content = render_template_to_html(
                 template_content,
@@ -1406,8 +1407,7 @@ class PrintTemplateService:
                 strict_variables=strict_variables,
             )
         
-        # 更新使用统计
-        print_template.usage_count += 1
+        print_template.usage_count = (print_template.usage_count or 0) + 1
         print_template.last_used_at = resolve_business_datetime()
         await print_template.save()
         

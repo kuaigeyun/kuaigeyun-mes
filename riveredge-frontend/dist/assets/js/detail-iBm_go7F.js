@@ -1,1 +1,0 @@
-import{j as a}from"./vendor-r-7ZGhD4.js";import{aB as r,N as t}from"./clearSessionQueries-CODXIZJA.js";const p=()=>{const{id:e}=r();return e?a.jsx(t,{to:`/apps/kuaiplm/knowledge-base?articleId=${e}`,replace:!0}):a.jsx(t,{to:"/apps/kuaiplm/knowledge-base",replace:!0})};export{p as default};

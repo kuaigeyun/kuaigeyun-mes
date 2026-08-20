@@ -39,6 +39,23 @@ def test_acceptance_uploaded_at_not_set_when_still_empty():
     assert row.acceptance_uploaded_at is None
 
 
+def test_match_equipment_payable_balance_status():
+    from apps.haoligo.services.finance_equipment_payable import (
+        match_equipment_payable_balance_status,
+    )
+
+    unpaid = Decimal("12.50")
+    cleared = Decimal("0")
+    assert match_equipment_payable_balance_status(unpaid=unpaid, status="all")
+    assert match_equipment_payable_balance_status(unpaid=unpaid, status="unpaid")
+    assert match_equipment_payable_balance_status(unpaid=unpaid, status="open")
+    assert not match_equipment_payable_balance_status(unpaid=unpaid, status="paid")
+    assert match_equipment_payable_balance_status(unpaid=cleared, status="paid")
+    assert match_equipment_payable_balance_status(unpaid=cleared, status="cleared")
+    assert not match_equipment_payable_balance_status(unpaid=cleared, status="unpaid")
+
+
+
 def _qs_first(row):
     qs = MagicMock()
     qs.filter.return_value = qs
