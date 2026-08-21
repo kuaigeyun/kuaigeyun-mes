@@ -1,0 +1,10 @@
+{
+  "code": "spoke-wheel",
+  "name": "辐条轮毂总装",
+  "version": "0.1.0",
+  "description": "铝合金辐条轮毂 5 部件 + 总装调试业务模块(同心度 ≤ 0.8mm)",
+  "icon": "tool",
+  "author": "Local Customization",
+  "entry_point": "./index.tsx",
+  "route_path": "/apps/spoke-wheel"
+}

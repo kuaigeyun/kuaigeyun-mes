@@ -2661,6 +2661,8 @@ export default {
   'app.uniDetail.tabHistory': '历史记录',
   'app.uniDetail.sectionFullChain': '全链路跟踪',
   'app.kuaicaiwu.name': '轻财务',
+  'app.spoke-wheel.name': '辐条轮毂总装',
+  'app.spoke-wheel.menu.assembly-debug': '总装调试(同心度0.8mm)',
   'app.kuaioa.name': '轻办公',
   'app.kuaioa.menu.group.approval': '审批协同',
   'app.kuaicaiwu.menu.gl-management.settings': '总账设置',

@@ -2668,6 +2668,8 @@ export default {
   'app.uniDetail.tabHistory': 'History',
   'app.uniDetail.sectionFullChain': 'Full chain tracking',
   'app.kuaicaiwu.name': 'Light Finance',
+  'app.spoke-wheel.name': 'Spoke Wheel Assembly',
+  'app.spoke-wheel.menu.assembly-debug': 'Assembly Debug (0.8mm)',
   'app.kuaioa.name': 'Light Office',
   'app.kuaioa.menu.group.approval': 'Approval',
   'app.kuaicaiwu.menu.gl-management.settings': 'GL Settings',

@@ -196,7 +196,6 @@ const HolidaysPage: React.FC = () => {
       uniTableKeepWidth: true,
       resizable: false,
       sorter: true,
-      render: (_, r) => renderPerformanceTypeMarker(r.holidayType),
     },
     {
       title: t('app.kuaizhizao.performance.common.columns.description'),

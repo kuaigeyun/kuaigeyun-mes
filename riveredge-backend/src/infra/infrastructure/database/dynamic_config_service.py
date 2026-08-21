@@ -165,6 +165,13 @@ class DynamicDatabaseConfigService:
             "apps.kuaiplm.models.gate_template",
             "apps.kuaiplm.models.knowledge_base",
             "apps.kuaiplm.models.phase2",
+            # 快制造 (kuaizhizao) — 开源版补注册，避免 lifespan reconcile_interrupted_computations 报 default_connection=None
+            "apps.kuaizhizao.models.demand_computation",
+            "apps.kuaizhizao.models.demand_computation_item",
+            "apps.kuaizhizao.models.demand_computation_snapshot",
+            "apps.kuaizhizao.models.demand_computation_recalc_history",
+            # 辐条轮毂 (spoke_wheel) — 自定义模块,显式注册到默认连接
+            "apps.spoke_wheel.models",
         ]
 
         # 验证模型模块是否存在，只包含存在的模块
