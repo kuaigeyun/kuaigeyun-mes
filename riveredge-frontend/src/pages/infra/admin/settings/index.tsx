@@ -664,10 +664,10 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
                           onClick={() => queryClient.invalidateQueries({ queryKey: ['platformSettings'] })}
                           loading={isLoading}
                         >
-                          {t('pages.system.siteSettings.refresh')}
+                          {t('common.refresh')}
                         </Button>
                         <Button onClick={handleResetLoginPageSettings} loading={updateMutation.isPending}>
-                          {t('components.uniQuery.reset')}
+                          {t('common.reset')}
                         </Button>
                         {dom}
                       </Space>

@@ -446,7 +446,7 @@ const KuaiplmDashboard: React.FC = () => {
                   render: (name) => name || '—',
                 },
                 {
-                  title: t('app.kuaiplm.common.columns.status'),
+                  title: t('common.status'),
                   dataIndex: 'status',
                   width: 72,
                   render: (status) => getKuaiplmTaskStatusText(t, status),
@@ -641,7 +641,7 @@ const KuaiplmDashboard: React.FC = () => {
 
                 {
 
-                  title: t('app.kuaiplm.common.columns.status'),
+                  title: t('common.status'),
 
                   dataIndex: 'status',
 

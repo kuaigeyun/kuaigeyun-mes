@@ -286,7 +286,7 @@ const GlFinancialStatementsPage: React.FC = () => {
               type="primary"
               onClick={() => printFinancialStatementNode(printRef.current, title)}
             >
-              {t(`${NS}.print.confirm`, { defaultValue: '打印' })}
+              {t('common.print', { defaultValue: '打印' })}
             </Button>
           </Space>
         }

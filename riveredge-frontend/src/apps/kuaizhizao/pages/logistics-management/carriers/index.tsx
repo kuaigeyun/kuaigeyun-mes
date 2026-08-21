@@ -96,8 +96,8 @@ const CarriersPage: React.FC = () => {
     () =>
       alignDescriptionColumns<LogisticsCarrier>(
         [
-          { title: t('app.kuaizhizao.logistics.field.code'), dataIndex: 'code' },
-          { title: t('app.kuaizhizao.logistics.field.name'), dataIndex: 'name' },
+          { title: t('common.code'), dataIndex: 'code' },
+          { title: t('common.name'), dataIndex: 'name' },
           {
             title: t('app.kuaizhizao.logistics.field.carrierType'),
             dataIndex: 'carrier_type',
@@ -117,7 +117,7 @@ const CarriersPage: React.FC = () => {
             },
           },
           {
-            title: t('app.kuaizhizao.logistics.field.enabled'),
+            title: t('common.enabled'),
             dataIndex: 'is_enabled',
             render: (_, record) => renderLogisticsEnabledTag(t, record.is_enabled),
           },
@@ -132,7 +132,7 @@ const CarriersPage: React.FC = () => {
     () =>
       alignProColumns<LogisticsCarrier>([
         {
-          title: t('app.kuaizhizao.logistics.field.name'),
+          title: t('common.name'),
           key: 'logistics_carrier_stacked',
           dataIndex: 'name',
           width: 160,
@@ -143,7 +143,7 @@ const CarriersPage: React.FC = () => {
           fixed: 'left',
         },
         {
-          title: t('app.kuaizhizao.logistics.field.code'),
+          title: t('common.code'),
           dataIndex: 'code',
           width: 88,
           minWidth: 88,
@@ -196,7 +196,7 @@ const CarriersPage: React.FC = () => {
           },
         },
         {
-          title: t('app.kuaizhizao.logistics.field.enabled'),
+          title: t('common.enabled'),
           dataIndex: 'is_enabled',
           width: 88,
           minWidth: 88,
@@ -346,11 +346,11 @@ const CarriersPage: React.FC = () => {
           }}
           columns={[
             {
-              title: t('app.kuaizhizao.logistics.field.name'),
+              title: t('common.name'),
               dataIndex: 'name',
             },
             {
-              title: t('app.kuaizhizao.logistics.field.code'),
+              title: t('common.code'),
               dataIndex: 'code',
               width: 80,
             },

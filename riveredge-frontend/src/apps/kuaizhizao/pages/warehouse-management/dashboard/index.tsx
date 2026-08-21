@@ -351,7 +351,7 @@ const WarehouseDashboard: React.FC = () => {
               title={t('app.kuaizhizao.warehouseDashboard.inventoryAlertsTitle')}
               loading={alertsLoading}
               masonryWeight={masonryWeightFromRows(Math.min(alertList.length, 6))}
-              extra={<a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inventory-alert')}>{t('app.kuaizhizao.warehouseDashboard.more')}</a>}
+              extra={<a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inventory-alert')}>{t('common.more')}</a>}
             >
               <Table tableLayout="fixed" size="small" dataSource={alertList} pagination={false} rowKey={(r) => String(r.id ?? r.uuid ?? `${r.material_id}-${r.warehouse_id}`)} columns={alertColumns} />
             </ModuleActionPanel>
@@ -361,7 +361,7 @@ const WarehouseDashboard: React.FC = () => {
               layout="masonry"
               title={t('app.kuaizhizao.warehouseDashboard.pendingOutboundTitle')}
               masonryWeight={masonryWeightFromRows(pendingOutbound.length)}
-              extra={<a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/outbound')}>{t('app.kuaizhizao.warehouseDashboard.more')}</a>}
+              extra={<a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/outbound')}>{t('common.more')}</a>}
             >
               <Table tableLayout="fixed" size="small" dataSource={pendingOutbound} pagination={false} rowKey={(r) => `${r.doc_type}-${r.doc_code}`} columns={queueColumns} />
             </ModuleActionPanel>
@@ -371,7 +371,7 @@ const WarehouseDashboard: React.FC = () => {
               layout="masonry"
               title={t('app.kuaizhizao.warehouseDashboard.pendingInboundTitle')}
               masonryWeight={masonryWeightFromRows(pendingInbound.length)}
-              extra={<a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inbound')}>{t('app.kuaizhizao.warehouseDashboard.more')}</a>}
+              extra={<a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inbound')}>{t('common.more')}</a>}
             >
               <Table tableLayout="fixed" size="small" dataSource={pendingInbound} pagination={false} rowKey={(r) => `${r.doc_type}-${r.doc_code}`} columns={queueColumns} />
             </ModuleActionPanel>
@@ -386,7 +386,7 @@ const WarehouseDashboard: React.FC = () => {
               layout="masonry"
               title={t('app.kuaizhizao.warehouseDashboard.stockStructureTitle')}
               masonryWeight={masonryWeightFromRows(stockStructureRows.filter((row) => row.count > 0).length)}
-              extra={<a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inventory')}>{t('app.kuaizhizao.warehouseDashboard.more')}</a>}
+              extra={<a onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inventory')}>{t('common.more')}</a>}
             >
               <Table tableLayout="fixed" size="small" dataSource={stockStructureRows.filter((row) => row.count > 0)} pagination={false} rowKey="key" columns={stockStructureColumns} />
             </ModuleActionPanel>

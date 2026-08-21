@@ -332,7 +332,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'materialCode', width: 120 },
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'materialName', ellipsis: true },
       {
-        title: t('app.kuaizhizao.warehouseOutbound.col.unit'),
+        title: t('common.unit'),
         dataIndex: 'unit',
         width: 88,
         align: 'center' as const,
@@ -510,7 +510,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
           />
         ),
       },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'unit', width: 60 },
+      { title: t('common.unit'), dataIndex: 'unit', width: 60 },
     ],
     [
       applyLineWarehouse,
@@ -828,7 +828,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
       }
     } catch (e: unknown) {
       const err = e as { message?: string; response?: { data?: { detail?: string } } };
-      messageApi.error(err?.message || err?.response?.data?.detail || t('app.kuaizhizao.warehouseOutbound.entry.saveFailed'));
+      messageApi.error(err?.message || err?.response?.data?.detail || t('common.saveFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -839,14 +839,14 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
       header={
         <>
           <Space align="center" size={8}>
-            <Button type="text" icon={<ArrowLeftOutlined />} aria-label={t('app.kuaizhizao.warehouseOutbound.action.back')} onClick={leavePage} />
+            <Button type="text" icon={<ArrowLeftOutlined />} aria-label={t('common.back')} onClick={leavePage} />
             <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
               {pageTitle}
             </Typography.Title>
           </Space>
           <Space wrap>
             <Button disabled={submitting || loading} onClick={leavePage}>
-              {t('app.kuaizhizao.warehouseOutbound.action.cancel')}
+              {t('common.cancel')}
             </Button>
             <Button loading={submitting} disabled={loading || pickLines.length === 0} onClick={() => void submit('draft')}>
               {t('app.kuaizhizao.warehouseOutbound.action.generateDraft')}

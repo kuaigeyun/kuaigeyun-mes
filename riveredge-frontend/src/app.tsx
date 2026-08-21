@@ -21,6 +21,7 @@ import enUS from 'antd/locale/en_US';
 import zhTW from 'antd/locale/zh_TW';
 import jaJP from 'antd/locale/ja_JP';
 import viVN from 'antd/locale/vi_VN';
+import loLA from './locales/antd/lo_LA';
 import {
   getToken,
   clearAuth,
@@ -39,7 +40,7 @@ import { queryClient } from './queryClient';
 import { refreshAccessTokenDetailed } from './utils/tokenRefresh';
 import { prefetchAvatarUrl } from './utils/avatar';
 import { FORM_LAYOUT } from './components/layout-templates/constants';
-import { ENGLISH_UI_FONT_FAMILY } from './constants/fonts';
+import { resolveUiFontFamily } from './constants/fonts';
 import { useGlobalStore } from './stores';
 import { syncLanguageFromPreferences } from './config/i18n';
 import { useAppShellReady } from './hooks/useAppShellReady';
@@ -693,6 +694,8 @@ const ANT_LOCALE_MAP: Record<string, typeof zhCN> = {
   'ja': jaJP,
   'vi-VN': viVN,
   'vi': viVN,
+  'lo-LA': loLA,
+  'lo': loLA,
 };
 
 // 主应用组件
@@ -783,7 +786,7 @@ export default function App() {
   // PC / H5 二分：<1200 已跳 H5；留在 PC 的一律桌面令牌，无中间平板档
   const responsiveThemeConfig = React.useMemo(() => {
     const { algorithm, token } = finalThemeConfig;
-    const isEnglishLocale = i18n.language?.startsWith('en');
+    const uiFontFamily = resolveUiFontFamily(i18n.language);
     /** 与 @ant-design/pro-layout 侧栏 collapsedWidth=64 一致。默认 Menu 令牌的 collapsedWidth 常为 2*controlHeightLG(≈80)，
      * 与 64px 侧栏不同宽时，inline-collapsed 用「百分比 padding」的居中在错误宽度上计算，整列会表现成贴左。 */
     const proLayoutSiderCollapsedWidth = 64;
@@ -798,7 +801,7 @@ export default function App() {
       algorithm,
       token: {
         ...token,
-        ...(isEnglishLocale ? { fontFamily: ENGLISH_UI_FONT_FAMILY } : {}),
+        ...(uiFontFamily ? { fontFamily: uiFontFamily } : {}),
         controlOutlineWidth: 0,
         controlOutline: 'transparent',
         paddingContentHorizontal: 16,

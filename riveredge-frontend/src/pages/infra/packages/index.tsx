@@ -31,22 +31,22 @@ export default function PackageManagementPage() {
   const createMutation = useMutation({
     mutationFn: (data: PackageCreate) => createPackage(data),
     onSuccess: () => {
-      messageApi.success(t('pages.infra.package.createSuccess'));
+      messageApi.success(t('common.createSuccess'));
       handleSave();
     },
     onError: (error: any) => {
-      messageApi.error(error?.message || t('pages.infra.package.createFailed'));
+      messageApi.error(error?.message || t('common.createFailed'));
     },
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: PackageUpdate }) => updatePackage(id, data),
     onSuccess: () => {
-      messageApi.success(t('pages.infra.package.updateSuccess'));
+      messageApi.success(t('common.updateSuccess'));
       handleSave();
     },
     onError: (error: any) => {
-      messageApi.error(error?.message || t('pages.infra.package.updateFailed'));
+      messageApi.error(error?.message || t('common.updateFailed'));
     },
   });
 
@@ -133,7 +133,7 @@ export default function PackageManagementPage() {
       actionRef.current?.reload();
     },
     onError: (error: any) => {
-      messageApi.error(error?.message || t('pages.infra.package.deleteFailed'));
+      messageApi.error(error?.message || t('common.deleteFailed'));
     },
   });
 
@@ -282,7 +282,7 @@ export default function PackageManagementPage() {
       key: 'allow_pro_apps',
       render: (_, record) => (
         <Tag color={record.allow_pro_apps ? 'success' : 'default'}>
-          {record.allow_pro_apps ? t('pages.infra.package.yes') : t('pages.infra.package.no')}
+          {record.allow_pro_apps ? t('common.yes') : t('common.no')}
         </Tag>
       ),
     },
@@ -297,7 +297,7 @@ export default function PackageManagementPage() {
       },
     },
     {
-      title: t('pages.infra.package.status'),
+      title: t('common.status'),
       dataIndex: 'is_active',
       key: 'is_active',
       render: (_, record) => (
@@ -307,14 +307,14 @@ export default function PackageManagementPage() {
       ),
     },
     {
-      title: t('pages.infra.admin.createdAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       key: 'created_at',
       valueType: 'dateTime',
       sorter: true,
     },
     {
-      title: t('pages.infra.package.actions'),
+      title: t('common.actions'),
       key: 'action',
       width: 120,
       render: (_: any, record: Package) => (
@@ -325,14 +325,14 @@ export default function PackageManagementPage() {
             onClick={() => handleEdit(record)}
             size="small"
           >
-            {t('pages.infra.package.edit')}
+            {t('common.edit')}
           </Button>
           <Popconfirm
             title={t('pages.infra.package.deleteConfirmTitle')}
             description={t('pages.infra.package.deleteConfirmContent', { name: record.name })}
             onConfirm={() => handleSingleDelete(record.id)}
-            okText={t('pages.infra.package.ok')}
-            cancelText={t('pages.infra.package.cancel')}
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
           >
             <Button
               type="link"
@@ -341,7 +341,7 @@ export default function PackageManagementPage() {
               size="small"
               loading={deleteMutation.isPending}
             >
-              {t('pages.infra.package.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>

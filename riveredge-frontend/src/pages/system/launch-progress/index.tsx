@@ -131,7 +131,7 @@ const LaunchProgressPage: React.FC = () => {
       key: 'name',
     },
     {
-      title: t('pages.system.launchProgress.columnStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       render: (status: string, record: any) => {
@@ -145,7 +145,7 @@ const LaunchProgressPage: React.FC = () => {
       },
     },
     {
-      title: t('pages.system.launchProgress.columnUpdatedAt'),
+      title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       key: 'updated_at',
       render: (text: string) => text || '-',
@@ -162,7 +162,7 @@ const LaunchProgressPage: React.FC = () => {
       key: 'name',
     },
     {
-      title: t('pages.system.launchProgress.columnStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => {
@@ -280,7 +280,7 @@ const LaunchProgressPage: React.FC = () => {
                   title={t('pages.system.launchProgress.trackingTitle')}
                   extra={
                     <Space>
-                      <Button icon={<ReloadOutlined />} onClick={loadProgressTracking}>{t('pages.system.launchProgress.refresh')}</Button>
+                      <Button icon={<ReloadOutlined />} onClick={loadProgressTracking}>{t('common.refresh')}</Button>
                       <Button type="primary" icon={<FileTextOutlined />} onClick={loadProgressReport}>
                         {t('pages.system.launchProgress.generateReport')}
                       </Button>
@@ -393,7 +393,7 @@ const LaunchProgressPage: React.FC = () => {
                   title={t('pages.system.launchProgress.checklistTitle')}
                   extra={
                     <Space>
-                      <Button icon={<ReloadOutlined />} onClick={loadChecklist}>{t('pages.system.launchProgress.refresh')}</Button>
+                      <Button icon={<ReloadOutlined />} onClick={loadChecklist}>{t('common.refresh')}</Button>
                       <Button type="primary" onClick={handleCheckItems}>{t('pages.system.launchProgress.runCheck')}</Button>
                       <Button icon={<FileTextOutlined />} onClick={loadCheckReport}>
                         {t('pages.system.launchProgress.generateReport')}

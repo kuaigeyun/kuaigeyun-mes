@@ -636,7 +636,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
 
   const handleSubmit = async (record: EngineeringDrawing) => {
     getAntdModal().confirm({
-      title: t('app.master-data.drawings.submit'),
+      title: t('common.submit'),
       content: t('app.master-data.drawings.submitConfirm'),
       onOk: async () => {
         await drawingApi.submit(record.uuid);
@@ -811,7 +811,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
             ) : null}
             {canSubmit ? (
               <Button key="submit" {...rowActionKind('submit')} onClick={() => handleSubmit(record)}>
-                {t('app.master-data.drawings.submit')}
+                {t('common.submit')}
               </Button>
             ) : null}
             {canDelete ? (
@@ -924,7 +924,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         )}
         {canPrint ? (
           <Button key="print" {...rowActionKind('print')} icon={<PrinterOutlined />} onClick={() => void openDrawingPrint(record)}>
-            {t('app.master-data.drawings.print')}
+            {t('common.print')}
           </Button>
         ) : null}
         {!compact && record.file && !showInlinePreview && (
@@ -982,7 +982,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
           ),
       },
       {
-        title: t('app.master-data.drawings.status'),
+        title: t('common.status'),
         dataIndex: 'status',
         render: (_, r) => <MarkerTag color={STATUS_COLOR[r.status]}>{statusLabel(r.status)}</MarkerTag>,
       },
@@ -1077,7 +1077,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         dataIndex: 'operations',
         render: (_, r) => formatAssociationLabels(r.operations),
       },
-      { title: t('app.master-data.drawings.description'), dataIndex: 'description' },
+      { title: t('common.remark'), dataIndex: 'description' },
       {
         title: t('app.master-data.drawings.checkedOutBy'),
         dataIndex: 'checkedOutByName',
@@ -1151,7 +1151,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
           ),
       },
       {
-        title: t('app.master-data.drawings.status'),
+        title: t('common.status'),
         dataIndex: 'status',
         width: 88,
         valueType: 'select',
@@ -1568,12 +1568,12 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
                 ? {
                 key: 'delete',
                 danger: true,
-                label: t('app.master-data.drawings.folder.delete'),
+                label: t('common.delete'),
                 onClick: () => {
                   const target = folderCtx;
                   setFolderCtx(null);
                   getAntdModal().confirm({
-                    title: t('app.master-data.drawings.folder.delete'),
+                    title: t('common.delete'),
                     content: t('app.master-data.drawings.folder.deleteConfirm'),
                     okButtonProps: { danger: true },
                     onOk: async () => {

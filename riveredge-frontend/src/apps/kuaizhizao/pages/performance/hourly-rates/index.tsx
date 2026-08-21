@@ -77,7 +77,7 @@ const HourlyRatesPage: React.FC = () => {
         rate: r.rate,
         is_active: r.is_active !== false,
       });
-    }).catch((e: any) => messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed')));
+    }).catch((e: any) => messageApi.error(e?.message || t('common.loadFailed')));
   }, [modalVisible, editId, messageApi, t]);
 
   const detailColumns: ProDescriptionsItemProps<HourlyRate>[] = useMemo(
@@ -86,12 +86,12 @@ const HourlyRatesPage: React.FC = () => {
       { title: t('app.kuaizhizao.performance.common.columns.position'), dataIndex: 'position_name' },
       { title: t('app.kuaizhizao.performance.hourlyRates.columns.rate'), dataIndex: 'rate' },
       {
-        title: t('app.kuaizhizao.performance.common.form.active'),
+        title: t('common.enabled'),
         dataIndex: 'is_active',
         render: (_, r) => renderActiveTag(t, r?.is_active !== false),
       },
-      { title: t('app.kuaizhizao.performance.common.columns.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-      { title: t('app.kuaizhizao.performance.common.columns.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+      { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
     ],
     [t],
   );
@@ -107,10 +107,10 @@ const HourlyRatesPage: React.FC = () => {
   const handleDelete = async (r: HourlyRate) => {
     try {
       await employeePerformanceApi.deleteHourlyRate(r.id);
-      messageApi.success(t('app.kuaizhizao.performance.common.messages.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
+      messageApi.error(e?.message || t('common.deleteFailed'));
     }
   };
   const loadDetail = async (id: number) => {
@@ -120,7 +120,7 @@ const HourlyRatesPage: React.FC = () => {
       setDetail(await employeePerformanceApi.getHourlyRate(id));
     } catch (error) {
       setDetail(null);
-      setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.performance.common.messages.loadFailed')));
+      setDetailError(getApiErrorMessage(error, t('common.loadFailed')));
     } finally {
       setDetailLoading(false);
     }
@@ -174,14 +174,14 @@ const HourlyRatesPage: React.FC = () => {
         sorter: true,
       },
       {
-        title: t('app.kuaizhizao.performance.common.form.active'),
+        title: t('common.enabled'),
         dataIndex: 'is_active',
         hideInTable: true,
         valueEnum: getPerformanceYesNoValueEnum(t),
       },
       ...buildDocumentAuditColumns<HourlyRate>(t),
       {
-        title: t('app.kuaizhizao.performance.common.columns.status'),
+        title: t('common.status'),
         dataIndex: 'is_active',
         width: 88,
         minWidth: 88,
@@ -191,7 +191,7 @@ const HourlyRatesPage: React.FC = () => {
         render: (_, r) => renderActiveTag(t, r.is_active),
       },
       {
-        title: t('app.kuaizhizao.performance.common.columns.actions'),
+        title: t('common.actions'),
         key: 'action',
         valueType: 'option',
         fixed: 'right',
@@ -200,18 +200,18 @@ const HourlyRatesPage: React.FC = () => {
           <Space>
             {ratePerms.canRead ? (
               <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-                {t('app.kuaizhizao.performance.common.actions.detail')}
+                {t('common.detail')}
               </Button>
             ) : null}
             {ratePerms.canUpdate ? (
               <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-                {t('app.kuaizhizao.performance.common.actions.edit')}
+                {t('common.edit')}
               </Button>
             ) : null}
             {ratePerms.canDelete ? (
               <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.hourlyRates.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
                 <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                  {t('app.kuaizhizao.performance.common.actions.delete')}
+                  {t('common.delete')}
                 </Button>
               </Popconfirm>
             ) : null}
@@ -247,7 +247,7 @@ const HourlyRatesPage: React.FC = () => {
               const { data, total } = normalizePerformanceListResponse(response);
               return { data: data as HourlyRate[], success: true, total };
             } catch (e: any) {
-              messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
+              messageApi.error(e?.message || t('common.loadFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
@@ -261,7 +261,7 @@ const HourlyRatesPage: React.FC = () => {
               messageApi.success(t('app.kuaizhizao.performance.common.messages.deleteBatchSuccess', { count: keys.length }));
               actionRef.current?.reload();
             } catch (error: any) {
-              messageApi.error(error?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
+              messageApi.error(error?.message || t('common.deleteFailed'));
             }
           }}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.performance.hourlyRates.messages.deleteBatchConfirm', { count })}
@@ -302,10 +302,10 @@ const HourlyRatesPage: React.FC = () => {
           };
           if (editId) {
             await employeePerformanceApi.updateHourlyRate(editId, payload);
-            messageApi.success(t('app.kuaizhizao.performance.common.messages.updateSuccess'));
+            messageApi.success(t('common.updateSuccess'));
           } else {
             await employeePerformanceApi.createHourlyRate(payload);
-            messageApi.success(t('app.kuaizhizao.performance.common.messages.createSuccess'));
+            messageApi.success(t('common.createSuccess'));
           }
           setModalVisible(false);
           setEditId(null);
@@ -335,7 +335,7 @@ const HourlyRatesPage: React.FC = () => {
           colProps={{ span: 12 }}
         />
         <ProFormDigit name="rate" label={t('app.kuaizhizao.performance.hourlyRates.form.rate')} rules={[{ required: true }]} min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
-        <ProFormSwitch name="is_active" label={t('app.kuaizhizao.performance.common.form.active')} colProps={{ span: 12 }} />
+        <ProFormSwitch name="is_active" label={t('common.enabled')} colProps={{ span: 12 }} />
       </FormModalTemplate>
 
       <PerformanceConfigDetailDrawer

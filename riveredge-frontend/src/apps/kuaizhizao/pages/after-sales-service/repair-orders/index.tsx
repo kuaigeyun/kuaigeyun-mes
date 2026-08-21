@@ -116,7 +116,7 @@ const RepairOrdersPage: React.FC = () => {
             render: (_, row) => (row.reported_at ? formatDateTime(row.reported_at) : '-'),
           },
           {
-            title: t('app.kuaizhizao.afterSalesService.repairOrder.field.status'),
+            title: t('common.status'),
             key: 'lifecycle',
             dataIndex: 'status',
             fixed: 'right',
@@ -250,7 +250,7 @@ const RepairOrdersPage: React.FC = () => {
                       messageApi.success(t('app.kuaizhizao.afterSalesService.repairOrder.closeSuccess'));
                     }}
                   >
-                    {t('app.kuaizhizao.afterSalesService.repairOrder.actionClose')}
+                    {t('common.close')}
                   </Button>
                 ),
               },

@@ -222,7 +222,7 @@ const CardView: React.FC = () => {
             onClick={loadMessages}
             loading={loading}
           >
-            {t('pages.personal.messages.refresh')}
+            {t('common.refresh')}
           </Button>,
         ]}
       >
@@ -391,7 +391,7 @@ const CardView: React.FC = () => {
                                   </div>
                                   
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.personal.messages.status')}：</Text>
+                                    <Text type="secondary" style={{ fontSize: 12 }}>{t('common.status')}：</Text>
                                     <Badge
                                       status={statusInfo.status}
                                       text={statusInfo.text}
@@ -457,7 +457,7 @@ const CardView: React.FC = () => {
               <Descriptions.Item label={t('pages.personal.messages.recipient')}>
                 {currentMessage.recipient}
               </Descriptions.Item>
-              <Descriptions.Item label={t('pages.personal.messages.status')}>
+              <Descriptions.Item label={t('common.status')}>
                 <Badge
                   status={getStatusInfo(currentMessage.status).status}
                   text={getStatusInfo(currentMessage.status).text}
@@ -503,7 +503,7 @@ const CardView: React.FC = () => {
                   {formatDateTimeBySiteSetting(currentMessage.sent_at)}
                 </Descriptions.Item>
               )}
-              <Descriptions.Item label={t('pages.personal.messages.createdAt')}>
+              <Descriptions.Item label={t('common.createdAt')}>
                 {formatDateTimeBySiteSetting(currentMessage.created_at)}
               </Descriptions.Item>
             </Descriptions>

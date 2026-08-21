@@ -119,13 +119,13 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
       if (isEdit && editUuid) {
         payload = omitPresetLocalizedPayloadFields('role', editPresetCode, payload);
         await updateRole(editUuid, payload as UpdateRoleData);
-        messageApi.success(t('pages.system.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createRole({ ...payload, create_position: createPosition } as CreateRoleData);
         messageApi.success(
           createPosition
             ? t('field.role.createSuccessWithPosition')
-            : t('pages.system.createSuccess'),
+            : t('common.createSuccess'),
         );
       }
       void queryClient.invalidateQueries({ queryKey: EFFECTIVE_HOME_QUERY_KEY });

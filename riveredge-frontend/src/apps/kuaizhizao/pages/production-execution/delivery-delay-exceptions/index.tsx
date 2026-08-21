@@ -264,7 +264,7 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
     },
     ...buildDocumentAuditColumns<DeliveryDelayException>(t),
     {
-      title: t(`${P}.col.status`),
+      title: t('common.status'),
       // 搜索仍绑 status；key 声明列身份，UniTable 右固定于操作列之前
       key: 'lifecycle',
       dataIndex: 'status',
@@ -466,7 +466,7 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
             </div>
             <ProFormTextArea
               name="remarks"
-              label={t(`${P}.field.remarks`)}
+              label={t('common.remark')}
               placeholder={t(`${P}.placeholder.handleRemarksOptional`)}
               fieldProps={{
                 rows: 4,

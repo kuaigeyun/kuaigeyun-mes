@@ -258,12 +258,12 @@ const MoldDetailPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.mold.colNeedsCalibration'),
         dataIndex: 'needs_calibration',
-        render: (_, record) => (record.needs_calibration ? t('app.kuaizhizao.mold.yes') : t('app.kuaizhizao.mold.no')),
+        render: (_, record) => (record.needs_calibration ? t('common.yes') : t('common.no')),
       },
       { title: t('app.kuaizhizao.mold.colCalibrationPeriod'), dataIndex: 'calibration_period' },
       { title: t('app.kuaizhizao.mold.colLastCalibrationDate'), dataIndex: 'last_calibration_date', valueType: 'date' },
       { title: t('app.kuaizhizao.mold.colNextCalibrationDate'), dataIndex: 'next_calibration_date', valueType: 'date' },
-      { title: t('app.kuaizhizao.mold.fieldDescription'), dataIndex: 'description', span: 2 },
+      { title: t('common.remark'), dataIndex: 'description', span: 2 },
       { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
       { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
     ],
@@ -332,7 +332,7 @@ const MoldDetailPage: React.FC = () => {
         width: 120,
         render: (v: string) => (v ? formatDateBySiteSetting(v) : '-'),
       },
-      { title: t('app.kuaizhizao.mold.colRemark'), dataIndex: 'remark', ellipsis: true },
+      { title: t('common.remark'), dataIndex: 'remark', ellipsis: true },
     ],
     [t],
   );
@@ -805,7 +805,7 @@ const MoldDetailPage: React.FC = () => {
               <Button icon={<UploadOutlined />}>{t('app.kuaizhizao.mold.upload')}</Button>
             </Upload>
           </Form.Item>
-          <Form.Item name="remark" label={t('app.kuaizhizao.mold.colRemark')}>
+          <Form.Item name="remark" label={t('common.remark')}>
             <Input.TextArea rows={2} placeholder={t('app.kuaizhizao.mold.phRemark')} />
           </Form.Item>
         </Form>

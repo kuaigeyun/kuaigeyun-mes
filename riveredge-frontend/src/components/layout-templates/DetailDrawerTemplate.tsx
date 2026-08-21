@@ -408,7 +408,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   const tabItems = [
     {
       key: DETAIL_TAB_KEY,
-      label: t('app.uniDetail.tabDetail'),
+      label: t('common.detail'),
       children: detailBody,
     },
     ...(hasHistoryTab && historyTab

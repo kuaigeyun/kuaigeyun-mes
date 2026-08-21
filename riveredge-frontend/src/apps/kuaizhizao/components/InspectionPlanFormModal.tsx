@@ -173,7 +173,7 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
       }
       await submitPlan(values);
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.quality.plans.messages.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -264,7 +264,7 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
         <Col span={24}>
           <ProFormTextArea
             name="remarks"
-            label={t('app.kuaizhizao.quality.common.form.remarks')}
+            label={t('common.remark')}
             placeholder={t('app.kuaizhizao.quality.plans.placeholder.optional')}
           />
         </Col>

@@ -112,7 +112,7 @@ export function QualityInspectionDetailDrawer<T extends QualityInspectionDetailR
       collaborationTitleSuffix={
         contentReady && nextSteps && nextSteps.length > 0 ? (
           <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-            {t('components.uniLifecycle.nextStep')}：
+            {t('common.next')}：
             {nextSteps.join(t('components.uniLifecycle.nextStepSeparator'))}
           </Typography.Text>
         ) : undefined

@@ -29,9 +29,9 @@ const LicensesPage: React.FC = () => (
       { name: 'expiry_date', labelKey: 'app.kuaioa.license.expiry', width: 120, type: 'date' },
       { name: 'reminder_days', labelKey: 'app.kuaioa.common.reminderDays', width: 100, type: 'number', hideInTable: true },
       { name: 'file_uuid', labelKey: 'app.kuaioa.license.attachment', type: 'file', hideInTable: true },
-      { name: 'status', labelKey: 'app.kuaioa.common.status', width: 100 },
+      { name: 'status', labelKey: 'common.status', width: 100 },
       { name: 'issuing_authority', labelKey: 'app.kuaioa.license.authority', hideInTable: true },
-      { name: 'notes', labelKey: 'app.kuaioa.common.notes', hideInTable: true, type: 'textarea' },
+      { name: 'notes', labelKey: 'common.remark', hideInTable: true, type: 'textarea' },
     ]}
     listFn={listComplianceLicenses}
     expiringListFn={() => listExpiringLicenses(30)}

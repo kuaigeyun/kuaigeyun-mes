@@ -697,7 +697,7 @@ const ReceiptsPage: React.FC = () => {
             </Button>,
             record.status === 'Draft' && receiptPerms.canAction?.('audit') ? (
               <Button {...rowActionKind('audit')} key="cf" onClick={() => handleConfirm(record)}>
-                {t('app.kuaicaiwu.common.confirm')}
+                {t('common.confirm')}
               </Button>
             ) : null,
             record.status === 'Confirmed' && Number(record.unsettled_amount ?? 0) > 0 ? (
@@ -821,7 +821,7 @@ const ReceiptsPage: React.FC = () => {
         scopeOptions={pullFromReceivableQuery.scopeOptions}
         scope={pullFromReceivableQuery.scope}
         onScopeChange={pullFromReceivableQuery.handleScopeChange}
-        okText={t('components.uniLifecycle.nextStep')}
+        okText={t('common.next')}
       />
 
       <Modal
@@ -959,7 +959,7 @@ const ReceiptsPage: React.FC = () => {
                   acceptanceNoteDirection="receivable"
                   partnerFieldName="customer_id"
                 />
-                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} colProps={financeColFull} />
+                <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 3 }} colProps={financeColFull} />
                 <DocumentAttachmentsField category="receipt_attachments" />
               </ProForm>
             ) : null}
@@ -1022,7 +1022,7 @@ const ReceiptsPage: React.FC = () => {
           acceptanceNoteDirection="receivable"
           partnerFieldName="customer_id"
         />
-        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} colProps={financeColFull} />
+        <ProFormTextArea name="notes" label={t('common.remark')} colProps={financeColFull} />
         <DocumentAttachmentsField category="receipt_attachments" />
       </ModalForm>
 
@@ -1049,7 +1049,7 @@ const ReceiptsPage: React.FC = () => {
                   visible: detailRecord.status === 'Draft' && Boolean(receiptPerms.canAction?.('audit')),
                   render: (
                     <Button {...rowActionKind('audit')} onClick={() => void handleConfirm(detailRecord)}>
-                      {t('app.kuaicaiwu.common.confirm')}
+                      {t('common.confirm')}
                     </Button>
                   ),
                 },

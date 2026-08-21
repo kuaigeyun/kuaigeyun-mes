@@ -33,7 +33,7 @@ const PermissionListPage: React.FC = () => {
       { title: t('field.permission.name'), dataIndex: 'name' },
       { title: t('field.permission.code'), dataIndex: 'code' },
       { title: t('field.permission.resource'), dataIndex: 'resource' },
-      { title: t('field.permission.action'), dataIndex: 'action' },
+      { title: t('common.actions'), dataIndex: 'action' },
       {
         title: t('field.permission.type'),
         dataIndex: 'permission_type',
@@ -52,12 +52,12 @@ const PermissionListPage: React.FC = () => {
         dataIndex: 'is_system',
         render: (_: unknown, entity: Permission) =>
           entity?.is_system ? (
-            <Tag color="purple">{t('field.role.yes')}</Tag>
+            <Tag color="purple">{t('common.yes')}</Tag>
           ) : (
-            <Tag>{t('field.role.no')}</Tag>
+            <Tag>{t('common.no')}</Tag>
           ),
       },
-      { title: t('field.permission.description'), dataIndex: 'description', span: 2 },
+      { title: t('common.remark'), dataIndex: 'description', span: 2 },
       { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
       { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
     ],
@@ -127,7 +127,7 @@ const PermissionListPage: React.FC = () => {
       width: 150,
     },
     {
-      title: t('field.permission.action'),
+      title: t('common.actions'),
       dataIndex: 'action',
       width: 150,
     },
@@ -157,12 +157,12 @@ const PermissionListPage: React.FC = () => {
       width: 100,
       render: (_, record) => (
         <Tag color={record.is_system ? 'default' : 'blue'}>
-          {record.is_system ? t('field.role.yes') : t('field.role.no')}
+          {record.is_system ? t('common.yes') : t('common.no')}
         </Tag>
       ),
     },
     {
-      title: t('field.permission.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -181,7 +181,7 @@ const PermissionListPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => [
             <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
-              {t('field.permission.view')}
+              {t('common.view')}
             </Button>,
           ],
     },

@@ -195,7 +195,7 @@ const DemandHistoryPane: React.FC<{ demandId: number; refreshKey: number }> = ({
                     : v || '-',
             },
             {
-              title: t('app.kuaizhizao.demandManagement.colDescription'),
+              title: t('common.remark'),
               dataIndex: 'message',
               ellipsis: true,
               render: (v: string) => v || '-',
@@ -440,7 +440,7 @@ export const DemandDetailDrawer: React.FC<DemandDetailDrawerProps> = ({
         dataIndex: 'computation_code',
         key: 'linked_computation_code',
       },
-      { title: t('app.kuaizhizao.salesOrder.notes'), dataIndex: 'notes', span: 3 },
+      { title: t('common.remark'), dataIndex: 'notes', span: 3 },
     );
     return alignDescriptionColumns(cols as ProDescriptionsItemProps<Record<string, unknown>>[]);
   }, [t, effective.demand_type, dictLabelMap, formatDemandTypeLabel, formatBusinessModeLabel, handleCopy]);
@@ -462,7 +462,7 @@ export const DemandDetailDrawer: React.FC<DemandDetailDrawerProps> = ({
         },
       },
       {
-        title: t('app.kuaizhizao.salesOrder.unit'),
+        title: t('common.unit'),
         dataIndex: 'material_unit',
         width: 80,
         render: (v: string) => <MaterialUnitLabel value={v} />,
@@ -587,7 +587,7 @@ export const DemandDetailDrawer: React.FC<DemandDetailDrawerProps> = ({
       collaborationTitleSuffix={
         contentReady && showNextInTitle ? (
           <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-            {t('components.uniLifecycle.nextStep')}：
+            {t('common.next')}：
             {nextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
           </Typography.Text>
         ) : undefined

@@ -226,7 +226,7 @@ const CardView: React.FC = () => {
             onClick={loadBackups}
             loading={loading}
           >
-            {t('pages.system.dataBackups.refresh')}
+            {t('common.refresh')}
           </Button>,
         ]}
       >
@@ -345,7 +345,7 @@ const CardView: React.FC = () => {
                           okText={t('common.confirm')}
                           cancelText={t('common.cancel')}
                         >
-                          <Tooltip title={t('pages.system.dataBackups.deleteTooltip')}>
+                          <Tooltip title={t('common.delete')}>
                             <DeleteOutlined
                               style={{ fontSize: 16, color: '#ff4d4f' }}
                             />
@@ -461,7 +461,7 @@ const CardView: React.FC = () => {
                 {currentBackup.backup_tables.join(', ')}
               </Descriptions.Item>
             )}
-            <Descriptions.Item label={t('pages.system.dataBackups.columnStatus')}>
+            <Descriptions.Item label={t('common.status')}>
               <Badge
                 status={getStatusInfo(currentBackup.status).status}
                 text={getStatusInfo(currentBackup.status).text}
@@ -493,10 +493,10 @@ const CardView: React.FC = () => {
                 />
               </Descriptions.Item>
             )}
-            <Descriptions.Item label={t('pages.system.dataBackups.columnCreatedAt')}>
+            <Descriptions.Item label={t('common.createdAt')}>
               {formatDateTime(currentBackup.created_at, 'YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
-            <Descriptions.Item label={t('pages.system.dataBackups.columnUpdatedAt')}>
+            <Descriptions.Item label={t('common.updatedAt')}>
               {formatDateTime(currentBackup.updated_at, 'YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
           </Descriptions>

@@ -108,12 +108,12 @@ export const ServiceAssetDetailDrawer: React.FC<ServiceAssetDetailDrawerProps> =
         { title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.warrantyMonths'), dataIndex: 'warranty_months' },
         { title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.warrantyPolicy'), dataIndex: 'warranty_policy' },
         {
-          title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.status'),
+          title: t('common.status'),
           dataIndex: 'status',
           render: (_, row) => renderAfterSalesStatusTag(row.status, AFTER_SALES_ASSET_STATUS_COLOR),
         },
         {
-          title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.notes'),
+          title: t('common.remark'),
           dataIndex: 'notes',
           span: 3,
         },

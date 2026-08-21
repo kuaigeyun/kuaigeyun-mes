@@ -349,7 +349,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
       }
     } catch (e: unknown) {
       const err = e as { message?: string; response?: { data?: { detail?: string } } };
-      messageApi.error(err?.message || err?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.msg.saveFailed'));
+      messageApi.error(err?.message || err?.response?.data?.detail || t('common.saveFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -361,7 +361,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
       { title: t('app.kuaizhizao.warehouseInbound.col.spec'), dataIndex: 'material_spec', width: 120, ellipsis: true, render: (v: unknown) => v || '—' },
       {
-        title: t('app.kuaizhizao.warehouseInbound.col.unit'),
+        title: t('common.unit'),
         dataIndex: 'material_unit',
         width: 88,
         align: 'center' as const,
@@ -438,14 +438,14 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
       header={
         <>
           <Space align="center" size={8}>
-            <Button type="text" icon={<ArrowLeftOutlined />} aria-label={t('app.kuaizhizao.warehouseInbound.action.back')} onClick={leavePage} />
+            <Button type="text" icon={<ArrowLeftOutlined />} aria-label={t('common.back')} onClick={leavePage} />
             <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
               {pageTitle}
             </Typography.Title>
           </Space>
           <Space wrap>
             <Button disabled={submitting || loading} onClick={leavePage}>
-              {t('app.kuaizhizao.warehouseInbound.action.cancel')}
+              {t('common.cancel')}
             </Button>
             <Button loading={submitting} disabled={loading} onClick={() => void submit('draft')}>
               {t('app.kuaizhizao.warehouseInbound.action.generateDraft')}

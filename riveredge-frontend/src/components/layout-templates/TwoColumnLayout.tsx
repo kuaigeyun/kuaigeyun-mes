@@ -324,7 +324,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
           >
             {search.onSearch ? (
               <Input.Search
-                placeholder={search.placeholder || t('components.layoutTemplates.twoColumn.searchPlaceholder')}
+                placeholder={search.placeholder || t('common.search')}
                 value={search.value}
                 onChange={(e) => search.onChange?.(e.target.value)}
                 onSearch={(v) => search.onSearch?.(v)}
@@ -333,7 +333,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
               />
             ) : (
               <Input
-                placeholder={search.placeholder || t('components.layoutTemplates.twoColumn.searchPlaceholder')}
+                placeholder={search.placeholder || t('common.search')}
                 prefix={<SearchOutlined />}
                 value={search.value}
                 onChange={(e) => search.onChange?.(e.target.value)}

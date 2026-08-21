@@ -239,7 +239,7 @@ const EquipmentPage: React.FC = () => {
         },
         {
           field: 'description',
-          labelKey: 'app.kuaizhizao.equipment.import.description',
+          labelKey: 'common.remark',
           aliases: ['备注', '描述', 'description'],
         },
         {
@@ -271,7 +271,7 @@ const EquipmentPage: React.FC = () => {
         '',
         pickExample(
           [...EQUIPMENT_IMPORT_IS_ACTIVE_OPTIONS],
-          t('app.kuaizhizao.equipment.importExample.isActive'),
+          t('common.yes'),
         ),
       ],
     );
@@ -1287,7 +1287,7 @@ const EquipmentPage: React.FC = () => {
           <Col span={24}>
             <ProFormTextArea
               name="description"
-              label={t('app.kuaizhizao.equipment.fieldDescription')}
+              label={t('common.remark')}
               placeholder={t('app.kuaizhizao.equipment.phDescription')}
               fieldProps={{ rows: 3 }}
             />

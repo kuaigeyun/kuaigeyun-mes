@@ -94,3 +94,10 @@ def test_anonymous_hit_does_not_ban_lan_ip():
         assert exc.details["ip_banned"] is False
     assert asyncio.run(guard.is_banned(LAN_IP)) is False
     asyncio.run(guard.ensure_ip_allowed(LAN_IP, user_id=11))
+
+
+def test_control_disabled_without_tenant():
+    from core.services.content.sensitive_word_ip_guard import tenant_has_sensitive_word_control
+
+    assert asyncio.run(tenant_has_sensitive_word_control(None)) is False
+    assert asyncio.run(tenant_has_sensitive_word_control(0)) is False

@@ -125,7 +125,7 @@ const TaxSettingsPage: React.FC = () => {
   const rateColumns = [
     { title: t(`${NS}.rate`, { defaultValue: '税率' }), dataIndex: 'label', width: 120 },
     {
-      title: t(`${NS}.active`, { defaultValue: '启用' }),
+      title: t('common.enabled', { defaultValue: '启用' }),
       dataIndex: 'is_active',
       width: 80,
       align: 'center' as const,

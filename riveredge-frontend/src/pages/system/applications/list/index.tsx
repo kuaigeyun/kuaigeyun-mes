@@ -810,7 +810,7 @@ const ApplicationListPage: React.FC = () => {
       actionRef.current?.reload();
       refreshApplicationMenusAfterBackendMenuChange();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.applications.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
     }
   };
 
@@ -854,7 +854,7 @@ const ApplicationListPage: React.FC = () => {
       actionRef.current?.reload();
       refreshApplicationMenusAfterBackendMenuChange();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.applications.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -1001,8 +1001,8 @@ const ApplicationListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('field.customField.yes'), status: 'Default' },
-        false: { text: t('field.customField.no'), status: 'Processing' },
+        true: { text: t('common.yes'), status: 'Default' },
+        false: { text: t('common.no'), status: 'Processing' },
       },
       render: (_, record) => renderSystemYesNoTag(t, record.is_system),
     },
@@ -1025,7 +1025,7 @@ const ApplicationListPage: React.FC = () => {
         ),
     },
     {
-      title: t('pages.system.applications.activeStatus'),
+      title: t('common.status'),
       dataIndex: 'is_active',
       width: 100,
       minWidth: 100,
@@ -1033,11 +1033,11 @@ const ApplicationListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('pages.system.applications.enabled'), status: 'Success' },
-        false: { text: t('pages.system.applications.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) =>
-        renderSystemActiveTag(t, record.is_active, 'pages.system.applications.enabled', 'pages.system.applications.disabled'),
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
       title: t('pages.system.applications.version'),
@@ -1049,7 +1049,7 @@ const ApplicationListPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('pages.system.applications.actions'),
+      title: t('common.actions'),
       key: 'action',
       valueType: 'option',
       fixed: 'right',
@@ -1065,7 +1065,7 @@ const ApplicationListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            {t('pages.system.applications.view')}
+            {t('common.view')}
           </Button>
         ];
 
@@ -1639,7 +1639,7 @@ const ApplicationListPage: React.FC = () => {
         </div>
         <div className="application-center-card__grow" />
         <div className="application-center-card__meta">
-          <span>{t('pages.system.applications.codeLabel')}: {application.code}</span>
+          <span>{t('common.code')}: {application.code}</span>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
             <Tag
               color={application.is_installed ? 'success' : 'error'}
@@ -1663,15 +1663,15 @@ const ApplicationListPage: React.FC = () => {
         </div>
         <div className="application-center-card__tray">
           <div className="application-center-card__tray-cell">
-            <span style={{ fontSize: 12, color: themeToken.colorTextSecondary }}>{t('pages.system.applications.activeStatus')}</span>
+            <span style={{ fontSize: 12, color: themeToken.colorTextSecondary }}>{t('common.status')}</span>
             <Tooltip title={!canManageAppLifecycle ? t('pages.system.applications.platformAdminOnlyLifecycle') : undefined}>
               <span style={{ display: 'inline-flex' }}>
                 <Switch
                   checked={application.is_active}
                   onChange={(checked) => handleToggleActive(application, checked)}
                   disabled={!application.is_installed || !canManageAppLifecycle}
-                  checkedChildren={t('pages.system.applications.enabled')}
-                  unCheckedChildren={t('pages.system.applications.disabled')}
+                  checkedChildren={t('common.enabled')}
+                  unCheckedChildren={t('common.disabled')}
                 />
               </span>
             </Tooltip>
@@ -1721,14 +1721,14 @@ const ApplicationListPage: React.FC = () => {
         ),
     },
     {
-      title: t('pages.system.applications.activeStatus'),
+      title: t('common.status'),
       dataIndex: 'is_active',
       render: (dom: any) =>
-        renderSystemActiveTag(t, Boolean(dom), 'pages.system.applications.enabled', 'pages.system.applications.disabled'),
+        renderSystemActiveTag(t, Boolean(dom), 'common.enabled', 'common.disabled'),
     },
     { title: t('pages.system.applications.sortOrder'), dataIndex: 'sort_order' },
-    { title: t('pages.system.applications.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-    { title: t('pages.system.applications.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
 
   return (
@@ -1841,7 +1841,7 @@ const ApplicationListPage: React.FC = () => {
                 items = items.filter((d) => keys.includes(d.uuid));
               }
               if (items.length === 0) {
-                messageApi.warning(t('pages.system.applications.noDataExport'));
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               await downloadRecordsAsXlsx(
@@ -1850,7 +1850,7 @@ const ApplicationListPage: React.FC = () => {
               );
               messageApi.success(t('pages.system.applications.exportSuccessCount', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || t('pages.system.applications.exportFailed'));
+              messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
           pagination={{
@@ -2046,7 +2046,7 @@ const ApplicationListPage: React.FC = () => {
               },
             },
             {
-              title: t('pages.system.applications.actions'),
+              title: t('common.actions'),
               key: 'actions',
               width: 100,
               render: (_, row) => (

@@ -1343,7 +1343,7 @@ const OnboardingWizardPage: React.FC = () => {
                                         }));
                                         setRealCountsRefreshKey((k) => k + 1);
                                       } catch (err: any) {
-                                        messageApi.error(err?.message || t('pages.system.onboardingWizard.actionFailed'));
+                                        messageApi.error(err?.message || t('common.operationFailed'));
                                       }
                                     }}
                                     style={{
@@ -1861,7 +1861,7 @@ const OnboardingWizardPage: React.FC = () => {
                   ),
               },
               {
-                title: t('pages.system.onboardingWizard.modal.columnAction'),
+                title: t('common.actions'),
                 key: 'action',
                 width: 132,
                 align: 'center',

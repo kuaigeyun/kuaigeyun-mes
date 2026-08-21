@@ -872,7 +872,7 @@ const ReceiptNoticesPage: React.FC = () => {
         hideInTable: true,
       },
       {
-        title: t('app.kuaizhizao.shipmentNotice.import.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'notice_quantity',
         width: 120,
         align: 'right',
@@ -975,7 +975,7 @@ const ReceiptNoticesPage: React.FC = () => {
         ),
       },
       {
-        title: t('app.kuaizhizao.salesOrder.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'suggested_quantity',
         width: 100,
         align: 'right' as const,
@@ -1057,17 +1057,17 @@ const ReceiptNoticesPage: React.FC = () => {
         ),
       },
       {
-        title: t('app.kuaizhizao.shipmentNotice.import.unit'),
+        title: t('common.unit'),
         dataIndex: 'material_unit',
         width: 80,
         render: (_: any, __: any, index: number) => (
           <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-            <Input placeholder={t('app.kuaizhizao.shipmentNotice.import.unit')} size="small" />
+            <Input placeholder={t('common.unit')} size="small" />
           </AntForm.Item>
         ),
       },
       {
-        title: t('app.kuaizhizao.shipmentNotice.import.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'notice_quantity',
         width: 100,
         align: 'right' as const,
@@ -1080,7 +1080,7 @@ const ReceiptNoticesPage: React.FC = () => {
             ]}
             style={{ margin: 0 }}
           >
-            <InputNumber placeholder={t('app.kuaizhizao.shipmentNotice.import.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
+            <InputNumber placeholder={t('common.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
           </AntForm.Item>
         ),
       },
@@ -1103,8 +1103,8 @@ const ReceiptNoticesPage: React.FC = () => {
     () => [
       { title: t('app.kuaizhizao.shipmentNotice.import.materialCode'), dataIndex: 'material_code', width: 120 },
       { title: t('app.kuaizhizao.shipmentNotice.import.materialName'), dataIndex: 'material_name', width: 150 },
-      { title: t('app.kuaizhizao.shipmentNotice.import.unit'), dataIndex: 'material_unit', width: 60 },
-      { title: t('app.kuaizhizao.shipmentNotice.import.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right' as const, render: formatQuantity },
+      { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
+      { title: t('common.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right' as const, render: formatQuantity },
       { title: t('app.kuaizhizao.shipmentNotice.import.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' as const },
     ],
     [t, i18n.language],
@@ -1114,8 +1114,8 @@ const ReceiptNoticesPage: React.FC = () => {
     () => [
       { title: t('app.kuaizhizao.shipmentNotice.import.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
       { title: t('app.kuaizhizao.shipmentNotice.import.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
-      { title: t('app.kuaizhizao.shipmentNotice.import.unit'), dataIndex: 'material_unit', width: 60 },
-      { title: t('app.kuaizhizao.shipmentNotice.import.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right' as const, render: formatQuantity },
+      { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
+      { title: t('common.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right' as const, render: formatQuantity },
       { title: t('app.kuaizhizao.shipmentNotice.import.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' as const },
       { title: t('app.kuaizhizao.shipmentNotice.amount'), dataIndex: 'total_amount', width: 100, align: 'right' as const },
     ],
@@ -1335,7 +1335,7 @@ const ReceiptNoticesPage: React.FC = () => {
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.receiptNotice.createFailed'));
+      messageApi.error(error.message || t('common.createFailed'));
       throw error;
     }
   };
@@ -1362,7 +1362,7 @@ const ReceiptNoticesPage: React.FC = () => {
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.receiptNotice.updateFailed'));
+      messageApi.error(error.message || t('common.updateFailed'));
       throw error;
     }
   };
@@ -1391,7 +1391,7 @@ const ReceiptNoticesPage: React.FC = () => {
           title: t('app.kuaizhizao.receiptNotice.linkedInboundReceipt'),
           dataIndex: 'purchase_receipt_code',
         },
-        { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes', span: 3 },
+        { title: t('common.remark'), dataIndex: 'notes', span: 3 },
       ] as ProDescriptionsItemProps<ReceiptNoticeDetail>[]),
     [t, i18n.language],
   );
@@ -1494,7 +1494,7 @@ const ReceiptNoticesPage: React.FC = () => {
           style: { width: '100%', margin: 0 },
         }}
       />
-      <ProFormTextArea name="notes" label={t('app.kuaizhizao.common.fieldNotes')} placeholder={t('app.kuaizhizao.common.fieldNotes')} fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
+      <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('common.remark')} fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
       <DocumentAttachmentsField category="receipt_notice_attachments" />
     </>
   );
@@ -1546,7 +1546,7 @@ const ReceiptNoticesPage: React.FC = () => {
           }}
         </AntForm.Item>
       </div>
-      <ProFormTextArea name="notes" label={t('app.kuaizhizao.common.fieldNotes')} placeholder={t('app.kuaizhizao.common.fieldNotes')} fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
+      <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('common.remark')} fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
       <DocumentAttachmentsField category="receipt_notice_attachments" />
     </>
   );
@@ -1922,7 +1922,7 @@ const ReceiptNoticesPage: React.FC = () => {
         collaborationTitleSuffix={
           receiptNoticeLifecycle?.nextStepSuggestions?.length ? (
             <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-              {t('components.uniLifecycle.nextStep')}：
+              {t('common.next')}：
               {receiptNoticeLifecycle.nextStepSuggestions.join(t('components.uniLifecycle.nextStepSeparator'))}
             </Typography.Text>
           ) : undefined
@@ -2085,7 +2085,7 @@ const ReceiptNoticesPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.purchaseOrder.col.noticeQty'), dataIndex: 'notice_quantity', width: 90, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },

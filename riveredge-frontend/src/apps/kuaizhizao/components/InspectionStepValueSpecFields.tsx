@@ -87,8 +87,8 @@ export const InspectionStepValueSpecFields: React.FC<Props> = ({
             value={spec.pass_when === false ? 'false' : 'true'}
             onChange={(v) => patch({ pass_when: v === 'true' })}
             options={[
-              { label: t('app.kuaizhizao.quality.plans.stepSpec.passWhenYes'), value: 'true' },
-              { label: t('app.kuaizhizao.quality.plans.stepSpec.passWhenNo'), value: 'false' },
+              { label: t('common.yes'), value: 'true' },
+              { label: t('common.no'), value: 'false' },
             ]}
           />
         </Form.Item>
@@ -142,7 +142,7 @@ export const InspectionStepValueSpecFields: React.FC<Props> = ({
             </span>
           </>
         ) : null}
-        <Form.Item label={t('app.kuaizhizao.quality.plans.stepSpec.unit')} style={{ marginBottom: 0 }}>
+        <Form.Item label={t('common.unit')} style={{ marginBottom: 0 }}>
           <Input
             value={(spec.unit as string) || ''}
             onChange={(e) => patch({ unit: e.target.value || undefined })}

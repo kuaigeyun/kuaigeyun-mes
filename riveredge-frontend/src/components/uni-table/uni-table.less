@@ -293,6 +293,22 @@
 .uni-table-container.uni-table-has-list-toolbar .ant-pro-table-list-toolbar-container {
   display: flex !important;
   min-height: 32px;
+  flex-wrap: nowrap !important;
+  align-items: center;
+}
+
+.uni-table-container .ant-pro-table-list-toolbar-left,
+.uni-table-container .ant-pro-table-list-toolbar-right {
+  flex-wrap: nowrap !important;
+  white-space: nowrap;
+}
+
+.uni-table-container .ant-pro-table-list-toolbar-right .ant-space {
+  flex-wrap: nowrap !important;
+}
+
+.uni-table-toolbar-plain-label {
+  white-space: nowrap;
 }
 
 .uni-table-container .uni-table-alt-view-toolbar {

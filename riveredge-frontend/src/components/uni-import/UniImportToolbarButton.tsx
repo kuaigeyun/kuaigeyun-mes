@@ -25,7 +25,7 @@ export const UniImportToolbarButton: React.FC<UniImportToolbarButtonProps> = ({
   ...rest
 }) => {
   const { t } = useTranslation();
-  const label = String(children ?? buttonText ?? t('components.uniTable.import'));
+  const label = String(children ?? buttonText ?? t('common.import'));
   const btn = (
     <Button type={type} icon={<ImportOutlined />} onClick={onOpen} aria-label={label} {...rest}>
       {iconOnly ? null : label}

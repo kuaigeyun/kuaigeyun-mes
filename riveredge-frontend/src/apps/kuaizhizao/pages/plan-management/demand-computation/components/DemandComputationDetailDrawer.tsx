@@ -205,7 +205,7 @@ const ComputationHistoryPane: React.FC<{
               render: (createdAt: string) => (createdAt ? formatDateTimeBySiteSetting(createdAt) : '—'),
             },
             {
-              title: t('app.kuaizhizao.demandComputation.colStatus'),
+              title: t('common.status'),
               dataIndex: 'target_exists',
               width: 88,
               render: (exists: boolean) =>
@@ -245,13 +245,13 @@ const ComputationHistoryPane: React.FC<{
               render: (_: unknown, r: ComputationRecalcHistoryItem) =>
                 r.snapshot_id != null ? (
                   <Button type="link" size="small" style={{ padding: 0 }} onClick={() => void openSnapshot(r.snapshot_id!)}>
-                    {t('app.kuaizhizao.demandComputation.actionView')}
+                    {t('common.view')}
                   </Button>
                 ) : (
                   <span style={{ color: 'var(--ant-color-text-secondary)' }}>—</span>
                 ),
             },
-            { title: t('app.kuaizhizao.demandComputation.colNotes'), dataIndex: 'message', ellipsis: true },
+            { title: t('common.remark'), dataIndex: 'message', ellipsis: true },
           ]}
         />
       </DetailDrawerSection>
@@ -402,7 +402,7 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
       if (!text?.trim()) return
       void navigator.clipboard.writeText(text).then(
         () => messageApi.success(t('app.kuaizhizao.demandComputation.copied')),
-        () => messageApi.error(t('app.kuaizhizao.demandComputation.copyFailed')),
+        () => messageApi.error(t('common.copyFailed')),
       )
     },
     [messageApi, t],
@@ -534,7 +534,7 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
           valueType: 'dateTime',
         },
         {
-          title: t('app.kuaizhizao.demandComputation.colNotes'),
+          title: t('common.remark'),
           dataIndex: 'notes',
           span: 3,
           render: (_, record) => normalizeComputationSourceNote(record, t) || '—',
@@ -575,7 +575,7 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
         collaborationTitleSuffix={
           contentReady && showNextInTitle ? (
             <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-              {t('components.uniLifecycle.nextStep')}：
+              {t('common.next')}：
               {nextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
             </Typography.Text>
           ) : undefined
@@ -699,7 +699,7 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.demandComputation.colUnit'),
+                    title: t('common.unit'),
                     dataIndex: 'material_unit',
                     width: 88,
                     render: (_: unknown, record: DemandComputationItem) => (

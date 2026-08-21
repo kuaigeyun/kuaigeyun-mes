@@ -356,7 +356,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
           }
           reloadList();
         } catch (error: any) {
-          messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.deleteFailed'));
+          messageApi.error(error?.message || t('common.deleteFailed'));
         }
       },
     });
@@ -478,7 +478,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       search: { order: 10 } as ProColumns['search'],
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: workflowStatusValueEnum,
@@ -571,7 +571,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       },
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colActions'),
+      title: t('common.actions'),
       width: 260,
       fixed: 'right',
       render: (_, record) => (
@@ -607,7 +607,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
     { title: config.dateLabel, dataIndex: config.dateField, valueType: 'date' },
     { title: t('app.kuaizhizao.warehouseCommon.colProductMaterial'), dataIndex: 'product_material_name' },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       render: (status) => {
         const mapped = orderStatusKeys[String(status ?? '')];
@@ -624,7 +624,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       : []),
     { title: t('app.kuaizhizao.warehouseCommon.colExecutor'), dataIndex: 'executed_by_name' },
     { title: t('app.kuaizhizao.warehouseCommon.colExecutedAt'), dataIndex: 'executed_at', valueType: 'dateTime' },
-    { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 3 },
+    { title: t('common.remark'), dataIndex: 'remarks', span: 3 },
   ]),
     [config, t],
   );
@@ -685,7 +685,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
     () => [
       { title: t('app.kuaizhizao.warehouseCommon.colComponentCode'), dataIndex: 'material_code', width: 120 },
       { title: t('app.kuaizhizao.warehouseCommon.colComponentName'), dataIndex: 'material_name', width: 150 },
-      { title: t('app.kuaizhizao.warehouseCommon.colQuantity'), dataIndex: 'quantity', width: 90, align: 'right' as const, render: formatQuantity },
+      { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right' as const, render: formatQuantity },
       {
         title: t('app.kuaizhizao.warehouseCommon.colUnitPrice'),
         dataIndex: 'unit_price',
@@ -701,7 +701,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         render: (value: unknown) => Number(value || 0).toFixed(2),
       },
       {
-        title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+        title: t('common.status'),
         dataIndex: 'status',
         width: 90,
         render: (status: unknown) => {
@@ -721,18 +721,18 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
           return renderDocumentStatusTag(String(status ?? '-'), String(status ?? ''));
         },
       },
-      { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks' },
+      { title: t('common.remark'), dataIndex: 'remarks' },
       {
-        title: t('app.kuaizhizao.warehouseCommon.colActions'),
+        title: t('common.actions'),
         width: 150,
         render: (_: unknown, item: ItemLike) =>
           currentOrder?.status === 'draft' ? (
             <Space size={0}>
               <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openItemModal(currentOrder, item)}>
-                {t('app.kuaizhizao.warehouseCommon.edit')}
+                {t('common.edit')}
               </Button>
               <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => confirmDeleteItem(currentOrder, item)}>
-                {t('app.kuaizhizao.warehouseCommon.delete')}
+                {t('common.delete')}
               </Button>
             </Space>
           ) : null,
@@ -776,7 +776,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
                 invalidateMenuBadgeCounts();
                 reloadList();
               } catch (error: any) {
-                messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.deleteFailed'));
+                messageApi.error(error?.message || t('common.deleteFailed'));
               }
             },
           });
@@ -872,7 +872,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
           fieldProps={{ precision: 2 }}
         />
         <DocumentAttachmentsField category={config.attachmentCategory} />
-        <ProFormTextArea name="remarks" label={t('app.kuaizhizao.warehouseCommon.colRemarks')} placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')} fieldProps={{ rows: 3 }} />
+        <ProFormTextArea name="remarks" label={t('common.remark')} placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')} fieldProps={{ rows: 3 }} />
         <AntForm.Item name="_warehouse_name" hidden />
         <AntForm.Item name="warehouse_name" hidden />
         <AntForm.Item name="product_material_code" hidden />
@@ -907,13 +907,13 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         />
         <ProFormDigit
           name="quantity"
-          label={t('app.kuaizhizao.warehouseCommon.colQuantity')}
+          label={t('common.quantity')}
           rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.enterQuantity') }]}
           min={0.01}
           fieldProps={{ precision: 2 }}
         />
         <ProFormDigit name="unit_price" label={t('app.kuaizhizao.warehouseCommon.colUnitPrice')} min={0} fieldProps={{ precision: 2 }} />
-        <ProFormTextArea name="remarks" label={t('app.kuaizhizao.warehouseCommon.colRemarks')} placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')} fieldProps={{ rows: 3 }} />
+        <ProFormTextArea name="remarks" label={t('common.remark')} placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')} fieldProps={{ rows: 3 }} />
         <AntForm.Item name="material_code" hidden />
         <AntForm.Item name="material_name" hidden />
       </FormModalTemplate>

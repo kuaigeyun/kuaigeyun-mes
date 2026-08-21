@@ -289,9 +289,9 @@ const SalesInvoiceDetailPage: React.FC = () => {
     () => [
       { title: t('app.kuaicaiwu.invoice.line.itemName'), dataIndex: 'item_name', width: 200 },
       { title: t('app.kuaicaiwu.invoice.line.specModel'), dataIndex: 'spec_model', width: 120 },
-      { title: t('app.kuaicaiwu.invoice.line.unit'), dataIndex: 'unit', width: 72 },
+      { title: t('common.unit'), dataIndex: 'unit', width: 72 },
       {
-        title: t('app.kuaicaiwu.invoice.line.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'quantity',
         width: 88,
         align: 'right',
@@ -339,7 +339,7 @@ const SalesInvoiceDetailPage: React.FC = () => {
 
   const pageActions = data ? (
     <Space wrap size={8}>
-      <Button onClick={() => navigate('/apps/kuaicaiwu/finance-management/sales-invoices')}>{t('app.kuaicaiwu.common.back')}</Button>
+      <Button onClick={() => navigate('/apps/kuaicaiwu/finance-management/sales-invoices')}>{t('common.back')}</Button>
       {editable && salesInvoicePerms.canUpdate ? (
         <Button type="primary" onClick={save}>
           {t(`${P}.saveChanges`)}
@@ -474,7 +474,7 @@ const SalesInvoiceDetailPage: React.FC = () => {
               fieldProps={{ precision: 2 }}
               rules={[{ required: true }]}
             />
-            <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
+            <ProFormTextArea name="notes" label={t('common.remark')} />
           </ProForm>
         </DetailDrawerSection>
       ) : (
@@ -491,7 +491,7 @@ const SalesInvoiceDetailPage: React.FC = () => {
             <ProDescriptions.Item label={t('app.kuaicaiwu.invoice.col.totalAmount')}>
               <Typography.Text strong>¥{moneyCell(data.total_amount)}</Typography.Text>
             </ProDescriptions.Item>
-            <ProDescriptions.Item label={t('app.kuaicaiwu.common.notes')} span={2}>
+            <ProDescriptions.Item label={t('common.remark')} span={2}>
               {data.notes || '—'}
             </ProDescriptions.Item>
           </ProDescriptions>

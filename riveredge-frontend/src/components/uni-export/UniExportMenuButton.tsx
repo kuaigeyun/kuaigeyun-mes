@@ -43,7 +43,7 @@ export function UniExportMenuButton<T extends Record<string, any> = Record<strin
   buttonText,
 }: UniExportMenuButtonProps<T>) {
   const { t } = useTranslation();
-  const exportLabel = buttonText ?? t('components.uniTable.export');
+  const exportLabel = buttonText ?? t('common.export');
   const items: MenuProps['items'] = [];
   if (showSelected) {
     items.push({

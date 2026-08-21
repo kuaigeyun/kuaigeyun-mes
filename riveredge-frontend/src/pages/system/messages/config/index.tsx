@@ -177,10 +177,10 @@ const MessageConfigListPage: React.FC = () => {
     }
     try {
       await deleteMessageConfig(record.uuid);
-      messageApi.success(t('pages.system.messageConfig.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.messageConfig.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -212,7 +212,7 @@ const MessageConfigListPage: React.FC = () => {
               successCount++;
             } catch (error: any) {
               failCount++;
-              errors.push(error.message || t('pages.system.messageConfig.deleteFailed'));
+              errors.push(error.message || t('common.deleteFailed'));
             }
           }
 
@@ -252,7 +252,7 @@ const MessageConfigListPage: React.FC = () => {
           is_active: values.is_active,
           is_default: values.is_default,
         } as UpdateMessageConfigData);
-        messageApi.success(t('pages.system.messageConfig.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createMessageConfig({
           name: values.name,
@@ -263,7 +263,7 @@ const MessageConfigListPage: React.FC = () => {
           is_active: values.is_active,
           is_default: values.is_default,
         } as CreateMessageConfigData);
-        messageApi.success(t('pages.system.messageConfig.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
       
       setModalVisible(false);
@@ -272,7 +272,7 @@ const MessageConfigListPage: React.FC = () => {
       if (error?.name === 'ValidationError') {
          // Form validation failed, handled by ProForm
       } else {
-        messageApi.error(error.message || t('pages.system.messageConfig.operationFailed'));
+        messageApi.error(error.message || t('common.operationFailed'));
       }
       throw error;
     } finally {
@@ -398,7 +398,7 @@ const MessageConfigListPage: React.FC = () => {
       },
     },
     {
-      title: t('pages.system.messageConfig.remark'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -412,11 +412,11 @@ const MessageConfigListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('pages.system.applications.enabled'), status: 'Success' },
-        false: { text: t('pages.system.applications.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) =>
-        renderSystemActiveTag(t, record.is_active, 'pages.system.applications.enabled', 'pages.system.applications.disabled'),
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
       title: t('pages.system.messageConfig.defaultConfig'),
@@ -427,13 +427,13 @@ const MessageConfigListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('field.customField.yes'), status: 'Success' },
-        false: { text: t('field.customField.no'), status: 'Default' },
+        true: { text: t('common.yes'), status: 'Success' },
+        false: { text: t('common.no'), status: 'Default' },
       },
       render: (_, record) => renderSystemYesNoTag(t, record.is_default),
     },
     {
-      title: t('pages.system.messageConfig.createdAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       minWidth: 180,
@@ -444,14 +444,14 @@ const MessageConfigListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('pages.system.messageConfig.actions'),
+      title: t('common.actions'),
       key: 'action',
       valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => [
             <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
-              {t('pages.system.messageConfig.view')}
+              {t('common.view')}
             </Button>,
             <Button {...rowActionKind('update')}
               key="edit"
@@ -461,7 +461,7 @@ const MessageConfigListPage: React.FC = () => {
               disabled={isBuiltInChannel(record)}
               onClick={() => handleEdit(record)}
             >
-              {t('pages.system.messageConfig.edit')}
+              {t('common.edit')}
             </Button>,
             <Popconfirm {...rowActionKind('delete')}
               key="delete"
@@ -476,7 +476,7 @@ const MessageConfigListPage: React.FC = () => {
                 icon={<DeleteOutlined />}
                 disabled={isBuiltInChannel(record)}
               >
-                {t('pages.system.messageConfig.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>,
           ],
@@ -502,7 +502,7 @@ const MessageConfigListPage: React.FC = () => {
         return typeMap[r.type] || r.type;
       },
     },
-    { title: t('pages.system.messageConfig.remark'), dataIndex: 'description' },
+    { title: t('common.remark'), dataIndex: 'description' },
     {
       title: t('pages.system.messageConfig.configInfo'),
       dataIndex: 'config',
@@ -524,15 +524,15 @@ const MessageConfigListPage: React.FC = () => {
       title: t('pages.system.messageConfig.activeStatus'),
       dataIndex: 'is_active',
       render: (_, r) =>
-        renderSystemActiveTag(t, r.is_active, 'pages.system.applications.enabled', 'pages.system.applications.disabled'),
+        renderSystemActiveTag(t, r.is_active, 'common.enabled', 'common.disabled'),
     },
     {
       title: t('pages.system.messageConfig.defaultConfig'),
       dataIndex: 'is_default',
       render: (_, r) => renderSystemYesNoTag(t, r.is_default),
     },
-    { title: t('pages.system.messageConfig.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-    { title: t('pages.system.messageConfig.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
 
   return (
@@ -592,7 +592,7 @@ const MessageConfigListPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         showDeleteButton
         onDelete={handleBatchDelete}
-        deleteButtonText={t('pages.system.messageConfig.batchDeleteButton')}
+        deleteButtonText={t('common.batchDelete')}
         showImportButton={false}
         showExportButton={true}
         onExport={async (type, keys, pageData) => {
@@ -604,7 +604,7 @@ const MessageConfigListPage: React.FC = () => {
               items = items.filter((d: any) => keys.includes(d.uuid));
             }
             if (items.length === 0) {
-              messageApi.warning(t('pages.system.messageConfig.noDataExport'));
+              messageApi.warning(t('common.exportNoData'));
               return;
             }
             await downloadRecordsAsXlsx(
@@ -613,7 +613,7 @@ const MessageConfigListPage: React.FC = () => {
             );
             messageApi.success(t('pages.system.messageConfig.exportSuccessCount', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || t('pages.system.messageConfig.exportFailed'));
+              messageApi.error(error?.message || t('common.exportFailed'));
           }
         }}
         pagination={{
@@ -765,7 +765,7 @@ const MessageConfigListPage: React.FC = () => {
 
         <ProFormTextArea
           name="description"
-          label={t('pages.system.messageConfig.remark')}
+          label={t('common.remark')}
           placeholder={t('pages.system.messageConfig.remarkPlaceholder')}
           fieldProps={{ rows: 2 }}
           colProps={{ span: 24 }}

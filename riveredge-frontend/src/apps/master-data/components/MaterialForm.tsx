@@ -1972,7 +1972,7 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
       ),
     },
     {
-      title: t('app.master-data.materialForm.action'),
+      title: t('common.actions'),
       width: 88,
       align: 'center' as const,
       render: (_: unknown, __: MaterialUnit, index: number) => (
@@ -1984,7 +1984,7 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
             icon={<DeleteOutlined />}
             onClick={() => handleDeleteUnit(index)}
           >
-            {t('app.master-data.materialForm.delete')}
+            {t('common.delete')}
           </Button>
         </div>
       ),
@@ -2507,7 +2507,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
       <Col span={24}>
         <ProFormTextArea
           name="description"
-          label={t('app.master-data.materialForm.description')}
+          label={t('common.remark')}
           placeholder={t('app.master-data.materialForm.descriptionPlaceholder')}
           fieldProps={{ rows: 3, maxLength: 500 }}
         />
@@ -2682,7 +2682,7 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
           name: r.internalCode,
           description: r.description,
           extra: (
-            <Tag color={r.isActive ? 'success' : 'default'} variant="solid">{r.isActive ? t('app.master-data.codeMapping.enabled') : t('app.master-data.codeMapping.disabled')}</Tag>
+            <Tag color={r.isActive ? 'success' : 'default'} variant="solid">{r.isActive ? t('common.enabled') : t('common.disabled')}</Tag>
           ),
         });
       });
@@ -2855,7 +2855,7 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
         columns={[
           { title: t('app.master-data.codeMapping.mappingType'), dataIndex: 'typeLabel', key: 'typeLabel', width: 100 },
           {
-            title: `${t('app.master-data.codeMapping.name')} / ${t('app.master-data.codeMapping.code')}`,
+            title: `${t('common.name')} / ${t('app.master-data.codeMapping.code')}`,
             key: 'nameCode',
             width: 180,
             ellipsis: false,
@@ -2884,10 +2884,10 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
             },
           },
           { title: t('app.master-data.codeMapping.relation'), dataIndex: 'relation', key: 'relation', width: 160, ellipsis: true },
-          { title: t('app.master-data.codeMapping.description'), dataIndex: 'description', key: 'description', ellipsis: true },
+          { title: t('common.remark'), dataIndex: 'description', key: 'description', ellipsis: true },
           { title: t('app.master-data.codeMapping.extra'), dataIndex: 'extra', key: 'extra', width: 100 },
           {
-            title: t('app.master-data.materialForm.action'),
+            title: t('common.actions'),
             key: 'action',
             width: 72,
             fixed: 'right' as const,
@@ -2898,8 +2898,8 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
                     type="link"
                     size="small"
                     icon={<EditOutlined />}
-                    title={t('app.master-data.codeMapping.edit')}
-                    aria-label={t('app.master-data.codeMapping.edit')}
+                    title={t('common.edit')}
+                    aria-label={t('common.edit')}
                     onClick={() => {
                       const ext = externalSystemCodes.find((e) => e.uuid === record.externalUuid);
                       if (ext) openEditExternalModal(ext);
@@ -2910,8 +2910,8 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
                     type="link"
                     size="small"
                     icon={<EditOutlined />}
-                    title={t('app.master-data.codeMapping.edit')}
-                    aria-label={t('app.master-data.codeMapping.edit')}
+                    title={t('common.edit')}
+                    aria-label={t('common.edit')}
                     onClick={() => handleOpenEditMappingModal(record)}
                   />
                 )}
@@ -2920,8 +2920,8 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
                   danger
                   size="small"
                   icon={<DeleteOutlined />}
-                  title={t('app.master-data.materialForm.delete')}
-                  aria-label={t('app.master-data.materialForm.delete')}
+                  title={t('common.delete')}
+                  aria-label={t('common.delete')}
                   onClick={() => handleDeleteRow(record)}
                 />
               </Space>
@@ -2946,7 +2946,7 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
       <Modal
         title={
           editingRow
-            ? `${t('app.master-data.codeMapping.edit')} — ${codeMappingTypeOptions.find((o) => o.value === addModalType)?.label ?? ''}`
+            ? `${t('common.edit')} — ${codeMappingTypeOptions.find((o) => o.value === addModalType)?.label ?? ''}`
             : t('app.master-data.codeMapping.addMapping')
         }
         open={addModalVisible}

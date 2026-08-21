@@ -138,7 +138,7 @@ export const UniBatchDeleteButton: React.FC<UniBatchDeleteButtonProps> = ({
       }
       okButtonProps={{ danger: true }}
     >
-      {buttonText ?? t('components.uniTable.delete')}
+      {buttonText ?? t('common.batchDelete')}
     </UniBatchButton>
   );
 };

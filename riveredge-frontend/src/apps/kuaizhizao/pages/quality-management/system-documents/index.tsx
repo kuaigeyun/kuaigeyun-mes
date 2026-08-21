@@ -133,7 +133,7 @@ const SystemDocumentsPage: React.FC = () => {
             },
           },
           {
-            title: t('app.kuaizhizao.quality.qms.status'),
+            title: t('common.status'),
             dataIndex: 'status',
             width: 96,
             valueEnum: statusEnum,

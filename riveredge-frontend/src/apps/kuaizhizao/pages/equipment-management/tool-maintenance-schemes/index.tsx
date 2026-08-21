@@ -196,16 +196,16 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
 
   const detailBasicColumns = useMemo<ProDescriptionsItemProps<MaintenanceScheme>[]>(
     () => [
-      { title: t(`${P}.col.code`), dataIndex: 'code' },
-      { title: t(`${P}.col.name`), dataIndex: 'name' },
+      { title: t('common.code'), dataIndex: 'code' },
+      { title: t('common.name'), dataIndex: 'name' },
       {
         title: t(`${P}.col.triggerType`),
         dataIndex: 'trigger_type',
         render: (_, record) => resolveMaintenanceTriggerTypeLabel(t, record.trigger_type),
       },
       { title: t(`${P}.col.intervalValue`), dataIndex: 'interval_value' },
-      { title: t(`${P}.col.description`), dataIndex: 'description', span: 2 },
-      buildIsActiveDescriptionColumn<MaintenanceScheme>(t, `${P}.col.isActive`),
+      { title: t('common.remark'), dataIndex: 'description', span: 2 },
+      buildIsActiveDescriptionColumn<MaintenanceScheme>(t),
     ],
     [t],
   );
@@ -232,7 +232,7 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
         search: { order: 10 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.isActive`),
+        title: t('common.enabled'),
         dataIndex: 'is_active',
         valueType: 'select',
         valueEnum: activeStatusValueEnum,
@@ -240,7 +240,7 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
         search: { order: 20 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.code`),
+        title: t('common.code'),
         dataIndex: 'code',
         width: 120,
         fixed: 'left',
@@ -248,7 +248,7 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
         search: { order: 30 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.name`),
+        title: t('common.name'),
         dataIndex: 'name',
         width: 180,
         ellipsis: true,
@@ -264,9 +264,9 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
       },
       { title: t(`${P}.col.intervalValue`), dataIndex: 'interval_value', width: 90, hideInSearch: true },
       { title: t(`${P}.col.lineCount`), dataIndex: 'line_count', width: 80, hideInSearch: true },
-      { title: t(`${P}.col.description`), dataIndex: 'description', ellipsis: true, hideInSearch: true },
+      { title: t('common.remark'), dataIndex: 'description', ellipsis: true, hideInSearch: true },
       {
-        title: t(`${P}.col.isActive`),
+        title: t('common.enabled'),
         dataIndex: 'is_active',
         width: 80,
         sorter: true,
@@ -380,10 +380,10 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
       >
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormText name="code" label={t(`${P}.col.code`)} rules={[{ required: true }]} />
+            <ProFormText name="code" label={t('common.code')} rules={[{ required: true }]} />
           </Col>
           <Col span={12}>
-            <ProFormText name="name" label={t(`${P}.col.name`)} rules={[{ required: true }]} />
+            <ProFormText name="name" label={t('common.name')} rules={[{ required: true }]} />
           </Col>
           <Col span={12}>
             <ProFormSelect name="trigger_type" label={t(`${P}.col.triggerType`)} options={triggerTypeOptions} />
@@ -435,10 +435,10 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
         />
         <Row gutter={16} style={{ marginTop: 16 }}>
           <Col span={24}>
-            <ProFormTextArea name="description" label={t(`${P}.col.description`)} fieldProps={{ rows: 2 }} />
+            <ProFormTextArea name="description" label={t('common.remark')} fieldProps={{ rows: 2 }} />
           </Col>
           <Col span={24}>
-            <ProFormSwitch name="is_active" label={t(`${P}.col.isActive`)} />
+            <ProFormSwitch name="is_active" label={t('common.enabled')} />
           </Col>
         </Row>
       </FormModalTemplate>

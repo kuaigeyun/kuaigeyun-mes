@@ -11,11 +11,14 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from core.services.content.sensitive_word_ip_guard import SensitiveWordIpGuardService
+from core.services.content.sensitive_word_ip_guard import (
+    SensitiveWordIpGuardService,
+    tenant_has_sensitive_word_control,
+)
 from core.services.content.sensitive_word_service import SensitiveWordService
 from infra.exceptions.exceptions import create_error_response
 from infra.utils.client_ip import get_client_ip
-from infra.utils.request_identity import get_request_user_id
+from infra.utils.request_identity import get_request_tenant_id, get_request_user_id
 
 _WRITE_METHODS = frozenset({"POST", "PUT", "PATCH"})
 _EXCLUDED_PATHS = frozenset(
@@ -38,6 +41,10 @@ class SensitiveWordMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         if not self._should_scan(request):
+            return await call_next(request)
+
+        tenant_id = get_request_tenant_id(request)
+        if tenant_id is not None and not await tenant_has_sensitive_word_control(tenant_id):
             return await call_next(request)
 
         service = SensitiveWordService.instance()

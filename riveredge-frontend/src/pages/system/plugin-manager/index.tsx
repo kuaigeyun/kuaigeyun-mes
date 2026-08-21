@@ -147,7 +147,7 @@ const PluginManagerPage: React.FC = () => {
       ),
     },
     {
-      title: t('pages.system.pluginManager.columnDesc'),
+      title: t('common.remark'),
       dataIndex: 'description',
       width: 250,
       render: (text) => (
@@ -164,7 +164,7 @@ const PluginManagerPage: React.FC = () => {
       ),
     },
     {
-      title: t('pages.system.pluginManager.columnStatus'),
+      title: t('common.status'),
       dataIndex: 'is_active',
       width: 200,
       render: (_, record) => (
@@ -202,7 +202,7 @@ const PluginManagerPage: React.FC = () => {
       ),
     },
     {
-      title: t('pages.system.pluginManager.actions'),
+      title: t('common.actions'),
       width: 200,
       render: (_, record) => (
         <Space>
@@ -229,7 +229,7 @@ const PluginManagerPage: React.FC = () => {
                   cancelText={t('common.cancel')}
                 >
                   <Button size="small" type="primary">
-                    {t('pages.system.pluginManager.enable')}
+                    {t('common.enabled')}
                   </Button>
                 </Popconfirm>
               )}
@@ -274,7 +274,7 @@ const PluginManagerPage: React.FC = () => {
                 toExport = items.filter((d) => keys.includes(d.code));
               }
               if (toExport.length === 0) {
-                message.warning(t('pages.system.pluginManager.noDataToExport'));
+                message.warning(t('common.exportNoData'));
                 return;
               }
               await downloadRecordsAsXlsx(
@@ -283,7 +283,7 @@ const PluginManagerPage: React.FC = () => {
               );
               message.success(t('pages.system.pluginManager.exportSuccess', { count: toExport.length }));
             } catch (error: any) {
-              message.error(t('pages.system.pluginManager.exportFailed'));
+              message.error(t('common.exportFailed'));
             }
           }}
           toolBarActions={[
@@ -301,7 +301,7 @@ const PluginManagerPage: React.FC = () => {
               icon={<ReloadOutlined />}
               onClick={() => actionRef.current?.reload()}
             >
-              {t('pages.system.pluginManager.refresh')}
+              {t('common.refresh')}
             </Button>,
           ]}
         />

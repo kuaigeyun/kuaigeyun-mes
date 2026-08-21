@@ -111,3 +111,39 @@ def test_anonymous_write_hit_does_not_ban_lan(monkeypatch):
     response = client.post("/api/v1/demo", json={"notes": "正常备注"})
     assert response.status_code == 200
     assert response.json()["notes"] == "正常备注"
+
+
+def test_tenant_control_off_skips_scan(monkeypatch):
+    async def _off(_tenant_id):
+        return False
+
+    monkeypatch.setattr(
+        "core.middleware.sensitive_word_middleware.get_request_tenant_id",
+        lambda _request: 9,
+    )
+    monkeypatch.setattr(
+        "core.middleware.sensitive_word_middleware.tenant_has_sensitive_word_control",
+        _off,
+    )
+    client = _app(monkeypatch)
+    response = client.post("/api/v1/demo", json={"notes": f"这里有{CN}"})
+    assert response.status_code == 200
+    assert response.json()["notes"] == f"这里有{CN}"
+
+
+def test_tenant_control_on_still_rejects(monkeypatch):
+    async def _on(_tenant_id):
+        return True
+
+    monkeypatch.setattr(
+        "core.middleware.sensitive_word_middleware.get_request_tenant_id",
+        lambda _request: 9,
+    )
+    monkeypatch.setattr(
+        "core.middleware.sensitive_word_middleware.tenant_has_sensitive_word_control",
+        _on,
+    )
+    client = _app(monkeypatch)
+    response = client.post("/api/v1/demo", json={"notes": f"这里有{CN}"})
+    assert response.status_code == 422
+    assert response.json()["error"]["details"]["matched"] == CN

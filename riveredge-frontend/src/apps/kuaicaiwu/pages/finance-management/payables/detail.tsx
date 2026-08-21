@@ -180,7 +180,7 @@ const PayableDetail: React.FC = () => {
 
     <>
 
-      <Button onClick={() => navigate(-1)}>{t('app.kuaicaiwu.common.back')}</Button>
+      <Button onClick={() => navigate(-1)}>{t('common.back')}</Button>
 
       <UniWorkflowActions
 
@@ -326,7 +326,7 @@ const PayableDetail: React.FC = () => {
 
             <ProDescriptions.Item label={t('app.kuaicaiwu.common.reviewStatus')}>{data.review_status}</ProDescriptions.Item>
 
-            <ProDescriptions.Item label={t('app.kuaicaiwu.common.notes')} span={3}>
+            <ProDescriptions.Item label={t('common.remark')} span={3}>
 
               {data.notes || '-'}
 

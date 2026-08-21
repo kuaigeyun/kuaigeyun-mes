@@ -82,17 +82,17 @@ const DepartmentListPage: React.FC = () => {
         render: (_: unknown, entity: Department) => entity.manager_name || '-',
       },
       {
-        title: t('field.role.status'),
+        title: t('common.status'),
         dataIndex: 'is_active',
         render: (_: unknown, entity: Department) =>
-          renderSystemActiveTag(t, entity?.is_active, 'field.role.enabled', 'field.role.disabled'),
+          renderSystemActiveTag(t, entity?.is_active, 'common.enabled', 'common.disabled'),
       },
       { title: t('field.department.userCount'), dataIndex: 'user_count' },
       { title: t('field.department.sortOrder'), dataIndex: 'sort_order' },
       { title: t('field.department.queryCode'), dataIndex: 'query_code' },
       { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
       { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-      { title: t('field.department.remark'), dataIndex: 'description' },
+      { title: t('common.remark'), dataIndex: 'description' },
     ],
     [t]
   );
@@ -348,7 +348,7 @@ const DepartmentListPage: React.FC = () => {
         t('field.department.code'),
         t('field.department.name'),
         t('field.department.parentName'),
-        t('field.role.status'),
+        t('common.status'),
         t('field.department.sortOrder'),
         t('common.createdAt'),
       ];
@@ -358,7 +358,7 @@ const DepartmentListPage: React.FC = () => {
           d.code || '',
           d.name || '',
           (d as any).parent_name || '-',
-          d.is_active ? t('field.role.enabled') : t('field.role.disabled'),
+          d.is_active ? t('common.enabled') : t('common.disabled'),
           String(d.sort_order ?? ''),
           d.created_at ? formatDateTimeBySiteSetting(d.created_at) : '',
         ];
@@ -464,7 +464,7 @@ const DepartmentListPage: React.FC = () => {
   const handleDelete = async (record: Department) => {
     try {
       await deleteDepartment(record.uuid);
-      messageApi.success(t('pages.system.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: unknown) {
       if (isDepartmentNotFoundError(error)) {
@@ -472,7 +472,7 @@ const DepartmentListPage: React.FC = () => {
         actionRef.current?.reload();
         return;
       }
-      messageApi.error((error as Error).message || t('pages.system.deleteFailed'));
+      messageApi.error((error as Error).message || t('common.deleteFailed'));
     }
   };
 
@@ -481,14 +481,14 @@ const DepartmentListPage: React.FC = () => {
 
     try {
       await Promise.all(keys.map((key) => deleteDepartment(String(key))));
-      messageApi.success(t('pages.system.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: unknown) {
       if (isDepartmentNotFoundError(error)) {
         messageApi.warning(t('field.department.alreadyDeletedRefresh'));
       } else {
-        messageApi.error((error as Error).message || t('pages.system.deleteFailed'));
+        messageApi.error((error as Error).message || t('common.deleteFailed'));
       }
       actionRef.current?.reload();
     }
@@ -561,7 +561,7 @@ const DepartmentListPage: React.FC = () => {
       render: (_, record) => record.manager_name || '-',
     },
     {
-      title: t('field.department.remark'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -592,7 +592,7 @@ const DepartmentListPage: React.FC = () => {
       sorter: (a, b) => a.sort_order - b.sort_order,
     },
     {
-      title: t('field.role.status'),
+      title: t('common.status'),
       dataIndex: 'is_active',
       width: 100,
       minWidth: 100,
@@ -600,11 +600,11 @@ const DepartmentListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('field.role.enabled'), status: 'Success' },
-        false: { text: t('field.role.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) =>
-        renderSystemActiveTag(t, record.is_active, 'field.role.enabled', 'field.role.disabled'),
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
       title: t('common.createdAt'),
@@ -637,10 +637,10 @@ const DepartmentListPage: React.FC = () => {
       render: (_, record) => {
         const actions: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
-            {t('field.department.view')}
+            {t('common.view')}
           </Button>,
           <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
-            {t('field.department.edit')}
+            {t('common.edit')}
           </Button>,
           <Button {...rowActionKind('create')}
             key="addChild"
@@ -665,7 +665,7 @@ const DepartmentListPage: React.FC = () => {
               danger
               icon={<DeleteOutlined />}
             >
-              {t('field.department.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>,
         ];
@@ -690,7 +690,7 @@ const DepartmentListPage: React.FC = () => {
         onCreate={() => handleCreate()}
         showDeleteButton
         onDelete={handleBatchDelete}
-        deleteButtonText={t('pages.system.batchDelete')}
+        deleteButtonText={t('common.batchDelete')}
         deleteConfirmTitle={t('field.department.batchDeleteTitle')}
         deleteConfirmDescription={(c) => t('field.department.batchDeleteDescription', { count: c })}
         toolBarRender={() => [

@@ -100,9 +100,9 @@ const SealPage: React.FC = () => {
 
         { name: 'source_doc_no', labelKey: 'app.kuaioa.common.sourceDocNo', width: 140, hideInTable: true },
 
-        { name: 'status', labelKey: 'app.kuaioa.common.status', width: 100 },
+        { name: 'status', labelKey: 'common.status', width: 100 },
 
-        { name: 'notes', labelKey: 'app.kuaioa.common.notes', hideInTable: true, type: 'textarea' },
+        { name: 'notes', labelKey: 'common.remark', hideInTable: true, type: 'textarea' },
 
       ]}
 

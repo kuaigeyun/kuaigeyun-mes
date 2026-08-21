@@ -94,8 +94,8 @@ const PlantsPage: React.FC = () => {
           { field: 'code', required: true, labelKey: 'app.master-data.plants.code' },
           { field: 'name', required: true, labelKey: 'app.master-data.plants.name' },
           { field: 'address', labelKey: 'app.master-data.plants.address' },
-          { field: 'description', labelKey: 'app.master-data.plants.description' },
-          { field: 'isActive', labelKey: 'field.plant.isActive', aliases: ['是否启用', '启用'] , options: [...IMPORT_YES_NO_OPTIONS] },
+          { field: 'description', labelKey: 'common.remark' },
+          { field: 'isActive', labelKey: 'common.enabled', aliases: ['是否启用', '启用'] , options: [...IMPORT_YES_NO_OPTIONS] },
         ],
         [
           t('app.master-data.plants.importExample.code'),
@@ -448,7 +448,7 @@ const PlantsPage: React.FC = () => {
       }
 
       // 构建 CSV 内容
-      const headers = [t('app.master-data.plants.code'), t('app.master-data.plants.name'), t('app.master-data.plants.address'), t('app.master-data.plants.description'), t('app.master-data.plants.status'), t('common.createdAt')];
+      const headers = [t('app.master-data.plants.code'), t('app.master-data.plants.name'), t('app.master-data.plants.address'), t('common.remark'), t('common.status'), t('common.createdAt')];
       const csvRows: string[] = [headers.join(',')];
 
       exportData.forEach((item) => {
@@ -457,7 +457,7 @@ const PlantsPage: React.FC = () => {
           item.name || '',
           item.address || '',
           item.description || '',
-          item.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled'),
+          item.isActive ? t('common.enabled') : t('common.disabled'),
           item.createdAt ? formatDateTimeBySiteSetting(item.createdAt) : '',
         ];
         // 处理包含逗号、引号或换行符的字段
@@ -476,7 +476,7 @@ const PlantsPage: React.FC = () => {
       downloadFile(blob, filename);
       messageApi.success(t('common.exportSuccess', { count: exportData.length }));
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.exportFailed'));
+      messageApi.error(error.message || t('common.exportFailed'));
     }
   };
 
@@ -493,8 +493,8 @@ const PlantsPage: React.FC = () => {
     () =>
       buildMasterCrudActiveValueEnum(
         t,
-        'app.master-data.plants.enabled',
-        'app.master-data.plants.disabled',
+        'common.enabled',
+        'common.disabled',
       ),
     [t],
   );
@@ -551,7 +551,7 @@ const PlantsPage: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: t('app.master-data.plants.description'),
+        title: t('common.remark'),
         dataIndex: 'description',
         width: 168,
         minWidth: 168,
@@ -561,7 +561,7 @@ const PlantsPage: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: t('app.master-data.plants.status'),
+        title: t('common.status'),
         dataIndex: 'isActive',
         hideInTable: true,
         order: 20,
@@ -570,7 +570,7 @@ const PlantsPage: React.FC = () => {
         fieldProps: { allowClear: true },
       },
       {
-        title: t('app.master-data.plants.status'),
+        title: t('common.status'),
         dataIndex: 'isActive',
         width: 88,
         minWidth: 88,
@@ -583,8 +583,8 @@ const PlantsPage: React.FC = () => {
           renderMasterActiveTag(
             t,
             record?.isActive,
-            'app.master-data.plants.enabled',
-            'app.master-data.plants.disabled',
+            'common.enabled',
+            'common.disabled',
           ),
       },
       ...customFieldColumns,
@@ -600,14 +600,14 @@ const PlantsPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            {t('field.customField.view')}
+            {t('common.view')}
           </Button>
           <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            {t('field.customField.edit')}
+            {t('common.edit')}
           </Button>
           <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.plants.deleteConfirm')}
             description={t('app.master-data.plants.deleteDescription')}
@@ -621,7 +621,7 @@ const PlantsPage: React.FC = () => {
               danger
               icon={<DeleteOutlined />}
             >
-              {t('field.customField.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -637,11 +637,11 @@ const PlantsPage: React.FC = () => {
     { title: t('app.master-data.plants.code'), dataIndex: 'code' },
     { title: t('app.master-data.plants.name'), dataIndex: 'name' },
     { title: t('app.master-data.plants.address'), dataIndex: 'address' },
-    { title: t('app.master-data.plants.description'), dataIndex: 'description' },
+    { title: t('common.remark'), dataIndex: 'description' },
     {
-      title: t('app.master-data.plants.status'),
+      title: t('common.status'),
       dataIndex: 'isActive',
-      render: (_: React.ReactNode, record: Plant) => renderMasterActiveTag(t, record?.isActive, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
+      render: (_: React.ReactNode, record: Plant) => renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled'),
     },
     { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
     { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
@@ -700,7 +700,7 @@ const PlantsPage: React.FC = () => {
           createButtonText={t('app.master-data.plants.create') + NEW_SHORTCUT_HINT}
           onCreate={handleCreate}
           showDeleteButton
-          deleteButtonText={t('app.master-data.plants.batchDelete')}
+          deleteButtonText={t('common.batchDelete')}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={t('app.master-data.plants.batchDeleteTitle')}
           deleteConfirmDescription={(count) =>

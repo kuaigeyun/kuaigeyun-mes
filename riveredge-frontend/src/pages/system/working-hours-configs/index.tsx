@@ -118,10 +118,10 @@ const WorkingHoursConfigsPage: React.FC = () => {
     if (record.id) {
       try {
         await apiRequest(`/core/working-hours-configs/${record.id}`, { method: 'DELETE' });
-        messageApi.success(t('pages.system.workingHoursConfigs.deleteSuccess'));
+        messageApi.success(t('common.deleteSuccess'));
         actionRef.current?.reload();
       } catch (error) {
-        messageApi.error(t('pages.system.workingHoursConfigs.deleteFailed'));
+        messageApi.error(t('common.deleteFailed'));
       }
     }
   };
@@ -216,13 +216,13 @@ const WorkingHoursConfigsPage: React.FC = () => {
       align: 'right',
     },
     {
-      title: t('pages.system.workingHoursConfigs.columnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
       width: 160,
     },
     {
-      title: t('pages.system.workingHoursConfigs.columnActions'),
+      title: t('common.actions'),
       width: 180,
       fixed: 'right',
       render: (_, record) => (
@@ -233,7 +233,7 @@ const WorkingHoursConfigsPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleDetail(record)}
           >
-            {t('pages.system.workingHoursConfigs.view')}
+            {t('common.detail')}
           </Button>
           <Button
             type="link"
@@ -241,13 +241,13 @@ const WorkingHoursConfigsPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            {t('pages.system.workingHoursConfigs.edit')}
+            {t('common.edit')}
           </Button>
           <Popconfirm
             title={t('pages.system.workingHoursConfigs.confirmDelete')}
             onConfirm={() => handleDelete(record)}
-            okText={t('pages.system.workingHoursConfigs.commonOk')}
-            cancelText={t('pages.system.workingHoursConfigs.commonCancel')}
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
           >
             <Button
               type="link"
@@ -255,7 +255,7 @@ const WorkingHoursConfigsPage: React.FC = () => {
               danger
               icon={<DeleteOutlined />}
             >
-              {t('pages.system.workingHoursConfigs.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -274,19 +274,19 @@ const WorkingHoursConfigsPage: React.FC = () => {
           method: 'PUT',
           data: values,
         });
-        messageApi.success(t('pages.system.workingHoursConfigs.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await apiRequest('/core/working-hours-configs', {
           method: 'POST',
           data: values,
         });
-        messageApi.success(t('pages.system.workingHoursConfigs.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
       setModalVisible(false);
       formRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.workingHoursConfigs.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -340,7 +340,7 @@ const WorkingHoursConfigsPage: React.FC = () => {
       dataIndex: 'end_date',
       valueType: 'date',
     },
-    { title: t('pages.system.workingHoursConfigs.labelRemarks'), dataIndex: 'remarks' },
+    { title: t('common.remark'), dataIndex: 'remarks' },
     { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
   ];
 
@@ -389,7 +389,7 @@ const WorkingHoursConfigsPage: React.FC = () => {
                 ? pageData
                 : await fetchAllListItems((p) => apiRequest('/core/working-hours-configs', { method: 'GET', params: { ...p } }));
             if (toExport.length === 0) {
-              messageApi.warning(t('pages.system.workingHoursConfigs.noDataToExport'));
+              messageApi.warning(t('common.exportNoData'));
               return;
             }
             await downloadRecordsAsXlsx(
@@ -398,7 +398,7 @@ const WorkingHoursConfigsPage: React.FC = () => {
             );
             messageApi.success(t('pages.system.workingHoursConfigs.exportSuccess', { count: toExport.length }));
           } catch (error: any) {
-            messageApi.error(t('pages.system.workingHoursConfigs.exportFailed'));
+            messageApi.error(t('common.exportFailed'));
           }
         }}
       />
@@ -489,7 +489,7 @@ const WorkingHoursConfigsPage: React.FC = () => {
         />
         <ProFormTextArea
           name="remarks"
-          label={t('pages.system.workingHoursConfigs.labelRemarks')}
+          label={t('common.remark')}
           placeholder={t('pages.system.workingHoursConfigs.remarksPlaceholder')}
           colProps={{ span: 24 }}
         />

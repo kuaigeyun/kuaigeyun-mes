@@ -245,7 +245,7 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
     const recommendedLabel = t('pages.system.configCenter.notification.action.recommended', {
       defaultValue: '推荐',
     });
-    const moreLabel = t('pages.system.configCenter.notification.action.more', {
+    const moreLabel = t('common.more', {
       defaultValue: '更多',
     });
     return (cfg.actionOptions[doc] || []).map((it) => {
@@ -462,9 +462,9 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
       content: (
         <Descriptions column={2} size="small">
           <Descriptions.Item label={t('pages.system.configCenter.notification.detail.scene')}>{row.scene}</Descriptions.Item>
-          <Descriptions.Item label={t('pages.system.configCenter.notification.detail.status')}>
+          <Descriptions.Item label={t('common.status')}>
             {row.enabled
-              ? t('pages.system.configCenter.notification.status.enabled')
+              ? t('common.enabled')
               : t('pages.system.configCenter.notification.status.disabled')}
           </Descriptions.Item>
           <Descriptions.Item label={t('pages.system.configCenter.notification.detail.document')}>{row.document}</Descriptions.Item>
@@ -742,28 +742,28 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
                   { title: t('pages.system.configCenter.notification.column.channels'), dataIndex: 'channels', width: 180, ellipsis: true },
                   { title: t('pages.system.configCenter.notification.column.recipients'), dataIndex: 'recipients', width: 220, ellipsis: true },
                   {
-                    title: t('pages.system.configCenter.notification.column.status'),
+                    title: t('common.status'),
                     dataIndex: 'enabled',
                     width: 90,
                     render: (_: unknown, row: { enabled: boolean }) =>
                       row.enabled
-                        ? t('pages.system.configCenter.notification.status.enabled')
+                        ? t('common.enabled')
                         : t('pages.system.configCenter.notification.status.disabled'),
                   },
                   {
-                    title: t('pages.system.configCenter.notification.column.actions'),
+                    title: t('common.actions'),
                     width: 220,
                     fixed: 'right' as const,
                     render: (_: unknown, row: { id: string }) => {
                       const actions: React.ReactNode[] = [
                         <Button {...rowActionKind('read')} key="detail" onClick={() => handleViewNotificationRule(row as never)}>
-                          {t('pages.system.configCenter.notification.action.view')}
+                          {t('common.detail')}
                         </Button>,
                         <Button {...rowActionKind('update')} key="edit" onClick={() => handleEditNotificationRule(row as never)}>
-                          {t('pages.system.configCenter.notification.action.edit')}
+                          {t('common.edit')}
                         </Button>,
                         <Button {...rowActionKind('delete')} key="delete" onClick={() => handleDeleteNotificationRule(row)}>
-                          {t('pages.system.configCenter.notification.action.delete')}
+                          {t('common.delete')}
                         </Button>,
                       ];
                       return actions;

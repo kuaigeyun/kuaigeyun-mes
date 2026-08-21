@@ -230,7 +230,7 @@ const OpeningBalancesPage: React.FC = () => {
       })) as { saved?: number; trial?: TrialInfo };
       setTrial(res.trial || null);
       messageApi.success(
-        t(`${NS}.saveSuccess`, {
+        t('common.saveSuccess', {
           defaultValue: '期初已保存（{{count}} 条）',
           count: res.saved ?? items.length,
         }),

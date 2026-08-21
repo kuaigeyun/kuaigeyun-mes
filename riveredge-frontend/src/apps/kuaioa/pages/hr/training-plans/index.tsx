@@ -35,8 +35,8 @@ const TrainingPlansPage: React.FC = () => {
         { name: 'planned_start_date', labelKey: 'app.kuaioa.trainingPlan.plannedStart', width: 120, type: 'date', hideInTable: true },
         { name: 'planned_end_date', labelKey: 'app.kuaioa.trainingPlan.plannedEnd', width: 120, type: 'date', hideInTable: true },
         { name: 'reminder_days', labelKey: 'app.kuaioa.common.reminderDays', width: 100, type: 'number', hideInTable: true },
-        { name: 'status', labelKey: 'app.kuaioa.common.status', width: 100 },
-        { name: 'description', labelKey: 'app.kuaioa.common.description', hideInTable: true, type: 'textarea' },
+        { name: 'status', labelKey: 'common.status', width: 100 },
+        { name: 'description', labelKey: 'common.remark', hideInTable: true, type: 'textarea' },
       ]}
       listFn={listTrainingPlans}
       createFn={createTrainingPlan}

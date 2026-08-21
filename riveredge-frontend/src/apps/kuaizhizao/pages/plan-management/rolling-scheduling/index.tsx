@@ -212,7 +212,7 @@ const RollingSchedulingPage: React.FC = () => {
       setDirty(false);
       refreshTargetPlan();
     } catch (e: unknown) {
-      message.error((e as Error)?.message || t('app.kuaizhizao.rollingScheduling.saveFailed'));
+      message.error((e as Error)?.message || t('common.saveFailed'));
     }
   }, [lines, message, refreshTargetPlan, targetPlan?.id, t]);
 
@@ -332,14 +332,14 @@ const RollingSchedulingPage: React.FC = () => {
         },
       },
       {
-        title: t('app.kuaizhizao.rollingScheduling.col.status'),
+        title: t('common.status'),
         dataIndex: 'work_order_status',
         width: 72,
         onHeaderCell: nowrapHeaderCell,
         render: (v: string) => translateWorkOrderLifecycleStatus(t, v),
       },
       {
-        title: t('app.kuaizhizao.rollingScheduling.col.actions'),
+        title: t('common.actions'),
         width: 120,
         onHeaderCell: nowrapHeaderCell,
         render: (_: unknown, row: RollingScheduleLine, index: number) =>
@@ -360,7 +360,7 @@ const RollingSchedulingPage: React.FC = () => {
                 onClick={() => moveLine(index, 1)}
               />
               <Button {...rowActionKind('delete')} size="small" onClick={() => removeLine(row.work_order_id)}>
-                {t('app.kuaizhizao.rollingScheduling.remove')}
+                {t('common.remove')}
               </Button>
             </Space>
           ) : null,
@@ -420,7 +420,7 @@ const RollingSchedulingPage: React.FC = () => {
             refreshClosePlan();
           }}
         >
-          {t('app.kuaizhizao.rollingScheduling.refresh')}
+          {t('common.refresh')}
         </Button>
         {canClose ? (
           <Button onClick={handleCloseDay} disabled={closePlan?.status !== 'published'}>

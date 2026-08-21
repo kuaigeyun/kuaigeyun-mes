@@ -509,7 +509,7 @@ const ExceptionProcessPage: React.FC = () => {
           ) : null,
           canCancel ? (
             <Button key="cancel" {...rowActionKind('revoke')} onClick={() => handleCancel(record)}>
-              {t(`${P}.action.cancel`)}
+              {t('common.cancel')}
             </Button>
           ) : null,
         ];
@@ -536,7 +536,7 @@ const ExceptionProcessPage: React.FC = () => {
       { title: t(`${P}.col.assignedAt`), dataIndex: 'assigned_at', valueType: 'dateTime' },
       { title: t(`${P}.col.startTime`), dataIndex: 'started_at', valueType: 'dateTime' },
       { title: t(`${P}.col.endTime`), dataIndex: 'completed_at', valueType: 'dateTime' },
-      { title: t(`${P}.field.remarks`), dataIndex: 'remarks', span: 3 },
+      { title: t('common.remark'), dataIndex: 'remarks', span: 3 },
     ]),
     [t, getExceptionTypeTag],
   );
@@ -717,7 +717,7 @@ const ExceptionProcessPage: React.FC = () => {
                 icon={<CloseCircleOutlined />}
                 onClick={() => handleCancel(currentRecord)}
               >
-                {t(`${P}.action.cancel`)}
+                {t('common.cancel')}
               </Button>
             </Space>
           ) : null
@@ -734,7 +734,7 @@ const ExceptionProcessPage: React.FC = () => {
         collaborationTitleSuffix={
           currentRecord && exceptionProcessShowNextInTitle ? (
             <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-              {t('components.uniLifecycle.nextStep')}：
+              {t('common.next')}：
               {exceptionProcessNextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
             </Typography.Text>
           ) : undefined
@@ -864,7 +864,7 @@ const ExceptionProcessPage: React.FC = () => {
         <ProFormText name="assigned_to" hidden />
         <ProFormTextArea
           name="remarks"
-          label={t(`${P}.field.remarks`)}
+          label={t('common.remark')}
           fieldProps={{ rows: 4 }}
         />
       </FormModalTemplate>
@@ -894,7 +894,7 @@ const ExceptionProcessPage: React.FC = () => {
         <ProFormText name="assigned_to" hidden />
         <ProFormTextArea
           name="comment"
-          label={t(`${P}.field.remarks`)}
+          label={t('common.remark')}
           fieldProps={{ rows: 4 }}
         />
       </FormModalTemplate>
@@ -916,7 +916,7 @@ const ExceptionProcessPage: React.FC = () => {
         />
         <ProFormTextArea
           name="comment"
-          label={t(`${P}.field.remarks`)}
+          label={t('common.remark')}
           fieldProps={{ rows: 4 }}
         />
       </FormModalTemplate>
@@ -932,7 +932,7 @@ const ExceptionProcessPage: React.FC = () => {
       >
         <ProFormTextArea
           name="comment"
-          label={t(`${P}.field.remarks`)}
+          label={t('common.remark')}
           fieldProps={{ rows: 4 }}
         />
         <ProFormTextArea

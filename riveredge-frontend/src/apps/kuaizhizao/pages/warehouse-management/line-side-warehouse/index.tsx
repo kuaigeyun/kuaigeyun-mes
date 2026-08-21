@@ -267,7 +267,7 @@ const LineSideWarehousePage: React.FC = () => {
             },
           },
           {
-            title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+            title: t('common.status'),
             key: 'lifecycle',
             dataIndex: 'status',
             fixed: 'right',

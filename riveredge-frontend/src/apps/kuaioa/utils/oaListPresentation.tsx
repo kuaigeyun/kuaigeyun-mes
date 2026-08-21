@@ -36,7 +36,7 @@ export function resolveOaEnumLabel(
 export function renderOaActiveTag(t: TFunction, isActive?: boolean | null) {
   return (
     <MarkerTag color={isActive ? 'success' : 'default'}>
-      {isActive ? t('app.kuaioa.common.yes') : t('app.kuaioa.common.no')}
+      {isActive ? t('common.yes') : t('common.no')}
     </MarkerTag>
   );
 }
@@ -44,7 +44,7 @@ export function renderOaActiveTag(t: TFunction, isActive?: boolean | null) {
 export function renderOaYesNoTag(t: TFunction, value?: boolean | null) {
   return (
     <MarkerTag color={value ? 'processing' : 'default'}>
-      {value ? t('app.kuaioa.common.yes') : t('app.kuaioa.common.no')}
+      {value ? t('common.yes') : t('common.no')}
     </MarkerTag>
   );
 }

@@ -160,7 +160,7 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
         valueType: 'dateTime',
       },
       {
-        title: t('app.master-data.warehouses.status'),
+        title: t('common.status'),
         dataIndex: 'isActive',
         render: (_, record) =>
           renderMasterActiveTag(
@@ -256,8 +256,8 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
       { title: t('field.partner.deliveryContactName'), dataIndex: 'deliveryContactName' },
       { title: t('field.partner.deliveryContactPhone'), dataIndex: 'deliveryContactPhone' },
       { title: t('field.partner.deliveryAddress'), dataIndex: 'deliveryAddress', span: 2 },
-      { title: t('app.master-data.warehouses.createTime'), dataIndex: 'createdAt', valueType: 'dateTime' },
-      { title: t('app.master-data.warehouses.updateTime'), dataIndex: 'updatedAt', valueType: 'dateTime' },
+      { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
     ],
     [dictLabel, t],
   );

@@ -122,7 +122,7 @@ const ServiceAssetsPage: React.FC = () => {
             copyable: true,
           },
           {
-            title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.status'),
+            title: t('common.status'),
             key: 'lifecycle',
             dataIndex: 'status',
             fixed: 'right',

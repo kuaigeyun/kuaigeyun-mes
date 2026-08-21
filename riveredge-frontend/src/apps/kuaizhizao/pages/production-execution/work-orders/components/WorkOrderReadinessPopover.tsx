@@ -1609,7 +1609,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
               { required: true, type: 'array', min: 1, message: t('app.kuaizhizao.workOrder.remindBatchingRecipientRequired') },
             ]}
           />
-          <Form.Item name="remarks" label={t('app.kuaizhizao.workOrder.colRemarks')}>
+          <Form.Item name="remarks" label={t('common.remark')}>
             <Input.TextArea
               rows={3}
               placeholder={t('app.kuaizhizao.workOrder.remindBatchingRemarksPlaceholder')}

@@ -349,7 +349,7 @@ const RoutePatrolsPage: React.FC = () => {
       { title: t(`${P}.col.patrolDate`), dataIndex: 'patrol_date', valueType: 'date' },
       { title: t(`${P}.col.inspector`), dataIndex: 'inspector_name' },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status),
       },
@@ -363,7 +363,7 @@ const RoutePatrolsPage: React.FC = () => {
             <MarkerTag color="success">{t(`${P}.normal`)}</MarkerTag>
           ),
       },
-      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+      { title: t('common.remark'), dataIndex: 'remark', span: 2 },
     ],
     [t],
   );
@@ -439,7 +439,7 @@ const RoutePatrolsPage: React.FC = () => {
         search: { order: 11 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         valueType: 'select',
         valueEnum: routePatrolStatusValueEnum,
@@ -526,7 +526,7 @@ const RoutePatrolsPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<RoutePatrol>(t),
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
         hideInSearch: true,
@@ -673,7 +673,7 @@ const RoutePatrolsPage: React.FC = () => {
             />
           </Col>
           <Col span={24}>
-            <ProFormTextArea name="remark" label={t(`${P}.form.remark`)} fieldProps={{ rows: 2 }} />
+            <ProFormTextArea name="remark" label={t('common.remark')} fieldProps={{ rows: 2 }} />
           </Col>
         </Row>
         {previewLines.length > 0 && (

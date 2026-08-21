@@ -365,7 +365,7 @@ const LoginLogsPage: React.FC = () => {
                 items = items.filter((d) => keys.includes(d.uuid));
               }
               if (items.length === 0) {
-                messageApi.warning(t('pages.system.loginLogs.noDataExport'));
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               await downloadRecordsAsXlsx(
@@ -374,7 +374,7 @@ const LoginLogsPage: React.FC = () => {
               );
               messageApi.success(t('pages.system.loginLogs.exportSuccessCount', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || t('pages.system.loginLogs.exportFailed'));
+              messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
           toolBarRender={() => [

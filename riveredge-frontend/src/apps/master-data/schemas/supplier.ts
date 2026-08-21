@@ -73,7 +73,7 @@ export const supplierFormSchemaBasicTail: FieldConfig[] = [
   {
     name: 'isActive',
     type: 'switch',
-    labelKey: 'field.supplier.isActive',
+    labelKey: 'common.enabled',
     colSpan: 12,
   },
   {

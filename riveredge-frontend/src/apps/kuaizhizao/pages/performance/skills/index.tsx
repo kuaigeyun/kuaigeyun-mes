@@ -70,14 +70,14 @@ const SkillsPage: React.FC = () => {
         dataIndex: 'category',
         render: (_, record) => renderPerformanceTypeMarker(record?.category),
       },
-      { title: t('app.kuaizhizao.performance.common.columns.description'), dataIndex: 'description', span: 2 },
+      { title: t('common.remark'), dataIndex: 'description', span: 2 },
       {
         title: t('app.kuaizhizao.performance.holidays.columns.activeStatus'),
         dataIndex: 'isActive',
         render: (_, record) => renderActiveTag(t, record?.isActive),
       },
-      { title: t('app.kuaizhizao.performance.common.columns.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
-      { title: t('app.kuaizhizao.performance.common.columns.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
+      { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
     ],
     [t],
   );
@@ -176,7 +176,7 @@ const SkillsPage: React.FC = () => {
       render: (_, r) => renderPerformanceTypeMarker(r.category),
     },
     {
-      title: t('app.kuaizhizao.performance.common.columns.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       width: 200,
       minWidth: 200,
@@ -187,7 +187,7 @@ const SkillsPage: React.FC = () => {
     },
     ...customFieldColumns,
     {
-      title: t('app.kuaizhizao.performance.common.active.enabled'),
+      title: t('common.enabled'),
       dataIndex: 'isActive',
       hideInTable: true,
       valueType: 'select',
@@ -195,7 +195,7 @@ const SkillsPage: React.FC = () => {
     },
     ...buildDocumentAuditColumns<Skill>(t),
     {
-      title: t('app.kuaizhizao.performance.common.columns.status'),
+      title: t('common.status'),
       dataIndex: 'isActive',
       width: 88,
       minWidth: 88,
@@ -205,7 +205,7 @@ const SkillsPage: React.FC = () => {
       render: (_, r) => renderActiveTag(t, r.isActive),
     },
     {
-      title: t('app.kuaizhizao.performance.common.columns.actions'),
+      title: t('common.actions'),
       key: 'action',
       valueType: 'option',
       fixed: 'right',
@@ -214,18 +214,18 @@ const SkillsPage: React.FC = () => {
         <Space>
           {skillPerms.canRead ? (
             <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-              {t('app.kuaizhizao.performance.common.actions.detail')}
+              {t('common.detail')}
             </Button>
           ) : null}
           {skillPerms.canUpdate ? (
             <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-              {t('app.kuaizhizao.performance.common.actions.edit')}
+              {t('common.edit')}
             </Button>
           ) : null}
           {skillPerms.canDelete ? (
             <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.skills.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('app.kuaizhizao.performance.common.actions.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>
           ) : null}

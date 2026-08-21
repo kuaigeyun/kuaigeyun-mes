@@ -226,7 +226,7 @@ const DesignReviewsPage: React.FC = () => {
       },
       ...plmCreatedUpdatedColumns<RdDesignReview>(t),
       {
-        title: t('app.kuaiplm.phase2.designReviews.columns.status'),
+        title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
         width: 90,
@@ -476,7 +476,7 @@ const DesignReviewsPage: React.FC = () => {
         />
         <ProFormSelect
           name="status"
-          label={t('app.kuaiplm.phase2.designReviews.form.status')}
+          label={t('common.status')}
           options={designReviewStatusOptions}
         />
         <ProFormText name="material_code" label={t('app.kuaiplm.phase2.designReviews.form.materialCode')} />
@@ -514,7 +514,7 @@ const DesignReviewsPage: React.FC = () => {
         />
         <ProFormSelect
           name="status"
-          label={t('app.kuaiplm.phase2.designReviews.form.status')}
+          label={t('common.status')}
           options={designReviewStatusOptions}
         />
         <ProFormText name="reviewer_name" label={t('app.kuaiplm.phase2.designReviews.form.reviewer')} />

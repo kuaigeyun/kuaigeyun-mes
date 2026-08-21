@@ -433,7 +433,7 @@ export const MergeFinanceDocsModal: React.FC<Props> = ({
         <Col span={24}>
           <ProFormTextArea
             name="notes"
-            label={t('app.kuaicaiwu.common.notes')}
+            label={t('common.remark')}
             fieldProps={{ rows: 2 }}
           />
         </Col>

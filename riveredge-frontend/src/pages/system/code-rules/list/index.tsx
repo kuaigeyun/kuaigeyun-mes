@@ -907,7 +907,7 @@ const CodeRuleListPage: React.FC = () => {
 
                   <ProFormSwitch
                     name="is_active"
-                    label={t('pages.system.codeRules.isActive')}
+                    label={t('common.enabled')}
                   />
                 </ProForm>
               </div>

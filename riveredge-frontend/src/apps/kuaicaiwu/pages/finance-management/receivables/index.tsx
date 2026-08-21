@@ -213,7 +213,7 @@ const ReceivableList: React.FC = () => {
                     },
                     { field: 'dueDate', labelKey: `${P}.import.dueDate`, aliases: ['到期日期'] },
                     { field: 'businessDate', labelKey: `${P}.import.businessDate`, aliases: ['业务日期'] },
-                    { field: 'notes', labelKey: 'app.kuaicaiwu.common.notes', aliases: ['备注'] },
+                    { field: 'notes', labelKey: 'common.remark', aliases: ['备注'] },
                 ],
                 [
                     t(`${P}.importExample.customerName`),
@@ -1094,7 +1094,7 @@ const ReceivableList: React.FC = () => {
                 scopeOptions={pullFromSalesOrderQuery.scopeOptions}
                 scope={pullFromSalesOrderQuery.scope}
                 onScopeChange={pullFromSalesOrderQuery.handleScopeChange}
-                okText={t('components.uniLifecycle.nextStep')}
+                okText={t('common.next')}
             />
 
             <UniPullQueryModal<ReceivablePullCandidate>
@@ -1127,7 +1127,7 @@ const ReceivableList: React.FC = () => {
                 scopeOptions={pullFromSalesDeliveryQuery.scopeOptions}
                 scope={pullFromSalesDeliveryQuery.scope}
                 onScopeChange={pullFromSalesDeliveryQuery.handleScopeChange}
-                okText={t('components.uniLifecycle.nextStep')}
+                okText={t('common.next')}
             />
 
             <Modal
@@ -1256,7 +1256,7 @@ const ReceivableList: React.FC = () => {
                                         t,
                                     })}
                                 />
-                                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} colProps={financeColFull} />
+                                <ProFormTextArea name="notes" label={t('common.remark')} colProps={financeColFull} />
                                 <DocumentAttachmentsField category="receivable_attachments" />
                             </ProForm>
                         ) : null}
@@ -1306,7 +1306,7 @@ const ReceivableList: React.FC = () => {
                         t,
                     })}
                 />
-                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} colProps={financeColFull} />
+                <ProFormTextArea name="notes" label={t('common.remark')} colProps={financeColFull} />
                 <DocumentAttachmentsField category="receivable_attachments" />
             </ModalForm>
 

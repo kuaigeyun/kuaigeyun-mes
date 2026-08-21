@@ -46,14 +46,14 @@ const SystemParametersPage: React.FC = () => {
     try {
       const values = await form.validateFields();
       await updateConfigs(values);
-      message.success(t('pages.system.parameters.saveSuccess', '保存成功'));
+      message.success(t('common.saveSuccess', '保存成功'));
       useThemeStore.getState().initFromApi();
       
       // 提示用户某些设置可能需要刷新页面才能生效
       message.info(t('pages.system.parameters.saveInfo', '部分设置（如主题色、页面大小）可能需要刷新页面才能完全生效'));
     } catch (error) {
       console.error('保存配置失败:', error);
-      message.error(t('pages.system.parameters.saveFailed', '保存失败'));
+      message.error(t('common.saveFailed', '保存失败'));
     } finally {
       setSaving(false);
     }

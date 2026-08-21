@@ -27,8 +27,8 @@ const WorkLicensesPage: React.FC = () => (
       { name: 'issue_date', labelKey: 'app.kuaioa.workLicense.issueDate', width: 120, type: 'date', hideInTable: true },
       { name: 'expiry_date', labelKey: 'app.kuaioa.workLicense.expiry', width: 120, type: 'date' },
       { name: 'reminder_days', labelKey: 'app.kuaioa.common.reminderDays', width: 100, type: 'number', hideInTable: true },
-      { name: 'status', labelKey: 'app.kuaioa.common.status', width: 100 },
-      { name: 'notes', labelKey: 'app.kuaioa.common.notes', hideInTable: true, type: 'textarea' },
+      { name: 'status', labelKey: 'common.status', width: 100 },
+      { name: 'notes', labelKey: 'common.remark', hideInTable: true, type: 'textarea' },
     ]}
     listFn={listWorkLicenses}
     expiringListFn={() => listExpiringWorkLicenses(30)}

@@ -35,14 +35,14 @@ export const workGroupFormSchemaRest: FieldConfig[] = [
   {
     name: 'description',
     type: 'textarea',
-    labelKey: 'field.workGroup.description',
+    labelKey: 'common.remark',
     colSpan: 24,
     fieldProps: { rows: 2 },
   },
   {
     name: 'isActive',
     type: 'switch',
-    labelKey: 'field.workGroup.isActive',
+    labelKey: 'common.enabled',
     colSpan: 12,
   },
 ];

@@ -223,12 +223,12 @@ const ApplicationConnectionsListPage: React.FC = () => {
       buildFactoryImportTemplate(
         t,
         [
-          { field: 'name', required: true, labelKey: 'pages.system.applicationConnections.importHeaderName' },
-          { field: 'code', required: true, labelKey: 'pages.system.applicationConnections.importHeaderCode' },
+          { field: 'name', required: true, labelKey: 'common.name' },
+          { field: 'code', required: true, labelKey: 'common.code' },
           { field: 'type', required: true, labelKey: 'pages.system.applicationConnections.importHeaderType' },
           {
             field: 'description',
-            labelKey: 'pages.system.applicationConnections.importHeaderDescription',
+            labelKey: 'common.remark',
             aliases: ['备注', '描述'],
           },
           {
@@ -247,7 +247,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
           'example_conn',
           'feishu',
           t('pages.system.applicationConnections.importExampleDescription'),
-          t('pages.system.applicationConnections.importExampleActive'),
+          t('common.yes'),
           '{}',
         ],
       ),
@@ -347,7 +347,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
         done++;
       }
       messageApi.success(t('pages.system.applicationConnections.batchStatusSuccess', {
-        action: enable ? t('pages.system.applicationConnections.actionEnable') : t('pages.system.applicationConnections.actionDisable'),
+        action: enable ? t('common.enabled') : t('common.disabled'),
         count: done,
       }));
       setSelectedRowKeys([]);
@@ -1175,7 +1175,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
         return record.config?.model || t('common.dash');
       },
     },
-    { title: t('pages.system.applicationConnections.columnDescription'), dataIndex: 'description', ellipsis: true, hideInSearch: true },
+    { title: t('common.remark'), dataIndex: 'description', ellipsis: true, hideInSearch: true },
     {
       title: t('pages.system.applicationConnections.columnConnectionStatus'),
       dataIndex: 'is_connected',
@@ -1189,7 +1189,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
       },
     },
     {
-      title: t('pages.system.applicationConnections.columnActive'),
+      title: t('common.enabled'),
       dataIndex: 'is_active',
       width: 80,
       minWidth: 80,
@@ -1199,8 +1199,8 @@ const ApplicationConnectionsListPage: React.FC = () => {
         renderSystemActiveTag(
           t,
           record.is_active,
-          'pages.system.applicationConnections.actionEnable',
-          'pages.system.applicationConnections.actionDisable',
+          'common.enabled',
+          'common.disabled',
         ),
     },
     {
@@ -1215,7 +1215,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('pages.system.applicationConnections.columnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       minWidth: 180,
@@ -1226,7 +1226,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('pages.system.applicationConnections.columnActions'),
+      title: t('common.actions'),
       key: 'action',
       valueType: 'option',
       fixed: 'right',
@@ -1234,10 +1234,10 @@ const ApplicationConnectionsListPage: React.FC = () => {
       render: (_, record) =>
         [
             <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
-              {t('pages.system.applicationConnections.view')}
+              {t('common.view')}
             </Button>,
             <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
-              {t('pages.system.applicationConnections.edit')}
+              {t('common.edit')}
             </Button>,
             <Button
               {...rowActionTestConnection('execute')}
@@ -1274,7 +1274,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
               cancelText={t('common.cancel')}
             >
               <Button type="link" size="small" icon={<DeleteOutlined />} danger>
-                {t('pages.system.applicationConnections.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>,
           ].filter(Boolean),
@@ -1298,7 +1298,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
       render: (_: any, record: ApplicationConnection) =>
         isLlmConnectionType(record.type) ? record.config?.model || t('common.dash') : t('common.dash'),
     },
-    { title: t('pages.system.applicationConnections.columnDescription'), dataIndex: 'description' },
+    { title: t('common.remark'), dataIndex: 'description' },
     {
       title: t('pages.system.applicationConnections.columnConfig'),
       dataIndex: 'config',
@@ -1325,14 +1325,14 @@ const ApplicationConnectionsListPage: React.FC = () => {
       ),
     },
     {
-      title: t('pages.system.applicationConnections.columnActive'),
+      title: t('common.enabled'),
       dataIndex: 'is_active',
       render: (v: boolean) =>
         renderSystemActiveTag(
           t,
           v,
-          'pages.system.applicationConnections.actionEnable',
-          'pages.system.applicationConnections.actionDisable',
+          'common.enabled',
+          'common.disabled',
         ),
     },
     { title: t('pages.system.applicationConnections.columnLastConnected'), dataIndex: 'last_connected_at', valueType: 'dateTime' },
@@ -1341,8 +1341,8 @@ const ApplicationConnectionsListPage: React.FC = () => {
       dataIndex: 'last_error',
       render: (v: string) => (v ? renderSystemTypeMarker(v, 'error') : t('common.dash')),
     },
-    { title: t('pages.system.applicationConnections.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-    { title: t('pages.system.applicationConnections.columnUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
 
   return (
@@ -1393,7 +1393,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText={t('pages.system.applicationConnections.batchDeleteButton')}
+          deleteButtonText={t('common.batchDelete')}
           deleteConfirmTitle={t('pages.system.applicationConnections.batchDeleteTitle')}
           deleteConfirmDescription={(c) => t('pages.system.applicationConnections.batchDeleteDescription', { count: c })}
           toolBarRender={() =>
@@ -1553,12 +1553,12 @@ const ApplicationConnectionsListPage: React.FC = () => {
         </ProFormDependency>
         <ProFormTextArea
           name="description"
-          label={t('pages.system.applicationConnections.columnDescription')}
+          label={t('common.remark')}
           placeholder={t('pages.system.applicationConnections.descPlaceholder')}
           fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
         />
-        <ProFormSwitch name="is_active" label={t('pages.system.applicationConnections.columnActive')} colProps={{ span: 12 }} />
+        <ProFormSwitch name="is_active" label={t('common.enabled')} colProps={{ span: 12 }} />
       </FormModalTemplate>
 
       <AppConnectorMarket
@@ -1622,7 +1622,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
                   visible: true,
                   render: (
                     <Button {...rowActionKind('update')} icon={<EditOutlined />} onClick={() => handleEdit(detailData)}>
-                      {t('pages.system.applicationConnections.edit')}
+                      {t('common.edit')}
                     </Button>
                   ),
                 },

@@ -254,7 +254,7 @@ const EquipmentFaultListPage: React.FC = () => {
       { title: t('pages.system.equipmentFaults.columnFaultDesc'), dataIndex: 'fault_description', span: 2 },
       { title: t('pages.system.equipmentFaults.columnReporter'), dataIndex: 'reporter_name' },
       {
-        title: t('pages.system.equipmentFaults.columnStatus'),
+        title: t('common.status'),
         dataIndex: 'status',
         render: (_: unknown, record: EquipmentFault) => {
           const statusMap: Record<string, { color: string; text: string }> = {
@@ -272,13 +272,13 @@ const EquipmentFaultListPage: React.FC = () => {
         dataIndex: 'repair_required',
         render: (_: unknown, entity: EquipmentFault) => (
           <Tag color={entity?.repair_required ? 'success' : 'default'}>
-            {entity?.repair_required ? t('pages.system.equipmentFaults.yes') : t('pages.system.equipmentFaults.no')}
+            {entity?.repair_required ? t('common.yes') : t('common.no')}
           </Tag>
         ),
       },
-      { title: t('pages.system.equipmentFaults.labelRemark'), dataIndex: 'remark', span: 2 },
-      { title: t('pages.system.equipmentFaults.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-      { title: t('pages.system.equipmentFaults.labelUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+      { title: t('common.remark'), dataIndex: 'remark', span: 2 },
+      { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
     ],
     [t]
   );
@@ -346,7 +346,7 @@ const EquipmentFaultListPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('pages.system.equipmentFaults.columnStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       width: 100,
       valueType: 'select',
@@ -373,18 +373,18 @@ const EquipmentFaultListPage: React.FC = () => {
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('pages.system.equipmentFaults.yes'), status: 'Success' },
-        false: { text: t('pages.system.equipmentFaults.no'), status: 'Default' },
+        true: { text: t('common.yes'), status: 'Success' },
+        false: { text: t('common.no'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.repair_required ? 'success' : 'default'}>
-          {record.repair_required ? t('pages.system.equipmentFaults.yes') : t('pages.system.equipmentFaults.no')}
+          {record.repair_required ? t('common.yes') : t('common.no')}
         </Tag>
       ),
       hideInSearch: true,
     },
     {
-      title: t('pages.system.equipmentFaults.columnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -392,7 +392,7 @@ const EquipmentFaultListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('pages.system.equipmentFaults.columnActions'),
+      title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
       render: (_, record) => [
@@ -403,7 +403,7 @@ const EquipmentFaultListPage: React.FC = () => {
               icon={<EyeOutlined />}
               onClick={() => handleView(record)}
             >
-              {t('pages.system.equipmentFaults.view')}
+              {t('common.view')}
             </Button>,
             <Button {...rowActionKind('update')}
               key="edit"
@@ -412,7 +412,7 @@ const EquipmentFaultListPage: React.FC = () => {
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
             >
-              {t('pages.system.equipmentFaults.edit')}
+              {t('common.edit')}
             </Button>,
             <Popconfirm {...rowActionKind('delete')}
               key="delete"
@@ -420,7 +420,7 @@ const EquipmentFaultListPage: React.FC = () => {
               onConfirm={() => handleDelete(record)}
             >
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('pages.system.equipmentFaults.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>,
           ],
@@ -458,7 +458,7 @@ const EquipmentFaultListPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText={t('pages.system.equipmentFaults.batchDelete')}
+          deleteButtonText={t('common.batchDelete')}
           deleteConfirmTitle={t('pages.system.equipmentFaults.batchDeleteTitle')}
           deleteConfirmDescription={(c) => t('pages.system.equipmentFaults.batchDeleteDescription', { count: c })}
           showImportButton={false}
@@ -560,7 +560,7 @@ const EquipmentFaultListPage: React.FC = () => {
         />
         <ProFormSelect
           name="status"
-          label={t('pages.system.equipmentFaults.columnStatus')}
+          label={t('common.status')}
           rules={[{ required: true, message: t('pages.system.equipmentFaults.statusRequired') }]}
           options={[
             { label: t('pages.system.equipmentFaults.statusPending'), value: '待处理' },
@@ -576,7 +576,7 @@ const EquipmentFaultListPage: React.FC = () => {
         />
         <ProFormTextArea
           name="remark"
-          label={t('pages.system.equipmentFaults.labelRemark')}
+          label={t('common.remark')}
           placeholder={t('pages.system.equipmentFaults.remarkPlaceholder')}
         />
       </FormModalTemplate>

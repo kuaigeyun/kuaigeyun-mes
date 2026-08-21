@@ -1509,7 +1509,7 @@ const ReportingPage: React.FC = () => {
           span: 3,
         },
         {
-          title: t('app.kuaizhizao.workReporting.colRemarks'),
+          title: t('common.remark'),
           dataIndex: 'remarks',
           span: 3,
         },
@@ -1848,7 +1848,7 @@ const ReportingPage: React.FC = () => {
         />
         <ProFormTextArea
           name="remarks"
-          label={t('app.kuaizhizao.workReporting.colRemarks')}
+          label={t('common.remark')}
           placeholder={t('app.kuaizhizao.workReporting.formRemarksPlaceholder')}
           fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
@@ -2240,7 +2240,7 @@ const ReportingPage: React.FC = () => {
         collaborationTitleSuffix={
           reportingDetail && reportingShowNextInTitle ? (
             <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-              {t('components.uniLifecycle.nextStep')}：
+              {t('common.next')}：
               {reportingNextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
             </Typography.Text>
           ) : undefined
@@ -2299,7 +2299,7 @@ const ReportingPage: React.FC = () => {
                   { title: t('app.kuaizhizao.workReporting.bindingColType'), dataIndex: 'binding_type', width: 100, ellipsis: true },
                   { title: t('app.kuaizhizao.workReporting.bindingColMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
                   { title: t('app.kuaizhizao.workReporting.bindingColMaterialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.workReporting.bindingColQuantity'), dataIndex: 'quantity', width: 100, align: 'right' as const, render: formatQuantity },
+                  { title: t('common.quantity'), dataIndex: 'quantity', width: 100, align: 'right' as const, render: formatQuantity },
                   { title: t('app.kuaizhizao.workReporting.bindingColWarehouse'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
                   { title: t('app.kuaizhizao.workReporting.bindingColMethod'), dataIndex: 'binding_method', width: 100 },
                 ]}

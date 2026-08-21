@@ -101,7 +101,7 @@ const ReportTemplatesPage: React.FC = () => {
         },
       },
       {
-        title: t('pages.system.reportTemplates.columnStatus'),
+        title: t('common.status'),
         dataIndex: 'status',
         render: (_: unknown, record: ReportTemplate) => {
           const map: Record<string, { text: string; color: string }> = {
@@ -120,9 +120,9 @@ const ReportTemplatesPage: React.FC = () => {
         dataIndex: 'is_default',
         render: (_: unknown, record: ReportTemplate) => renderSystemYesNoTag(t, record.is_default),
       },
-      { title: t('pages.system.reportTemplates.labelDescription'), dataIndex: 'description' },
+      { title: t('common.remark'), dataIndex: 'description' },
       { title: t('pages.system.reportTemplates.columnCreatedBy'), dataIndex: 'created_by_name' },
-      { title: t('pages.system.reportTemplates.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
       { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
     ],
     [t]
@@ -200,10 +200,10 @@ const ReportTemplatesPage: React.FC = () => {
           })
         )
       );
-      messageApi.success(t('pages.system.reportTemplates.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error) {
-      messageApi.error(t('pages.system.reportTemplates.deleteFailed'));
+      messageApi.error(t('common.deleteFailed'));
     }
   };
 
@@ -217,18 +217,18 @@ const ReportTemplatesPage: React.FC = () => {
           method: 'PUT',
           data: values,
         });
-        messageApi.success(t('pages.system.reportTemplates.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await apiRequest('/core/reports/templates', {
           method: 'POST',
           data: values,
         });
-        messageApi.success(t('pages.system.reportTemplates.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (error) {
-      messageApi.error(isEdit ? t('pages.system.reportTemplates.updateFailed') : t('pages.system.reportTemplates.createFailed'));
+      messageApi.error(isEdit ? t('common.updateFailed') : t('common.createFailed'));
     }
   };
 
@@ -276,7 +276,7 @@ const ReportTemplatesPage: React.FC = () => {
       },
     },
     {
-      title: t('pages.system.reportTemplates.columnStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       width: 100,
       valueEnum: {
@@ -297,13 +297,13 @@ const ReportTemplatesPage: React.FC = () => {
       width: 100,
     },
     {
-      title: t('pages.system.reportTemplates.columnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
       width: 160,
     },
     {
-      title: t('pages.system.reportTemplates.columnActions'),
+      title: t('common.actions'),
       width: 250,
       fixed: 'right',
       render: (_, record) => (
@@ -315,7 +315,7 @@ const ReportTemplatesPage: React.FC = () => {
             {...rowActionKind('read')}
             onClick={() => handleDetail([record.id!])}
           >
-            {t('pages.system.reportTemplates.view')}
+            {t('common.detail')}
           </Button>
           <Button
             type="link"
@@ -334,7 +334,7 @@ const ReportTemplatesPage: React.FC = () => {
             {...rowActionKind('delete')}
             onClick={() => handleDelete([record.id!])}
           >
-            {t('pages.system.reportTemplates.delete')}
+            {t('common.delete')}
           </Button>
         </Space>
       ),
@@ -398,7 +398,7 @@ const ReportTemplatesPage: React.FC = () => {
                 ? pageData
                 : await fetchAllListItems((p) => apiRequest('/core/reports/templates', { method: 'GET', params: { ...p } }));
             if (toExport.length === 0) {
-              messageApi.warning(t('pages.system.reportTemplates.noDataToExport'));
+              messageApi.warning(t('common.exportNoData'));
               return;
             }
             await downloadRecordsAsXlsx(
@@ -407,7 +407,7 @@ const ReportTemplatesPage: React.FC = () => {
             );
             messageApi.success(t('pages.system.reportTemplates.exportSuccess', { count: toExport.length }));
           } catch (error: any) {
-            messageApi.error(t('pages.system.reportTemplates.exportFailed'));
+            messageApi.error(t('common.exportFailed'));
           }
         }}
       />
@@ -455,7 +455,7 @@ const ReportTemplatesPage: React.FC = () => {
         />
         <ProFormSelect
           name="status"
-          label={t('pages.system.reportTemplates.labelStatus')}
+          label={t('common.status')}
           rules={[{ required: true, message: t('pages.system.reportTemplates.statusRequired') }]}
           options={[
             { label: t('pages.system.reportTemplates.statusDraft'), value: 'draft' },
@@ -464,7 +464,7 @@ const ReportTemplatesPage: React.FC = () => {
           ]}
         />
         <ProFormSwitch name="is_default" label={t('pages.system.reportTemplates.labelIsDefault')} />
-        <ProFormTextArea name="description" label={t('pages.system.reportTemplates.labelDescription')} />
+        <ProFormTextArea name="description" label={t('common.remark')} />
       </FormModalTemplate>
 
       {/* 详情Drawer */}

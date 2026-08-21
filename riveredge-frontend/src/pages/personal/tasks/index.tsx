@@ -336,7 +336,7 @@ const UserTasksPage: React.FC = () => {
       resizable: false,
     },
     {
-      title: t('pages.personal.tasks.status'),
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'lifecycle',
       width: 100,
@@ -354,7 +354,7 @@ const UserTasksPage: React.FC = () => {
       render: (_: any, record: UserTask) => getStatusTag(record.status),
     },
     {
-      title: t('pages.personal.tasks.actions'),
+      title: t('common.actions'),
       key: 'action',
       valueType: 'option',
       fixed: 'right',
@@ -368,7 +368,7 @@ const UserTasksPage: React.FC = () => {
               icon={<EyeOutlined />}
               onClick={() => handleView(record)}
             >
-              {t('pages.personal.tasks.view')}
+              {t('common.view')}
             </Button>
             {isPending && (
               <>
@@ -405,7 +405,7 @@ const UserTasksPage: React.FC = () => {
                   });
                 }}
               >
-                {t('pages.personal.tasks.delete')}
+                {t('common.delete')}
               </Button>
             )}
           </Space>
@@ -430,7 +430,7 @@ const UserTasksPage: React.FC = () => {
       render: (_: any, record: UserTask) => formatApprovalTaskContent(record.content, t),
     },
     {
-      title: t('pages.personal.tasks.status'),
+      title: t('common.status'),
       dataIndex: 'status',
       render: (dom: any) => getStatusTag(dom as string),
     },
@@ -440,7 +440,7 @@ const UserTasksPage: React.FC = () => {
       render: (_: any, record: UserTask) => record.submitter_name || record.submitter_id || '-',
     },
     { title: t('pages.personal.tasks.submittedAt'), dataIndex: 'submitted_at', valueType: 'dateTime' },
-    { title: t('pages.personal.tasks.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
     {
       title: t('pages.personal.tasks.formData'),
       dataIndex: 'form_data',

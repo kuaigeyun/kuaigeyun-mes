@@ -105,7 +105,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
       />
       <ProFormSelect
         name="status"
-        label={t('app.kuaizhizao.logistics.field.status')}
+        label={t('common.status')}
         options={[
           { label: t('app.kuaizhizao.logistics.option.vehicleStatus.idle'), value: 'idle' },
           { label: t('app.kuaizhizao.logistics.option.vehicleStatus.inTransit'), value: 'in_transit' },
@@ -113,7 +113,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
           { label: t('app.kuaizhizao.logistics.option.vehicleStatus.disabled'), value: 'disabled' },
         ]}
       />
-      <ProFormSwitch name="is_enabled" label={t('app.kuaizhizao.logistics.field.enabled')} />
+      <ProFormSwitch name="is_enabled" label={t('common.enabled')} />
     </FormModalTemplate>
   );
 };

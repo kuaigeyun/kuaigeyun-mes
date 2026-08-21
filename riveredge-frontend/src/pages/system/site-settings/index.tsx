@@ -1147,7 +1147,7 @@ const SiteSettingsPage: React.FC = () => {
       }
 
       await updateSiteSetting({ settings });
-      messageApi.success(t('pages.system.siteSettings.saveSuccess'));
+      messageApi.success(t('common.saveSuccess'));
 
       if (shouldRefreshTheme) {
         useThemeStore.getState().initFromApi();
@@ -1173,7 +1173,7 @@ const SiteSettingsPage: React.FC = () => {
       await loadSiteSetting();
     } catch (error: any) {
       if (error?.errorFields) return;
-      messageApi.error(error?.message || t('pages.system.siteSettings.saveFailed'));
+      messageApi.error(error?.message || t('common.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -1309,7 +1309,7 @@ const SiteSettingsPage: React.FC = () => {
           onClick={loadSiteSetting}
           loading={loading}
         >
-          {t('pages.system.siteSettings.refresh')}
+          {t('common.refresh')}
         </Button>
         <Button
           type="primary"
@@ -1317,7 +1317,7 @@ const SiteSettingsPage: React.FC = () => {
           onClick={handleSave}
           loading={saving}
         >
-          {t('pages.system.siteSettings.save')}
+          {t('common.save')}
         </Button>
       </Space>
     </div>
@@ -1809,13 +1809,13 @@ const SiteSettingsPage: React.FC = () => {
             onClick={loadSiteSetting}
             loading={loading}
           >
-            {t('pages.system.siteSettings.refresh')}
+            {t('common.refresh')}
           </Button>
           <Button
             onClick={handleResetLoginPageSettings}
             loading={saving}
           >
-            {t('components.uniQuery.reset')}
+            {t('common.reset')}
           </Button>
           <Button
             type="primary"
@@ -1823,7 +1823,7 @@ const SiteSettingsPage: React.FC = () => {
             onClick={handleSave}
             loading={saving}
           >
-            {t('pages.system.siteSettings.save')}
+            {t('common.save')}
           </Button>
         </Space>
       </div>
@@ -1842,7 +1842,7 @@ const SiteSettingsPage: React.FC = () => {
       key: 'domain',
     },
     {
-      title: t('pages.system.siteSettings.branchOrgColumnStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       render: (value: string) => {
@@ -1877,7 +1877,7 @@ const SiteSettingsPage: React.FC = () => {
       render: (_: unknown, record: BranchOrganizationItem) => `${record.user_count || 0}/${record.max_users}`,
     },
     {
-      title: t('pages.system.siteSettings.branchOrgColumnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       key: 'created_at',
       render: (value: string) => formatDateTimeBySiteSetting(value),
@@ -1905,7 +1905,7 @@ const SiteSettingsPage: React.FC = () => {
         </Space>
         <Space>
           <Button onClick={() => loadBranchOrganizations(branchOrgPage, branchOrgPageSize)} loading={branchOrgLoading}>
-            {t('pages.system.siteSettings.refresh')}
+            {t('common.refresh')}
           </Button>
           {branchOrgCapability?.can_create_branch_organization && (
             <Button type="primary" onClick={openCreateBranchOrgModal}>
@@ -2013,7 +2013,7 @@ const SiteSettingsPage: React.FC = () => {
           {branchOrgModalMode === 'edit' && (
             <Form.Item
               name="status"
-              label={t('pages.system.siteSettings.branchOrgStatusLabel')}
+              label={t('common.status')}
               rules={[{ required: true, message: t('pages.system.siteSettings.branchOrgStatusRequired') }]}
             >
               <Select

@@ -32,7 +32,7 @@ export function UniImportMenuButton({
   ...rest
 }: UniImportMenuButtonProps) {
   const { t } = useTranslation();
-  const importLabel = buttonText ?? t('components.uniTable.import');
+  const importLabel = buttonText ?? t('common.import');
 
   const menuItems: MenuProps['items'] = items.map((item) => ({
     key: item.key,

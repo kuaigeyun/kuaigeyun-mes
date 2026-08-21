@@ -87,7 +87,7 @@ const SummariesPage: React.FC = () => {
       setSummaryTrackingRefreshKey((k) => k + 1);
     } catch (error) {
       setDetail(null);
-      setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.performance.common.messages.loadFailed')));
+      setDetailError(getApiErrorMessage(error, t('common.loadFailed')));
       setSummaryTrackingId(null);
     } finally {
       setDetailLoading(false);
@@ -177,7 +177,7 @@ const SummariesPage: React.FC = () => {
       a.click();
       URL.revokeObjectURL(url);
     } catch (e: any) {
-      messageApi.error(e?.message || t('app.kuaizhizao.performance.summaries.messages.exportFailed'));
+      messageApi.error(e?.message || t('common.exportFailed'));
     }
   };
 
@@ -288,14 +288,14 @@ const SummariesPage: React.FC = () => {
         sorter: true,
       },
       {
-        title: t('app.kuaizhizao.performance.common.columns.status'),
+        title: t('common.status'),
         dataIndex: 'status',
         hideInTable: true,
         valueEnum: getPerformanceSummaryStatusValueEnum(t),
       },
       ...buildDocumentAuditColumns<PerformanceSummary>(t),
       {
-        title: t('app.kuaizhizao.performance.common.columns.status'),
+        title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
         fixed: 'right',
@@ -303,7 +303,7 @@ const SummariesPage: React.FC = () => {
         render: (_, r) => renderSummaryStatusTag(t, r.status),
       },
       {
-        title: t('app.kuaizhizao.performance.common.columns.actions'),
+        title: t('common.actions'),
         key: 'action',
         fixed: 'right',
         hideInSearch: true,
@@ -359,7 +359,7 @@ const SummariesPage: React.FC = () => {
               const { data, total } = normalizePerformanceListResponse(response);
               return { data: data as PerformanceSummary[], success: true, total };
             } catch (e: any) {
-              messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
+              messageApi.error(e?.message || t('common.loadFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}

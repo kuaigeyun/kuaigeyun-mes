@@ -416,7 +416,7 @@ const CostCalculationPage: React.FC = () => {
       { title: t('app.kuaicaiwu.costCalculation.col.workOrderCode'), dataIndex: 'work_order_code' },
       { title: t('app.kuaicaiwu.costCalculation.col.productCode'), dataIndex: 'product_code' },
       { title: t('app.kuaicaiwu.costCalculation.col.productName'), dataIndex: 'product_name' },
-      { title: t('app.kuaicaiwu.costCommon.col.quantity'), dataIndex: 'quantity' },
+      { title: t('common.quantity'), dataIndex: 'quantity' },
       { title: t('app.kuaicaiwu.costCommon.col.materialCost'), dataIndex: 'material_cost' },
       { title: t('app.kuaicaiwu.costCommon.col.laborCost'), dataIndex: 'labor_cost' },
       { title: t('app.kuaicaiwu.costCommon.col.manufacturingCost'), dataIndex: 'manufacturing_cost' },
@@ -687,7 +687,7 @@ const CostCalculationPage: React.FC = () => {
       },
       { title: t('app.kuaicaiwu.costCalculation.col.productName'), dataIndex: 'product_name', key: 'product_name', hideInTable: true },
       {
-        title: t('app.kuaicaiwu.costCommon.col.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'quantity',
         key: 'quantity',
         width: 100,
@@ -788,7 +788,7 @@ const CostCalculationPage: React.FC = () => {
       },
       ...costDocCreatedUpdatedColumns<CostCalculation>(t),
       {
-        title: t('app.kuaicaiwu.costCommon.action'),
+        title: t('common.actions'),
         valueType: 'option',
         key: 'action',
         fixed: 'right',
@@ -926,7 +926,7 @@ const CostCalculationPage: React.FC = () => {
             />
             <ProFormTextArea
               name="remark"
-              label={t('app.kuaicaiwu.costCommon.remark')}
+              label={t('common.remark')}
               placeholder={t('app.kuaicaiwu.costCommon.remarkPlaceholder')}
               fieldProps={{ rows: 3 }}
             />
@@ -1005,7 +1005,7 @@ const CostCalculationPage: React.FC = () => {
             />
             <ProFormDigit
               name="quantity"
-              label={t('app.kuaicaiwu.costCommon.col.quantity')}
+              label={t('common.quantity')}
               placeholder={t('app.kuaicaiwu.costCommon.field.quantityPlaceholder')}
               rules={[{ required: true, message: t('app.kuaicaiwu.costCommon.field.quantityRequired') }]}
               min={0}
@@ -1040,7 +1040,7 @@ const CostCalculationPage: React.FC = () => {
             />
             <ProFormTextArea
               name="remark"
-              label={t('app.kuaicaiwu.costCommon.remark')}
+              label={t('common.remark')}
               placeholder={t('app.kuaicaiwu.costCommon.remarkPlaceholder')}
               fieldProps={{ rows: 3 }}
             />
@@ -1079,7 +1079,7 @@ const CostCalculationPage: React.FC = () => {
                   formRef={compareFormRef}
                   onFinish={handleCompareQuery}
                   submitter={{
-                    searchConfig: { submitText: t('app.kuaicaiwu.costCommon.query') },
+                    searchConfig: { submitText: t('common.query') },
                     resetButtonProps: { style: { display: 'none' } },
                   }}
                 >
@@ -1194,7 +1194,7 @@ const CostCalculationPage: React.FC = () => {
                   />
                   <ProFormDigit
                     name="quantity"
-                    label={t('app.kuaicaiwu.costCommon.col.quantity')}
+                    label={t('common.quantity')}
                     placeholder={t('app.kuaicaiwu.costComparison.field.quantityPlaceholder')}
                     rules={[
                       { required: true, message: t('app.kuaicaiwu.costCommon.field.quantityRequired') },
@@ -1277,7 +1277,7 @@ const CostCalculationPage: React.FC = () => {
                         { title: t('app.kuaicaiwu.costCommon.col.materialCode'), dataIndex: 'material_code' },
                         { title: t('app.kuaicaiwu.costCommon.col.materialName'), dataIndex: 'material_name' },
                         { title: t('app.kuaicaiwu.costCommon.col.sourceType'), dataIndex: 'source_type' },
-                        { title: t('app.kuaicaiwu.costCommon.col.quantity'), dataIndex: 'quantity' },
+                        { title: t('common.quantity'), dataIndex: 'quantity' },
                       ]}
                     />
 
@@ -1374,7 +1374,7 @@ const CostCalculationPage: React.FC = () => {
         formRef={analyzeFormRef}
         onFinish={handleAnalyzeQuery}
         submitter={{
-          searchConfig: { submitText: t('app.kuaicaiwu.costCommon.query') },
+          searchConfig: { submitText: t('common.query') },
           resetButtonProps: { style: { display: 'none' } },
         }}
       >

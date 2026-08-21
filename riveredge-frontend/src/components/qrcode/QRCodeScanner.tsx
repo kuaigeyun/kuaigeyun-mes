@@ -193,7 +193,7 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
                 </pre>
               </div>
               <div style={{ marginTop: 8 }}>
-                <strong>{t('components.qrcode.status')}:</strong>{' '}
+                <strong>{t('common.status')}:</strong>{' '}
                 <span style={{ color: parseResult.valid ? '#52c41a' : '#ff4d4f' }}>
                   {parseResult.valid ? t('components.qrcode.valid') : t('components.qrcode.invalid')}
                 </span>

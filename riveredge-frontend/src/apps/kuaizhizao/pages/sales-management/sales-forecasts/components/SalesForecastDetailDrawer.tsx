@@ -146,7 +146,7 @@ export const SalesForecastDetailDrawer: React.FC<SalesForecastDetailDrawerProps>
         },
         { title: t('app.kuaizhizao.salesForecast.startDate'), dataIndex: 'start_date', valueType: 'date' },
         { title: t('app.kuaizhizao.salesForecast.endDate'), dataIndex: 'end_date', valueType: 'date' },
-        { title: t('app.kuaizhizao.salesForecast.notes'), dataIndex: 'notes', span: 3 },
+        { title: t('common.remark'), dataIndex: 'notes', span: 3 },
       ] as ProDescriptionsItemProps<SalesForecast>[]),
     [t],
   );
@@ -196,7 +196,7 @@ export const SalesForecastDetailDrawer: React.FC<SalesForecastDetailDrawerProps>
       collaborationTitleSuffix={
         contentReady && showNextInTitle ? (
           <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-            {t('components.uniLifecycle.nextStep')}：
+            {t('common.next')}：
             {nextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
           </Typography.Text>
         ) : undefined

@@ -102,14 +102,14 @@ export const operationFormSchema: FieldConfig[] = [
   {
     name: 'description',
     type: 'textarea',
-    labelKey: 'field.operation.description',
+    labelKey: 'common.remark',
     colSpan: 24,
     fieldProps: { rows: 2, maxLength: 500 },
   },
   {
     name: 'isActive',
     type: 'switch',
-    labelKey: 'field.operation.isActive',
+    labelKey: 'common.enabled',
     colSpan: 12,
   },
 ];

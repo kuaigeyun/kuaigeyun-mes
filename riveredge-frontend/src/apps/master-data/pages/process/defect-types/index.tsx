@@ -60,7 +60,7 @@ const DefectTypesPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const defectTypeActiveValueEnum = useMemo(
-    () => buildMasterCrudActiveValueEnum(t, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
+    () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
     [t],
   );
 
@@ -73,12 +73,12 @@ const DefectTypesPage: React.FC = () => {
           { field: 'name', required: true, labelKey: 'app.master-data.defectTypes.name' },
           {
             field: 'description',
-            labelKey: 'field.defectType.description',
+            labelKey: 'common.remark',
             aliases: ['备注', '描述'],
           },
           {
             field: 'isActive',
-            labelKey: 'field.defectType.isActive',
+            labelKey: 'common.enabled',
             aliases: ['是否启用', '启用'],
             options: [...IMPORT_YES_NO_OPTIONS],
           },
@@ -124,16 +124,16 @@ const DefectTypesPage: React.FC = () => {
     () => [
       { title: t('app.master-data.defectTypes.code'), dataIndex: 'code' },
       { title: t('app.master-data.defectTypes.name'), dataIndex: 'name' },
-      { title: t('field.defectType.description'), dataIndex: 'description' },
+      { title: t('common.remark'), dataIndex: 'description' },
       {
-        title: t('field.defectType.isActive'),
+        title: t('common.enabled'),
         dataIndex: 'isActive',
         render: (_: unknown, record: DefectType) =>
           renderMasterActiveTag(
             t,
             record?.isActive ?? false,
-            'app.master-data.plants.enabled',
-            'app.master-data.plants.disabled',
+            'common.enabled',
+            'common.disabled',
           ),
       },
       { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
@@ -438,7 +438,7 @@ const DefectTypesPage: React.FC = () => {
       );
       messageApi.success(t('common.exportSuccess', { count: exportData.length }));
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.master-data.exportFailed'));
+      messageApi.error(error?.message || t('common.exportFailed'));
     }
   };
 
@@ -468,7 +468,7 @@ const DefectTypesPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('field.defectType.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -492,7 +492,7 @@ const DefectTypesPage: React.FC = () => {
         const isActive = record?.isActive ?? false;
         return (
           <Tag color={isActive ? 'success' : 'default'} variant="solid">
-            {isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
+            {isActive ? t('common.enabled') : t('common.disabled')}
           </Tag>
         );
       },
@@ -510,14 +510,14 @@ const DefectTypesPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            {t('field.customField.view')}
+            {t('common.view')}
           </Button>
           <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            {t('field.customField.edit')}
+            {t('common.edit')}
           </Button>
           <Popconfirm
             key="delete"
@@ -534,7 +534,7 @@ const DefectTypesPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              {t('field.customField.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>

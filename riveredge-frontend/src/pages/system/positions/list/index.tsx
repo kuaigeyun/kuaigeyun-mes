@@ -57,17 +57,17 @@ const PositionListPage: React.FC = () => {
         render: (_: unknown, record: Position) => resolvePresetPositionName(record, t),
       },
       { title: t('field.position.code'), dataIndex: 'code' },
-      { title: t('field.position.remark'), dataIndex: 'description' },
+      { title: t('common.remark'), dataIndex: 'description' },
       {
         title: t('field.position.departmentUuid'),
         dataIndex: ['department', 'name'],
         render: (_: unknown, record: Position) => record?.department?.name || '-',
       },
       {
-        title: t('field.position.status'),
+        title: t('common.status'),
         dataIndex: 'is_active',
         render: (_: unknown, entity: Position) =>
-          renderSystemActiveTag(t, entity?.is_active, 'field.role.enabled', 'field.role.disabled'),
+          renderSystemActiveTag(t, entity?.is_active, 'common.enabled', 'common.disabled'),
       },
       { title: t('field.position.userCount'), dataIndex: 'user_count' },
       { title: t('field.position.sortOrder'), dataIndex: 'sort_order' },
@@ -159,10 +159,10 @@ const PositionListPage: React.FC = () => {
   const handleDelete = async (record: Position) => {
     try {
       await deletePosition(record.uuid);
-      messageApi.success(t('pages.system.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -177,19 +177,19 @@ const PositionListPage: React.FC = () => {
           successCount++;
         } catch (error: any) {
           failCount++;
-          errors.push(error.message || t('pages.system.deleteFailed'));
+          errors.push(error.message || t('common.deleteFailed'));
         }
       }
-      if (successCount > 0) messageApi.success(t('pages.system.deleteSuccess'));
+      if (successCount > 0) messageApi.success(t('common.deleteSuccess'));
       if (failCount > 0) {
         messageApi.error(
-          `${t('pages.system.deleteFailed')} ${failCount} ${errors.length > 0 ? '：' + errors.join('; ') : ''}`
+          `${t('common.deleteFailed')} ${failCount} ${errors.length > 0 ? '：' + errors.join('; ') : ''}`
         );
       }
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -228,7 +228,7 @@ const PositionListPage: React.FC = () => {
       render: (_, record) => record.department?.name || '-',
     },
     {
-      title: t('field.position.remark'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -254,7 +254,7 @@ const PositionListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('field.position.status'),
+      title: t('common.status'),
       dataIndex: 'is_active',
       key: 'is_active',
       width: 100,
@@ -263,11 +263,11 @@ const PositionListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('field.role.enabled'), status: 'Success' },
-        false: { text: t('field.role.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) =>
-        renderSystemActiveTag(t, record.is_active, 'field.role.enabled', 'field.role.disabled'),
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
       title: t('common.createdAt'),
@@ -299,14 +299,14 @@ const PositionListPage: React.FC = () => {
       hideInSearch: true,
       render: (_, record) => [
             <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
-              {t('field.position.view')}
+              {t('common.view')}
             </Button>,
             <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
-              {t('field.position.edit')}
+              {t('common.edit')}
             </Button>,
             <Popconfirm {...rowActionKind('delete')} key="delete" title={t('field.position.deleteConfirm')} onConfirm={() => handleDelete(record)}>
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('field.position.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>,
           ],
@@ -373,7 +373,7 @@ const PositionListPage: React.FC = () => {
           ]}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText={t('pages.system.batchDelete')}
+          deleteButtonText={t('common.batchDelete')}
           deleteConfirmTitle={t('field.position.batchDeleteTitle')}
           deleteConfirmDescription={(c) => t('field.position.batchDeleteDescription', { count: c })}
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}

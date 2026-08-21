@@ -503,12 +503,12 @@ const SalesReturnsPage: React.FC = () => {
         partnerLabelKey: 'app.kuaizhizao.salesReturn.customer',
         partnerAliases: ['客户', '客户名称'],
         materialLabelKey: 'app.kuaizhizao.salesReturn.import.materialCode',
-        unitLabelKey: 'app.kuaizhizao.salesReturn.import.unit',
+        unitLabelKey: 'common.unit',
         qtyLabelKey: 'app.kuaizhizao.salesReturn.import.returnQuantity',
         unitPriceLabelKey: 'app.kuaizhizao.salesReturn.import.unitPrice',
         batchLabelKey: 'app.kuaizhizao.salesReturn.import.batchNumber',
         locationLabelKey: 'app.kuaizhizao.salesReturn.import.location',
-        notesLabelKey: 'app.kuaizhizao.salesReturn.import.notes',
+        notesLabelKey: 'common.remark',
         defaultUnit: t('app.kuaizhizao.salesReturn.defaultUnit'),
         examplePartner: t('app.kuaizhizao.quotation.importExample.customerName'),
         exampleMaterial: 'MAT001',
@@ -838,7 +838,7 @@ const SalesReturnsPage: React.FC = () => {
         ),
       },
       {
-        title: t('app.kuaizhizao.salesOrder.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'suggested_quantity',
         width: 100,
         align: 'right',
@@ -907,7 +907,7 @@ const SalesReturnsPage: React.FC = () => {
         ),
       },
       {
-        title: t('app.kuaizhizao.salesOrder.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'suggested_quantity',
         width: 100,
         align: 'right',
@@ -1140,7 +1140,7 @@ const SalesReturnsPage: React.FC = () => {
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.salesReturn.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -1205,7 +1205,7 @@ const SalesReturnsPage: React.FC = () => {
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.salesReturn.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
     }
   };
 
@@ -1368,8 +1368,8 @@ const SalesReturnsPage: React.FC = () => {
       '产品编号',
     ];
     const unitKeys = [
-      t('app.kuaizhizao.salesReturn.import.unit'),
-      t('app.kuaizhizao.salesOrder.unit'),
+      t('common.unit'),
+      t('common.unit'),
       '单位',
     ];
     const returnQuantityKeys = [
@@ -1390,8 +1390,8 @@ const SalesReturnsPage: React.FC = () => {
       '库位',
     ];
     const notesKeys = [
-      t('app.kuaizhizao.salesReturn.import.notes'),
-      t('app.kuaizhizao.common.fieldNotes'),
+      t('common.remark'),
+      t('common.remark'),
       '备注',
     ];
     const currentItems = formRef.current?.getFieldValue('items') || [];
@@ -1468,7 +1468,7 @@ const SalesReturnsPage: React.FC = () => {
         dataIndex: 'returner_name',
       },
       {
-        title: t('app.kuaizhizao.common.fieldNotes'),
+        title: t('common.remark'),
         dataIndex: 'notes',
         span: 3,
       },
@@ -2209,7 +2209,7 @@ const SalesReturnsPage: React.FC = () => {
           tableProps={DOCUMENT_DETAIL_TABLE_PROPS}
         />
 
-        <ProFormTextArea name="notes" label={t('app.kuaizhizao.common.fieldNotes')} placeholder={t('app.kuaizhizao.salesReturn.notesPlaceholder')} fieldProps={{ rows: 3 }} />
+        <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('app.kuaizhizao.salesReturn.notesPlaceholder')} fieldProps={{ rows: 3 }} />
         <DocumentAttachmentsField category="sales_return_attachments" />
       </FormModalTemplate>
 
@@ -2334,12 +2334,12 @@ const SalesReturnsPage: React.FC = () => {
           title={t('app.kuaizhizao.salesReturn.importTitle')}
           headers={[
             t('app.kuaizhizao.salesReturn.import.materialCode'),
-            t('app.kuaizhizao.salesReturn.import.unit'),
+            t('common.unit'),
             t('app.kuaizhizao.salesReturn.import.returnQuantity'),
             t('app.kuaizhizao.salesReturn.import.unitPrice'),
             t('app.kuaizhizao.salesReturn.import.batchNumber'),
             t('app.kuaizhizao.salesReturn.import.location'),
-            t('app.kuaizhizao.salesReturn.import.notes'),
+            t('common.remark'),
           ]}
           exampleRow={[
             'MAT001',

@@ -178,10 +178,10 @@ const CostRulePage: React.FC = () => {
         return;
       }
       await costRuleApi.delete(record.uuid);
-      messageApi.success(t('app.kuaicaiwu.costCommon.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaicaiwu.costCommon.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -240,15 +240,15 @@ const CostRulePage: React.FC = () => {
 
       if (isEdit && currentCostRule?.uuid) {
         await costRuleApi.update(currentCostRule.uuid, values);
-        messageApi.success(t('app.kuaicaiwu.costCommon.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await costRuleApi.create(values);
-        messageApi.success(t('app.kuaicaiwu.costCommon.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaicaiwu.costRule.saveFailed'));
+      messageApi.error(error.message || t('common.saveFailed'));
     }
   };
 
@@ -271,8 +271,8 @@ const CostRulePage: React.FC = () => {
         fieldProps: {
           allowClear: true,
           options: [
-            { label: t('app.kuaicaiwu.costRule.status.enabled'), value: true },
-            { label: t('app.kuaicaiwu.costRule.status.disabled'), value: false },
+            { label: t('common.enabled'), value: true },
+            { label: t('common.disabled'), value: false },
           ],
         },
       },
@@ -350,7 +350,7 @@ const CostRulePage: React.FC = () => {
       },
       ...costDocCreatedUpdatedColumns<CostRule>(t),
       {
-        title: t('app.kuaicaiwu.costCommon.action'),
+        title: t('common.actions'),
         key: 'action',
         valueType: 'option',
         fixed: 'right',
@@ -358,10 +358,10 @@ const CostRulePage: React.FC = () => {
         render: (_: any, record: CostRule) => (
           <Space>
             <Button key="view" {...rowActionKind('read')} size="small" onClick={() => handleDetail(record)}>
-              {t('app.kuaicaiwu.costCommon.detail')}
+              {t('common.detail')}
             </Button>
             <Button key="edit" {...rowActionKind('update')} size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-              {t('app.kuaicaiwu.costCommon.edit')}
+              {t('common.edit')}
             </Button>
             <Popconfirm
               key="delete"
@@ -370,7 +370,7 @@ const CostRulePage: React.FC = () => {
               onConfirm={() => handleDelete(record)}
             >
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('app.kuaicaiwu.costCommon.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>
           </Space>
@@ -550,7 +550,7 @@ const CostRulePage: React.FC = () => {
         <ProFormSwitch name="is_active" label={t('app.kuaicaiwu.costRule.col.isActive')} initialValue={true} />
         <ProFormTextArea
           name="description"
-          label={t('app.kuaicaiwu.costCommon.description')}
+          label={t('common.remark')}
           placeholder={t('app.kuaicaiwu.costCommon.descriptionPlaceholder')}
           fieldProps={{ rows: 3 }}
         />

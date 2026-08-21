@@ -74,7 +74,7 @@ const AssetPurchasesPage: React.FC = () => {
 
         { name: 'asset_category', labelKey: 'app.kuaioa.asset.category', width: 120 },
 
-        { name: 'quantity', labelKey: 'app.kuaioa.assetPurchase.quantity', width: 80, type: 'number' },
+        { name: 'quantity', labelKey: 'common.quantity', width: 80, type: 'number' },
 
         { name: 'estimated_amount', labelKey: 'app.kuaioa.assetPurchase.amount', width: 120, type: 'number' },
 
@@ -84,7 +84,7 @@ const AssetPurchasesPage: React.FC = () => {
 
         { name: 'applicant_name', labelKey: 'app.kuaioa.common.applicant', width: 100 },
 
-        { name: 'status', labelKey: 'app.kuaioa.common.status', width: 100 },
+        { name: 'status', labelKey: 'common.status', width: 100 },
 
         { name: 'purpose', labelKey: 'app.kuaioa.common.purpose', hideInTable: true, type: 'textarea' },
 

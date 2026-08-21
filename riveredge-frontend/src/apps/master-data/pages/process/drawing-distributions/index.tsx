@@ -217,7 +217,7 @@ const DrawingDistributionsPage: React.FC = () => {
           ) : null,
           row.status === 'Draft' && canSubmit ? (
             <Button key="submit" {...rowActionKind('submit')} type="link" size="small" onClick={() => void runAction(() => drawingDistributionApi.submit(row.uuid), 'app.master-data.drawingDistributions.submitSuccess')}>
-              {t('app.master-data.drawingDistributions.submit')}
+              {t('common.submit')}
             </Button>
           ) : null,
           row.status === 'Pending' && canApprove ? (
@@ -434,7 +434,7 @@ const DrawingDistributionsPage: React.FC = () => {
             <Space>
               {detail.status === 'Draft' && canSubmit ? (
                 <Button type="primary" size="small" onClick={() => void runAction(() => drawingDistributionApi.submit(detail.uuid), 'app.master-data.drawingDistributions.submitSuccess')}>
-                  {t('app.master-data.drawingDistributions.submit')}
+                  {t('common.submit')}
                 </Button>
               ) : null}
               {detail.status === 'Pending' && canApprove ? (

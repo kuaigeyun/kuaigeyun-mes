@@ -367,7 +367,7 @@ const FreightBillsPage: React.FC = () => {
           ellipsis: true,
         },
         {
-          title: t('app.kuaizhizao.logistics.field.status'),
+          title: t('common.status'),
           key: 'lifecycle',
           dataIndex: 'status',
           fixed: 'right',
@@ -393,7 +393,7 @@ const FreightBillsPage: React.FC = () => {
         render: (_: unknown, row: FreightOrder) => String(row.tracking_number ?? '').trim() || '-',
       },
       {
-        title: t('app.kuaizhizao.logistics.field.status'),
+        title: t('common.status'),
         dataIndex: 'status',
         width: 100,
         ellipsis: true,

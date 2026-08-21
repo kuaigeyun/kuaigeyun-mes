@@ -31,14 +31,14 @@ export const holidayFormSchema: FieldConfig[] = [
   {
     name: 'description',
     type: 'textarea',
-    labelKey: 'field.holiday.description',
+    labelKey: 'common.remark',
     colSpan: 24,
     fieldProps: { rows: 2 },
   },
   {
     name: 'isActive',
     type: 'switch',
-    labelKey: 'field.holiday.isActive',
+    labelKey: 'common.enabled',
     colSpan: 12,
   },
 ];

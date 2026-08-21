@@ -243,7 +243,7 @@ const WorkOrdersKioskPage: React.FC = () => {
             if (typeof detail === 'string' && (detail.includes('需要先下达') || detail.includes('只能开始已下达'))) {
                 message.warning(t('app.kuaizhizao.workOrder.msgReleaseBeforeStart'));
             } else {
-                message.error(t('app.kuaizhizao.workOrder.kioskOperationFailed'));
+                message.error(t('common.operationFailed'));
             }
         } finally {
             setOpsLoading(false);
@@ -1067,7 +1067,7 @@ const WorkOrdersKioskPage: React.FC = () => {
             deviceName={(stationInfo as any).deviceName || '未连接'}
             headerExtra={
                 <div className="header-extra-buttons" style={{ display: 'flex', gap: HMI_DESIGN_TOKENS.BUTTON_GAP }}>
-                    <Button size="large" {...touchButtonProps({ size: 'header' })} icon={<ReloadOutlined />} onClick={() => loadWorkOrders(stationInfo?.workCenterId)}>{t('app.kuaizhizao.workOrder.actionRefresh')}</Button>
+                    <Button size="large" {...touchButtonProps({ size: 'header' })} icon={<ReloadOutlined />} onClick={() => loadWorkOrders(stationInfo?.workCenterId)}>{t('common.refresh')}</Button>
                     <Button size="large" {...touchButtonProps({ size: 'header' })} icon={<SwapOutlined />} onClick={handleSwitchStation}>{t('app.kuaizhizao.workOrder.actionSwitchStation')}</Button>
                 </div>
             }
@@ -1327,7 +1327,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                 rootClassName="kiosk-modal-terminal-bg"
                 onCancel={() => setParamModalVisible(false)}
                 footer={[
-                    <Button key="close" onClick={() => setParamModalVisible(false)}>{t('app.kuaizhizao.workOrder.actionClose')}</Button>,
+                    <Button key="close" onClick={() => setParamModalVisible(false)}>{t('common.close')}</Button>,
                 ]}
                 width={640}
                 destroyOnHidden

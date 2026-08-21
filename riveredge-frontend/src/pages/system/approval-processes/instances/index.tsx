@@ -127,7 +127,7 @@ const ApprovalInstanceListPage: React.FC = () => {
       setActionModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.approvalInstances.actionFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     } finally {
       setActionFormLoading(false);
@@ -261,7 +261,7 @@ const ApprovalInstanceListPage: React.FC = () => {
       render: (_, record) => renderApprovalStatusTag(record.status),
     },
     {
-      title: t('pages.system.approvalInstances.actions'),
+      title: t('common.actions'),
       key: 'action',
       valueType: 'option',
       fixed: 'right',
@@ -276,7 +276,7 @@ const ApprovalInstanceListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            {t('pages.system.approvalInstances.view')}
+            {t('common.view')}
           </Button>,
         ];
         
@@ -328,7 +328,7 @@ const ApprovalInstanceListPage: React.FC = () => {
                   icon={<StopOutlined />}
                   onClick={() => handleAction(record, 'cancel')}
                 >
-                  {t('pages.system.approvalInstances.cancel')}
+                  {t('common.cancel')}
                 </Button>
               </Tooltip>
             );
@@ -407,7 +407,7 @@ const ApprovalInstanceListPage: React.FC = () => {
               handleView(item);
             }}
           >
-            {t('pages.system.approvalInstances.view')}
+            {t('common.view')}
           </Button>
         </div>
       </div>
@@ -595,7 +595,7 @@ const ApprovalInstanceListPage: React.FC = () => {
                 toExport = items.filter((d: any) => keys.includes(d.uuid));
               }
               if (toExport.length === 0) {
-                messageApi.warning(t('pages.system.approvalInstances.exportNoData'));
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               await downloadRecordsAsXlsx(
@@ -604,7 +604,7 @@ const ApprovalInstanceListPage: React.FC = () => {
               );
               messageApi.success(t('pages.system.approvalInstances.exportSuccessCount', { count: toExport.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || t('pages.system.approvalInstances.exportFailed'));
+              messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
           viewTypes={['table', 'help']}

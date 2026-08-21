@@ -48,6 +48,7 @@ import enUS from '../../../../locales/en-US';
 import zhHant from '../../../../locales/zh-Hant';
 import jaJP from '../../../../locales/ja-JP';
 import viVN from '../../../../locales/vi-VN';
+import loLA from '../../../../locales/lo-LA';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { getAntdModal } from '../../../../utils/antdAppApis';
@@ -95,10 +96,10 @@ const LanguageListPage: React.FC = () => {
         dataIndex: 'sort_order',
       },
       {
-        title: t('field.role.status'),
+        title: t('common.status'),
         dataIndex: 'is_active',
         render: (_: unknown, entity: Language) =>
-          renderSystemActiveTag(t, entity?.is_active, 'field.role.enabled', 'field.role.disabled'),
+          renderSystemActiveTag(t, entity?.is_active, 'common.enabled', 'common.disabled'),
       },
       {
         title: t('common.createdAt'),
@@ -281,6 +282,7 @@ const LanguageListPage: React.FC = () => {
       'zh-Hant': zhHant as Record<string, string>,
       'ja-JP': jaJP as Record<string, string>,
       'vi-VN': viVN as Record<string, string>,
+      'lo-LA': loLA as Record<string, string>,
     };
     const localeContent = localeMap[currentLanguageForTranslation.code];
     if (!localeContent) {
@@ -313,7 +315,7 @@ const LanguageListPage: React.FC = () => {
       await updateTranslations(currentLanguageForTranslation.uuid, {
         translations,
       } as TranslationUpdateRequest);
-      messageApi.success(t('pages.system.updateSuccess'));
+      messageApi.success(t('common.updateSuccess'));
       setTranslationDrawerVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
@@ -329,10 +331,10 @@ const LanguageListPage: React.FC = () => {
   const handleDelete = async (record: Language) => {
     try {
       await deleteLanguage(record.uuid);
-      messageApi.success(t('pages.system.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -363,23 +365,23 @@ const LanguageListPage: React.FC = () => {
               successCount++;
             } catch (error: any) {
               failCount++;
-              errors.push(error.message || t('pages.system.deleteFailed'));
+              errors.push(error.message || t('common.deleteFailed'));
             }
           }
 
           if (successCount > 0) {
-            messageApi.success(t('pages.system.deleteSuccess'));
+            messageApi.success(t('common.deleteSuccess'));
           }
           if (failCount > 0) {
             messageApi.error(
-              `${t('pages.system.deleteFailed')} ${failCount} ${errors.length > 0 ? '：' + errors.join('; ') : ''}`
+              `${t('common.deleteFailed')} ${failCount} ${errors.length > 0 ? '：' + errors.join('; ') : ''}`
             );
           }
 
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || t('pages.system.deleteFailed'));
+          messageApi.error(error.message || t('common.deleteFailed'));
         }
       },
     });
@@ -394,10 +396,10 @@ const LanguageListPage: React.FC = () => {
       
       if (isEdit && currentLanguageUuid) {
         await updateLanguage(currentLanguageUuid, values as UpdateLanguageData);
-        messageApi.success(t('pages.system.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createLanguage(values as CreateLanguageData);
-        messageApi.success(t('pages.system.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
 
       if (values.is_default) {
@@ -462,8 +464,8 @@ const LanguageListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('field.role.yes'), status: 'Success' },
-        false: { text: t('field.role.no'), status: 'Default' },
+        true: { text: t('common.yes'), status: 'Success' },
+        false: { text: t('common.no'), status: 'Default' },
       },
       render: (_, record) => renderSystemYesNoTag(t, record.is_default),
     },
@@ -478,7 +480,7 @@ const LanguageListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('field.role.status'),
+      title: t('common.status'),
       dataIndex: 'is_active',
       width: 100,
       minWidth: 100,
@@ -486,11 +488,11 @@ const LanguageListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('field.role.enabled'), status: 'Success' },
-        false: { text: t('field.role.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) =>
-        renderSystemActiveTag(t, record.is_active, 'field.role.enabled', 'field.role.disabled'),
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
       title: t('common.createdAt'),
@@ -511,7 +513,7 @@ const LanguageListPage: React.FC = () => {
       hideInSearch: true,
       render: (_, record) => [
             <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
-              {t('field.language.view')}
+              {t('common.view')}
             </Button>,
             <Button {...rowActionKind('read')}
               key="translations"
@@ -523,7 +525,7 @@ const LanguageListPage: React.FC = () => {
               {t('field.language.translations')}
             </Button>,
             <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
-              {t('field.language.edit')}
+              {t('common.edit')}
             </Button>,
             <Popconfirm {...rowActionKind('delete')}
               key="delete"
@@ -532,7 +534,7 @@ const LanguageListPage: React.FC = () => {
               disabled={record.is_default}
             >
               <Button type="link" danger size="small" icon={<DeleteOutlined />} disabled={record.is_default}>
-                {t('field.language.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>,
           ],
@@ -577,7 +579,7 @@ const LanguageListPage: React.FC = () => {
           size="small"
           onClick={() => handleDeleteTranslation(record.key)}
         >
-          {t('field.language.delete')}
+          {t('common.delete')}
         </Button>
       ),
     },
@@ -668,7 +670,7 @@ const LanguageListPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText={t('pages.system.batchDelete')}
+          deleteButtonText={t('common.batchDelete')}
           showImportButton={false}
           showExportButton={true}
           onExport={async (type, keys, pageData) => {
@@ -736,6 +738,7 @@ const LanguageListPage: React.FC = () => {
             { label: t('field.language.codeEnUS'), value: 'en-US' },
             { label: t('field.language.codeJaJP'), value: 'ja-JP' },
             { label: t('field.language.codeViVN'), value: 'vi-VN' },
+            { label: t('field.language.codeLoLA'), value: 'lo-LA' },
           ]}
         />
         <ProFormText
@@ -761,7 +764,7 @@ const LanguageListPage: React.FC = () => {
         />
         <ProFormSwitch
           name="is_active"
-          label={t('field.language.isActive')}
+          label={t('common.enabled')}
           colProps={{ span: 12 }}
         />
       </FormModalTemplate>

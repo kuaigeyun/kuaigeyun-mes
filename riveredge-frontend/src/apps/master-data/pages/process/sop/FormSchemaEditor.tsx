@@ -426,7 +426,7 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
                       size="small"
                       onClick={() => handleEditField(index)}
                     >
-                      {t('app.master-data.formSchema.edit')}
+                      {t('common.edit')}
                     </Button>
                     <Button
                       type="link"
@@ -435,7 +435,7 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
                       icon={<DeleteOutlined />}
                       onClick={() => handleDeleteField(index)}
                     >
-                      {t('app.master-data.formSchema.delete')}
+                      {t('common.delete')}
                     </Button>
                   </Space>
                 </div>
@@ -443,7 +443,7 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
             >
               <div style={{ fontSize: 12, color: '#666' }}>
                 <div>{t('app.master-data.formSchema.type')}: {field.type}</div>
-                {field.description && <div>{t('app.master-data.formSchema.description')}: {field.description}</div>}
+                {field.description && <div>{t('common.remark')}: {field.description}</div>}
                 {field.component && <div>{t('app.master-data.formSchema.component')}: {field.component}</div>}
               </div>
             </Card>
@@ -594,7 +594,7 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
                     </Form.Item>
                     <Form.Item
                       name="unit"
-                      label={t('app.master-data.formSchema.unit')}
+                      label={t('common.unit')}
                     >
                       <Input placeholder={t('app.master-data.formSchema.unitPlaceholder')} />
                     </Form.Item>
@@ -610,7 +610,7 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
               return null;
             }}
           </Form.Item>
-          <Form.Item name="description" label={t('app.master-data.formSchema.fieldDescription')}>
+          <Form.Item name="description" label={t('common.remark')}>
             <TextArea rows={2} placeholder={t('app.master-data.formSchema.fieldDescriptionPlaceholder')} />
           </Form.Item>
           <Form.Item name="required" label={t('app.master-data.formSchema.required')} valuePropName="checked">

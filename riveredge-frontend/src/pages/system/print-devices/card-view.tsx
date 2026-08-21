@@ -135,10 +135,10 @@ const CardView: React.FC = () => {
   const handleDelete = async (device: PrintDevice) => {
     try {
       await deletePrintDevice(device.uuid);
-      handleSuccess(t('pages.system.printDevices.deleteSuccess'));
+      handleSuccess(t('common.deleteSuccess'));
       loadDevices();
     } catch (error: any) {
-      handleError(error, t('pages.system.printDevices.deleteFailed'));
+      handleError(error, t('common.deleteFailed'));
     }
   };
 
@@ -217,7 +217,7 @@ const CardView: React.FC = () => {
             onClick={loadDevices}
             loading={loading}
           >
-            {t('pages.system.printDevices.refresh')}
+            {t('common.refresh')}
           </Button>,
         ]}
       >
@@ -339,7 +339,7 @@ const CardView: React.FC = () => {
                           okText={t('common.confirm')}
                           cancelText={t('common.cancel')}
                         >
-                          <Tooltip title={t('pages.system.printDevices.deleteTooltip')}>
+                          <Tooltip title={t('common.delete')}>
                             <DeleteOutlined
                               style={{ fontSize: 16, color: '#ff4d4f' }}
                             />
@@ -388,14 +388,14 @@ const CardView: React.FC = () => {
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printDevices.statusLabel')}</Text>
                             <Tag color={device.is_active ? 'success' : 'default'}>
-                              {device.is_active ? t('pages.system.printDevices.enabled') : t('pages.system.printDevices.disabled')}
+                              {device.is_active ? t('common.enabled') : t('common.disabled')}
                             </Tag>
                           </div>
                           
                           {device.is_default && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printDevices.defaultLabel')}</Text>
-                              <Tag color="processing">{t('pages.system.printDevices.isDefault')}</Tag>
+                              <Tag color="processing">{t('common.yes')}</Tag>
                             </div>
                           )}
                           
@@ -458,7 +458,7 @@ const CardView: React.FC = () => {
                 {getTypeInfo(currentDevice.type).text}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label={t('pages.system.printDevices.labelDescription')}>
+            <Descriptions.Item label={t('common.remark')}>
               {currentDevice.description || '-'}
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.printDevices.columnConfig')}>
@@ -480,14 +480,14 @@ const CardView: React.FC = () => {
                 text={getDeviceStatus(currentDevice).onlineText}
               />
             </Descriptions.Item>
-            <Descriptions.Item label={t('pages.system.printDevices.columnActive')}>
+            <Descriptions.Item label={t('common.enabled')}>
               <Tag color={currentDevice.is_active ? 'success' : 'default'}>
-                {currentDevice.is_active ? t('pages.system.printDevices.enabled') : t('pages.system.printDevices.disabled')}
+                {currentDevice.is_active ? t('common.enabled') : t('common.disabled')}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.printDevices.statDefault')}>
               <Tag color={currentDevice.is_default ? 'processing' : 'default'}>
-                {currentDevice.is_default ? t('pages.system.printDevices.isDefault') : t('pages.system.printDevices.no')}
+                {currentDevice.is_default ? t('common.yes') : t('common.no')}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.printDevices.columnUsage')}>
@@ -503,10 +503,10 @@ const CardView: React.FC = () => {
                 ? formatDateTimeBySiteSetting(currentDevice.last_used_at)
                 : '-'}
             </Descriptions.Item>
-            <Descriptions.Item label={t('pages.system.printDevices.columnCreatedAt')}>
+            <Descriptions.Item label={t('common.createdAt')}>
               {formatDateTimeBySiteSetting(currentDevice.created_at)}
             </Descriptions.Item>
-            <Descriptions.Item label={t('pages.system.printDevices.columnUpdatedAt')}>
+            <Descriptions.Item label={t('common.updatedAt')}>
               {formatDateTimeBySiteSetting(currentDevice.updated_at)}
             </Descriptions.Item>
           </Descriptions>
@@ -528,7 +528,7 @@ const CardView: React.FC = () => {
             setTestResult(null);
             setTestingUuid(null);
           }}>
-            {t('pages.system.printDevices.close')}
+            {t('common.close')}
           </Button>,
         ]}
         width={600}

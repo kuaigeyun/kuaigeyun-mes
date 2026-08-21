@@ -213,10 +213,10 @@ const InspectionPlansPage: React.FC = () => {
   const handleDelete = async (record: InspectionPlan) => {
     try {
       await inspectionPlanApi.delete(record.id!.toString());
-      messageApi.success(t('app.kuaizhizao.quality.plans.messages.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.quality.common.messages.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -267,7 +267,7 @@ const InspectionPlansPage: React.FC = () => {
       }
       await submitPlan(values);
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.quality.plans.messages.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     }
   };
@@ -293,20 +293,20 @@ const InspectionPlansPage: React.FC = () => {
           },
           { title: t('app.kuaizhizao.quality.plans.columns.version'), dataIndex: 'version' },
           {
-            title: t('app.kuaizhizao.quality.common.columns.status'),
+            title: t('common.status'),
             dataIndex: 'is_active',
             render: (_, r) =>
               r
                 ? renderMasterActiveTag(
                     t,
                     r.is_active,
-                    'app.kuaizhizao.quality.plans.active.enabled',
+                    'common.enabled',
                     'app.kuaizhizao.quality.plans.active.disabled',
                   )
                 : '-',
           },
           {
-            title: t('app.kuaizhizao.quality.common.form.remarks'),
+            title: t('common.remark'),
             dataIndex: 'remarks',
             span: 2,
             render: (val) => val || '-',
@@ -376,7 +376,7 @@ const InspectionPlansPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<InspectionPlan>(t),
       {
-        title: t('app.kuaizhizao.quality.common.columns.createdAt'),
+        title: t('common.createdAt'),
         dataIndex: 'created_at_range',
         valueType: 'dateRange',
         hideInTable: true,
@@ -384,7 +384,7 @@ const InspectionPlansPage: React.FC = () => {
         formItemProps: formDateRangeFormItemProps,
       },
       {
-        title: t('app.kuaizhizao.quality.common.columns.updatedAt'),
+        title: t('common.updatedAt'),
         dataIndex: 'updated_at_range',
         valueType: 'dateRange',
         hideInTable: true,
@@ -392,7 +392,7 @@ const InspectionPlansPage: React.FC = () => {
         formItemProps: formDateRangeFormItemProps,
       },
       {
-        title: t('app.kuaizhizao.quality.common.columns.status'),
+        title: t('common.status'),
         dataIndex: 'is_active',
         hideInTable: true,
         order: 21,
@@ -401,7 +401,7 @@ const InspectionPlansPage: React.FC = () => {
         fieldProps: { allowClear: true },
       },
       {
-        title: t('app.kuaizhizao.quality.common.columns.status'),
+        title: t('common.status'),
         dataIndex: 'is_active',
         width: 88,
         sorter: true,
@@ -413,12 +413,12 @@ const InspectionPlansPage: React.FC = () => {
           renderMasterActiveTag(
             t,
             record.is_active,
-            'app.kuaizhizao.quality.plans.active.enabled',
+            'common.enabled',
             'app.kuaizhizao.quality.plans.active.disabled',
           ),
       },
       {
-        title: t('app.kuaizhizao.quality.common.columns.actions'),
+        title: t('common.actions'),
         key: 'action',
         fixed: 'right',
         hideInSearch: true,
@@ -431,7 +431,7 @@ const InspectionPlansPage: React.FC = () => {
                 void handleDetail(record);
               }}
             >
-              {t('app.kuaizhizao.quality.common.actions.detail')}
+              {t('common.detail')}
             </Button>
             <Button
               {...rowActionKind('update')}
@@ -516,7 +516,7 @@ const InspectionPlansPage: React.FC = () => {
             }
             actionRef.current?.reload();
           } catch (error: any) {
-            messageApi.error(error.message || t('app.kuaizhizao.quality.common.messages.deleteFailed'));
+            messageApi.error(error.message || t('common.deleteFailed'));
           }
         }}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.quality.plans.messages.deleteConfirm', { count })}
@@ -604,7 +604,7 @@ const InspectionPlansPage: React.FC = () => {
           <Col span={24}>
             <ProFormTextArea
               name="remarks"
-              label={t('app.kuaizhizao.quality.common.form.remarks')}
+              label={t('common.remark')}
               placeholder={t('app.kuaizhizao.quality.plans.placeholder.optional')}
             />
           </Col>

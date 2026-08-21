@@ -111,8 +111,8 @@ export const WizardTemplate: React.FC<WizardTemplateProps> = ({
 }) => {
   const { t } = useTranslation();
   const { token } = useToken();
-  const prevLabel = prevText ?? t('components.layoutTemplates.wizard.prev');
-  const nextLabel = nextText ?? t('components.layoutTemplates.wizard.next');
+  const prevLabel = prevText ?? t('common.previous');
+  const nextLabel = nextText ?? t('common.next');
   const finishLabel = finishText ?? t('components.layoutTemplates.wizard.finish');
   const skipLabel = skipText ?? t('components.layoutTemplates.wizard.skipLater');
 

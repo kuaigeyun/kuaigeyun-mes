@@ -268,7 +268,7 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
   const notesColumn = useMemo(
     () =>
       alignDescriptionColumns([
-        { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes', span: 3 },
+        { title: t('common.remark'), dataIndex: 'notes', span: 3 },
       ] as ProDescriptionsItemProps<PurchaseOrder>[]),
     [t],
   );
@@ -321,7 +321,7 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
       collaborationTitleSuffix={
         contentReady && showNextInTitle ? (
           <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-            {t('components.uniLifecycle.nextStep')}：
+            {t('common.next')}：
             {nextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
           </Typography.Text>
         ) : undefined
@@ -375,7 +375,7 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
                           ? t('app.kuaizhizao.salesOrder.feeBearerOurSide')
                           : t('app.kuaizhizao.salesOrder.feeBearerCounterparty'),
                     },
-                    { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes' },
+                    { title: t('common.remark'), dataIndex: 'notes' },
                   ]}
                   dataSource={effective.fee_details}
                   rowKey={(_: unknown, i?: number) => String(i ?? 0)}
@@ -477,8 +477,8 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
                   width: 100,
                   render: (val: boolean) =>
                     val
-                      ? t('app.kuaizhizao.purchaseRequisition.convertedYes')
-                      : t('app.kuaizhizao.purchaseRequisition.convertedNo'),
+                      ? t('common.yes')
+                      : t('common.no'),
                 },
               ]}
               dataSource={effective.items}

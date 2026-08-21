@@ -162,10 +162,10 @@ const MaintenancePlanListPage: React.FC = () => {
   const handleDelete = async (record: MaintenancePlan) => {
     try {
       await deleteMaintenancePlan(record.uuid);
-      messageApi.success(t('pages.system.maintenancePlans.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.maintenancePlans.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -215,16 +215,16 @@ const MaintenancePlanListPage: React.FC = () => {
       
       if (isEdit && currentMaintenancePlanUuid) {
         await updateMaintenancePlan(currentMaintenancePlanUuid, payload as UpdateMaintenancePlanData);
-        messageApi.success(t('pages.system.maintenancePlans.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createMaintenancePlan(payload as CreateMaintenancePlanData);
-        messageApi.success(t('pages.system.maintenancePlans.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
       
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.maintenancePlans.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error; // 重新抛出错误，让 FormModalTemplate 处理
     } finally {
       setFormLoading(false);
@@ -291,7 +291,7 @@ const MaintenancePlanListPage: React.FC = () => {
       { title: t('pages.system.maintenancePlans.columnPlannedEnd'), dataIndex: 'planned_end_date', valueType: 'date' },
       { title: t('pages.system.maintenancePlans.columnResponsible'), dataIndex: 'responsible_person_name' },
       {
-        title: t('pages.system.maintenancePlans.columnStatus'),
+        title: t('common.status'),
         dataIndex: 'status',
         render: (_: unknown, record: MaintenancePlan) => {
           const statusMap: Record<string, { color: string; text: string }> = {
@@ -304,9 +304,9 @@ const MaintenancePlanListPage: React.FC = () => {
           return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
         },
       },
-      { title: t('pages.system.maintenancePlans.labelRemark'), dataIndex: 'remark', span: 2 },
-      { title: t('pages.system.maintenancePlans.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-      { title: t('pages.system.maintenancePlans.columnUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+      { title: t('common.remark'), dataIndex: 'remark', span: 2 },
+      { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
     ],
     [t]
   );
@@ -402,7 +402,7 @@ const MaintenancePlanListPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('pages.system.maintenancePlans.columnStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       width: 100,
       valueType: 'select',
@@ -424,7 +424,7 @@ const MaintenancePlanListPage: React.FC = () => {
       },
     },
     {
-      title: t('pages.system.maintenancePlans.columnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -432,7 +432,7 @@ const MaintenancePlanListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('pages.system.maintenancePlans.columnActions'),
+      title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
       render: (_, record) => [
@@ -443,7 +443,7 @@ const MaintenancePlanListPage: React.FC = () => {
               icon={<EyeOutlined />}
               onClick={() => handleView(record)}
             >
-              {t('pages.system.maintenancePlans.view')}
+              {t('common.view')}
             </Button>,
             <Button {...rowActionKind('update')}
               key="edit"
@@ -452,7 +452,7 @@ const MaintenancePlanListPage: React.FC = () => {
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
             >
-              {t('pages.system.maintenancePlans.edit')}
+              {t('common.edit')}
             </Button>,
             <Popconfirm {...rowActionKind('delete')}
               key="delete"
@@ -460,7 +460,7 @@ const MaintenancePlanListPage: React.FC = () => {
               onConfirm={() => handleDelete(record)}
             >
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('pages.system.maintenancePlans.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>,
           ],
@@ -498,7 +498,7 @@ const MaintenancePlanListPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText={t('pages.system.maintenancePlans.batchDelete')}
+          deleteButtonText={t('common.batchDelete')}
           deleteConfirmTitle={t('pages.system.maintenancePlans.batchDeleteTitle')}
           deleteConfirmDescription={(c) => t('pages.system.maintenancePlans.batchDeleteDescription', { count: c })}
           showImportButton={false}
@@ -512,7 +512,7 @@ const MaintenancePlanListPage: React.FC = () => {
                 items = items.filter((d) => keys.includes(d.uuid));
               }
               if (items.length === 0) {
-                messageApi.warning(t('pages.system.maintenancePlans.noDataToExport'));
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               await downloadRecordsAsXlsx(
@@ -521,7 +521,7 @@ const MaintenancePlanListPage: React.FC = () => {
               );
               messageApi.success(t('pages.system.maintenancePlans.exportSuccess', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || t('pages.system.maintenancePlans.exportFailed'));
+              messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
           pagination={{
@@ -627,7 +627,7 @@ const MaintenancePlanListPage: React.FC = () => {
         />
         <ProFormSelect
           name="status"
-          label={t('pages.system.maintenancePlans.labelStatus')}
+          label={t('common.status')}
           rules={[{ required: true, message: t('pages.system.maintenancePlans.statusRequired') }]}
           options={[
             { label: t('pages.system.maintenancePlans.statusPending'), value: '待执行' },
@@ -638,7 +638,7 @@ const MaintenancePlanListPage: React.FC = () => {
         />
         <ProFormTextArea
           name="remark"
-          label={t('pages.system.maintenancePlans.labelRemark')}
+          label={t('common.remark')}
           placeholder={t('pages.system.maintenancePlans.remarkPlaceholder')}
         />
       </FormModalTemplate>

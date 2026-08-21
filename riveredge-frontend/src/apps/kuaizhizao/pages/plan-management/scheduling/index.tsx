@@ -779,7 +779,7 @@ const SchedulingPage: React.FC = () => {
             </div>
           ),
           okText: t('app.kuaizhizao.scheduling.msg.saveAnyway'),
-          cancelText: t('app.kuaizhizao.scheduling.common.cancel'),
+          cancelText: t('common.cancel'),
           onOk: async () => {
             try {
               await doSave();
@@ -882,7 +882,7 @@ const SchedulingPage: React.FC = () => {
               </div>
             ),
             okText: t('app.kuaizhizao.scheduling.msg.saveAnyway'),
-            cancelText: t('app.kuaizhizao.scheduling.common.cancel'),
+            cancelText: t('common.cancel'),
             onOk: async () => {
               try {
                 await persistDraft();
@@ -1103,7 +1103,7 @@ const SchedulingPage: React.FC = () => {
                 })
               : t('app.kuaizhizao.scheduling.msg.quickActionConfirm', { count: ids.length }),
           okText: t('app.kuaizhizao.scheduling.common.confirm'),
-          cancelText: t('app.kuaizhizao.scheduling.common.cancel'),
+          cancelText: t('common.cancel'),
           onOk: () => resolve(),
           onCancel: () => reject(new Error('cancelled')),
         });
@@ -1240,7 +1240,7 @@ const SchedulingPage: React.FC = () => {
         title: t('app.kuaizhizao.scheduling.msg.autoRescheduleTitle'),
         content: t('app.kuaizhizao.scheduling.msg.autoRescheduleConfirm', { count: ids.length }),
         okText: t('app.kuaizhizao.scheduling.common.confirm'),
-        cancelText: t('app.kuaizhizao.scheduling.common.cancel'),
+        cancelText: t('common.cancel'),
         onOk: () => resolve(),
         onCancel: () => reject(new Error('cancelled')),
       });
@@ -1326,7 +1326,7 @@ const SchedulingPage: React.FC = () => {
         title: t('app.kuaizhizao.scheduling.msg.rescheduleForwardTitle'),
         content: t('app.kuaizhizao.scheduling.msg.rescheduleForwardConfirm', { count: ids.length }),
         okText: t('app.kuaizhizao.scheduling.common.confirm'),
-        cancelText: t('app.kuaizhizao.scheduling.common.cancel'),
+        cancelText: t('common.cancel'),
         onOk: () => resolve(),
         onCancel: () => reject(new Error('cancelled')),
       });
@@ -1783,7 +1783,7 @@ const SchedulingPage: React.FC = () => {
         },
       },
       { title: t('app.kuaizhizao.scheduling.col.productName'), dataIndex: 'product_name', width: 120, ellipsis: true },
-      { title: t('app.kuaizhizao.scheduling.col.quantity'), dataIndex: 'quantity', width: 72, align: 'right' , render: formatQuantity },
+      { title: t('common.quantity'), dataIndex: 'quantity', width: 72, align: 'right' , render: formatQuantity },
       { title: t('app.kuaizhizao.scheduling.col.plannedStart'), dataIndex: 'planned_start_date', valueType: 'dateTime', width: 148 },
       { title: t('app.kuaizhizao.scheduling.col.plannedEnd'), dataIndex: 'planned_end_date', valueType: 'dateTime', width: 148 },
       {
@@ -1858,7 +1858,7 @@ const SchedulingPage: React.FC = () => {
         },
       },
       {
-        title: t('app.kuaizhizao.scheduling.col.status'),
+        title: t('common.status'),
         dataIndex: 'status',
         width: 100,
         valueEnum: {
@@ -1886,7 +1886,7 @@ const SchedulingPage: React.FC = () => {
           title: t('app.kuaizhizao.scheduling.draft.closeTitle'),
           content: t('app.kuaizhizao.scheduling.draft.closeContent', { count: draftPendingCount }),
           okText: t('app.kuaizhizao.scheduling.draft.discardAndClose'),
-          cancelText: t('app.kuaizhizao.scheduling.common.cancel'),
+          cancelText: t('common.cancel'),
           onOk: () => {
             draftWoUpdatesRef.current.clear();
             draftOpUpdatesRef.current.clear();
@@ -2353,13 +2353,13 @@ const SchedulingPage: React.FC = () => {
                   setConfigDrawerOpen(false);
                   refreshBoardScan();
                 } catch (e: any) {
-                  messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.configSaveFailed'));
+                  messageApi.error(e?.message || t('common.saveFailed'));
                 } finally {
                   setConfigSaving(false);
                 }
               }}
             >
-              {t('app.kuaizhizao.scheduling.common.ok')}
+              {t('common.confirm')}
             </Button>
           </Space>
         }

@@ -111,7 +111,7 @@ const ContractExecutionReport: React.FC = () => {
         align: 'right',
       },
       {
-        title: t('app.kuaizhizao.reports.status'),
+        title: t('common.status'),
         dataIndex: 'status',
         width: 90,
         hideInSearch: true,

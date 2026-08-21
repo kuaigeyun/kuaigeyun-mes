@@ -1,1 +1,0 @@
-import{x as n}from"./clearSessionQueries-B6bqWyg8.js";async function r(e){return n("/core/online-users",{params:e})}async function t(e){return n(`/core/online-users/${e}`,{method:"DELETE"})}async function o(e){return n("/core/online-users/statistics",{params:e})}export{r as a,t as f,o as g};

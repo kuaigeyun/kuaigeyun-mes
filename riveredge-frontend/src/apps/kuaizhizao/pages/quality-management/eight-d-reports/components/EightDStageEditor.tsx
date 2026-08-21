@@ -128,7 +128,7 @@ export const EightDStageEditor: React.FC<EightDStageEditorProps> = ({ form, repo
         <TextArea autoSize={{ minRows: 2, maxRows: 6 }} placeholder={t('app.kuaizhizao.eightD.placeholders.verificationResult')} />
       </Form.Item>
 
-      <Form.Item name="remarks" label={t('app.kuaizhizao.eightD.columns.remarks')}>
+      <Form.Item name="remarks" label={t('common.remark')}>
         <TextArea autoSize={{ minRows: 2, maxRows: 6 }} placeholder={t('app.kuaizhizao.eightD.placeholders.remarks')} />
       </Form.Item>
 

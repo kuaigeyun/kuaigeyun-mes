@@ -135,7 +135,7 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
       const printWindow = window.open('', '_blank');
       if (printWindow) {
         printWindow.document.write(
-          `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${t('app.kuaizhizao.workOrder.actionPrint')}</title></head><body>${html}</body></html>`
+          `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${t('common.print')}</title></head><body>${html}</body></html>`
         );
         printWindow.document.close();
         printWindow.focus();
@@ -194,7 +194,7 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
           loading={printLoading}
           disabled={!selectedTemplateId || !effectiveWorkOrderId}
         >
-          {t('app.kuaizhizao.workOrder.actionPrint')}
+          {t('common.print')}
         </Button>,
       ]}
       className="work-order-print-modal"

@@ -243,7 +243,7 @@ const ShiftRostersPage: React.FC = () => {
       setRoster(updated);
       messageApi.success(t('app.kuaizhizao.performance.rosters.messages.saveSuccess'));
     } catch (e: any) {
-      messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.saveFailed'));
+      messageApi.error(e?.message || t('common.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -272,7 +272,7 @@ const ShiftRostersPage: React.FC = () => {
       await reloadMatrixFromRoster(updated);
       messageApi.success(t('app.kuaizhizao.performance.rosters.messages.copySuccess'));
     } catch (e: any) {
-      messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.copyFailed'));
+      messageApi.error(e?.message || t('common.copyFailed'));
     } finally {
       setSaving(false);
     }
@@ -407,7 +407,7 @@ const ShiftRostersPage: React.FC = () => {
             </Button>
           ) : null}
           <Button onClick={loadRoster} disabled={!scopeReady}>
-            {t('app.kuaizhizao.performance.common.actions.refresh')}
+            {t('common.refresh')}
           </Button>
         </Space>
         <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>

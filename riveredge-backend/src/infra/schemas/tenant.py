@@ -37,6 +37,7 @@ class TenantBase(BaseModel):
     settings: Dict[str, Any] = Field(default_factory=dict, description="组织配置（JSONB 存储）")
     max_users: Optional[int] = Field(default=None, ge=1, description="最大用户数限制（可选，根据套餐自动设置）")
     max_storage: Optional[int] = Field(default=None, ge=0, description="最大存储空间限制（可选，根据套餐自动设置，单位：MB）")
+    sensitive_word_enabled: bool = Field(default=False, description="是否开启敏感词控制（默认关闭）")
     expires_at: Optional[datetime] = Field(default=None, description="过期时间（可选）")
 
 
@@ -111,6 +112,7 @@ class TenantUpdate(BaseModel):
         settings: 组织配置（可选）
         max_users: 最大用户数限制（可选）
         max_storage: 最大存储空间限制（可选）
+        sensitive_word_enabled: 是否开启敏感词控制（可选）
         expires_at: 过期时间（可选）
     """
     
@@ -121,6 +123,7 @@ class TenantUpdate(BaseModel):
     settings: Optional[Dict[str, Any]] = Field(None, description="组织配置")
     max_users: Optional[int] = Field(None, ge=1, description="最大用户数限制")
     max_storage: Optional[int] = Field(None, ge=0, description="最大存储空间限制（MB）")
+    sensitive_word_enabled: Optional[bool] = Field(None, description="是否开启敏感词控制")
     expires_at: Optional[datetime] = Field(None, description="过期时间")
 
 

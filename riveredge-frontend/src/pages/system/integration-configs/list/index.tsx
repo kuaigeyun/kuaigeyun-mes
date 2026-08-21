@@ -202,10 +202,10 @@ const IntegrationConfigListPage: React.FC = () => {
   const handleDelete = async (record: IntegrationConfig) => {
     try {
       await deleteIntegrationConfig(record.uuid);
-      messageApi.success(t('pages.system.integrationConfigs.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.integrationConfigs.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -224,7 +224,7 @@ const IntegrationConfigListPage: React.FC = () => {
           successCount++;
         } catch (error: any) {
           failCount++;
-          errors.push(error.message || t('pages.system.integrationConfigs.deleteFailed'));
+          errors.push(error.message || t('common.deleteFailed'));
         }
       }
 
@@ -289,7 +289,7 @@ const IntegrationConfigListPage: React.FC = () => {
           config: config,
           is_active: values.is_active,
         } as IntegrationConfigUpdate);
-        messageApi.success(t('pages.system.integrationConfigs.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createIntegrationConfig({
           name: values.name,
@@ -299,14 +299,14 @@ const IntegrationConfigListPage: React.FC = () => {
           config: config,
           is_active: values.is_active,
         } as IntegrationConfigCreate);
-        messageApi.success(t('pages.system.integrationConfigs.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
       
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.integrationConfigs.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -382,7 +382,7 @@ const IntegrationConfigListPage: React.FC = () => {
             okText={t('common.confirm')}
             cancelText={t('common.cancel')}
           >
-            <Tooltip title={t('pages.system.integrationConfigs.delete')}>
+            <Tooltip title={t('common.delete')}>
               <DeleteOutlined
                 style={{ fontSize: 16, color: '#ff4d4f' }}
               />
@@ -403,7 +403,7 @@ const IntegrationConfigListPage: React.FC = () => {
             
             {integration.code && (
               <Text type="secondary" style={{ fontSize: 12 }}>
-                {t('pages.system.integrationConfigs.code')}: {integration.code}
+                {t('common.code')}: {integration.code}
               </Text>
             )}
             
@@ -431,7 +431,7 @@ const IntegrationConfigListPage: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.integrationConfigs.enableStatus')}：</Text>
               <Tag color={integration.is_active ? 'success' : 'default'}>
-                {integration.is_active ? t('pages.system.integrationConfigs.enabled') : t('pages.system.integrationConfigs.disabled')}
+                {integration.is_active ? t('common.enabled') : t('common.disabled')}
               </Tag>
             </div>
             
@@ -495,7 +495,7 @@ const IntegrationConfigListPage: React.FC = () => {
       },
     },
     {
-      title: t('pages.system.integrationConfigs.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -530,12 +530,12 @@ const IntegrationConfigListPage: React.FC = () => {
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('pages.system.integrationConfigs.enabled'), status: 'Success' },
-        false: { text: t('pages.system.integrationConfigs.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('pages.system.integrationConfigs.enabled') : t('pages.system.integrationConfigs.disabled')}
+          {record.is_active ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
@@ -548,7 +548,7 @@ const IntegrationConfigListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('pages.system.integrationConfigs.createdAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -583,7 +583,7 @@ const IntegrationConfigListPage: React.FC = () => {
       },
     },
     {
-      title: t('pages.system.integrationConfigs.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
     },
     {
@@ -620,7 +620,7 @@ const IntegrationConfigListPage: React.FC = () => {
       title: t('pages.system.integrationConfigs.enableStatusLabel'),
       dataIndex: 'is_active',
       render: (_, r) =>
-        renderSystemActiveTag(t, r.is_active, 'pages.system.integrationConfigs.enabled', 'pages.system.integrationConfigs.disabled'),
+        renderSystemActiveTag(t, r.is_active, 'common.enabled', 'common.disabled'),
     },
     {
       title: t('pages.system.integrationConfigs.lastConnectionTime'),
@@ -635,12 +635,12 @@ const IntegrationConfigListPage: React.FC = () => {
       ) : '-',
     },
     {
-      title: t('pages.system.integrationConfigs.createdAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
     },
     {
-      title: t('pages.system.integrationConfigs.updatedAt'),
+      title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       valueType: 'dateTime',
     },
@@ -709,7 +709,7 @@ const IntegrationConfigListPage: React.FC = () => {
           onCreate={handleCreate}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText={t('pages.system.integrationConfigs.batchDelete')}
+          deleteButtonText={t('common.batchDelete')}
           deleteConfirmTitle={t('pages.system.integrationConfigs.batchDeleteTitle')}
           deleteConfirmDescription={(c) => t('pages.system.integrationConfigs.batchDeleteDescription', { count: c })}
           toolBarRender={() => [
@@ -728,7 +728,7 @@ const IntegrationConfigListPage: React.FC = () => {
               items = await getIntegrationConfigListAllMatching();
             }
             if (items.length === 0) {
-              messageApi.warning(t('pages.system.integrationConfigs.exportNoData'));
+              messageApi.warning(t('common.exportNoData'));
               return;
             }
             await downloadRecordsAsXlsx(
@@ -826,7 +826,7 @@ const IntegrationConfigListPage: React.FC = () => {
         />
         <ProFormTextArea
           name="description"
-          label={t('pages.system.integrationConfigs.description')}
+          label={t('common.remark')}
           placeholder={t('pages.system.integrationConfigs.descPlaceholder')}
         />
         <div>
@@ -843,7 +843,7 @@ const IntegrationConfigListPage: React.FC = () => {
         </div>
         <ProFormSwitch
           name="is_active"
-          label={t('pages.system.integrationConfigs.isActive')}
+          label={t('common.enabled')}
         />
       </FormModalTemplate>
 

@@ -11,8 +11,28 @@ import { getLanguageFromPreferenceCache } from '../stores/userPreferenceStore';
 import { getTenantId, getUserInfo } from './auth';
 
 /** 当前注册的界面语言。下架语言包时把对应 code 移到 SHELVED_UI_LANGUAGES。 */
-export const SUPPORTED_UI_LANGUAGES = ['zh-CN', 'zh-Hant', 'en-US', 'ja-JP', 'vi-VN'] as const;
+export const SUPPORTED_UI_LANGUAGES = ['zh-CN', 'zh-Hant', 'en-US', 'ja-JP', 'vi-VN', 'lo-LA'] as const;
 export type SupportedUiLanguage = (typeof SUPPORTED_UI_LANGUAGES)[number];
+
+/** 语言切换器展示名（各语言自称）。 */
+export const LANGUAGE_MAP: Record<SupportedUiLanguage, string> = {
+  'zh-CN': '简体中文',
+  'zh-Hant': '繁體中文',
+  'en-US': 'English',
+  'ja-JP': '日本語',
+  'vi-VN': 'Tiếng Việt',
+  'lo-LA': 'ພາສາລາວ',
+};
+
+/** 登录页工具栏缩写。 */
+export const LANGUAGE_TOOLBAR_SHORT: Record<SupportedUiLanguage, string> = {
+  'zh-CN': '中',
+  'zh-Hant': '繁',
+  'en-US': 'EN',
+  'ja-JP': '日',
+  'vi-VN': 'VI',
+  'lo-LA': 'ລາວ',
+};
 
 /** 语言包已就绪但当前不注册（不删文件）。启用时移入 SUPPORTED_UI_LANGUAGES。 */
 export const SHELVED_UI_LANGUAGES = [] as const;

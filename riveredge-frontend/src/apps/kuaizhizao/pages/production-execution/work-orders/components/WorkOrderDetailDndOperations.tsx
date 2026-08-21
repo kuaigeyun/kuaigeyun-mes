@@ -123,7 +123,7 @@ const SortableOperationItem: React.FC<SortableOperationItemProps> = ({
         {canEdit && (
           <Space>
             <Button type="link" size="small" onClick={onEdit}>
-              {t('app.kuaizhizao.workOrder.actionEdit')}
+              {t('common.edit')}
             </Button>
             <Popconfirm
               title={t('app.kuaizhizao.workOrder.modalConfirmDeleteOp')}
@@ -133,7 +133,7 @@ const SortableOperationItem: React.FC<SortableOperationItemProps> = ({
               onConfirm={onDelete}
             >
               <Button type="link" size="small" danger>
-                {t('app.kuaizhizao.workOrder.actionDelete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>
           </Space>

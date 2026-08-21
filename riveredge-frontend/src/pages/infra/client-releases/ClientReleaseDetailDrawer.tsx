@@ -54,7 +54,7 @@ export function ClientReleaseDetailDrawer({ open, release, clientLabel, onClose 
         dataIndex: 'update_type',
       },
       {
-        title: t('pages.infra.clientReleases.columnStatus'),
+        title: t('common.status'),
         dataIndex: 'is_active',
         render: (_, record) => (
           <MarkerTag color={record.is_active ? 'success' : 'default'}>
@@ -111,7 +111,7 @@ export function ClientReleaseDetailDrawer({ open, release, clientLabel, onClose 
         render: (_, record) => record.package?.sha256 ?? record.apk?.sha256 ?? '—',
       },
       {
-        title: t('pages.infra.clientReleases.columnNotes'),
+        title: t('common.remark'),
         dataIndex: 'release_notes',
         span: 2,
         render: (v) => v || '—',

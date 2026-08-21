@@ -210,10 +210,10 @@ const UserListPage: React.FC = () => {
   const handleDelete = useCallback(async (record: User) => {
     try {
       await deleteUser(record.uuid);
-      messageApi.success(t('pages.system.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   }, [messageApi, t]);
 
@@ -244,7 +244,7 @@ const UserListPage: React.FC = () => {
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -412,10 +412,10 @@ const UserListPage: React.FC = () => {
         t('field.user.department'),
         t('field.user.position'),
         t('field.user.roles'),
-        t('field.role.status'),
+        t('common.status'),
         t('field.user.isTenantAdmin'),
         t('field.user.lastLogin'),
-        t('field.user.createdAt'),
+        t('common.createdAt'),
       ];
       const csvRows = [headers.join(',')];
       users.forEach((user) => {
@@ -427,8 +427,8 @@ const UserListPage: React.FC = () => {
           user.department ? resolvePresetDepartmentName(user.department, t) : '',
           user.position ? resolvePresetPositionName(user.position, t) : '',
           user.roles?.map((role) => resolvePresetRoleName(role, t)).join(', ') || '',
-          user.is_active ? t('field.role.enabled') : t('field.role.disabled'),
-          user.is_tenant_admin ? t('field.customField.yes') : t('field.customField.no'),
+          user.is_active ? t('common.enabled') : t('common.disabled'),
+          user.is_tenant_admin ? t('common.yes') : t('common.no'),
           user.last_login ? formatDateTimeBySiteSetting(user.last_login) : '',
           user.created_at ? formatDateTimeBySiteSetting(user.created_at) : '',
         ];
@@ -457,7 +457,7 @@ const UserListPage: React.FC = () => {
       }
       messageApi.success(t('field.user.exportSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || t('field.user.exportFailed'));
+      messageApi.error(error.message || t('common.exportFailed'));
     }
   };
 
@@ -569,14 +569,14 @@ const UserListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('field.customField.yes'), status: 'Warning' },
-        false: { text: t('field.customField.no'), status: 'Default' },
+        true: { text: t('common.yes'), status: 'Warning' },
+        false: { text: t('common.no'), status: 'Default' },
       },
       hideInTable: true,
       render: (_, record) => renderSystemYesNoTag(t, record.is_tenant_admin),
     },
     {
-      title: t('field.user.status'),
+      title: t('common.status'),
       dataIndex: 'is_active',
       width: 100,
       minWidth: 100,
@@ -584,14 +584,14 @@ const UserListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('field.systemParameter.enabled'), status: 'Success' },
-        false: { text: t('field.systemParameter.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) =>
-        renderSystemActiveTag(t, record.is_active, 'field.systemParameter.enabled', 'field.systemParameter.disabled'),
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
-      title: t('field.user.createdAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       minWidth: 180,
@@ -602,7 +602,7 @@ const UserListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('field.user.updatedAt'),
+      title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       width: 180,
       minWidth: 180,
@@ -637,7 +637,7 @@ const UserListPage: React.FC = () => {
               icon={<EyeOutlined />}
               onClick={() => handleView(record)}
             >
-              {t('field.user.view')}
+              {t('common.view')}
             </Button>,
             <Button
               key="edit"
@@ -647,11 +647,11 @@ const UserListPage: React.FC = () => {
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
             >
-              {t('field.user.edit')}
+              {t('common.edit')}
             </Button>,
             <Popconfirm key="delete" {...rowActionKind('delete')} title={t('field.user.deleteConfirm')} onConfirm={() => handleDelete(record)}>
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('field.user.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>,
             <Button
@@ -663,7 +663,7 @@ const UserListPage: React.FC = () => {
               icon={<ReloadOutlined />}
               onClick={() => handleResetPassword(record)}
             >
-              {t('field.user.reset')}
+              {t('common.reset')}
             </Button>,
           ],
     },
@@ -709,23 +709,23 @@ const UserListPage: React.FC = () => {
       ),
     },
     {
-      title: t('field.user.status'),
+      title: t('common.status'),
       dataIndex: 'is_active',
       render: (_: unknown, record: User) =>
-        renderSystemActiveTag(t, record?.is_active, 'field.systemParameter.enabled', 'field.systemParameter.disabled'),
+        renderSystemActiveTag(t, record?.is_active, 'common.enabled', 'common.disabled'),
     },
     {
       title: t('field.user.isTenantAdmin'),
       dataIndex: 'is_tenant_admin',
       render: (_: any, record: User) => (
         <Tag color={record?.is_tenant_admin ? 'blue' : 'default'}>
-          {record?.is_tenant_admin ? t('field.customField.yes') : t('field.customField.no')}
+          {record?.is_tenant_admin ? t('common.yes') : t('common.no')}
         </Tag>
       ),
     },
     { title: t('field.user.lastLogin'), dataIndex: 'last_login', valueType: 'dateTime' },
-    { title: t('field.user.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-    { title: t('field.user.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ], [t, handleOpenRoleEdit]);
 
   return (
@@ -763,7 +763,7 @@ const UserListPage: React.FC = () => {
         enableRowSelection
         onRowSelectionChange={setSelectedRowKeys}
         showDeleteButton={true}
-        deleteButtonText={t('field.user.batchDeleteButton')}
+        deleteButtonText={t('common.batchDelete')}
         deleteConfirmTitle={t('field.user.batchDeleteConfirmTitle')}
         deleteConfirmDescription={(c) => t('field.user.batchDeleteConfirmDescription', { count: c })}
         onDelete={handleBatchDelete}

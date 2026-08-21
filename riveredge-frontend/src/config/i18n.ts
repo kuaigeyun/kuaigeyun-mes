@@ -14,6 +14,13 @@
 
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import dayjs from 'dayjs';
+import 'dayjs/locale/zh-cn';
+import 'dayjs/locale/zh-tw';
+import 'dayjs/locale/en';
+import 'dayjs/locale/ja';
+import 'dayjs/locale/vi';
+import 'dayjs/locale/lo';
 import { getSiteSetting } from '../services/siteSetting';
 import { getLanguageList, type Language } from '../services/language';
 import { getToken } from '../utils/auth';
@@ -24,13 +31,16 @@ import {
 import { useConfigStore } from '../stores/configStore';
 import {
   cacheTenantDefaultLanguage,
+  LANGUAGE_MAP,
   normalizeUiLanguage,
   resolveInitialLanguage,
   resolveTenantDefaultFromCache,
   UI_LANGUAGE_FALLBACK,
   type SupportedUiLanguage,
 } from '../utils/localeBootstrap';
-import { syncEnglishUiFont } from '../constants/fonts';
+import { syncUiLocaleChrome } from '../constants/fonts';
+
+export { LANGUAGE_MAP };
 
 import zhCN from '../locales/zh-CN';
 
@@ -50,7 +60,22 @@ const LANGUAGE_ALIASES: Record<string, SupportedUiLanguage> = {
   'ja-jp': 'ja-JP',
   vi: 'vi-VN',
   'vi-vn': 'vi-VN',
+  lo: 'lo-LA',
+  'lo-la': 'lo-LA',
 };
+
+const DAYJS_LOCALE: Record<string, string> = {
+  'zh-CN': 'zh-cn',
+  'zh-Hant': 'zh-tw',
+  'en-US': 'en',
+  'ja-JP': 'ja',
+  'vi-VN': 'vi',
+  'lo-LA': 'lo',
+};
+
+function syncDayjsLocale(language: string): void {
+  dayjs.locale(DAYJS_LOCALE[language] ?? 'zh-cn');
+}
 
 function resolveRegisteredUiLanguage(languageCode: string): SupportedUiLanguage {
   return (
@@ -64,14 +89,6 @@ function resolveRegisteredUiLanguage(languageCode: string): SupportedUiLanguage 
 let tenantDefaultLanguage: SupportedUiLanguage | null = null;
 /** 最近一次站点 settings，供 sync 使用 */
 let siteLanguageSettings: Record<string, unknown> | null = null;
-
-export const LANGUAGE_MAP: Record<string, string> = {
-  'zh-CN': '简体中文',
-  'zh-Hant': '繁體中文',
-  'en-US': 'English',
-  'ja-JP': '日本語',
-  'vi-VN': 'Tiếng Việt',
-};
 
 function resolveTenantDefaultFromCloud(
   siteSettings?: Record<string, unknown> | null,
@@ -144,6 +161,7 @@ async function ensureLanguageLoaded(languageCode: string): Promise<void> {
     'zh-Hant': () => import('../locales/zh-Hant'),
     'ja-JP': () => import('../locales/ja-JP'),
     'vi-VN': () => import('../locales/vi-VN'),
+    'lo-LA': () => import('../locales/lo-LA'),
   };
 
   const load = loaders[languageCode];
@@ -182,13 +200,15 @@ i18n.use(initReactI18next).init({
   resources: buildInitResources(initialLang),
 });
 
-syncEnglishUiFont(initialLang);
+syncUiLocaleChrome(initialLang);
+syncDayjsLocale(initialLang);
 
 const originalChangeLanguage = i18n.changeLanguage.bind(i18n);
 i18n.changeLanguage = async (language: string) => {
   await ensureLanguageLoaded(language);
   const result = await originalChangeLanguage(language);
-  syncEnglishUiFont(language);
+  syncUiLocaleChrome(language);
+  syncDayjsLocale(language);
   return result;
 };
 

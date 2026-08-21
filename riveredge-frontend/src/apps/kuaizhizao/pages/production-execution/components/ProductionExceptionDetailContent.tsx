@@ -147,7 +147,7 @@ export function DeliveryDelayExceptionDetailContent({
         dataIndex: 'handled_at',
         valueType: 'dateTime',
       },
-      { title: t(`${P}.field.remarks`), dataIndex: 'remarks', span: 2 },
+      { title: t('common.remark'), dataIndex: 'remarks', span: 2 },
     ],
     [t],
   );
@@ -211,7 +211,7 @@ export function QualityExceptionDetailHandlingContent({
         dataIndex: 'handled_at',
         valueType: 'dateTime',
       },
-      { title: t(`${P}.field.remarks`), dataIndex: 'remarks', span: 2 },
+      { title: t('common.remark'), dataIndex: 'remarks', span: 2 },
     ],
     [t],
   );

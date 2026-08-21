@@ -151,7 +151,7 @@ const OperationGuidePage: React.FC = () => {
       render: (steps: OperationGuideStep[]) => steps?.length || 0,
     },
     {
-      title: t('pages.system.operationGuide.columnActions'),
+      title: t('common.actions'),
       key: 'action',
       width: 200,
       render: (_: any, record: OperationGuide) => (
@@ -168,7 +168,7 @@ const OperationGuidePage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleCreateOrEdit(record)}
           >
-            {t('pages.system.operationGuide.edit')}
+            {t('common.edit')}
           </Button>
         </Space>
       ),

@@ -850,7 +850,7 @@ const FileListPage: React.FC = () => {
           setCurrentPath([ROOT_PATH_KEY]);
           await loadFileList(undefined);
         } catch (error: any) {
-          messageApi.error(error.message || t('pages.system.files.deleteFailed'));
+          messageApi.error(error.message || t('common.deleteFailed'));
         }
       },
     });
@@ -894,11 +894,11 @@ const FileListPage: React.FC = () => {
     
     try {
       await batchDeleteFiles(filesToDelete.map(f => f.uuid));
-      messageApi.success(t('pages.system.files.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       setSelectedRowKeys([]);
       reloadCurrentFolder();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.files.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -1074,7 +1074,7 @@ const FileListPage: React.FC = () => {
     },
     {
       key: 'delete',
-      label: t('pages.system.files.contextDelete'),
+      label: t('common.delete'),
       icon: <DeleteOutlined />,
       danger: true,
       onClick: () => {
@@ -1089,7 +1089,7 @@ const FileListPage: React.FC = () => {
    */
   const columns: ColumnsType<File> = [
     {
-      title: t('pages.system.files.columnName'),
+      title: t('common.name'),
       dataIndex: 'original_name',
       key: 'name',
       width: '40%',
@@ -1399,7 +1399,7 @@ const FileListPage: React.FC = () => {
                   icon={<DeleteOutlined />}
                   onClick={() => handleDelete()}
                 >
-                  {t('pages.system.files.deleteButton')}
+                  {t('common.delete')}
                 </Button>
                 <Button
                   icon={<SettingOutlined />}

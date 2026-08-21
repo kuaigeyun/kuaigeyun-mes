@@ -110,7 +110,7 @@ export function plmCodeTitleSearchColumns(options: {
 export function plmCreatedUpdatedColumns<T extends object>(t: TFunction): ProColumns<T>[] {
   return [
     {
-      title: t('app.kuaiplm.common.columns.updatedAt'),
+      title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       ...UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS,
       sorter: true,
@@ -133,7 +133,7 @@ export function plmCreatedUpdatedColumns<T extends object>(t: TFunction): ProCol
       formItemProps: formDateRangeFormItemProps,
     },
     {
-      title: t('app.kuaiplm.common.columns.updatedAt'),
+      title: t('common.updatedAt'),
       dataIndex: 'updated_at_range',
       valueType: 'dateRange',
       hideInTable: true,

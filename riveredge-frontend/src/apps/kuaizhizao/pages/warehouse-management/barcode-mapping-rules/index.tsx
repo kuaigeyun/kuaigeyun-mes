@@ -130,7 +130,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
 
         actionRef.current?.reload();
       } catch (error) {
-        messageApi.error(t('app.kuaizhizao.warehouseCommon.deleteFailed'));
+        messageApi.error(t('common.deleteFailed'));
       }
     }
   };
@@ -219,8 +219,8 @@ const BarcodeMappingRulesPage: React.FC = () => {
       render: (_, record) => (
         <Tag color={record.is_enabled ? 'success' : 'default'}>
           {record.is_enabled
-            ? t('app.kuaizhizao.warehouseCommon.enabled')
-            : t('app.kuaizhizao.warehouseCommon.disabled')}
+            ? t('common.enabled')
+            : t('common.disabled')}
         </Tag>
       ),
     },
@@ -232,7 +232,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
     },
     ...buildDocumentAuditColumns<BarcodeMappingRule>(t),
     {
-      title: t('app.kuaizhizao.warehouseCommon.colActions'),
+      title: t('common.actions'),
       width: 180,
       fixed: 'right',
       render: (_, record) => (
@@ -242,8 +242,8 @@ const BarcodeMappingRulesPage: React.FC = () => {
           <Popconfirm
             title={t('app.kuaizhizao.barcodeMapping.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
-            okText={t('app.kuaizhizao.warehouseCommon.confirm')}
-            cancelText={t('app.kuaizhizao.warehouseCommon.cancel')}
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
           >
             <Button {...rowActionKind('delete')} />
           </Popconfirm>
@@ -281,13 +281,13 @@ const BarcodeMappingRulesPage: React.FC = () => {
         render: (_, record) => (
           <Tag color={record.is_enabled ? 'success' : 'default'}>
             {record.is_enabled
-              ? t('app.kuaizhizao.warehouseCommon.enabled')
-              : t('app.kuaizhizao.warehouseCommon.disabled')}
+              ? t('common.enabled')
+              : t('common.disabled')}
           </Tag>
         ),
       },
       { title: t('app.kuaizhizao.barcodeMapping.colPriority'), dataIndex: 'priority' },
-      { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 2 },
+      { title: t('common.remark'), dataIndex: 'remarks', span: 2 },
     ],
     [t],
   );
@@ -304,10 +304,10 @@ const BarcodeMappingRulesPage: React.FC = () => {
       };
       if (isEdit && currentId) {
         await warehouseApi.barcodeMappingRule.update(currentId.toString(), payload);
-        messageApi.success(t('app.kuaizhizao.warehouseCommon.updateSuccessGeneric'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await warehouseApi.barcodeMappingRule.create(payload);
-        messageApi.success(t('app.kuaizhizao.warehouseCommon.createSuccessGeneric'));
+        messageApi.success(t('common.createSuccess'));
       }
       setModalVisible(false);
       setPendingFormValues(null);
@@ -316,7 +316,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.warehouseCommon.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -349,7 +349,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
             invalidateMenuBadgeCounts();
             actionRef.current?.reload();
           } catch (error: any) {
-            messageApi.error(error.message || t('app.kuaizhizao.warehouseCommon.deleteFailed'));
+            messageApi.error(error.message || t('common.deleteFailed'));
           }
         }}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.barcodeMapping.deleteBatchConfirm', { count })}
@@ -492,7 +492,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
         <DocumentAttachmentsField category="barcode_mapping_rule_attachments" />
         <ProFormTextArea
           name="remarks"
-          label={t('app.kuaizhizao.warehouseCommon.colRemarks')}
+          label={t('common.remark')}
           placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')}
           colProps={{ span: 24 }}
         />

@@ -153,10 +153,10 @@ const ScheduledTaskListPage: React.FC = () => {
   const handleDelete = async (record: ScheduledTask) => {
     try {
       await deleteScheduledTask(record.uuid);
-      messageApi.success(t('pages.system.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -175,21 +175,21 @@ const ScheduledTaskListPage: React.FC = () => {
           successCount++;
         } catch (error: any) {
           failCount++;
-          errors.push(error.message || t('pages.system.deleteFailed'));
+          errors.push(error.message || t('common.deleteFailed'));
         }
       }
 
       if (successCount > 0) {
-        messageApi.success(t('pages.system.deleteSuccess'));
+        messageApi.success(t('common.deleteSuccess'));
       }
       if (failCount > 0) {
-        messageApi.error(t('pages.system.deleteFailed') + (errors.length > 0 ? '：' + errors.join('; ') : ''));
+        messageApi.error(t('common.deleteFailed') + (errors.length > 0 ? '：' + errors.join('; ') : ''));
       }
 
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -253,7 +253,7 @@ const ScheduledTaskListPage: React.FC = () => {
           task_config: taskConfig,
           is_active: values.is_active,
         } as UpdateScheduledTaskData);
-        messageApi.success(t('pages.system.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createScheduledTask({
           name: values.name,
@@ -265,14 +265,14 @@ const ScheduledTaskListPage: React.FC = () => {
           task_config: taskConfig,
           is_active: values.is_active,
         } as CreateScheduledTaskData);
-        messageApi.success(t('pages.system.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
       
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -333,7 +333,7 @@ const ScheduledTaskListPage: React.FC = () => {
       },
     },
     {
-      title: t('field.scheduledTask.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -358,12 +358,12 @@ const ScheduledTaskListPage: React.FC = () => {
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('field.systemParameter.enabled'), status: 'Success' },
-        false: { text: t('field.systemParameter.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')}
+          {record.is_active ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
@@ -393,7 +393,7 @@ const ScheduledTaskListPage: React.FC = () => {
       },
     },
     {
-      title: t('field.scheduledTask.createdAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -411,14 +411,14 @@ const ScheduledTaskListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            {t('field.scheduledTask.view')}
+            {t('common.view')}
           </Button>
           <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            {t('field.scheduledTask.edit')}
+            {t('common.edit')}
           </Button>
           {record.is_active ? (
             <Button key="stop" {...rowActionKind('execute')}
@@ -446,7 +446,7 @@ const ScheduledTaskListPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              {t('field.scheduledTask.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -509,7 +509,7 @@ const ScheduledTaskListPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText={t('field.scheduledTask.batchDeleteButton')}
+          deleteButtonText={t('common.batchDelete')}
           deleteConfirmTitle={t('field.scheduledTask.batchDeleteConfirmTitle')}
           deleteConfirmDescription={(c) => t('field.scheduledTask.batchDeleteConfirmDescription', { count: c })}
           showImportButton={false}
@@ -523,7 +523,7 @@ const ScheduledTaskListPage: React.FC = () => {
                 items = items.filter((d: any) => keys.includes(d.uuid));
               }
               if (items.length === 0) {
-                messageApi.warning(t('field.scheduledTask.exportNoData'));
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               await downloadRecordsAsXlsx(
@@ -532,7 +532,7 @@ const ScheduledTaskListPage: React.FC = () => {
               );
               messageApi.success(t('field.scheduledTask.exportSuccess', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || t('pages.system.deleteFailed'));
+              messageApi.error(error?.message || t('common.deleteFailed'));
             }
           }}
           pagination={{
@@ -683,12 +683,12 @@ const ScheduledTaskListPage: React.FC = () => {
         )}
         <ProFormTextArea
           name="description"
-          label={t('field.scheduledTask.description')}
+          label={t('common.remark')}
           placeholder={t('field.scheduledTask.descriptionPlaceholder')}
         />
         <ProFormSwitch
           name="is_active"
-          label={t('field.scheduledTask.isActiveLabel')}
+          label={t('common.enabled')}
         />
       </FormModalTemplate>
 
@@ -746,7 +746,7 @@ const ScheduledTaskListPage: React.FC = () => {
             },
           },
           {
-            title: t('field.scheduledTask.description'),
+            title: t('common.remark'),
             dataIndex: 'description',
           },
           {
@@ -811,7 +811,7 @@ const ScheduledTaskListPage: React.FC = () => {
               const value = !!record.is_active;
               return (
               <MarkerTag color={value ? 'success' : 'default'}>
-                {value ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')}
+                {value ? t('common.enabled') : t('common.disabled')}
               </MarkerTag>
             );
             },
@@ -846,12 +846,12 @@ const ScheduledTaskListPage: React.FC = () => {
             },
           },
           {
-            title: t('field.scheduledTask.createdAt'),
+            title: t('common.createdAt'),
             dataIndex: 'created_at',
             valueType: 'dateTime',
           },
           {
-            title: t('field.scheduledTask.updatedAt'),
+            title: t('common.updatedAt'),
             dataIndex: 'updated_at',
             valueType: 'dateTime',
           },

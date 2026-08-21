@@ -219,7 +219,7 @@ const APIListPage: React.FC = () => {
     () => [
       { title: t('pages.system.apis.detailColumnName'), dataIndex: 'name' },
       { title: t('pages.system.apis.detailColumnCode'), dataIndex: 'code' },
-      { title: t('pages.system.apis.detailColumnDescription'), dataIndex: 'description' },
+      { title: t('common.remark'), dataIndex: 'description' },
       {
         title: t('pages.system.apis.detailColumnMethod'),
         dataIndex: 'method',
@@ -325,7 +325,7 @@ const APIListPage: React.FC = () => {
         title: t('pages.system.apis.detailColumnActive'),
         dataIndex: 'is_active',
         render: (_dom, entity: API) =>
-          renderSystemActiveTag(t, entity.is_active, 'pages.system.apis.enabled', 'pages.system.apis.disabled'),
+          renderSystemActiveTag(t, entity.is_active, 'common.enabled', 'common.disabled'),
       },
       {
         title: t('pages.system.apis.detailColumnSystem'),
@@ -336,8 +336,8 @@ const APIListPage: React.FC = () => {
             entity.is_system ? 'purple' : 'default',
           ),
       },
-      { title: t('pages.system.apis.detailColumnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-      { title: t('pages.system.apis.detailColumnUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+      { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
     ],
     [t]
   )
@@ -348,10 +348,10 @@ const APIListPage: React.FC = () => {
   const handleDelete = async (record: API) => {
     try {
       await deleteAPI(record.uuid)
-      messageApi.success(t('pages.system.apis.deleteSuccess'))
+      messageApi.success(t('common.deleteSuccess'))
       actionRef.current?.reload()
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.apis.deleteFailed'))
+      messageApi.error(error.message || t('common.deleteFailed'))
     }
   }
 
@@ -457,7 +457,7 @@ const APIListPage: React.FC = () => {
           response_example: responseExample,
           is_active: values.is_active,
         } as UpdateAPIData)
-        messageApi.success(t('pages.system.apis.updateSuccess'))
+        messageApi.success(t('common.updateSuccess'))
       } else {
         await createAPI({
           name: values.name,
@@ -473,14 +473,14 @@ const APIListPage: React.FC = () => {
           is_active: values.is_active,
           is_system: values.is_system || false,
         } as CreateAPIData)
-        messageApi.success(t('pages.system.apis.createSuccess'))
+        messageApi.success(t('common.createSuccess'))
       }
 
       setModalVisible(false)
       setFormInitialValues(undefined)
       actionRef.current?.reload()
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.apis.operationFailed'))
+      messageApi.error(error.message || t('common.operationFailed'))
       throw error
     } finally {
       setFormLoading(false)
@@ -538,7 +538,7 @@ const APIListPage: React.FC = () => {
       width: 300,
     },
     {
-      title: t('pages.system.apis.columnDescription'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -552,11 +552,11 @@ const APIListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('pages.system.apis.enabled'), status: 'Success' },
-        false: { text: t('pages.system.apis.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) =>
-        renderSystemActiveTag(t, record.is_active, 'pages.system.apis.enabled', 'pages.system.apis.disabled'),
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
       title: t('pages.system.apis.columnSystem'),
@@ -573,7 +573,7 @@ const APIListPage: React.FC = () => {
         ),
     },
     {
-      title: t('pages.system.apis.columnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       minWidth: 180,
@@ -584,7 +584,7 @@ const APIListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('pages.system.apis.columnActions'),
+      title: t('common.actions'),
       key: 'action',
       valueType: 'option',
       fixed: 'right',
@@ -592,10 +592,10 @@ const APIListPage: React.FC = () => {
       render: (_, record) => {
         const actions: React.ReactNode[] = [
           <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)}>
-            {t('pages.system.apis.view')}
+            {t('common.view')}
           </Button>,
           <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-            {t('pages.system.apis.edit')}
+            {t('common.edit')}
           </Button>,
           <Button key="test" {...rowActionKind('read')} onClick={() => handleTest(record)}>
             {t('pages.system.apis.test')}
@@ -605,7 +605,7 @@ const APIListPage: React.FC = () => {
           actions.push(
             <Popconfirm key="delete" {...rowActionKind('delete')} title={t('pages.system.apis.deleteConfirmTitle')} onConfirm={() => handleDelete(record)}>
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('pages.system.apis.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>,
           )
@@ -675,7 +675,7 @@ const APIListPage: React.FC = () => {
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText={t('pages.system.apis.batchDelete')}
+          deleteButtonText={t('common.batchDelete')}
           deleteConfirmTitle={t('pages.system.apis.batchDeleteTitle')}
           deleteConfirmDescription={(c) => t('pages.system.apis.batchDeleteDescription', { count: c })}
           showCreateButton
@@ -687,7 +687,7 @@ const APIListPage: React.FC = () => {
             t('pages.system.apis.columnCode'),
             t('pages.system.apis.columnPath'),
             t('pages.system.apis.columnMethod'),
-            t('pages.system.apis.columnDescription'),
+            t('common.remark'),
             t('pages.system.apis.columnActive'),
           ]}
           importExampleRow={['示例接口', 'example_api', '/api/v1/example', 'GET', '', 'true']}
@@ -704,7 +704,7 @@ const APIListPage: React.FC = () => {
             [t('pages.system.apis.columnMethod')]: 'method',
             请求方法: 'method',
             method: 'method',
-            [t('pages.system.apis.columnDescription')]: 'description',
+            [t('common.remark')]: 'description',
             描述: 'description',
             description: 'description',
             [t('pages.system.apis.columnActive')]: 'is_active',
@@ -737,7 +737,7 @@ const APIListPage: React.FC = () => {
               [t('pages.system.apis.columnMethod')]: 'method',
               请求方法: 'method',
               method: 'method',
-              [t('pages.system.apis.columnDescription')]: 'description',
+              [t('common.remark')]: 'description',
               描述: 'description',
               description: 'description',
               [t('pages.system.apis.columnActive')]: 'is_active',
@@ -782,7 +782,7 @@ const APIListPage: React.FC = () => {
               items = res.items
             }
             if (items.length === 0) {
-              messageApi.warning(t('pages.system.apis.noDataToExport'))
+              messageApi.warning(t('common.exportNoData'))
               return
             }
             await downloadRecordsAsXlsx(
@@ -930,12 +930,12 @@ const APIListPage: React.FC = () => {
         </ProFormGroup>
         <ProFormTextArea
           name="description"
-          label={t('pages.system.apis.labelDescription')}
+          label={t('common.remark')}
           placeholder={t('pages.system.apis.descriptionPlaceholder')}
           fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
         />
-        <ProFormSwitch name="is_active" label={t('pages.system.apis.labelActive')} colProps={{ span: 12 }} />
+        <ProFormSwitch name="is_active" label={t('common.enabled')} colProps={{ span: 12 }} />
         {!isEdit && <ProFormSwitch name="is_system" label={t('pages.system.apis.labelSystem')} colProps={{ span: 12 }} />}
       </FormModalTemplate>
 

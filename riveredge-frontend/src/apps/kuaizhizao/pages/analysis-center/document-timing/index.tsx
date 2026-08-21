@@ -76,7 +76,7 @@ const DocumentTimingPage: React.FC = () => {
   const handleExport = () => {
     const rows = lastRowsRef.current;
     if (!rows.length) {
-      messageApi.warning(t('app.kuaireport.analysis.exportEmpty', { defaultValue: '暂无数据可导出' }));
+      messageApi.warning(t('common.exportNoData', { defaultValue: '暂无数据可导出' }));
       return;
     }
     setExporting(true);

@@ -122,7 +122,7 @@ export function ClientMiniprogramQrModal({ open, onClose }: Props) {
       onClose();
     } catch (e) {
       messageApi.error(
-        e instanceof Error ? e.message : t('pages.infra.clientReleases.miniprogramQrSaveFailed'),
+        e instanceof Error ? e.message : t('common.saveFailed'),
       );
     } finally {
       setSaving(false);

@@ -128,7 +128,7 @@ const MaterialBindingModal: React.FC<MaterialBindingModalProps> = ({
   const columns = [
     { title: t('app.kuaizhizao.workOrder.kioskMaterialCodeBarcode'), dataIndex: 'material_code', key: 'material_code', render: (text: string, record: any) => text || record.barcode },
     { title: '批次', dataIndex: 'batch_number', key: 'batch_number' },
-    { title: t('app.kuaizhizao.workOrder.colQuantity'), dataIndex: 'quantity', key: 'quantity' },
+    { title: t('common.quantity'), dataIndex: 'quantity', key: 'quantity' },
     { title: t('app.kuaizhizao.workOrder.colType'), dataIndex: 'binding_type', key: 'binding_type', render: (type: string) => <Text style={{ color: '#fff' }}>{type === 'feeding' ? '上料' : '下料'}</Text> },
     { 
       title: '操作', 
@@ -254,7 +254,7 @@ const MaterialBindingModal: React.FC<MaterialBindingModalProps> = ({
         <div style={{ flex: 1, minHeight: 0 }}>
           <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={{ color: 'rgba(255, 255, 255, 0.45)', fontSize: 18 }}>当前已绑定物料 ({boundMaterials.length})</Text>
-            <Button icon={<SaveOutlined />} onClick={loadBoundMaterials}>{t('app.kuaizhizao.workOrder.actionRefresh')}</Button>
+            <Button icon={<SaveOutlined />} onClick={loadBoundMaterials}>{t('common.refresh')}</Button>
           </div>
           <Table 
             dataSource={boundMaterials} 

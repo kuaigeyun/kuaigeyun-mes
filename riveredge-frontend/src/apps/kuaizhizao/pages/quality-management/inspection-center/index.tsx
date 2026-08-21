@@ -168,7 +168,7 @@ const InspectionCenter: React.FC = () => {
             value: summary?.total_inspected_today || 0,
           },
           {
-            label: t('app.kuaizhizao.quality.common.columns.status'),
+            label: t('common.status'),
             value:
               summary && summary.today_qualified_rate >= 98
                 ? t('app.kuaizhizao.quality.inspectionCenter.kpi.statusExcellent')

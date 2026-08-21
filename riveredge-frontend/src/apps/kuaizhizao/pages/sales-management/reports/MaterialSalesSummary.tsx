@@ -31,7 +31,7 @@ const MaterialSalesSummary: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: t('app.kuaizhizao.reports.unit'),
+        title: t('common.unit'),
         dataIndex: 'unit',
         width: 80,
         minWidth: 80,

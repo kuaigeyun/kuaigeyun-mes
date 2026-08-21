@@ -149,7 +149,7 @@ const EquipmentRepairsPage: React.FC = () => {
       { title: t(`${P}.col.repairType`), dataIndex: 'repair_type' },
       { title: t(`${P}.col.repairerName`), dataIndex: 'repairer_name' },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
@@ -187,7 +187,7 @@ const EquipmentRepairsPage: React.FC = () => {
         search: { order: 11 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         valueType: 'select',
         valueEnum: repairStatusValueEnum,
@@ -256,7 +256,7 @@ const EquipmentRepairsPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<EquipmentRepair>(t),
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
         hideInSearch: true,

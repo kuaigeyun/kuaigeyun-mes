@@ -305,7 +305,7 @@ const RdProjectsListPage: React.FC = () => {
           icon={<EyeOutlined />}
           onClick={() => navigate(`/apps/kuaiplm/rd-projects/detail/${record.id}`)}
         >
-          {t('app.kuaiplm.common.actions.detail')}
+          {t('common.detail')}
         </Button>,
       ], 120),
     ],
@@ -349,7 +349,7 @@ const RdProjectsListPage: React.FC = () => {
         ]}
         showDeleteButton
         onDelete={handleBatchDelete}
-        deleteConfirmTitle={(count) => `${t('app.kuaiplm.common.actions.delete')} (${count})?`}
+        deleteConfirmTitle={(count) => `${t('common.delete')} (${count})?`}
         toolBarActionsAfterDelete={[
           <UniBatchMenuButton
             key="rd-project-batch-actions"
@@ -392,7 +392,7 @@ const RdProjectsListPage: React.FC = () => {
             });
             return { data: res.items, total: res.total, success: true };
           } catch (e: any) {
-            messageApi.error(e?.message || t('app.kuaiplm.common.messages.loadFailed'));
+            messageApi.error(e?.message || t('common.loadFailed'));
             return { data: [], total: 0, success: false };
           }
         }}
@@ -423,7 +423,7 @@ const RdProjectsListPage: React.FC = () => {
               : undefined,
             notes: values.notes,
           });
-          messageApi.success(t('app.kuaiplm.common.messages.createSuccess'));
+          messageApi.success(t('common.createSuccess'));
           setCreateOpen(false);
           selectedOwnerRef.current = null;
           actionRef.current?.reload();
@@ -481,7 +481,7 @@ const RdProjectsListPage: React.FC = () => {
           width="100%"
           fieldProps={{ style: { width: '100%' } }}
         />
-        <ProFormTextArea name="notes" label={t('app.kuaiplm.rdProjects.form.notes')} colProps={{ span: 24 }} />
+        <ProFormTextArea name="notes" label={t('common.remark')} colProps={{ span: 24 }} />
       </FormModalTemplate>
     </ListPageTemplate>
   );

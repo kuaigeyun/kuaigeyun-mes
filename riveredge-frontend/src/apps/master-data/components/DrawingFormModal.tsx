@@ -407,7 +407,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
       />
       <ProFormTextArea
         name="description"
-        label={t('app.master-data.drawings.description')}
+        label={t('common.remark')}
         fieldProps={{ rows: 3 }}
         colProps={{ span: 24 }}
       />

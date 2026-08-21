@@ -377,10 +377,13 @@ body {
   overflow: hidden;
 }
 
-/* 英文界面全局 UI 字体（由 syncEnglishUiFont 设置 html.locale-en 与 CSS 变量） */
+/* 英文 / 老挝语界面全局 UI 字体（由 syncUiLocaleChrome 设置 html class 与 CSS 变量） */
 html.locale-en,
 html.locale-en body,
-html.locale-en #root {
+html.locale-en #root,
+html.locale-lo,
+html.locale-lo body,
+html.locale-lo #root {
   font-family: var(--riveredge-ui-font-family);
 }
 

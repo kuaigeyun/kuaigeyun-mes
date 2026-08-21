@@ -237,7 +237,7 @@ const RepairOrderFormModal: React.FC<RepairOrderFormModalProps> = ({
         >
           <DatePicker showTime style={{ width: '100%' }} />
         </Form.Item>
-        <Form.Item name="notes" label={t('app.kuaizhizao.afterSalesService.repairOrder.field.notes')}>
+        <Form.Item name="notes" label={t('common.remark')}>
           <Input.TextArea rows={2} />
         </Form.Item>
       </Form>

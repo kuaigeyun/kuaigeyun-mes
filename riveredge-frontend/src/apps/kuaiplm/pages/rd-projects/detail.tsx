@@ -363,10 +363,10 @@ const RdProjectDetailPage: React.FC = () => {
         width: 100,
         render: (linkType: string) => getKuaiplmEngineeringLinkText(t, linkType),
       },
-      { title: t('app.kuaiplm.common.columns.name'), dataIndex: 'target_name', ellipsis: true },
+      { title: t('common.name'), dataIndex: 'target_name', ellipsis: true },
       { title: t('app.kuaiplm.common.columns.version'), dataIndex: 'version', width: 80 },
       {
-        title: t('app.kuaiplm.common.columns.actions'),
+        title: t('common.actions'),
         width: 160,
         render: (_: unknown, row: RdProjectLink) => (
           <Space>
@@ -401,7 +401,7 @@ const RdProjectDetailPage: React.FC = () => {
                 });
               }}
             >
-              {t('app.kuaiplm.common.actions.detail')}
+              {t('common.detail')}
             </Button>
             <Button
               type="link"
@@ -413,7 +413,7 @@ const RdProjectDetailPage: React.FC = () => {
                   title: t('app.kuaiplm.rdProjects.detail.link.deleteConfirm'),
                   onOk: async () => {
                     await deleteRdProjectLink(id!, row.id!);
-                    messageApi.success(t('app.kuaiplm.common.messages.deleteSuccess'));
+                    messageApi.success(t('common.deleteSuccess'));
                     load();
                   },
                 });
@@ -442,7 +442,7 @@ const RdProjectDetailPage: React.FC = () => {
             extra={
               <Space>
                 <Button size="small" icon={<EditOutlined />} onClick={() => openGateEdit(gate)}>
-                  {t('app.kuaiplm.common.actions.edit')}
+                  {t('common.edit')}
                 </Button>
                 <Button
                   type="primary"
@@ -460,7 +460,7 @@ const RdProjectDetailPage: React.FC = () => {
             }
           >
             <Descriptions column={2} size="small">
-              <Descriptions.Item label={t('app.kuaiplm.common.columns.status')}>
+              <Descriptions.Item label={t('common.status')}>
                 <Tag color={GATE_STATUS_COLOR[gateStatus] ?? 'default'}>
                   {getKuaiplmGateStatusText(t, gateStatus)}
                 </Tag>
@@ -522,7 +522,7 @@ const RdProjectDetailPage: React.FC = () => {
                   render: (v) => v || '—',
                 },
                 {
-                  title: t('app.kuaiplm.common.columns.status'),
+                  title: t('common.status'),
                   dataIndex: 'status',
                   width: 88,
                   render: (s: string) => (
@@ -536,12 +536,12 @@ const RdProjectDetailPage: React.FC = () => {
                   render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '—'),
                 },
                 {
-                  title: t('app.kuaiplm.common.columns.actions'),
+                  title: t('common.actions'),
                   width: 120,
                   render: (_: unknown, row: RdProjectTask) => (
                     <Space size="small">
                       <Button type="link" size="small" onClick={() => openEditTask(row)}>
-                        {t('app.kuaiplm.common.actions.edit')}
+                        {t('common.edit')}
                       </Button>
                       <Button
                         type="link"
@@ -552,13 +552,13 @@ const RdProjectDetailPage: React.FC = () => {
                             title: t('app.kuaiplm.rdProjects.detail.task.deleteConfirm'),
                             onOk: async () => {
                               await deleteRdProjectTask(id!, row.id!);
-                              messageApi.success(t('app.kuaiplm.common.messages.deleteSuccess'));
+                              messageApi.success(t('common.deleteSuccess'));
                               load();
                             },
                           });
                         }}
                       >
-                        {t('app.kuaiplm.common.actions.delete')}
+                        {t('common.delete')}
                       </Button>
                     </Space>
                   ),
@@ -589,7 +589,7 @@ const RdProjectDetailPage: React.FC = () => {
               locale={{ emptyText: t('app.kuaiplm.rdProjects.detail.empty.gateDeliverables') }}
               dataSource={gateDeliverables}
               columns={[
-                { title: t('app.kuaiplm.common.columns.name'), dataIndex: 'name', ellipsis: true },
+                { title: t('common.name'), dataIndex: 'name', ellipsis: true },
                 {
                   title: t('app.kuaiplm.common.columns.type'),
                   dataIndex: 'deliverable_type',
@@ -597,7 +597,7 @@ const RdProjectDetailPage: React.FC = () => {
                   render: (v) => v || '—',
                 },
                 {
-                  title: t('app.kuaiplm.common.columns.status'),
+                  title: t('common.status'),
                   dataIndex: 'status',
                   width: 88,
                   render: (s: string) => (
@@ -607,7 +607,7 @@ const RdProjectDetailPage: React.FC = () => {
                   ),
                 },
                 {
-                  title: t('app.kuaiplm.common.columns.actions'),
+                  title: t('common.actions'),
                   width: 280,
                   render: (_: unknown, row: RdProjectDeliverable) => {
                     const engineeringLink = resolveDeliverableEngineeringLink(row, project?.material_id);
@@ -624,7 +624,7 @@ const RdProjectDetailPage: React.FC = () => {
                         </Button>
                       ) : null}
                       <Button type="link" size="small" onClick={() => openEditDeliverable(row)}>
-                        {t('app.kuaiplm.common.actions.edit')}
+                        {t('common.edit')}
                       </Button>
                       {row.status !== 'SUBMITTED' && row.status !== 'APPROVED' ? (
                         <Button
@@ -661,13 +661,13 @@ const RdProjectDetailPage: React.FC = () => {
                             title: t('app.kuaiplm.rdProjects.detail.deliverable.deleteConfirm'),
                             onOk: async () => {
                               await deleteRdProjectDeliverable(id!, row.id!);
-                              messageApi.success(t('app.kuaiplm.common.messages.deleteSuccess'));
+                              messageApi.success(t('common.deleteSuccess'));
                               load();
                             },
                           });
                         }}
                       >
-                        {t('app.kuaiplm.common.actions.delete')}
+                        {t('common.delete')}
                       </Button>
                     </Space>
                     );
@@ -979,7 +979,7 @@ const RdProjectDetailPage: React.FC = () => {
         <ProFormText name="target_code" hidden />
         <ProFormText name="target_name" hidden />
         <ProFormText name="material_id" hidden />
-        <ProFormTextArea name="notes" label={t('app.kuaiplm.rdProjects.form.notes')} />
+        <ProFormTextArea name="notes" label={t('common.remark')} />
       </FormModalTemplate>
 
       <FormModalTemplate
@@ -1038,7 +1038,7 @@ const RdProjectDetailPage: React.FC = () => {
         <ProFormText name="assignee_name" label={t('app.kuaiplm.rdProjects.detail.task.assignee')} />
         <ProFormSelect
           name="status"
-          label={t('app.kuaiplm.common.columns.status')}
+          label={t('common.status')}
           initialValue="TODO"
           options={taskStatusOptions}
         />
@@ -1051,7 +1051,7 @@ const RdProjectDetailPage: React.FC = () => {
             t,
           })}
         />
-        <ProFormTextArea name="description" label={t('app.kuaiplm.rdProjects.detail.task.description')} />
+        <ProFormTextArea name="description" label={t('common.remark')} />
       </FormModalTemplate>
 
       <FormModalTemplate
@@ -1106,17 +1106,17 @@ const RdProjectDetailPage: React.FC = () => {
         />
         <ProFormSelect
           name="status"
-          label={t('app.kuaiplm.common.columns.status')}
+          label={t('common.status')}
           initialValue="PENDING"
           options={deliverableStatusOptions}
         />
         <ProFormText name="file_url" label={t('app.kuaiplm.rdProjects.detail.deliverable.fileUrl')} />
         <ProFormText name="file_name" label={t('app.kuaiplm.rdProjects.detail.deliverable.fileName')} />
-        <ProFormTextArea name="description" label={t('app.kuaiplm.rdProjects.detail.task.description')} />
+        <ProFormTextArea name="description" label={t('common.remark')} />
       </FormModalTemplate>
 
       <FormModalTemplate
-        title={`${t('app.kuaiplm.common.actions.edit')} - ${editingGate?.gate_name ?? ''}`}
+        title={`${t('common.edit')} - ${editingGate?.gate_name ?? ''}`}
         open={gateEditOpen}
         grid
         onClose={() => {
@@ -1214,7 +1214,7 @@ const RdProjectDetailPage: React.FC = () => {
         <Space direction="vertical" style={{ width: '100%' }}>
           <Alert type="info" showIcon title={t('app.kuaiplm.rdProjects.detail.trialWo.hint')} />
           <div>
-            <Typography.Text>{t('app.kuaiplm.rdProjects.detail.trialWo.quantity')}</Typography.Text>
+            <Typography.Text>{t('common.quantity')}</Typography.Text>
             <InputNumber
               min={1}
               value={pushQty}
@@ -1223,7 +1223,7 @@ const RdProjectDetailPage: React.FC = () => {
             />
           </div>
           <div>
-            <Typography.Text>{t('app.kuaiplm.rdProjects.form.notes')}</Typography.Text>
+            <Typography.Text>{t('common.remark')}</Typography.Text>
             <Input.TextArea
               rows={3}
               value={pushNotes}

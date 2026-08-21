@@ -375,7 +375,7 @@ const EquipmentStatusPage: React.FC = () => {
             {autoRefresh ? t(`${P}.pauseAutoRefresh`) : t(`${P}.startAutoRefresh`)}
           </Button>
           <Button icon={<ReloadOutlined />} onClick={fetchStatusList} loading={loading}>
-            {t(`${P}.refresh`)}
+            {t('common.refresh')}
           </Button>
         </Space>
       </div>
@@ -707,7 +707,7 @@ const EquipmentStatusPage: React.FC = () => {
         />
         <ProFormTextArea
           name="remark"
-          label={t(`${P}.form.remark`)}
+          label={t('common.remark')}
           placeholder={t(`${P}.form.remarkPlaceholder`)}
         />
       </FormModalTemplate>

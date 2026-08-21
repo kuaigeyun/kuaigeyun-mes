@@ -111,7 +111,7 @@ const MoldCalibrationsPage: React.FC = () => {
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || t(`${P}.saveFailed`));
+      messageApi.error(e?.message || t('common.saveFailed'));
       throw e;
     }
   };
@@ -149,7 +149,7 @@ const MoldCalibrationsPage: React.FC = () => {
         dataIndex: 'expiry_date',
         render: (_, r) => (r.expiry_date ? formatDateTime(r.expiry_date, 'YYYY-MM-DD') : '-'),
       },
-      { title: t(`${P}.formRemark`), dataIndex: 'remark', span: 2 },
+      { title: t('common.remark'), dataIndex: 'remark', span: 2 },
     ],
     [t],
   );
@@ -228,7 +228,7 @@ const MoldCalibrationsPage: React.FC = () => {
         hideInSearch: true,
         render: (_, r) => (r.expiry_date ? formatDateTime(r.expiry_date, 'YYYY-MM-DD') : '-'),
       },
-      { title: t(`${P}.colRemark`), dataIndex: 'remark', ellipsis: true, hideInSearch: true },
+      { title: t('common.remark'), dataIndex: 'remark', ellipsis: true, hideInSearch: true },
       ...buildDocumentAuditColumns<MoldCalibration>(t),
       {
         title: t('common.actions'),
@@ -341,7 +341,7 @@ const MoldCalibrationsPage: React.FC = () => {
           fieldProps={EQUIPMENT_DATE_FIELD_PROPS}
         />
         <DocumentAttachmentsField category="mold_calibration_attachments" />
-        <ProFormText name="remark" label={t(`${P}.formRemark`)} colProps={{ span: 24 }} />
+        <ProFormText name="remark" label={t('common.remark')} colProps={{ span: 24 }} />
       </FormModalTemplate>
 
       <DetailDrawerTemplate

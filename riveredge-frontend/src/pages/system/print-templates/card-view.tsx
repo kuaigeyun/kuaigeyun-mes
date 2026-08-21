@@ -191,7 +191,7 @@ const CardView: React.FC = () => {
         config: EMPTY_VISUAL_PRINT_CONFIG(values.document_type),
         is_active: true,
       });
-      handleSuccess(t('pages.system.printTemplates.createSuccess'));
+      handleSuccess(t('common.createSuccess'));
       setCreateModalVisible(false);
       loadTemplates();
     } catch (error: any) {
@@ -286,10 +286,10 @@ const CardView: React.FC = () => {
   const handleDelete = async (template: PrintTemplate) => {
     try {
       await deletePrintTemplate(template.uuid);
-      handleSuccess(t('pages.system.printTemplates.deleteSuccess'));
+      handleSuccess(t('common.deleteSuccess'));
       loadTemplates();
     } catch (error: any) {
-      handleError(error, t('pages.system.printTemplates.deleteFailed'));
+      handleError(error, t('common.deleteFailed'));
     }
   };
 
@@ -341,7 +341,7 @@ const CardView: React.FC = () => {
             onClick={loadTemplates}
             loading={loading}
           >
-            {t('pages.system.printTemplates.refreshShort')}
+            {t('common.refresh')}
           </Button>,
         ]}
       >
@@ -455,7 +455,7 @@ const CardView: React.FC = () => {
                           okText={t('common.confirm')}
                           cancelText={t('common.cancel')}
                         >
-                          <Tooltip title={t('pages.system.printTemplates.deleteTooltip')}>
+                          <Tooltip title={t('common.delete')}>
                             <DeleteOutlined
                               style={{ fontSize: 16, color: '#ff4d4f' }}
                             />
@@ -496,14 +496,14 @@ const CardView: React.FC = () => {
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printTemplates.statusLabel')}</Text>
                             <Tag color={template.is_active ? 'success' : 'default'}>
-                              {template.is_active ? t('pages.system.printTemplates.enabled') : t('pages.system.printTemplates.disabled')}
+                              {template.is_active ? t('common.enabled') : t('common.disabled')}
                             </Tag>
                           </div>
                           
                           {template.is_default && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printTemplates.defaultLabel')}</Text>
-                              <Tag color="processing">{t('pages.system.printTemplates.isDefault')}</Tag>
+                              <Tag color="processing">{t('common.yes')}</Tag>
                             </div>
                           )}
                           
@@ -566,7 +566,7 @@ const CardView: React.FC = () => {
                 {getTypeInfo(currentTemplate.type).text}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label={t('pages.system.printTemplates.labelDescription')}>
+            <Descriptions.Item label={t('common.remark')}>
               {currentTemplate.description || '-'}
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.printTemplates.columnContent')}>
@@ -597,14 +597,14 @@ const CardView: React.FC = () => {
                 </pre>
               </Descriptions.Item>
             )}
-            <Descriptions.Item label={t('pages.system.printTemplates.labelActive')}>
+            <Descriptions.Item label={t('common.enabled')}>
               <Tag color={currentTemplate.is_active ? 'success' : 'default'}>
-                {currentTemplate.is_active ? t('pages.system.printTemplates.enabled') : t('pages.system.printTemplates.disabled')}
+                {currentTemplate.is_active ? t('common.enabled') : t('common.disabled')}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.printTemplates.labelDefault')}>
               <Tag color={currentTemplate.is_default ? 'processing' : 'default'}>
-                {currentTemplate.is_default ? t('pages.system.printTemplates.isDefault') : t('pages.system.printTemplates.noLabel')}
+                {currentTemplate.is_default ? t('common.yes') : t('common.no')}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.printTemplates.usageLabel')}>
@@ -615,10 +615,10 @@ const CardView: React.FC = () => {
                 ? formatDateTimeBySiteSetting(currentTemplate.last_used_at)
                 : '-'}
             </Descriptions.Item>
-            <Descriptions.Item label={t('pages.system.printTemplates.columnCreatedAt')}>
+            <Descriptions.Item label={t('common.createdAt')}>
               {formatDateTimeBySiteSetting(currentTemplate.created_at)}
             </Descriptions.Item>
-            <Descriptions.Item label={t('pages.system.printTemplates.columnUpdatedAt')}>
+            <Descriptions.Item label={t('common.updatedAt')}>
               {formatDateTimeBySiteSetting(currentTemplate.updated_at)}
             </Descriptions.Item>
           </Descriptions>
@@ -869,7 +869,7 @@ const CardView: React.FC = () => {
         />
         <ProFormTextArea
           name="description"
-          label={t('pages.system.printTemplates.labelDescription')}
+          label={t('common.remark')}
           fieldProps={{ rows: 4, placeholder: t('pages.system.printTemplates.descPlaceholder') }}
         />
       </FormModalTemplate>

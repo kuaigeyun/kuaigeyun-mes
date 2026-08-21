@@ -728,7 +728,7 @@ const QuotationsPage: React.FC = () => {
             labelKey: 'app.kuaizhizao.quotation.import.materialCode',
             aliases: ['产品', '产品编号'],
           },
-          { field: 'quantity', required: true, labelKey: 'app.kuaizhizao.quotation.import.quantity', aliases: ['数量'] },
+          { field: 'quantity', required: true, labelKey: 'common.quantity', aliases: ['数量'] },
           { field: 'unitPrice', labelKey: 'app.kuaizhizao.quotation.import.unitPrice', aliases: ['单价'] },
           { field: 'delivery', labelKey: 'app.kuaizhizao.quotation.import.deliveryDate', aliases: ['交货日期'] },
           { field: 'validUntil', labelKey: 'app.kuaizhizao.quotation.form.validUntil', aliases: ['有效期至'] },
@@ -740,7 +740,7 @@ const QuotationsPage: React.FC = () => {
           { field: 'currency', labelKey: 'app.kuaizhizao.quotation.form.currency', aliases: ['币种'] , options: quotationImportDict.CURRENCY },
           { field: 'priceType', labelKey: 'app.kuaizhizao.salesOrder.priceType', aliases: ['价格类型'] , options: buildImportPriceTypeOptions(t) },
           { field: 'salesman', labelKey: 'app.kuaizhizao.quotation.import.salesman', aliases: ['业务员'] },
-          { field: 'notes', labelKey: 'app.kuaizhizao.quotation.import.notes', aliases: ['备注'] },
+          { field: 'notes', labelKey: 'common.remark', aliases: ['备注'] },
         ],
         [
           t('app.kuaizhizao.quotation.importExample.code'),
@@ -1391,7 +1391,7 @@ const QuotationsPage: React.FC = () => {
             hideInTable: true,
           },
           {
-            title: t('app.kuaizhizao.quotation.import.quantity'),
+            title: t('common.quantity'),
             dataIndex: 'quote_quantity',
             width: 120,
             align: 'right',
@@ -2993,7 +2993,7 @@ const QuotationsPage: React.FC = () => {
     { title: t('app.kuaizhizao.salesOrder.shippingAddress'), dataIndex: 'shipping_address', span: 3 },
     // —— 关联与其它 ——
     { title: t('app.kuaizhizao.quotation.form.linkedSalesOrder'), dataIndex: 'sales_order_code' },
-    { title: t('app.kuaizhizao.salesOrder.notes'), dataIndex: 'notes', span: 3 },
+    { title: t('common.remark'), dataIndex: 'notes', span: 3 },
     // —— 系统信息 ——
     { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
@@ -3356,7 +3356,7 @@ const QuotationsPage: React.FC = () => {
                         ),
                       },
                       {
-                        title: t('app.kuaizhizao.salesOrder.unit'),
+                        title: t('common.unit'),
                         dataIndex: 'material_unit',
                         width: 108,
                         ...QUOTATION_DETAIL_TEXT_COL,
@@ -3379,7 +3379,7 @@ const QuotationsPage: React.FC = () => {
                         ),
                       },
                       {
-                        title: t('app.kuaizhizao.salesOrder.quantity'),
+                        title: t('common.quantity'),
                         dataIndex: 'quote_quantity',
                         width: 112,
                         ...QUOTATION_DETAIL_NUM_COL,
@@ -3390,7 +3390,7 @@ const QuotationsPage: React.FC = () => {
                             style={{ margin: 0 }}
                           >
                             <InputNumber
-                              placeholder={t('app.kuaizhizao.salesOrder.quantity')}
+                              placeholder={t('common.quantity')}
                               min={0.01}
                               precision={2}
                               style={{ width: '100%' }}
@@ -3670,13 +3670,13 @@ const QuotationsPage: React.FC = () => {
                         ),
                       },
                       {
-                        title: t('app.kuaizhizao.salesOrder.notes'),
+                        title: t('common.remark'),
                         dataIndex: 'notes',
                         width: 140,
                         ...QUOTATION_DETAIL_TEXT_COL,
                         render: (_: unknown, __: unknown, index: number) => (
                           <Form.Item name={[index, 'notes']} style={{ margin: 0 }}>
-                            <Input placeholder={t('app.kuaizhizao.salesOrder.notes')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
+                            <Input placeholder={t('common.remark')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                           </Form.Item>
                         ),
                       },
@@ -3782,7 +3782,7 @@ const QuotationsPage: React.FC = () => {
         }}
       </Form.Item>
       <QuotationFormSummary />
-      <ProFormTextArea name="notes" label={t('app.kuaizhizao.salesOrder.notes')} fieldProps={{ rows: 2 }} />
+      <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 2 }} />
       </DetailDrawerSection>
 
       <DetailDrawerSection
@@ -3810,7 +3810,7 @@ const QuotationsPage: React.FC = () => {
           onCancel={() => setImportModalVisible(false)}
           onConfirm={handleItemImport}
           title={t('app.kuaizhizao.quotation.importItemsTitle')}
-          headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('app.kuaizhizao.salesOrder.unit'), t('app.kuaizhizao.salesOrder.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
+          headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('common.unit'), t('common.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
           exampleRow={['MAT001', 'Spec X', pickImportExampleValue(quotationLineUnitOptions, 'PCS'), '100', '1.5', '2026-03-01']}
           columnOptions={quotationLineImportColumnOptions}
         />
@@ -4285,7 +4285,7 @@ const QuotationsPage: React.FC = () => {
         collaborationTitleSuffix={
           showQuotationLifecycleNextInTitle ? (
             <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-              {t('components.uniLifecycle.nextStep')}：
+              {t('common.next')}：
               {quotationNextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
             </Typography.Text>
           ) : undefined
@@ -4330,7 +4330,7 @@ const QuotationsPage: React.FC = () => {
                         { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true, ...QUOTATION_DETAIL_TEXT_COL },
                         { title: t('app.kuaizhizao.salesOrder.spec'), dataIndex: 'material_spec', width: 120, ellipsis: true, ...QUOTATION_DETAIL_TEXT_COL },
                         {
-                          title: t('app.kuaizhizao.salesOrder.unit'),
+                          title: t('common.unit'),
                           dataIndex: 'material_unit',
                           width: 72,
                           ellipsis: true,
@@ -4429,7 +4429,7 @@ const QuotationsPage: React.FC = () => {
                           },
                         },
                         { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', width: 120, ellipsis: true, ...QUOTATION_DETAIL_TEXT_COL },
-                        { title: t('app.kuaizhizao.salesOrder.notes'), dataIndex: 'notes', width: 160, ellipsis: true, ...QUOTATION_DETAIL_TEXT_COL },
+                        { title: t('common.remark'), dataIndex: 'notes', width: 160, ellipsis: true, ...QUOTATION_DETAIL_TEXT_COL },
                       ];
                     })()}
                     dataSource={quotationDetail.items}

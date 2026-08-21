@@ -454,11 +454,11 @@ const SalesContractsPage: React.FC = () => {
     () => [
       t('app.kuaizhizao.salesContract.importHeaders.materialCode'),
       t('app.kuaizhizao.salesContract.importHeaders.spec'),
-      t('app.kuaizhizao.salesContract.importHeaders.unit'),
-      t('app.kuaizhizao.salesContract.importHeaders.quantity'),
+      t('common.unit'),
+      t('common.quantity'),
       t('app.kuaizhizao.salesContract.importHeaders.unitPrice'),
       t('app.kuaizhizao.salesContract.importHeaders.deliveryDate'),
-      t('app.kuaizhizao.salesContract.importHeaders.notes'),
+      t('common.remark'),
     ],
     [t],
   );
@@ -1442,7 +1442,7 @@ const SalesContractsPage: React.FC = () => {
             : '-',
       },
       {
-        title: t('app.kuaizhizao.salesOrder.status'),
+        title: t('common.status'),
         dataIndex: 'status',
         width: 100,
         align: 'center' as const,
@@ -2029,7 +2029,7 @@ const SalesContractsPage: React.FC = () => {
           </Card>
         )}
 
-        <ProFormTextArea name="notes" label={t('app.kuaizhizao.salesOrder.notes')} fieldProps={{ rows: 2 }} />
+        <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 2 }} />
       </DetailDrawerSection>
 
       <DetailDrawerSection
@@ -2594,7 +2594,7 @@ const SalesContractsPage: React.FC = () => {
 
     } catch (e: any) {
 
-      messageApi.error(e?.message || t('app.kuaizhizao.salesOrder.operationFailed'));
+      messageApi.error(e?.message || t('common.operationFailed'));
 
     }
 
@@ -2833,7 +2833,7 @@ const SalesContractsPage: React.FC = () => {
           const canDelete = record.capabilities?.delete?.allowed === true && contractPerms.canDelete;
           const parts: React.ReactNode[] = [
             <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record.id!)}>
-              {t('app.kuaizhizao.salesOrder.viewDetail')}
+              {t('common.detail')}
             </Button>,
           ];
           if (canEdit) {
@@ -3194,7 +3194,7 @@ const SalesContractsPage: React.FC = () => {
         ),
     },
 
-    { title: t('app.kuaizhizao.salesOrder.notes'), dataIndex: 'notes', span: 3 },
+    { title: t('common.remark'), dataIndex: 'notes', span: 3 },
 
   ],
     [t, contractTypeLabels, salesCommonLabels],
@@ -3442,7 +3442,7 @@ const SalesContractsPage: React.FC = () => {
               items = items.filter((d) => d.id != null && keys.includes(d.id));
             }
             if (items.length === 0) {
-              messageApi.warning(t('app.kuaizhizao.salesContract.noExportData'));
+              messageApi.warning(t('common.exportNoData'));
               return;
             }
             await downloadRecordsAsXlsx(
@@ -3451,7 +3451,7 @@ const SalesContractsPage: React.FC = () => {
             );
             messageApi.success(t('app.kuaizhizao.salesContract.exportSuccess', { count: items.length }));
           } catch (error: any) {
-            messageApi.error(error?.message || t('app.kuaizhizao.salesContract.exportFailed'));
+            messageApi.error(error?.message || t('common.exportFailed'));
           }
         }}
 
@@ -3750,7 +3750,7 @@ const SalesContractsPage: React.FC = () => {
 
                       { title: t('app.kuaizhizao.salesContract.plannedAmount'), dataIndex: 'planned_amount', render: (v) => `¥${Number(v ?? 0).toFixed(2)}` },
 
-                      { title: t('app.kuaizhizao.salesOrder.status'), dataIndex: 'status' },
+                      { title: t('common.status'), dataIndex: 'status' },
 
                       { title: t('app.kuaizhizao.salesContract.receivableDoc'), dataIndex: 'receivable_code', render: (v) => v || '—' },
 
@@ -3915,7 +3915,7 @@ const SalesContractsPage: React.FC = () => {
 
             { title: t('app.kuaizhizao.salesContract.deltaAmount'), dataIndex: 'delta_amount', render: (v) => `¥${Number(v ?? 0).toFixed(2)}` },
 
-            { title: t('app.kuaizhizao.salesOrder.status'), dataIndex: 'status', width: 90, render: (v) => renderContractStatus(v) },
+            { title: t('common.status'), dataIndex: 'status', width: 90, render: (v) => renderContractStatus(v) },
 
             {
 
@@ -3929,7 +3929,7 @@ const SalesContractsPage: React.FC = () => {
 
                   {r.status === '草稿' ? (
 
-                    <Button type="link" size="small" onClick={() => handleChangeAction(r.id, 'submit')}>{t('app.kuaizhizao.salesOrder.submitOrder')}</Button>
+                    <Button type="link" size="small" onClick={() => handleChangeAction(r.id, 'submit')}>{t('common.submit')}</Button>
 
                   ) : null}
 
@@ -4116,7 +4116,7 @@ const SalesContractsPage: React.FC = () => {
                     },
                   },
                   {
-                    title: t('app.kuaizhizao.salesOrder.unit'),
+                    title: t('common.unit'),
                     dataIndex: 'material_unit',
                     width: 60,
                   },

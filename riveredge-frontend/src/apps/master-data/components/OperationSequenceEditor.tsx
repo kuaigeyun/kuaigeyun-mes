@@ -738,7 +738,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
               {t('app.master-data.operationSequence.replace')}
             </Button>
             <Button type="link" size="small" danger style={{ paddingInline: 4, flexShrink: 0 }} onClick={() => handleDeleteOperation(record.uuid)}>
-              {t('app.master-data.operationSequence.delete')}
+              {t('common.delete')}
             </Button>
           </div>
         ),

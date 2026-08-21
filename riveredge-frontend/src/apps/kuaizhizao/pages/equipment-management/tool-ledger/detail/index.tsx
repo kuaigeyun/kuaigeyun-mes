@@ -209,7 +209,7 @@ const ToolLedgerDetailPage: React.FC = () => {
         },
       },
       { title: t('app.kuaizhizao.toolLedger.colTotalUsageCount'), dataIndex: 'total_usage_count' },
-      { title: t('app.kuaizhizao.toolLedger.fieldDescription'), dataIndex: 'description', span: 2 },
+      { title: t('common.remark'), dataIndex: 'description', span: 2 },
       { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
       { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
     ],
@@ -226,7 +226,7 @@ const ToolLedgerDetailPage: React.FC = () => {
         render: (v: string) => (v ? formatDateBySiteSetting(v) : '-'),
       },
       {
-        title: t('app.kuaizhizao.toolOps.maintenance.col.status'),
+        title: t('common.status'),
         dataIndex: 'status',
         width: 90,
         render: (v: string) => (v ? renderDocumentStatusTag(v, v) : '-'),

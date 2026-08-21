@@ -232,7 +232,7 @@ export const UniImport: React.FC<UniImportProps> = ({
   const { t } = useTranslation();
   const resolvedTitle = title ?? t('components.uniImport.defaultTitle');
   const resolvedConfirmText = confirmText ?? t('components.uniImport.confirmImport');
-  const resolvedCancelText = cancelText ?? t('components.uniImport.cancel');
+  const resolvedCancelText = cancelText ?? t('common.cancel');
   const location = useLocation();
   const getPreference = useUserPreferenceStore((s) => s.getPreference);
   const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
@@ -503,7 +503,7 @@ export const UniImport: React.FC<UniImportProps> = ({
         </>
       ),
       okText: t('components.uniImport.downloadTemplateConfirmOk'),
-      cancelText: t('components.uniImport.cancel'),
+      cancelText: t('common.cancel'),
       onOk: async () => {
         try {
           setXlsxBusy(true);
@@ -580,7 +580,7 @@ export const UniImport: React.FC<UniImportProps> = ({
         </>
       ),
       okText: t('components.uniImport.mappingImportConfirmOk'),
-      cancelText: t('components.uniImport.cancel'),
+      cancelText: t('common.cancel'),
       onOk: () => {
         const input = mappingFileInputRef.current;
         if (!input) return;

@@ -418,12 +418,12 @@ const BatchingCenterPage: React.FC = () => {
                           align: 'right' as const,
                           render: (_: any, __: any, index: number) => (
                             <AntForm.Item name={[index, 'required_quantity']} rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.required') }, { type: 'number', min: 0.0001, message: t('app.kuaizhizao.batchingCenter.qtyGtZero') }]} style={{ margin: 0 }}>
-                              <InputNumber placeholder={t('app.kuaizhizao.warehouseCommon.colQuantity')} min={0} precision={4} style={{ width: '100%' }} size="small" />
+                              <InputNumber placeholder={t('common.quantity')} min={0} precision={4} style={{ width: '100%' }} size="small" />
                             </AntForm.Item>
                           ),
                         },
                         {
-                          title: t('app.kuaizhizao.warehouseCommon.colActions'),
+                          title: t('common.actions'),
                           width: 60,
                           render: (_: any, __: any, index: number) => (
                             <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
@@ -507,7 +507,7 @@ const BatchingCenterPage: React.FC = () => {
                 <DocumentAttachmentsField category="batching_order_attachments" />
                 <ProFormTextArea
                   name="remarks"
-                  label={t('app.kuaizhizao.warehouseCommon.colRemarks')}
+                  label={t('common.remark')}
                   placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')}
                   fieldProps={{ rows: 3 }}
                   colProps={{ span: 24 }}
@@ -533,7 +533,7 @@ const BatchingCenterPage: React.FC = () => {
           { title: t('app.kuaizhizao.warehouseCommon.colWorkOrderCode'), dataIndex: 'code', width: 180 },
           { title: t('app.kuaizhizao.warehouseCommon.colWorkOrderName'), dataIndex: 'name', width: 220 },
           {
-            title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+            title: t('common.status'),
             dataIndex: 'status',
             width: 140,
             align: 'center' as const,

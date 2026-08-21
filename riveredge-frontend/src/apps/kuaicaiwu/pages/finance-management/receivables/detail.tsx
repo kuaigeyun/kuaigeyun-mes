@@ -90,7 +90,7 @@ const ReceivableDetail: React.FC = () => {
 
   const pageActions = data ? (
     <>
-      <Button onClick={() => navigate(-1)}>{t('app.kuaicaiwu.common.back')}</Button>
+      <Button onClick={() => navigate(-1)}>{t('common.back')}</Button>
       <UniWorkflowActions
         record={data}
         apiPrefix="/apps/kuaicaiwu/receivables"
@@ -163,7 +163,7 @@ const ReceivableDetail: React.FC = () => {
                 </ProDescriptions.Item>
                 <ProDescriptions.Item label={t('app.kuaicaiwu.common.businessStatus')}>{data.status}</ProDescriptions.Item>
                 <ProDescriptions.Item label={t('app.kuaicaiwu.common.reviewStatus')}>{data.review_status}</ProDescriptions.Item>
-                <ProDescriptions.Item label={t('app.kuaicaiwu.common.notes')} span={3}>
+                <ProDescriptions.Item label={t('common.remark')} span={3}>
                   {data.notes || '-'}
                 </ProDescriptions.Item>
               </ProDescriptions>

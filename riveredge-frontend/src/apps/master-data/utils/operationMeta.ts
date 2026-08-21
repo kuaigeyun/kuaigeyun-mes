@@ -166,7 +166,7 @@ export function renderOperationActiveStatusTag(
   return React.createElement(
     MarkerTag,
     { color: active ? 'success' : 'default' },
-    active ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled'),
+    active ? t('common.enabled') : t('common.disabled'),
   );
 }
 

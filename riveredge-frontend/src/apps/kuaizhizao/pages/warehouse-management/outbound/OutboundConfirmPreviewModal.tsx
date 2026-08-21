@@ -832,7 +832,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       onCancel={onClose}
       footer={
         <Space>
-          <Button onClick={onClose}>{t('app.kuaizhizao.warehouseOutbound.action.cancel')}</Button>
+          <Button onClick={onClose}>{t('common.cancel')}</Button>
           {outboundType === 'sales_delivery' && oqcEnsure?.requires_oqc && oqcBlocksConfirm ? (
             <Button type="primary" onClick={goInspectOqc}>
               {t('app.kuaizhizao.warehouseOutbound.oqcReview.goInspect')}

@@ -42,7 +42,7 @@ export const departmentFormSchema: FieldConfig[] = [
   {
     name: 'description',
     type: 'textarea',
-    labelKey: 'field.department.remark',
+    labelKey: 'common.remark',
     placeholderKey: 'field.department.remarkPlaceholder',
     colSpan: 24,
     fieldProps: { rows: 2 },
@@ -50,6 +50,6 @@ export const departmentFormSchema: FieldConfig[] = [
   {
     name: 'is_active',
     type: 'switch',
-    labelKey: 'field.department.isActive',
+    labelKey: 'common.enabled',
   },
 ];

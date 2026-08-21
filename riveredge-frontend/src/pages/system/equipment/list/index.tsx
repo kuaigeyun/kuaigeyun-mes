@@ -304,14 +304,14 @@ const EquipmentListPage: React.FC = () => {
       render: (_: unknown, record: Equipment) => renderEquipmentStatus(record.status),
     },
     {
-      title: t('pages.system.equipment.columnActive'),
+      title: t('common.enabled'),
       dataIndex: 'is_active',
       render: (_: unknown, record: Equipment) =>
-        renderSystemActiveTag(t, record?.is_active, 'pages.system.equipment.enabled', 'pages.system.equipment.disabled'),
+        renderSystemActiveTag(t, record?.is_active, 'common.enabled', 'common.disabled'),
     },
-    { title: t('pages.system.equipment.labelDescription'), dataIndex: 'description' },
-    { title: t('pages.system.equipment.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-    { title: t('pages.system.equipment.labelUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    { title: t('common.remark'), dataIndex: 'description' },
+    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
 
   const columns: ProColumns<Equipment>[] = [
@@ -383,19 +383,19 @@ const EquipmentListPage: React.FC = () => {
       render: (_, record) => renderEquipmentStatus(record.status),
     },
     {
-      title: t('pages.system.equipment.columnActive'),
+      title: t('common.enabled'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('pages.system.equipment.enabled'), status: 'Success' },
-        false: { text: t('pages.system.equipment.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) =>
-        renderSystemActiveTag(t, record.is_active, 'pages.system.equipment.enabled', 'pages.system.equipment.disabled'),
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
-      title: t('pages.system.equipment.columnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -403,7 +403,7 @@ const EquipmentListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('pages.system.equipment.columnActions'),
+      title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
       render: (_, record) => [
@@ -414,7 +414,7 @@ const EquipmentListPage: React.FC = () => {
               icon={<EyeOutlined />}
               onClick={() => handleView(record)}
             >
-              {t('pages.system.equipment.view')}
+              {t('common.view')}
             </Button>,
             <Button {...rowActionKind('update')}
               key="edit"
@@ -423,7 +423,7 @@ const EquipmentListPage: React.FC = () => {
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
             >
-              {t('pages.system.equipment.edit')}
+              {t('common.edit')}
             </Button>,
             <Button {...rowActionKind('read')}
               key="trace"
@@ -440,7 +440,7 @@ const EquipmentListPage: React.FC = () => {
               onConfirm={() => handleDelete(record)}
             >
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('pages.system.equipment.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>,
           ],
@@ -479,7 +479,7 @@ const EquipmentListPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText={t('pages.system.equipment.batchDelete')}
+          deleteButtonText={t('common.batchDelete')}
           deleteConfirmTitle={t('pages.system.equipment.batchDeleteTitle')}
           deleteConfirmDescription={(c) => t('pages.system.equipment.batchDeleteDescription', { count: c })}
           showImportButton={false}
@@ -631,12 +631,12 @@ const EquipmentListPage: React.FC = () => {
         />
         <ProFormSwitch
           name="is_active"
-          label={t('pages.system.equipment.columnActive')}
+          label={t('common.enabled')}
           initialValue={true}
         />
         <ProFormTextArea
           name="description"
-          label={t('pages.system.equipment.labelDescription')}
+          label={t('common.remark')}
           placeholder={t('pages.system.equipment.descPlaceholder')}
         />
       </FormModalTemplate>

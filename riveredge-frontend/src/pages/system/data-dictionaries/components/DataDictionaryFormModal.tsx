@@ -63,10 +63,10 @@ export const DataDictionaryFormModal: React.FC<DataDictionaryFormModalProps> = (
       setFormLoading(true);
       if (isEdit && editUuid) {
         await updateDataDictionary(editUuid, values as UpdateDataDictionaryData);
-        messageApi.success(t('pages.system.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createDataDictionary(values as CreateDataDictionaryData);
-        messageApi.success(t('pages.system.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
       onClose();
       formRef.current?.resetFields();

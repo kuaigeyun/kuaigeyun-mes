@@ -102,7 +102,7 @@ export const CostCalculationDetailDrawer: React.FC<CostCalculationDetailDrawerPr
         { title: t('app.kuaicaiwu.costCalculation.col.productCode'), dataIndex: 'product_code' },
         { title: t('app.kuaicaiwu.costCalculation.col.productName'), dataIndex: 'product_name' },
         {
-          title: t('app.kuaicaiwu.costCommon.col.quantity'),
+          title: t('common.quantity'),
           dataIndex: 'quantity',
           render: (_, row) => formatQuantity(row.quantity),
         },
@@ -131,11 +131,11 @@ export const CostCalculationDetailDrawer: React.FC<CostCalculationDetailDrawerPr
           dataIndex: 'unit_cost',
           render: (_, row) => formatMoney(row.unit_cost),
         },
-        { title: t('app.kuaicaiwu.costCommon.remark'), dataIndex: 'remark', span: 3 },
+        { title: t('common.remark'), dataIndex: 'remark', span: 3 },
         { title: t('app.kuaicaiwu.costCommon.col.createdBy'), dataIndex: 'created_by_name' },
-        { title: t('app.kuaicaiwu.costCommon.col.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+        { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
         { title: t('app.kuaicaiwu.costCommon.col.updatedBy'), dataIndex: 'updated_by_name' },
-        { title: t('app.kuaicaiwu.costCommon.col.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+        { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
       ] as ProDescriptionsItemProps<CostCalculationDetail>[]),
     [t],
   );

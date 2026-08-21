@@ -214,11 +214,11 @@ const FabricationRawMaterialWizard: React.FC<FabricationRawMaterialWizardProps> 
         <Space>
           <Button onClick={handleClose}>{t('app.master-data.fabricationWizard.skipLater')}</Button>
           {currentStep > 0 && (
-            <Button onClick={handlePrev}>{t('app.master-data.fabricationWizard.prev')}</Button>
+            <Button onClick={handlePrev}>{t('common.previous')}</Button>
           )}
           {currentStep < 2 ? (
             <Button type="primary" onClick={handleNext}>
-              {t('app.master-data.fabricationWizard.next')}
+              {t('common.next')}
             </Button>
           ) : (
             <Button type="primary" loading={submitting} onClick={handleSubmit}>

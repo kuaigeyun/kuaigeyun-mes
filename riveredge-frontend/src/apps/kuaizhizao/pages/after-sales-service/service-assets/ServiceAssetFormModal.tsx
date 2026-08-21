@@ -137,10 +137,10 @@ const ServiceAssetFormModal: React.FC<ServiceAssetFormModalProps> = ({
         <Form.Item name="warranty_policy" label={t('app.kuaizhizao.afterSalesService.serviceAsset.field.warrantyPolicy')}>
           <Input />
         </Form.Item>
-        <Form.Item name="status" label={t('app.kuaizhizao.afterSalesService.serviceAsset.field.status')}>
+        <Form.Item name="status" label={t('common.status')}>
           <Select options={STATUS_OPTIONS.map((value) => ({ value, label: value }))} />
         </Form.Item>
-        <Form.Item name="notes" label={t('app.kuaizhizao.afterSalesService.serviceAsset.field.notes')}>
+        <Form.Item name="notes" label={t('common.remark')}>
           <Input.TextArea rows={3} />
         </Form.Item>
       </Form>

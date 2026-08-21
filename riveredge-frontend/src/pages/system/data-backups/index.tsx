@@ -450,7 +450,7 @@ const DataBackupsPage: React.FC = () => {
             okText={t('common.confirm')}
             cancelText={t('common.cancel')}
           >
-            <Tooltip title={t('pages.system.dataBackups.deleteTooltip')}>
+            <Tooltip title={t('common.delete')}>
               <DeleteOutlined
                 style={{ fontSize: 16, color: '#ff4d4f' }}
               />
@@ -610,7 +610,7 @@ const DataBackupsPage: React.FC = () => {
       resizable: false,
     },
     {
-      title: t('pages.system.dataBackups.columnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       key: 'created_at',
       valueType: 'dateTime',
@@ -622,7 +622,7 @@ const DataBackupsPage: React.FC = () => {
       resizable: false,
     },
     {
-      title: t('pages.system.dataBackups.columnStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'lifecycle',
       valueEnum: {
@@ -640,7 +640,7 @@ const DataBackupsPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('pages.system.dataBackups.columnActions'),
+      title: t('common.actions'),
       key: 'action',
       valueType: 'option',
       fixed: 'right',
@@ -678,7 +678,7 @@ const DataBackupsPage: React.FC = () => {
             cancelText={t('common.cancel')}
           >
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              {t('pages.system.dataBackups.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>,
         );
@@ -707,7 +707,7 @@ const DataBackupsPage: React.FC = () => {
       dataIndex: 'source_tenant_id',
       render: (_, r) => (r.source_tenant_id != null ? r.source_tenant_id : '-'),
     },
-    { title: t('pages.system.dataBackups.columnStatus'), dataIndex: 'status', render: (_, r) => getStatusTag(r.status) },
+    { title: t('common.status'), dataIndex: 'status', render: (_, r) => getStatusTag(r.status) },
     { title: t('pages.system.dataBackups.columnRestoreStatus'), dataIndex: 'restore_status', render: (_, r) => getRestoreStatusTag(r.restore_status, r.restore_error_message) },
     { title: t('pages.system.dataBackups.columnFilePath'), dataIndex: 'file_path', render: (_, r) => r.file_path || '-' },
     { title: t('pages.system.dataBackups.columnFileSize'), dataIndex: 'file_size', render: (_, r) => formatFileSize(r.file_size) },
@@ -718,12 +718,12 @@ const DataBackupsPage: React.FC = () => {
     { title: t('pages.system.dataBackups.columnRestoreCompletedAt'), dataIndex: 'restore_completed_at', valueType: 'dateTime' },
     { title: t('pages.system.dataBackups.columnRestoreError'), dataIndex: 'restore_error_message', render: (_, r) => r.restore_error_message || '-' },
     {
-      title: t('pages.system.dataBackups.columnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
     },
     {
-      title: t('pages.system.dataBackups.columnUpdatedAt'),
+      title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       valueType: 'dateTime',
     },
@@ -861,7 +861,7 @@ const DataBackupsPage: React.FC = () => {
                 }
               }
               if (items.length === 0) {
-                messageApi.warning(t('pages.system.dataBackups.noDataToExport'));
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               await downloadRecordsAsXlsx(
@@ -870,7 +870,7 @@ const DataBackupsPage: React.FC = () => {
               );
               messageApi.success(t('pages.system.dataBackups.exportSuccess', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || t('pages.system.dataBackups.exportFailed'));
+              messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
           viewTypes={['table', 'help']}

@@ -44,7 +44,7 @@ const DesignerToolbar: React.FC<{
   return (
     <div className="oa-form-designer-toolbar">
       <div className="oa-form-designer-toolbar__left">
-        <Tooltip title={t('app.kuaioa.formTemplate.designerBack')}>
+        <Tooltip title={t('common.back')}>
           <Button type="text" icon={<ArrowLeftOutlined />} onClick={onBack} />
         </Tooltip>
         <Input
@@ -67,7 +67,7 @@ const DesignerToolbar: React.FC<{
       </div>
       <div className="oa-form-designer-toolbar__right">
         <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={onSave}>
-          {t('app.kuaioa.formTemplate.designerSave')}
+          {t('common.save')}
         </Button>
       </div>
     </div>
@@ -159,7 +159,7 @@ const FormTemplateDesignerPage: React.FC = () => {
       messageApi.success(t('app.kuaioa.formTemplate.designerSaveSuccess'));
     } catch (error: unknown) {
       const err = error as { message?: string };
-      messageApi.error(err?.message || t('app.kuaioa.common.operationFailed'));
+      messageApi.error(err?.message || t('common.operationFailed'));
     } finally {
       setSaving(false);
     }

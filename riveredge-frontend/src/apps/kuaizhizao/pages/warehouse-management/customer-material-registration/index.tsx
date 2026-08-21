@@ -560,7 +560,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.operationFailed'));
+      messageApi.error(error?.message || t('common.operationFailed'));
     }
   };
 
@@ -599,7 +599,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       search: { order: 10 } as ProColumns['search'],
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: registrationStatusValueEnum,
@@ -652,7 +652,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colQuantity'),
+      title: t('common.quantity'),
       dataIndex: 'total_quantity',
       width: 90,
       align: 'right',
@@ -704,7 +704,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       },
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colActions'),
+      title: t('common.actions'),
       width: 280,
       fixed: 'right',
       render: (_, record) => (
@@ -720,7 +720,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           {record.capabilities?.cancel?.allowed && (resourcePerms.canAction?.('reject') ?? false) && (
             <Popconfirm title={t('app.kuaizhizao.customerMaterialRegistration.confirmCancel')} onConfirm={() => handleCancel(record)}>
               <Button {...rowActionKind('reject')} {...rowActionLabelKeep()}>
-                {t('app.kuaizhizao.warehouseCommon.cancel')}
+                {t('common.cancel')}
               </Button>
             </Popconfirm>
           )}
@@ -758,7 +758,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       render: (_, record) => formatQuantity(record.total_quantity ?? record.quantity),
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       render: (_, record) => {
         const status = String(record.status ?? '');
@@ -781,15 +781,15 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       dataIndex: 'processed_at',
       valueType: 'dateTime',
     },
-    { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 3 },
+    { title: t('common.remark'), dataIndex: 'remarks', span: 3 },
   ]), [t]);
 
   const detailItemColumns = useMemo(() => [
     { title: t('app.kuaizhizao.warehouseCommon.colMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
     { title: t('app.kuaizhizao.warehouseCommon.colMaterialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
     { title: t('app.kuaizhizao.warehouseCommon.colSpec'), dataIndex: 'material_spec', width: 100, ellipsis: true },
-    { title: t('app.kuaizhizao.warehouseCommon.colUnit'), dataIndex: 'material_unit', width: 70 },
-    { title: t('app.kuaizhizao.warehouseCommon.colQuantity'), dataIndex: 'quantity', width: 90, align: 'right' as const , render: formatQuantity },
+    { title: t('common.unit'), dataIndex: 'material_unit', width: 70 },
+    { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right' as const , render: formatQuantity },
     { title: t('app.kuaizhizao.warehouseCommon.colBatchNo'), dataIndex: 'batch_number', width: 120, ellipsis: true },
     {
       title: t('app.kuaizhizao.warehouseCommon.colSerialNo'),
@@ -880,7 +880,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       ),
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colUnit'),
+      title: t('common.unit'),
       dataIndex: 'material_unit',
       width: 90,
       render: (_: unknown, __: unknown, index: number) => (
@@ -902,7 +902,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       ),
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colQuantity'),
+      title: t('common.quantity'),
       dataIndex: 'quantity',
       width: 100,
       align: 'right' as const,
@@ -1205,7 +1205,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           />
         )}
         <DocumentAttachmentsField category="customer_material_registration_attachments" />
-        <ProFormTextArea name="remarks" label={t('app.kuaizhizao.warehouseCommon.colRemarks')} fieldProps={{ rows: 2 }} />
+        <ProFormTextArea name="remarks" label={t('common.remark')} fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
 
       <UniMaterialBatchPicker

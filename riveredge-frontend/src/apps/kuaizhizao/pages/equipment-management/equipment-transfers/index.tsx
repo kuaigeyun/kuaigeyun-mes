@@ -181,12 +181,12 @@ const EquipmentTransfersPage: React.FC = () => {
       { title: t(`${P}.col.transferDate`), dataIndex: 'transfer_date', valueType: 'date' },
       { title: t(`${P}.col.applicant`, { defaultValue: '申请人' }), dataIndex: 'applicant_name' },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
       { title: t(`${P}.form.reason`), dataIndex: 'reason', span: 2 },
-      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+      { title: t('common.remark'), dataIndex: 'remark', span: 2 },
       { title: t(`${P}.form.rejectReason`, { defaultValue: '驳回原因' }), dataIndex: 'reject_reason', span: 2 },
     ],
     [t],
@@ -210,7 +210,7 @@ const EquipmentTransfersPage: React.FC = () => {
         search: { order: 11 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         valueType: 'select',
         valueEnum: approvalStatusValueEnum,
@@ -273,7 +273,7 @@ const EquipmentTransfersPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<TransferApplication>(t),
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
         hideInSearch: true,
@@ -308,7 +308,7 @@ const EquipmentTransfersPage: React.FC = () => {
                 actionRef.current?.reload();
               }}
             >
-              {t(`${P}.action.submit`)}
+              {t('common.submit')}
             </Button>
           ) : null,
           perms.canAction?.('approve') && record.status === '已提交' ? (

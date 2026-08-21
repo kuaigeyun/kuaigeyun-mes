@@ -1,1 +1,0 @@
-import{j as t}from"./vendor-CxgTw_xo.js";import{N as a}from"./clearSessionQueries-B6bqWyg8.js";const s=()=>t.jsx(a,{to:"/apps/kuaicaiwu/cost-management/cost-calculations?cat=optimization",replace:!0});export{s as default};

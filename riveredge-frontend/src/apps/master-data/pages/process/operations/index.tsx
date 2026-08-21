@@ -86,7 +86,7 @@ const OperationsPage: React.FC = () => {
   );
 
   const operationActiveValueEnum = useMemo(
-    () => buildMasterCrudActiveValueEnum(t, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
+    () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
     [t],
   );
   
@@ -151,7 +151,7 @@ const OperationsPage: React.FC = () => {
           { field: 'name', required: true, labelKey: 'field.operation.name' },
           {
             field: 'description',
-            labelKey: 'field.operation.description',
+            labelKey: 'common.remark',
             aliases: ['备注', '描述'],
           },
           {
@@ -183,7 +183,7 @@ const OperationsPage: React.FC = () => {
           t('app.master-data.operations.importExample.code'),
           t('app.master-data.operations.importExample.name'),
           t('app.master-data.operations.importExample.description'),
-          t('app.master-data.operations.importExample.isActive'),
+          t('common.enabled'),
           'quantity',
           'simple',
           t('app.master-data.operations.importExample.defectTypes'),
@@ -205,9 +205,9 @@ const OperationsPage: React.FC = () => {
         dataIndex: 'name',
         render: (_: unknown, record: Operation) => resolvePresetOperationNameByName(record.name, t),
       },
-      { title: t('field.operation.description'), dataIndex: 'description', span: 2 },
+      { title: t('common.remark'), dataIndex: 'description', span: 2 },
       {
-        title: t('field.route.isActive'),
+        title: t('common.enabled'),
         dataIndex: 'isActive',
         render: (_: unknown, record: Operation) => renderOperationActiveStatusTag(t, record.isActive),
       },
@@ -396,7 +396,7 @@ const OperationsPage: React.FC = () => {
       try {
         defectMap = await defectTypeApi.batchResolveOrCreate(Array.from(allDefectInputs));
       } catch (e: any) {
-        messageApi.error(e?.message || t('app.master-data.exportFailed'));
+        messageApi.error(e?.message || t('common.exportFailed'));
         return;
       }
     }
@@ -487,13 +487,13 @@ const OperationsPage: React.FC = () => {
         messageApi.warning(t('app.master-data.noExportData'));
         return;
       }
-      const enabledLabel = t('app.master-data.plants.enabled');
-      const disabledLabel = t('app.master-data.plants.disabled');
+      const enabledLabel = t('common.enabled');
+      const disabledLabel = t('common.disabled');
       const csv = [
         [
           t('field.operation.code'),
           t('field.operation.name'),
-          t('field.operation.description'),
+          t('common.remark'),
           t('app.master-data.operations.isActive'),
           t('app.master-data.operations.defectTypes'),
         ].join(','),
@@ -512,7 +512,7 @@ const OperationsPage: React.FC = () => {
       URL.revokeObjectURL(url);
       messageApi.success(t('common.exportSuccess', { count: list.length }));
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.master-data.exportFailed'));
+      messageApi.error(error?.message || t('common.exportFailed'));
     }
   };
 
@@ -600,7 +600,7 @@ const OperationsPage: React.FC = () => {
       render: (_: unknown, record: Operation) => resolvePresetOperationNameByName(record.name, t),
     },
     {
-      title: t('field.operation.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -680,14 +680,14 @@ const OperationsPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            {t('field.customField.view')}
+            {t('common.view')}
           </Button>
           <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            {t('field.customField.edit')}
+            {t('common.edit')}
           </Button>
           <Popconfirm key="delete" {...rowActionKind('delete')} title={t('common.confirmDelete')}
             description={t('app.master-data.operations.deleteConfirmDesc')}
@@ -699,7 +699,7 @@ const OperationsPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              {t('field.customField.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>

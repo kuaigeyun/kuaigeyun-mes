@@ -310,10 +310,10 @@ const PrintDeviceListPage: React.FC = () => {
   const handleDelete = async (record: PrintDevice) => {
     try {
       await deletePrintDevice(record.uuid);
-      messageApi.success(t('pages.system.printDevices.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.printDevices.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -360,17 +360,17 @@ const PrintDeviceListPage: React.FC = () => {
       
       if (isEdit && currentPrintDeviceUuid) {
         await updatePrintDevice(currentPrintDeviceUuid, data as UpdatePrintDeviceData);
-        messageApi.success(t('pages.system.printDevices.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createPrintDevice(data as CreatePrintDeviceData);
-        messageApi.success(t('pages.system.printDevices.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
       
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.printDevices.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -437,7 +437,7 @@ const PrintDeviceListPage: React.FC = () => {
             okText={t('common.confirm')}
             cancelText={t('common.cancel')}
           >
-            <Tooltip title={t('pages.system.printDevices.deleteTooltip')}>
+            <Tooltip title={t('common.delete')}>
               <DeleteOutlined
                 style={{ fontSize: 16, color: '#ff4d4f' }}
               />
@@ -486,14 +486,14 @@ const PrintDeviceListPage: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printDevices.statusLabel')}</Text>
               <Tag color={device.is_active ? 'success' : 'default'}>
-                {device.is_active ? t('pages.system.printDevices.enabled') : t('pages.system.printDevices.disabled')}
+                {device.is_active ? t('common.enabled') : t('common.disabled')}
               </Tag>
             </div>
             
             {device.is_default && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printDevices.defaultLabel')}</Text>
-                <Tag color="processing">{t('pages.system.printDevices.isDefault')}</Tag>
+                <Tag color="processing">{t('common.yes')}</Tag>
               </div>
             )}
             
@@ -564,7 +564,7 @@ const PrintDeviceListPage: React.FC = () => {
       },
     },
     {
-      title: t('pages.system.printDevices.columnActive'),
+      title: t('common.enabled'),
       dataIndex: 'is_active',
       width: 100,
       minWidth: 100,
@@ -572,11 +572,11 @@ const PrintDeviceListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('pages.system.printDevices.enabled'), status: 'Success' },
-        false: { text: t('pages.system.printDevices.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) =>
-        renderSystemActiveTag(t, record.is_active, 'pages.system.printDevices.enabled', 'pages.system.printDevices.disabled'),
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
       title: t('pages.system.printDevices.columnOnline'),
@@ -625,7 +625,7 @@ const PrintDeviceListPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('pages.system.printDevices.columnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       minWidth: 180,
@@ -635,7 +635,7 @@ const PrintDeviceListPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('pages.system.printDevices.columnActions'),
+      title: t('common.actions'),
       key: 'action',
       valueType: 'option',
       fixed: 'right',
@@ -643,10 +643,10 @@ const PrintDeviceListPage: React.FC = () => {
       render: (_, record) =>
         [
             <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
-              {t('pages.system.printTemplates.detail')}
+              {t('common.detail')}
             </Button>,
             <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
-              {t('pages.system.printTemplates.edit')}
+              {t('common.edit')}
             </Button>,
             <Popconfirm {...rowActionKind('delete')}
               key="delete"
@@ -656,7 +656,7 @@ const PrintDeviceListPage: React.FC = () => {
               cancelText={t('common.cancel')}
             >
               <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                {t('pages.system.printDevices.deleteTooltip')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>,
             <Button {...rowActionKind('read')}
@@ -700,12 +700,12 @@ const PrintDeviceListPage: React.FC = () => {
     { title: t('pages.system.printDevices.columnName'), dataIndex: 'name' },
     { title: t('pages.system.printDevices.columnCode'), dataIndex: 'code' },
     { title: t('pages.system.printDevices.columnType'), dataIndex: 'type' },
-    { title: t('pages.system.printDevices.labelDescription'), dataIndex: 'description' },
+    { title: t('common.remark'), dataIndex: 'description' },
     {
-      title: t('pages.system.printDevices.columnActive'),
+      title: t('common.enabled'),
       dataIndex: 'is_active',
       render: (_: unknown, record: PrintDevice) =>
-        renderSystemActiveTag(t, record.is_active, 'pages.system.printDevices.enabled', 'pages.system.printDevices.disabled'),
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
       title: t('pages.system.printDevices.columnOnline'),
@@ -737,8 +737,8 @@ const PrintDeviceListPage: React.FC = () => {
     { title: t('pages.system.printDevices.columnUsage'), dataIndex: 'usage_count' },
     { title: t('pages.system.printDevices.columnLastConnected'), dataIndex: 'last_connected_at', valueType: 'dateTime' },
     { title: t('pages.system.printDevices.columnLastUsed'), dataIndex: 'last_used_at', valueType: 'dateTime' },
-    { title: t('pages.system.printDevices.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-    { title: t('pages.system.printDevices.columnUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
 
   return (
@@ -797,7 +797,7 @@ const PrintDeviceListPage: React.FC = () => {
           onCreate={handleCreate}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText={t('pages.system.printDevices.batchDelete')}
+          deleteButtonText={t('common.batchDelete')}
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
           rowSelection={{
@@ -815,7 +815,7 @@ const PrintDeviceListPage: React.FC = () => {
               items = await fetchAllListItems((p) => getPrintDeviceList(p));
             }
             if (items.length === 0) {
-              messageApi.warning(t('pages.system.printDevices.noDataToExport'));
+              messageApi.warning(t('common.exportNoData'));
               return;
             }
             await downloadRecordsAsXlsx(
@@ -885,14 +885,14 @@ const PrintDeviceListPage: React.FC = () => {
         />
         <ProFormTextArea
           name="description"
-          label={t('pages.system.printDevices.labelDescription')}
+          label={t('common.remark')}
           fieldProps={{
             rows: 3,
           }}
         />
         <ProFormSwitch
           name="is_active"
-          label={t('pages.system.printDevices.labelActive')}
+          label={t('common.enabled')}
         />
         {isEdit && (
           <ProFormSwitch
@@ -942,7 +942,7 @@ const PrintDeviceListPage: React.FC = () => {
           onFinish={handlePrintSubmit}
           submitter={{
             searchConfig: {
-              submitText: t('pages.system.printDevices.submitPrint'),
+              submitText: t('common.print'),
             },
           }}
         >

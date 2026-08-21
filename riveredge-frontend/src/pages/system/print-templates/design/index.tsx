@@ -2249,7 +2249,7 @@ const PrintTemplateDesignPage: React.FC = () => {
       messageApi.success(t('pages.system.printTemplatesDesign.exportPortableSuccess'));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      messageApi.error(msg || t('pages.system.printTemplatesDesign.exportPortableFailed'));
+      messageApi.error(msg || t('common.exportFailed'));
     }
   }, [getNormalizedSchema, templateName, templateCode, templateDescription, templateType, messageApi, t]);
 
@@ -2270,7 +2270,7 @@ const PrintTemplateDesignPage: React.FC = () => {
           title: t('pages.system.printTemplatesDesign.importConfirmTitle'),
           content: t('pages.system.printTemplatesDesign.importConfirmDesc'),
           okText: t('pages.system.printTemplatesDesign.apply'),
-          cancelText: t('pages.system.printTemplatesDesign.cancel'),
+          cancelText: t('common.cancel'),
           onOk: () => {
             applyPortableDesign(parsed.data);
             messageApi.success(t('pages.system.printTemplatesDesign.importPortableSuccess'));
@@ -2324,13 +2324,13 @@ const PrintTemplateDesignPage: React.FC = () => {
           },
         },
       });
-      messageApi.success(t('pages.system.printTemplatesDesign.saveSuccess'));
+      messageApi.success(t('common.saveSuccess'));
       if (compiled.warnings?.length) {
         messageApi.warning(t('pages.system.printTemplatesDesign.saveSuccessWithWarnings', { count: compiled.warnings.length }));
       }
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
-      messageApi.error(msg || t('pages.system.printTemplatesDesign.saveFailed'));
+      messageApi.error(msg || t('common.saveFailed'));
     }
   };
 
@@ -2473,8 +2473,8 @@ const PrintTemplateDesignPage: React.FC = () => {
       // Fallback: Default columns
       handleInsertDetailTable(key, [
         { key: 'material_code', label: t('pages.system.printTemplatesDesign.colMaterialCode') },
-        { key: 'material_name', label: t('pages.system.printTemplatesDesign.colMaterialName') },
-        { key: 'quote_quantity', label: t('pages.system.printTemplatesDesign.colQuantity') },
+        { key: 'material_name', label: t('common.name') },
+        { key: 'quote_quantity', label: t('common.quantity') },
         { key: 'unit_price', label: t('pages.system.printTemplatesDesign.colUnitPrice') },
         { key: 'total_amount', label: t('pages.system.printTemplatesDesign.colAmount') },
       ]);
@@ -3722,7 +3722,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                           onChange={e => updateSelectedBlock({ showLabel: e.target.value })}
                         >
                           <Radio.Button value={true}>{t('pages.system.printTemplatesDesign.on')}</Radio.Button>
-                          <Radio.Button value={false}>{t('pages.system.printTemplatesDesign.off')}</Radio.Button>
+                          <Radio.Button value={false}>{t('common.close')}</Radio.Button>
                         </Radio.Group>
                       </div>
                       <div>
@@ -3782,7 +3782,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                           onChange={e => updateSelectedBlock({ keepRatio: e.target.value })}
                         >
                           <Radio.Button value={true}>{t('pages.system.printTemplatesDesign.on')}</Radio.Button>
-                          <Radio.Button value={false}>{t('pages.system.printTemplatesDesign.off')}</Radio.Button>
+                          <Radio.Button value={false}>{t('common.close')}</Radio.Button>
                         </Radio.Group>
                       </div>
                       <div>
@@ -3818,7 +3818,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                           onChange={e => updateSelectedBlock({ keepRatio: e.target.value })}
                         >
                           <Radio.Button value={true}>{t('pages.system.printTemplatesDesign.on')}</Radio.Button>
-                          <Radio.Button value={false}>{t('pages.system.printTemplatesDesign.off')}</Radio.Button>
+                          <Radio.Button value={false}>{t('common.close')}</Radio.Button>
                         </Radio.Group>
                       </div>
                       <div>

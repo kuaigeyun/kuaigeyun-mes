@@ -139,11 +139,11 @@ const MaintenanceItemsPage: React.FC = () => {
 
   const detailBasicColumns = useMemo<ProDescriptionsItemProps<MaintenanceItem>[]>(
     () => [
-      { title: t(`${P}.col.code`), dataIndex: 'code' },
-      { title: t(`${P}.col.name`), dataIndex: 'name' },
+      { title: t('common.code'), dataIndex: 'code' },
+      { title: t('common.name'), dataIndex: 'name' },
       { title: t(`${P}.col.standardHours`), dataIndex: 'standard_hours' },
       { title: t(`${P}.col.requirement`), dataIndex: 'requirement', span: 2 },
-      buildIsActiveDescriptionColumn<MaintenanceItem>(t, `${P}.col.isActive`),
+      buildIsActiveDescriptionColumn<MaintenanceItem>(t),
     ],
     [t],
   );
@@ -158,7 +158,7 @@ const MaintenanceItemsPage: React.FC = () => {
         search: { order: 10 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.isActive`),
+        title: t('common.enabled'),
         dataIndex: 'is_active',
         valueType: 'select',
         valueEnum: activeStatusValueEnum,
@@ -166,7 +166,7 @@ const MaintenanceItemsPage: React.FC = () => {
         search: { order: 20 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.code`),
+        title: t('common.code'),
         dataIndex: 'code',
         width: 120,
         fixed: 'left',
@@ -174,7 +174,7 @@ const MaintenanceItemsPage: React.FC = () => {
         search: { order: 30 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.name`),
+        title: t('common.name'),
         dataIndex: 'name',
         width: 180,
         ellipsis: true,
@@ -184,7 +184,7 @@ const MaintenanceItemsPage: React.FC = () => {
       { title: t(`${P}.col.standardHours`), dataIndex: 'standard_hours', width: 100, hideInSearch: true },
       { title: t(`${P}.col.requirement`), dataIndex: 'requirement', ellipsis: true, hideInSearch: true },
       {
-        title: t(`${P}.col.isActive`),
+        title: t('common.enabled'),
         dataIndex: 'is_active',
         width: 80,
         sorter: true,
@@ -293,10 +293,10 @@ const MaintenanceItemsPage: React.FC = () => {
       >
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormText name="code" label={t(`${P}.col.code`)} rules={[{ required: true }]} />
+            <ProFormText name="code" label={t('common.code')} rules={[{ required: true }]} />
           </Col>
           <Col span={12}>
-            <ProFormText name="name" label={t(`${P}.col.name`)} rules={[{ required: true }]} />
+            <ProFormText name="name" label={t('common.name')} rules={[{ required: true }]} />
           </Col>
           <Col span={12}>
             <ProFormDigit name="standard_hours" label={t(`${P}.col.standardHours`)} min={0} />
@@ -305,7 +305,7 @@ const MaintenanceItemsPage: React.FC = () => {
             <ProFormTextArea name="requirement" label={t(`${P}.col.requirement`)} fieldProps={{ rows: 3 }} />
           </Col>
           <Col span={24}>
-            <ProFormSwitch name="is_active" label={t(`${P}.col.isActive`)} />
+            <ProFormSwitch name="is_active" label={t('common.enabled')} />
           </Col>
         </Row>
       </FormModalTemplate>

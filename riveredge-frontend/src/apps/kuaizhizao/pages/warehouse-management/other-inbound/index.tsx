@@ -279,7 +279,7 @@ const OtherInboundPage: React.FC = () => {
         search: { order: 10 } as ProColumns['search'],
       },
       {
-        title: t('app.kuaizhizao.warehouseOtherInbound.field.status'),
+        title: t('common.status'),
         dataIndex: 'status',
         valueType: 'select',
         valueEnum: otherInboundStatusValueEnum,
@@ -390,7 +390,7 @@ const OtherInboundPage: React.FC = () => {
       },
       ...otherInboundCustomFieldColumns,
       {
-        title: t('app.kuaizhizao.warehouseOtherInbound.col.actions'),
+        title: t('common.actions'),
         width: 180,
         fixed: 'right',
         render: (_, record) => {
@@ -475,12 +475,12 @@ const OtherInboundPage: React.FC = () => {
       onOk: async () => {
         try {
           await warehouseApi.otherInbound.delete(record.id!.toString());
-          messageApi.success(t('app.kuaizhizao.warehouseOtherInbound.msg.deleteSuccess'));
+          messageApi.success(t('common.deleteSuccess'));
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.warehouseOtherInbound.msg.deleteFailed'));
+          messageApi.error(error.message || t('common.deleteFailed'));
         }
       },
     });
@@ -637,7 +637,7 @@ const OtherInboundPage: React.FC = () => {
       if (recordId > 0 && Object.keys(customData).length > 0) {
         await saveOtherInboundCustomFieldValues(recordId, customData);
       }
-      messageApi.success(t('app.kuaizhizao.warehouseOtherInbound.msg.createSuccess'));
+      messageApi.success(t('common.createSuccess'));
       resetOtherInboundFormFieldValues();
       resetSelectedWarehouseId();
       setCreateModalVisible(false);
@@ -646,7 +646,7 @@ const OtherInboundPage: React.FC = () => {
       actionRef.current?.reload();
     } catch (error: any) {
       if (error.message !== t('app.kuaizhizao.warehouseOtherInbound.msg.needValidLine')) {
-        messageApi.error(error.message || t('app.kuaizhizao.warehouseOtherInbound.msg.createFailed'));
+        messageApi.error(error.message || t('common.createFailed'));
       }
       throw error;
     }
@@ -739,7 +739,7 @@ const OtherInboundPage: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseOtherInbound.field.reasonDesc'), dataIndex: 'reason_desc', span: 3 },
       { title: t('app.kuaizhizao.warehouseOtherInbound.col.warehouse'), dataIndex: 'warehouse_name' },
       {
-        title: t('app.kuaizhizao.warehouseOtherInbound.field.status'),
+        title: t('common.status'),
         dataIndex: 'status',
         render: (s) => {
           const map: Record<string, { textKey: string; color: string }> = {
@@ -759,7 +759,7 @@ const OtherInboundPage: React.FC = () => {
 
   const detailNotesColumn: ProDescriptionsItemProps<OtherInboundDetail> = useMemo(
     () => ({
-      title: t('app.kuaizhizao.warehouseOtherInbound.col.notes'),
+      title: t('common.remark'),
       dataIndex: 'notes',
       span: 3,
     }),
@@ -771,7 +771,7 @@ const OtherInboundPage: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseOtherInbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
       { title: t('app.kuaizhizao.warehouseOtherInbound.col.materialName'), dataIndex: 'material_name', width: 150 },
       {
-        title: t('app.kuaizhizao.warehouseOtherInbound.col.unit'),
+        title: t('common.unit'),
         dataIndex: 'material_unit',
         width: 60,
         render: (val: unknown) => <MaterialUnitLabel value={val as string | null} />,
@@ -791,7 +791,7 @@ const OtherInboundPage: React.FC = () => {
           return list.length > 0 ? list.join('、') : '—';
         },
       },
-      { title: t('app.kuaizhizao.warehouseOtherInbound.col.notes'), dataIndex: 'notes' },
+      { title: t('common.remark'), dataIndex: 'notes' },
     ],
     [t],
   );
@@ -1076,7 +1076,7 @@ const OtherInboundPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.warehouseOtherInbound.col.unit'),
+                    title: t('common.unit'),
                     dataIndex: 'material_unit',
                     width: 100,
                     render: (_: any, __: any, index: number) => (
@@ -1102,13 +1102,13 @@ const OtherInboundPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.warehouseOtherInbound.col.quantity'),
+                    title: t('common.quantity'),
                     dataIndex: 'inbound_quantity',
                     width: 100,
                     align: 'right' as const,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'inbound_quantity']} rules={[{ required: true, message: t('app.kuaizhizao.warehouseOtherInbound.field.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.warehouseOtherInbound.field.quantityMin') }]} style={{ margin: 0 }}>
-                        <InputNumber placeholder={t('app.kuaizhizao.warehouseOtherInbound.field.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
+                        <InputNumber placeholder={t('common.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
                       </AntForm.Item>
                     ),
                   },
@@ -1204,7 +1204,7 @@ const OtherInboundPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.warehouseOtherInbound.col.actions'),
+                    title: t('common.actions'),
                     width: 60,
                     render: (_: any, __: any, index: number) => (
                       <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
@@ -1248,7 +1248,7 @@ const OtherInboundPage: React.FC = () => {
             </AntForm.List>
         </div>
         <DocumentAttachmentsField category="other_inbound_attachments" />
-        <ProFormTextArea name="notes" label={t('app.kuaizhizao.warehouseOtherInbound.field.notes')} placeholder={t('app.kuaizhizao.warehouseOtherInbound.field.optional')} fieldProps={{ rows: 2 }} />
+        <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('app.kuaizhizao.warehouseOtherInbound.field.optional')} fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
 
       <UniMaterialBatchPicker

@@ -37,7 +37,7 @@ export function useDocumentTracking(
         if (!cancelled) setData(normalizeDocumentTrackingResponse(d));
       })
       .catch((e) => {
-        if (!cancelled) setError(e?.message || t('components.documentTrackingPanel.loadFailed'));
+        if (!cancelled) setError(e?.message || t('common.loadFailed'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

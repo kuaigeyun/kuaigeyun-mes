@@ -80,10 +80,10 @@ const InvitationCodeListPage: React.FC = () => {
   const handleDelete = async (record: InvitationCode) => {
     try {
       await deleteInvitationCode(record.uuid);
-      messageApi.success(t('pages.system.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -109,18 +109,18 @@ const InvitationCodeListPage: React.FC = () => {
               successCount++;
             } catch (error: any) {
               failCount++;
-              errors.push(error.message || t('pages.system.deleteFailed'));
+              errors.push(error.message || t('common.deleteFailed'));
             }
           }
-          if (successCount > 0) messageApi.success(t('pages.system.deleteSuccess'));
+          if (successCount > 0) messageApi.success(t('common.deleteSuccess'));
           if (failCount > 0) {
             messageApi.error(
-              `${t('pages.system.deleteFailed')} ${failCount} ${errors.length > 0 ? '：' + errors.join('; ') : ''}`
+              `${t('common.deleteFailed')} ${failCount} ${errors.length > 0 ? '：' + errors.join('; ') : ''}`
             );
           }
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || t('pages.system.deleteFailed'));
+          messageApi.error(error.message || t('common.deleteFailed'));
         }
       },
     });
@@ -181,14 +181,14 @@ const InvitationCodeListPage: React.FC = () => {
         render: (_, record) => record.expires_at || t('field.invitationCode.neverExpires'),
       },
       {
-        title: t('field.role.status'),
+        title: t('common.status'),
         dataIndex: 'is_active',
         render: (_, record) => {
           const value = !!record.is_active;
           const valid = isCodeValid(record);
           return (
             <Space>
-              {renderSystemActiveTag(t, value, 'field.role.enabled', 'field.role.disabled')}
+              {renderSystemActiveTag(t, value, 'common.enabled', 'common.disabled')}
               {!valid && value && <Tag color="error">{t('field.invitationCode.invalid')}</Tag>}
             </Space>
           );
@@ -242,18 +242,18 @@ const InvitationCodeListPage: React.FC = () => {
       render: (_, record) => record.expires_at || t('field.invitationCode.neverExpires'),
     },
     {
-      title: t('field.role.status'),
+      title: t('common.status'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('field.role.enabled'), status: 'Success' },
-        false: { text: t('field.role.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Space>
           <Tag color={record.is_active ? 'success' : 'default'}>
-            {record.is_active ? t('field.role.enabled') : t('field.role.disabled')}
+            {record.is_active ? t('common.enabled') : t('common.disabled')}
           </Tag>
           {!isCodeValid(record) && record.is_active && (
             <Tag color="error">{t('field.invitationCode.invalid')}</Tag>
@@ -275,10 +275,10 @@ const InvitationCodeListPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => [
             <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
-              {t('field.invitationCode.view')}
+              {t('common.view')}
             </Button>,
             <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
-              {t('field.invitationCode.edit')}
+              {t('common.edit')}
             </Button>,
             <Popconfirm {...rowActionKind('delete')}
               key="delete"
@@ -286,7 +286,7 @@ const InvitationCodeListPage: React.FC = () => {
               onConfirm={() => handleDelete(record)}
             >
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('field.invitationCode.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>,
           ],
@@ -333,7 +333,7 @@ const InvitationCodeListPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText={t('pages.system.batchDelete')}
+          deleteButtonText={t('common.batchDelete')}
           showImportButton={false}
           showExportButton={true}
           onExport={async (type, keys, pageData) => {

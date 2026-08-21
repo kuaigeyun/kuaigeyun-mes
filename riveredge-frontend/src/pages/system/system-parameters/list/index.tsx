@@ -143,10 +143,10 @@ const SystemParameterListPage: React.FC = () => {
   const handleDelete = async (record: SystemParameter) => {
     try {
       await deleteSystemParameter(record.uuid);
-      messageApi.success(t('pages.system.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -177,21 +177,21 @@ const SystemParameterListPage: React.FC = () => {
               successCount++;
             } catch (error: any) {
               failCount++;
-              errors.push(error.message || t('pages.system.deleteFailed'));
+              errors.push(error.message || t('common.deleteFailed'));
             }
           }
 
           if (successCount > 0) {
-            messageApi.success(t('pages.system.deleteSuccess'));
+            messageApi.success(t('common.deleteSuccess'));
           }
           if (failCount > 0) {
-            messageApi.error(t('pages.system.deleteFailed') + (errors.length > 0 ? '：' + errors.join('; ') : ''));
+            messageApi.error(t('common.deleteFailed') + (errors.length > 0 ? '：' + errors.join('; ') : ''));
           }
 
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || t('pages.system.deleteFailed'));
+          messageApi.error(error.message || t('common.deleteFailed'));
         }
       },
     });
@@ -227,7 +227,7 @@ const SystemParameterListPage: React.FC = () => {
           description: values.description,
           is_active: values.is_active,
         } as UpdateSystemParameterData);
-        messageApi.success(t('pages.system.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createSystemParameter({
           key: values.key,
@@ -237,14 +237,14 @@ const SystemParameterListPage: React.FC = () => {
           is_system: values.is_system || false,
           is_active: values.is_active,
         } as CreateSystemParameterData);
-        messageApi.success(t('pages.system.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
       
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -296,7 +296,7 @@ const SystemParameterListPage: React.FC = () => {
         dataIndex: 'type',
       },
       {
-        title: t('field.systemParameter.description'),
+        title: t('common.remark'),
         dataIndex: 'description',
       },
       {
@@ -304,24 +304,24 @@ const SystemParameterListPage: React.FC = () => {
         dataIndex: 'is_system',
         render: (_: unknown, record: SystemParameter) =>
           record?.is_system ? (
-            <Tag color="purple">{t('field.systemParameter.yes')}</Tag>
+            <Tag color="purple">{t('common.yes')}</Tag>
           ) : (
-            <Tag>{t('field.systemParameter.no')}</Tag>
+            <Tag>{t('common.no')}</Tag>
           ),
       },
       {
-        title: t('field.systemParameter.status'),
+        title: t('common.status'),
         dataIndex: 'is_active',
         render: (_: unknown, record: SystemParameter) =>
-          renderSystemActiveTag(t, record?.is_active, 'field.systemParameter.enabled', 'field.systemParameter.disabled'),
+          renderSystemActiveTag(t, record?.is_active, 'common.enabled', 'common.disabled'),
       },
       {
-        title: t('field.systemParameter.createdAt'),
+        title: t('common.createdAt'),
         dataIndex: 'created_at',
         valueType: 'dateTime',
       },
       {
-        title: t('field.systemParameter.updatedAt'),
+        title: t('common.updatedAt'),
         dataIndex: 'updated_at',
         valueType: 'dateTime',
       },
@@ -357,7 +357,7 @@ const SystemParameterListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(item)}
           >
-            {t('field.systemParameter.view')}
+            {t('common.view')}
           </Button>,
           <Button {...rowActionKind('update')}
             key="edit"
@@ -365,7 +365,7 @@ const SystemParameterListPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(item)}
           >
-            {t('field.systemParameter.edit')}
+            {t('common.edit')}
           </Button>,
           <Popconfirm {...rowActionKind('delete')}
             key="delete"
@@ -379,7 +379,7 @@ const SystemParameterListPage: React.FC = () => {
               icon={<DeleteOutlined />}
               disabled={item.is_system}
             >
-              {t('field.systemParameter.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>,
         ]}
@@ -391,7 +391,7 @@ const SystemParameterListPage: React.FC = () => {
               <Tag color={typeInfo.color}>{t(typeInfo.textKey)}</Tag>
               {item.is_system && <Tag color="default">{t('field.systemParameter.isSystem')}</Tag>}
               <Tag color={item.is_active ? 'success' : 'default'}>
-                {item.is_active ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')}
+                {item.is_active ? t('common.enabled') : t('common.disabled')}
               </Tag>
             </Space>
           }
@@ -471,7 +471,7 @@ const SystemParameterListPage: React.FC = () => {
       },
     },
     {
-      title: t('field.systemParameter.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       width: 200,
       ellipsis: true,
@@ -483,32 +483,32 @@ const SystemParameterListPage: React.FC = () => {
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('field.systemParameter.yes'), status: 'Default' },
-        false: { text: t('field.systemParameter.no'), status: 'Processing' },
+        true: { text: t('common.yes'), status: 'Default' },
+        false: { text: t('common.no'), status: 'Processing' },
       },
       render: (_, record) => (
         <Tag color={record.is_system ? 'default' : 'blue'}>
-          {record.is_system ? t('field.systemParameter.yes') : t('field.systemParameter.no')}
+          {record.is_system ? t('common.yes') : t('common.no')}
         </Tag>
       ),
     },
     {
-      title: t('field.systemParameter.status'),
+      title: t('common.status'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('field.systemParameter.enabled'), status: 'Success' },
-        false: { text: t('field.systemParameter.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')}
+          {record.is_active ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
     {
-      title: t('field.systemParameter.createdAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -527,7 +527,7 @@ const SystemParameterListPage: React.FC = () => {
               icon={<EyeOutlined />}
               onClick={() => handleView(record)}
             >
-              {t('field.systemParameter.view')}
+              {t('common.view')}
             </Button>,
             <Button {...rowActionKind('update')}
               key="edit"
@@ -536,7 +536,7 @@ const SystemParameterListPage: React.FC = () => {
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
             >
-              {t('field.systemParameter.edit')}
+              {t('common.edit')}
             </Button>,
             <Popconfirm {...rowActionKind('delete')}
               key="delete"
@@ -551,7 +551,7 @@ const SystemParameterListPage: React.FC = () => {
                 icon={<DeleteOutlined />}
                 disabled={record.is_system}
               >
-                {t('field.systemParameter.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>,
           ],
@@ -675,7 +675,7 @@ const SystemParameterListPage: React.FC = () => {
           onCreate={handleCreate}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText={t('field.systemParameter.batchDeleteButton')}
+          deleteButtonText={t('common.batchDelete')}
           showExportButton
           onExport={async (type, keys, pageData) => {
             const res = await getSystemParameterList({ page: 1, page_size: 10000 });
@@ -684,7 +684,7 @@ const SystemParameterListPage: React.FC = () => {
               items = res.items.filter((d) => keys.includes(d.uuid));
             }
             if (items.length === 0) {
-              messageApi.warning(t('field.systemParameter.exportNoData'));
+              messageApi.warning(t('common.exportNoData'));
               return;
             }
             await downloadRecordsAsXlsx(
@@ -748,7 +748,7 @@ const SystemParameterListPage: React.FC = () => {
           {renderValueInput()}
           <ProFormTextArea
             name="description"
-            label={t('field.systemParameter.description')}
+            label={t('common.remark')}
             placeholder={t('field.systemParameter.descriptionPlaceholder')}
           />
           {!isEdit && (
@@ -759,7 +759,7 @@ const SystemParameterListPage: React.FC = () => {
           )}
           <ProFormSwitch
             name="is_active"
-            label={t('field.systemParameter.isActiveLabel')}
+            label={t('common.enabled')}
           />
       </FormModalTemplate>
 

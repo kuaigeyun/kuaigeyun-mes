@@ -81,7 +81,7 @@ const DataDictionaryListPage: React.FC = () => {
       },
       { title: t('field.dataDictionary.code'), dataIndex: 'code' },
       {
-        title: t('field.dataDictionary.description'),
+        title: t('common.remark'),
         dataIndex: 'description',
         render: (_: unknown, entity: DataDictionary) => resolveSystemDictionaryDescription(entity, t),
       },
@@ -90,16 +90,16 @@ const DataDictionaryListPage: React.FC = () => {
         dataIndex: 'is_system',
         render: (_: unknown, entity: DataDictionary) =>
           entity?.is_system ? (
-            <Tag color="purple">{t('field.role.yes')}</Tag>
+            <Tag color="purple">{t('common.yes')}</Tag>
           ) : (
-            <Tag>{t('field.role.no')}</Tag>
+            <Tag>{t('common.no')}</Tag>
           ),
       },
       {
-        title: t('field.role.status'),
+        title: t('common.status'),
         dataIndex: 'is_active',
         render: (_: unknown, entity: DataDictionary) =>
-          renderSystemActiveTag(t, entity?.is_active, 'field.role.enabled', 'field.role.disabled'),
+          renderSystemActiveTag(t, entity?.is_active, 'common.enabled', 'common.disabled'),
       },
       { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
       { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
@@ -166,10 +166,10 @@ const DataDictionaryListPage: React.FC = () => {
   const handleDelete = async (record: DataDictionary) => {
     try {
       await deleteDataDictionary(record.uuid);
-      messageApi.success(t('pages.system.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -195,19 +195,19 @@ const DataDictionaryListPage: React.FC = () => {
               successCount++;
             } catch (error: any) {
               failCount++;
-              errors.push(error.message || t('pages.system.deleteFailed'));
+              errors.push(error.message || t('common.deleteFailed'));
             }
           }
-          if (successCount > 0) messageApi.success(t('pages.system.deleteSuccess'));
+          if (successCount > 0) messageApi.success(t('common.deleteSuccess'));
           if (failCount > 0) {
             messageApi.error(
-              `${t('pages.system.deleteFailed')} ${failCount} ${errors.length > 0 ? '：' + errors.join('; ') : ''}`
+              `${t('common.deleteFailed')} ${failCount} ${errors.length > 0 ? '：' + errors.join('; ') : ''}`
             );
           }
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || t('pages.system.deleteFailed'));
+          messageApi.error(error.message || t('common.deleteFailed'));
         }
       },
     });
@@ -280,12 +280,12 @@ const DataDictionaryListPage: React.FC = () => {
   const handleDeleteItem = async (record: DictionaryItem) => {
     try {
       await deleteDictionaryItem(record.uuid);
-      messageApi.success(t('pages.system.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       if (currentDictionaryForItems) {
         await loadItems(currentDictionaryForItems.uuid);
       }
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -337,10 +337,10 @@ const DataDictionaryListPage: React.FC = () => {
       const payload = normalizeDictionaryItemFormValues(values);
       if (isEditItem && currentItemUuid) {
         await updateDictionaryItem(currentItemUuid, payload);
-        messageApi.success(t('pages.system.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createDictionaryItem(currentDictionaryForItems.uuid, payload);
-        messageApi.success(t('pages.system.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
       setItemModalVisible(false);
       await loadItems(currentDictionaryForItems.uuid);
@@ -371,7 +371,7 @@ const DataDictionaryListPage: React.FC = () => {
       resizable: false,
     },
     {
-      title: t('field.dataDictionary.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -386,13 +386,13 @@ const DataDictionaryListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('field.role.yes'), status: 'Default' },
-        false: { text: t('field.role.no'), status: 'Processing' },
+        true: { text: t('common.yes'), status: 'Default' },
+        false: { text: t('common.no'), status: 'Processing' },
       },
       render: (_, record) => renderSystemYesNoTag(t, record.is_system),
     },
     {
-      title: t('field.role.status'),
+      title: t('common.status'),
       dataIndex: 'is_active',
       width: 100,
       minWidth: 100,
@@ -400,11 +400,11 @@ const DataDictionaryListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('field.role.enabled'), status: 'Success' },
-        false: { text: t('field.role.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) =>
-        renderSystemActiveTag(t, record.is_active, 'field.role.enabled', 'field.role.disabled'),
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
       title: t('common.createdAt'),
@@ -434,7 +434,7 @@ const DataDictionaryListPage: React.FC = () => {
               onClick={() => handleEdit(record)}
               disabled={record.is_system}
             >
-              {t('field.dataDictionary.edit')}
+              {t('common.edit')}
             </Button>,
             <Button {...rowActionKind('read')} key="items" onClick={() => handleManageItems(record)}>
               {t('field.dataDictionary.items')}
@@ -450,7 +450,7 @@ const DataDictionaryListPage: React.FC = () => {
               >
                 <span>
                   <Button type="link" danger size="small" disabled={record.is_system}>
-                    {t('field.dataDictionary.delete')}
+                    {t('common.delete')}
                   </Button>
                 </span>
               </Tooltip>
@@ -483,7 +483,7 @@ const DataDictionaryListPage: React.FC = () => {
       ellipsis: { showTitle: true },
     },
     {
-      title: t('field.dataDictionary.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       key: 'description',
       ellipsis: true,
@@ -509,12 +509,12 @@ const DataDictionaryListPage: React.FC = () => {
       sorter: (a: DictionaryItem, b: DictionaryItem) => a.sort_order - b.sort_order,
     },
     {
-      title: t('field.role.status'),
+      title: t('common.status'),
       dataIndex: 'is_active',
       key: 'is_active',
       width: 88,
       render: (isActive: boolean) =>
-        renderSystemActiveTag(t, isActive, 'field.role.enabled', 'field.role.disabled'),
+        renderSystemActiveTag(t, isActive, 'common.enabled', 'common.disabled'),
     },
     {
       title: t('common.actions'),
@@ -526,7 +526,7 @@ const DataDictionaryListPage: React.FC = () => {
         return (
           <Space size={4}>
             <Button key="edit" {...rowActionKind('update')} onClick={() => handleEditItem(record)}>
-              {t('field.dataDictionary.edit')}
+              {t('common.edit')}
             </Button>
             <Popconfirm key="delete" {...rowActionKind('delete')} title={t('field.dataDictionary.itemDeleteConfirm')}
               onConfirm={() => handleDeleteItem(record)}
@@ -534,7 +534,7 @@ const DataDictionaryListPage: React.FC = () => {
             >
               <Tooltip title={isPresetItem ? t('field.dataDictionary.systemPresetItemNoDelete') : undefined}>
                 <Button type="link" danger size="small" disabled={isPresetItem}>
-                  {t('field.dataDictionary.delete')}
+                  {t('common.delete')}
                 </Button>
               </Tooltip>
             </Popconfirm>
@@ -618,7 +618,7 @@ const DataDictionaryListPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         showDeleteButton
         onDelete={handleBatchDelete}
-        deleteButtonText={t('pages.system.batchDelete')}
+        deleteButtonText={t('common.batchDelete')}
         showImportButton={false}
         showExportButton={true}
         onExport={async (type, keys, pageData) => {
@@ -766,10 +766,10 @@ const DataDictionaryListPage: React.FC = () => {
           />
           <ProFormTextArea
             name="description"
-            label={t('field.dataDictionary.description')}
+            label={t('common.remark')}
             placeholder={t('field.dataDictionary.descriptionPlaceholder')}
           />
-          <ProFormSwitch name="is_active" label={t('field.dataDictionary.isActive')} />
+          <ProFormSwitch name="is_active" label={t('common.enabled')} />
         </ProForm>
       </Modal>
     </>

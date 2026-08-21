@@ -48,7 +48,7 @@ const DriversPage: React.FC = () => {
     () =>
       alignDescriptionColumns<Driver>(
         [
-          { title: t('app.kuaizhizao.logistics.field.code'), dataIndex: 'code' },
+          { title: t('common.code'), dataIndex: 'code' },
           { title: t('app.kuaizhizao.logistics.field.driverName'), dataIndex: 'name' },
           { title: t('app.kuaizhizao.logistics.field.phone'), dataIndex: 'phone' },
           { title: t('app.kuaizhizao.logistics.field.licenseNumber'), dataIndex: 'license_number' },
@@ -58,7 +58,7 @@ const DriversPage: React.FC = () => {
             render: (_, record) => renderLogisticsOwnershipTag(t, record.ownership),
           },
           {
-            title: t('app.kuaizhizao.logistics.field.enabled'),
+            title: t('common.enabled'),
             dataIndex: 'is_enabled',
             render: (_, record) => renderLogisticsEnabledTag(t, record.is_enabled),
           },
@@ -84,7 +84,7 @@ const DriversPage: React.FC = () => {
           fixed: 'left',
         },
         {
-          title: t('app.kuaizhizao.logistics.field.code'),
+          title: t('common.code'),
           dataIndex: 'code',
           width: 88,
           minWidth: 88,
@@ -110,7 +110,7 @@ const DriversPage: React.FC = () => {
           render: (_, row) => renderLogisticsOwnershipTag(t, row.ownership),
         },
         {
-          title: t('app.kuaizhizao.logistics.field.enabled'),
+          title: t('common.enabled'),
           dataIndex: 'is_enabled',
           width: 88,
           minWidth: 88,

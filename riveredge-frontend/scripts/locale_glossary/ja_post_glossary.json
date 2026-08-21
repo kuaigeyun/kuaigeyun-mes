@@ -25,5 +25,8 @@
   "Description": "備考",
   "Leaf": "末級",
   "Work center": "ワークセンター",
-  "Work Center": "ワークセンター"
+  "Work Center": "ワークセンター",
+  "閉店": "クローズ",
+  "データ ソース": "データソース",
+  "ポストグレSQL": "PostgreSQL"
 }

@@ -439,7 +439,7 @@ const OutlookMessagesView: React.FC = () => {
                   void loadStats();
                   void loadMessages();
                 }}
-                aria-label={t('pages.personal.messages.refresh')}
+                aria-label={t('common.refresh')}
               />
               <Button
                 type="default"
@@ -685,7 +685,7 @@ const OutlookMessagesView: React.FC = () => {
                     </Text>
                   )}
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    {t('pages.personal.messages.createdAt')}：
+                    {t('common.createdAt')}：
                     {formatDateTime(selectedMessage.created_at, 'YYYY-MM-DD HH:mm:ss')}
                   </Text>
                 </Space>

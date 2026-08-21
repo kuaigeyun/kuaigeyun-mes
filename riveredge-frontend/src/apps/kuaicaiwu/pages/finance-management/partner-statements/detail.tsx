@@ -204,7 +204,7 @@ const PartnerStatementDetailPage: React.FC = () => {
       downloadBlob(blob, t(`${PS}.detail.exportFilename`, { code: data.statement_code, ext }));
       message.success(t(`${PS}.detail.exportSuccess`));
     } catch (e: any) {
-      message.error(e?.message || t(`${PS}.detail.exportFailed`));
+      message.error(e?.message || t('common.exportFailed'));
     } finally {
       setExporting(null);
     }
@@ -227,7 +227,7 @@ const PartnerStatementDetailPage: React.FC = () => {
   const pageActions = data ? (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyItems: 'center', justifyContent: 'space-between', width: '100%' }}>
       <Space wrap size={8}>
-        <Button onClick={() => navigate('/apps/kuaicaiwu/finance-management/partner-statements')}>{t('app.kuaicaiwu.common.back')}</Button>
+        <Button onClick={() => navigate('/apps/kuaicaiwu/finance-management/partner-statements')}>{t('common.back')}</Button>
         {data.status === 'Draft' || data.status === 'Disputed' ? (
           statementPerms.canUpdate ? (
           <Button type="primary" onClick={handleConfirm}>{t(`${PS}.detail.internalConfirm`)}</Button>
@@ -247,7 +247,7 @@ const PartnerStatementDetailPage: React.FC = () => {
             <Button loading={exporting === 'pdf'} onClick={() => void handleExport('pdf')}>{t(`${PS}.detail.exportPdf`)}</Button>
           </>
         ) : null}
-        <Button onClick={handlePrint}>{t(`${PS}.detail.print`)}</Button>
+        <Button onClick={handlePrint}>{t('common.print')}</Button>
       </Space>
     </div>
   ) : null;
@@ -314,7 +314,7 @@ const PartnerStatementDetailPage: React.FC = () => {
               <Descriptions.Item label={t(`${PS}.detail.disputeReason`)} span={2}>{data.dispute_reason}</Descriptions.Item>
             ) : null}
             {data.notes ? (
-              <Descriptions.Item label={t('app.kuaicaiwu.common.notes')} span={2}>{data.notes}</Descriptions.Item>
+              <Descriptions.Item label={t('common.remark')} span={2}>{data.notes}</Descriptions.Item>
             ) : null}
           </Descriptions>
 

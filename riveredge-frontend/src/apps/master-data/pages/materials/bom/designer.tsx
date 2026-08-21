@@ -1627,7 +1627,7 @@ const BOMDesignerPage: React.FC = () => {
       messageApi.success(t('app.master-data.bom.designSaved'));
       await loadBOMData();
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.bom.saveFailed'));
+      messageApi.error(error.message || t('common.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -1659,7 +1659,7 @@ const BOMDesignerPage: React.FC = () => {
       const created = await bomApi.batchImport({ items, version: targetVersion, baseQuantity: bomBaseQuantity, bomName });
       const uuids = [...new Set((created ?? []).map((b) => b.uuid).filter(Boolean))];
       if (uuids.length === 0) {
-        messageApi.warning(t('app.master-data.bom.saveFailed'));
+        messageApi.warning(t('common.saveFailed'));
         await loadBOMData();
         return;
       }
@@ -1677,7 +1677,7 @@ const BOMDesignerPage: React.FC = () => {
       }
       await loadBOMData();
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.bom.saveFailed'));
+      messageApi.error(error.message || t('common.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -2022,7 +2022,7 @@ const BOMDesignerPage: React.FC = () => {
       setObsoleteReason('');
       await loadBOMData();
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.master-data.bom.operationFailed'));
+      messageApi.error(error?.message || t('common.operationFailed'));
     } finally {
       setObsoleteLoading(false);
     }
@@ -2737,7 +2737,7 @@ const BOMDesignerPage: React.FC = () => {
                 </div>
                 {showQtyBadge && (
                   <span
-                    title={t('app.master-data.bom.quantity')}
+                    title={t('common.quantity')}
                     style={{
                       marginLeft: 6,
                       display: 'inline-flex',
@@ -3100,9 +3100,9 @@ const BOMDesignerPage: React.FC = () => {
           <Button
             icon={<ReloadOutlined />}
             onClick={() => loadBOMData()}
-            title={t('app.master-data.bom.refresh')}
+            title={t('common.refresh')}
           >
-            {t('app.master-data.bom.refresh')}
+            {t('common.refresh')}
           </Button>
           <Button
             icon={<CopyOutlined />}
@@ -3119,7 +3119,7 @@ const BOMDesignerPage: React.FC = () => {
             {t('app.master-data.bom.versionCompareBtn')}
           </Button>
           <Button icon={<CloseOutlined />} onClick={handleCancel}>
-            {t('app.master-data.bom.back')}
+            {t('common.back')}
           </Button>
         </Space>
       }
@@ -3482,7 +3482,7 @@ const BOMDesignerPage: React.FC = () => {
                 <Col span={8}>
                   <Form.Item
                     name="quantity"
-                    label={t('app.master-data.bom.quantity')}
+                    label={t('common.quantity')}
                     rules={[
                       { required: true, message: t('app.master-data.bom.quantityRequired') },
                       { type: 'number', min: 0.0001, message: t('app.master-data.bom.quantityMin') },
@@ -3497,7 +3497,7 @@ const BOMDesignerPage: React.FC = () => {
                   </Form.Item>
                 </Col>
                 <Col span={8}>
-                  <Form.Item name="unit" label={t('app.master-data.bom.unit')} rules={[{ required: true, message: t('app.master-data.bom.unitRequired') }]}>
+                  <Form.Item name="unit" label={t('common.unit')} rules={[{ required: true, message: t('app.master-data.bom.unitRequired') }]}>
                     <Select
                       placeholder={selectedMaterial ? t('app.master-data.bom.unitPlaceholder') : t('app.master-data.bom.selectMaterialFirst')}
                       options={unitOptionsFromMaterial}
@@ -3546,7 +3546,7 @@ const BOMDesignerPage: React.FC = () => {
               <Row gutter={12}>
                 <Col span={8}>
                   <Form.Item name="isRequired" label={t('app.master-data.bom.isRequired')} valuePropName="checked">
-                    <Switch checkedChildren={t('app.master-data.bom.yes')} unCheckedChildren={t('app.master-data.bom.no')} />
+                    <Switch checkedChildren={t('common.yes')} unCheckedChildren={t('common.no')} />
                   </Form.Item>
                 </Col>
                 <Col span={8}>
@@ -3557,8 +3557,8 @@ const BOMDesignerPage: React.FC = () => {
                     tooltip={t('app.master-data.bom.isConfigurableTooltip')}
                   >
                     <Switch
-                      checkedChildren={t('app.master-data.bom.yes')}
-                      unCheckedChildren={t('app.master-data.bom.no')}
+                      checkedChildren={t('common.yes')}
+                      unCheckedChildren={t('common.no')}
                       onChange={(checked) => {
                         nodeConfigForm.setFieldsValue({
                           isConfigurable: checked,
@@ -3579,8 +3579,8 @@ const BOMDesignerPage: React.FC = () => {
                     tooltip={t('app.master-data.bom.alternativeTitleTooltip')}
                   >
                     <Switch
-                      checkedChildren={t('app.master-data.bom.yes')}
-                      unCheckedChildren={t('app.master-data.bom.no')}
+                      checkedChildren={t('common.yes')}
+                      unCheckedChildren={t('common.no')}
                       onChange={(checked) => {
                         nodeConfigForm.setFieldsValue({
                           isAlternative: checked,
@@ -3653,7 +3653,7 @@ const BOMDesignerPage: React.FC = () => {
                                       danger
                                       icon={<DeleteOutlined />}
                                       onClick={() => (item as any).node?.id && handleRemoveAlternativeOrConfigurableNode((item as any).node.id)}
-                                      aria-label={t('app.master-data.bom.removeOption')}
+                                      aria-label={t('common.remove')}
                                     />,
                                   ] : undefined}
                                 >
@@ -3705,7 +3705,7 @@ const BOMDesignerPage: React.FC = () => {
                                   danger
                                   icon={<DeleteOutlined />}
                                   onClick={() => (item as any).node?.id && handleRemoveAlternativeOrConfigurableNode((item as any).node.id)}
-                                  aria-label={t('app.master-data.bom.removeOption')}
+                                  aria-label={t('common.remove')}
                                 />,
                               ] : undefined}
                               onDragOver={(e) => {
@@ -3797,7 +3797,7 @@ const BOMDesignerPage: React.FC = () => {
 
               <Form.Item>
                 <Space>
-                  <Button type="primary" onClick={handleSaveNodeConfig}>{t('app.master-data.bom.save')}</Button>
+                  <Button type="primary" onClick={handleSaveNodeConfig}>{t('common.save')}</Button>
                   <Button onClick={() => { 
                     setSelectedNodeId(null); 
                     // Clear graph selection
@@ -4194,7 +4194,7 @@ const BOMDesignerPage: React.FC = () => {
                         )}
                         {v1.unit !== v2.unit && (
                           <div style={{ paddingLeft: 16 }}>
-                            {t('app.master-data.bom.unitTitle')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.unit ?? '-'}</span>
+                            {t('common.unit')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.unit ?? '-'}</span>
                             {' → '}<span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.unit ?? '-'}</span>
                           </div>
                         )}
@@ -4206,14 +4206,14 @@ const BOMDesignerPage: React.FC = () => {
                         )}
                         {v1.is_required !== v2.is_required && (
                           <div style={{ paddingLeft: 16 }}>
-                            {t('app.master-data.bom.isRequiredTitle')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.is_required ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}</span>
-                            {' → '}<span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.is_required ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}</span>
+                            {t('app.master-data.bom.isRequiredTitle')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.is_required ? t('common.yes') : t('common.no')}</span>
+                            {' → '}<span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.is_required ? t('common.yes') : t('common.no')}</span>
                           </div>
                         )}
                         {(v1.is_configurable ?? v1.isConfigurable) !== (v2.is_configurable ?? v2.isConfigurable) && (
                           <div style={{ paddingLeft: 16 }}>
-                            {t('app.master-data.bom.isConfigurable')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.is_configurable ?? v1.isConfigurable ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}</span>
-                            {' → '}<span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.is_configurable ?? v2.isConfigurable ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}</span>
+                            {t('app.master-data.bom.isConfigurable')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.is_configurable ?? v1.isConfigurable ? t('common.yes') : t('common.no')}</span>
+                            {' → '}<span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.is_configurable ?? v2.isConfigurable ? t('common.yes') : t('common.no')}</span>
                           </div>
                         )}
                         {(v1.configurable_group_id ?? v1.configurableGroupId) !== (v2.configurable_group_id ?? v2.configurableGroupId) && (
@@ -4224,14 +4224,14 @@ const BOMDesignerPage: React.FC = () => {
                         )}
                         {(v1.is_default_configurable ?? v1.isDefaultConfigurable) !== (v2.is_default_configurable ?? v2.isDefaultConfigurable) && (
                           <div style={{ paddingLeft: 16 }}>
-                            {t('app.master-data.bom.isDefaultConfigurable')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.is_default_configurable ?? v1.isDefaultConfigurable ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}</span>
-                            {' → '}<span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.is_default_configurable ?? v2.isDefaultConfigurable ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}</span>
+                            {t('app.master-data.bom.isDefaultConfigurable')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.is_default_configurable ?? v1.isDefaultConfigurable ? t('common.yes') : t('common.no')}</span>
+                            {' → '}<span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.is_default_configurable ?? v2.isDefaultConfigurable ? t('common.yes') : t('common.no')}</span>
                           </div>
                         )}
                         {(v1.is_alternative ?? v1.isAlternative) !== (v2.is_alternative ?? v2.isAlternative) && (
                           <div style={{ paddingLeft: 16 }}>
-                            {t('app.master-data.bom.alternativeLabel')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.is_alternative ?? v1.isAlternative ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}</span>
-                            {' → '}<span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.is_alternative ?? v2.isAlternative ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}</span>
+                            {t('app.master-data.bom.alternativeLabel')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.is_alternative ?? v1.isAlternative ? t('common.yes') : t('common.no')}</span>
+                            {' → '}<span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.is_alternative ?? v2.isAlternative ? t('common.yes') : t('common.no')}</span>
                           </div>
                         )}
                         {(v1.alternative_group_id ?? v1.alternativeGroupId) !== (v2.alternative_group_id ?? v2.alternativeGroupId) && (
@@ -4287,8 +4287,8 @@ const BOMDesignerPage: React.FC = () => {
       onCancel={() => { setObsoleteModalVisible(false); setObsoleteReason(''); }}
       onOk={handleSetObsoleteSubmit}
       confirmLoading={obsoleteLoading}
-      okText={t('app.master-data.bom.ok')}
-      cancelText={t('app.master-data.bom.cancel')}
+      okText={t('common.confirm')}
+      cancelText={t('common.cancel')}
     >
       <p style={{ marginBottom: 8 }}>{t('app.master-data.bom.setObsoleteConfirm')}</p>
       {resolvedVersion && (

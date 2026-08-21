@@ -126,7 +126,7 @@ const UniSearch: React.FC<UniSearchProps> = ({
   const { t } = useTranslation();
   const { token } = theme.useToken();
   const placeholder = fuzzyPlaceholder ?? t('components.uniSearch.fuzzySearch');
-  const resetLabel = resetText ?? t('components.uniSearch.reset');
+  const resetLabel = resetText ?? t('common.reset');
 
   const canReset = Boolean(showReset && onReset);
   /** 默认高级搜索条内已带「重置」，不再在整条最右侧重复渲染 */

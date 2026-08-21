@@ -160,7 +160,7 @@ const MoldReturnsPage: React.FC = () => {
       { title: t(`${P}.col.returnDate`), dataIndex: 'return_date', valueType: 'date' },
       { title: t(`${P}.col.manufactureQty`), dataIndex: 'manufacture_qty' },
       { title: t(`${P}.col.usageCount`), dataIndex: 'usage_count' },
-      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+      { title: t('common.remark'), dataIndex: 'remark', span: 2 },
     ],
     [t],
   );
@@ -345,7 +345,7 @@ const MoldReturnsPage: React.FC = () => {
             <ProFormDigit name="usage_count" label={t(`${P}.col.usageCount`)} min={1} rules={[{ required: true }]} />
           </Col>
           <Col span={24}>
-            <ProFormTextArea name="remark" label={t(`${P}.form.remark`)} fieldProps={{ rows: 2 }} />
+            <ProFormTextArea name="remark" label={t('common.remark')} fieldProps={{ rows: 2 }} />
           </Col>
         </Row>
       </FormModalTemplate>

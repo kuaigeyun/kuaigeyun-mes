@@ -230,7 +230,7 @@ const codeRulePageEnUS = {
   'codeRulePage.master-data-warehouse-warehouse.pageName': 'Warehouses',
   'codeRulePage.module.主数据管理': 'Master Data',
   'codeRulePage.module.好力 GO': 'Haoli GO',
-  'codeRulePage.module.快格轻制造': 'Kuaizhizao',
+  'codeRulePage.module.快格轻制造': 'Kuai Manufacturing',
   'codeRulePage.module.快研发': 'Kuai PLM',
   'codeRulePage.module.系统配置': 'System Configuration',
   'codeRulePage.module.轻管理会计': 'Finance Lite',

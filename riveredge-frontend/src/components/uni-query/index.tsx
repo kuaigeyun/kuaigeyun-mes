@@ -808,7 +808,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       queryClient.invalidateQueries({ queryKey: ['savedSearches', pagePath] });
     },
     onError: (error: any) => {
-      messageApi.error(error?.message || t('components.uniQuery.saveFailed'));
+      messageApi.error(error?.message || t('common.saveFailed'));
     },
   });
   
@@ -820,7 +820,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       queryClient.invalidateQueries({ queryKey: ['savedSearches', pagePath] });
     },
     onError: (error: any) => {
-      messageApi.error(error?.message || t('components.uniQuery.deleteFailed'));
+      messageApi.error(error?.message || t('common.deleteFailed'));
     },
   });
   
@@ -837,7 +837,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       queryClient.invalidateQueries({ queryKey: ['savedSearches', pagePath] });
     },
     onError: (error: any) => {
-      messageApi.error(error?.message || t('components.uniQuery.updateFailed'));
+      messageApi.error(error?.message || t('common.updateFailed'));
     },
   });
 
@@ -1680,17 +1680,17 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
               {editingSearch ? t('components.uniQuery.updateSearch') : t('components.uniQuery.saveSearch')}
             </Button>
             <Button onClick={handleReset}>
-              {t('components.uniQuery.reset')}
+              {t('common.reset')}
             </Button>
             <Button onClick={onClose}>
-              {t('components.uniQuery.cancel')}
+              {t('common.cancel')}
             </Button>
             <Button 
               type="primary" 
               onClick={handleSearch}
               ref={searchButtonRef}
             >
-              {t('components.uniQuery.search')}
+              {t('common.search')}
             </Button>
           </div>
         </div>
@@ -1783,7 +1783,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
                         items: [
                           ...(isBuiltinSavedSearch(item) ? [] : [{
                             key: 'edit',
-                            label: t('components.uniQuery.edit'),
+                            label: t('common.edit'),
                             icon: <EditOutlined />,
                             onClick: (e) => {
                               e.domEvent.stopPropagation();
@@ -1808,7 +1808,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
                           // 只有自己的条件才能删除
                           ...(isOwnSearch(item) ? [{
                             key: 'delete',
-                            label: t('components.uniQuery.delete'),
+                            label: t('common.delete'),
                             icon: <DeleteOutlined />,
                             danger: true,
                             onClick: (e: any) => {
@@ -1976,7 +1976,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
                         items: [
                           ...(isBuiltinSavedSearch(item) ? [] : [{
                             key: 'edit',
-                            label: t('components.uniQuery.edit'),
+                            label: t('common.edit'),
                             icon: <EditOutlined />,
                             onClick: (e) => {
                               e.domEvent.stopPropagation();
@@ -2016,7 +2016,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
                           // 只有自己的条件才能删除
                           ...(isOwnSearch(item) ? [{
                             key: 'delete',
-                            label: t('components.uniQuery.delete'),
+                            label: t('common.delete'),
                             icon: <DeleteOutlined />,
                             danger: true,
                             onClick: (e: any) => {
@@ -3131,7 +3131,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
             type="default"
             style={{ height: '32px' }}
           >
-            {t('components.uniQuery.reset')}
+            {t('common.reset')}
           </Button>
         )}
         {/* 钉住条件：按容器宽度动态拆分，宽度不足时收入「更多」下拉 */}
@@ -3219,7 +3219,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
                     color: token.colorText,
                   }}
                 >
-                  {t('components.uniQuery.more')} ({Math.max(1, pinnedSearches.length - 1)})
+                  {t('common.more')} ({Math.max(1, pinnedSearches.length - 1)})
                 </Button>
               </div>
               <div
@@ -3307,7 +3307,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
                         e.currentTarget.style.color = token.colorText;
                       }}
                     >
-                      {t('components.uniQuery.more')} ({morePinnedSearches.length})
+                      {t('common.more')} ({morePinnedSearches.length})
                     </Button>
                   </Dropdown>
                 )}

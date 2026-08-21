@@ -472,7 +472,7 @@ const InventoryTransferPage: React.FC = () => {
       search: { order: 10 } as ProColumns['search'],
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: workflowStatusValueEnum,
@@ -570,7 +570,7 @@ const InventoryTransferPage: React.FC = () => {
       render: (_, record) => `¥${Number(record.total_amount ?? 0).toFixed(2)}`,
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
+      title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       hideInTable: true,
       hideInSearch: true,
@@ -597,7 +597,7 @@ const InventoryTransferPage: React.FC = () => {
       },
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colActions'),
+      title: t('common.actions'),
       width: 200,
       fixed: 'right',
       render: (_, record) => (
@@ -644,7 +644,7 @@ const InventoryTransferPage: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseReports.colToWarehouse'), dataIndex: 'to_warehouse_name' },
       { title: t('app.kuaizhizao.inventoryTransfer.colTransferDate'), dataIndex: 'transfer_date', valueType: 'date' },
       {
-        title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+        title: t('common.status'),
         dataIndex: 'status',
         render: (s) => {
           const map: Record<string, { textKey: string; color: string }> = {
@@ -665,7 +665,7 @@ const InventoryTransferPage: React.FC = () => {
         render: (_dom, entity) => `¥${Number(entity.total_amount ?? 0).toFixed(2)}`,
       },
       { title: t('app.kuaizhizao.inventoryTransfer.formTransferReason'), dataIndex: 'transfer_reason' },
-      { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 3 },
+      { title: t('common.remark'), dataIndex: 'remarks', span: 3 },
     ]),
     [t],
   );
@@ -674,7 +674,7 @@ const InventoryTransferPage: React.FC = () => {
     () => [
       { title: t('app.kuaizhizao.warehouseCommon.colMaterialCode'), dataIndex: 'material_code', width: 120 },
       { title: t('app.kuaizhizao.warehouseReports.colMaterialName'), dataIndex: 'material_name', width: 150 },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'material_unit', width: 72 },
+      { title: t('common.unit'), dataIndex: 'material_unit', width: 72 },
       {
         title: t('app.kuaizhizao.inventoryTransfer.formTransferQty'),
         dataIndex: 'quantity',
@@ -712,7 +712,7 @@ const InventoryTransferPage: React.FC = () => {
       },
       { title: t('app.kuaizhizao.warehouseReports.colBatchNo'), dataIndex: 'batch_no', width: 100 },
       {
-        title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+        title: t('common.status'),
         dataIndex: 'status',
         width: 100,
         render: (status: string) => {
@@ -800,7 +800,7 @@ const InventoryTransferPage: React.FC = () => {
             invalidateMenuBadgeCounts();
             actionRef.current?.reload();
           } catch (error: any) {
-            messageApi.error(error.message || t('app.kuaizhizao.warehouseCommon.deleteFailed'));
+            messageApi.error(error.message || t('common.deleteFailed'));
           }
         }}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.inventoryTransfer.deleteConfirm', { count })}
@@ -931,7 +931,7 @@ const InventoryTransferPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.warehouseOutbound.col.unit'),
+                    title: t('common.unit'),
                     dataIndex: 'material_unit',
                     width: 88,
                     render: (_: unknown, __: unknown, index: number) => (
@@ -957,7 +957,7 @@ const InventoryTransferPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.warehouseCommon.colQuantity'),
+                    title: t('common.quantity'),
                     dataIndex: 'quantity',
                     width: 100,
                     align: 'right' as const,
@@ -967,7 +967,7 @@ const InventoryTransferPage: React.FC = () => {
                         rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.batchingCenter.qtyGtZero') }]}
                         style={{ margin: 0 }}
                       >
-                        <InputNumber placeholder={t('app.kuaizhizao.warehouseCommon.colQuantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
+                        <InputNumber placeholder={t('common.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
                       </AntForm.Item>
                     ),
                   },
@@ -1086,7 +1086,7 @@ const InventoryTransferPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.warehouseCommon.colActions'),
+                    title: t('common.actions'),
                     width: 60,
                     render: (_: unknown, __: unknown, index: number) => (
                       <Button
@@ -1142,7 +1142,7 @@ const InventoryTransferPage: React.FC = () => {
         <DocumentAttachmentsField category="inventory_transfer_attachments" />
         <ProFormTextArea
           name="remarks"
-          label={t('app.kuaizhizao.warehouseCommon.colRemarks')}
+          label={t('common.remark')}
           placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')}
           fieldProps={{ rows: 3 }}
         />
@@ -1282,7 +1282,7 @@ const InventoryTransferPage: React.FC = () => {
         />
         <ProFormTextArea
           name="remarks"
-          label={t('app.kuaizhizao.warehouseCommon.colRemarks')}
+          label={t('common.remark')}
           placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')}
           fieldProps={{ rows: 3 }}
         />

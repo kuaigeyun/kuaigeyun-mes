@@ -170,7 +170,7 @@ const ChartOfAccountsPage: React.FC = () => {
         },
       },
       {
-        title: t(`${NS}.col.active`, { defaultValue: '启用' }),
+        title: t('common.enabled', { defaultValue: '启用' }),
         dataIndex: 'is_active',
         width: 80,
         minWidth: 80,
@@ -446,7 +446,7 @@ const ChartOfAccountsPage: React.FC = () => {
         </ProFormCheckbox>
         <ProFormTextArea
           name="notes"
-          label={t(`${NS}.field.notes`, { defaultValue: '备注' })}
+          label={t('common.remark', { defaultValue: '备注' })}
           colProps={{ span: 24 }}
           fieldProps={{ rows: 3 }}
         />
@@ -458,7 +458,7 @@ const ChartOfAccountsPage: React.FC = () => {
         onCancel={() => setSeedModalOpen(false)}
         onOk={() => void handleSeed()}
         confirmLoading={seedLoading}
-        okText={t(`${NS}.seedConfirm`, { defaultValue: '导入' })}
+        okText={t('common.import', { defaultValue: '导入' })}
         cancelText={t('common.cancel', { defaultValue: '取消' })}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         destroyOnHidden

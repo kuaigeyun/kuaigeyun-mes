@@ -35,14 +35,14 @@ export const workshopFormSchema: FieldConfig[] = [
   {
     name: 'description',
     type: 'textarea',
-    labelKey: 'field.workshop.description',
+    labelKey: 'common.remark',
     colSpan: 24,
     fieldProps: { rows: 2, maxLength: 1000 },
   },
   {
     name: 'isActive',
     type: 'switch',
-    labelKey: 'field.workshop.isActive',
+    labelKey: 'common.enabled',
     colSpan: 12,
   },
 ];

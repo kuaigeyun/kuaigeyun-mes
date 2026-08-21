@@ -89,7 +89,7 @@ export const roleFormSchema: FieldConfig[] = [
   {
     name: 'description',
     type: 'textarea',
-    labelKey: 'field.role.description',
+    labelKey: 'common.remark',
     placeholderKey: 'field.role.descriptionPlaceholder',
     colSpan: 24,
     fieldProps: { rows: 2 },
@@ -97,7 +97,7 @@ export const roleFormSchema: FieldConfig[] = [
   {
     name: 'is_active',
     type: 'switch',
-    labelKey: 'field.role.isActive',
+    labelKey: 'common.enabled',
     colSpan: 24,
   },
 ];

@@ -127,6 +127,7 @@ export interface Tenant {
   is_subtenant?: boolean;
   max_users: number;
   max_storage: number;
+  sensitive_word_enabled?: boolean;
   user_count?: number;
   expires_at?: string;
   last_login_at?: string;
@@ -181,6 +182,7 @@ export interface CreateTenantData {
   max_users?: number;
   max_storage?: number;
   expires_at?: string;
+  sensitive_word_enabled?: boolean;
   admin_account: TenantAdminAccountData;
 }
 
@@ -196,6 +198,7 @@ export interface UpdateTenantData {
   max_users?: number;
   max_storage?: number;
   expires_at?: string;
+  sensitive_word_enabled?: boolean;
 }
 
 /**

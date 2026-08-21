@@ -512,7 +512,7 @@ const SalesOrderChangesPage: React.FC = () => {
         span: 3,
       },
       {
-        title: t('app.kuaizhizao.salesOrderChange.notes'),
+        title: t('common.remark'),
         dataIndex: 'notes',
         span: 3,
       },
@@ -980,7 +980,7 @@ const SalesOrderChangesPage: React.FC = () => {
         <OrderChangeItemsTable items={editItems ?? []} editable onChange={setEditItems} />
         <ProFormTextArea name="change_reason" label={t('app.kuaizhizao.salesOrderChange.colChangeReason')} rules={[{ required: true }]} />
         <DocumentAttachmentsField category="sales_order_change_attachments" />
-        <ProFormTextArea name="notes" label={t('app.kuaizhizao.salesOrderChange.notes')} />
+        <ProFormTextArea name="notes" label={t('common.remark')} />
       </FormModalTemplate>
 
       <DetailDrawerTemplate
@@ -992,7 +992,7 @@ const SalesOrderChangesPage: React.FC = () => {
           detail ? (
             <Space size="small">
               {!detailCapabilityGates.submit.disabled && (
-                <Button icon={<ThunderboltOutlined />} onClick={() => runSubmitWithPreview(detail.id!)}>{t('app.kuaizhizao.salesOrderChange.submit')}</Button>
+                <Button icon={<ThunderboltOutlined />} onClick={() => runSubmitWithPreview(detail.id!)}>{t('common.submit')}</Button>
               )}
               {!detailCapabilityGates.update.disabled && (
                 <Button icon={<EditOutlined />} onClick={() => { setDetailOpen(false); openEdit(detail); }}>{t('common.edit')}</Button>

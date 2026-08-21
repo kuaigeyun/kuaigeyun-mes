@@ -224,11 +224,11 @@ const ToolBorrowsPage: React.FC = () => {
       },
       { title: t(`${P}.col.plannedQty`), dataIndex: 'planned_qty' },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status),
       },
-      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+      { title: t('common.remark'), dataIndex: 'remark', span: 2 },
     ],
     [t],
   );
@@ -251,7 +251,7 @@ const ToolBorrowsPage: React.FC = () => {
         search: { order: 11 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         valueType: 'select',
         valueEnum: borrowStatusValueEnum,
@@ -288,7 +288,7 @@ const ToolBorrowsPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<ToolBorrow>(t),
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
         width: 90,
@@ -462,7 +462,7 @@ const ToolBorrowsPage: React.FC = () => {
             <ProFormDigit name="planned_qty" label={t(`${P}.col.plannedQty`)} min={0} />
           </Col>
           <Col span={24}>
-            <ProFormTextArea name="remark" label={t(`${P}.form.remark`)} fieldProps={{ rows: 2 }} />
+            <ProFormTextArea name="remark" label={t('common.remark')} fieldProps={{ rows: 2 }} />
           </Col>
         </Row>
       </FormModalTemplate>

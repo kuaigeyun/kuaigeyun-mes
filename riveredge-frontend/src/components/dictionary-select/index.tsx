@@ -292,7 +292,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
       return newValue;
     } catch (error: any) {
       console.error('创建字典项失败:', error);
-      messageApi.error(error?.response?.data?.detail || t('components.dictionarySelect.createFailed'));
+      messageApi.error(error?.response?.data?.detail || t('common.createFailed'));
     } finally {
       setCreating(false);
     }
@@ -466,7 +466,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
                 <Input placeholder={t('components.dictionarySelect.placeholderValue')} maxLength={100} />
               </Form.Item>
             ) : null}
-            <Form.Item name="description" label={t('components.dictionarySelect.fieldDescription')}>
+            <Form.Item name="description" label={t('common.remark')}>
               <Input.TextArea
                 placeholder={t('components.dictionarySelect.placeholderDescription')}
                 rows={3}

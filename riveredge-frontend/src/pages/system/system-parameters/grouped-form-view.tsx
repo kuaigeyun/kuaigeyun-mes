@@ -195,10 +195,10 @@ const GroupedFormView: React.FC = () => {
       }
       
       await batchUpdateSystemParameters(updates);
-      handleSuccess(t('pages.system.parameters.saveSuccess'));
+      handleSuccess(t('common.saveSuccess'));
       loadParameters();
     } catch (error: any) {
-      handleError(error, t('pages.system.parameters.saveFailed'));
+      handleError(error, t('common.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -238,7 +238,7 @@ const GroupedFormView: React.FC = () => {
       
       handleSuccess(t('pages.system.parameters.grouped.exportSuccess'));
     } catch (error: any) {
-      handleError(error, t('pages.system.parameters.grouped.exportFailed'));
+      handleError(error, t('common.exportFailed'));
     }
   };
 
@@ -473,7 +473,7 @@ const GroupedFormView: React.FC = () => {
             icon={<DownloadOutlined />}
             onClick={handleExport}
           >
-            {t('pages.system.parameters.grouped.export')}
+            {t('common.export')}
           </Button>,
           <Upload
             key="import"
@@ -481,7 +481,7 @@ const GroupedFormView: React.FC = () => {
             beforeUpload={handleImport}
             showUploadList={false}
           >
-            <Button icon={<UploadOutlined />}>{t('pages.system.parameters.grouped.import')}</Button>
+            <Button icon={<UploadOutlined />}>{t('common.import')}</Button>
           </Upload>,
           <Button
             key="reload"
@@ -489,7 +489,7 @@ const GroupedFormView: React.FC = () => {
             onClick={loadParameters}
             loading={loading}
           >
-            {t('pages.system.parameters.grouped.refresh')}
+            {t('common.refresh')}
           </Button>,
           <Button
             key="save"
@@ -498,7 +498,7 @@ const GroupedFormView: React.FC = () => {
             onClick={handleSave}
             loading={saving}
           >
-            {t('pages.system.parameters.grouped.save')}
+            {t('common.save')}
           </Button>,
         ]}
       >
@@ -546,7 +546,7 @@ const GroupedFormView: React.FC = () => {
                             <Tag color="default">{t('pages.system.parameters.grouped.systemParam')}</Tag>
                           )}
                           <Tag color={param.is_active ? 'success' : 'default'}>
-                            {param.is_active ? t('pages.system.parameters.grouped.enabled') : t('pages.system.parameters.grouped.disabled')}
+                            {param.is_active ? t('common.enabled') : t('common.disabled')}
                           </Tag>
                         </Space>
                         <Button
@@ -599,9 +599,9 @@ const GroupedFormView: React.FC = () => {
                   <div>
                     <div style={{ marginBottom: 4 }}>
                       <Text strong>
-                        {log.operation_type === 'create' ? t('pages.system.parameters.grouped.create') :
+                        {log.operation_type === 'create' ? t('common.create') :
                          log.operation_type === 'update' ? t('pages.system.parameters.grouped.update') :
-                         log.operation_type === 'delete' ? t('pages.system.parameters.grouped.delete') :
+                         log.operation_type === 'delete' ? t('common.delete') :
                          log.operation_type}
                       </Text>
                       <Text type="secondary" style={{ marginLeft: 8 }}>

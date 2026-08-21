@@ -249,7 +249,7 @@ const OtherOutboundPage: React.FC = () => {
       search: { order: 10 } as ProColumns['search'],
     },
     {
-      title: t('app.kuaizhizao.warehouseOutbound.col.status'),
+      title: t('common.status'),
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: otherOutboundStatusValueEnum,
@@ -363,7 +363,7 @@ const OtherOutboundPage: React.FC = () => {
     },
     ...otherOutboundCustomFieldColumns,
     {
-      title: t('app.kuaizhizao.warehouseOutbound.col.actions'),
+      title: t('common.actions'),
       width: 180,
       fixed: 'right',
       render: (_, record) => {
@@ -463,12 +463,12 @@ const OtherOutboundPage: React.FC = () => {
       onOk: async () => {
         try {
           await warehouseApi.otherOutbound.delete(record.id!.toString());
-          messageApi.success(t('app.kuaizhizao.otherOutbound.msg.deleteSuccess'));
+          messageApi.success(t('common.deleteSuccess'));
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.otherOutbound.msg.deleteFailed'));
+          messageApi.error(error.message || t('common.deleteFailed'));
         }
       },
     });
@@ -579,7 +579,7 @@ const OtherOutboundPage: React.FC = () => {
       if (recordId > 0 && Object.keys(customData).length > 0) {
         await saveOtherOutboundCustomFieldValues(recordId, customData);
       }
-      messageApi.success(t('app.kuaizhizao.otherOutbound.msg.createSuccess'));
+      messageApi.success(t('common.createSuccess'));
       resetOtherOutboundFormFieldValues();
       resetSelectedWarehouseId();
       setCreateModalVisible(false);
@@ -587,7 +587,7 @@ const OtherOutboundPage: React.FC = () => {
 
       actionRef.current?.reload();
     } catch (error: any) {
-      if (error.message !== needValidLinesMsg) messageApi.error(error.message || t('app.kuaizhizao.otherOutbound.msg.createFailed'));
+      if (error.message !== needValidLinesMsg) messageApi.error(error.message || t('common.createFailed'));
       throw error;
     }
   };
@@ -603,7 +603,7 @@ const OtherOutboundPage: React.FC = () => {
     { title: t('app.kuaizhizao.otherOutbound.field.reasonDesc'), dataIndex: 'reason_desc', span: 3 },
     { title: t('app.kuaizhizao.warehouseReports.colWarehouse'), dataIndex: 'warehouse_name' },
     {
-      title: t('app.kuaizhizao.warehouseOutbound.col.status'),
+      title: t('common.status'),
       dataIndex: 'status',
       render: (s) => {
         const map: Record<string, { text: string; color: string }> = {
@@ -620,7 +620,7 @@ const OtherOutboundPage: React.FC = () => {
   ]), [t]);
 
   const detailNotesColumn: ProDescriptionsItemProps<OtherOutboundDetail> = useMemo(() => ({
-    title: t('app.kuaizhizao.common.fieldNotes'),
+    title: t('common.remark'),
     dataIndex: 'notes',
     span: 3,
   }), [t]);
@@ -780,7 +780,7 @@ const OtherOutboundPage: React.FC = () => {
                   { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
                   { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
                   {
-                    title: t('app.kuaizhizao.warehouseOutbound.col.unit'),
+                    title: t('common.unit'),
                     dataIndex: 'material_unit',
                     width: 60,
                     render: (val) => <MaterialUnitLabel value={val} />,
@@ -789,7 +789,7 @@ const OtherOutboundPage: React.FC = () => {
                   { title: t('app.kuaizhizao.warehouseOutbound.field.unitPrice'), dataIndex: 'unit_price', width: 100, align: 'right' },
                   { title: t('app.kuaizhizao.warehouseOutbound.field.amount'), dataIndex: 'total_amount', width: 100, align: 'right' },
                   { title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'), dataIndex: 'batch_number', width: 100 },
-                  { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes' },
+                  { title: t('common.remark'), dataIndex: 'notes' },
                 ]}
                 dataSource={outboundDetail.items}
                 pagination={false}
@@ -923,7 +923,7 @@ const OtherOutboundPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.warehouseOutbound.col.unit'),
+                    title: t('common.unit'),
                     dataIndex: 'material_unit',
                     width: 100,
                     render: (_: any, __: any, index: number) => (
@@ -949,13 +949,13 @@ const OtherOutboundPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.warehouseOutbound.field.quantity'),
+                    title: t('common.quantity'),
                     dataIndex: 'outbound_quantity',
                     width: 100,
                     align: 'right' as const,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'outbound_quantity']} rules={[{ required: true, message: t('app.kuaizhizao.warehouseOutbound.field.required') }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
-                        <InputNumber placeholder={t('app.kuaizhizao.warehouseOutbound.field.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
+                        <InputNumber placeholder={t('common.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
                       </AntForm.Item>
                     ),
                   },
@@ -990,7 +990,7 @@ const OtherOutboundPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.warehouseOutbound.col.actions'),
+                    title: t('common.actions'),
                     width: 60,
                     render: (_: any, __: any, index: number) => (
                       <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
@@ -1034,7 +1034,7 @@ const OtherOutboundPage: React.FC = () => {
             </AntForm.List>
         </div>
         <DocumentAttachmentsField category="other_outbound_attachments" />
-        <ProFormTextArea name="notes" label={t('app.kuaizhizao.common.fieldNotes')} placeholder={t('app.kuaizhizao.warehouseOutbound.field.optional')} fieldProps={{ rows: 2 }} />
+        <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('app.kuaizhizao.warehouseOutbound.field.optional')} fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
 
       <UniMaterialBatchPicker

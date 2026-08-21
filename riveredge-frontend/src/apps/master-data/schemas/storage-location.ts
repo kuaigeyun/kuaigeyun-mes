@@ -38,14 +38,14 @@ export const storageLocationFormSchema: FieldConfig[] = [
   {
     name: 'description',
     type: 'textarea',
-    labelKey: 'field.storageLocation.description',
+    labelKey: 'common.remark',
     colSpan: 24,
     fieldProps: { rows: 2, maxLength: 1000 },
   },
   {
     name: 'isActive',
     type: 'switch',
-    labelKey: 'field.storageLocation.isActive',
+    labelKey: 'common.enabled',
     colSpan: 12,
   },
 ];

@@ -471,7 +471,7 @@ const FreightOrdersPage: React.FC = () => {
           render: (_, row) => formatDateTimeBySiteSetting(row.planned_arrive_at),
         },
         {
-          title: t('app.kuaizhizao.logistics.field.status'),
+          title: t('common.status'),
           key: 'lifecycle',
           dataIndex: 'status',
           fixed: 'right',

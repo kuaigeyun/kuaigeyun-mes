@@ -133,7 +133,7 @@ const ConnectionWizard: React.FC<ConnectionWizardProps> = ({ open, onClose, onSu
       handleClose();
       onSuccess();
     } catch (error: any) {
-      messageApi.error(error?.message || t('pages.system.integrationConfigs.saveFailed'));
+      messageApi.error(error?.message || t('common.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -232,7 +232,7 @@ const ConnectionWizard: React.FC<ConnectionWizardProps> = ({ open, onClose, onSu
       >
         <Input placeholder={t('pages.system.integrationConfigs.connectionCodePlaceholder')} />
       </Form.Item>
-      <Form.Item name="description" label={t('pages.system.integrationConfigs.descLabel')}>
+      <Form.Item name="description" label={t('common.remark')}>
         <Input.TextArea rows={2} placeholder={t('pages.system.integrationConfigs.descOptional')} />
       </Form.Item>
     </Form>
@@ -282,9 +282,9 @@ const ConnectionWizard: React.FC<ConnectionWizardProps> = ({ open, onClose, onSu
       {step === 2 && (
         <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <Space>
-            <Button onClick={handleClose}>{t('pages.system.integrationConfigs.wizardCancel')}</Button>
+            <Button onClick={handleClose}>{t('common.cancel')}</Button>
             <Button type="primary" loading={saving} onClick={() => handleFinish(false)}>
-              {t('pages.system.integrationConfigs.wizardSave')}
+              {t('common.save')}
             </Button>
             <Button type="primary" loading={saving || testing} onClick={() => handleFinish(true)}>
               {t('pages.system.integrationConfigs.wizardSaveAndTest')}

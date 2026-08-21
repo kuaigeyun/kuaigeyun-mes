@@ -112,7 +112,7 @@ const InternalAuditsPage: React.FC = () => {
             render: (_, row) => formatDateTimeBySiteSetting(row.planned_date) || '-',
           },
           {
-            title: t('app.kuaizhizao.quality.qms.status'),
+            title: t('common.status'),
             dataIndex: 'status',
             width: 110,
             valueEnum: statusEnum,
@@ -258,7 +258,7 @@ const InternalAuditsPage: React.FC = () => {
             <Col span={8}>
               <ProFormSelect
                 name="status"
-                label={t('app.kuaizhizao.quality.qms.status')}
+                label={t('common.status')}
                 options={QMS_AUDIT_STATUS_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))}
                 rules={[{ required: true }]}
               />

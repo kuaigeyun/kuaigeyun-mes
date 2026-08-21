@@ -69,7 +69,7 @@ export function buildMaterialShortageExceptionActionButtons({
       {...rowActionKind('reject')}
       onClick={() => onAction('cancel')}
     >
-      {t(`${P}.action.cancel`)}
+      {t('common.cancel')}
     </Button>,
   ];
 }
@@ -134,7 +134,7 @@ export function buildDeliveryDelayExceptionActionButtons({
       {...rowActionKind('reject')}
       onClick={() => onAction('cancel')}
     >
-      {t(`${P}.action.cancel`)}
+      {t('common.cancel')}
     </Button>,
   ];
 }
@@ -195,7 +195,7 @@ export function buildQualityExceptionHandleButtons({
         {...rowActionLabelKeep()}
         onClick={() => onAction('close')}
       >
-        {t(`${P}.action.close`)}
+        {t('common.close')}
       </Button>,
     );
   }
@@ -207,7 +207,7 @@ export function buildQualityExceptionHandleButtons({
         {...rowActionKind('reject')}
         onClick={() => onAction('cancel')}
       >
-        {t(`${P}.action.cancel`)}
+        {t('common.cancel')}
       </Button>,
     );
   }

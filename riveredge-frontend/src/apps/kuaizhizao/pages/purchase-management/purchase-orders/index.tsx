@@ -371,7 +371,7 @@ const PurchaseOrdersPage: React.FC = () => {
             labelKey: 'app.kuaizhizao.purchaseOrder.import.materialCode',
             aliases: ['物料', '物料编号'],
           },
-          { field: 'quantity', required: true, labelKey: 'app.kuaizhizao.purchaseOrder.import.quantity', aliases: ['数量'] },
+          { field: 'quantity', required: true, labelKey: 'common.quantity', aliases: ['数量'] },
           { field: 'unitPrice', labelKey: 'app.kuaizhizao.purchaseOrder.import.unitPrice', aliases: ['单价'] },
           { field: 'delivery', labelKey: 'app.kuaizhizao.purchaseOrder.import.deliveryDate', aliases: ['交货日期'] },
           { field: 'supplierContact', labelKey: 'app.kuaizhizao.purchaseOrder.import.supplierContact', aliases: ['供应商联系人'] },
@@ -380,7 +380,7 @@ const PurchaseOrdersPage: React.FC = () => {
           { field: 'buyer', labelKey: 'app.kuaizhizao.purchaseOrder.import.buyer', aliases: ['采购员'] },
           { field: 'currency', labelKey: 'app.kuaizhizao.quotation.form.currency', aliases: ['币种'] , options: purchaseOrderImportDict.CURRENCY },
           { field: 'priceType', labelKey: 'app.kuaizhizao.salesOrder.priceType', aliases: ['价格类型'] , options: buildImportPriceTypeOptions(t) },
-          { field: 'notes', labelKey: 'app.kuaizhizao.purchaseOrder.import.notes', aliases: ['备注'] },
+          { field: 'notes', labelKey: 'common.remark', aliases: ['备注'] },
         ],
         [
           t('app.kuaizhizao.purchaseOrder.importExample.code'),
@@ -418,7 +418,7 @@ const PurchaseOrdersPage: React.FC = () => {
     () => (
       <Space key="highlight-overdue-switch" align="center">
         <Switch checked={highlightDeliveryOverdue} onChange={setHighlightDeliveryOverdue} />
-        <span style={{ fontSize: 13, color: 'var(--ant-color-text)' }}>
+        <span className="uni-table-toolbar-plain-label" style={{ fontSize: 13, color: 'var(--ant-color-text)' }}>
           {t('app.kuaizhizao.purchaseOrder.highlightOverdue')}
         </span>
       </Space>
@@ -1055,7 +1055,7 @@ const PurchaseOrdersPage: React.FC = () => {
         hideInTable: true,
       },
       {
-        title: t('app.kuaizhizao.purchaseOrder.col.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'ordered_quantity',
         width: 120,
         align: 'right',
@@ -1216,13 +1216,13 @@ const PurchaseOrdersPage: React.FC = () => {
     }
     if (pushPreviewKind === 'purchase_return') {
       return {
-        quantity: t('app.kuaizhizao.salesOrder.quantity'),
+        quantity: t('common.quantity'),
         pushed: t('app.kuaizhizao.salesOrder.colPushedQty'),
         pushable: t('app.kuaizhizao.salesOrder.colPushableQty'),
       };
     }
     return {
-      quantity: t('app.kuaizhizao.salesOrder.quantity'),
+      quantity: t('common.quantity'),
       pushed: t('app.kuaizhizao.salesOrder.colPushedQty'),
       pushable: t('app.kuaizhizao.salesOrder.colPushableQty'),
     };
@@ -2052,7 +2052,7 @@ const PurchaseOrdersPage: React.FC = () => {
         ),
       },
       {
-        title: t('app.kuaizhizao.salesOrder.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'suggested_quantity',
         width: 100,
         align: 'right' as const,
@@ -2115,7 +2115,7 @@ const PurchaseOrdersPage: React.FC = () => {
         ),
       },
       {
-        title: t('app.kuaizhizao.salesOrder.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'suggested_quantity',
         width: 100,
         align: 'right' as const,
@@ -2896,7 +2896,7 @@ const PurchaseOrdersPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.purchaseOrder.form.unit'),
+                    title: t('common.unit'),
                     dataIndex: 'unit',
                     width: DOCUMENT_DETAIL_COL_WIDTH.unit,
                     ...DOCUMENT_DETAIL_TEXT_COL,
@@ -2923,13 +2923,13 @@ const PurchaseOrdersPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.purchaseOrder.form.quantity'),
+                    title: t('common.quantity'),
                     dataIndex: 'ordered_quantity',
                     width: DOCUMENT_DETAIL_COL_WIDTH.quantity,
                     ...DOCUMENT_DETAIL_NUM_COL,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'ordered_quantity']} rules={[{ required: true, message: t('common.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.salesOrder.quantityMinHint') }]} style={{ margin: 0 }}>
-                        <InputNumber placeholder={t('app.kuaizhizao.purchaseOrder.form.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
+                        <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                       </AntForm.Item>
                     ),
                   },
@@ -3091,7 +3091,7 @@ const PurchaseOrdersPage: React.FC = () => {
 
         <ProFormTextArea
           name="notes"
-          label={t('app.kuaizhizao.purchaseOrder.form.notes')}
+          label={t('common.remark')}
           placeholder={t('app.kuaizhizao.purchaseOrder.form.notesPlaceholder')}
           fieldProps={{ rows: 3 }}
         />
@@ -3119,7 +3119,7 @@ const PurchaseOrdersPage: React.FC = () => {
           onCancel={() => setImportModalVisible(false)}
           onConfirm={handleItemImport}
           title={t('app.kuaizhizao.purchaseOrder.importItemsTitle')}
-          headers={[t('app.kuaizhizao.purchaseOrder.importItems.materialCode'), t('app.kuaizhizao.purchaseOrder.importItems.spec'), t('app.kuaizhizao.purchaseOrder.importItems.unit'), t('app.kuaizhizao.purchaseOrder.importItems.quantity'), t('app.kuaizhizao.purchaseOrder.importItems.unitPrice'), t('app.kuaizhizao.purchaseOrder.importItems.requiredDate')]}
+          headers={[t('app.kuaizhizao.purchaseOrder.importItems.materialCode'), t('app.kuaizhizao.purchaseOrder.importItems.spec'), t('common.unit'), t('common.quantity'), t('app.kuaizhizao.purchaseOrder.importItems.unitPrice'), t('app.kuaizhizao.purchaseOrder.importItems.requiredDate')]}
           exampleRow={['MAT001', 'Spec X', pickImportExampleValue(purchaseOrderLineUnitOptions, t('app.kuaizhizao.purchaseOrder.importItems.exampleUnit')), '10', '100', '2026-03-01']}
           columnOptions={purchaseOrderLineImportColumnOptions}
         />
@@ -3827,7 +3827,7 @@ const PurchaseOrdersPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.purchaseOrder.col.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
                 ]}
               />
             ) : (

@@ -407,7 +407,7 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
               disabled={!canSave}
               onClick={() => void handleSave()}
             >
-              {t('app.master-data.productProcess.save')}
+              {t('common.save')}
             </Button>
           </Space>
         </div>

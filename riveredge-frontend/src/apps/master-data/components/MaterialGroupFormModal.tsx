@@ -275,7 +275,7 @@ export const MaterialGroupFormModal: React.FC<MaterialGroupFormModalProps> = ({
                 />
                 <ProFormTextArea
                   name="description"
-                  label={t('app.master-data.materials.description')}
+                  label={t('common.remark')}
                   placeholder={t('app.master-data.materials.descriptionPlaceholder')}
                   rows={3}
                   fieldProps={{
@@ -285,8 +285,8 @@ export const MaterialGroupFormModal: React.FC<MaterialGroupFormModalProps> = ({
                 <ProFormSwitch
                   name="isActive"
                   label={t('app.master-data.materials.enabledStatusLabel')}
-                  checkedChildren={t('app.master-data.materials.checkedChildren')}
-                  unCheckedChildren={t('app.master-data.materials.unCheckedChildren')}
+                  checkedChildren={t('common.enabled')}
+                  unCheckedChildren={t('common.disabled')}
                 />
               </>
             ),

@@ -380,7 +380,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
       setRoute({ ...route, operation_sequence: { sequence: operations.map((o) => o.uuid), operations } } as any);
       messageApi.success(t('app.master-data.sop.routeSaved'));
     } catch (e: any) {
-      messageApi.error(e?.message || t('app.master-data.sop.saveFailed'));
+      messageApi.error(e?.message || t('common.saveFailed'));
     } finally {
       setLoading(false);
     }
@@ -624,7 +624,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                           onClick={() => handleRemoveOperation(record.uuid)}
                           style={{ minWidth: 48, paddingInline: 4 }}
                         >
-                          {t('field.customField.delete')}
+                          {t('common.delete')}
                         </Button>
                       </Space>
                     ),
@@ -633,7 +633,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
               />
               <div style={{ display: 'flex', justifyContent: 'flex-start', gap: 8 }}>
                 <Button onClick={() => setCurrentStep(0)}>
-                  {t('components.layoutTemplates.wizard.prev')}
+                  {t('common.previous')}
                 </Button>
                 <Button type="primary" loading={loading} onClick={handleUpdateRoute}>
                   {t('app.master-data.sop.saveRoute')}
@@ -741,7 +741,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
             />
             <Space>
               <Button onClick={() => setCurrentStep(1)}>
-                {t('components.layoutTemplates.wizard.prev')}
+                {t('common.previous')}
               </Button>
               <Button type="primary" loading={createLoading} onClick={handleBatchCreateSops}>
                 {t('app.master-data.sop.createSopsForOps')}
@@ -792,7 +792,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                           icon={<FormOutlined />}
                           onClick={() => handleOpenEdit(record.uuid, 'formConfig')}
                         >
-                          {t('field.customField.edit')}
+                          {t('common.edit')}
                         </Button>,
                       ],
                 },
@@ -800,7 +800,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
             />
             <Space>
               <Button onClick={() => setCurrentStep(2)}>
-                {t('components.layoutTemplates.wizard.prev')}
+                {t('common.previous')}
               </Button>
               <Button type="primary" onClick={handleClose}>
                 {t('common.close')}
@@ -855,7 +855,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                   width: 80,
                   render: (_: any, record: OperationItem) => (
                     <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleRemoveOperation(record.uuid)}>
-                      {t('field.customField.delete')}
+                      {t('common.delete')}
                     </Button>
                   ),
                 },

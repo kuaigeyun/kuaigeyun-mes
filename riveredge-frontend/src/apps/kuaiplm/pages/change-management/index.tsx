@@ -237,7 +237,7 @@ const ChangeManagementPage: React.FC = () => {
       },
       ...plmCreatedUpdatedColumns<UnifiedChangeRow>(t),
       {
-        title: t('app.kuaiplm.common.columns.status'),
+        title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
         width: 100,
@@ -378,7 +378,7 @@ const ChangeManagementPage: React.FC = () => {
             setRowsByUuid(map);
             return { data: res.items, total: res.total, success: true };
           } catch (e: any) {
-            messageApi.error(e?.message || t('app.kuaiplm.common.messages.loadFailed'));
+            messageApi.error(e?.message || t('common.loadFailed'));
             return { data: [], total: 0, success: false };
           }
         }}

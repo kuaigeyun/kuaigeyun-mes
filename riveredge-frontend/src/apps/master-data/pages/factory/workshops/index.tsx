@@ -120,8 +120,8 @@ const WorkshopsPage: React.FC = () => {
           { field: 'code', required: true, labelKey: 'app.master-data.workshops.code' },
           { field: 'name', required: true, labelKey: 'app.master-data.workshops.name' },
           { field: 'plantCode', required: true, labelKey: 'app.master-data.workshops.plantCode' },
-          { field: 'description', labelKey: 'app.master-data.workshops.description' },
-          { field: 'isActive', labelKey: 'field.workshop.isActive', aliases: ['是否启用', '启用'] , options: [...IMPORT_YES_NO_OPTIONS] },
+          { field: 'description', labelKey: 'common.remark' },
+          { field: 'isActive', labelKey: 'common.enabled', aliases: ['是否启用', '启用'] , options: [...IMPORT_YES_NO_OPTIONS] },
         ],
         [
           t('app.master-data.workshops.importExample.code'),
@@ -538,7 +538,7 @@ const WorkshopsPage: React.FC = () => {
       }
 
       // 构建 CSV 内容
-      const headers = [t('app.master-data.workshops.code'), t('app.master-data.workshops.name'), t('app.master-data.workshops.plantName'), t('app.master-data.workshops.description'), t('app.master-data.workshops.status'), t('common.createdAt')];
+      const headers = [t('app.master-data.workshops.code'), t('app.master-data.workshops.name'), t('app.master-data.workshops.plantName'), t('common.remark'), t('common.status'), t('common.createdAt')];
       const csvRows: string[] = [headers.join(',')];
 
       exportData.forEach((item) => {
@@ -567,7 +567,7 @@ const WorkshopsPage: React.FC = () => {
       downloadFile(blob, filename);
       messageApi.success(t('common.exportSuccess', { count: exportData.length }));
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.exportFailed'));
+      messageApi.error(error.message || t('common.exportFailed'));
     }
   };
 
@@ -634,7 +634,7 @@ const WorkshopsPage: React.FC = () => {
         render: (_text, record) => formatPlantDisplay(record),
       },
       {
-        title: t('app.master-data.workshops.description'),
+        title: t('common.remark'),
         dataIndex: 'description',
         ellipsis: true,
         hideInSearch: true,
@@ -676,14 +676,14 @@ const WorkshopsPage: React.FC = () => {
               size="small"
               onClick={() => handleOpenDetail(record)}
             >
-              {t('field.customField.view')}
+              {t('common.view')}
             </Button>
             <Button key="edit" {...rowActionKind('update')}
               size="small"
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
             >
-              {t('field.customField.edit')}
+              {t('common.edit')}
             </Button>
             <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.workshops.deleteConfirm')}
               description={t('app.master-data.workshops.deleteDescription')}
@@ -695,7 +695,7 @@ const WorkshopsPage: React.FC = () => {
                 size="small"
                 icon={<DeleteOutlined />}
               >
-                {t('field.customField.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>
           </Space>
@@ -723,7 +723,7 @@ const WorkshopsPage: React.FC = () => {
       render: (_, record) => formatPlantDisplay(record),
     },
     {
-      title: t('app.master-data.workshops.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
     },
     {

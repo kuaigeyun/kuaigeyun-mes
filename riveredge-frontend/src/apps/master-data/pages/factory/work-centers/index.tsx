@@ -116,8 +116,8 @@ const WorkCentersPage: React.FC = () => {
         [
           { field: 'code', required: true, labelKey: 'field.workCenter.code' },
           { field: 'name', required: true, labelKey: 'field.workCenter.name' },
-          { field: 'description', labelKey: 'field.workCenter.description' },
-          { field: 'isActive', labelKey: 'field.workCenter.isActive', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
+          { field: 'description', labelKey: 'common.remark' },
+          { field: 'isActive', labelKey: 'common.enabled', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
         ],
         [
           t('app.master-data.workCenters.importExample.code'),
@@ -418,7 +418,7 @@ const WorkCentersPage: React.FC = () => {
         return;
       }
 
-      const headers = [t('field.workCenter.code'), t('field.workCenter.name'), t('field.workCenter.description'), t('app.master-data.plants.status'), t('common.createdAt')];
+      const headers = [t('field.workCenter.code'), t('field.workCenter.name'), t('common.remark'), t('common.status'), t('common.createdAt')];
       const csvRows: string[] = [headers.join(',')];
 
       exportData.forEach((item) => {
@@ -444,7 +444,7 @@ const WorkCentersPage: React.FC = () => {
       downloadFile(blob, filename);
       messageApi.success(t('common.exportSuccess', { count: exportData.length }));
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.exportFailed'));
+      messageApi.error(error.message || t('common.exportFailed'));
     }
   };
 
@@ -491,7 +491,7 @@ const WorkCentersPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('field.workCenter.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       width: 168,
       minWidth: 168,
@@ -502,7 +502,7 @@ const WorkCentersPage: React.FC = () => {
     },
     ...customFieldColumns,
     {
-      title: t('field.workCenter.isActive'),
+      title: t('common.enabled'),
       dataIndex: 'isActive',
       hideInTable: true,
       order: 20,
@@ -511,7 +511,7 @@ const WorkCentersPage: React.FC = () => {
       fieldProps: { allowClear: true },
     },
     {
-      title: t('field.workCenter.isActive'),
+      title: t('common.enabled'),
       dataIndex: 'isActive',
       width: 88,
       minWidth: 88,
@@ -534,14 +534,14 @@ const WorkCentersPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            {t('field.customField.view')}
+            {t('common.view')}
           </Button>
           <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            {t('field.customField.edit')}
+            {t('common.edit')}
           </Button>
           <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.workCenters.deleteConfirm')}
             description={t('app.master-data.workCenters.deleteDescription')}
@@ -555,7 +555,7 @@ const WorkCentersPage: React.FC = () => {
               danger
               icon={<DeleteOutlined />}
             >
-              {t('field.customField.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -567,7 +567,7 @@ const WorkCentersPage: React.FC = () => {
   const detailColumns: ProDescriptionsItemProps<WorkCenter>[] = [
     { title: t('field.workCenter.code'), dataIndex: 'code' },
     { title: t('field.workCenter.name'), dataIndex: 'name' },
-    { title: t('field.workCenter.description'), dataIndex: 'description' },
+    { title: t('common.remark'), dataIndex: 'description' },
     {
       title: t('field.workCenter.workstationIds'),
       dataIndex: 'workstationIds',
@@ -582,7 +582,7 @@ const WorkCentersPage: React.FC = () => {
       },
     },
     {
-      title: t('field.workCenter.isActive'),
+      title: t('common.enabled'),
       dataIndex: 'isActive',
       render: (_: React.ReactNode, record: WorkCenter) => renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled'),
     },

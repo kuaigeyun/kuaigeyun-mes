@@ -353,29 +353,29 @@ export const AssemblyTemplatesTab: React.FC = () => {
         render: (_, r) => sourceTypeMap[String(r.source_type ?? 'manual') as keyof typeof sourceTypeMap] || r.source_type,
       },
       {
-        title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+        title: t('common.status'),
         dataIndex: 'is_active',
         width: 90,
         valueType: 'select',
         valueEnum: {
-          true: { text: t('app.kuaizhizao.warehouseCommon.enabled'), status: 'Success' },
-          false: { text: t('app.kuaizhizao.warehouseCommon.disabled'), status: 'Default' },
+          true: { text: t('common.enabled'), status: 'Success' },
+          false: { text: t('common.disabled'), status: 'Default' },
         },
         render: (_, r) => (
           <MarkerTag color={r.is_active ? 'success' : 'default'}>
-            {r.is_active ? t('app.kuaizhizao.warehouseCommon.enabled') : t('app.kuaizhizao.warehouseCommon.disabled')}
+            {r.is_active ? t('common.enabled') : t('common.disabled')}
           </MarkerTag>
         ),
       },
       {
-        title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
+        title: t('common.updatedAt'),
         dataIndex: 'updated_at',
         width: 168,
         hideInSearch: true,
         render: (_, r) => (r.updated_at ? formatDateTimeBySiteSetting(r.updated_at) : '-'),
       },
       {
-        title: t('app.kuaizhizao.warehouseCommon.colActions'),
+        title: t('common.actions'),
         width: 260,
         fixed: 'right',
         render: (_, record) => (
@@ -408,18 +408,18 @@ export const AssemblyTemplatesTab: React.FC = () => {
           sourceTypeMap[String(value ?? 'manual') as keyof typeof sourceTypeMap] || String(value ?? '-'),
       },
       {
-        title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+        title: t('common.status'),
         dataIndex: 'is_active',
         render: (_, record) => (
           <MarkerTag color={record.is_active ? 'success' : 'default'}>
             {record.is_active
-              ? t('app.kuaizhizao.warehouseCommon.enabled')
-              : t('app.kuaizhizao.warehouseCommon.disabled')}
+              ? t('common.enabled')
+              : t('common.disabled')}
           </MarkerTag>
         ),
       },
       { title: t('app.kuaizhizao.assemblyTemplate.colLineCount'), dataIndex: 'total_items' },
-      { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 2 },
+      { title: t('common.remark'), dataIndex: 'remarks', span: 2 },
     ],
     [t, sourceTypeMap],
   );
@@ -442,9 +442,9 @@ export const AssemblyTemplatesTab: React.FC = () => {
         align: 'right' as const,
         render: (v: number) => Number(v || 0).toFixed(2),
       },
-      { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks' },
+      { title: t('common.remark'), dataIndex: 'remarks' },
       {
-        title: t('app.kuaizhizao.warehouseCommon.colActions'),
+        title: t('common.actions'),
         width: 140,
         render: (_: unknown, item: TemplateItem) =>
           canUpdate || canDelete ? (
@@ -456,7 +456,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
                   icon={<EditOutlined />}
                   onClick={() => openItemModal(currentTemplate!, item)}
                 >
-                  {t('app.kuaizhizao.warehouseCommon.edit')}
+                  {t('common.edit')}
                 </Button>
               )}
               {canDelete && (
@@ -467,7 +467,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
                   icon={<DeleteOutlined />}
                   onClick={() => confirmDeleteItem(currentTemplate!, item)}
                 >
-                  {t('app.kuaizhizao.warehouseCommon.delete')}
+                  {t('common.delete')}
                 </Button>
               )}
             </Space>
@@ -587,10 +587,10 @@ export const AssemblyTemplatesTab: React.FC = () => {
           min={0.01}
           fieldProps={{ precision: 2 }}
         />
-        <ProFormSwitch name="is_active" label={t('app.kuaizhizao.warehouseCommon.enabled')} />
+        <ProFormSwitch name="is_active" label={t('common.enabled')} />
         <ProFormTextArea
           name="remarks"
-          label={t('app.kuaizhizao.warehouseCommon.colRemarks')}
+          label={t('common.remark')}
           fieldProps={{ rows: 3 }}
         />
         <AntForm.Item name="product_material_code" hidden />
@@ -640,7 +640,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
         />
         <ProFormTextArea
           name="remarks"
-          label={t('app.kuaizhizao.warehouseCommon.colRemarks')}
+          label={t('common.remark')}
           fieldProps={{ rows: 2 }}
         />
       </FormModalTemplate>
@@ -699,7 +699,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
           currentTemplate && canUpdate
             ? [
                 <Button key="cancel" onClick={() => setBomPreviewVisible(false)}>
-                  {t('app.kuaizhizao.warehouseCommon.close')}
+                  {t('common.close')}
                 </Button>,
                 <Button
                   key="import"
@@ -714,7 +714,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
               ]
             : [
                 <Button key="close" onClick={() => setBomPreviewVisible(false)}>
-                  {t('app.kuaizhizao.warehouseCommon.close')}
+                  {t('common.close')}
                 </Button>,
               ]
         }

@@ -235,7 +235,7 @@ export const StepBomImportWizard: React.FC<StepBomImportWizardProps> = ({
   const mappingColumns: ColumnsType<NodeMappingRow> = [
     { title: t('app.master-data.drawings.stepBomWizard.colName'), dataIndex: 'name', ellipsis: true },
     { title: t('app.master-data.drawings.stepBomWizard.colDepth'), dataIndex: 'depth', width: 64 },
-    { title: t('app.master-data.drawings.stepBomWizard.colQty'), dataIndex: 'quantity', width: 72 },
+    { title: t('common.quantity'), dataIndex: 'quantity', width: 72 },
     {
       title: t('app.master-data.drawings.stepBomWizard.colStatus'),
       dataIndex: 'matchStatus',

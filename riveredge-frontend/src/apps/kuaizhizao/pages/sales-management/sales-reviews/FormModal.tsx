@@ -457,7 +457,7 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
             ),
           },
           {
-            title: t('app.kuaizhizao.salesReview.colQuantity'),
+            title: t('common.quantity'),
             dataIndex: 'quantity',
             width: 110,
             render: (_: unknown, __: unknown, index: number) => (
@@ -489,7 +489,7 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
         ]}
       />
 
-      <Form.Item name="remarks" label={t('app.kuaizhizao.salesReview.fieldRemarks')}>
+      <Form.Item name="remarks" label={t('common.remark')}>
         <Input.TextArea rows={2} maxLength={1000} showCount />
       </Form.Item>
     </FormModalTemplate>

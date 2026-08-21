@@ -150,13 +150,13 @@ const UnitsPage: React.FC = () => {
           },
           {
             field: 'is_active',
-            labelKey: 'app.master-data.units.status',
+            labelKey: 'common.status',
             aliases: ['是否启用', '启用', '状态'],
             options: [...IMPORT_YES_NO_OPTIONS],
           },
           {
             field: 'description',
-            labelKey: 'app.master-data.units.description',
+            labelKey: 'common.remark',
             aliases: ['备注', '描述'],
           },
         ],
@@ -196,13 +196,13 @@ const UnitsPage: React.FC = () => {
           },
           {
             field: 'is_active',
-            labelKey: 'app.master-data.units.status',
+            labelKey: 'common.status',
             aliases: ['是否启用', '启用', '状态'],
             options: [...IMPORT_YES_NO_OPTIONS],
           },
           {
             field: 'description',
-            labelKey: 'app.master-data.units.description',
+            labelKey: 'common.remark',
             aliases: ['备注', '描述'],
           },
         ],
@@ -533,7 +533,7 @@ const UnitsPage: React.FC = () => {
           code: r.code,
           name: r.name,
           sort_order: r.sort_order,
-          is_active: r.is_active ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled'),
+          is_active: r.is_active ? t('common.enabled') : t('common.disabled'),
           is_system: r.is_system ? t('app.master-data.units.isSystem') : '',
           description: r.description ?? '',
           updated_at: r.updated_at ?? '',
@@ -546,16 +546,16 @@ const UnitsPage: React.FC = () => {
             { key: 'code', title: t('app.master-data.units.code') },
             { key: 'name', title: t('app.master-data.units.name') },
             { key: 'sort_order', title: t('app.master-data.units.sortOrder') },
-            { key: 'is_active', title: t('app.master-data.units.status') },
+            { key: 'is_active', title: t('common.status') },
             { key: 'is_system', title: t('app.master-data.units.isSystem') },
-            { key: 'description', title: t('app.master-data.units.description') },
+            { key: 'description', title: t('common.remark') },
             { key: 'updated_at', title: t('common.updatedAt') },
           ],
         },
       );
       messageApi.success(t('common.exportSuccess', { count: exportData.length }));
     } catch (e: any) {
-      messageApi.error(e?.message || t('app.master-data.exportFailed'));
+      messageApi.error(e?.message || t('common.exportFailed'));
     }
   };
 
@@ -586,7 +586,7 @@ const UnitsPage: React.FC = () => {
           numerator: r.numerator,
           denominator: r.denominator,
           formula: `1 ${r.from_unit_code} = ${r.numerator}/${r.denominator} ${r.to_unit_code}`,
-          is_active: r.is_active ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled'),
+          is_active: r.is_active ? t('common.enabled') : t('common.disabled'),
           is_system: r.is_system ? t('app.master-data.units.isSystem') : '',
           description: r.description ?? '',
           updated_at: r.updated_at ?? '',
@@ -601,16 +601,16 @@ const UnitsPage: React.FC = () => {
             { key: 'numerator', title: t('app.master-data.units.numerator') },
             { key: 'denominator', title: t('app.master-data.units.denominator') },
             { key: 'formula', title: t('app.master-data.units.formula') },
-            { key: 'is_active', title: t('app.master-data.units.status') },
+            { key: 'is_active', title: t('common.status') },
             { key: 'is_system', title: t('app.master-data.units.isSystem') },
-            { key: 'description', title: t('app.master-data.units.description') },
+            { key: 'description', title: t('common.remark') },
             { key: 'updated_at', title: t('common.updatedAt') },
           ],
         },
       );
       messageApi.success(t('common.exportSuccess', { count: exportData.length }));
     } catch (e: any) {
-      messageApi.error(e?.message || t('app.master-data.exportFailed'));
+      messageApi.error(e?.message || t('common.exportFailed'));
     }
   };
 
@@ -659,7 +659,7 @@ const UnitsPage: React.FC = () => {
           r.is_system ? renderMasterTypeMarker(t('app.master-data.units.isSystem')) : '-',
       },
       {
-        title: t('app.master-data.units.status'),
+        title: t('common.status'),
         dataIndex: 'is_active',
         width: 88,
         minWidth: 88,
@@ -667,13 +667,13 @@ const UnitsPage: React.FC = () => {
         resizable: false,
         valueType: 'select',
         valueEnum: {
-          true: { text: t('app.master-data.plants.enabled'), status: 'Success' },
-          false: { text: t('app.master-data.plants.disabled'), status: 'Default' },
+          true: { text: t('common.enabled'), status: 'Success' },
+          false: { text: t('common.disabled'), status: 'Default' },
         },
-        render: (_, r) => renderMasterActiveTag(t, r.is_active, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
+        render: (_, r) => renderMasterActiveTag(t, r.is_active, 'common.enabled', 'common.disabled'),
       },
       {
-        title: t('app.master-data.units.description'),
+        title: t('common.remark'),
         dataIndex: 'description',
         ellipsis: true,
         hideInSearch: true,
@@ -699,7 +699,7 @@ const UnitsPage: React.FC = () => {
                   unitFormRef.current?.setFieldsValue(detail);
                 }}
               >
-                {t('field.customField.edit')}
+                {t('common.edit')}
               </Button>
             ) : null}
             {perms.canDelete ? (
@@ -721,7 +721,7 @@ const UnitsPage: React.FC = () => {
                 }}
               >
                 <Button type="link" danger size="small" icon={<DeleteOutlined />} disabled={record.is_system}>
-                  {t('field.customField.delete')}
+                  {t('common.delete')}
                 </Button>
               </Popconfirm>
             ) : null}
@@ -765,7 +765,7 @@ const UnitsPage: React.FC = () => {
           r.is_system ? renderMasterTypeMarker(t('app.master-data.units.isSystem')) : '-',
       },
       {
-        title: t('app.master-data.units.status'),
+        title: t('common.status'),
         dataIndex: 'is_active',
         width: 88,
         minWidth: 88,
@@ -773,13 +773,13 @@ const UnitsPage: React.FC = () => {
         resizable: false,
         valueType: 'select',
         valueEnum: {
-          true: { text: t('app.master-data.plants.enabled'), status: 'Success' },
-          false: { text: t('app.master-data.plants.disabled'), status: 'Default' },
+          true: { text: t('common.enabled'), status: 'Success' },
+          false: { text: t('common.disabled'), status: 'Default' },
         },
-        render: (_, r) => renderMasterActiveTag(t, r.is_active, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
+        render: (_, r) => renderMasterActiveTag(t, r.is_active, 'common.enabled', 'common.disabled'),
       },
       {
-        title: t('app.master-data.units.description'),
+        title: t('common.remark'),
         dataIndex: 'description',
         ellipsis: true,
         hideInSearch: true,
@@ -805,7 +805,7 @@ const UnitsPage: React.FC = () => {
                   convFormRef.current?.setFieldsValue(record);
                 }}
               >
-                {t('field.customField.edit')}
+                {t('common.edit')}
               </Button>
             ) : null}
             {perms.canDelete ? (
@@ -826,7 +826,7 @@ const UnitsPage: React.FC = () => {
                 }}
               >
                 <Button type="link" danger size="small" icon={<DeleteOutlined />} disabled={record.is_system}>
-                  {t('field.customField.delete')}
+                  {t('common.delete')}
                 </Button>
               </Popconfirm>
             ) : null}
@@ -853,7 +853,7 @@ const UnitsPage: React.FC = () => {
         tabs={[
           {
             key: 'units',
-            label: t('app.master-data.units.tabUnits'),
+            label: t('common.unit'),
             children: (
               <UniTable<MaterialUnit>
                 columnPersistenceId="apps.master-data.pages.materials.units.catalog.list-v1"
@@ -861,7 +861,7 @@ const UnitsPage: React.FC = () => {
                 actionRef={unitActionRef}
                 rowKey="uuid"
                 columns={alignProColumns(unitColumns, MASTER_DATA_LIST_FIELD_RANK)}
-                headerTitle={t('app.master-data.units.tabUnits')}
+                headerTitle={t('common.unit')}
                 showCreateButton={perms.canCreate}
                 createButtonText={withSingleNewShortcutHint(t('app.master-data.units.createTitle'))}
                 onCreate={openCreateUnit}
@@ -871,7 +871,7 @@ const UnitsPage: React.FC = () => {
                 importExampleRow={unitImportTemplate.importExampleRow}
                 importColumnOptions={unitImportTemplate.importColumnOptions}
                 importFieldMap={unitImportTemplate.importHeaderMap}
-                importTemplateName={t('app.master-data.units.tabUnits')}
+                importTemplateName={t('common.unit')}
                 showExportButton
                 onExport={handleUnitExport}
                 request={async (params, sort) => {
@@ -1025,8 +1025,8 @@ const UnitsPage: React.FC = () => {
           }
         />
         <ProFormDigit name="sort_order" label={t('app.master-data.units.sortOrder')} min={0} />
-        <ProFormSwitch name="is_active" label={t('app.master-data.units.status')} />
-        <ProFormTextArea name="description" label={t('app.master-data.units.description')} />
+        <ProFormSwitch name="is_active" label={t('common.status')} />
+        <ProFormTextArea name="description" label={t('common.remark')} />
       </FormModalTemplate>
 
       <FormModalTemplate
@@ -1099,8 +1099,8 @@ const UnitsPage: React.FC = () => {
           min={1}
           rules={[{ required: true, message: t('app.master-data.units.factorRequired') }]}
         />
-        <ProFormSwitch name="is_active" label={t('app.master-data.units.status')} />
-        <ProFormTextArea name="description" label={t('app.master-data.units.description')} />
+        <ProFormSwitch name="is_active" label={t('common.status')} />
+        <ProFormTextArea name="description" label={t('common.remark')} />
       </FormModalTemplate>
     </>
   );

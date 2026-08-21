@@ -453,7 +453,7 @@ const DemandReplanDashboardPage: React.FC = () => {
             },
           },
           {
-            title: t('app.kuaizhizao.demandReplan.col.createdAt'),
+            title: t('common.createdAt'),
             key: 'task_created_at',
             dataIndex: 'created_at',
             width: 132,
@@ -494,7 +494,7 @@ const DemandReplanDashboardPage: React.FC = () => {
               renderDemandReplanTaskStatusTag(labelFromMap(taskStatusText, row.status), row.status),
           },
           {
-            title: t('app.kuaizhizao.demandReplan.col.actions'),
+            title: t('common.actions'),
             key: 'action',
             valueType: 'option',
             fixed: 'right',
@@ -563,7 +563,7 @@ const DemandReplanDashboardPage: React.FC = () => {
           renderDemandReplanTaskStatusTag(labelFromMap(taskStatusText, status), status),
       },
       {
-        title: t('app.kuaizhizao.demandReplan.col.actions'),
+        title: t('common.actions'),
         key: 'action',
         width: 100,
         render: (_: unknown, row: DemandReplanTaskItem) => (
@@ -681,7 +681,7 @@ const DemandReplanDashboardPage: React.FC = () => {
             },
             actions: [
               <Button key="refresh-left" icon={<ReloadOutlined />} onClick={refreshAll} block>
-                {t('app.kuaizhizao.demandReplan.refresh')}
+                {t('common.refresh')}
               </Button>,
             ],
             leftContent: leftEventList,
@@ -856,9 +856,9 @@ const DemandReplanDashboardPage: React.FC = () => {
                     width: 80,
                     render: (v) =>
                       v ? (
-                        <MarkerTag color="warning">{t('app.kuaizhizao.demandReplan.yes')}</MarkerTag>
+                        <MarkerTag color="warning">{t('common.yes')}</MarkerTag>
                       ) : (
-                        <MarkerTag color="default">{t('app.kuaizhizao.demandReplan.no')}</MarkerTag>
+                        <MarkerTag color="default">{t('common.no')}</MarkerTag>
                       ),
                   },
                   { title: t('app.kuaizhizao.demandReplan.impactCol.reason'), dataIndex: 'impact_reason' },

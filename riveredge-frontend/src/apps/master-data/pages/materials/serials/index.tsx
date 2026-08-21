@@ -204,7 +204,7 @@ const SerialsPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('app.master-data.serials.status'),
+      title: t('common.status'),
       dataIndex: 'status',
       hideInTable: true,
       order: 20,
@@ -213,7 +213,7 @@ const SerialsPage: React.FC = () => {
       fieldProps: { allowClear: true },
     },
     {
-      title: t('app.master-data.serials.status'),
+      title: t('common.status'),
       dataIndex: 'status',
       width: 100,
       minWidth: 100,
@@ -272,7 +272,7 @@ const SerialsPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            {t('field.customField.edit')}
+            {t('common.edit')}
           </Button>
           <Popconfirm
             key="delete"
@@ -281,7 +281,7 @@ const SerialsPage: React.FC = () => {
             onConfirm={() => handleDelete(record)}
           >
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              {t('field.customField.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -323,7 +323,7 @@ const SerialsPage: React.FC = () => {
           labelWidth: 'auto',
         }}
         showCreateButton
-        createButtonText={t('pages.system.create')}
+        createButtonText={t('common.create')}
         onCreate={handleCreate}
         showDeleteButton
         onDelete={handleBatchDelete}
@@ -337,8 +337,8 @@ const SerialsPage: React.FC = () => {
       <FormModalTemplate
         title={
           isEdit
-            ? `${t('field.customField.edit')}${t('app.master-data.serials.serialNo')}`
-            : `${t('pages.system.create')}${t('app.master-data.serials.serialNo')}`
+            ? `${t('common.edit')}${t('app.master-data.serials.serialNo')}`
+            : `${t('common.create')}${t('app.master-data.serials.serialNo')}`
         }
         open={modalVisible}
         onClose={() => setModalVisible(false)}
@@ -386,7 +386,7 @@ const SerialsPage: React.FC = () => {
         />
         <ProFormSelect
           name="status"
-          label={t('app.master-data.serials.status')}
+          label={t('common.status')}
           options={serialStatusOptions}
           initialValue="in_stock"
           colProps={{ span: 12 }}

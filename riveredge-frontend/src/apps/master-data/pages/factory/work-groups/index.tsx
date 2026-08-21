@@ -79,8 +79,8 @@ const WorkGroupsPage: React.FC = () => {
         [
           { field: 'code', required: true, labelKey: 'field.workGroup.code' },
           { field: 'name', required: true, labelKey: 'field.workGroup.name' },
-          { field: 'description', labelKey: 'field.workGroup.description' },
-          { field: 'isActive', labelKey: 'field.workGroup.isActive', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
+          { field: 'description', labelKey: 'common.remark' },
+          { field: 'isActive', labelKey: 'common.enabled', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
         ],
         [
           t('app.master-data.workGroups.importExample.code'),
@@ -409,9 +409,9 @@ const WorkGroupsPage: React.FC = () => {
       const headers = [
         t('field.workGroup.code'),
         t('field.workGroup.name'),
-        t('field.workGroup.description'),
+        t('common.remark'),
         t('field.workGroup.members'),
-        t('app.master-data.plants.status'),
+        t('common.status'),
         t('common.createdAt'),
       ];
       const csvRows: string[] = [headers.join(',')];
@@ -442,7 +442,7 @@ const WorkGroupsPage: React.FC = () => {
       downloadFile(blob, filename);
       messageApi.success(t('common.exportSuccess', { count: exportData.length }));
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.exportFailed'));
+      messageApi.error(error.message || t('common.exportFailed'));
     }
   };
 
@@ -498,7 +498,7 @@ const WorkGroupsPage: React.FC = () => {
       },
     },
     {
-      title: t('field.workGroup.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       width: 168,
       minWidth: 168,
@@ -508,7 +508,7 @@ const WorkGroupsPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('field.workGroup.isActive'),
+      title: t('common.enabled'),
       dataIndex: 'isActive',
       hideInTable: true,
       order: 20,
@@ -517,7 +517,7 @@ const WorkGroupsPage: React.FC = () => {
       fieldProps: { allowClear: true },
     },
     {
-      title: t('field.workGroup.isActive'),
+      title: t('common.enabled'),
       dataIndex: 'isActive',
       width: 88,
       minWidth: 88,
@@ -537,14 +537,14 @@ const WorkGroupsPage: React.FC = () => {
       render: (_, record) => (
         <Space>
           <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-            {t('field.customField.view')}
+            {t('common.view')}
           </Button>
           <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            {t('field.customField.edit')}
+            {t('common.edit')}
           </Button>
           <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.workGroups.deleteConfirm')}
             description={t('app.master-data.workGroups.deleteDescription')}
@@ -553,7 +553,7 @@ const WorkGroupsPage: React.FC = () => {
             cancelText={t('common.cancel')}
           >
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              {t('field.customField.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -564,7 +564,7 @@ const WorkGroupsPage: React.FC = () => {
   const detailColumns: ProDescriptionsItemProps<WorkGroup>[] = [
     { title: t('field.workGroup.code'), dataIndex: 'code' },
     { title: t('field.workGroup.name'), dataIndex: 'name' },
-    { title: t('field.workGroup.description'), dataIndex: 'description' },
+    { title: t('common.remark'), dataIndex: 'description' },
     {
       title: t('field.workGroup.members'),
       dataIndex: 'members',
@@ -584,7 +584,7 @@ const WorkGroupsPage: React.FC = () => {
       },
     },
     {
-      title: t('field.workGroup.isActive'),
+      title: t('common.enabled'),
       dataIndex: 'isActive',
       render: (_: React.ReactNode, record: WorkGroup) => renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled'),
     },

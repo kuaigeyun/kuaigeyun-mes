@@ -55,14 +55,14 @@ export const warehouseFormSchemaRest: FieldConfig[] = [
   {
     name: 'description',
     type: 'textarea',
-    labelKey: 'field.warehouse.description',
+    labelKey: 'common.remark',
     colSpan: 24,
     fieldProps: { rows: 2 },
   },
   {
     name: 'isActive',
     type: 'switch',
-    labelKey: 'field.warehouse.isActive',
+    labelKey: 'common.enabled',
     colSpan: 12,
   },
 ];

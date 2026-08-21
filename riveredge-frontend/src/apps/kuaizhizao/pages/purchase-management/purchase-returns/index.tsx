@@ -450,12 +450,12 @@ const PurchaseReturnsPage: React.FC = () => {
         partnerLabelKey: 'app.kuaizhizao.purchaseReturn.supplier',
         partnerAliases: ['供应商', '供应商名称'],
         materialLabelKey: 'app.kuaizhizao.purchaseReturn.import.materialCode',
-        unitLabelKey: 'app.kuaizhizao.purchaseReturn.import.unit',
+        unitLabelKey: 'common.unit',
         qtyLabelKey: 'app.kuaizhizao.purchaseReturn.import.returnQuantity',
         unitPriceLabelKey: 'app.kuaizhizao.purchaseReturn.import.unitPrice',
         batchLabelKey: 'app.kuaizhizao.purchaseReturn.import.batchNumber',
         locationLabelKey: 'app.kuaizhizao.purchaseReturn.import.location',
-        notesLabelKey: 'app.kuaizhizao.purchaseReturn.import.notes',
+        notesLabelKey: 'common.remark',
         defaultUnit: t('app.kuaizhizao.purchaseReturn.defaultUnit'),
         examplePartner: t('app.kuaizhizao.purchaseReturn.listImport.exampleSupplier'),
         exampleMaterial: 'MAT001',
@@ -902,7 +902,7 @@ const PurchaseReturnsPage: React.FC = () => {
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.purchaseReturn.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
     }
   };
 
@@ -1065,8 +1065,8 @@ const PurchaseReturnsPage: React.FC = () => {
       '物料编号',
     ];
     const unitKeys = [
-      t('app.kuaizhizao.purchaseReturn.import.unit'),
-      t('app.kuaizhizao.purchaseOrder.importItems.unit'),
+      t('common.unit'),
+      t('common.unit'),
       '单位',
     ];
     const returnQuantityKeys = [
@@ -1087,7 +1087,7 @@ const PurchaseReturnsPage: React.FC = () => {
       '库位',
     ];
     const notesKeys = [
-      t('app.kuaizhizao.purchaseReturn.import.notes'),
+      t('common.remark'),
       '备注',
     ];
     const newItems = data.map((row) => ({
@@ -1144,7 +1144,7 @@ const PurchaseReturnsPage: React.FC = () => {
   const detailNotesColumn: ProDescriptionsItemProps<PurchaseReturnDetail>[] = useMemo(
     () =>
       alignDescriptionColumns([
-        { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes', span: 3 },
+        { title: t('common.remark'), dataIndex: 'notes', span: 3 },
       ] as ProDescriptionsItemProps<PurchaseReturnDetail>[]),
     [t, i18n.language],
   );
@@ -1198,7 +1198,7 @@ const PurchaseReturnsPage: React.FC = () => {
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.purchaseReturn.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -1590,7 +1590,7 @@ const PurchaseReturnsPage: React.FC = () => {
         ),
       },
       {
-        title: t('app.kuaizhizao.salesOrder.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'suggested_quantity',
         width: 100,
         align: 'right',
@@ -2221,7 +2221,7 @@ const PurchaseReturnsPage: React.FC = () => {
           tableProps={DOCUMENT_DETAIL_TABLE_PROPS}
         />
 
-        <ProFormTextArea name="notes" label={t('app.kuaizhizao.common.fieldNotes')} placeholder={t('app.kuaizhizao.purchaseReturn.notesPlaceholder')} fieldProps={{ rows: 3 }} />
+        <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('app.kuaizhizao.purchaseReturn.notesPlaceholder')} fieldProps={{ rows: 3 }} />
         <DocumentAttachmentsField category="purchase_return_attachments" />
       </FormModalTemplate>
 
@@ -2324,12 +2324,12 @@ const PurchaseReturnsPage: React.FC = () => {
           title={t('app.kuaizhizao.purchaseReturn.importTitle')}
           headers={[
             t('app.kuaizhizao.purchaseReturn.import.materialCode'),
-            t('app.kuaizhizao.purchaseReturn.import.unit'),
+            t('common.unit'),
             t('app.kuaizhizao.purchaseReturn.import.returnQuantity'),
             t('app.kuaizhizao.purchaseReturn.import.unitPrice'),
             t('app.kuaizhizao.purchaseReturn.import.batchNumber'),
             t('app.kuaizhizao.purchaseReturn.import.location'),
-            t('app.kuaizhizao.purchaseReturn.import.notes'),
+            t('common.remark'),
           ]}
           exampleRow={[
             'MAT001',
@@ -2421,7 +2421,7 @@ const PurchaseReturnsPage: React.FC = () => {
         collaborationTitleSuffix={
           purchaseReturnLifecycle?.nextStepSuggestions?.length ? (
             <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-              {t('components.uniLifecycle.nextStep')}：
+              {t('common.next')}：
               {purchaseReturnLifecycle.nextStepSuggestions.join(t('components.uniLifecycle.nextStepSeparator'))}
             </Typography.Text>
           ) : undefined

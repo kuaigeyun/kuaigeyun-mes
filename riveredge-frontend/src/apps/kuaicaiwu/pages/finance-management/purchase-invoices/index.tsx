@@ -898,7 +898,7 @@ const PurchaseInvoiceList: React.FC = () => {
         scopeOptions={pullFromPurchaseOrderQuery.scopeOptions}
         scope={pullFromPurchaseOrderQuery.scope}
         onScopeChange={pullFromPurchaseOrderQuery.handleScopeChange}
-        okText={t('components.uniLifecycle.nextStep')}
+        okText={t('common.next')}
       />
 
       <UniPullQueryModal<PurchaseInvoicePullCandidate>
@@ -931,7 +931,7 @@ const PurchaseInvoiceList: React.FC = () => {
         scopeOptions={pullFromPurchaseReceiptQuery.scopeOptions}
         scope={pullFromPurchaseReceiptQuery.scope}
         onScopeChange={pullFromPurchaseReceiptQuery.handleScopeChange}
-        okText={t('components.uniLifecycle.nextStep')}
+        okText={t('common.next')}
       />
 
       <UniPullQueryModal<PurchaseInvoicePullCandidate>
@@ -964,7 +964,7 @@ const PurchaseInvoiceList: React.FC = () => {
         scopeOptions={pullFromPayableQuery.scopeOptions}
         scope={pullFromPayableQuery.scope}
         onScopeChange={pullFromPayableQuery.handleScopeChange}
-        okText={t('components.uniLifecycle.nextStep')}
+        okText={t('common.next')}
       />
 
       <Modal
@@ -1158,7 +1158,7 @@ const PurchaseInvoiceList: React.FC = () => {
                   colProps={financeColHalf}
                   fieldProps={{ precision: 2, style: { width: '100%' } }}
                 />
-                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 2 }} colProps={financeColFull} />
+                <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 2 }} colProps={financeColFull} />
                 {canConcurrentPayment ? (
                   <>
                     <ProFormSwitch
@@ -1275,7 +1275,7 @@ const PurchaseInvoiceList: React.FC = () => {
           fieldProps={{ precision: 2, style: { width: '100%' } }}
           colProps={financeColHalf}
         />
-        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} colProps={financeColFull} />
+        <ProFormTextArea name="notes" label={t('common.remark')} colProps={financeColFull} />
         <DocumentAttachmentsField category="purchase_invoice_attachments" />
       </ModalForm>
     </ListPageTemplate>

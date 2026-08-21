@@ -108,7 +108,7 @@ const EquipmentCalibrationsPage: React.FC = () => {
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || t(`${P}.saveFailed`));
+      messageApi.error(e?.message || t('common.saveFailed'));
       throw e;
     }
   };
@@ -146,7 +146,7 @@ const EquipmentCalibrationsPage: React.FC = () => {
         dataIndex: 'expiry_date',
         render: (_, r) => (r.expiry_date ? formatDateTime(r.expiry_date, 'YYYY-MM-DD') : '-'),
       },
-      { title: t(`${P}.formRemark`), dataIndex: 'remark', span: 2 },
+      { title: t('common.remark'), dataIndex: 'remark', span: 2 },
     ],
     [t],
   );
@@ -225,7 +225,7 @@ const EquipmentCalibrationsPage: React.FC = () => {
         hideInSearch: true,
         render: (_, r) => (r.expiry_date ? formatDateTime(r.expiry_date, 'YYYY-MM-DD') : '-'),
       },
-      { title: t(`${P}.formRemark`), dataIndex: 'remark', ellipsis: true, hideInSearch: true },
+      { title: t('common.remark'), dataIndex: 'remark', ellipsis: true, hideInSearch: true },
       ...buildDocumentAuditColumns<EquipmentCalibration>(t),
       {
         title: t('common.actions'),
@@ -321,7 +321,7 @@ const EquipmentCalibrationsPage: React.FC = () => {
         <ProFormText name="certificate_no" label={t(`${P}.formCertificateNo`)} />
         <ProFormDatePicker name="expiry_date" label={t(`${P}.formExpiryDate`)} {...EQUIPMENT_DATE_FIELD_PROPS} />
         <DocumentAttachmentsField category="equipment_calibration_attachments" />
-        <ProFormText name="remark" label={t(`${P}.formRemark`)} />
+        <ProFormText name="remark" label={t('common.remark')} />
       </FormModalTemplate>
 
       <DetailDrawerTemplate

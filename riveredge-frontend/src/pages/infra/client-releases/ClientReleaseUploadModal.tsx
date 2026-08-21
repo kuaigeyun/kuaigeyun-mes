@@ -229,7 +229,7 @@ export function ClientReleaseUploadModal({
         onSuccess();
         onClose();
       } catch (e) {
-        messageApi.error(e instanceof Error ? e.message : t('pages.infra.clientReleases.editFailed'));
+        messageApi.error(e instanceof Error ? e.message : t('common.updateFailed'));
       } finally {
         setLoading(false);
       }
@@ -416,7 +416,7 @@ export function ClientReleaseUploadModal({
           />
           <ProFormTextArea
             name="release_notes"
-            label={t('pages.infra.clientReleases.columnNotes')}
+            label={t('common.remark')}
             placeholder={t('pages.infra.clientReleases.formNotesPlaceholder')}
             colProps={{ span: 24 }}
             fieldProps={{ rows: 3 }}
@@ -482,7 +482,7 @@ export function ClientReleaseUploadModal({
           />
           <ProFormTextArea
             name="release_notes"
-            label={t('pages.infra.clientReleases.columnNotes')}
+            label={t('common.remark')}
             placeholder={t('pages.infra.clientReleases.formNotesPlaceholder')}
             colProps={{ span: 24 }}
             fieldProps={{ rows: 3 }}

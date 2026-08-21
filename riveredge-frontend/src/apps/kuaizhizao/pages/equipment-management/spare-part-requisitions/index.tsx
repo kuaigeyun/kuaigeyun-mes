@@ -200,11 +200,11 @@ const SparePartRequisitionsPage: React.FC = () => {
       { title: t(`${P}.col.purpose`), dataIndex: 'purpose', span: 2 },
       { title: t(`${P}.col.applicant`), dataIndex: 'applicant_name' },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
-      { title: t(`${P}.form.remark`, { defaultValue: '备注' }), dataIndex: 'remark', span: 2 },
+      { title: t('common.remark'), dataIndex: 'remark', span: 2 },
       { title: t(`${P}.form.rejectReason`, { defaultValue: '驳回原因' }), dataIndex: 'reject_reason', span: 2 },
     ],
     [t],
@@ -214,7 +214,7 @@ const SparePartRequisitionsPage: React.FC = () => {
     () => [
       { title: t(`${P}.line.part`), dataIndex: 'part_name', render: (_, row) => row.part_name ?? row.part_no ?? '-' },
       { title: t(`${P}.line.partNo`, { defaultValue: '料号' }), dataIndex: 'part_no', width: 120 },
-      { title: t(`${P}.line.quantity`), dataIndex: 'quantity', width: 80, align: 'right' },
+      { title: t('common.quantity'), dataIndex: 'quantity', width: 80, align: 'right' },
       { title: t(`${P}.line.location`), dataIndex: 'warehouse_location' },
     ],
     [t],
@@ -230,7 +230,7 @@ const SparePartRequisitionsPage: React.FC = () => {
         search: { order: 10 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         valueType: 'select',
         valueEnum: approvalStatusValueEnum,
@@ -275,7 +275,7 @@ const SparePartRequisitionsPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<SparePartRequisition>(t),
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
         hideInSearch: true,
@@ -316,7 +316,7 @@ const SparePartRequisitionsPage: React.FC = () => {
                 }
               }}
             >
-              {t(`${P}.action.submit`)}
+              {t('common.submit')}
             </Button>
           ) : null,
           perms.canAction?.('approve') && record.status === '已提交' ? (
@@ -470,7 +470,7 @@ const SparePartRequisitionsPage: React.FC = () => {
                   ),
                 },
                 {
-                  title: t(`${P}.line.quantity`),
+                  title: t('common.quantity'),
                   width: 100,
                   render: (_, __, index) => (
                     <InputNumber

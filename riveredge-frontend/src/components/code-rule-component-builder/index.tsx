@@ -139,7 +139,7 @@ const SortableComponentItem: React.FC<SortableComponentItemProps> = ({
           icon={<EditOutlined />}
           onClick={() => onEdit(component, index)}
         >
-          {t('components.codeRuleComponentBuilder.action.edit')}
+          {t('common.edit')}
         </Button>
         {canDelete && (
           <Button
@@ -149,7 +149,7 @@ const SortableComponentItem: React.FC<SortableComponentItemProps> = ({
             icon={<DeleteOutlined />}
             onClick={() => onDelete(index)}
           >
-            {t('components.codeRuleComponentBuilder.action.delete')}
+            {t('common.delete')}
           </Button>
         )}
       </Space>

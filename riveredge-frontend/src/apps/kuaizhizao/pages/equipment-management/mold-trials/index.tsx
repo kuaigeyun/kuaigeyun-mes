@@ -198,7 +198,7 @@ const MoldTrialsPage: React.FC = () => {
           return <MarkerTag color={color}>{r.trial_result ?? '-'}</MarkerTag>;
         },
       },
-      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+      { title: t('common.remark'), dataIndex: 'remark', span: 2 },
     ],
     [t],
   );
@@ -397,7 +397,7 @@ const MoldTrialsPage: React.FC = () => {
             <ProFormSelect name="result" label={t(`${P}.col.result`)} options={resultOptions} />
           </Col>
           <Col span={24}>
-            <ProFormTextArea name="remark" label={t(`${P}.form.remark`)} fieldProps={{ rows: 2 }} />
+            <ProFormTextArea name="remark" label={t('common.remark')} fieldProps={{ rows: 2 }} />
           </Col>
         </Row>
       </FormModalTemplate>

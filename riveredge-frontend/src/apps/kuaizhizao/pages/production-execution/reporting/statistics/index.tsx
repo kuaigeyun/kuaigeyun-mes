@@ -61,7 +61,7 @@ const ReportingStatisticsPage: React.FC = () => {
 
   const handleExport = async () => {
     if (!statistics) {
-      messageApi.warning(t('app.kuaizhizao.workReporting.statistics.noDataExport'));
+      messageApi.warning(t('common.exportNoData'));
       return;
     }
     try {
@@ -92,7 +92,7 @@ const ReportingStatisticsPage: React.FC = () => {
       messageApi.success(t('app.kuaizhizao.workReporting.statistics.exportSuccess'));
     } catch (error: unknown) {
       const msg =
-        error instanceof Error ? error.message : t('app.kuaizhizao.workReporting.statistics.exportFailed');
+        error instanceof Error ? error.message : t('common.exportFailed');
       messageApi.error(msg);
     }
   };
@@ -238,20 +238,20 @@ const ReportingStatisticsPage: React.FC = () => {
               onClick={() => void loadStatistics()}
               loading={loading}
             >
-              {t('app.kuaizhizao.workReporting.statistics.query')}
+              {t('common.query')}
             </Button>
             <Button icon={<ReloadOutlined />} onClick={() => void loadStatistics()} loading={loading}>
               {t('common.refresh')}
             </Button>
             <Button icon={<DownloadOutlined />} onClick={() => void handleExport()} disabled={!statistics}>
-              {t('app.kuaizhizao.workReporting.statistics.export')}
+              {t('common.export')}
             </Button>
           </Space>
         </Card>
 
         {!statistics && !loading ? (
           <Card>
-            <Empty description={t('app.kuaizhizao.workReporting.statistics.noDataExport')} />
+            <Empty description={t('common.exportNoData')} />
           </Card>
         ) : null}
 

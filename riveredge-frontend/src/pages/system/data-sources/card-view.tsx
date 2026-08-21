@@ -140,10 +140,10 @@ const CardView: React.FC = () => {
   const handleDelete = async (dataSource: DataSource) => {
     try {
       await deleteDataSource(dataSource.uuid);
-      handleSuccess(t('pages.system.dataSources.deleteSuccess'));
+      handleSuccess(t('common.deleteSuccess'));
       loadDataSources();
     } catch (error: any) {
-      handleError(error, t('pages.system.dataSources.deleteFailed'));
+      handleError(error, t('common.deleteFailed'));
     }
   };
 
@@ -229,7 +229,7 @@ const CardView: React.FC = () => {
             onClick={loadDataSources}
             loading={loading}
           >
-            {t('pages.system.dataSources.cardView.refresh')}
+            {t('common.refresh')}
           </Button>,
         ]}
       >
@@ -319,7 +319,7 @@ const CardView: React.FC = () => {
                           okText={t('common.confirm')}
                           cancelText={t('common.cancel')}
                         >
-                          <Tooltip title={t('pages.system.dataSources.deleteTooltip')}>
+                          <Tooltip title={t('common.delete')}>
                             <DeleteOutlined
                               style={{ fontSize: 16, color: '#ff4d4f' }}
                             />
@@ -368,7 +368,7 @@ const CardView: React.FC = () => {
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataSources.statusLabel')}</Text>
                             <Tag color={dataSource.is_active ? 'success' : 'default'}>
-                              {dataSource.is_active ? t('pages.system.dataSources.enabled') : t('pages.system.dataSources.disabled')}
+                              {dataSource.is_active ? t('common.enabled') : t('common.disabled')}
                             </Tag>
                           </div>
                           
@@ -427,7 +427,7 @@ const CardView: React.FC = () => {
                 {getTypeInfo(currentDataSource.type).text}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label={t('pages.system.dataSources.detailColumnDescription')}>
+            <Descriptions.Item label={t('common.remark')}>
               {currentDataSource.description || '-'}
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.dataSources.detailColumnConfig')}>
@@ -451,7 +451,7 @@ const CardView: React.FC = () => {
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.dataSources.detailColumnActive')}>
               <Tag color={currentDataSource.is_active ? 'success' : 'default'}>
-                {currentDataSource.is_active ? t('pages.system.dataSources.enabled') : t('pages.system.dataSources.disabled')}
+                {currentDataSource.is_active ? t('common.enabled') : t('common.disabled')}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.dataSources.detailColumnLastConnected')}>
@@ -469,10 +469,10 @@ const CardView: React.FC = () => {
                 />
               </Descriptions.Item>
             )}
-            <Descriptions.Item label={t('pages.system.dataSources.detailColumnCreatedAt')}>
+            <Descriptions.Item label={t('common.createdAt')}>
               {formatDateTimeBySiteSetting(currentDataSource.created_at)}
             </Descriptions.Item>
-            <Descriptions.Item label={t('pages.system.dataSources.detailColumnUpdatedAt')}>
+            <Descriptions.Item label={t('common.updatedAt')}>
               {formatDateTimeBySiteSetting(currentDataSource.updated_at)}
             </Descriptions.Item>
           </Descriptions>
@@ -494,7 +494,7 @@ const CardView: React.FC = () => {
             setTestResult(null);
             setTestingUuid(null);
           }}>
-            {t('pages.system.dataSources.cardView.close')}
+            {t('common.close')}
           </Button>,
         ]}
         width={600}

@@ -55,7 +55,7 @@ const SerialRulesPage: React.FC = () => {
   const [ruleComponents, setRuleComponents] = useState<CodeRuleComponent[]>([]);
 
   const ruleActiveValueEnum = useMemo(
-    () => buildMasterCrudActiveValueEnum(t, 'app.master-data.seqRules.enabled', 'app.master-data.seqRules.disabled'),
+    () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'app.master-data.seqRules.disabled'),
     [t],
   );
 
@@ -151,7 +151,7 @@ const SerialRulesPage: React.FC = () => {
     messageApi.success(
       t('app.master-data.seqRules.serialRuleSetActiveSuccess', {
         count: keys.length,
-        status: isActive ? t('app.master-data.seqRules.enabled') : t('app.master-data.seqRules.disabled'),
+        status: isActive ? t('common.enabled') : t('app.master-data.seqRules.disabled'),
       }),
     );
     setSelectedRowKeys([]);
@@ -177,7 +177,7 @@ const SerialRulesPage: React.FC = () => {
     },
     { title: t('app.master-data.seqRules.ruleCode'), dataIndex: 'code', copyable: true, width: 120, sorter: true, hideInSearch: true },
     {
-      title: t('app.master-data.seqRules.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       width: 168,
       minWidth: 168,
@@ -199,7 +199,7 @@ const SerialRulesPage: React.FC = () => {
       render: (_, r) => seqResetOptions.find((o) => o.value === r.seqResetRule)?.label || r.seqResetRule || '-',
     },
     {
-      title: t('app.master-data.seqRules.status'),
+      title: t('common.status'),
       dataIndex: 'isActive',
       hideInTable: true,
       order: 20,
@@ -208,7 +208,7 @@ const SerialRulesPage: React.FC = () => {
       fieldProps: { allowClear: true },
     },
     {
-      title: t('app.master-data.seqRules.status'),
+      title: t('common.status'),
       dataIndex: 'isActive',
       width: 88,
       minWidth: 88,
@@ -217,7 +217,7 @@ const SerialRulesPage: React.FC = () => {
       sorter: true,
       hideInSearch: true,
       valueEnum: ruleActiveValueEnum,
-      render: (_, r) => renderMasterActiveTag(t, r.isActive, 'app.master-data.seqRules.enabled', 'app.master-data.seqRules.disabled'),
+      render: (_, r) => renderMasterActiveTag(t, r.isActive, 'common.enabled', 'app.master-data.seqRules.disabled'),
     },
     ...masterCrudCreatedUpdatedColumns<SerialRule>(t),
     {
@@ -233,7 +233,7 @@ const SerialRulesPage: React.FC = () => {
             onClick={() => handleEdit(record)}
             disabled={record.isSystem}
           >
-            {t('field.customField.edit')}
+            {t('common.edit')}
           </Button>
           <Popconfirm
             title={t('app.master-data.seqRules.deleteConfirm')}
@@ -241,7 +241,7 @@ const SerialRulesPage: React.FC = () => {
             disabled={record.isSystem}
           >
             <Button type="link" size="small" danger icon={<DeleteOutlined />} disabled={record.isSystem}>
-              {t('field.customField.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -295,7 +295,7 @@ const SerialRulesPage: React.FC = () => {
             menuItems={[
               {
                 key: 'batch-enable',
-                label: t('app.master-data.seqRules.enabled'),
+                label: t('common.enabled'),
                 onClick: (keys) => handleBatchSetActive(keys, true),
               },
               {
@@ -361,8 +361,8 @@ const SerialRulesPage: React.FC = () => {
             />
           </div>
         </ProForm.Item>
-        <ProFormTextArea name="description" label={t('app.master-data.seqRules.description')} colProps={{ span: 24 }} fieldProps={{ rows: 2 }} />
-        <ProFormSwitch name="isActive" label={t('app.master-data.seqRules.status')} colProps={{ span: 12 }} initialValue={true} />
+        <ProFormTextArea name="description" label={t('common.remark')} colProps={{ span: 24 }} fieldProps={{ rows: 2 }} />
+        <ProFormSwitch name="isActive" label={t('common.status')} colProps={{ span: 12 }} initialValue={true} />
       </FormModalTemplate>
     </ListPageTemplate>
   );

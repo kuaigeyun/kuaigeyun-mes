@@ -186,7 +186,7 @@ export const MrpMaterialPlanPanel: React.FC<MrpMaterialPlanPanelProps> = ({
           dataSource={parsed.plannedOrders}
           columns={[
             {
-              title: t('app.kuaizhizao.demandComputation.mrpColQty'),
+              title: t('common.quantity'),
               dataIndex: 'qty',
               width: 88,
               align: 'right',
@@ -232,7 +232,7 @@ export const MrpMaterialPlanPanel: React.FC<MrpMaterialPlanPanelProps> = ({
               render: (v: string) => formatBusinessDateOnly(v) || v || '-',
             },
             {
-              title: t('app.kuaizhizao.demandComputation.mrpColQty'),
+              title: t('common.quantity'),
               dataIndex: 'qty',
               width: 88,
               align: 'right',

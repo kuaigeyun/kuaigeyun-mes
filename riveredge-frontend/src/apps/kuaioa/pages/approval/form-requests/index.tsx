@@ -59,8 +59,8 @@ const FormRequestsPage: React.FC = () => {
         { name: 'template_code', labelKey: 'app.kuaioa.formTemplate.code', width: 120 },
         { name: 'applicant_name', labelKey: 'app.kuaioa.common.applicant', width: 100 },
         { name: 'department_name', labelKey: 'app.kuaioa.common.department', hideInTable: true },
-        { name: 'status', labelKey: 'app.kuaioa.common.status', width: 100 },
-        { name: 'notes', labelKey: 'app.kuaioa.common.notes', hideInTable: true, type: 'textarea' },
+        { name: 'status', labelKey: 'common.status', width: 100 },
+        { name: 'notes', labelKey: 'common.remark', hideInTable: true, type: 'textarea' },
       ]}
       listFn={listFormRequests}
       createFn={createFormRequest}

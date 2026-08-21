@@ -76,7 +76,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
       {!isEdit ? (
         <ProFormText
           name="code"
-          label={t('app.kuaizhizao.logistics.field.code')}
+          label={t('common.code')}
           placeholder={t('app.kuaizhizao.logistics.placeholder.autoCode')}
         />
       ) : null}
@@ -95,7 +95,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
           { label: t('app.kuaizhizao.logistics.option.ownership.external'), value: 'external' },
         ]}
       />
-      <ProFormSwitch name="is_enabled" label={t('app.kuaizhizao.logistics.field.enabled')} />
+      <ProFormSwitch name="is_enabled" label={t('common.enabled')} />
     </FormModalTemplate>
   );
 };

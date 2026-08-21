@@ -52,7 +52,7 @@ const VariantAttributesPage: React.FC = () => {
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
 
   const attributeActiveValueEnum = useMemo(
-    () => buildMasterCrudActiveValueEnum(t, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
+    () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
     [t],
   );
 
@@ -132,7 +132,7 @@ const VariantAttributesPage: React.FC = () => {
       render: (_, record) =>
         record.attribute_type === 'enum' ? (
           <MarkerTag color={record.allow_multiple ? 'blue' : 'default'}>
-            {record.allow_multiple ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+            {record.allow_multiple ? t('common.yes') : t('common.no')}
           </MarkerTag>
         ) : '-',
     },
@@ -145,12 +145,12 @@ const VariantAttributesPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('app.master-data.bom.yes'), status: 'Error' },
-        false: { text: t('app.master-data.bom.no'), status: 'Success' },
+        true: { text: t('common.yes'), status: 'Error' },
+        false: { text: t('common.no'), status: 'Success' },
       },
       render: (_, record) => (
         <MarkerTag color={record.is_required ? 'red' : 'green'}>
-          {record.is_required ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+          {record.is_required ? t('common.yes') : t('common.no')}
         </MarkerTag>
       ),
     },
@@ -185,7 +185,7 @@ const VariantAttributesPage: React.FC = () => {
       },
     },
     {
-      title: t('app.master-data.variantAttributes.status'),
+      title: t('common.status'),
       dataIndex: 'is_active',
       hideInTable: true,
       order: 20,
@@ -194,7 +194,7 @@ const VariantAttributesPage: React.FC = () => {
       fieldProps: { allowClear: true },
     },
     {
-      title: t('app.master-data.variantAttributes.status'),
+      title: t('common.status'),
       dataIndex: 'is_active',
       width: 88,
       minWidth: 88,
@@ -203,7 +203,7 @@ const VariantAttributesPage: React.FC = () => {
       sorter: true,
       hideInSearch: true,
       valueEnum: attributeActiveValueEnum,
-      render: (_, record) => renderMasterActiveTag(t, record.is_active, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
+      render: (_, record) => renderMasterActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
       title: t('app.master-data.variantAttributes.version'),
@@ -214,7 +214,7 @@ const VariantAttributesPage: React.FC = () => {
       resizable: false,
     },
     {
-      title: t('app.master-data.variantAttributes.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -232,7 +232,7 @@ const VariantAttributesPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            {t('field.customField.edit')}
+            {t('common.edit')}
           </Button>
           <Popconfirm key="delete" {...rowActionKind('delete')} title={t('common.confirmDelete')}
             onConfirm={() => handleDelete(record.uuid)}
@@ -245,7 +245,7 @@ const VariantAttributesPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              {t('field.customField.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -555,7 +555,7 @@ const VariantAttributesPage: React.FC = () => {
         </ProForm.Item>
         <ProFormTextArea
           name="description"
-          label={t('app.master-data.variantAttributes.description')}
+          label={t('common.remark')}
           placeholder={t('app.master-data.variantAttributes.descriptionPlaceholder')}
           colProps={{ span: 24 }}
         />

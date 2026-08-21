@@ -69,9 +69,9 @@ const ReportDesignPage: React.FC = () => {
           config: reportConfig,
         },
       });
-      messageApi.success(t('pages.system.reportTemplates.designSaveSuccess'));
+      messageApi.success(t('common.saveSuccess'));
     } catch (error) {
-      messageApi.error(t('pages.system.reportTemplates.designSaveFailed'));
+      messageApi.error(t('common.saveFailed'));
     }
   };
 

@@ -278,7 +278,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
         form.setFieldsValue(hydrated);
       })
       .catch((error: { message?: string }) => {
-        messageApi.warning(error?.message || t('app.kuaioa.common.operationFailed'));
+        messageApi.warning(error?.message || t('common.operationFailed'));
       });
   };
 
@@ -317,7 +317,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
           setDetailRecord(fresh);
         }
       } catch (error: any) {
-        messageApi.error(error?.message || t('app.kuaioa.common.operationFailed'));
+        messageApi.error(error?.message || t('common.operationFailed'));
       } finally {
         setDetailLoading(false);
       }
@@ -342,10 +342,10 @@ const KuaioaCrudListPage: React.FC<Props> = ({
     try {
       if (editing?.id) {
         await updateFn?.(Number(editing.id), payload);
-        messageApi.success(t('app.kuaioa.common.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         const created = await createFn?.(payload);
-        messageApi.success(t('app.kuaioa.common.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
         if (created && typeof created === 'object') {
           onCreateSuccess?.(created as Record<string, unknown>);
         }
@@ -353,7 +353,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
       setModalOpen(false);
       reloadTable();
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaioa.common.operationFailed'));
+      messageApi.error(error?.message || t('common.operationFailed'));
     }
   };
 
@@ -364,10 +364,10 @@ const KuaioaCrudListPage: React.FC<Props> = ({
         onOk: async () => {
           try {
             await deleteFn?.(Number(record.id));
-            messageApi.success(t('app.kuaioa.common.deleteSuccess'));
+            messageApi.success(t('common.deleteSuccess'));
             reloadTable();
           } catch (error: any) {
-            messageApi.error(error?.message || t('app.kuaioa.common.operationFailed'));
+            messageApi.error(error?.message || t('common.operationFailed'));
           }
         },
       });
@@ -385,7 +385,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
         setSelectedRowKeys([]);
         reloadTable();
       } catch (error: any) {
-        messageApi.error(error?.message || t('app.kuaioa.common.operationFailed'));
+        messageApi.error(error?.message || t('common.operationFailed'));
       }
     },
     [deleteFn, messageApi, reloadTable, t],
@@ -512,7 +512,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
     }
 
     base.push({
-      title: t('app.kuaioa.common.actions'),
+      title: t('common.actions'),
       key: 'action',
       valueType: 'option',
       fixed: 'right',
@@ -527,13 +527,13 @@ const KuaioaCrudListPage: React.FC<Props> = ({
             icon={<EyeOutlined />}
             onClick={() => void openDetail(record)}
           >
-            {t('app.kuaioa.common.detail')}
+            {t('common.detail')}
           </Button>,
         );
         if (perms.canUpdate) {
           actions.push(
             <Button key="edit" type="link" icon={<EditOutlined />} onClick={() => openEdit(record)}>
-              {t('app.kuaioa.common.edit')}
+              {t('common.edit')}
             </Button>,
           );
         }
@@ -553,7 +553,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
                     reloadTable();
                   }
                 } catch (error: any) {
-                  messageApi.error(error?.message || t('app.kuaioa.common.operationFailed'));
+                  messageApi.error(error?.message || t('common.operationFailed'));
                 }
               }}
             >
@@ -595,7 +595,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
         if (perms.canDelete && deleteFn) {
           actions.push(
             <Button key="delete" type="link" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
-              {t('app.kuaioa.common.delete')}
+              {t('common.delete')}
             </Button>,
           );
         }
@@ -685,7 +685,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
 
       <FormModalTemplate
         open={modalOpen}
-        title={editing ? t('app.kuaioa.common.edit') : t(createButtonKey)}
+        title={editing ? t('common.edit') : t(createButtonKey)}
         onClose={() => setModalOpen(false)}
         onFinish={handleSubmit}
         isEdit={Boolean(editing)}

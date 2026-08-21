@@ -496,7 +496,7 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
           </span>
           <span style={{ minWidth: 0 }}>
             <span style={{ fontWeight: 600, color: 'var(--ant-color-text-secondary)' }}>
-              {t('components.uniLifecycle.nextStep')}
+              {t('common.next')}
             </span>
             <span style={{ color: 'var(--ant-color-text-secondary)' }}>：</span>
             <span style={{ color: 'var(--ant-color-text)' }}>

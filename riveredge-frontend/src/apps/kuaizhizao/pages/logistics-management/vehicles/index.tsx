@@ -63,12 +63,12 @@ const VehiclesPage: React.FC = () => {
           },
           { title: t('app.kuaizhizao.logistics.field.loadCapacity'), dataIndex: 'load_capacity' },
           {
-            title: t('app.kuaizhizao.logistics.field.status'),
+            title: t('common.status'),
             dataIndex: 'status',
             render: (_, record) => renderVehicleStatusTag(t, record.status),
           },
           {
-            title: t('app.kuaizhizao.logistics.field.enabled'),
+            title: t('common.enabled'),
             dataIndex: 'is_enabled',
             render: (_, record) => renderLogisticsEnabledTag(t, record.is_enabled),
           },
@@ -111,7 +111,7 @@ const VehiclesPage: React.FC = () => {
           render: (_, row) => renderLogisticsOwnershipTag(t, row.ownership),
         },
         {
-          title: t('app.kuaizhizao.logistics.field.enabled'),
+          title: t('common.enabled'),
           dataIndex: 'is_enabled',
           width: 88,
           minWidth: 88,
@@ -121,7 +121,7 @@ const VehiclesPage: React.FC = () => {
           render: (_, row) => renderLogisticsEnabledTag(t, row.is_enabled),
         },
         {
-          title: t('app.kuaizhizao.logistics.field.status'),
+          title: t('common.status'),
           key: 'lifecycle',
           dataIndex: 'status',
           fixed: 'right',

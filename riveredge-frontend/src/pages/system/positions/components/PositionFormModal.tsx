@@ -109,10 +109,10 @@ export const PositionFormModal: React.FC<PositionFormModalProps> = ({
         : values;
       if (isEdit && editUuid) {
         await updatePosition(editUuid, payload as UpdatePositionData);
-        messageApi.success(t('pages.system.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createPosition(values as CreatePositionData);
-        messageApi.success(t('pages.system.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
       onClose();
       formRef.current?.resetFields();

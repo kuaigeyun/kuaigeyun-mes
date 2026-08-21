@@ -142,18 +142,18 @@ const InspectionItemsPage: React.FC = () => {
 
   const detailBasicColumns = useMemo<ProDescriptionsItemProps<InspectionItem>[]>(
     () => [
-      { title: t(`${P}.col.code`), dataIndex: 'code' },
-      { title: t(`${P}.col.name`), dataIndex: 'name' },
+      { title: t('common.code'), dataIndex: 'code' },
+      { title: t('common.name'), dataIndex: 'name' },
       {
         title: t(`${P}.col.valueType`),
         dataIndex: 'value_type',
         render: (_, record) => t(`${P}.valueType.${record.value_type || 'boolean'}`, record.value_type || '-'),
       },
-      { title: t(`${P}.col.unit`), dataIndex: 'unit' },
+      { title: t('common.unit'), dataIndex: 'unit' },
       { title: t(`${P}.col.numericMin`), dataIndex: 'numeric_min' },
       { title: t(`${P}.col.numericMax`), dataIndex: 'numeric_max' },
       { title: t(`${P}.col.requirement`), dataIndex: 'requirement', span: 2 },
-      buildIsActiveDescriptionColumn<InspectionItem>(t, `${P}.col.isActive`),
+      buildIsActiveDescriptionColumn<InspectionItem>(t),
     ],
     [t],
   );
@@ -168,7 +168,7 @@ const InspectionItemsPage: React.FC = () => {
         search: { order: 10 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.isActive`),
+        title: t('common.enabled'),
         dataIndex: 'is_active',
         valueType: 'select',
         valueEnum: activeStatusValueEnum,
@@ -176,7 +176,7 @@ const InspectionItemsPage: React.FC = () => {
         search: { order: 20 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.code`),
+        title: t('common.code'),
         dataIndex: 'code',
         width: 120,
         fixed: 'left',
@@ -184,7 +184,7 @@ const InspectionItemsPage: React.FC = () => {
         search: { order: 30 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.name`),
+        title: t('common.name'),
         dataIndex: 'name',
         width: 180,
         ellipsis: true,
@@ -198,10 +198,10 @@ const InspectionItemsPage: React.FC = () => {
         hideInSearch: true,
         render: (_, r) => t(`${P}.valueType.${r.value_type || 'boolean'}`, r.value_type || '-'),
       },
-      { title: t(`${P}.col.unit`), dataIndex: 'unit', width: 80, hideInSearch: true },
+      { title: t('common.unit'), dataIndex: 'unit', width: 80, hideInSearch: true },
       { title: t(`${P}.col.requirement`), dataIndex: 'requirement', ellipsis: true, hideInSearch: true },
       {
-        title: t(`${P}.col.isActive`),
+        title: t('common.enabled'),
         dataIndex: 'is_active',
         width: 80,
         sorter: true,
@@ -310,10 +310,10 @@ const InspectionItemsPage: React.FC = () => {
       >
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormText name="code" label={t(`${P}.col.code`)} rules={[{ required: true }]} />
+            <ProFormText name="code" label={t('common.code')} rules={[{ required: true }]} />
           </Col>
           <Col span={12}>
-            <ProFormText name="name" label={t(`${P}.col.name`)} rules={[{ required: true }]} />
+            <ProFormText name="name" label={t('common.name')} rules={[{ required: true }]} />
           </Col>
           <Col span={12}>
             <ProFormSelect
@@ -327,7 +327,7 @@ const InspectionItemsPage: React.FC = () => {
             />
           </Col>
           <Col span={12}>
-            <ProFormText name="unit" label={t(`${P}.col.unit`)} />
+            <ProFormText name="unit" label={t('common.unit')} />
           </Col>
           <Col span={12}>
             <ProFormDigit name="numeric_min" label={t(`${P}.col.numericMin`)} />
@@ -339,7 +339,7 @@ const InspectionItemsPage: React.FC = () => {
             <ProFormTextArea name="requirement" label={t(`${P}.col.requirement`)} />
           </Col>
           <Col span={12}>
-            <ProFormSwitch name="is_active" label={t(`${P}.col.isActive`)} />
+            <ProFormSwitch name="is_active" label={t('common.enabled')} />
           </Col>
         </Row>
       </FormModalTemplate>

@@ -135,7 +135,7 @@ const DataSourceListPage: React.FC = () => {
           },
           {
             field: 'description',
-            labelKey: 'pages.system.dataSources.columnDescription',
+            labelKey: 'common.remark',
             aliases: ['备注', '描述'],
           },
           {
@@ -154,7 +154,7 @@ const DataSourceListPage: React.FC = () => {
           t('pages.system.dataSources.importExampleCode'),
           t('pages.system.dataSources.importExampleType'),
           '',
-          t('pages.system.dataSources.enabled'),
+          t('common.enabled'),
           t('pages.system.dataSources.importExampleConfig'),
         ],
       ),
@@ -293,12 +293,12 @@ const DataSourceListPage: React.FC = () => {
         await updateIntegrationConfig(String(uuid), { is_active: enable });
         done++;
       }
-      const action = enable ? t('pages.system.dataSources.enabled') : t('pages.system.dataSources.disabled');
+      const action = enable ? t('common.enabled') : t('common.disabled');
       messageApi.success(t('pages.system.dataSources.batchStatusSuccess', { action, count: done }));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || t('pages.system.dataSources.operationFailed'));
+      messageApi.error(error?.message || t('common.operationFailed'));
     }
   };
 
@@ -331,10 +331,10 @@ const DataSourceListPage: React.FC = () => {
   const handleDelete = async (record: DataSource) => {
     try {
       await deleteDataSource(record.uuid);
-      messageApi.success(t('pages.system.dataSources.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.dataSources.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -450,7 +450,7 @@ const DataSourceListPage: React.FC = () => {
           config,
           is_active,
         } as UpdateDataSourceData);
-        messageApi.success(t('pages.system.dataSources.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createDataSource({
           name,
@@ -460,14 +460,14 @@ const DataSourceListPage: React.FC = () => {
           config,
           is_active,
         } as CreateDataSourceData);
-        messageApi.success(t('pages.system.dataSources.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
       
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.dataSources.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -540,7 +540,7 @@ const DataSourceListPage: React.FC = () => {
               okText={t('common.confirm')}
               cancelText={t('common.cancel')}
             >
-              <Tooltip title={t('pages.system.dataSources.deleteTooltip')}>
+              <Tooltip title={t('common.delete')}>
                 <DeleteOutlined
                   style={{ fontSize: 16, color: '#ff4d4f' }}
                 />
@@ -595,7 +595,7 @@ const DataSourceListPage: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataSources.statusLabel')}</Text>
               <Tag color={dataSource.is_active ? 'success' : 'default'}>
-                {dataSource.is_active ? t('pages.system.dataSources.enabled') : t('pages.system.dataSources.disabled')}
+                {dataSource.is_active ? t('common.enabled') : t('common.disabled')}
               </Tag>
             </div>
             
@@ -666,7 +666,7 @@ const DataSourceListPage: React.FC = () => {
       },
     },
     {
-      title: t('pages.system.dataSources.columnDescription'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -705,11 +705,11 @@ const DataSourceListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('pages.system.dataSources.enabled'), status: 'Success' },
-        false: { text: t('pages.system.dataSources.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) =>
-        renderSystemActiveTag(t, record.is_active, 'pages.system.dataSources.enabled', 'pages.system.dataSources.disabled'),
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
       title: t('pages.system.dataSources.columnLastConnected'),
@@ -723,7 +723,7 @@ const DataSourceListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('pages.system.dataSources.columnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       minWidth: 180,
@@ -734,7 +734,7 @@ const DataSourceListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('pages.system.dataSources.columnActions'),
+      title: t('common.actions'),
       key: 'action',
       valueType: 'option',
       fixed: 'right',
@@ -749,7 +749,7 @@ const DataSourceListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            {t('pages.system.dataSources.view')}
+            {t('common.view')}
           </Button>,
         ];
         if (record.is_editable !== false) {
@@ -762,7 +762,7 @@ const DataSourceListPage: React.FC = () => {
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
             >
-              {t('pages.system.dataSources.edit')}
+              {t('common.edit')}
             </Button>,
           );
         }
@@ -789,7 +789,7 @@ const DataSourceListPage: React.FC = () => {
               cancelText={t('common.cancel')}
             >
               <Button type="link" size="small" icon={<DeleteOutlined />} danger>
-                {t('pages.system.dataSources.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>,
           );
@@ -825,7 +825,7 @@ const DataSourceListPage: React.FC = () => {
         return <Tag color={typeInfo.color} variant="filled">{typeInfo.text}</Tag>;
       },
     },
-    { title: t('pages.system.dataSources.detailColumnDescription'), dataIndex: 'description' },
+    { title: t('common.remark'), dataIndex: 'description' },
     {
       title: t('pages.system.dataSources.detailColumnRelatedDatasets'),
       dataIndex: 'related_datasets',
@@ -883,7 +883,7 @@ const DataSourceListPage: React.FC = () => {
       title: t('pages.system.dataSources.detailColumnActive'),
       dataIndex: 'is_active',
       render: (value: boolean) =>
-        renderSystemActiveTag(t, value, 'pages.system.dataSources.enabled', 'pages.system.dataSources.disabled'),
+        renderSystemActiveTag(t, value, 'common.enabled', 'common.disabled'),
     },
     { title: t('pages.system.dataSources.detailColumnLastConnected'), dataIndex: 'last_connected_at', valueType: 'dateTime' },
     {
@@ -891,8 +891,8 @@ const DataSourceListPage: React.FC = () => {
       dataIndex: 'last_error',
       render: (value: any) => value ? <Tag color="error">{value}</Tag> : '-',
     },
-    { title: t('pages.system.dataSources.detailColumnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-    { title: t('pages.system.dataSources.detailColumnUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
 
   return (
@@ -977,7 +977,7 @@ const DataSourceListPage: React.FC = () => {
           }
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText={t('pages.system.dataSources.batchDelete')}
+          deleteButtonText={t('common.batchDelete')}
           deleteConfirmTitle={t('pages.system.dataSources.batchDeleteTitle')}
           deleteConfirmDescription={(c) => t('pages.system.dataSources.batchDeleteDescription', { count: c })}
           toolBarRender={() =>
@@ -1049,7 +1049,7 @@ const DataSourceListPage: React.FC = () => {
               items = res.items;
             }
             if (items.length === 0) {
-              messageApi.warning(t('pages.system.dataSources.noDataToExport'));
+              messageApi.warning(t('common.exportNoData'));
               return;
             }
             await downloadRecordsAsXlsx(
@@ -1435,12 +1435,12 @@ const DataSourceListPage: React.FC = () => {
           </ProFormDependency>
         <ProFormTextArea
           name="description"
-          label={t('pages.system.dataSources.labelDescription')}
+          label={t('common.remark')}
           placeholder={t('pages.system.dataSources.descriptionPlaceholder')}
           fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
         />
-        <ProFormSwitch name="is_active" label={t('pages.system.dataSources.labelActive')} colProps={{ span: 12 }} />
+        <ProFormSwitch name="is_active" label={t('common.enabled')} colProps={{ span: 12 }} />
       </FormModalTemplate>
 
       {/* 连接器市场 */}
@@ -1485,7 +1485,7 @@ const DataSourceListPage: React.FC = () => {
                   visible: detailData.is_editable !== false,
                   render: (
                     <Button {...rowActionKind('update')} icon={<EditOutlined />} onClick={() => handleEdit(detailData)}>
-                      {t('pages.system.dataSources.edit')}
+                      {t('common.edit')}
                     </Button>
                   ),
                 },

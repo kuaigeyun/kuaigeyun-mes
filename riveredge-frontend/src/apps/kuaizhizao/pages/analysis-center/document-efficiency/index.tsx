@@ -109,7 +109,7 @@ const DocumentEfficiencyPage: React.FC = () => {
     const nodes = efficiencyData?.node_statistics || [];
     const bottlenecks = efficiencyData?.bottleneck_nodes || [];
     if (!nodes.length && !bottlenecks.length) {
-      messageApi.warning(t('app.kuaireport.analysis.exportEmpty', { defaultValue: '暂无数据可导出' }));
+      messageApi.warning(t('common.exportNoData', { defaultValue: '暂无数据可导出' }));
       return;
     }
     setExporting(true);

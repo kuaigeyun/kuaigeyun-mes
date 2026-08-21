@@ -131,7 +131,7 @@ export const InstallExecutionTaskFormModal: React.FC<Props> = ({
       />
       <ProFormTextArea
         name="notes"
-        label={t('app.kuaizhizao.installExecution.taskNotes')}
+        label={t('common.remark')}
         colProps={{ span: 24 }}
         fieldProps={{ rows: 3 }}
       />

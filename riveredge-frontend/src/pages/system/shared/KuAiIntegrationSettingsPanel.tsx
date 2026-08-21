@@ -87,12 +87,12 @@ const KuAiIntegrationSettingsPanel: React.FC<KuAiIntegrationSettingsPanelProps> 
           integrations: buildKuAiIntegrationSettingsPayload(values),
         },
       });
-      messageApi.success(t('pages.system.siteSettings.saveSuccess'));
+      messageApi.success(t('common.saveSuccess'));
       await fetchConfigs(true);
       await loadSettings();
     } catch (error: any) {
       if (error?.errorFields) return;
-      messageApi.error(error?.message || t('pages.system.siteSettings.saveFailed'));
+      messageApi.error(error?.message || t('common.saveFailed'));
     } finally {
       setSaving(false);
     }

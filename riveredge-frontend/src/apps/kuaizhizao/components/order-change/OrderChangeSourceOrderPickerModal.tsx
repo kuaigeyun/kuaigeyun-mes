@@ -130,7 +130,7 @@ export const OrderChangeSourceOrderPickerModal: React.FC<OrderChangeSourceOrderP
             orderLabel,
             partnerLabel,
           })}
-          enterButton={t('app.kuaizhizao.orderChange.search')}
+          enterButton={t('common.search')}
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           onSearch={(v) => void loadCandidates(v)}

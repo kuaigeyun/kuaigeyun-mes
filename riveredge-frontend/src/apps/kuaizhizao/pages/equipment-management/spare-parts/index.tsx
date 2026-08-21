@@ -177,13 +177,13 @@ const SparePartsPage: React.FC = () => {
       { title: t(`${P}.col.partName`), dataIndex: 'part_name' },
       { title: t(`${P}.col.spec`), dataIndex: 'spec' },
       { title: t(`${P}.col.category`), dataIndex: 'category' },
-      { title: t(`${P}.col.unit`), dataIndex: 'unit' },
+      { title: t('common.unit'), dataIndex: 'unit' },
       { title: t(`${P}.col.brand`), dataIndex: 'brand' },
       { title: t(`${P}.col.supplier`), dataIndex: 'supplier' },
       { title: t(`${P}.col.safetyStock`), dataIndex: 'safety_stock' },
       { title: t(`${P}.col.price`), dataIndex: 'price' },
-      { title: t(`${P}.col.description`), dataIndex: 'description', span: 2 },
-      buildIsActiveDescriptionColumn<SparePart>(t, `${P}.col.isActive`),
+      { title: t('common.remark'), dataIndex: 'description', span: 2 },
+      buildIsActiveDescriptionColumn<SparePart>(t),
     ],
     [t],
   );
@@ -199,7 +199,7 @@ const SparePartsPage: React.FC = () => {
         search: { order: 10 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.isActive`),
+        title: t('common.enabled'),
         dataIndex: 'is_active',
         valueType: 'select',
         valueEnum: activeStatusValueEnum,
@@ -235,7 +235,7 @@ const SparePartsPage: React.FC = () => {
         sorter: true,
         hideInSearch: true,
       },
-      { title: t(`${P}.col.unit`), dataIndex: 'unit', width: 60, hideInSearch: true },
+      { title: t('common.unit'), dataIndex: 'unit', width: 60, hideInSearch: true },
       {
         title: t(`${P}.col.safetyStock`),
         dataIndex: 'safety_stock',
@@ -244,7 +244,7 @@ const SparePartsPage: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: t(`${P}.col.isActive`),
+        title: t('common.enabled'),
         dataIndex: 'is_active',
         width: 80,
         sorter: true,
@@ -480,7 +480,7 @@ const SparePartsPage: React.FC = () => {
             <ProFormText name="category" label={t(`${P}.col.category`)} />
           </Col>
           <Col span={12}>
-            <ProFormText name="unit" label={t(`${P}.col.unit`)} rules={[{ required: true }]} />
+            <ProFormText name="unit" label={t('common.unit')} rules={[{ required: true }]} />
           </Col>
           <Col span={12}>
             <ProFormDigit name="safety_stock" label={t(`${P}.col.safetyStock`)} min={0} />
@@ -495,10 +495,10 @@ const SparePartsPage: React.FC = () => {
             <ProFormDigit name="price" label={t(`${P}.col.price`)} min={0} />
           </Col>
           <Col span={24}>
-            <ProFormTextArea name="description" label={t(`${P}.col.description`)} fieldProps={{ rows: 2 }} />
+            <ProFormTextArea name="description" label={t('common.remark')} fieldProps={{ rows: 2 }} />
           </Col>
           <Col span={24}>
-            <ProFormSwitch name="is_active" label={t(`${P}.col.isActive`)} />
+            <ProFormSwitch name="is_active" label={t('common.enabled')} />
           </Col>
         </Row>
       </FormModalTemplate>
@@ -522,9 +522,9 @@ const SparePartsPage: React.FC = () => {
           ]}
           rules={[{ required: true }]}
         />
-        <ProFormDigit name="quantity" label={t(`${P}.form.quantity`)} min={1} rules={[{ required: true }]} />
+        <ProFormDigit name="quantity" label={t('common.quantity')} min={1} rules={[{ required: true }]} />
         <ProFormText name="warehouse_location" label={t(`${P}.col.warehouseLocation`)} rules={[{ required: true }]} />
-        <ProFormTextArea name="remark" label={t(`${P}.form.remark`)} fieldProps={{ rows: 2 }} />
+        <ProFormTextArea name="remark" label={t('common.remark')} fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
     </>
   );

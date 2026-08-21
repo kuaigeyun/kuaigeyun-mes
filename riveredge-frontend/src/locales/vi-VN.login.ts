@@ -1,6 +1,8 @@
 /**
- * Specialized language pack for the login page (English)
- * Contains pages.login.* keys and component keys needed for the login flow.
+ * 登录页专用语言包（精简版）
+ * 包含 pages.login.* 及登录流程内嵌组件所需 key（如多组织选择弹窗），减少首屏 bundle 约 400KB
+ *
+ * 与 zh-CN.ts 中同名 key 的文案、标点需保持一致；主应用若加载完整 zh-CN，会与登录 MPA 共用 RegisterDrawer 等组件，分叉会导致「本地无句号、线上有句號」类问题。
  */
 export default {
   'pages.login.title': 'Đăng nhập',
@@ -23,7 +25,7 @@ export default {
   'pages.login.descriptionTitle': 'Khung nhiều người thuê',
   'pages.login.descriptionText': 'Giải pháp SaaS an toàn, hiệu quả và có thể mở rộng cho các doanh nghiệp hiện đại',
   'pages.login.guestLogin': 'Hãy thử quyền truy cập của khách',
-  'pages.login.noAccount': "Don't have an account?",
+  'pages.login.noAccount': 'Chưa có tài khoản?',
   'pages.login.registerNow': 'Tạo một cái',
   'pages.login.userTerms': 'Điều khoản dịch vụ',
   'pages.login.privacyTerms': 'Chính sách bảo mật',
@@ -37,7 +39,7 @@ export default {
   'components.iterationFloatButton.provenanceStatus.unknown': 'Nguồn không rõ',
   'pages.login.browserHintShort': 'Để có trải nghiệm tốt nhất, chúng tôi khuyên bạn nên sử dụng Chrome hoặc Microsoft Edge.',
   'pages.login.clientDownloadsTitle': 'Ứng dụng khách tại chỗ',
-  'pages.login.clientDownloadsSub': 'Máy trạm & thiết bị hiện trường di động',
+  'pages.login.clientDownloadsSub': 'Trạm làm việc & thiết bị hiện trường di động',
   'pages.login.clientDownloadWinTitle': 'HMI máy trạm',
   'pages.login.clientDownloadWinMeta': 'Trình cài đặt Windows',
   'pages.login.clientDownloadAndroidTitle': 'PDA cầm tay',
@@ -178,10 +180,10 @@ export default {
   'pages.login.wecomQrLoginHint': 'Quét mã bằng WeCom và xác nhận đăng nhập',
   'common.cancel': 'Hủy bỏ',
 
-  // Tenant Selection Modal
+  // 多组织选择弹窗（TenantSelectionModal，与 zh-CN.ts 保持一致）
   'components.tenantSelection.title': 'Chọn tổ chức',
   'components.tenantSelection.hint': 'Bạn là thành viên của nhiều tổ chức. Vui lòng chọn một để tiếp tục:',
-  'components.tenantSelection.statusActive': 'Tích cực',
+  'components.tenantSelection.statusActive': 'Kích hoạt',
   'components.tenantSelection.statusInactive': 'Không hoạt động',
   'components.tenantSelection.statusExpired': 'Hết hạn',
   'components.tenantSelection.statusSuspended': 'Cấm',

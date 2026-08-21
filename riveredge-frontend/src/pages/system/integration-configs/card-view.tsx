@@ -136,10 +136,10 @@ const CardView: React.FC = () => {
   const handleDelete = async (integration: IntegrationConfig) => {
     try {
       await deleteIntegrationConfig(integration.uuid);
-      handleSuccess(t('pages.system.integrationConfigs.deleteSuccess'));
+      handleSuccess(t('common.deleteSuccess'));
       loadIntegrationConfigs();
     } catch (error: any) {
-      handleError(error, t('pages.system.integrationConfigs.deleteFailed'));
+      handleError(error, t('common.deleteFailed'));
     }
   };
 
@@ -291,7 +291,7 @@ const CardView: React.FC = () => {
             onClick={loadIntegrationConfigs}
             loading={loading}
           >
-            {t('pages.system.integrationConfigs.refresh')}
+            {t('common.refresh')}
           </Button>,
         ]}
       >
@@ -414,7 +414,7 @@ const CardView: React.FC = () => {
                                   okText={t('common.confirm')}
                                   cancelText={t('common.cancel')}
                                 >
-                                  <Tooltip title={t('pages.system.integrationConfigs.delete')}>
+                                  <Tooltip title={t('common.delete')}>
                                     <DeleteOutlined
                                       style={{ fontSize: 16, color: '#ff4d4f' }}
                                     />
@@ -435,7 +435,7 @@ const CardView: React.FC = () => {
                                   
                                   {integration.code && (
                                     <Text type="secondary" style={{ fontSize: 12 }}>
-                                      {t('pages.system.integrationConfigs.code')}: {integration.code}
+                                      {t('common.code')}: {integration.code}
                                     </Text>
                                   )}
                                   
@@ -463,7 +463,7 @@ const CardView: React.FC = () => {
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.integrationConfigs.enableStatus')}：</Text>
                                     <Tag color={integration.is_active ? 'success' : 'default'}>
-                                      {integration.is_active ? t('pages.system.integrationConfigs.enabled') : t('pages.system.integrationConfigs.disabled')}
+                                      {integration.is_active ? t('common.enabled') : t('common.disabled')}
                                     </Tag>
                                   </div>
                                   
@@ -526,7 +526,7 @@ const CardView: React.FC = () => {
                 {getTypeInfo(currentIntegration.type).text}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label={t('pages.system.integrationConfigs.description')}>
+            <Descriptions.Item label={t('common.remark')}>
               {currentIntegration.description || '-'}
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.integrationConfigs.configInfo')}>
@@ -550,7 +550,7 @@ const CardView: React.FC = () => {
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.integrationConfigs.enableStatusLabel')}>
               <Tag color={currentIntegration.is_active ? 'success' : 'default'}>
-                {currentIntegration.is_active ? t('pages.system.integrationConfigs.enabled') : t('pages.system.integrationConfigs.disabled')}
+                {currentIntegration.is_active ? t('common.enabled') : t('common.disabled')}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.integrationConfigs.lastConnectionTime')}>
@@ -568,10 +568,10 @@ const CardView: React.FC = () => {
                 />
               </Descriptions.Item>
             )}
-            <Descriptions.Item label={t('pages.system.integrationConfigs.createdAt')}>
+            <Descriptions.Item label={t('common.createdAt')}>
               {formatDateTimeBySiteSetting(currentIntegration.created_at)}
             </Descriptions.Item>
-            <Descriptions.Item label={t('pages.system.integrationConfigs.updatedAt')}>
+            <Descriptions.Item label={t('common.updatedAt')}>
               {formatDateTimeBySiteSetting(currentIntegration.updated_at)}
             </Descriptions.Item>
           </Descriptions>
@@ -593,7 +593,7 @@ const CardView: React.FC = () => {
             setTestResult(null);
             setTestingUuid(null);
           }}>
-            {t('pages.system.integrationConfigs.close')}
+            {t('common.close')}
           </Button>,
         ]}
         width={600}

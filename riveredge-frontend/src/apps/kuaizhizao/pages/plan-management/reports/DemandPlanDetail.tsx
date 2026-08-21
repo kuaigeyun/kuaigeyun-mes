@@ -67,7 +67,7 @@ const DemandPlanDetail: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: t('app.kuaizhizao.reports.unit'),
+        title: t('common.unit'),
         dataIndex: 'material_unit',
         width: 80,
         minWidth: 80,
@@ -111,7 +111,7 @@ const DemandPlanDetail: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: t('app.kuaizhizao.reports.notes'),
+        title: t('common.remark'),
         dataIndex: 'notes',
         ellipsis: true,
         width: 140,

@@ -237,7 +237,7 @@ const IncomingInspectionPage: React.FC = () => {
             aliases: ['处置方式', 'disposition'],
             options: disposalImportOptions,
           },
-          { field: 'remark', labelKey: 'app.kuaizhizao.quality.incoming.import.notes', aliases: ['备注'] },
+          { field: 'remark', labelKey: 'common.remark', aliases: ['备注'] },
         ],
         [
           t('app.kuaizhizao.quality.incoming.importExample.purchaseReceiptCode'),
@@ -619,7 +619,7 @@ const IncomingInspectionPage: React.FC = () => {
           ? (currentPageData || []).filter((r) => r.id != null && selectedRowKeys.includes(r.id))
           : currentPageData || [];
         if (toExport.length === 0) {
-          messageApi.warning(t('app.kuaizhizao.quality.common.messages.exportEmpty'));
+          messageApi.warning(t('common.exportNoData'));
           return;
         }
         await downloadRecordsAsXlsx(
@@ -629,7 +629,7 @@ const IncomingInspectionPage: React.FC = () => {
         messageApi.success(t('common.exportCountSuccess', { count: toExport.length }));
       }
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.quality.common.messages.exportFailed'));
+      messageApi.error(error?.message || t('common.exportFailed'));
     }
   };
 
@@ -1005,7 +1005,7 @@ const IncomingInspectionPage: React.FC = () => {
           void handleDetail(record);
         }}
       >
-        {t('app.kuaizhizao.quality.common.actions.detail')}
+        {t('common.detail')}
       </Button>,
     ];
     if (gates.conduct.allowed) {
@@ -1195,7 +1195,7 @@ const IncomingInspectionPage: React.FC = () => {
       },
     },
     {
-      title: t('app.kuaizhizao.quality.common.columns.actions'),
+      title: t('common.actions'),
       key: 'action',
       fixed: 'right',
       hideInSearch: true,
@@ -1319,7 +1319,7 @@ const IncomingInspectionPage: React.FC = () => {
             invalidateStats();
             actionRef.current?.reload();
           } catch (error: any) {
-            messageApi.error(error.message || t('app.kuaizhizao.quality.common.messages.deleteFailed'));
+            messageApi.error(error.message || t('common.deleteFailed'));
           }
         }}
         toolBarActionsAfterDelete={[
@@ -1606,7 +1606,7 @@ const IncomingInspectionPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
                   {
@@ -1707,8 +1707,8 @@ const IncomingInspectionPage: React.FC = () => {
         <DowngradeDispositionFields />
         <ProFormTextArea
           name="remarks"
-          label={t('app.kuaizhizao.quality.common.form.remarks')}
-          placeholder={t('app.kuaizhizao.quality.common.form.remarks')}
+          label={t('common.remark')}
+          placeholder={t('common.remark')}
           fieldProps={{ rows: 2 }}
         />
       </FormModalTemplate>

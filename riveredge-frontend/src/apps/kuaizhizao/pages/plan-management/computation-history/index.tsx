@@ -106,7 +106,7 @@ const ComputationHistoryPage: React.FC = () => {
         formItemProps: formDateRangeFormItemProps,
       },
       {
-        title: t('app.kuaizhizao.computationHistory.col.createdAt'),
+        title: t('common.createdAt'),
         dataIndex: 'created_at_range',
         valueType: 'dateRange',
         hideInTable: true,

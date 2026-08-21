@@ -543,7 +543,7 @@ const GlBooksPage: React.FC = () => {
               <Descriptions.Item label={t(`${NS}.col.summary`, { defaultValue: '摘要' })}>
                 {String(voucherDetail.summary || '—')}
               </Descriptions.Item>
-              <Descriptions.Item label={t(`${NS}.col.status`, { defaultValue: '状态' })}>
+              <Descriptions.Item label={t('common.status', { defaultValue: '状态' })}>
                 {String(voucherDetail.status || '—')}
               </Descriptions.Item>
             </Descriptions>

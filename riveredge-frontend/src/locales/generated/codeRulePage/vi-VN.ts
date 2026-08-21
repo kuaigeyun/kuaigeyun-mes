@@ -230,7 +230,7 @@ const codeRulePageviVN = {
   'codeRulePage.master-data-warehouse-warehouse.pageName': 'Kho hàng',
   'codeRulePage.module.主数据管理': 'Dữ liệu chủ',
   'codeRulePage.module.好力 GO': 'Hào Lý GO',
-  'codeRulePage.module.快格轻制造': 'Kuaizhizao',
+  'codeRulePage.module.快格轻制造': 'Sản xuất Kuai',
   'codeRulePage.module.快研发': 'Kuai PLM',
   'codeRulePage.module.系统配置': 'Cấu hình hệ thống',
   'codeRulePage.module.轻管理会计': 'Tài chính Lite',

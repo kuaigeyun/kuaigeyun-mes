@@ -377,7 +377,7 @@ export const WorkOrderDetailDrawer: React.FC<WorkOrderDetailDrawerProps> = ({
   const notesColumn = useMemo(
     () =>
       alignDescriptionColumns([
-        { title: t('app.kuaizhizao.workOrder.colRemarks'), dataIndex: 'remarks', span: 2 },
+        { title: t('common.remark'), dataIndex: 'remarks', span: 2 },
       ] as ProDescriptionsItemProps<WorkOrderDetailRecord>[]),
     [t],
   );
@@ -425,7 +425,7 @@ export const WorkOrderDetailDrawer: React.FC<WorkOrderDetailDrawerProps> = ({
       collaborationTitleSuffix={
         contentReady && showNextInTitle ? (
           <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-            {t('components.uniLifecycle.nextStep')}：
+            {t('common.next')}：
             {nextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
           </Typography.Text>
         ) : undefined

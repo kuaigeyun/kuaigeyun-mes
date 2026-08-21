@@ -38,14 +38,14 @@ export const productionLineFormSchema: FieldConfig[] = [
   {
     name: 'description',
     type: 'textarea',
-    labelKey: 'field.productionLine.description',
+    labelKey: 'common.remark',
     colSpan: 24,
     fieldProps: { rows: 2, maxLength: 1000 },
   },
   {
     name: 'isActive',
     type: 'switch',
-    labelKey: 'field.productionLine.isActive',
+    labelKey: 'common.enabled',
     colSpan: 12,
   },
 ];

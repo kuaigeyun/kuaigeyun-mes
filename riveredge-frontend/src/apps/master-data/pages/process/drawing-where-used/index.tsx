@@ -141,7 +141,7 @@ const DrawingWhereUsedPage: React.FC = () => {
           { title: t('app.master-data.drawings.name'), dataIndex: 'name', ellipsis: true, width: 200 },
           { title: t('app.master-data.drawings.revision'), dataIndex: 'revision', width: 72 },
           {
-            title: t('app.master-data.drawings.status'),
+            title: t('common.status'),
             dataIndex: 'status',
             width: 88,
             render: (_, record) => (
@@ -204,7 +204,7 @@ const DrawingWhereUsedPage: React.FC = () => {
                 { key: 'code', title: t('app.master-data.drawings.code') },
                 { key: 'name', title: t('app.master-data.drawings.name') },
                 { key: 'revision', title: t('app.master-data.drawings.revision') },
-                { key: 'status', title: t('app.master-data.drawings.status') },
+                { key: 'status', title: t('common.status') },
               ],
       },
     );

@@ -244,7 +244,7 @@ const RequirementsPage: React.FC = () => {
       },
       ...plmCreatedUpdatedColumns<RdRequirement>(t),
       {
-        title: t('app.kuaiplm.phase2.requirements.columns.status'),
+        title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
         width: 90,
@@ -456,7 +456,7 @@ const RequirementsPage: React.FC = () => {
           min={1}
           fieldProps={{ precision: 0 }}
         />
-        <ProFormTextArea name="description" label={t('app.kuaiplm.phase2.requirements.form.description')} />
+        <ProFormTextArea name="description" label={t('common.remark')} />
       </FormModalTemplate>
 
       <FormModalTemplate
@@ -491,7 +491,7 @@ const RequirementsPage: React.FC = () => {
         />
         <ProFormSelect
           name="status"
-          label={t('app.kuaiplm.phase2.requirements.form.status')}
+          label={t('common.status')}
           options={requirementStatusOptions}
         />
         <ProFormSelect
@@ -509,7 +509,7 @@ const RequirementsPage: React.FC = () => {
           min={1}
           fieldProps={{ precision: 0 }}
         />
-        <ProFormTextArea name="description" label={t('app.kuaiplm.phase2.requirements.form.description')} />
+        <ProFormTextArea name="description" label={t('common.remark')} />
       </FormModalTemplate>
 
       <FormModalTemplate
@@ -533,7 +533,7 @@ const RequirementsPage: React.FC = () => {
         />
         <ProFormSelect
           name="status"
-          label={t('app.kuaiplm.phase2.requirements.form.status')}
+          label={t('common.status')}
           options={requirementStatusOptions}
         />
         <ProFormSelect
@@ -546,7 +546,7 @@ const RequirementsPage: React.FC = () => {
           ]}
         />
         <ProFormDigit name="source_id" label={t('app.kuaiplm.phase2.requirements.form.sourceId')} />
-        <ProFormTextArea name="description" label={t('app.kuaiplm.phase2.requirements.form.description')} />
+        <ProFormTextArea name="description" label={t('common.remark')} />
       </FormModalTemplate>
     </ListPageTemplate>
   );

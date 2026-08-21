@@ -113,7 +113,7 @@ export const PerformanceSummaryDetailDrawer: React.FC<PerformanceSummaryDetailDr
           render: (_, row) => (row as PerformanceDetail).summary?.kpi_coefficient ?? '-',
         },
         {
-          title: t('app.kuaizhizao.performance.common.columns.status'),
+          title: t('common.status'),
           dataIndex: 'status',
           render: (_, row) => renderSummaryStatusTag(t, (row as PerformanceDetail).summary?.status),
         },

@@ -1063,7 +1063,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     const menuItems: MenuProps['items'] = [
       {
         key: 'refresh',
-        label: t('tabs.refresh'),
+        label: t('common.refresh'),
         icon: <ReloadOutlined style={{ color: '#10b981' }} />, // 2026 Emerald Green
       },
       {
@@ -1087,7 +1087,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       },
       {
         key: 'close',
-        label: t('tabs.close'),
+        label: t('common.close'),
         disabled: isWorkplace || isPinned, // 工作台和固定标签不可关闭
       },
       {

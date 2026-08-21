@@ -249,7 +249,7 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
     if (!text) return
     navigator.clipboard.writeText(text).then(
       () => message.success(t('ui.aiAssistant.copySuccess')),
-      () => message.error(t('ui.aiAssistant.copyFailed')),
+      () => message.error(t('common.copyFailed')),
     )
   }
 
@@ -340,8 +340,8 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
             icon={<CloseOutlined />}
             onClick={onClose}
             className="ai-qa-header-icon-btn"
-            aria-label={t('ui.aiAssistant.close')}
-            title={t('ui.aiAssistant.close')}
+            aria-label={t('common.close')}
+            title={t('common.close')}
           />
         </div>
       </header>
@@ -573,7 +573,7 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({ open, onClo
         const result = await executeAiAction(confirmToken)
         message.success(String(result.message || t('ui.aiAssistant.actionExecuted')))
       } catch (error: unknown) {
-        message.error(error instanceof Error ? error.message : t('ui.aiAssistant.actionFailed'))
+        message.error(error instanceof Error ? error.message : t('common.operationFailed'))
       }
     },
     [t],

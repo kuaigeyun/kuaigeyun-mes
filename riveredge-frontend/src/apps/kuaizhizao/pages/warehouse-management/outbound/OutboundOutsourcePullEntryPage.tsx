@@ -134,7 +134,7 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
           />
         ),
       },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'unit', width: 60 },
+      { title: t('common.unit'), dataIndex: 'unit', width: 60 },
     ],
     [t],
   );
@@ -263,7 +263,7 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
       leavePage();
     } catch (e: unknown) {
       const err = e as { message?: string; response?: { data?: { detail?: string } } };
-      messageApi.error(err?.message || err?.response?.data?.detail || t('app.kuaizhizao.warehouseOutbound.entry.saveFailed'));
+      messageApi.error(err?.message || err?.response?.data?.detail || t('common.saveFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -274,14 +274,14 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
       header={
         <>
           <Space align="center" size={8}>
-            <Button type="text" icon={<ArrowLeftOutlined />} aria-label={t('app.kuaizhizao.warehouseOutbound.action.back')} onClick={leavePage} />
+            <Button type="text" icon={<ArrowLeftOutlined />} aria-label={t('common.back')} onClick={leavePage} />
             <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
               {pageTitle}
             </Typography.Title>
           </Space>
           <Space wrap>
             <Button disabled={submitting || loading} onClick={leavePage}>
-              {t('app.kuaizhizao.warehouseOutbound.action.cancel')}
+              {t('common.cancel')}
             </Button>
             <Button type="primary" loading={submitting} disabled={loading} onClick={() => void submit()}>
               {t('app.kuaizhizao.warehouseOutbound.action.confirmIssue')}

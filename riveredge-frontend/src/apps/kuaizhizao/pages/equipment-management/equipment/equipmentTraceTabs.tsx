@@ -82,7 +82,7 @@ export function useEquipmentTraceColumns(t: TFunction) {
         width: 100,
         render: (required: boolean) => (
           <Tag color={required ? 'warning' : 'success'}>
-            {required ? t('app.kuaizhizao.equipment.yes') : t('app.kuaizhizao.equipment.no')}
+            {required ? t('common.yes') : t('common.no')}
           </Tag>
         ),
       },
@@ -122,7 +122,7 @@ export function useEquipmentTraceColumns(t: TFunction) {
       { title: t('app.kuaizhizao.equipment.traceColResult'), dataIndex: 'result', width: 100, render: renderOpsStatusTag },
       { title: t('app.kuaizhizao.equipment.traceColCertificateNo'), dataIndex: 'certificate_no', width: 140 },
       { title: t('app.kuaizhizao.equipment.traceColExpiryDate'), dataIndex: 'expiry_date', width: 120 },
-      { title: t('app.kuaizhizao.equipment.traceColRemark'), dataIndex: 'remark', ellipsis: true },
+      { title: t('common.remark'), dataIndex: 'remark', ellipsis: true },
       { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
     ],
     [t],
@@ -140,7 +140,7 @@ export function useEquipmentTraceColumns(t: TFunction) {
         width: 100,
         render: (v: boolean) => (
           <Tag color={v ? 'error' : 'success'}>
-            {v ? t('app.kuaizhizao.equipment.yes') : t('app.kuaizhizao.equipment.no')}
+            {v ? t('common.yes') : t('common.no')}
           </Tag>
         ),
       },
@@ -164,7 +164,7 @@ export function useEquipmentTraceColumns(t: TFunction) {
         width: 100,
         render: (v: boolean) => (
           <Tag color={v ? 'error' : 'success'}>
-            {v ? t('app.kuaizhizao.equipment.yes') : t('app.kuaizhizao.equipment.no')}
+            {v ? t('common.yes') : t('common.no')}
           </Tag>
         ),
       },

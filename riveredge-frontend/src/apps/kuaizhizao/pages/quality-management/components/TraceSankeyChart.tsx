@@ -77,7 +77,7 @@ const TraceSankeyChart: React.FC<TraceSankeyChartProps> = ({ profile, height = 4
           if (datum?.key) return labelById.get(datum.key) || datum.key;
           return '';
         },
-        items: [{ field: 'value', name: t('app.kuaizhizao.quality.traceability.sankeyQuantity') }],
+        items: [{ field: 'value', name: t('common.quantity') }],
       }}
     />
   );

@@ -247,7 +247,7 @@ const DrawingLoansPage: React.FC = () => {
           ) : null,
           row.status === 'Draft' && canSubmit ? (
             <Button key="submit" {...rowActionKind('submit')} type="link" size="small" onClick={() => void runAction(() => drawingLoanApi.submit(row.uuid), 'app.master-data.drawingLoans.submitSuccess')}>
-              {t('app.master-data.drawingLoans.submit')}
+              {t('common.submit')}
             </Button>
           ) : null,
           row.status === 'Pending' && canApprove ? (
@@ -552,7 +552,7 @@ const DrawingLoansPage: React.FC = () => {
             <Space>
               {detail.status === 'Draft' && canSubmit ? (
                 <Button type="primary" size="small" onClick={() => void runAction(() => drawingLoanApi.submit(detail.uuid), 'app.master-data.drawingLoans.submitSuccess')}>
-                  {t('app.master-data.drawingLoans.submit')}
+                  {t('common.submit')}
                 </Button>
               ) : null}
               {detail.status === 'Pending' && canApprove ? (

@@ -45,12 +45,13 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--langs", default="zh-Hant,ja-JP,vi-VN")
+    parser.add_argument("--langs", default="zh-Hant,ja-JP,vi-VN,lo-LA")
     args = parser.parse_args()
     all_targets = {
         "zh-Hant": load_json(GLOSSARY_DIR / "zh_tw_post_glossary.json"),
         "ja-JP": load_json(GLOSSARY_DIR / "ja_post_glossary.json"),
         "vi-VN": load_json(GLOSSARY_DIR / "vi_post_glossary.json"),
+        "lo-LA": load_json(GLOSSARY_DIR / "lo_post_glossary.json"),
     }
     wanted = {x.strip() for x in args.langs.split(",") if x.strip()}
     targets = {k: v for k, v in all_targets.items() if k in wanted}

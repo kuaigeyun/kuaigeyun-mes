@@ -817,12 +817,19 @@ class AuthService:
             final_tenant_id = None
 
         if request:
-            from core.services.content.sensitive_word_ip_guard import SensitiveWordIpGuardService
-
-            await SensitiveWordIpGuardService.instance().ensure_ip_allowed(
-                get_client_ip(request),
-                user_id=user.id,
+            from core.services.content.sensitive_word_ip_guard import (
+                SensitiveWordIpGuardService,
+                tenant_has_sensitive_word_control,
             )
+
+            control_tenant_id = (
+                final_tenant_id if final_tenant_id is not None else user.tenant_id
+            )
+            if await tenant_has_sensitive_word_control(control_tenant_id):
+                await SensitiveWordIpGuardService.instance().ensure_ip_allowed(
+                    get_client_ip(request),
+                    user_id=user.id,
+                )
 
         # 1. 设置组织上下文
         if final_tenant_id is not None:
@@ -1201,12 +1208,16 @@ class AuthService:
                 )
             
             if request:
-                from core.services.content.sensitive_word_ip_guard import SensitiveWordIpGuardService
-
-                await SensitiveWordIpGuardService.instance().ensure_ip_allowed(
-                    get_client_ip(request),
-                    user_id=guest_user.id,
+                from core.services.content.sensitive_word_ip_guard import (
+                    SensitiveWordIpGuardService,
+                    tenant_has_sensitive_word_control,
                 )
+
+                if await tenant_has_sensitive_word_control(default_tenant.id):
+                    await SensitiveWordIpGuardService.instance().ensure_ip_allowed(
+                        get_client_ip(request),
+                        user_id=guest_user.id,
+                    )
 
             # 3. 生成 Token（包含 tenant_id）
             logger.info(f"开始生成 Token: user_id={guest_user.id}, username={guest_user.username}, tenant_id={default_tenant.id}")

@@ -68,12 +68,12 @@ const ShiftsPage: React.FC = () => {
       },
       { title: t('app.kuaizhizao.performance.shifts.columns.standardHours'), dataIndex: 'standardHours' },
       {
-        title: t('app.kuaizhizao.performance.common.columns.status'),
+        title: t('common.status'),
         dataIndex: 'isActive',
         render: (_, r) => renderActiveTag(t, r?.isActive, 'inactive'),
       },
-      { title: t('app.kuaizhizao.performance.common.columns.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
-      { title: t('app.kuaizhizao.performance.common.columns.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
+      { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
     ],
     [t],
   );
@@ -91,7 +91,7 @@ const ShiftsPage: React.FC = () => {
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
+      messageApi.error(e?.message || t('common.deleteFailed'));
     }
   };
 
@@ -102,7 +102,7 @@ const ShiftsPage: React.FC = () => {
       setShiftDetail(await shiftApi.get(uuid));
     } catch (error) {
       setShiftDetail(null);
-      setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.performance.common.messages.loadFailed')));
+      setDetailError(getApiErrorMessage(error, t('common.loadFailed')));
     } finally {
       setDetailLoading(false);
     }
@@ -176,7 +176,7 @@ const ShiftsPage: React.FC = () => {
         sorter: true,
       },
       {
-        title: t('app.kuaizhizao.performance.common.columns.status'),
+        title: t('common.status'),
         dataIndex: 'isActive',
         width: 88,
         minWidth: 88,
@@ -189,7 +189,7 @@ const ShiftsPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<Shift>(t),
       {
-        title: t('app.kuaizhizao.performance.common.columns.actions'),
+        title: t('common.actions'),
         key: 'action',
         valueType: 'option',
         fixed: 'right',
@@ -198,7 +198,7 @@ const ShiftsPage: React.FC = () => {
           <Space>
             {shiftPerms.canRead ? (
               <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-                {t('app.kuaizhizao.performance.common.actions.detail')}
+                {t('common.detail')}
               </Button>
             ) : null}
             {shiftPerms.canUpdate ? (
@@ -210,7 +210,7 @@ const ShiftsPage: React.FC = () => {
                   setModalVisible(true);
                 }}
               >
-                {t('app.kuaizhizao.performance.common.actions.edit')}
+                {t('common.edit')}
               </Button>
             ) : null}
             {shiftPerms.canDelete ? (
@@ -221,15 +221,15 @@ const ShiftsPage: React.FC = () => {
                 onConfirm={async () => {
                   try {
                     await shiftApi.delete(record.uuid);
-                    messageApi.success(t('app.kuaizhizao.performance.common.messages.deleteSuccess'));
+                    messageApi.success(t('common.deleteSuccess'));
                     actionRef.current?.reload();
                   } catch (e: any) {
-                    messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
+                    messageApi.error(e?.message || t('common.deleteFailed'));
                   }
                 }}
               >
                 <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                  {t('app.kuaizhizao.performance.common.actions.delete')}
+                  {t('common.delete')}
                 </Button>
               </Popconfirm>
             ) : null}
@@ -273,7 +273,7 @@ const ShiftsPage: React.FC = () => {
               const { data, total } = normalizePerformanceListResponse(response);
               return { data: data as Shift[], success: true, total };
             } catch (e: any) {
-              messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
+              messageApi.error(e?.message || t('common.loadFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}

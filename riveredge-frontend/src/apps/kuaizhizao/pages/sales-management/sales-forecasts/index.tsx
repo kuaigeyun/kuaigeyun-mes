@@ -285,7 +285,7 @@ export default function SalesForecastsPage() {
           },
           {
             field: 'notes',
-            labelKey: 'app.kuaizhizao.salesForecast.notes',
+            labelKey: 'common.remark',
             aliases: ['备注'],
           },
         ],
@@ -1739,7 +1739,7 @@ export default function SalesForecastsPage() {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.salesForecast.unit'),
+                    title: t('common.unit'),
                     dataIndex: 'material_unit',
                     width: 100,
                     render: (_: any, __: any, index: number) => (
@@ -1800,11 +1800,11 @@ export default function SalesForecastsPage() {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.salesForecast.notes'),
+                    title: t('common.remark'),
                     dataIndex: 'notes',
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'notes']} style={{ margin: 0 }}>
-                        <Input placeholder={t('app.kuaizhizao.salesForecast.notes')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
+                        <Input placeholder={t('common.remark')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                       </AntForm.Item>
                     ),
                   },
@@ -1814,7 +1814,7 @@ export default function SalesForecastsPage() {
           tableProps={DOCUMENT_DETAIL_TABLE_PROPS}
         />
         <SalesForecastFormSummary />
-        <ProFormTextArea name="notes" label={t('app.kuaizhizao.salesForecast.notes')} placeholder={t('app.kuaizhizao.salesForecast.notesPlaceholder')} />
+        <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('app.kuaizhizao.salesForecast.notesPlaceholder')} />
       </DetailDrawerSection>
 
       <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionAttachments')} marginBottom={0}>
@@ -1906,10 +1906,10 @@ export default function SalesForecastsPage() {
             headers={[
               t('app.kuaizhizao.salesForecast.importHeaderMaterialCode'),
               t('app.kuaizhizao.salesForecast.importHeaderSpec'),
-              t('app.kuaizhizao.salesForecast.importHeaderUnit'),
+              t('common.unit'),
               t('app.kuaizhizao.salesForecast.importHeaderForecastQuantity'),
               t('app.kuaizhizao.salesForecast.importHeaderForecastDate'),
-              t('app.kuaizhizao.salesForecast.importHeaderNotes'),
+              t('common.remark'),
             ]}
             exampleRow={[
               t('app.kuaizhizao.salesForecast.importExampleMaterialCode'),

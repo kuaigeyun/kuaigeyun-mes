@@ -603,7 +603,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
           theme_config: themeConfigForPreference,
         })
         .catch((err) => {
-          message.error(err?.message || t('components.themeEditor.message.saveFailed'));
+          message.error(err?.message || t('common.saveFailed'));
         });
     }
 
@@ -625,7 +625,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       useThemeStore.getState().applyTheme(mode, themeConfigForPreference);
 
       if (!getToken()) {
-        throw new Error(t('components.themeEditor.message.saveFailed'));
+        throw new Error(t('common.saveFailed'));
       }
       await useUserPreferenceStore.getState().updatePreferences({
         theme: mode,
@@ -688,7 +688,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       const cleanedThemeConfig = normalizeThemeConfig(themeConfigForPreference);
 
       if (!getToken()) {
-        throw new Error(t('components.themeEditor.message.saveFailed'));
+        throw new Error(t('common.saveFailed'));
       }
 
       await useUserPreferenceStore.getState().updatePreferences({
@@ -716,7 +716,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       onClose();
     } catch (error: any) {
       console.error('Theme save error:', error);
-      message.error(error?.message || t('components.themeEditor.message.saveFailed'));
+      message.error(error?.message || t('common.saveFailed'));
     } finally {
       setSaving(false);
     }

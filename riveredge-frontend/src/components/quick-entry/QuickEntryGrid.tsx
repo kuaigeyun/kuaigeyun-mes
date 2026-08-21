@@ -262,7 +262,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
         open={configModalVisible}
         onOk={handleSaveConfig}
         onCancel={() => setConfigModalVisible(false)}
-        okText={t('pages.dashboard.save')}
+        okText={t('common.save')}
         cancelText={t('common.cancel')}
         width={600}
       >

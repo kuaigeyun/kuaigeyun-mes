@@ -58,7 +58,7 @@ const ApprovalProcessListPage: React.FC = () => {
         dataIndex: 'code',
       },
       {
-        title: t('pages.system.approvalProcesses.description'),
+        title: t('common.remark'),
         dataIndex: 'description',
         render: (_: unknown, record: ApprovalProcess) =>
           resolvePresetApprovalProcessDescription(record, t),
@@ -70,8 +70,8 @@ const ApprovalProcessListPage: React.FC = () => {
           renderSystemActiveTag(
             t,
             Boolean(value),
-            'pages.system.approvalProcesses.enabled',
-            'pages.system.approvalProcesses.disabled',
+            'common.enabled',
+            'common.disabled',
           ),
       },
       {
@@ -111,12 +111,12 @@ const ApprovalProcessListPage: React.FC = () => {
         ),
       },
       {
-        title: t('pages.system.approvalProcesses.createdAt'),
+        title: t('common.createdAt'),
         dataIndex: 'created_at',
         valueType: 'dateTime',
       },
       {
-        title: t('pages.system.approvalProcesses.updatedAt'),
+        title: t('common.updatedAt'),
         dataIndex: 'updated_at',
         valueType: 'dateTime',
       },
@@ -209,10 +209,10 @@ const ApprovalProcessListPage: React.FC = () => {
   const handleDelete = async (record: ApprovalProcess) => {
     try {
       await deleteApprovalProcess(record.uuid);
-      messageApi.success(t('pages.system.approvalProcesses.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.approvalProcesses.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -270,17 +270,17 @@ const ApprovalProcessListPage: React.FC = () => {
       
       if (isEdit && currentApprovalProcessUuid) {
         await updateApprovalProcess(currentApprovalProcessUuid, data as UpdateApprovalProcessData);
-        messageApi.success(t('pages.system.approvalProcesses.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createApprovalProcess(data as CreateApprovalProcessData);
-        messageApi.success(t('pages.system.approvalProcesses.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
       
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.approvalProcesses.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -308,7 +308,7 @@ const ApprovalProcessListPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: t('pages.system.approvalProcesses.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       width: 200,
       ellipsis: true,
@@ -324,14 +324,14 @@ const ApprovalProcessListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('pages.system.approvalProcesses.enabled'), status: 'Success' },
-        false: { text: t('pages.system.approvalProcesses.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) =>
-        renderSystemActiveTag(t, record.is_active, 'pages.system.approvalProcesses.enabled', 'pages.system.approvalProcesses.disabled'),
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
-      title: t('pages.system.approvalProcesses.createdAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       minWidth: 180,
@@ -341,7 +341,7 @@ const ApprovalProcessListPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('pages.system.approvalProcesses.actions'),
+      title: t('common.actions'),
       key: 'action',
       valueType: 'option',
       fixed: 'right',
@@ -349,10 +349,10 @@ const ApprovalProcessListPage: React.FC = () => {
       uniActionRenderOptions: { directMax: 4 },
       render: (_, record) => [
             <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)}>
-              {t('pages.system.approvalProcesses.view')}
+              {t('common.view')}
             </Button>,
             <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-              {t('pages.system.approvalProcesses.edit')}
+              {t('common.edit')}
             </Button>,
             <Button
               key="design"
@@ -374,7 +374,7 @@ const ApprovalProcessListPage: React.FC = () => {
               cancelText={t('common.cancel')}
             >
               <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                {t('pages.system.approvalProcesses.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>,
           ],
@@ -429,7 +429,7 @@ const ApprovalProcessListPage: React.FC = () => {
               total,
             };
           } catch (error: any) {
-            messageApi.error(error?.message || t('pages.system.approvalProcesses.operationFailed'));
+            messageApi.error(error?.message || t('common.operationFailed'));
             return {
               data: [],
               success: false,
@@ -448,7 +448,7 @@ const ApprovalProcessListPage: React.FC = () => {
         onCreate={handleCreate}
         showDeleteButton
         onDelete={handleBatchDelete}
-        deleteButtonText={t('pages.system.approvalProcesses.batchDelete')}
+        deleteButtonText={t('common.batchDelete')}
         toolBarRender={() => []}
         showExportButton
         onExport={async (type, keys, pageData) => {
@@ -458,7 +458,7 @@ const ApprovalProcessListPage: React.FC = () => {
             items = allData.filter((d) => keys.includes(d.uuid));
           }
           if (items.length === 0) {
-            messageApi.warning(t('pages.system.approvalProcesses.exportNoData'));
+            messageApi.warning(t('common.exportNoData'));
             return;
           }
           await downloadRecordsAsXlsx(
@@ -508,7 +508,7 @@ const ApprovalProcessListPage: React.FC = () => {
       
         <ProFormTextArea
           name="description"
-          label={t('pages.system.approvalProcesses.descLabel')}
+          label={t('common.remark')}
           placeholder={t('pages.system.approvalProcesses.descPlaceholder')}
           fieldProps={{
             rows: 3,
@@ -518,9 +518,9 @@ const ApprovalProcessListPage: React.FC = () => {
       
         <ProFormSwitch
           name="is_active"
-          label={t('pages.system.approvalProcesses.isActiveLabel')}
-          checkedChildren={t('pages.system.approvalProcesses.enabled')}
-          unCheckedChildren={t('pages.system.approvalProcesses.disabled')}
+          label={t('common.enabled')}
+          checkedChildren={t('common.enabled')}
+          unCheckedChildren={t('common.disabled')}
           colProps={{ span: 24 }}
         />
       </FormModalTemplate>

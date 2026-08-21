@@ -97,7 +97,7 @@ const EmployeeConfigsPage: React.FC = () => {
         effective_to: c.effective_to ? dayjs(c.effective_to) : undefined,
         is_active: c.is_active !== false,
       });
-    }).catch((e: any) => messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed')));
+    }).catch((e: any) => messageApi.error(e?.message || t('common.loadFailed')));
   }, [modalVisible, editId, messageApi, t]);
 
   const detailColumns: ProDescriptionsItemProps<EmployeePerformanceConfig>[] = useMemo(
@@ -127,12 +127,12 @@ const EmployeeConfigsPage: React.FC = () => {
         valueType: 'date',
       },
       {
-        title: t('app.kuaizhizao.performance.common.form.active'),
+        title: t('common.enabled'),
         dataIndex: 'is_active',
         render: (_, r) => renderActiveTag(t, r?.is_active !== false),
       },
-      { title: t('app.kuaizhizao.performance.common.columns.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-      { title: t('app.kuaizhizao.performance.common.columns.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+      { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
     ],
     [t],
   );
@@ -148,10 +148,10 @@ const EmployeeConfigsPage: React.FC = () => {
   const handleDelete = async (record: EmployeePerformanceConfig) => {
     try {
       await employeePerformanceApi.deleteConfig(record.id);
-      messageApi.success(t('app.kuaizhizao.performance.common.messages.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
+      messageApi.error(error?.message || t('common.deleteFailed'));
     }
   };
   const loadDetail = async (id: number) => {
@@ -161,7 +161,7 @@ const EmployeeConfigsPage: React.FC = () => {
       setDetail(await employeePerformanceApi.getConfig(id));
     } catch (error) {
       setDetail(null);
-      setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.performance.common.messages.loadFailed')));
+      setDetailError(getApiErrorMessage(error, t('common.loadFailed')));
     } finally {
       setDetailLoading(false);
     }
@@ -249,14 +249,14 @@ const EmployeeConfigsPage: React.FC = () => {
         align: 'right',
       },
       {
-        title: t('app.kuaizhizao.performance.common.form.active'),
+        title: t('common.enabled'),
         dataIndex: 'is_active',
         hideInTable: true,
         valueEnum: getPerformanceYesNoValueEnum(t),
       },
       ...buildDocumentAuditColumns<EmployeePerformanceConfig>(t),
       {
-        title: t('app.kuaizhizao.performance.common.columns.status'),
+        title: t('common.status'),
         dataIndex: 'is_active',
         width: 88,
         minWidth: 88,
@@ -266,7 +266,7 @@ const EmployeeConfigsPage: React.FC = () => {
         render: (_, r) => renderActiveTag(t, r.is_active),
       },
       {
-        title: t('app.kuaizhizao.performance.common.columns.actions'),
+        title: t('common.actions'),
         key: 'action',
         valueType: 'option',
         fixed: 'right',
@@ -275,18 +275,18 @@ const EmployeeConfigsPage: React.FC = () => {
           <Space>
             {configPerms.canRead ? (
               <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-                {t('app.kuaizhizao.performance.common.actions.detail')}
+                {t('common.detail')}
               </Button>
             ) : null}
             {configPerms.canUpdate ? (
               <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-                {t('app.kuaizhizao.performance.common.actions.edit')}
+                {t('common.edit')}
               </Button>
             ) : null}
             {configPerms.canDelete ? (
               <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.employeeConfigs.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
                 <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                  {t('app.kuaizhizao.performance.common.actions.delete')}
+                  {t('common.delete')}
                 </Button>
               </Popconfirm>
             ) : null}
@@ -322,7 +322,7 @@ const EmployeeConfigsPage: React.FC = () => {
               const { data, total } = normalizePerformanceListResponse(response);
               return { data: data as EmployeePerformanceConfig[], success: true, total };
             } catch (e: any) {
-              messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
+              messageApi.error(e?.message || t('common.loadFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
@@ -336,7 +336,7 @@ const EmployeeConfigsPage: React.FC = () => {
               messageApi.success(t('app.kuaizhizao.performance.common.messages.deleteBatchSuccess', { count: keys.length }));
               actionRef.current?.reload();
             } catch (error: any) {
-              messageApi.error(error?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
+              messageApi.error(error?.message || t('common.deleteFailed'));
             }
           }}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.performance.employeeConfigs.messages.deleteBatchConfirm', { count })}
@@ -378,10 +378,10 @@ const EmployeeConfigsPage: React.FC = () => {
           };
           if (editId) {
             await employeePerformanceApi.updateConfig(editId, payload);
-            messageApi.success(t('app.kuaizhizao.performance.common.messages.updateSuccess'));
+            messageApi.success(t('common.updateSuccess'));
           } else {
             await employeePerformanceApi.createConfig(payload);
-            messageApi.success(t('app.kuaizhizao.performance.common.messages.createSuccess'));
+            messageApi.success(t('common.createSuccess'));
           }
           handleModalSuccess();
         }}
@@ -419,7 +419,7 @@ const EmployeeConfigsPage: React.FC = () => {
         <ProFormDigit name="base_salary" label={t('app.kuaizhizao.performance.employeeConfigs.form.baseSalary')} min={0} fieldProps={{ precision: 2 }} formItemProps={modalFieldLayoutFromColSpan(12)} />
         <ProFormDatePicker name="effective_from" label={t('app.kuaizhizao.performance.employeeConfigs.form.effectiveFrom')} {...modalDateFieldProps()} />
         <ProFormDatePicker name="effective_to" label={t('app.kuaizhizao.performance.employeeConfigs.form.effectiveTo')} {...modalDateFieldProps()} />
-        <ProFormSwitch name="is_active" label={t('app.kuaizhizao.performance.common.form.active')} formItemProps={modalFieldLayoutFromColSpan(12)} />
+        <ProFormSwitch name="is_active" label={t('common.enabled')} formItemProps={modalFieldLayoutFromColSpan(12)} />
       </FormModalTemplate>
 
       <PerformanceConfigDetailDrawer

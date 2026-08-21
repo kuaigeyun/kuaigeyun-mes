@@ -541,7 +541,7 @@ export const OutsourceOrdersTable: React.FC = () => {
     () =>
       alignDescriptionColumns([
         {
-          title: t('app.kuaizhizao.common.fieldNotes'),
+          title: t('common.remark'),
           dataIndex: 'remarks',
           span: 3,
         },
@@ -709,7 +709,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         }
       }
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.outsourceWorkOrder.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     }
   };
@@ -1159,7 +1159,7 @@ export const OutsourceOrdersTable: React.FC = () => {
             ellipsis: true,
             render: (_, row) => `${row.operation_name || '-'} (${row.operation_code || '-'})`,
           },
-          { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'max_quantity', width: 90, align: 'right' },
+          { title: t('common.quantity'), dataIndex: 'max_quantity', width: 90, align: 'right' },
           { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'occupied_quantity', width: 90, align: 'right' },
           { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'outsourceable_quantity', width: 90, align: 'right' },
         ]}
@@ -1288,7 +1288,7 @@ export const OutsourceOrdersTable: React.FC = () => {
             />
             <ProFormTextArea
               name="remarks"
-              label={t('app.kuaizhizao.common.fieldNotes')}
+              label={t('common.remark')}
               placeholder={t('app.kuaizhizao.outsourceOrder.placeholderRemarks')}
               fieldProps={{ rows: 3 }}
             />
@@ -1353,7 +1353,7 @@ export const OutsourceOrdersTable: React.FC = () => {
           />
           <ProFormSelect
             name="status"
-            label={t('app.kuaizhizao.outsourceOrder.fieldStatus')}
+            label={t('common.status')}
             placeholder={t('app.kuaizhizao.outsourceOrder.placeholderStatus')}
             options={statusFormOptions}
           />
@@ -1409,7 +1409,7 @@ export const OutsourceOrdersTable: React.FC = () => {
           <DocumentAttachmentsField category="outsource_order_attachments" />
           <ProFormTextArea
             name="remarks"
-            label={t('app.kuaizhizao.common.fieldNotes')}
+            label={t('common.remark')}
             placeholder={t('app.kuaizhizao.outsourceOrder.placeholderRemarks')}
             fieldProps={{ rows: 3 }}
           />
@@ -1450,7 +1450,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         collaborationTitleSuffix={
           outsourceOrderDetail && outsourceShowNextInTitle ? (
             <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-              {t('components.uniLifecycle.nextStep')}：
+              {t('common.next')}：
               {outsourceNextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
             </Typography.Text>
           ) : undefined

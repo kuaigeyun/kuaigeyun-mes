@@ -396,7 +396,7 @@ function reportI18nText(t: TFunction, table: Record<string, string>, value: unkn
 
 function qualityReportUnitColumn(t: TFunction): ProColumns {
   return {
-    title: t('app.kuaizhizao.reports.unit'),
+    title: t('common.unit'),
     dataIndex: 'unit',
     width: 80,
     minWidth: 80,
@@ -422,7 +422,7 @@ function qualityReportPassRateColumn(t: TFunction): ProColumns {
 function qualityInspectionStatusColumn(t: TFunction): ProColumns {
   const statusEnum = reportI18nEnum(t, QUALITY_DOC_STATUS_I18N);
   return {
-    title: t('app.kuaizhizao.quality.common.columns.status'),
+    title: t('common.status'),
     dataIndex: 'status',
     width: 100,
     valueEnum: statusEnum,
@@ -721,7 +721,7 @@ export function buildQualityReportNonconformingColumns(t: TFunction): ProColumns
       render: (_, row) => reportI18nText(t, QUALITY_DISPOSAL_I18N, row.disposal_method),
     },
     {
-      title: t('app.kuaizhizao.quality.common.columns.status'),
+      title: t('common.status'),
       dataIndex: 'status',
       width: 100,
       valueEnum: statusEnum,
@@ -798,7 +798,7 @@ export function buildQualityReportExceptionColumns(t: TFunction): ProColumns[] {
       hideInSearch: true,
     },
     {
-      title: t('app.kuaizhizao.quality.common.columns.status'),
+      title: t('common.status'),
       dataIndex: 'status',
       width: 100,
       valueEnum: statusEnum,

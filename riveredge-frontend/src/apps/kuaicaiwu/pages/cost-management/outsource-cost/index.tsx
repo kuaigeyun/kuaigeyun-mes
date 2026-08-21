@@ -120,7 +120,7 @@ const OutsourceCostPage: React.FC<OutsourceCostPageProps> = ({ embedded = false 
       },
       { title: t('app.kuaicaiwu.costCommon.col.supplier'), dataIndex: 'supplier_name', hide: !result?.supplier_name },
       { title: t('app.kuaicaiwu.costCommon.col.sourceType'), dataIndex: 'source_type' },
-      { title: t('app.kuaicaiwu.costCommon.col.quantity'), dataIndex: 'quantity' },
+      { title: t('common.quantity'), dataIndex: 'quantity' },
       { title: t('app.kuaicaiwu.costCommon.col.materialCost'), dataIndex: 'material_cost' },
       { title: t('app.kuaicaiwu.outsourceCost.col.processingCost'), dataIndex: 'processing_cost' },
       { title: t('app.kuaicaiwu.costCommon.col.totalCost'), dataIndex: 'total_cost' },
@@ -216,7 +216,7 @@ const OutsourceCostPage: React.FC<OutsourceCostPageProps> = ({ embedded = false 
             />
             <ProFormDigit
               name="quantity"
-              label={t('app.kuaicaiwu.costCommon.col.quantity')}
+              label={t('common.quantity')}
               placeholder={t('app.kuaicaiwu.costCommon.field.quantityPlaceholder')}
               rules={[
                 { required: true, message: t('app.kuaicaiwu.costCommon.field.quantityRequired') },

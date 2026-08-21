@@ -360,7 +360,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       render: (_, r) => (r.estimated_delivery_days != null ? r.estimated_delivery_days : '-'),
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       hideInTable: true,
       valueType: 'select',
@@ -377,7 +377,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
     },
     ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     {
-      title: t('app.kuaizhizao.warehouseCommon.colActions'),
+      title: t('common.actions'),
       width: 150,
       fixed: 'right',
       render: (_, record) => (
@@ -578,7 +578,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       dataIndex: 'related_demand_code',
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       render: (_, record) => {
         const config = statusConfig(record.status);
@@ -586,7 +586,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       },
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colRemarks'),
+      title: t('common.remark'),
       dataIndex: 'remarks',
       span: 2,
       render: (text) => text || '-',
@@ -764,8 +764,8 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
           setProcessSuggestion(null);
           setProcessNotes('');
         }}
-        okText={t('app.kuaizhizao.warehouseCommon.confirm')}
-        cancelText={t('app.kuaizhizao.warehouseCommon.cancel')}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
       >
         <ProForm
           submitter={false}
@@ -807,8 +807,8 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
         onOk={() => void handleGenerateFromDemand()}
         confirmLoading={generatingDemand}
         onCancel={() => setDemandModalVisible(false)}
-        okText={t('app.kuaizhizao.warehouseCommon.confirm')}
-        cancelText={t('app.kuaizhizao.warehouseCommon.cancel')}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
       >
         <div style={{ marginBottom: 8 }}>
           {t('app.kuaizhizao.replenishmentSuggestions.formDemandComputation')}

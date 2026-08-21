@@ -322,7 +322,7 @@ const BatchInventoryQuery: React.FC = () => {
         render: (_, r) => renderCell(r.texture),
       },
       {
-        title: t('app.kuaizhizao.warehouseCommon.colUnit'),
+        title: t('common.unit'),
         dataIndex: 'material_unit',
         width: 72,
         hideInSearch: true,
@@ -402,7 +402,7 @@ const BatchInventoryQuery: React.FC = () => {
         render: (_, record) => record.supplier_batch_no || '-',
       },
       {
-        title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+        title: t('common.status'),
         dataIndex: 'status',
         width: 100,
         render: (_, record) => {
@@ -497,7 +497,7 @@ const BatchInventoryQuery: React.FC = () => {
         items = response.items ?? (Array.isArray(response) ? response : []);
       }
       if (items.length === 0) {
-        messageApi.warning(t('app.kuaizhizao.warehouseCommon.exportNoData'));
+        messageApi.warning(t('common.exportNoData'));
         return;
       }
       const headers = [
@@ -507,7 +507,7 @@ const BatchInventoryQuery: React.FC = () => {
         t('app.master-data.materials.model'),
         t('app.kuaizhizao.warehouseInventory.colBrand'),
         t('app.kuaizhizao.warehouseInventory.colTexture'),
-        t('app.kuaizhizao.warehouseCommon.colUnit'),
+        t('common.unit'),
         t('app.kuaizhizao.batchInventoryQuery.colBatchNo'),
         t('app.kuaizhizao.batchInventoryQuery.colProductionDate'),
         t('app.kuaizhizao.batchInventoryQuery.colExpiryDate'),
@@ -515,7 +515,7 @@ const BatchInventoryQuery: React.FC = () => {
         t('app.kuaizhizao.warehouseInventory.colInTransit'),
         t('app.kuaizhizao.warehouseInventory.colAlert'),
         t('app.kuaizhizao.batchInventoryQuery.colSupplierBatchNo'),
-        t('app.kuaizhizao.warehouseCommon.colStatus'),
+        t('common.status'),
         t('app.kuaizhizao.warehouseReports.colWarehouse'),
       ];
       const lines = items.map((r) =>
@@ -550,7 +550,7 @@ const BatchInventoryQuery: React.FC = () => {
       URL.revokeObjectURL(url);
       messageApi.success(t('app.kuaizhizao.warehouseCommon.exportSuccess', { count: items.length }));
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.exportFailed'));
+      messageApi.error(error?.message || t('common.exportFailed'));
     }
   };
 

@@ -63,14 +63,14 @@ const QuotationQuery: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: t('app.kuaizhizao.reports.unit'),
+        title: t('common.unit'),
         dataIndex: 'material_unit',
         width: 80,
         minWidth: 80,
         hideInSearch: true,
       },
       {
-        title: t('app.kuaizhizao.reports.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'quantity',
         valueType: 'digit',
         width: 90,
@@ -98,7 +98,7 @@ const QuotationQuery: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: t('app.kuaizhizao.reports.status'),
+        title: t('common.status'),
         dataIndex: 'status',
         width: 90,
         valueEnum: quotationStatusEnum(t),
@@ -111,7 +111,7 @@ const QuotationQuery: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: t('app.kuaizhizao.reports.notes'),
+        title: t('common.remark'),
         dataIndex: 'notes',
         ellipsis: true,
         hideInSearch: true,

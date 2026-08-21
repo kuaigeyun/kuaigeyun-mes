@@ -94,7 +94,7 @@ export const customerFormSchemaBasicTail: FieldConfig[] = [
   {
     name: 'isActive',
     type: 'switch',
-    labelKey: 'field.customer.isActive',
+    labelKey: 'common.enabled',
     colSpan: 12,
   },
 ];

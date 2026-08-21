@@ -135,7 +135,7 @@ const BomInquiryDrawer: React.FC<BomInquiryDrawerProps> = ({ open, onClose }) =>
       destroyOnHidden
       extra={
         <Button type="primary" icon={<SearchOutlined />} onClick={() => void runQuery()}>
-          {t('app.master-data.bom.inquiryQuery')}
+          {t('common.query')}
         </Button>
       }
     >
@@ -273,7 +273,7 @@ const BomInquiryDrawer: React.FC<BomInquiryDrawerProps> = ({ open, onClose }) =>
                               `${row.quantity} ${row.unit || ''}`.trim(),
                           },
                           {
-                            title: t('app.master-data.bom.actionTitle'),
+                            title: t('common.actions'),
                             width: 80,
                             fixed: 'right',
                             render: (_: unknown, row: BOMWhereUsedItem) => (

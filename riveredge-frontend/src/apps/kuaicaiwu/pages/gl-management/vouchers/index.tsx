@@ -310,7 +310,7 @@ const GlVouchersPage: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: t(`${NS}.col.status`, { defaultValue: '状态' }),
+        title: t('common.status', { defaultValue: '状态' }),
         dataIndex: 'status',
         width: 100,
         minWidth: 100,

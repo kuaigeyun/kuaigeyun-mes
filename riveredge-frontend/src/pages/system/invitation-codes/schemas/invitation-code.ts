@@ -37,6 +37,6 @@ export const invitationCodeFormSchema: FieldConfig[] = [
   {
     name: 'is_active',
     type: 'switch',
-    labelKey: 'field.invitationCode.isActive',
+    labelKey: 'common.enabled',
   },
 ];

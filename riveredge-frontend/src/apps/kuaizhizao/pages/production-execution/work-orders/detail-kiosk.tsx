@@ -83,7 +83,7 @@ const WorkOrderDetailKioskPage: React.FC = () => {
             if (typeof detail === 'string' && (detail.includes('需要先下达') || detail.includes('只能开始已下达'))) {
                 message.warning(t('app.kuaizhizao.workOrder.msgReleaseBeforeStart'));
             } else {
-                message.error(t('app.kuaizhizao.workOrder.kioskOperationFailed'));
+                message.error(t('common.operationFailed'));
             }
         }
     };

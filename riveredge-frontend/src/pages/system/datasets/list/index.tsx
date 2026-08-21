@@ -96,7 +96,7 @@ const DatasetListPage: React.FC = () => {
             labelKey: 'pages.system.datasets.importHeaderDataSourceUuid',
           },
           { field: 'queryType', required: true, labelKey: 'pages.system.datasets.importHeaderQueryType' },
-          { field: 'description', labelKey: 'pages.system.datasets.importHeaderDescription', aliases: ['备注', '描述'] },
+          { field: 'description', labelKey: 'common.remark', aliases: ['备注', '描述'] },
           { field: 'isActive', labelKey: 'pages.system.datasets.importHeaderEnabled', aliases: ['启用状态'] },
           {
             field: 'queryConfigJson',
@@ -111,7 +111,7 @@ const DatasetListPage: React.FC = () => {
           'uuid-of-data-source',
           'sql',
           t('pages.system.datasets.importExampleDescription'),
-          t('pages.system.datasets.importExampleEnabled'),
+          t('common.yes'),
           t('pages.system.datasets.importExampleQueryConfigJson'),
         ],
       ),
@@ -235,7 +235,7 @@ const DatasetListPage: React.FC = () => {
         },
       },
       {
-        title: t('pages.system.datasets.labelDescription'),
+        title: t('common.remark'),
         dataIndex: 'description',
       },
       {
@@ -261,7 +261,7 @@ const DatasetListPage: React.FC = () => {
         title: t('pages.system.datasets.columnEnabled'),
         dataIndex: 'is_active',
         render: (_, record) =>
-          renderSystemActiveTag(t, record.is_active, 'pages.system.datasets.enabled', 'pages.system.datasets.disabled'),
+          renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
       },
       {
         title: t('pages.system.datasets.columnLastExecuted'),
@@ -274,12 +274,12 @@ const DatasetListPage: React.FC = () => {
         render: (_, record) => (record.last_error ? <Tag color="error">{record.last_error}</Tag> : t('common.dash')),
       },
       {
-        title: t('pages.system.datasets.columnCreatedAt'),
+        title: t('common.createdAt'),
         dataIndex: 'created_at',
         valueType: 'dateTime',
       },
       {
-        title: t('pages.system.datasets.columnUpdatedAt'),
+        title: t('common.updatedAt'),
         dataIndex: 'updated_at',
         valueType: 'dateTime',
       },
@@ -301,11 +301,11 @@ const DatasetListPage: React.FC = () => {
         await updateDataset(String(uuid), { is_active: enable });
         done++;
       }
-      messageApi.success(t('pages.system.datasets.batchStatusSuccess', { action: enable ? t('pages.system.datasets.enabled') : t('pages.system.datasets.disabled'), count: done }));
+      messageApi.success(t('pages.system.datasets.batchStatusSuccess', { action: enable ? t('common.enabled') : t('common.disabled'), count: done }));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || t('pages.system.datasets.operationFailed'));
+      messageApi.error(error?.message || t('common.operationFailed'));
     }
   };
 
@@ -315,10 +315,10 @@ const DatasetListPage: React.FC = () => {
   const handleDelete = async (record: Dataset) => {
     try {
       await deleteDataset(record.uuid);
-      messageApi.success(t('pages.system.datasets.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.datasets.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -446,7 +446,7 @@ const DatasetListPage: React.FC = () => {
           }
         }
         await updateDataset(currentDatasetUuid, updateData);
-        messageApi.success(t('pages.system.datasets.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
         setModalVisible(false);
         setFormInitialValues(undefined);
         actionRef.current?.reload();
@@ -476,7 +476,7 @@ const DatasetListPage: React.FC = () => {
         navigate(`/system/datasets/designer?uuid=${created.uuid}`);
       }
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.datasets.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -552,7 +552,7 @@ const DatasetListPage: React.FC = () => {
       },
     },
     {
-      title: t('pages.system.datasets.columnDescription'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -566,11 +566,11 @@ const DatasetListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('pages.system.datasets.enabled'), status: 'Success' },
-        false: { text: t('pages.system.datasets.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) =>
-        renderSystemActiveTag(t, record.is_active, 'pages.system.datasets.enabled', 'pages.system.datasets.disabled'),
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
       title: t('pages.system.datasets.columnLastExecuted'),
@@ -584,7 +584,7 @@ const DatasetListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('pages.system.datasets.columnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       minWidth: 180,
@@ -595,7 +595,7 @@ const DatasetListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('pages.system.datasets.columnActions'),
+      title: t('common.actions'),
       key: 'action',
       valueType: 'option',
       fixed: 'right',
@@ -603,13 +603,13 @@ const DatasetListPage: React.FC = () => {
       uniActionRenderOptions: { directMax: 5 },
       render: (_, record) => [
             <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)}>
-              {t('pages.system.datasets.view')}
+              {t('common.view')}
             </Button>,
             <Button key="design" {...rowActionKind('update')} onClick={() => handleDesign(record)}>
               {t('pages.system.datasets.design')}
             </Button>,
             <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-              {t('pages.system.datasets.edit')}
+              {t('common.edit')}
             </Button>,
             <Button
               key="execute"
@@ -634,7 +634,7 @@ const DatasetListPage: React.FC = () => {
               cancelText={t('common.cancel')}
             >
               <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                {t('pages.system.datasets.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>,
           ],
@@ -713,7 +713,7 @@ const DatasetListPage: React.FC = () => {
           }}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText={t('pages.system.datasets.batchDelete')}
+          deleteButtonText={t('common.batchDelete')}
           toolBarRender={() =>
             selectedRowKeys.length > 0
               ? [
@@ -800,7 +800,7 @@ const DatasetListPage: React.FC = () => {
               items = collected;
             }
             if (items.length === 0) {
-              messageApi.warning(t('pages.system.datasets.noDataToExport'));
+              messageApi.warning(t('common.exportNoData'));
               return;
             }
             await downloadRecordsAsXlsx(
@@ -874,12 +874,12 @@ const DatasetListPage: React.FC = () => {
         />
         <ProFormTextArea
           name="description"
-          label={t('pages.system.datasets.labelRemark')}
+          label={t('common.remark')}
           placeholder={t('pages.system.datasets.remarkOptional')}
           fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
         />
-        <ProFormSwitch name="is_active" label={t('pages.system.datasets.labelEnabled')} colProps={{ span: 12 }} />
+        <ProFormSwitch name="is_active" label={t('common.enabled')} colProps={{ span: 12 }} />
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
@@ -921,7 +921,7 @@ const DatasetListPage: React.FC = () => {
                   visible: true,
                   render: (
                     <Button {...rowActionKind('update')} icon={<EditOutlined />} onClick={() => handleEdit(detailData)}>
-                      {t('pages.system.datasets.edit')}
+                      {t('common.edit')}
                     </Button>
                   ),
                 },
@@ -938,7 +938,7 @@ const DatasetListPage: React.FC = () => {
         onCancel={() => setExecuteVisible(false)}
         footer={[
           <Button {...rowActionKind('close')} key="close" onClick={() => setExecuteVisible(false)}>
-            {t('pages.system.datasets.close')}
+            {t('common.close')}
           </Button>,
         ]}
         width={1000}

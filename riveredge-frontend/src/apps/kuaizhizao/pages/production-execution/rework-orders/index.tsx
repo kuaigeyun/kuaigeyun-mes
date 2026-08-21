@@ -340,7 +340,7 @@ const ReworkOrdersPage: React.FC = () => {
       render: (text) => text || 0,
     },
     {
-      title: t('app.kuaizhizao.workReporting.colRemarks'),
+      title: t('common.remark'),
       dataIndex: 'remarks',
       span: 2,
       render: (text) => text || '-',
@@ -608,7 +608,7 @@ const ReworkOrdersPage: React.FC = () => {
         ) : null,
         reworkCapabilityAllowed(record, 'close') ? (
           <Button key="close" {...rowActionKind('close')} onClick={() => void handleCloseRework(record)}>
-            {t('app.kuaizhizao.reworkOrder.actionClose')}
+            {t('common.close')}
           </Button>
         ) : null,
         reworkCapabilityAllowed(record, 'update') ? (
@@ -1237,7 +1237,7 @@ const ReworkOrdersPage: React.FC = () => {
         ellipsis: true,
       },
       {
-        title: t('app.kuaizhizao.workOrder.colQuantity'),
+        title: t('common.quantity'),
         dataIndex: 'quantity',
         width: 120,
         align: 'right',
@@ -1550,7 +1550,7 @@ const ReworkOrdersPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' , render: formatQuantity },
+                  { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right' , render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' , render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' , render: formatQuantity },
                   {
@@ -1830,7 +1830,7 @@ const ReworkOrdersPage: React.FC = () => {
         <DocumentAttachmentsField category="rework_order_attachments" />
         <ProFormTextArea
           name="remarks"
-          label={t('app.kuaizhizao.workReporting.colRemarks')}
+          label={t('common.remark')}
           placeholder={t('app.kuaizhizao.workReporting.formRemarksPlaceholder')}
           fieldProps={{ rows: 3 }}
         />
@@ -1936,7 +1936,7 @@ const ReworkOrdersPage: React.FC = () => {
                     visible: reworkCapabilityAllowed(detail, 'close'),
                     render: () => (
                       <Button onClick={() => void handleCloseRework(detail)}>
-                        {t('app.kuaizhizao.reworkOrder.actionClose')}
+                        {t('common.close')}
                       </Button>
                     ),
                   },
@@ -1997,7 +1997,7 @@ const ReworkOrdersPage: React.FC = () => {
         collaborationTitleSuffix={
           detailCollaboration?.nextSteps?.length ? (
             <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-              {t('components.uniLifecycle.nextStep')}：
+              {t('common.next')}：
               {detailCollaboration.nextSteps.join(t('components.uniLifecycle.nextStepSeparator'))}
             </Typography.Text>
           ) : undefined
@@ -2140,7 +2140,7 @@ const ReworkOrdersPage: React.FC = () => {
               {...formDateFormItemProps}
               fieldProps={{ showTime: true, style: { width: '100%' } }}
             />
-            <ProFormTextArea name="remarks" label={t('app.kuaizhizao.workReporting.colRemarks')} fieldProps={{ rows: 2 }} />
+            <ProFormTextArea name="remarks" label={t('common.remark')} fieldProps={{ rows: 2 }} />
           </>
         ) : null}
       </FormModalTemplate>

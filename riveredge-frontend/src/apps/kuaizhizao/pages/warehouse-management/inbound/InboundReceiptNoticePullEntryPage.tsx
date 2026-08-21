@@ -120,7 +120,7 @@ const InboundReceiptNoticePullEntryPage: React.FC = () => {
         ellipsis: true,
       },
       {
-        title: t('app.kuaizhizao.salesOrder.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'quantity',
         width: 90,
         align: 'right' as const,

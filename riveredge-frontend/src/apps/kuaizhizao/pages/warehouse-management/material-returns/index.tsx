@@ -215,12 +215,12 @@ const MaterialReturnsPage: React.FC = () => {
       onOk: async () => {
         try {
           await warehouseApi.materialReturn.delete(record.id!.toString());
-          messageApi.success(t('app.kuaizhizao.warehouseMaterialReturn.msg.deleteSuccess'));
+          messageApi.success(t('common.deleteSuccess'));
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.warehouseMaterialReturn.msg.deleteFailed'));
+          messageApi.error(error.message || t('common.deleteFailed'));
         }
       },
     });
@@ -334,7 +334,7 @@ const MaterialReturnsPage: React.FC = () => {
         error.message
           || (andConfirm
             ? t('app.kuaizhizao.warehouseMaterialReturn.msg.createAndConfirmFailed')
-            : t('app.kuaizhizao.warehouseMaterialReturn.msg.createFailed')),
+            : t('common.createFailed')),
       );
       throw error;
     } finally {
@@ -381,7 +381,7 @@ const MaterialReturnsPage: React.FC = () => {
         search: { order: 10 } as ProColumns['search'],
       },
       {
-        title: t('app.kuaizhizao.warehouseMaterialReturn.col.status'),
+        title: t('common.status'),
         dataIndex: 'status',
         valueType: 'select',
         valueEnum: materialReturnStatusValueEnum,
@@ -495,7 +495,7 @@ const MaterialReturnsPage: React.FC = () => {
         },
       },
       {
-        title: t('app.kuaizhizao.warehouseMaterialReturn.col.actions'),
+        title: t('common.actions'),
         valueType: 'option',
         fixed: 'right',
         hideInSearch: true,
@@ -531,7 +531,7 @@ const MaterialReturnsPage: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseMaterialReturn.col.warehouse'), dataIndex: 'warehouse_name' },
       { title: t('app.kuaizhizao.warehouseMaterialReturn.col.returner'), dataIndex: 'returner_name' },
       {
-        title: t('app.kuaizhizao.warehouseMaterialReturn.col.status'),
+        title: t('common.status'),
         dataIndex: 'status',
         render: (s) => {
           const map: Record<string, { textKey: string; color: string }> = {
@@ -544,7 +544,7 @@ const MaterialReturnsPage: React.FC = () => {
         },
       },
       { title: t('app.kuaizhizao.warehouseMaterialReturn.col.returnTime'), dataIndex: 'return_time', valueType: 'dateTime' },
-      { title: t('app.kuaizhizao.warehouseMaterialReturn.field.notes'), dataIndex: 'notes', span: 3 },
+      { title: t('common.remark'), dataIndex: 'notes', span: 3 },
     ]),
     [t],
   );
@@ -553,9 +553,9 @@ const MaterialReturnsPage: React.FC = () => {
     () => [
       { title: t('app.kuaizhizao.warehouseMaterialReturn.col.materialCode'), dataIndex: 'material_code', width: 120 },
       { title: t('app.kuaizhizao.warehouseMaterialReturn.col.materialName'), dataIndex: 'material_name', width: 150 },
-      { title: t('app.kuaizhizao.warehouseMaterialReturn.col.unit'), dataIndex: 'material_unit', width: 60 },
+      { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
       { title: t('app.kuaizhizao.warehouseMaterialReturn.col.returnQty'), dataIndex: 'return_quantity', width: 100, align: 'right' as const , render: formatQuantity },
-      { title: t('app.kuaizhizao.warehouseMaterialReturn.col.status'), dataIndex: 'status', width: 80 },
+      { title: t('common.status'), dataIndex: 'status', width: 80 },
     ],
     [t],
   );
@@ -579,7 +579,7 @@ const MaterialReturnsPage: React.FC = () => {
     () => [
       { title: t('app.kuaizhizao.warehouseMaterialReturn.col.materialCode'), dataIndex: 'material_code', width: 120 },
       { title: t('app.kuaizhizao.warehouseMaterialReturn.col.materialName'), dataIndex: 'material_name', width: 150 },
-      { title: t('app.kuaizhizao.warehouseMaterialReturn.col.unit'), dataIndex: 'material_unit', width: 60 },
+      { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
       { title: t('app.kuaizhizao.warehouseMaterialReturn.col.borrowQty'), dataIndex: 'borrow_quantity', width: 90, align: 'right' as const },
       { title: t('app.kuaizhizao.warehouseMaterialReturn.col.returnedQty'), dataIndex: 'returned_quantity', width: 90, align: 'right' as const },
       {
@@ -726,7 +726,7 @@ const MaterialReturnsPage: React.FC = () => {
               inst.submit();
             }}
           >
-            {t('app.kuaizhizao.warehouseMaterialReturn.action.save') + SUBMIT_SHORTCUT_HINT}
+            {t('common.save') + SUBMIT_SHORTCUT_HINT}
           </Button>
         }
         extraFooterAfter={
@@ -809,7 +809,7 @@ const MaterialReturnsPage: React.FC = () => {
         <DocumentAttachmentsField category="material_return_attachments" />
         <ProFormTextArea
           name="notes"
-          label={t('app.kuaizhizao.warehouseMaterialReturn.field.notes')}
+          label={t('common.remark')}
           placeholder={t('app.kuaizhizao.warehouseMaterialReturn.field.optional')}
           fieldProps={{ rows: 2 }}
         />

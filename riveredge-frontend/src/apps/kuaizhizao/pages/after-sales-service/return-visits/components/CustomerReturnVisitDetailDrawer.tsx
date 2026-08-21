@@ -88,7 +88,7 @@ export const CustomerReturnVisitDetailDrawer: React.FC<CustomerReturnVisitDetail
           span: 3,
         },
         {
-          title: t('app.kuaizhizao.afterSalesService.returnVisit.field.notes'),
+          title: t('common.remark'),
           dataIndex: 'notes',
           span: 3,
         },

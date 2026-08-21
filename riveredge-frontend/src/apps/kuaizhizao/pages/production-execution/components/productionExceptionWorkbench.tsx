@@ -205,7 +205,7 @@ export function renderExceptionWorkbenchNextStepSuffix(
   if (!nextLabel) return undefined;
   return (
     <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-      {t('components.uniLifecycle.nextStep')}：{nextLabel}
+      {t('common.next')}：{nextLabel}
     </Typography.Text>
   );
 }

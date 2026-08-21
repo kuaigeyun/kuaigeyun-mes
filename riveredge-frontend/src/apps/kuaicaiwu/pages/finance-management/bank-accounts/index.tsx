@@ -62,7 +62,7 @@ const BankAccountsPage: React.FC = () => {
 
   const activeValueEnum = useMemo(
     () => ({
-      true: { text: t(`${BA}.status.enabled`) },
+      true: { text: t('common.enabled') },
       false: { text: t(`${BA}.status.disabled`) },
     }),
     [t],
@@ -141,7 +141,7 @@ const BankAccountsPage: React.FC = () => {
     },
     { title: t(`${BA}.col.balance`), dataIndex: 'current_balance', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
     {
-      title: t(`${BA}.col.status`),
+      title: t('common.status'),
       dataIndex: 'is_active',
       width: 80,
       minWidth: 80,
@@ -151,7 +151,7 @@ const BankAccountsPage: React.FC = () => {
       sorter: true,
       valueType: 'select',
       valueEnum: activeValueEnum,
-      render: (_, r) => renderFinanceActiveTag(t, r.is_active, `${BA}.status.enabled`, `${BA}.status.disabled`),
+      render: (_, r) => renderFinanceActiveTag(t, r.is_active, 'common.enabled', `${BA}.status.disabled`),
     },
     ...financeDocCreatedUpdatedColumns<BankAccount>(t),
     {
@@ -165,7 +165,7 @@ const BankAccountsPage: React.FC = () => {
         return [
           <a key="tx" onClick={() => { setTxAccount(record); setTxDrawerOpen(true); }}>{t(`${BA}.action.transactions`)}</a>,
           isCash ? null : (
-            <a key="import" onClick={() => { setImportAccount(record); setImportOpen(true); }}>{t(`${BA}.action.import`)}</a>
+            <a key="import" onClick={() => { setImportAccount(record); setImportOpen(true); }}>{t('common.import')}</a>
           ),
           <a key="edit" onClick={() => { setEditing(record); setModalVisible(true); }}>{t('common.edit')}</a>,
           <Popconfirm {...rowActionKind('delete')}
@@ -475,14 +475,14 @@ const BankAccountsPage: React.FC = () => {
         {editing && (
           <ProFormSelect
             name="is_active"
-            label={t(`${BA}.col.status`)}
+            label={t('common.status')}
             options={[
-              { label: t(`${BA}.status.enabled`), value: true },
+              { label: t('common.enabled'), value: true },
               { label: t(`${BA}.status.disabled`), value: false },
             ]}
           />
         )}
-        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
+        <ProFormTextArea name="notes" label={t('common.remark')} />
         <DocumentAttachmentsField category="bank_account_attachments" />
       </FormModalTemplate>
     </ListPageTemplate>

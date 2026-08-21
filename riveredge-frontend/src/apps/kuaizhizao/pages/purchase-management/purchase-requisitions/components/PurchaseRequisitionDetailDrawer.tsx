@@ -179,7 +179,7 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
           dataIndex: 'required_date',
           valueType: 'date',
         },
-        { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes', span: 3 },
+        { title: t('common.remark'), dataIndex: 'notes', span: 3 },
         { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
         { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
       ] as ProDescriptionsItemProps<PurchaseRequisition>[]),
@@ -234,7 +234,7 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
       collaborationTitleSuffix={
         contentReady && showNextInTitle ? (
           <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-            {t('components.uniLifecycle.nextStep')}：
+            {t('common.next')}：
             {nextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
           </Typography.Text>
         ) : undefined
@@ -292,7 +292,7 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
                   ellipsis: true,
                 },
                 {
-                  title: t('app.kuaizhizao.purchaseRequisition.col.quantity'),
+                  title: t('common.quantity'),
                   dataIndex: 'quantity',
                   width: 120,
                   align: 'right',
@@ -301,7 +301,7 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
                   ),
                 },
                 {
-                  title: t('app.kuaizhizao.purchaseRequisition.col.unit'),
+                  title: t('common.unit'),
                   dataIndex: 'unit',
                   width: 100,
                   ellipsis: true,
@@ -335,9 +335,9 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
                   width: 80,
                   render: (v: number | undefined) =>
                     v ? (
-                      <Tag color="success">{t('app.kuaizhizao.purchaseRequisition.convertedYes')}</Tag>
+                      <Tag color="success">{t('common.yes')}</Tag>
                     ) : (
-                      <Tag>{t('app.kuaizhizao.purchaseRequisition.convertedNo')}</Tag>
+                      <Tag>{t('common.no')}</Tag>
                     ),
                 },
               ]}

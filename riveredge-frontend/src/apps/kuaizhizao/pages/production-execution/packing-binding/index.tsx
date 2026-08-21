@@ -778,7 +778,7 @@ const PackingBindingPage: React.FC = () => {
       { title: t('app.kuaizhizao.packingBinding.colBoundBy'), dataIndex: 'bound_by_name' },
       { title: t('app.kuaizhizao.packingBinding.colBoundAt'), dataIndex: 'bound_at', valueType: 'dateTime' },
       {
-        title: t('app.kuaizhizao.common.fieldNotes'),
+        title: t('common.remark'),
         dataIndex: 'remarks',
         span: 3,
       },
@@ -1124,7 +1124,7 @@ const PackingBindingPage: React.FC = () => {
       { title: t('app.kuaizhizao.packingBinding.taskPoolColReviewStatus'), dataIndex: 'review_status', width: 120 },
       { title: t('app.kuaizhizao.packingBinding.taskPoolColDocStatus'), dataIndex: 'status', width: 120 },
       {
-        title: t('app.kuaizhizao.packingBinding.taskPoolColUpdatedAt'),
+        title: t('common.updatedAt'),
         dataIndex: 'updated_at',
         render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
@@ -1285,7 +1285,7 @@ const PackingBindingPage: React.FC = () => {
         <ProFormText name="barcode" label={t('app.kuaizhizao.packingBinding.colBarcode')} />
         <ProFormTextArea
           name="remarks"
-          label={t('app.kuaizhizao.common.fieldNotes')}
+          label={t('common.remark')}
           placeholder={t('app.kuaizhizao.packingBinding.placeholderRemarks')}
           fieldProps={{ rows: 3 }}
         />
@@ -1320,7 +1320,7 @@ const PackingBindingPage: React.FC = () => {
         />
         <ProFormTextArea
           name="remarks"
-          label={t('app.kuaizhizao.common.fieldNotes')}
+          label={t('common.remark')}
           placeholder={t('app.kuaizhizao.packingBinding.placeholderRemarks')}
           fieldProps={{ rows: 3 }}
         />
@@ -1358,7 +1358,7 @@ const PackingBindingPage: React.FC = () => {
         collaborationTitleSuffix={
           currentBinding && packingShowNextInTitle ? (
             <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-              {t('components.uniLifecycle.nextStep')}：
+              {t('common.next')}：
               {packingNextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
             </Typography.Text>
           ) : undefined

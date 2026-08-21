@@ -47,7 +47,7 @@ export function DocumentFormPageHeaderActions({
 
   const primaryLabel = canSubmitAfterSave
     ? isCreatePage
-      ? primaryCreateLabel ?? t('components.layoutTemplates.formModal.submitCreate')
+      ? primaryCreateLabel ?? t('common.create')
       : primarySubmitLabel ?? t('components.layoutTemplates.documentFormPage.saveAndSubmit')
     : primarySaveLabel ?? t('common.save');
 

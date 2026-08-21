@@ -78,7 +78,7 @@ export default function TimeconfigPage() {
       await queryClient.invalidateQueries({ queryKey: DETAIL_DRAWER_FEATURES_QUERY_KEY });
       message.success(t('app.kuaizhizao.timeconfig.saveSuccess'));
     } catch (e) {
-      message.error(getApiErrorMessage(e, t('app.kuaizhizao.timeconfig.saveFailed')));
+      message.error(getApiErrorMessage(e, t('common.saveFailed')));
     } finally {
       setSaving(false);
     }
@@ -137,11 +137,11 @@ export default function TimeconfigPage() {
               options={[
                 {
                   value: 'off',
-                  label: t('pages.system.configCenter.param.common_detail_full_chain_mode_opt_off'),
+                  label: t('common.close'),
                 },
                 {
                   value: 'on',
-                  label: t('pages.system.configCenter.param.common_detail_full_chain_mode_opt_on'),
+                  label: t('common.enabled'),
                 },
                 {
                   value: 'documents_only',
@@ -168,7 +168,7 @@ export default function TimeconfigPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start' }}>
             <div>
               <Typography.Text strong>
-                {t('pages.system.configCenter.param.common_detail_basic_updated_at_enabled')}
+                {t('common.updatedAt')}
               </Typography.Text>
               <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
                 {t('pages.system.configCenter.param.common_detail_basic_updated_at_enabled_desc')}
@@ -239,7 +239,7 @@ export default function TimeconfigPage() {
 
       {canUpdate ? (
         <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={() => void handleSave()}>
-          {t('app.kuaizhizao.timeconfig.save')}
+          {t('common.save')}
         </Button>
       ) : null}
     </div>

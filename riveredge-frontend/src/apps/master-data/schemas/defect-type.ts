@@ -27,14 +27,14 @@ export const defectTypeFormSchema: FieldConfig[] = [
   {
     name: 'description',
     type: 'textarea',
-    labelKey: 'field.defectType.description',
+    labelKey: 'common.remark',
     colSpan: 24,
     fieldProps: { rows: 2 },
   },
   {
     name: 'isActive',
     type: 'switch',
-    labelKey: 'field.defectType.isActive',
+    labelKey: 'common.enabled',
     colSpan: 12,
   },
 ];

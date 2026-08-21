@@ -113,7 +113,7 @@ const StandardCostsPage: React.FC = () => {
       },
       { title: t('app.kuaicaiwu.standardCost.col.standardValue'), dataIndex: 'standard_value', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
       {
-        title: t('app.kuaicaiwu.standardCost.col.unit'),
+        title: t('common.unit'),
         dataIndex: 'unit',
         width: 80,
         minWidth: 80,
@@ -174,7 +174,7 @@ const StandardCostsPage: React.FC = () => {
         sorter: true,
       },
       {
-        title: t('app.kuaicaiwu.standardCost.col.status'),
+        title: t('common.status'),
         dataIndex: 'is_active',
         width: 80,
         minWidth: 80,
@@ -184,20 +184,20 @@ const StandardCostsPage: React.FC = () => {
         sorter: true,
         valueType: 'select',
         valueEnum: {
-          true: { text: t('app.kuaicaiwu.standardCost.status.active') },
+          true: { text: t('common.enabled') },
           false: { text: t('app.kuaicaiwu.standardCost.status.inactive') },
         },
         render: (_, r) =>
           renderFinanceActiveTag(
             t,
             r.is_active,
-            'app.kuaicaiwu.standardCost.status.active',
+            'common.enabled',
             'app.kuaicaiwu.standardCost.status.inactive',
           ),
       },
       ...costDocCreatedUpdatedColumns<StandardCost>(t),
       {
-        title: t('app.kuaicaiwu.costCommon.action'),
+        title: t('common.actions'),
         key: 'action',
         valueType: 'option',
         fixed: 'right',
@@ -212,19 +212,19 @@ const StandardCostsPage: React.FC = () => {
                 setModalVisible(true);
               }}
             >
-              {t('app.kuaicaiwu.costCommon.edit')}
+              {t('common.edit')}
             </Button>
             <Popconfirm
               {...rowActionKind('delete')}
               title={t('app.kuaicaiwu.standardCost.confirmDelete')}
               onConfirm={async () => {
                 await standardCostService.delete(record.id);
-                messageApi.success(t('app.kuaicaiwu.costCommon.deleteSuccess'));
+                messageApi.success(t('common.deleteSuccess'));
                 actionRef.current?.reload();
               }}
             >
               <Button type="link" danger size="small">
-                {t('app.kuaicaiwu.costCommon.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>
           </Space>
@@ -310,10 +310,10 @@ const StandardCostsPage: React.FC = () => {
         onFinish={async (values) => {
           if (editing) {
             await standardCostService.update(editing.id, values);
-            messageApi.success(t('app.kuaicaiwu.costCommon.updateSuccess'));
+            messageApi.success(t('common.updateSuccess'));
           } else {
             await standardCostService.create(values);
-            messageApi.success(t('app.kuaicaiwu.costCommon.createSuccess'));
+            messageApi.success(t('common.createSuccess'));
           }
           setModalVisible(false);
           actionRef.current?.reload();
@@ -345,7 +345,7 @@ const StandardCostsPage: React.FC = () => {
           disabled={!!editing}
         />
         <ProFormDigit name="standard_value" label={t('app.kuaicaiwu.standardCost.col.standardValue')} rules={[{ required: true }]} min={0} />
-        <ProFormText name="unit" label={t('app.kuaicaiwu.standardCost.col.unit')} />
+        <ProFormText name="unit" label={t('common.unit')} />
         <ProFormText name="version" label={t('app.kuaicaiwu.standardCost.col.version')} />
         <ProFormSelect
           name="currency"
@@ -355,8 +355,8 @@ const StandardCostsPage: React.FC = () => {
         />
         <ProFormDatePicker name="effective_date" label={t('app.kuaicaiwu.standardCost.field.effectiveDate')} />
         <ProFormDatePicker name="expiry_date" label={t('app.kuaicaiwu.standardCost.field.expiryDate')} />
-        <ProFormSwitch name="is_active" label={t('app.kuaicaiwu.standardCost.status.active')} />
-        <ProFormTextArea name="description" label={t('app.kuaicaiwu.costCommon.description')} />
+        <ProFormSwitch name="is_active" label={t('common.enabled')} />
+        <ProFormTextArea name="description" label={t('common.remark')} />
       </FormModalTemplate>
     </ListPageTemplate>
   );

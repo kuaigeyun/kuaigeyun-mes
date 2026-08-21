@@ -90,7 +90,7 @@ const FormRequestModalBody: React.FC<Props> = ({
           <span style={{ color: 'rgba(0,0,0,0.45)' }}>{t('app.kuaioa.formSchema.empty')}</span>
         </ProForm.Item>
       ) : null}
-      <ProFormTextArea name="notes" label={t('app.kuaioa.common.notes')} colProps={{ span: 24 }} fieldProps={{ rows: 2 }} />
+      <ProFormTextArea name="notes" label={t('common.remark')} colProps={{ span: 24 }} fieldProps={{ rows: 2 }} />
     </>
   );
 };

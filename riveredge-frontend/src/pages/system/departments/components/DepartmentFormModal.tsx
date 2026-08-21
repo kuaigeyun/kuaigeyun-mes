@@ -123,10 +123,10 @@ export const DepartmentFormModal: React.FC<DepartmentFormModalProps> = ({
       if (isEdit && editUuid) {
         payload = omitPresetLocalizedPayloadFields('department', editPresetCode, payload);
         await updateDepartment(editUuid, payload as UpdateDepartmentData);
-        messageApi.success(t('pages.system.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createDepartment(payload as CreateDepartmentData);
-        messageApi.success(t('pages.system.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
       onClose();
       formRef.current?.resetFields();

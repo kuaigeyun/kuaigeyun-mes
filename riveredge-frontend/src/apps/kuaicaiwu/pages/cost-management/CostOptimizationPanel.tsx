@@ -235,7 +235,7 @@ const CostOptimizationPanel: React.FC = () => {
             />
             <ProFormDigit
               name="quantity"
-              label={t('app.kuaicaiwu.costCommon.col.quantity')}
+              label={t('common.quantity')}
               placeholder={t('app.kuaicaiwu.costOptimization.field.quantityPlaceholder')}
               rules={[
                 { required: true, message: t('app.kuaicaiwu.costCommon.field.quantityRequired') },

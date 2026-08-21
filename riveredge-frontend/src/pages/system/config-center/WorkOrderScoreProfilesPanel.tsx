@@ -142,7 +142,7 @@ export const WorkOrderScoreProfilesPanel: React.FC<WorkOrderScoreProfilesPanelPr
       }
       await onSaved?.();
     } catch (e: any) {
-      message.error(e?.message || t('pages.system.configCenter.scoreProfiles.saveFailed'));
+      message.error(e?.message || t('common.saveFailed'));
     } finally {
       setSaving(false);
     }

@@ -188,7 +188,29 @@ export function getAppDisplayName(
   return fallback ?? '';
 }
 
-/** 库内菜单/应用名为租户自定义文案（非 i18n key） */
+/**
+ * manifest / 权限同步写入 core_menus 的默认应用名（简体及繁体）。
+ * 须与 `app.${code}.name` 在 zh-CN.ts / zh-Hant.ts 中的值及历史改名一致。
+ * 租户在应用中心改过的名称不在此列，侧栏应原样展示。
+ */
+const BUILTIN_APP_DISPLAY_NAME_ALIASES: Record<string, readonly string[]> = {
+  kuaizhizao: ['快制造', '快製造'],
+  kuaiplm: ['快研发', '快研發'],
+  kuaicaiwu: ['轻财务', '輕財務', '快财务', '快財務'],
+  kuaioa: ['轻办公', '輕辦公'],
+  kuaireport: ['快报表', '快報表'],
+  'master-data': ['主数据', '主資料', '基础数据管理', '基礎資料管理'],
+  kuaiiot: ['快数采', '快數採'],
+  kuaiai: ['KU-AI'],
+  haoligo: ['好力 GO'],
+  system: ['系统配置', '系統配置'],
+};
+
+function isBuiltinAppCatalogName(appCode: string, name: string): boolean {
+  return (BUILTIN_APP_DISPLAY_NAME_ALIASES[appCode] || []).includes(name);
+}
+
+/** 库内菜单/应用名为租户自定义文案（非 i18n key、亦非内置产品名） */
 export function isTenantCustomMenuDisplayName(name?: string | null): boolean {
   const n = (name || '').trim();
   if (!n) return false;
@@ -224,11 +246,13 @@ export function resolveAppMenuGroupDisplayName(
   dbName: string | undefined,
   t: (key: string, options?: { defaultValue?: string }) => string,
 ): string {
+  const localized = getAppDisplayName(appCode, t, '');
   const name = (dbName || '').trim();
-  if (isTenantCustomMenuDisplayName(name)) {
-    return name;
-  }
-  return getAppDisplayName(appCode, t, name);
+  if (!name) return localized;
+  if (localized && name === localized) return localized;
+  if (isBuiltinAppCatalogName(appCode, name)) return localized || name;
+  if (isTenantCustomMenuDisplayName(name)) return name;
+  return localized || name;
 }
 
 /**

@@ -224,8 +224,8 @@ const ReworkOrderCreateModal: React.FC<ReworkOrderCreateModalProps> = ({
         name="verification_required"
         label={t('app.kuaizhizao.reworkOrder.verificationRequired')}
         options={[
-          { label: t('app.kuaizhizao.reworkOrder.verificationRequiredNo'), value: false },
-          { label: t('app.kuaizhizao.reworkOrder.verificationRequiredYes'), value: true },
+          { label: t('common.no'), value: false },
+          { label: t('common.yes'), value: true },
         ]}
         colProps={{ span: 12 }}
       />
@@ -296,7 +296,7 @@ const ReworkOrderCreateModal: React.FC<ReworkOrderCreateModalProps> = ({
       />
       <ProFormTextArea
         name="remarks"
-        label={t('app.kuaizhizao.reworkOrder.formRemarks')}
+        label={t('common.remark')}
         placeholder={t('app.kuaizhizao.reworkOrder.formRemarksPlaceholder')}
         fieldProps={{ rows: 2 }}
         colProps={{ span: 24 }}

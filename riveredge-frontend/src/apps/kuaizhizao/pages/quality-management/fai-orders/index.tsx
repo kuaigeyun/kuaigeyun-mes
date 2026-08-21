@@ -157,13 +157,13 @@ const FaiOrdersPage: React.FC = () => {
             render: (_, r) => renderFaiConclusionTag(t, r.conclusion),
           },
           {
-            title: t('app.kuaizhizao.quality.fai.status'),
+            title: t('common.status'),
             dataIndex: 'status',
             hideInTable: true,
             valueEnum: statusEnum,
           },
           {
-            title: t('app.kuaizhizao.quality.fai.status'),
+            title: t('common.status'),
             key: 'lifecycle',
             dataIndex: 'status',
             fixed: 'right',
@@ -212,7 +212,7 @@ const FaiOrdersPage: React.FC = () => {
                     actionRef.current?.reload();
                   }}
                 >
-                  {t('app.kuaizhizao.quality.fai.actions.submit')}
+                  {t('common.submit')}
                 </Button>
               ) : null,
               canApprove && row.status === 'submitted' ? (

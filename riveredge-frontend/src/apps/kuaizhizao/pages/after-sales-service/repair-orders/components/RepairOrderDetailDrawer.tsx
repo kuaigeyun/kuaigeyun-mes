@@ -101,7 +101,7 @@ export const RepairOrderDetailDrawer: React.FC<RepairOrderDetailDrawerProps> = (
         },
         { title: t('app.kuaizhizao.afterSalesService.repairOrder.field.totalCost'), dataIndex: 'total_cost' },
         {
-          title: t('app.kuaizhizao.afterSalesService.repairOrder.field.status'),
+          title: t('common.status'),
           dataIndex: 'status',
           render: (_, row) => renderAfterSalesStatusTag(row.status, AFTER_SALES_REPAIR_STATUS_COLOR),
         },
@@ -121,7 +121,7 @@ export const RepairOrderDetailDrawer: React.FC<RepairOrderDetailDrawerProps> = (
           span: 3,
         },
         {
-          title: t('app.kuaizhizao.afterSalesService.repairOrder.field.notes'),
+          title: t('common.remark'),
           dataIndex: 'notes',
           span: 3,
         },
@@ -158,7 +158,7 @@ export const RepairOrderDetailDrawer: React.FC<RepairOrderDetailDrawerProps> = (
             columns={[
               { title: t('app.kuaizhizao.afterSalesTicket.fieldMaterialCode'), dataIndex: 'material_code' },
               { title: t('app.kuaizhizao.afterSalesTicket.fieldMaterialName'), dataIndex: 'material_name' },
-              { title: t('app.kuaizhizao.afterSalesTicket.fieldQuantity'), dataIndex: 'quantity', align: 'right' },
+              { title: t('common.quantity'), dataIndex: 'quantity', align: 'right' },
               { title: t('app.kuaizhizao.afterSalesService.repairOrder.field.totalCost'), dataIndex: 'amount', align: 'right' },
               { title: t('app.kuaizhizao.afterSalesTicket.fieldLineNotes'), dataIndex: 'notes' },
             ]}

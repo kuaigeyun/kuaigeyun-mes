@@ -111,10 +111,10 @@ const DatasetDesignerPage: React.FC = () => {
         query_type: saveQueryType,
         query_config: queryConfig,
       });
-      messageApi.success(t('pages.system.datasets.saveSuccess'));
+      messageApi.success(t('common.saveSuccess'));
       setDataset((prev) => (prev ? { ...prev, query_type: saveQueryType, query_config: queryConfig } : null));
     } catch (error: any) {
-      messageApi.error(error?.message || t('pages.system.datasets.saveFailed'));
+      messageApi.error(error?.message || t('common.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -173,13 +173,13 @@ const DatasetDesignerPage: React.FC = () => {
   const toolbar = (
     <Space>
       <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleSave}>
-        {t('pages.system.datasets.save')}
+        {t('common.save')}
       </Button>
       <Button icon={<PlayCircleOutlined />} loading={executing} onClick={handleExecute}>
         {t('pages.system.datasets.executeQuery')}
       </Button>
       <Button icon={<CloseOutlined />} onClick={handleBack}>
-        {t('pages.system.datasets.back')}
+        {t('common.back')}
       </Button>
       <span style={{ marginLeft: 16, color: '#666' }}>
         {dataset.name} ({dataset.code})

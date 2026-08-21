@@ -90,7 +90,7 @@ export default function LicenseManagementPage() {
       render: (_, record) => `****${record.key_last4}`,
     },
     {
-      title: t('pages.infra.licenseCenter.status', { defaultValue: '状态' }),
+      title: t('common.status', { defaultValue: '状态' }),
       dataIndex: 'is_active',
       width: 120,
       valueType: 'select',
@@ -113,7 +113,7 @@ export default function LicenseManagementPage() {
       render: (_, record) => `${record.current_activations}/${record.max_activations}`,
     },
     {
-      title: t('pages.infra.licenseCenter.remark', { defaultValue: '备注' }),
+      title: t('common.remark', { defaultValue: '备注' }),
       dataIndex: 'remark',
       ellipsis: true,
       hideInSearch: true,
@@ -281,7 +281,7 @@ export default function LicenseManagementPage() {
         />
         <ProFormTextArea
           name="remark"
-          label={t('pages.infra.licenseCenter.remark', { defaultValue: '备注' })}
+          label={t('common.remark', { defaultValue: '备注' })}
           fieldProps={{ rows: 3 }}
         />
       </FormModalTemplate>

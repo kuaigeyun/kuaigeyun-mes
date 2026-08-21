@@ -56,7 +56,7 @@ const InventoryLedger: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: t('app.kuaizhizao.warehouseReports.colQuantity'),
+        title: t('common.quantity'),
         dataIndex: 'quantity',
         valueType: 'digit',
         width: 100,

@@ -621,7 +621,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
 
   const detailRemarksColumn: ProDescriptionsItemProps<OutsourceWorkOrder> = useMemo(
     () => ({
-      title: t('app.kuaizhizao.common.fieldNotes'),
+      title: t('common.remark'),
       dataIndex: 'remarks',
       span: 3,
     }),
@@ -797,7 +797,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       return;
     }
     modal.confirm({
-      title: t('app.kuaizhizao.outsourceWorkOrder.actionCancel'),
+      title: t('common.cancel'),
       content: t('app.kuaizhizao.outsourceWorkOrder.confirmCancel'),
       okType: 'danger',
       onOk: async () => {
@@ -1006,7 +1006,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         }
       }
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.outsourceWorkOrder.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     }
   };
@@ -1366,7 +1366,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
             handleCancel(record);
           }}
         >
-          {t('app.kuaizhizao.outsourceWorkOrder.actionCancel')}
+          {t('common.cancel')}
         </Button>,
       );
     }
@@ -2050,7 +2050,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
 
         <ProFormTextArea
           name="remarks"
-          label={t('app.kuaizhizao.common.fieldNotes')}
+          label={t('common.remark')}
           placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderRemarks')}
           fieldProps={{
             rows: 4,
@@ -2079,7 +2079,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
               ) : null}
               {workOrderDetail.capabilities?.cancel?.allowed === true ? (
                 <Button danger icon={<CloseCircleOutlined />} onClick={() => handleCancel(workOrderDetail)}>
-                  {t('app.kuaizhizao.outsourceWorkOrder.actionCancel')}
+                  {t('common.cancel')}
                 </Button>
               ) : null}
               {workOrderDetail.capabilities?.close?.allowed === true ? (
@@ -2093,7 +2093,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         collaborationTitleSuffix={
           workOrderDetail && owoShowNextInTitle ? (
             <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-              {t('components.uniLifecycle.nextStep')}：
+              {t('common.next')}：
               {owoNextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
             </Typography.Text>
           ) : undefined
@@ -2226,7 +2226,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
                   {
                     title: t('app.kuaizhizao.warehouseOutbound.pull.colIssuedQty'),
                     dataIndex: 'pushed_quantity',

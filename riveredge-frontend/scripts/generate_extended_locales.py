@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Generate zh-Hant / ja-JP / vi-VN locale bundles.
+Generate zh-Hant / ja-JP / vi-VN / lo-LA locale bundles.
 
 - zh-Hant: OpenCC s2twp + Taiwan phrase glossary from zh-CN
-- ja-JP / vi-VN: Google Translate (deep-translator) from en-US + post glossary
+- ja-JP / vi-VN / lo-LA: Google Translate (deep-translator) from en-US + post glossary
 - Dedupes by value; caches translations under scripts/.cache/
 """
 
@@ -56,6 +56,16 @@ LANG_CONFIG = {
         "header_en": "Vietnamese language pack",
         "translate_target": "vi",
         "post_glossary": "vi_post_glossary.json",
+    },
+    "lo-LA": {
+        "source_main": "en-US.ts",
+        "source_login": "en-US.login.ts",
+        "source_generated": "en-US",
+        "import_prefix": "Lo",
+        "header": "ແພັກເກັດພາສາລາວ",
+        "header_en": "Lao language pack",
+        "translate_target": "lo",
+        "post_glossary": "lo_post_glossary.json",
     },
 }
 
@@ -120,7 +130,23 @@ def to_traditional(
     # 先按简体词条换成台湾用词，再 OpenCC；最后用繁体词条兜住转换残留。
     pre = apply_phrase_glossary(text, tw_phrases)
     converted = OPENCC.convert(pre)
+    # s2twp 会把产线「設備」改成消费电子「裝置」、把现场「調試」改成程式「除錯」。
+    converted = _restore_mes_taiwan_terms(converted)
     return apply_phrase_glossary(converted, tw_post or {})
+
+
+def _restore_mes_taiwan_terms(text: str) -> str:
+    protect = ("跨裝置", "行動裝置")
+    holders: list[tuple[str, str]] = []
+    for i, phrase in enumerate(protect):
+        token = f"__TW_PROTECT_{i}__"
+        text = text.replace(phrase, token)
+        holders.append((token, phrase))
+    text = text.replace("裝置", "設備")
+    text = text.replace("除錯", "調試")
+    for token, phrase in holders:
+        text = text.replace(token, phrase)
+    return text
 
 
 def protect_placeholders(text: str) -> tuple[str, list[str]]:
@@ -151,7 +177,7 @@ class Translator:
     def translate_one(self, text: str) -> str:
         if not text or not text.strip():
             return text
-        if text in self.cache:
+        if self._cache_usable(text):
             # 词条表是译文修正的真源：命中缓存也要重新套用，否则新增词条对已缓存的字符串永远不生效。
             return apply_phrase_glossary(self.cache[text], self.post_glossary)
 
@@ -159,7 +185,7 @@ class Translator:
         result: str | None = None
         for attempt in range(5):
             try:
-                time.sleep(0.15 * (attempt + 1))
+                time.sleep(0.45 * (attempt + 1))
                 result = GoogleTranslator(source="en", target=self.target).translate(protected)
                 if result:
                     break
@@ -169,7 +195,7 @@ class Translator:
                 result = None
 
         if not result:
-            result = text
+            return restore_placeholders(text, placeholders)
         result = restore_placeholders(result, placeholders)
         result = apply_phrase_glossary(result, self.post_glossary)
         self.cache[text] = result
@@ -179,24 +205,38 @@ class Translator:
             self._dirty = 0
         return result
 
+    def _cache_usable(self, text: str) -> bool:
+        if text not in self.cache:
+            return False
+        cached = self.cache[text]
+        # 限流失败时曾把原文写进缓存，下次必须重译。
+        if cached == text and re.search(r"[A-Za-z]{4,}", text):
+            return False
+        return True
+
     def translate_many(self, values: list[str]) -> dict[str, str]:
-        pending = [v for v in values if v not in self.cache]
+        pending = [v for v in values if not self._cache_usable(v)]
         if pending:
             print(f"  translating {len(pending)} unique strings -> {self.target} (cached: {len(values) - len(pending)})")
 
         def task(val: str) -> tuple[str, str]:
             return val, self.translate_one(val)
 
-        with ThreadPoolExecutor(max_workers=self.workers) as pool:
-            futures = [pool.submit(task, val) for val in pending]
-            done = 0
-            for fut in as_completed(futures):
-                val, translated = fut.result()
-                self.cache[val] = translated
-                done += 1
-                if done % 200 == 0:
-                    print(f"    ... {done}/{len(pending)}")
-                    save_cache(self.cache_name, self.cache)
+        batch_size = 80
+        done = 0
+        for start in range(0, len(pending), batch_size):
+            chunk = pending[start : start + batch_size]
+            with ThreadPoolExecutor(max_workers=self.workers) as pool:
+                futures = [pool.submit(task, val) for val in chunk]
+                for fut in as_completed(futures):
+                    val, translated = fut.result()
+                    if translated != val or not re.search(r"[A-Za-z]{4,}", val):
+                        self.cache[val] = translated
+                    done += 1
+                    if done % 200 == 0:
+                        print(f"    ... {done}/{len(pending)}")
+                        save_cache(self.cache_name, self.cache)
+            save_cache(self.cache_name, self.cache)
 
         save_cache(self.cache_name, self.cache)
         return {v: apply_phrase_glossary(self.cache.get(v, v), self.post_glossary) for v in values}
@@ -256,9 +296,15 @@ def build_value_map(
     return value_map
 
 
-def transform_main_locale(lang: str, cfg: dict, value_by_source: dict[str, str]) -> None:
+def transform_main_locale(
+    lang: str,
+    cfg: dict,
+    value_by_source: dict[str, str],
+    keep_existing: bool = False,
+) -> None:
     src_path = LOCALES / cfg["source_main"]
     dst_path = LOCALES / f"{lang}.ts"
+    existing = parse_locale_entries(dst_path) if keep_existing and dst_path.exists() else {}
     prefix = cfg["import_prefix"]
     lines_out: list[str] = [
         "/**",
@@ -268,6 +314,8 @@ def transform_main_locale(lang: str, cfg: dict, value_by_source: dict[str, str])
         "",
     ]
     started = False
+    reused = 0
+    filled = 0
 
     for line in src_path.read_text(encoding="utf-8").splitlines():
         if not started:
@@ -294,7 +342,12 @@ def transform_main_locale(lang: str, cfg: dict, value_by_source: dict[str, str])
         if m:
             indent, key, raw_val = m.groups()
             src_val = unescape_ts(raw_val)
-            new_val = value_by_source.get(src_val, src_val)
+            if keep_existing and key in existing:
+                new_val = existing[key]
+                reused += 1
+            else:
+                new_val = value_by_source.get(src_val, src_val)
+                filled += 1
             lines_out.append(f"{indent}'{ts_escape(key)}': '{ts_escape(new_val)}',")
             continue
 
@@ -302,12 +355,19 @@ def transform_main_locale(lang: str, cfg: dict, value_by_source: dict[str, str])
             lines_out.append(line)
 
     dst_path.write_text("\n".join(lines_out) + "\n", encoding="utf-8")
-    print(f"  wrote {dst_path.relative_to(ROOT)}")
+    extra = f" keep={reused} fill={filled}" if keep_existing else ""
+    print(f"  wrote {dst_path.relative_to(ROOT)}{extra}")
 
 
-def transform_login_locale(lang: str, cfg: dict, value_by_source: dict[str, str]) -> None:
+def transform_login_locale(
+    lang: str,
+    cfg: dict,
+    value_by_source: dict[str, str],
+    keep_existing: bool = False,
+) -> None:
     src_path = LOCALES / cfg["source_login"]
     dst_path = LOCALES / f"{lang}.login.ts"
+    existing = parse_locale_entries(dst_path) if keep_existing and dst_path.exists() else {}
     lines_out: list[str] = []
 
     for line in src_path.read_text(encoding="utf-8").splitlines():
@@ -315,7 +375,10 @@ def transform_login_locale(lang: str, cfg: dict, value_by_source: dict[str, str]
         if m:
             indent, key, raw_val = m.groups()
             src_val = unescape_ts(raw_val)
-            new_val = value_by_source.get(src_val, src_val)
+            if keep_existing and key in existing:
+                new_val = existing[key]
+            else:
+                new_val = value_by_source.get(src_val, src_val)
             lines_out.append(f"{indent}'{ts_escape(key)}': '{ts_escape(new_val)}',")
         else:
             lines_out.append(line)
@@ -356,6 +419,7 @@ def generate_lang(
     workers: int,
     modules: list[str] | None = None,
     include_main: bool = True,
+    keep_existing: bool = False,
 ) -> None:
     cfg = LANG_CONFIG[lang]
     print(f"\n=== {lang} ===")
@@ -379,8 +443,8 @@ def generate_lang(
         login_entries = parse_locale_entries(LOCALES / cfg["source_login"])
         main_value_map = build_value_map(lang, main_entries, tr, tw_phrases, tw_post)
         login_value_map = build_value_map(lang, login_entries, tr, tw_phrases, tw_post)
-        transform_main_locale(lang, cfg, main_value_map)
-        transform_login_locale(lang, cfg, login_value_map)
+        transform_main_locale(lang, cfg, main_value_map, keep_existing=keep_existing)
+        transform_login_locale(lang, cfg, login_value_map, keep_existing=keep_existing)
 
     generate_generated_modules(lang, cfg, tw_phrases, translators, tw_post, modules)
 
@@ -390,7 +454,7 @@ def generate_lang(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--langs", default="zh-Hant,ja-JP,vi-VN", help="Comma-separated locale codes")
+    parser.add_argument("--langs", default="zh-Hant,ja-JP,vi-VN,lo-LA", help="Comma-separated locale codes")
     parser.add_argument("--workers", type=int, default=4, help="Parallel translation workers")
     parser.add_argument(
         "--modules",
@@ -401,6 +465,11 @@ def main() -> None:
         "--skip-main",
         action="store_true",
         help="Rebuild only the generated modules, leaving the main and login bundles untouched",
+    )
+    parser.add_argument(
+        "--keep-existing",
+        action="store_true",
+        help="Keep existing translations for keys already present; only convert missing keys from the source locale",
     )
     args = parser.parse_args()
 
@@ -415,7 +484,13 @@ def main() -> None:
         raise SystemExit(f"Unsupported modules: {', '.join(unknown)}")
 
     for lang in langs:
-        generate_lang(lang, args.workers, modules, include_main=not args.skip_main)
+        generate_lang(
+            lang,
+            args.workers,
+            modules,
+            include_main=not args.skip_main,
+            keep_existing=args.keep_existing,
+        )
 
     print("\nDone.")
 

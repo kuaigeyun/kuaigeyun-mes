@@ -36,7 +36,7 @@ export const positionFormSchema: FieldConfig[] = [
   {
     name: 'description',
     type: 'textarea',
-    labelKey: 'field.position.remark',
+    labelKey: 'common.remark',
     placeholderKey: 'field.position.remarkPlaceholder',
     colSpan: 24,
     fieldProps: { rows: 2 },
@@ -44,6 +44,6 @@ export const positionFormSchema: FieldConfig[] = [
   {
     name: 'is_active',
     type: 'switch',
-    labelKey: 'field.position.isActive',
+    labelKey: 'common.enabled',
   },
 ];

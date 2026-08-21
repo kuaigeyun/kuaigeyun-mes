@@ -93,7 +93,7 @@ const ProductionCostPage: React.FC<ProductionCostPageProps> = ({ embedded = fals
       { title: t('app.kuaicaiwu.costCommon.col.materialCode'), dataIndex: 'material_code' },
       { title: t('app.kuaicaiwu.costCommon.col.materialName'), dataIndex: 'material_name' },
       { title: t('app.kuaicaiwu.costCommon.col.sourceType'), dataIndex: 'source_type' },
-      { title: t('app.kuaicaiwu.costCommon.col.quantity'), dataIndex: 'quantity' },
+      { title: t('common.quantity'), dataIndex: 'quantity' },
       { title: t('app.kuaicaiwu.costCommon.col.materialCost'), dataIndex: 'material_cost' },
       { title: t('app.kuaicaiwu.productionCost.col.processingCost'), dataIndex: 'labor_cost' },
       { title: t('app.kuaicaiwu.costCommon.col.manufacturingCost'), dataIndex: 'manufacturing_cost' },
@@ -182,7 +182,7 @@ const ProductionCostPage: React.FC<ProductionCostPageProps> = ({ embedded = fals
         />
         <ProFormDigit
           name="quantity"
-          label={t('app.kuaicaiwu.costCommon.col.quantity')}
+          label={t('common.quantity')}
           placeholder={t('app.kuaicaiwu.costCommon.field.quantityPlaceholder')}
           rules={[
             { required: true, message: t('app.kuaicaiwu.costCommon.field.quantityRequired') },

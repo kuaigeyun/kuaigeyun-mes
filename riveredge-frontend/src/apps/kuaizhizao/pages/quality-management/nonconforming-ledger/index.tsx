@@ -169,7 +169,7 @@ const NonconformingLedgerPage: React.FC = () => {
           toExport = currentPageData || tableRowsRef.current;
         }
         if (toExport.length === 0) {
-          messageApi.warning(t('app.kuaizhizao.quality.common.messages.exportEmpty'));
+          messageApi.warning(t('common.exportNoData'));
           return;
         }
         const exportRows = toExport.map((row) => ({
@@ -207,8 +207,8 @@ const NonconformingLedgerPage: React.FC = () => {
               { key: 'defect_quantity', title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty') },
               { key: 'defect_reason', title: t('app.kuaizhizao.quality.nc.columns.defectReason') },
               { key: 'downgrade_material_name', title: t('app.kuaizhizao.quality.nc.columns.downgradeMaterial') },
-              { key: 'status', title: t('app.kuaizhizao.quality.common.columns.status') },
-              { key: 'created_at', title: t('app.kuaizhizao.quality.common.columns.createdAt') },
+              { key: 'status', title: t('common.status') },
+              { key: 'created_at', title: t('common.createdAt') },
             ],
           },
         );
@@ -218,7 +218,7 @@ const NonconformingLedgerPage: React.FC = () => {
           error && typeof error === 'object' && 'message' in error
             ? String((error as { message?: string }).message || '')
             : '';
-        messageApi.error(message || t('app.kuaizhizao.quality.common.messages.exportFailed'));
+        messageApi.error(message || t('common.exportFailed'));
       }
     },
     [messageApi, t],
@@ -275,7 +275,7 @@ const NonconformingLedgerPage: React.FC = () => {
   const columns: ProColumns<DefectLedgerItem>[] = useMemo(
     () => alignProColumns<DefectLedgerItem>([
       {
-        title: t('app.kuaizhizao.quality.common.columns.createdAt'),
+        title: t('common.createdAt'),
         dataIndex: 'created_at_range',
         valueType: 'dateRange',
         hideInTable: true,
@@ -283,7 +283,7 @@ const NonconformingLedgerPage: React.FC = () => {
         search: { order: 10 } as ProColumns['search'],
       },
       {
-        title: t('app.kuaizhizao.quality.common.columns.status'),
+        title: t('common.status'),
         key: 'status_search',
         dataIndex: 'status',
         valueType: 'select',
@@ -407,7 +407,7 @@ const NonconformingLedgerPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<DefectLedgerItem>(t),
       {
-        title: t('app.kuaizhizao.quality.common.columns.status'),
+        title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
         fixed: 'right',
@@ -415,7 +415,7 @@ const NonconformingLedgerPage: React.FC = () => {
         render: (_, row) => renderNcLedgerStatusTag(t, row.status),
       },
       {
-        title: t('app.kuaizhizao.quality.common.columns.actions'),
+        title: t('common.actions'),
         key: 'action',
         valueType: 'option',
         fixed: 'right',
@@ -429,7 +429,7 @@ const NonconformingLedgerPage: React.FC = () => {
                 {...rowActionKind('read')}
                 onClick={() => openDetail(row)}
               >
-                {t('app.kuaizhizao.quality.common.actions.detail')}
+                {t('common.detail')}
               </Button>
               {gates.updateDisposition.allowed && (
                 <Button
@@ -565,7 +565,7 @@ const NonconformingLedgerPage: React.FC = () => {
             label={t('app.kuaizhizao.quality.nc.form.ledgerStatus')}
             valueEnum={getQualityNcLedgerStatusValueEnum(t)}
           />
-          <ProFormTextArea name="remarks" label={t('app.kuaizhizao.quality.common.form.remarks')} />
+          <ProFormTextArea name="remarks" label={t('common.remark')} />
           <DocumentAttachmentsField category="nonconforming_ledger_attachments" />
         </FormModalTemplate>
 

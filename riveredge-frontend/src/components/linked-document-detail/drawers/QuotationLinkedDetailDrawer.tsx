@@ -110,7 +110,7 @@ export function QuotationLinkedDetailDrawer({
           render: (_, record) => normalizeUserDisplayName(record.salesman_name) || '-',
         },
         { title: t('app.kuaizhizao.quotation.form.linkedSalesOrder'), dataIndex: 'sales_order_code' },
-        { title: t('app.kuaizhizao.salesOrder.notes'), dataIndex: 'notes', span: 3 },
+        { title: t('common.remark'), dataIndex: 'notes', span: 3 },
       ] as ProDescriptionsItemProps<Quotation>[]),
     [t],
   );
@@ -145,7 +145,7 @@ export function QuotationLinkedDetailDrawer({
       collaborationTitleSuffix={
         contentReady && showNextInTitle ? (
           <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-            {t('components.uniLifecycle.nextStep')}：
+            {t('common.next')}：
             {nextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
           </Typography.Text>
         ) : undefined
@@ -181,7 +181,7 @@ export function QuotationLinkedDetailDrawer({
               { title: t('app.kuaizhizao.quotation.colMaterialCode'), dataIndex: 'material_code', width: 120 },
               { title: t('app.kuaizhizao.quotation.colMaterialName'), dataIndex: 'material_name', width: 140 },
               {
-                title: t('app.kuaizhizao.warehouseOutbound.col.unit'),
+                title: t('common.unit'),
                 dataIndex: 'material_unit',
                 width: 72,
                 render: (v) => <MaterialUnitLabel value={v} />,

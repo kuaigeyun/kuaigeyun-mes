@@ -577,7 +577,7 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
               <InspectionSamplingSpecFields />
             </Form.Item>
           )}
-          <Form.Item name="remarks" label={t('app.kuaizhizao.quality.common.form.remarks')}>
+          <Form.Item name="remarks" label={t('common.remark')}>
             <Input placeholder={t('app.kuaizhizao.quality.plans.stepEditor.placeholder.remarksOptional')} />
           </Form.Item>
         </Form>

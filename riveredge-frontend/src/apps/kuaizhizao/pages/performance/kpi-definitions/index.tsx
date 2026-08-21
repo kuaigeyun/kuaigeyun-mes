@@ -76,13 +76,13 @@ const KpiDefinitionsPage: React.FC = () => {
         is_active: r.is_active !== false,
         formula_json: r.formula_json ? JSON.stringify(r.formula_json, null, 2) : '',
       });
-    }).catch((e: any) => messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed')));
+    }).catch((e: any) => messageApi.error(e?.message || t('common.loadFailed')));
   }, [modalVisible, editId, messageApi, t]);
 
   const detailColumns: ProDescriptionsItemProps<KPIDefinition>[] = useMemo(
     () => [
       { title: t('app.kuaizhizao.performance.common.columns.code'), dataIndex: 'code' },
-      { title: t('app.kuaizhizao.performance.common.columns.name'), dataIndex: 'name' },
+      { title: t('common.name'), dataIndex: 'name' },
       { title: t('app.kuaizhizao.performance.common.columns.weight'), dataIndex: 'weight' },
       {
         title: t('app.kuaizhizao.performance.common.columns.calcType'),
@@ -96,12 +96,12 @@ const KpiDefinitionsPage: React.FC = () => {
         render: (_, r) => (r?.formula_json ? JSON.stringify(r.formula_json) : '-'),
       },
       {
-        title: t('app.kuaizhizao.performance.common.form.active'),
+        title: t('common.enabled'),
         dataIndex: 'is_active',
         render: (_, r) => renderActiveTag(t, r?.is_active !== false),
       },
-      { title: t('app.kuaizhizao.performance.common.columns.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-      { title: t('app.kuaizhizao.performance.common.columns.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+      { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
     ],
     [t],
   );
@@ -117,10 +117,10 @@ const KpiDefinitionsPage: React.FC = () => {
   const handleDelete = async (r: KPIDefinition) => {
     try {
       await employeePerformanceApi.deleteKpiDefinition(r.id);
-      messageApi.success(t('app.kuaizhizao.performance.common.messages.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
+      messageApi.error(e?.message || t('common.deleteFailed'));
     }
   };
   const loadDetail = async (id: number) => {
@@ -130,7 +130,7 @@ const KpiDefinitionsPage: React.FC = () => {
       setDetail(await employeePerformanceApi.getKpiDefinition(id));
     } catch (error) {
       setDetail(null);
-      setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.performance.common.messages.loadFailed')));
+      setDetailError(getApiErrorMessage(error, t('common.loadFailed')));
     } finally {
       setDetailLoading(false);
     }
@@ -153,7 +153,7 @@ const KpiDefinitionsPage: React.FC = () => {
   const columns: ProColumns<KPIDefinition>[] = useMemo(
     () => alignProColumns<KPIDefinition>([
       {
-        title: t('app.kuaizhizao.performance.common.columns.name'),
+        title: t('common.name'),
         key: 'performance_name_code_stacked',
         dataIndex: 'name',
         ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -195,14 +195,14 @@ const KpiDefinitionsPage: React.FC = () => {
         sorter: true,
       },
       {
-        title: t('app.kuaizhizao.performance.common.form.active'),
+        title: t('common.enabled'),
         dataIndex: 'is_active',
         hideInTable: true,
         valueEnum: getPerformanceYesNoValueEnum(t),
       },
       ...buildDocumentAuditColumns<KPIDefinition>(t),
       {
-        title: t('app.kuaizhizao.performance.common.columns.status'),
+        title: t('common.status'),
         dataIndex: 'is_active',
         width: 88,
         minWidth: 88,
@@ -212,7 +212,7 @@ const KpiDefinitionsPage: React.FC = () => {
         render: (_, r) => renderActiveTag(t, r.is_active),
       },
       {
-        title: t('app.kuaizhizao.performance.common.columns.actions'),
+        title: t('common.actions'),
         key: 'action',
         valueType: 'option',
         fixed: 'right',
@@ -221,18 +221,18 @@ const KpiDefinitionsPage: React.FC = () => {
           <Space>
             {kpiPerms.canRead ? (
               <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-                {t('app.kuaizhizao.performance.common.actions.detail')}
+                {t('common.detail')}
               </Button>
             ) : null}
             {kpiPerms.canUpdate ? (
               <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-                {t('app.kuaizhizao.performance.common.actions.edit')}
+                {t('common.edit')}
               </Button>
             ) : null}
             {kpiPerms.canDelete ? (
               <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.kpi.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
                 <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                  {t('app.kuaizhizao.performance.common.actions.delete')}
+                  {t('common.delete')}
                 </Button>
               </Popconfirm>
             ) : null}
@@ -268,7 +268,7 @@ const KpiDefinitionsPage: React.FC = () => {
               const { data, total } = normalizePerformanceListResponse(response);
               return { data: data as KPIDefinition[], success: true, total };
             } catch (e: any) {
-              messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
+              messageApi.error(e?.message || t('common.loadFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
@@ -282,7 +282,7 @@ const KpiDefinitionsPage: React.FC = () => {
               messageApi.success(t('app.kuaizhizao.performance.common.messages.deleteBatchSuccess', { count: keys.length }));
               actionRef.current?.reload();
             } catch (error: any) {
-              messageApi.error(error?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
+              messageApi.error(error?.message || t('common.deleteFailed'));
             }
           }}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.performance.kpi.messages.deleteBatchConfirm', { count })}
@@ -320,10 +320,10 @@ const KpiDefinitionsPage: React.FC = () => {
           };
           if (editId) {
             await employeePerformanceApi.updateKpiDefinition(editId, payload);
-            messageApi.success(t('app.kuaizhizao.performance.common.messages.updateSuccess'));
+            messageApi.success(t('common.updateSuccess'));
           } else {
             await employeePerformanceApi.createKpiDefinition(payload);
-            messageApi.success(t('app.kuaizhizao.performance.common.messages.createSuccess'));
+            messageApi.success(t('common.createSuccess'));
           }
           setModalVisible(false);
           setEditId(null);
@@ -333,7 +333,7 @@ const KpiDefinitionsPage: React.FC = () => {
         width={MODAL_CONFIG.STANDARD_WIDTH}
       >
         <ProFormText name="code" label={t('app.kuaizhizao.performance.common.columns.code')} rules={[{ required: true }]} colProps={{ span: 12 }} disabled={!!editId} />
-        <ProFormText name="name" label={t('app.kuaizhizao.performance.common.columns.name')} rules={[{ required: true }]} colProps={{ span: 12 }} />
+        <ProFormText name="name" label={t('common.name')} rules={[{ required: true }]} colProps={{ span: 12 }} />
         <ProFormDigit name="weight" label={t('app.kuaizhizao.performance.common.columns.weight')} min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
         <ProFormSelect name="calc_type" label={t('app.kuaizhizao.performance.common.columns.calcType')} rules={[{ required: true }]} options={calcTypeOptions} colProps={{ span: 12 }} />
         <ProFormTextArea
@@ -343,7 +343,7 @@ const KpiDefinitionsPage: React.FC = () => {
           fieldProps={{ rows: 4 }}
           placeholder={t('app.kuaizhizao.performance.kpi.form.formulaPlaceholder')}
         />
-        <ProFormSwitch name="is_active" label={t('app.kuaizhizao.performance.common.form.active')} colProps={{ span: 12 }} />
+        <ProFormSwitch name="is_active" label={t('common.enabled')} colProps={{ span: 12 }} />
       </FormModalTemplate>
 
       <PerformanceConfigDetailDrawer

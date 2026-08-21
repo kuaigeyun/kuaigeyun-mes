@@ -117,7 +117,7 @@ const MaintenanceExecutionsPage: React.FC = () => {
         ),
       },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         render: (_, r) => <StatusTag>{r.status ?? '-'}</StatusTag>,
       },
@@ -172,7 +172,7 @@ const MaintenanceExecutionsPage: React.FC = () => {
         search: { order: 11 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         valueType: 'select',
         valueEnum: executionStatusValueEnum,
@@ -260,7 +260,7 @@ const MaintenanceExecutionsPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<MaintenanceExecution>(t),
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
         hideInSearch: true,

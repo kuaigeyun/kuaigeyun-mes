@@ -749,7 +749,7 @@ const AfterSalesTicketsPage: React.FC = () => {
         render: (_, row) => row.existing_ticket_codes || '—',
       },
       {
-        title: t('app.kuaizhizao.afterSalesTicket.colStatus'),
+        title: t('common.status'),
         dataIndex: 'status',
         width: 100,
         align: 'center' as const,
@@ -777,7 +777,7 @@ const AfterSalesTicketsPage: React.FC = () => {
           row.delivery_time ? formatDateTime(row.delivery_time, 'YYYY-MM-DD HH:mm') : '—',
       },
       {
-        title: t('app.kuaizhizao.afterSalesTicket.fieldQuantity'),
+        title: t('common.quantity'),
         dataIndex: 'total_quantity',
         width: 100,
         align: 'right',
@@ -952,7 +952,7 @@ const AfterSalesTicketsPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<AfterSalesTicket>(t),
       {
-        title: t('app.kuaizhizao.afterSalesTicket.colStatus'),
+        title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
         fixed: 'right',
@@ -961,7 +961,7 @@ const AfterSalesTicketsPage: React.FC = () => {
           renderAfterSalesStatusTag(row.status, AFTER_SALES_TICKET_STATUS_COLOR),
       },
       {
-        title: t('app.kuaizhizao.afterSalesTicket.colStatus'),
+        title: t('common.status'),
         dataIndex: 'status',
         hideInTable: true,
         order: 21,
@@ -991,7 +991,7 @@ const AfterSalesTicketsPage: React.FC = () => {
                 icon={<CheckOutlined />}
                 onClick={() => handleCloseTicket(record)}
               >
-                {t('app.kuaizhizao.afterSalesTicket.actionClose')}
+                {t('common.close')}
               </Button>,
             );
           }
@@ -1176,7 +1176,7 @@ const AfterSalesTicketsPage: React.FC = () => {
                     icon={<CheckOutlined />}
                     onClick={() => handleCloseTicket(detailRecord!)}
                   >
-                    {t('app.kuaizhizao.afterSalesTicket.actionClose')}
+                    {t('common.close')}
                   </Button>
                 ),
               },

@@ -162,7 +162,7 @@ const CustomerPoolPage: React.FC = () => {
           { field: 'contactTitle', labelKey: 'field.customer.contactTitle' , options: poolDictOptions.CONTACT_TITLE },
           { field: 'phone', labelKey: 'field.customer.phone' },
           { field: 'email', labelKey: 'field.customer.email' },
-          { field: 'isActive', labelKey: 'field.customer.isActive' , options: [...IMPORT_YES_NO_OPTIONS] },
+          { field: 'isActive', labelKey: 'common.enabled' , options: [...IMPORT_YES_NO_OPTIONS] },
           { field: 'taxRegistrationNo', labelKey: 'field.partner.taxRegistrationNo' },
           { field: 'invoiceTitle', labelKey: 'field.partner.invoiceTitle' },
           { field: 'invoiceAddress', labelKey: 'field.partner.invoiceAddress' },

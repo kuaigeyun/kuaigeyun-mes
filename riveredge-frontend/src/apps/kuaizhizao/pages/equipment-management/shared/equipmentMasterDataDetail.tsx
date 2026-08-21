@@ -25,7 +25,7 @@ export function renderIsActiveTag(t: TFunction, isActive?: boolean) {
 
 export function buildIsActiveDescriptionColumn<T extends { is_active?: boolean }>(
   t: TFunction,
-  titleKey: string,
+  titleKey: string = 'common.enabled',
 ): ProDescriptionsItemProps<T> {
   return {
     title: t(titleKey),

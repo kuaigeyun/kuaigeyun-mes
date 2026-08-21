@@ -191,7 +191,7 @@ const MaterialBorrowsPage: React.FC = () => {
       search: { order: 10 } as ProColumns['search'],
     },
     {
-      title: t('app.kuaizhizao.warehouseOutbound.col.status'),
+      title: t('common.status'),
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: materialBorrowStatusValueEnum,
@@ -300,7 +300,7 @@ const MaterialBorrowsPage: React.FC = () => {
       },
     },
     {
-      title: t('app.kuaizhizao.warehouseOutbound.col.actions'),
+      title: t('common.actions'),
       width: 220,
       fixed: 'right',
       render: (_, record) => {
@@ -426,12 +426,12 @@ const MaterialBorrowsPage: React.FC = () => {
       onOk: async () => {
         try {
           await warehouseApi.materialBorrow.delete(record.id!.toString());
-          messageApi.success(t('app.kuaizhizao.materialBorrow.msg.deleteSuccess'));
+          messageApi.success(t('common.deleteSuccess'));
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.materialBorrow.msg.deleteFailed'));
+          messageApi.error(error.message || t('common.deleteFailed'));
         }
       },
     });
@@ -562,14 +562,14 @@ const MaterialBorrowsPage: React.FC = () => {
           warehouse_name: warehouseName,
         })),
       });
-      messageApi.success(t('app.kuaizhizao.materialBorrow.msg.createSuccess'));
+      messageApi.success(t('common.createSuccess'));
       resetSelectedWarehouseId();
       setCreateModalVisible(false);
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
     } catch (error: any) {
-      if (error.message !== t('app.kuaizhizao.materialBorrow.msg.needValidLinesRule')) messageApi.error(error.message || t('app.kuaizhizao.materialBorrow.msg.createFailed'));
+      if (error.message !== t('app.kuaizhizao.materialBorrow.msg.needValidLinesRule')) messageApi.error(error.message || t('common.createFailed'));
       throw error;
     }
   };
@@ -580,7 +580,7 @@ const MaterialBorrowsPage: React.FC = () => {
     { title: t('app.kuaizhizao.materialBorrow.col.borrower'), dataIndex: 'borrower_name' },
     { title: t('app.kuaizhizao.materialBorrow.col.department'), dataIndex: 'department' },
     {
-      title: t('app.kuaizhizao.warehouseOutbound.col.status'),
+      title: t('common.status'),
       dataIndex: 'status',
       render: (s) => {
         const status = (s as string) || '';
@@ -594,7 +594,7 @@ const MaterialBorrowsPage: React.FC = () => {
     },
     { title: t('app.kuaizhizao.materialBorrow.col.expectedReturnDate'), dataIndex: 'expected_return_date', valueType: 'date' },
     { title: t('app.kuaizhizao.materialBorrow.col.borrowTime'), dataIndex: 'borrow_time', valueType: 'dateTime' },
-    { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes', span: 3 },
+    { title: t('common.remark'), dataIndex: 'notes', span: 3 },
   ]), [t]);
 
   const detailCollaboration = useMemo(() => {
@@ -664,7 +664,7 @@ const MaterialBorrowsPage: React.FC = () => {
                 items = rawData.filter((d: MaterialBorrow) => d.id != null && keys.map(String).includes(String(d.id)));
               }
               if (items.length === 0) {
-                messageApi.warning(t('app.kuaizhizao.materialBorrow.msg.noExportData'));
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               await downloadRecordsAsXlsx(
@@ -673,7 +673,7 @@ const MaterialBorrowsPage: React.FC = () => {
               );
               messageApi.success(t('app.kuaizhizao.materialBorrow.msg.exportSuccess', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || t('app.kuaizhizao.materialBorrow.msg.exportFailed'));
+              messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
           showSyncButton
@@ -735,11 +735,11 @@ const MaterialBorrowsPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
                   { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
-                  { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'material_unit', width: 60 },
+                  { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
                   { title: t('app.kuaizhizao.warehouseOutbound.col.location'), dataIndex: 'location_code', width: 120, render: (v) => v || '-' },
                   { title: t('app.kuaizhizao.materialBorrow.col.borrowQty'), dataIndex: 'borrow_quantity', width: 100, align: 'right' },
                   { title: t('app.kuaizhizao.materialBorrow.col.returnedQty'), dataIndex: 'returned_quantity', width: 100, align: 'right' },
-                  { title: t('app.kuaizhizao.warehouseOutbound.col.status'), dataIndex: 'status', width: 80 },
+                  { title: t('common.status'), dataIndex: 'status', width: 80 },
                 ]}
                 dataSource={borrowDetail.items}
                 pagination={false}
@@ -879,7 +879,7 @@ const MaterialBorrowsPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.warehouseOutbound.col.unit'),
+                    title: t('common.unit'),
                     dataIndex: 'material_unit',
                     width: 80,
                     render: (_: any, __: any, index: number) => (
@@ -924,18 +924,18 @@ const MaterialBorrowsPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.warehouseOutbound.field.quantity'),
+                    title: t('common.quantity'),
                     dataIndex: 'borrow_quantity',
                     width: 100,
                     align: 'right' as const,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'borrow_quantity']} rules={[{ required: true, message: t('app.kuaizhizao.warehouseOutbound.field.required') }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
-                        <InputNumber placeholder={t('app.kuaizhizao.warehouseOutbound.field.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
+                        <InputNumber placeholder={t('common.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
                       </AntForm.Item>
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.warehouseOutbound.col.actions'),
+                    title: t('common.actions'),
                     width: 60,
                     render: (_: any, __: any, index: number) => (
                       <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
@@ -980,7 +980,7 @@ const MaterialBorrowsPage: React.FC = () => {
           </AntForm.Item>
         </div>
         <DocumentAttachmentsField category="material_borrow_attachments" />
-        <ProFormTextArea name="notes" label={t('app.kuaizhizao.common.fieldNotes')} placeholder={t('app.kuaizhizao.warehouseOutbound.field.optional')} fieldProps={{ rows: 2 }} />
+        <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('app.kuaizhizao.warehouseOutbound.field.optional')} fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
 
       <SyncFromDatasetModal

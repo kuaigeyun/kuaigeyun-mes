@@ -351,7 +351,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
         render: (_, r) => String(getMaterialField(r as Record<string, unknown>, 'specification') ?? ''),
       },
       {
-        title: t('app.kuaizhizao.salesOrder.unit'),
+        title: t('common.unit'),
         width: 64,
         render: (_, r) => {
           const val = String(getMaterialField(r as Record<string, unknown>, 'baseUnit') ?? '');

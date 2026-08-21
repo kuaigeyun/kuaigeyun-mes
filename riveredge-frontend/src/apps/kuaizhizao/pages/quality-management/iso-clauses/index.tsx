@@ -202,8 +202,8 @@ const IsoClausesPage: React.FC = () => {
           { key: 'standard_code', title: t('app.kuaizhizao.quality.isoClauses.standardCode') },
           { key: 'clause_code', title: t('app.kuaizhizao.quality.isoClauses.clauseCode') },
           { key: 'title', title: t('app.kuaizhizao.quality.isoClauses.title') },
-          { key: 'description', title: t('field.defectType.description') },
-          { key: 'is_active', title: t('field.defectType.isActive') },
+          { key: 'description', title: t('common.remark') },
+          { key: 'is_active', title: t('common.enabled') },
         ],
       });
     } catch (error) {
@@ -216,9 +216,9 @@ const IsoClausesPage: React.FC = () => {
       { title: t('app.kuaizhizao.quality.isoClauses.standardCode'), dataIndex: 'standard_code' },
       { title: t('app.kuaizhizao.quality.isoClauses.clauseCode'), dataIndex: 'clause_code' },
       { title: t('app.kuaizhizao.quality.isoClauses.title'), dataIndex: 'title' },
-      { title: t('field.defectType.description'), dataIndex: 'description' },
+      { title: t('common.remark'), dataIndex: 'description' },
       {
-        title: t('field.defectType.isActive'),
+        title: t('common.enabled'),
         dataIndex: 'is_active',
         render: (_, record) =>
           renderMasterActiveTag(
@@ -269,7 +269,7 @@ const IsoClausesPage: React.FC = () => {
             },
           },
           {
-            title: t('field.defectType.isActive'),
+            title: t('common.enabled'),
             dataIndex: 'is_active',
             width: 100,
             uniTableKeepWidth: true,
@@ -443,7 +443,7 @@ const IsoClausesPage: React.FC = () => {
             />
           </Col>
           <Col span={24}>
-            <ProFormTextArea name="description" label={t('field.defectType.description')} />
+            <ProFormTextArea name="description" label={t('common.remark')} />
           </Col>
           <Col span={12}>
             <ProFormItem
@@ -460,7 +460,7 @@ const IsoClausesPage: React.FC = () => {
             <ProFormDigit name="sort_order" label={t('app.kuaizhizao.quality.isoClauses.sortOrder')} min={0} />
           </Col>
           <Col span={12}>
-            <ProFormSwitch name="is_active" label={t('field.defectType.isActive')} />
+            <ProFormSwitch name="is_active" label={t('common.enabled')} />
           </Col>
         </Row>
       </FormModalTemplate>

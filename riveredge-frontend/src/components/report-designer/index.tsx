@@ -208,7 +208,7 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
   const handleSave = useCallback(() => {
     if (onSave) {
       onSave(config);
-      message.success(t('components.reportDesigner.saveSuccess'));
+      message.success(t('common.saveSuccess'));
     }
   }, [config, onSave]);
 

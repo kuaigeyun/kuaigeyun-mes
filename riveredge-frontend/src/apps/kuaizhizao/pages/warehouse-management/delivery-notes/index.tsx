@@ -193,7 +193,7 @@ const DeliveryNotesPage: React.FC = () => {
       search: { order: 10 } as ProColumns['search'],
     },
     {
-      title: t('app.kuaizhizao.warehouseOutbound.col.status'),
+      title: t('common.status'),
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: deliveryNoticeStatusValueEnum,
@@ -322,7 +322,7 @@ const DeliveryNotesPage: React.FC = () => {
       },
     },
     {
-      title: t('app.kuaizhizao.warehouseOutbound.col.actions'),
+      title: t('common.actions'),
       width: 200,
       fixed: 'right',
       render: (_, record) => {
@@ -343,7 +343,7 @@ const DeliveryNotesPage: React.FC = () => {
             {moreItems.length > 0 && (
               <Dropdown menu={{ items: moreItems }} trigger={['click']}>
                 <Button {...rowActionKind('display')} {...rowActionLabelKeep()} icon={<MoreOutlined />}>
-                  {t('app.kuaizhizao.deliveryNote.action.more')}
+                  {t('common.more')}
                 </Button>
               </Dropdown>
             )}
@@ -428,12 +428,12 @@ const DeliveryNotesPage: React.FC = () => {
       onOk: async () => {
         try {
           await deliveryNoticeApi.delete(record.id!.toString());
-          messageApi.success(t('app.kuaizhizao.deliveryNote.msg.deleteSuccess'));
+          messageApi.success(t('common.deleteSuccess'));
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.deliveryNote.msg.deleteFailed'));
+          messageApi.error(error.message || t('common.deleteFailed'));
         }
       },
     });
@@ -666,13 +666,13 @@ const DeliveryNotesPage: React.FC = () => {
           unit_price: Number(it.unit_price) || 0,
         })),
       });
-      messageApi.success(t('app.kuaizhizao.deliveryNote.msg.createSuccess'));
+      messageApi.success(t('common.createSuccess'));
       setCreateModalVisible(false);
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.deliveryNote.msg.createFailed'));
+      messageApi.error(error.message || t('common.createFailed'));
       throw error;
     }
   };
@@ -710,13 +710,13 @@ const DeliveryNotesPage: React.FC = () => {
           unit_price: Number(it.unit_price) || 0,
         })),
       });
-      messageApi.success(t('app.kuaizhizao.deliveryNote.msg.updateSuccess'));
+      messageApi.success(t('common.updateSuccess'));
       setEditModalVisible(false);
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.deliveryNote.msg.updateFailed'));
+      messageApi.error(error.message || t('common.updateFailed'));
       throw error;
     }
   };
@@ -739,7 +739,7 @@ const DeliveryNotesPage: React.FC = () => {
     { title: t('app.kuaizhizao.deliveryNote.col.trackingNumber'), dataIndex: 'tracking_number' },
     { title: t('app.kuaizhizao.deliveryNote.field.shippingAddress'), dataIndex: 'shipping_address', span: 3 },
     {
-      title: t('app.kuaizhizao.warehouseOutbound.col.status'),
+      title: t('common.status'),
       dataIndex: 'status',
       render: (s) => {
         const c = STATUS_MAP[(s as string) || ''] || { text: (s as string) || '-', color: 'default' };
@@ -747,15 +747,15 @@ const DeliveryNotesPage: React.FC = () => {
       },
     },
     { title: t('app.kuaizhizao.deliveryNote.col.sentAt'), dataIndex: 'sent_at', valueType: 'dateTime' },
-    { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes', span: 3 },
+    { title: t('common.remark'), dataIndex: 'notes', span: 3 },
   ]), [t]);
 
   const detailItemColumns = useMemo(
     () => [
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'material_unit', width: 60 },
-      { title: t('app.kuaizhizao.warehouseOutbound.field.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right' as const , render: formatQuantity },
+      { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
+      { title: t('common.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right' as const , render: formatQuantity },
       { title: t('app.kuaizhizao.warehouseOutbound.field.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' as const },
       { title: t('app.kuaizhizao.warehouseOutbound.field.amount'), dataIndex: 'total_amount', width: 100, align: 'right' as const },
     ],
@@ -798,7 +798,7 @@ const DeliveryNotesPage: React.FC = () => {
         ),
       },
       {
-        title: t('app.kuaizhizao.salesOrder.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'suggested_quantity',
         width: 100,
         align: 'right' as const,
@@ -1038,7 +1038,7 @@ const DeliveryNotesPage: React.FC = () => {
                   ),
                 },
                 {
-                  title: t('app.kuaizhizao.warehouseOutbound.col.unit'),
+                  title: t('common.unit'),
                   dataIndex: 'material_unit',
                   width: 80,
                   render: (_: any, __: any, index: number) => (
@@ -1064,13 +1064,13 @@ const DeliveryNotesPage: React.FC = () => {
                   ),
                 },
                 {
-                  title: t('app.kuaizhizao.warehouseOutbound.field.quantity'),
+                  title: t('common.quantity'),
                   dataIndex: 'notice_quantity',
                   width: 100,
                   align: 'right' as const,
                   render: (_: any, __: any, index: number) => (
                     <AntForm.Item name={[index, 'notice_quantity']} rules={[{ required: true, message: t('app.kuaizhizao.warehouseOutbound.field.required') }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
-                      <InputNumber placeholder={t('app.kuaizhizao.warehouseOutbound.field.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
+                      <InputNumber placeholder={t('common.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
                     </AntForm.Item>
                   ),
                 },
@@ -1086,7 +1086,7 @@ const DeliveryNotesPage: React.FC = () => {
                   ),
                 },
                 {
-                  title: t('app.kuaizhizao.warehouseOutbound.col.actions'),
+                  title: t('common.actions'),
                   width: 60,
                   render: (_: any, __: any, index: number) => (
                     <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
@@ -1131,7 +1131,7 @@ const DeliveryNotesPage: React.FC = () => {
         </AntForm.Item>
       </div>
       <DocumentAttachmentsField category="delivery_notice_attachments" />
-      <ProFormTextArea name="notes" label={t('app.kuaizhizao.common.fieldNotes')} placeholder={t('app.kuaizhizao.warehouseOutbound.field.optional')} fieldProps={{ rows: 2 }} />
+      <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('app.kuaizhizao.warehouseOutbound.field.optional')} fieldProps={{ rows: 2 }} />
     </>
   );
 
@@ -1236,7 +1236,7 @@ const DeliveryNotesPage: React.FC = () => {
                 items = rawData.filter((d: DeliveryNotice) => d.id != null && keys.includes(d.id));
               }
               if (items.length === 0) {
-                messageApi.warning(t('app.kuaizhizao.deliveryNote.msg.noExportData'));
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               await downloadRecordsAsXlsx(
@@ -1245,7 +1245,7 @@ const DeliveryNotesPage: React.FC = () => {
               );
               messageApi.success(t('app.kuaizhizao.deliveryNote.msg.exportSuccess', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || t('app.kuaizhizao.deliveryNote.msg.exportFailed'));
+              messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
           showSyncButton

@@ -233,11 +233,11 @@ const EquipmentDetailPage: React.FC = () => {
         dataIndex: 'is_active',
         render: (_, record) => (
           <Tag color={record.is_active ? 'success' : 'default'}>
-            {record.is_active ? t('app.kuaizhizao.equipment.isActiveEnabled') : t('app.kuaizhizao.equipment.isActiveDisabled')}
+            {record.is_active ? t('common.enabled') : t('app.kuaizhizao.equipment.isActiveDisabled')}
           </Tag>
         ),
       },
-      { title: t('app.kuaizhizao.equipment.fieldDescription'), dataIndex: 'description', span: 2 },
+      { title: t('common.remark'), dataIndex: 'description', span: 2 },
       { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
       { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
     ],
@@ -603,7 +603,7 @@ const EquipmentDetailPage: React.FC = () => {
               <Button icon={<UploadOutlined />}>{t('app.kuaizhizao.equipment.upload')}</Button>
             </Upload>
           </Form.Item>
-          <Form.Item name="remark" label={t('app.kuaizhizao.equipment.traceColRemark')}>
+          <Form.Item name="remark" label={t('common.remark')}>
             <Input.TextArea rows={2} placeholder={t('app.kuaizhizao.equipment.phRemark')} />
           </Form.Item>
         </Form>

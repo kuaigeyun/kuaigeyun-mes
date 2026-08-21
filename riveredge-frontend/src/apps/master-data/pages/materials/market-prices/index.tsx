@@ -322,7 +322,7 @@ const MarketPricesPage: React.FC = () => {
                 icon={<EditOutlined />}
                 onClick={() => handleEdit(record)}
               >
-                {t('field.customField.edit')}
+                {t('common.edit')}
               </Button>
               <Popconfirm
                 key="delete"
@@ -331,7 +331,7 @@ const MarketPricesPage: React.FC = () => {
                 onConfirm={() => handleDelete(record)}
               >
                 <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                  {t('field.customField.delete')}
+                  {t('common.delete')}
                 </Button>
               </Popconfirm>
             </Space>
@@ -364,7 +364,7 @@ const MarketPricesPage: React.FC = () => {
         }}
         search={{ labelWidth: 'auto' }}
         showCreateButton={perms.canUpdate}
-        createButtonText={t('pages.system.create')}
+        createButtonText={t('common.create')}
         onCreate={handleCreate}
         showDeleteButton={perms.canUpdate}
         onDelete={handleBatchDelete}

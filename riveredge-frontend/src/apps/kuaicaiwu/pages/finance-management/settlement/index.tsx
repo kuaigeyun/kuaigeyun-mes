@@ -535,7 +535,7 @@ const SettlementPage: React.FC = () => {
               setSettleAmount(0);
             }}
           >
-            {t(`${P}.select`)}
+            {t('common.select')}
           </a>,
         ],
       },
@@ -642,7 +642,7 @@ const SettlementPage: React.FC = () => {
               setSettleAmount(0);
             }}
           >
-            {t(`${P}.select`)}
+            {t('common.select')}
           </a>,
         ],
       },

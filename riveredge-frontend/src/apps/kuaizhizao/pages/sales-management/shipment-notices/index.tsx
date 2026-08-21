@@ -138,11 +138,11 @@ const ShipmentNoticesPage: React.FC = () => {
         t,
         [
           { field: 'material', labelKey: 'app.kuaizhizao.shipmentNotice.import.materialCode', aliases: ['产品编号'] },
-          { field: 'quantity', labelKey: 'app.kuaizhizao.shipmentNotice.import.quantity', aliases: ['数量'] },
+          { field: 'quantity', labelKey: 'common.quantity', aliases: ['数量'] },
           { field: 'unitPrice', labelKey: 'app.kuaizhizao.shipmentNotice.import.unitPrice', aliases: ['单价'] },
           { field: 'name', labelKey: 'app.kuaizhizao.shipmentNotice.import.materialName', aliases: ['产品名称'] },
           { field: 'specification', labelKey: 'app.kuaizhizao.shipmentNotice.import.specification', aliases: ['规格'] },
-          { field: 'unit', labelKey: 'app.kuaizhizao.shipmentNotice.import.unit', aliases: ['单位'], options: materialUnitImportOptions },
+          { field: 'unit', labelKey: 'common.unit', aliases: ['单位'], options: materialUnitImportOptions },
         ],
         [
           t('app.kuaizhizao.shipmentNotice.importExample.materialCode'),
@@ -587,7 +587,7 @@ const ShipmentNoticesPage: React.FC = () => {
         hideInTable: true,
       },
       {
-        title: t('app.kuaizhizao.shipmentNotice.import.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'notice_quantity',
         width: 120,
         align: 'right',
@@ -945,7 +945,7 @@ const ShipmentNoticesPage: React.FC = () => {
         ),
       },
       {
-        title: t('app.kuaizhizao.salesOrder.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'suggested_quantity',
         width: 100,
         align: 'right' as const,
@@ -1227,7 +1227,7 @@ const ShipmentNoticesPage: React.FC = () => {
     { title: t('app.kuaizhizao.shipmentNotice.plannedShipDate'), dataIndex: 'planned_ship_date', valueType: 'date' },
     { title: t('app.kuaizhizao.salesOrder.shippingAddress'), dataIndex: 'shipping_address', span: 3 },
     { title: t('app.kuaizhizao.shipmentNotice.notifiedAt'), dataIndex: 'notified_at', valueType: 'dateTime' },
-    { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes', span: 3 },
+    { title: t('common.remark'), dataIndex: 'notes', span: 3 },
   ]);
 
   /** 将 Excel 行写入当前表单「通知明细」（新建弹窗内导入或列表工具栏导入共用） */
@@ -1442,23 +1442,23 @@ const ShipmentNoticesPage: React.FC = () => {
                   ),
                 },
                 {
-                  title: t('app.kuaizhizao.salesOrder.unit'),
+                  title: t('common.unit'),
                   dataIndex: 'material_unit',
                   width: 80,
                   render: (_: any, __: any, index: number) => (
                     <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                      <Input placeholder={t('app.kuaizhizao.salesOrder.unit')} size="small" />
+                      <Input placeholder={t('common.unit')} size="small" />
                     </AntForm.Item>
                   ),
                 },
                 {
-                  title: t('app.kuaizhizao.salesOrder.quantity'),
+                  title: t('common.quantity'),
                   dataIndex: 'notice_quantity',
                   width: 100,
                   align: 'right' as const,
                   render: (_: any, __: any, index: number) => (
                     <AntForm.Item name={[index, 'notice_quantity']} rules={[{ required: true, message: t('common.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.shipmentNotice.quantityPositive') }]} style={{ margin: 0 }}>
-                      <InputNumber placeholder={t('app.kuaizhizao.salesOrder.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
+                      <InputNumber placeholder={t('common.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
                     </AntForm.Item>
                   ),
                 },
@@ -1483,7 +1483,7 @@ const ShipmentNoticesPage: React.FC = () => {
         }}
       />
       <ShipmentNoticeFormSummary />
-      <ProFormTextArea name="notes" label={t('app.kuaizhizao.common.fieldNotes')} placeholder={t('app.kuaizhizao.common.fieldNotes')} fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
+      <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('common.remark')} fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
       <DocumentAttachmentsField category="shipment_notice_attachments" />
     </>
   );
@@ -1548,8 +1548,8 @@ const ShipmentNoticesPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
-                  { title: t('app.kuaizhizao.salesOrder.unit'), dataIndex: 'material_unit', width: 60 },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
+                  { title: t('common.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' },
                 ]}
               />
@@ -1558,7 +1558,7 @@ const ShipmentNoticesPage: React.FC = () => {
         </AntForm.Item>
         <ShipmentNoticeFormSummary />
       </ProFormItem>
-      <ProFormTextArea name="notes" label={t('app.kuaizhizao.common.fieldNotes')} placeholder={t('app.kuaizhizao.common.fieldNotes')} fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
+      <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('common.remark')} fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
       <DocumentAttachmentsField category="shipment_notice_attachments" />
     </>
   );
@@ -1980,8 +1980,8 @@ const ShipmentNoticesPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
-                  { title: t('app.kuaizhizao.salesOrder.unit'), dataIndex: 'material_unit', width: 60 },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
+                  { title: t('common.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' },
                   { title: t('app.kuaizhizao.shipmentNotice.amount'), dataIndex: 'total_amount', width: 100, align: 'right' },
                 ]}
@@ -2131,7 +2131,7 @@ const ShipmentNoticesPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colShipQty'), dataIndex: 'notice_quantity', width: 90, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },

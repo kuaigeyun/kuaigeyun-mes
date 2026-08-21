@@ -69,7 +69,7 @@ export const FinishedGoodsReceiptFqcReviewModal: React.FC<Props> = ({
       dataIndex: 'fqc_required',
       width: 100,
       render: (v: boolean) =>
-        v ? t('app.kuaizhizao.warehouseInbound.fqcReview.requiredYes') : t('app.kuaizhizao.warehouseInbound.fqcReview.requiredNo'),
+        v ? t('common.yes') : t('common.no'),
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.fqcReview.colPlan'),

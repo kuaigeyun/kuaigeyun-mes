@@ -29,7 +29,7 @@ REPO = Path(__file__).resolve().parents[2]
 MANIFESTS = REPO / "riveredge-backend" / "src" / "apps"
 LOCALES = REPO / "riveredge-frontend" / "src" / "locales"
 
-REQUIRED_LOCALES = ("zh-CN", "zh-Hant", "en-US", "ja-JP", "vi-VN")
+REQUIRED_LOCALES = ("zh-CN", "zh-Hant", "en-US", "ja-JP", "vi-VN", "lo-LA")
 KEY_RE = re.compile(r"^[a-z][a-z0-9_-]*(\.[a-zA-Z0-9_-]+)+$")
 ENTRY_RE = re.compile(r"^\s*'([^']+)'\s*:", re.M)
 

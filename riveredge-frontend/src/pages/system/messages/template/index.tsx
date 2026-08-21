@@ -150,10 +150,10 @@ const MessageTemplateListPage: React.FC = () => {
   const handleDelete = async (record: MessageTemplate) => {
     try {
       await deleteMessageTemplate(record.uuid);
-      messageApi.success(t('pages.system.messageConfig.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.messageConfig.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -172,7 +172,7 @@ const MessageTemplateListPage: React.FC = () => {
           successCount++;
         } catch (error: any) {
           failCount++;
-          errors.push(error.message || t('pages.system.messageConfig.deleteFailed'));
+          errors.push(error.message || t('common.deleteFailed'));
         }
       }
 
@@ -217,7 +217,7 @@ const MessageTemplateListPage: React.FC = () => {
           variables: variables,
           is_active: values.is_active,
         } as UpdateMessageTemplateData);
-        messageApi.success(t('pages.system.messageConfig.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createMessageTemplate({
           name: values.name,
@@ -229,13 +229,13 @@ const MessageTemplateListPage: React.FC = () => {
           variables: variables,
           is_active: values.is_active,
         } as CreateMessageTemplateData);
-        messageApi.success(t('pages.system.messageConfig.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
       
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.messageConfig.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -293,7 +293,7 @@ const MessageTemplateListPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('pages.system.messageConfig.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -308,14 +308,14 @@ const MessageTemplateListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('pages.system.applications.enabled'), status: 'Success' },
-        false: { text: t('pages.system.applications.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) =>
-        renderSystemActiveTag(t, record.is_active, 'pages.system.applications.enabled', 'pages.system.applications.disabled'),
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
-      title: t('pages.system.messageConfig.createdAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       minWidth: 180,
@@ -326,17 +326,17 @@ const MessageTemplateListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('pages.system.messageConfig.actions'),
+      title: t('common.actions'),
       key: 'action',
       valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => [
             <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
-              {t('pages.system.messageConfig.view')}
+              {t('common.view')}
             </Button>,
             <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
-              {t('pages.system.messageConfig.edit')}
+              {t('common.edit')}
             </Button>,
             <Popconfirm {...rowActionKind('delete')}
               key="delete"
@@ -344,7 +344,7 @@ const MessageTemplateListPage: React.FC = () => {
               onConfirm={() => handleDelete(record)}
             >
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('pages.system.messageConfig.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>,
           ],
@@ -411,7 +411,7 @@ const MessageTemplateListPage: React.FC = () => {
       ) : '-',
     },
     {
-      title: t('pages.system.messageTemplate.remark'),
+      title: t('common.remark'),
       dataIndex: 'description',
       render: (_, r) => resolvePresetMessageTemplateDescription(r, t),
     },
@@ -419,10 +419,10 @@ const MessageTemplateListPage: React.FC = () => {
       title: t('pages.system.messageConfig.activeStatus'),
       dataIndex: 'is_active',
       render: (_, r) =>
-        renderSystemActiveTag(t, r.is_active, 'pages.system.applications.enabled', 'pages.system.applications.disabled'),
+        renderSystemActiveTag(t, r.is_active, 'common.enabled', 'common.disabled'),
     },
-    { title: t('pages.system.messageConfig.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-    { title: t('pages.system.messageConfig.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
 
   return (
@@ -479,7 +479,7 @@ const MessageTemplateListPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         showDeleteButton
         onDelete={handleBatchDelete}
-        deleteButtonText={t('pages.system.messageTemplate.batchDeleteButton')}
+        deleteButtonText={t('common.batchDelete')}
         deleteConfirmTitle={t('pages.system.messageConfig.batchDeleteTitle')}
         deleteConfirmDescription={(c) => t('pages.system.messageConfig.batchDeleteDescription', { count: c })}
         toolBarRender={() => [
@@ -513,7 +513,7 @@ const MessageTemplateListPage: React.FC = () => {
               items = items.filter((d: any) => keys.includes(d.uuid));
             }
             if (items.length === 0) {
-              messageApi.warning(t('pages.system.messageTemplate.noDataExport'));
+              messageApi.warning(t('common.exportNoData'));
               return;
             }
             await downloadRecordsAsXlsx(
@@ -522,7 +522,7 @@ const MessageTemplateListPage: React.FC = () => {
             );
             messageApi.success(t('pages.system.messageTemplate.exportSuccessCount', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || t('pages.system.messageTemplate.exportFailed'));
+              messageApi.error(error?.message || t('common.exportFailed'));
           }
         }}
         pagination={{
@@ -629,7 +629,7 @@ const MessageTemplateListPage: React.FC = () => {
 
             <ProFormTextArea
               name="description"
-              label={t('pages.system.messageTemplate.remark')}
+              label={t('common.remark')}
               placeholder={t('pages.system.messageTemplate.descriptionPlaceholder')}
               fieldProps={{
                 rows: 2,
@@ -638,7 +638,7 @@ const MessageTemplateListPage: React.FC = () => {
             />
             <ProFormSwitch
               name="is_active"
-              label={t('pages.system.messageTemplate.enabled')}
+              label={t('common.enabled')}
               colProps={{ span: 12 }}
             />
       </FormModalTemplate>

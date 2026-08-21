@@ -230,7 +230,7 @@ const LogisticsTrackingPage: React.FC = () => {
             <Form.Item name="business_direction" label={t('app.kuaizhizao.logistics.field.businessDirection')}>
               <Select allowClear style={{ width: 140 }} options={directionOptions} />
             </Form.Item>
-            <Form.Item name="status_in" label={t('app.kuaizhizao.logistics.field.status')}>
+            <Form.Item name="status_in" label={t('common.status')}>
               <Select
                 mode="multiple"
                 allowClear

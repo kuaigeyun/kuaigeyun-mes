@@ -190,7 +190,7 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
         ...(effective.notes
           ? [
               {
-                title: t('app.kuaizhizao.warehouseInbound.field.notes'),
+                title: t('common.remark'),
                 dataIndex: 'notes' as const,
                 span: 3,
               },
@@ -237,7 +237,7 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
               render: (v, row) => formatQuantity(v ?? row.return_quantity ?? row.quantity),
             },
             {
-              title: t('app.kuaizhizao.warehouseInbound.col.unit'),
+              title: t('common.unit'),
               dataIndex: 'material_unit',
               width: 60,
               render: (v, row) => String(v ?? row.unit ?? '-'),
@@ -311,7 +311,7 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
       collaborationTitleSuffix={
         contentReady && nextSteps?.length ? (
           <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-            {t('components.uniLifecycle.nextStep')}：
+            {t('common.next')}：
             {nextSteps.join(t('components.uniLifecycle.nextStepSeparator'))}
           </Typography.Text>
         ) : undefined

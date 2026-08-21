@@ -303,7 +303,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ taskType, onRefresh }) => {
               <Descriptions.Item label={t('pages.personal.tasks.taskContentLabel')}>
                 {selectedTask.content || t('pages.personal.tasks.noContent')}
               </Descriptions.Item>
-              <Descriptions.Item label={t('pages.personal.tasks.status')}>
+              <Descriptions.Item label={t('common.status')}>
                 {getStatusTag(selectedTask.status)}
               </Descriptions.Item>
               <Descriptions.Item label={t('pages.personal.tasks.submittedAt')}>

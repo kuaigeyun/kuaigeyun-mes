@@ -460,8 +460,8 @@ const InitialDataImportPage: React.FC = () => {
   const copyErrors = () => {
     const text = lastErrors.map((e) => `${e.row}\t${e.error}`).join('\n');
     navigator.clipboard.writeText(text).then(
-      () => messageApi.success(t('app.kuaizhizao.initialData.copiedErrors')),
-      () => messageApi.error(t('app.kuaizhizao.initialData.copyFailed'))
+      () => messageApi.success(t('common.copySuccess')),
+      () => messageApi.error(t('common.copyFailed'))
     );
   };
 
@@ -700,12 +700,12 @@ const InitialDataImportPage: React.FC = () => {
 
         <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
           {currentStep > 0 && currentStep < 3 && (
-            <Button onClick={handlePrev}>{t('app.kuaizhizao.initialData.prev')}</Button>
+            <Button onClick={handlePrev}>{t('common.previous')}</Button>
           )}
           {currentStep < 3 && (
             <Tooltip title={nextDisabledHint || undefined}>
               <Button type="primary" disabled={!canGoNext} onClick={handleNext}>
-                {t('app.kuaizhizao.initialData.next')}
+                {t('common.next')}
               </Button>
             </Tooltip>
           )}

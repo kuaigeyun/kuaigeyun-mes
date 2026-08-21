@@ -581,7 +581,7 @@ const TraceabilityPage: React.FC<TraceabilityPageProps> = ({
                   render: (v) => (v ? renderQualityQualityStatusTag(t, String(v)) : '-'),
                 },
                 {
-                  title: t('app.kuaizhizao.quality.traceability.remark'),
+                  title: t('common.remark'),
                   dataIndex: 'remark',
                   ellipsis: true,
                   render: (v) => formatTraceEventRemark(v != null ? String(v) : undefined, t),

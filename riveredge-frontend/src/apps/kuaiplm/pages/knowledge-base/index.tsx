@@ -329,7 +329,7 @@ const KnowledgeBasePage: React.FC = () => {
       messageApi.success(t('app.kuaiplm.knowledgeBase.messages.saveSuccess'));
       await loadArticles(selectedSpaceId, searchKeyword);
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaiplm.common.messages.saveFailed'));
+      messageApi.error(error?.message || t('common.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -343,7 +343,7 @@ const KnowledgeBasePage: React.FC = () => {
       okButtonProps: { danger: true },
       onOk: async () => {
         await deleteKbArticle(activeArticle.id!);
-        messageApi.success(t('app.kuaiplm.common.messages.deleteSuccess'));
+        messageApi.success(t('common.deleteSuccess'));
         setActiveArticle(null);
         setSelectedArticleId(undefined);
         setSearchParams((prev) => {
@@ -591,7 +591,7 @@ const KnowledgeBasePage: React.FC = () => {
                   onClick={() => void handleDeleteCurrent()}
                   disabled={!activeArticle?.id}
                 >
-                  {t('app.kuaiplm.common.actions.delete')}
+                  {t('common.delete')}
                 </Button>
                 <Button
                   type="primary"
@@ -600,7 +600,7 @@ const KnowledgeBasePage: React.FC = () => {
                   onClick={() => void handleSave()}
                   disabled={!activeArticle?.id}
                 >
-                  {t('app.kuaiplm.common.actions.save')}
+                  {t('common.save')}
                 </Button>
               </>
             ),

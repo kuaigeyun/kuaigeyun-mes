@@ -108,12 +108,12 @@ export const InstallExecutionDetailDrawer: React.FC<InstallExecutionDetailDrawer
           valueType: 'dateTime',
         },
         {
-          title: t('app.kuaizhizao.installExecution.field.status'),
+          title: t('common.status'),
           dataIndex: 'status',
           render: (_, row) => renderAfterSalesStatusTag(row.status, AFTER_SALES_INSTALL_STATUS_COLOR),
         },
         {
-          title: t('app.kuaizhizao.installExecution.field.notes'),
+          title: t('common.remark'),
           dataIndex: 'notes',
           span: 3,
         },
@@ -164,7 +164,7 @@ export const InstallExecutionDetailDrawer: React.FC<InstallExecutionDetailDrawer
                   dataIndex: 'actual_at',
                   render: (value) => (value ? formatDateTimeBySiteSetting(String(value)) : '-'),
                 },
-                { title: t('app.kuaizhizao.installExecution.stageNotes'), dataIndex: 'notes' },
+                { title: t('common.remark'), dataIndex: 'notes' },
               ]}
             />
           ) : (
@@ -213,7 +213,7 @@ export const InstallExecutionDetailDrawer: React.FC<InstallExecutionDetailDrawer
                   />
                 ),
               },
-              { title: t('app.kuaizhizao.installExecution.taskNotes'), dataIndex: 'notes' },
+              { title: t('common.remark'), dataIndex: 'notes' },
             ]}
           />
         ) : (
@@ -244,7 +244,7 @@ export const InstallExecutionDetailDrawer: React.FC<InstallExecutionDetailDrawer
                 dataIndex: 'occurred_at',
                 render: (value) => (value ? formatDateTimeBySiteSetting(String(value)) : '-'),
               },
-              { title: t('app.kuaizhizao.installExecution.costDescription'), dataIndex: 'description' },
+              { title: t('common.remark'), dataIndex: 'description' },
             ]}
           />
         ) : (

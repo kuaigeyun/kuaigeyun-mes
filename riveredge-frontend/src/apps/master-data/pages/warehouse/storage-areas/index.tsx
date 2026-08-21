@@ -116,7 +116,7 @@ const StorageAreasPage: React.FC = () => {
           { field: 'name', required: true, labelKey: 'app.master-data.storageAreas.name' },
           { field: 'warehouseCode', required: true, labelKey: 'app.master-data.storageAreas.warehouseCode' },
           { field: 'description', labelKey: 'app.master-data.storageAreas.description' },
-          { field: 'isActive', labelKey: 'field.storageArea.isActive', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
+          { field: 'isActive', labelKey: 'common.enabled', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
         ],
         [
           t('app.master-data.storageAreas.importExample.code'),
@@ -485,7 +485,7 @@ const StorageAreasPage: React.FC = () => {
       }
 
       // 构建 CSV 内容
-      const headers = [t('app.master-data.storageAreas.code'), t('app.master-data.storageAreas.name'), t('app.master-data.storageAreas.warehouse'), t('app.master-data.warehouses.description'), t('app.master-data.warehouses.status'), t('app.master-data.warehouses.createTime')];
+      const headers = [t('app.master-data.storageAreas.code'), t('app.master-data.storageAreas.name'), t('app.master-data.storageAreas.warehouse'), t('common.remark'), t('common.status'), t('common.createdAt')];
       const rows = exportData.map(item => {
         const warehouse = warehouses.find(w => w.id === item.warehouseId);
         return [
@@ -508,7 +508,7 @@ const StorageAreasPage: React.FC = () => {
       downloadFile(csvContent, filename, 'text/csv;charset=utf-8;');
       messageApi.success(t('app.master-data.exportSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.exportFailed'));
+      messageApi.error(error.message || t('common.exportFailed'));
     }
   };
 
@@ -622,7 +622,7 @@ const StorageAreasPage: React.FC = () => {
       render: (_, record) => formatWarehouseDisplay(record),
     },
     {
-      title: t('app.master-data.warehouses.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -630,7 +630,7 @@ const StorageAreasPage: React.FC = () => {
     // 插入自定义字段列
     ...customFieldColumns,
     {
-      title: t('app.master-data.warehouses.status'),
+      title: t('common.status'),
       dataIndex: 'isActive',
       hideInTable: true,
       order: 20,
@@ -639,7 +639,7 @@ const StorageAreasPage: React.FC = () => {
       fieldProps: { allowClear: true },
     },
     {
-      title: t('app.master-data.warehouses.status'),
+      title: t('common.status'),
       dataIndex: 'isActive',
       width: 88,
       minWidth: 88,
@@ -654,7 +654,7 @@ const StorageAreasPage: React.FC = () => {
     },
     ...masterCrudCreatedUpdatedColumns<StorageArea>(t),
     {
-      title: t('app.master-data.warehouses.action'),
+      title: t('common.actions'),
       key: 'action',
       valueType: 'option',
       fixed: 'right',
@@ -664,14 +664,14 @@ const StorageAreasPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            {t('field.customField.view')}
+            {t('common.view')}
           </Button>
           <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            {t('field.customField.edit')}
+            {t('common.edit')}
           </Button>
           <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.storageAreas.deleteConfirm')}
             description={t('app.master-data.storageAreas.deleteDescription')}
@@ -683,7 +683,7 @@ const StorageAreasPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              {t('field.customField.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -711,23 +711,23 @@ const StorageAreasPage: React.FC = () => {
       render: (_, record) => formatWarehouseDisplay(record),
     },
     {
-      title: t('app.master-data.warehouses.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
     },
     {
-      title: t('app.master-data.warehouses.status'),
+      title: t('common.status'),
       dataIndex: 'isActive',
       render: (_, record) => {
         return renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled');
       },
     },
     {
-      title: t('app.master-data.warehouses.createTime'),
+      title: t('common.createdAt'),
       dataIndex: 'createdAt',
       valueType: 'dateTime',
     },
     {
-      title: t('app.master-data.warehouses.updateTime'),
+      title: t('common.updatedAt'),
       dataIndex: 'updatedAt',
       valueType: 'dateTime',
     },

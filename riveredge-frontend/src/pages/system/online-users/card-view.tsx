@@ -190,7 +190,7 @@ const CardView: React.FC = () => {
             }}
             loading={loading}
           >
-            {t('pages.system.onlineUsers.refresh')}
+            {t('common.refresh')}
           </Button>,
         ]}
       >
@@ -311,7 +311,7 @@ const CardView: React.FC = () => {
                       <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
                         <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.onlineUsers.statusLabel')}：</Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>{t('common.status')}：</Text>
                             <Tag color={statusInfo.status === 'success' ? 'success' : statusInfo.status === 'warning' ? 'warning' : 'default'}>
                               {statusInfo.text}
                             </Tag>
@@ -394,7 +394,7 @@ const CardView: React.FC = () => {
             <Descriptions.Item label={t('pages.system.onlineUsers.onlineDuration')}>
               {getOnlineDuration(currentUserInfo)}
             </Descriptions.Item>
-            <Descriptions.Item label={t('pages.system.onlineUsers.statusLabel')}>
+            <Descriptions.Item label={t('common.status')}>
               <Tag color={getUserStatus(currentUserInfo).status === 'success' ? 'success' : getUserStatus(currentUserInfo).status === 'warning' ? 'warning' : 'default'}>
                 {getUserStatus(currentUserInfo).text}
               </Tag>

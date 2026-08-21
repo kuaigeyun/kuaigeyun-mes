@@ -52,6 +52,7 @@ import {
   renderSalesReviewRiskMarkerTag,
   renderSalesReviewStatusTag,
   renderSalesReviewUrgencyMarkerTag,
+  translateSalesReviewStatus,
 } from '../../../utils/salesReviewPresentation';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
@@ -679,7 +680,7 @@ const SalesReviewsPage: React.FC = () => {
             : '-',
       },
       {
-        title: t('app.kuaizhizao.salesOrder.status'),
+        title: t('common.status'),
         dataIndex: 'status',
         width: 100,
         align: 'center' as const,
@@ -821,7 +822,7 @@ const SalesReviewsPage: React.FC = () => {
             },
           },
           {
-            title: t('app.kuaizhizao.salesReview.colStatus'),
+            title: t('common.status'),
             dataIndex: 'status',
             key: 'lifecycle',
             fixed: 'right',
@@ -953,13 +954,13 @@ const SalesReviewsPage: React.FC = () => {
             },
           },
           {
-            title: t('app.kuaizhizao.salesReview.colStatus'),
+            title: t('common.status'),
             dataIndex: 'status',
             render: (_, row) => renderSalesReviewStatusTag(t, row.status),
           },
           { title: t('app.kuaizhizao.salesReview.colSalesman'), dataIndex: 'salesman_name' },
           { title: t('app.kuaizhizao.salesReview.colSalesOrder'), dataIndex: 'sales_order_code' },
-          { title: t('app.kuaizhizao.salesReview.fieldRemarks'), dataIndex: 'remarks', span: 3 },
+          { title: t('common.remark'), dataIndex: 'remarks', span: 3 },
     ];
     return alignDescriptionColumns(cols as any, GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK) as ProDescriptionsItemProps<SalesReview>[];
   }, [t]);
@@ -969,7 +970,7 @@ const SalesReviewsPage: React.FC = () => {
       { title: t('app.kuaizhizao.salesReview.colMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
       { title: t('app.kuaizhizao.salesReview.colMaterialName'), dataIndex: 'material_name', ellipsis: true },
       {
-        title: t('app.kuaizhizao.salesReview.colQuantity'),
+        title: t('common.quantity'),
         dataIndex: 'quantity',
         width: 90,
         align: 'right' as const,
@@ -1084,10 +1085,12 @@ const SalesReviewsPage: React.FC = () => {
               onChange={(v) => setStatusFilter(String(v))}
               options={[
                 { label: t('app.kuaizhizao.salesReview.filterAll'), value: 'all' },
-                { label: t('app.kuaizhizao.salesReview.status.draft'), value: 'draft' },
-                { label: t('app.kuaizhizao.salesReview.status.reviewing'), value: 'reviewing' },
-                { label: t('app.kuaizhizao.salesReview.status.passed'), value: 'passed' },
-                { label: t('app.kuaizhizao.salesReview.status.rejected'), value: 'rejected' },
+                { label: translateSalesReviewStatus(t, 'draft'), value: 'draft' },
+                { label: translateSalesReviewStatus(t, 'reviewing'), value: 'reviewing' },
+                { label: translateSalesReviewStatus(t, 'passed'), value: 'passed' },
+                { label: translateSalesReviewStatus(t, 'rejected'), value: 'rejected' },
+                { label: translateSalesReviewStatus(t, 'closed'), value: 'closed' },
+                { label: translateSalesReviewStatus(t, 'cancelled'), value: 'cancelled' },
               ]}
             />
           }
@@ -1203,7 +1206,7 @@ const SalesReviewsPage: React.FC = () => {
               );
               message.success(t('app.kuaizhizao.salesReview.exportSuccess', { count: items.length }));
             } catch (err) {
-              message.error(getApiErrorMessage(err, t('app.kuaizhizao.salesReview.exportFailed')));
+              message.error(getApiErrorMessage(err, t('common.exportFailed')));
             }
           }}
           request={async (params, sort, _filter, searchFormValues) => {

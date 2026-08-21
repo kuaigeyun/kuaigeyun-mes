@@ -696,7 +696,7 @@ const OutboundPage: React.FC = () => {
           }
         } catch (e: unknown) {
           const err = e as { message?: string; response?: { data?: { detail?: string } } };
-          messageApi.error(err?.message || err?.response?.data?.detail || t('app.kuaizhizao.warehouseOutbound.msg.deleteFailed'));
+          messageApi.error(err?.message || err?.response?.data?.detail || t('common.deleteFailed'));
         }
       },
     });
@@ -781,7 +781,7 @@ const OutboundPage: React.FC = () => {
         },
       },
       { title: t('app.kuaizhizao.warehouseOutbound.col.pickedQty'), dataIndex: 'picked_quantity', width: 100, align: 'right' as const },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'material_unit', width: 60 },
+      { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
       {
         title: t('app.kuaizhizao.warehouseOutbound.col.warehouseName'),
         dataIndex: 'warehouse_name',
@@ -853,9 +853,9 @@ const OutboundPage: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
       { title: t('app.kuaizhizao.warehouseOutbound.col.deliveryQty'), dataIndex: 'delivery_quantity', width: 100, align: 'right' as const },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'material_unit', width: 60 },
+      { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
       { title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'), dataIndex: 'batch_number', width: 100 },
-      { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes' },
+      { title: t('common.remark'), dataIndex: 'notes' },
     ],
     [t],
   );
@@ -897,7 +897,7 @@ const OutboundPage: React.FC = () => {
       render: (_, record) => renderOutboundIssueTypeMarkerTag(t, record.outbound_type),
     },
     {
-      title: t('app.kuaizhizao.warehouseOutbound.col.status'),
+      title: t('common.status'),
       dataIndex: 'status',
       hideInTable: true,
       valueType: 'select',
@@ -1020,7 +1020,7 @@ const OutboundPage: React.FC = () => {
     ...salesDeliveryCustomFieldColumns,
     ...productionPickingCustomFieldColumns,
     {
-      title: t('app.kuaizhizao.warehouseOutbound.col.actions'),
+      title: t('common.actions'),
       width: 300,
       fixed: 'right',
       hideInSearch: true,
@@ -1416,7 +1416,7 @@ const OutboundPage: React.FC = () => {
               rows={2}
               value={editablePickingNotes}
               onChange={(e) => setEditablePickingNotes(e.target.value)}
-              placeholder={t('app.kuaizhizao.common.fieldNotes')}
+              placeholder={t('common.remark')}
             />
           ) : undefined
         }

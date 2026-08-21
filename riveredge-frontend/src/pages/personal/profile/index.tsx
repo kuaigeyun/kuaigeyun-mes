@@ -706,7 +706,7 @@ const UserProfilePage: React.FC = () => {
         }
       }
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.personal.profile.updateFailed'));
+      messageApi.error(error.message || t('common.updateFailed'));
     } finally {
       setLoading(false);
     }

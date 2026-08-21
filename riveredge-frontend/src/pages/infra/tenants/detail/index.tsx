@@ -145,7 +145,7 @@ const SuperAdminTenantDetail: React.FC = () => {
       breadcrumbRender={false}
       extra={
         <Space>
-          <Button onClick={() => navigate(-1)}>{t('pages.infra.tenant.back')}</Button>
+          <Button onClick={() => navigate(-1)}>{t('common.back')}</Button>
           {isInactive && (
             <>
               <Button type="primary" onClick={handleApprove}>
@@ -183,7 +183,7 @@ const SuperAdminTenantDetail: React.FC = () => {
             dataIndex: 'domain',
           },
           {
-            title: t('pages.infra.tenant.status'),
+            title: t('common.status'),
             dataIndex: 'status',
             render: (_, record) => {
               const statusInfo = statusTagMap[record.status] ?? { color: 'default', text: record.status ?? '-' };
@@ -199,6 +199,17 @@ const SuperAdminTenantDetail: React.FC = () => {
             },
           },
           {
+            title: t('pages.infra.tenant.formSensitiveWordEnabled'),
+            dataIndex: 'sensitive_word_enabled',
+            render: (_, record) => (
+              <Tag color={record.sensitive_word_enabled ? 'success' : 'default'}>
+                {record.sensitive_word_enabled
+                  ? t('pages.infra.tenant.sensitiveWordEnabledOn')
+                  : t('pages.infra.tenant.sensitiveWordEnabledOff')}
+              </Tag>
+            ),
+          },
+          {
             title: t('pages.infra.tenant.maxUsers'),
             dataIndex: 'max_users',
           },
@@ -212,12 +223,12 @@ const SuperAdminTenantDetail: React.FC = () => {
             valueType: 'dateTime',
           },
           {
-            title: t('pages.infra.tenant.createdAt'),
+            title: t('common.createdAt'),
             dataIndex: 'created_at',
             valueType: 'dateTime',
           },
           {
-            title: t('pages.infra.tenant.updatedAt'),
+            title: t('common.updatedAt'),
             dataIndex: 'updated_at',
             valueType: 'dateTime',
           },

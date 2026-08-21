@@ -119,8 +119,8 @@ const StorageLocationsPage: React.FC = () => {
             required: true,
             labelKey: 'app.master-data.storageLocations.storageAreaCode',
           },
-          { field: 'description', labelKey: 'app.master-data.warehouses.description' },
-          { field: 'isActive', labelKey: 'field.storageLocation.isActive', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
+          { field: 'description', labelKey: 'common.remark' },
+          { field: 'isActive', labelKey: 'common.enabled', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
         ],
         [
           t('app.master-data.storageLocations.importExample.code'),
@@ -488,7 +488,7 @@ const StorageLocationsPage: React.FC = () => {
       }
 
       // 构建 CSV 内容
-      const headers = [t('app.master-data.storageLocations.code'), t('app.master-data.storageLocations.name'), t('app.master-data.storageLocations.storageArea'), t('app.master-data.warehouses.description'), t('app.master-data.warehouses.status'), t('app.master-data.warehouses.createTime')];
+      const headers = [t('app.master-data.storageLocations.code'), t('app.master-data.storageLocations.name'), t('app.master-data.storageLocations.storageArea'), t('common.remark'), t('common.status'), t('common.createdAt')];
       const rows = exportData.map(item => {
         const storageArea = storageAreas.find(s => s.id === item.storageAreaId);
         return [
@@ -511,7 +511,7 @@ const StorageLocationsPage: React.FC = () => {
       downloadFile(csvContent, filename, 'text/csv;charset=utf-8;');
       messageApi.success(t('app.master-data.exportSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.exportFailed'));
+      messageApi.error(error.message || t('common.exportFailed'));
     }
   };
 
@@ -625,7 +625,7 @@ const StorageLocationsPage: React.FC = () => {
       render: (_, record) => formatStorageAreaDisplay(record),
     },
     {
-      title: t('app.master-data.warehouses.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -633,7 +633,7 @@ const StorageLocationsPage: React.FC = () => {
     // 插入自定义字段列
     ...customFieldColumns,
     {
-      title: t('app.master-data.warehouses.status'),
+      title: t('common.status'),
       dataIndex: 'isActive',
       hideInTable: true,
       order: 20,
@@ -642,7 +642,7 @@ const StorageLocationsPage: React.FC = () => {
       fieldProps: { allowClear: true },
     },
     {
-      title: t('app.master-data.warehouses.status'),
+      title: t('common.status'),
       dataIndex: 'isActive',
       width: 88,
       minWidth: 88,
@@ -657,7 +657,7 @@ const StorageLocationsPage: React.FC = () => {
     },
     ...masterCrudCreatedUpdatedColumns<StorageLocation>(t),
     {
-      title: t('app.master-data.warehouses.action'),
+      title: t('common.actions'),
       key: 'action',
       valueType: 'option',
       fixed: 'right',
@@ -667,14 +667,14 @@ const StorageLocationsPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            {t('field.customField.view')}
+            {t('common.view')}
           </Button>
           <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            {t('field.customField.edit')}
+            {t('common.edit')}
           </Button>
           <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.storageLocations.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
@@ -685,7 +685,7 @@ const StorageLocationsPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              {t('field.customField.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -713,23 +713,23 @@ const StorageLocationsPage: React.FC = () => {
       render: (_, record) => formatStorageAreaDisplay(record),
     },
     {
-      title: t('app.master-data.warehouses.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
     },
     {
-      title: t('app.master-data.warehouses.status'),
+      title: t('common.status'),
       dataIndex: 'isActive',
       render: (_, record) => {
         return renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled');
       },
     },
     {
-      title: t('app.master-data.warehouses.createTime'),
+      title: t('common.createdAt'),
       dataIndex: 'createdAt',
       valueType: 'dateTime',
     },
     {
-      title: t('app.master-data.warehouses.updateTime'),
+      title: t('common.updatedAt'),
       dataIndex: 'updatedAt',
       valueType: 'dateTime',
     },

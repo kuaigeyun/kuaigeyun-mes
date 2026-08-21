@@ -502,7 +502,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
       }
       setImportOpen(false);
     } catch (e: unknown) {
-      messageApi.error(e instanceof Error ? e.message : t('app.common.operationFailed'));
+      messageApi.error(e instanceof Error ? e.message : t('common.operationFailed'));
     } finally {
       setImporting(false);
     }
@@ -559,7 +559,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
       onVariantsChanged?.();
       await loadVariants();
     } catch (e: any) {
-      messageApi.error(e?.message || t('app.common.operationFailed'));
+      messageApi.error(e?.message || t('common.operationFailed'));
     } finally {
       setMigrating(false);
     }
@@ -593,7 +593,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
           await loadVariants();
           onVariantsChanged?.();
         } catch (e: any) {
-          messageApi.error(e?.message || t('app.common.operationFailed'));
+          messageApi.error(e?.message || t('common.operationFailed'));
         } finally {
           setGenerating(false);
         }
@@ -644,7 +644,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
         await loadVariants();
         onVariantsChanged?.();
       } catch (e: any) {
-        messageApi.error(e?.message || t('app.common.operationFailed'));
+        messageApi.error(e?.message || t('common.operationFailed'));
       }
       return;
     }
@@ -666,11 +666,11 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
     if (!record.uuid) return;
     try {
       await materialApi.delete(record.uuid);
-      messageApi.success(t('app.common.deleteSuccess', '删除成功'));
+      messageApi.success(t('common.deleteSuccess', '删除成功'));
       await loadVariants();
       onVariantsChanged?.();
     } catch (e: any) {
-      messageApi.error(e?.message || t('app.common.operationFailed'));
+      messageApi.error(e?.message || t('common.operationFailed'));
     }
   };
 
@@ -703,12 +703,12 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
       width: 72,
       render: (v: boolean) => (
         <Tag color={v ? 'success' : 'default'}>
-          {v ? t('app.master-data.materials.enabled') : t('app.master-data.materials.disabled')}
+          {v ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
     {
-      title: t('app.common.actions', '操作'),
+      title: t('common.actions', '操作'),
       key: 'actions',
       width: 72,
       fixed: 'right',

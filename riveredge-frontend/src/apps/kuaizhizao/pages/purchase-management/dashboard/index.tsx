@@ -308,7 +308,7 @@ const PurchaseDashboard: React.FC = () => {
               value: trendType,
               options: [
                 { label: t('app.kuaizhizao.purchaseDashboard.trendAmount'), value: 'amount' },
-                { label: t('app.kuaizhizao.purchaseDashboard.trendQuantity'), value: 'quantity' },
+                { label: t('common.quantity'), value: 'quantity' },
               ],
               onChange: (v) => setTrendType(v as 'amount' | 'quantity'),
             }}

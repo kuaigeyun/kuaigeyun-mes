@@ -81,7 +81,7 @@ export const SparePartRequisitionDetailDrawer: React.FC<SparePartRequisitionDeta
           valueType: 'dateTime',
         },
         {
-          title: t('app.kuaizhizao.afterSalesService.sparePartRequisition.field.status'),
+          title: t('common.status'),
           dataIndex: 'status',
           render: (_, row) => renderAfterSalesStatusTag(row.status, AFTER_SALES_REVIEW_STATUS_COLOR),
         },
@@ -91,7 +91,7 @@ export const SparePartRequisitionDetailDrawer: React.FC<SparePartRequisitionDeta
           span: 3,
         },
         {
-          title: t('app.kuaizhizao.afterSalesService.sparePartRequisition.field.notes'),
+          title: t('common.remark'),
           dataIndex: 'notes',
           span: 3,
         },
@@ -128,7 +128,7 @@ export const SparePartRequisitionDetailDrawer: React.FC<SparePartRequisitionDeta
             columns={[
               { title: t('app.kuaizhizao.afterSalesTicket.fieldMaterialCode'), dataIndex: 'material_code' },
               { title: t('app.kuaizhizao.afterSalesTicket.fieldMaterialName'), dataIndex: 'material_name' },
-              { title: t('app.kuaizhizao.afterSalesTicket.fieldQuantity'), dataIndex: 'quantity', align: 'right' },
+              { title: t('common.quantity'), dataIndex: 'quantity', align: 'right' },
               { title: t('app.kuaizhizao.afterSalesTicket.fieldLineNotes'), dataIndex: 'notes' },
             ]}
           />

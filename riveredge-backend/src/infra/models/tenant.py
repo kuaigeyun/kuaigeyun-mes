@@ -53,6 +53,7 @@ class Tenant(BaseModel):
         settings: 组织配置（JSONB 存储）
         max_users: 最大用户数限制
         max_storage: 最大存储空间限制（MB）
+        sensitive_word_enabled: 是否开启敏感词控制（默认关闭）
         expires_at: 过期时间（可选）
         created_at: 创建时间
         updated_at: 更新时间
@@ -76,6 +77,10 @@ class Tenant(BaseModel):
     is_subtenant = fields.BooleanField(default=False, description="是否子组织")
     max_users = fields.IntField(default=10, description="最大用户数限制")
     max_storage = fields.IntField(default=1024, description="最大存储空间限制（MB）")
+    sensitive_word_enabled = fields.BooleanField(
+        default=False,
+        description="是否开启敏感词控制（默认关闭）",
+    )
     expires_at = fields.DatetimeField(null=True, description="过期时间（可选）")
 
     class Meta:

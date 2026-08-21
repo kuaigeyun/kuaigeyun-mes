@@ -392,7 +392,7 @@ const InventoryAlertPage: React.FC = () => {
 
       ruleActionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.warehouseCommon.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     }
   };
@@ -487,14 +487,14 @@ const InventoryAlertPage: React.FC = () => {
   }), [t]);
 
   const thresholdTypeEnum = useMemo(() => ({
-    quantity: { text: t('app.kuaizhizao.inventoryAlert.thresholdTypeQuantity') },
+    quantity: { text: t('common.quantity') },
     percentage: { text: t('app.kuaizhizao.inventoryAlert.thresholdTypePercentage') },
     days: { text: t('app.kuaizhizao.inventoryAlert.thresholdTypeDays') },
   }), [t]);
 
   const enabledEnum = useMemo(() => ({
-    true: { text: t('app.kuaizhizao.warehouseCommon.enabled'), status: 'success' as const },
-    false: { text: t('app.kuaizhizao.warehouseCommon.disabled'), status: 'default' as const },
+    true: { text: t('common.enabled'), status: 'success' as const },
+    false: { text: t('common.disabled'), status: 'default' as const },
   }), [t]);
 
   /**
@@ -543,7 +543,7 @@ const InventoryAlertPage: React.FC = () => {
       valueEnum: alertLevelEnum,
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       hideInTable: true,
       valueEnum: alertStatusEnum,
@@ -559,7 +559,7 @@ const InventoryAlertPage: React.FC = () => {
     },
     ...buildDocumentAuditColumns<InventoryAlert>(t),
     {
-      title: t('app.kuaizhizao.warehouseCommon.colActions'),
+      title: t('common.actions'),
       width: 200,
       fixed: 'right',
       render: (_, record) => (
@@ -653,7 +653,7 @@ const InventoryAlertPage: React.FC = () => {
     },
     ...buildDocumentAuditColumns<InventoryAlertRule>(t),
     {
-      title: t('app.kuaizhizao.warehouseCommon.colActions'),
+      title: t('common.actions'),
       width: 200,
       fixed: 'right',
       render: (_, record) => (
@@ -665,8 +665,8 @@ const InventoryAlertPage: React.FC = () => {
             <Popconfirm
               title={t('app.kuaizhizao.inventoryAlert.deleteRuleConfirm')}
               onConfirm={() => handleDeleteRule(record)}
-              okText={t('app.kuaizhizao.warehouseCommon.confirm')}
-              cancelText={t('app.kuaizhizao.warehouseCommon.cancel')}
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
             >
               <Button {...rowActionKind('delete')} />
             </Popconfirm>
@@ -712,7 +712,7 @@ const InventoryAlertPage: React.FC = () => {
       dataIndex: 'alert_message',
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       valueEnum: alertStatusEnum,
     },
@@ -1036,7 +1036,7 @@ const InventoryAlertPage: React.FC = () => {
               alert_type === 'expired'
                 ? [{ label: t('app.kuaizhizao.inventoryAlert.thresholdTypeDays'), value: 'days' }]
                 : [
-                    { label: t('app.kuaizhizao.inventoryAlert.thresholdTypeQuantity'), value: 'quantity' },
+                    { label: t('common.quantity'), value: 'quantity' },
                     { label: t('app.kuaizhizao.inventoryAlert.thresholdTypePercentage'), value: 'percentage' },
                   ];
             const previewValue =
@@ -1106,7 +1106,7 @@ const InventoryAlertPage: React.FC = () => {
         </ProFormDependency>
         <ProFormTextArea
           name="remarks"
-          label={t('app.kuaizhizao.warehouseCommon.colRemarks')}
+          label={t('common.remark')}
           placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')}
           fieldProps={{ rows: 3 }}
         />

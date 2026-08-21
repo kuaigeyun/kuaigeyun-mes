@@ -620,7 +620,7 @@ const RolesPermissionsPage: React.FC = () => {
   const handleDeleteRole = useCallback(async (role: Role) => {
     try {
       await deleteRole(role.uuid);
-      messageApi.success(t('pages.system.roles.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
 
       // 如果删除的是当前选中的角色，清空选择
       setSelectedRole((prev) => {
@@ -644,7 +644,7 @@ const RolesPermissionsPage: React.FC = () => {
         setRolesLoading(false);
       }
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.roles.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   }, [messageApi, t]);
 
@@ -713,10 +713,10 @@ const RolesPermissionsPage: React.FC = () => {
                 </Tag>
               )}
             {role.is_system && <Tag color="default">{t('pages.system.roles.system')}</Tag>}
-            {!role.is_active && <Tag color="default">{t('pages.system.roles.disabled')}</Tag>}
+            {!role.is_active && <Tag color="default">{t('common.disabled')}</Tag>}
           </Space>
           <Space size={4} className="role-tree-row__actions" onClick={(e) => e.stopPropagation()}>
-            <Tooltip title={t('pages.system.roles.edit')}>
+            <Tooltip title={t('common.edit')}>
               <Button
                 type="text"
                 size="small"
@@ -736,7 +736,7 @@ const RolesPermissionsPage: React.FC = () => {
               }}
               disabled={role.is_system}
             >
-              <Tooltip title={t('pages.system.roles.delete')}>
+              <Tooltip title={t('common.delete')}>
                 <Button
                   type="text"
                   danger
@@ -1719,7 +1719,7 @@ const RolesPermissionsPage: React.FC = () => {
                     }
                   }}
                 >
-                  {t('pages.system.roles.refresh')}
+                  {t('common.refresh')}
                 </Button>
                 <Button
                   icon={permissionTreeExpandedKeys.length > 0 ? <NodeCollapseOutlined /> : <NodeExpandOutlined />}
@@ -2473,7 +2473,7 @@ const RolesPermissionsPage: React.FC = () => {
               ellipsis: { showTitle: true },
             },
             {
-              title: t('field.role.description'),
+              title: t('common.remark'),
               dataIndex: 'description',
               ellipsis: true,
               render: (_: unknown, row: PresetRoleItem) => resolvePresetRoleDescription(row, t),

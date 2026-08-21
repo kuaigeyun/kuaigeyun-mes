@@ -43,7 +43,7 @@ const FormTemplateModalBody: React.FC<Props> = ({ editing }) => {
         </Form.Item>
       </Col>
       <Col span={12}>
-        <Form.Item name="is_active" label={t('app.kuaioa.common.enabled')} valuePropName="checked">
+        <Form.Item name="is_active" label={t('common.enabled')} valuePropName="checked">
           <Switch />
         </Form.Item>
       </Col>
@@ -58,7 +58,7 @@ const FormTemplateModalBody: React.FC<Props> = ({ editing }) => {
         </Form.Item>
       </Col>
       <Col span={24}>
-        <Form.Item name="description" label={t('app.kuaioa.common.description')}>
+        <Form.Item name="description" label={t('common.remark')}>
           <Input.TextArea rows={2} />
         </Form.Item>
       </Col>

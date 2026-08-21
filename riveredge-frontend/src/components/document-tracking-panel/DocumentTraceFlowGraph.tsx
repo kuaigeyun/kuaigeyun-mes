@@ -694,7 +694,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
             </Button>
           </Tooltip>
           <Button type="default" size="small" icon={<ReloadOutlined />} loading={loading} onClick={reloadTrace}>
-            {t('components.documentRelationGraph.refresh')}
+            {t('common.refresh')}
           </Button>
         </Space>
       ) : null}
@@ -737,7 +737,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
               loading={loading}
               onClick={reloadTrace}
             >
-              {t('components.documentRelationGraph.refresh')}
+              {t('common.refresh')}
             </Button>
             <Tooltip
               title={

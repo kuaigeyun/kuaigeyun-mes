@@ -284,7 +284,7 @@ const ToolRepairsPage: React.FC = () => {
       ),
     },
     {
-      title: t(`${P}.line.remark`),
+      title: t('common.remark'),
       dataIndex: 'remark',
       width: 140,
       render: (_: unknown, row: RepairLine, index: number) => (
@@ -322,12 +322,12 @@ const ToolRepairsPage: React.FC = () => {
       { title: t(`${P}.col.urgency`), dataIndex: 'urgency' },
       { title: t(`${P}.col.executor`), dataIndex: 'applicant_name' },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
       { title: t(`${P}.col.completionResult`), dataIndex: 'completion_result' },
-      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+      { title: t('common.remark'), dataIndex: 'remark', span: 2 },
     ],
     [t],
   );
@@ -342,7 +342,7 @@ const ToolRepairsPage: React.FC = () => {
         width: 80,
         render: (_, row) => (row.executed ? t('common.yes') : t('common.no')),
       },
-      { title: t(`${P}.line.remark`), dataIndex: 'remark', width: 140 },
+      { title: t('common.remark'), dataIndex: 'remark', width: 140 },
     ],
     [t],
   );
@@ -365,7 +365,7 @@ const ToolRepairsPage: React.FC = () => {
         search: { order: 11 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         valueType: 'select',
         valueEnum: workflowStatusValueEnum,
@@ -400,7 +400,7 @@ const ToolRepairsPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<ToolRepair>(t),
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
         width: 90,
@@ -452,7 +452,7 @@ const ToolRepairsPage: React.FC = () => {
                   void handleSubmitDoc(record);
                 }}
               >
-                {t(`${P}.action.submit`)}
+                {t('common.submit')}
               </Button>
             )}
             {canAudit && record.status === '已提交' && (
@@ -656,7 +656,7 @@ const ToolRepairsPage: React.FC = () => {
             <ProFormTextArea name="fault_description" label={t(`${P}.col.faultDescription`)} fieldProps={{ rows: 2 }} />
           </Col>
           <Col span={24}>
-            <ProFormTextArea name="remark" label={t(`${P}.form.remark`)} fieldProps={{ rows: 2 }} />
+            <ProFormTextArea name="remark" label={t('common.remark')} fieldProps={{ rows: 2 }} />
           </Col>
         </Row>
         {previewLines.length > 0 && (

@@ -213,7 +213,7 @@ export function buildQualityInspectionListSearchColumns<T extends object>(
       search: { order: 10 } as ProColumns['search'],
     },
     {
-      title: t('app.kuaizhizao.quality.common.columns.updatedAt'),
+      title: t('common.updatedAt'),
       dataIndex: 'created_at_range',
       valueType: 'dateRange',
       hideInTable: true,
@@ -221,7 +221,7 @@ export function buildQualityInspectionListSearchColumns<T extends object>(
       search: { order: 11 } as ProColumns['search'],
     },
     {
-      title: t('app.kuaizhizao.quality.common.columns.status'),
+      title: t('common.status'),
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: inspectionDocStatusValueEnum,

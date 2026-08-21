@@ -177,7 +177,7 @@ const TemplateSelectPage: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.init.templateSelect.enabledStatus')}：</Text>
                 <Tag color={template.is_active ? 'success' : 'default'}>
-                  {template.is_active ? t('pages.init.templateSelect.enabled') : t('pages.init.templateSelect.disabled')}
+                  {template.is_active ? t('common.enabled') : t('common.disabled')}
                 </Tag>
               </div>
             </Space>
@@ -267,7 +267,7 @@ const TemplateSelectPage: React.FC = () => {
                 {selectedTemplate.industry}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label={t('pages.init.templateSelect.description')} span={2}>
+            <Descriptions.Item label={t('common.remark')} span={2}>
               {selectedTemplate.description || t('pages.init.templateSelect.none')}
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.init.templateSelect.usageCountLabel')}>
@@ -275,7 +275,7 @@ const TemplateSelectPage: React.FC = () => {
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.init.templateSelect.enabledStatusLabel')}>
               <Tag color={selectedTemplate.is_active ? 'success' : 'default'}>
-                {selectedTemplate.is_active ? t('pages.init.templateSelect.enabled') : t('pages.init.templateSelect.disabled')}
+                {selectedTemplate.is_active ? t('common.enabled') : t('common.disabled')}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.init.templateSelect.templateConfig')} span={2}>
@@ -298,7 +298,7 @@ const TemplateSelectPage: React.FC = () => {
         onOk={handleConfirmApply}
         confirmLoading={applying}
         okText={t('pages.init.templateSelect.confirmApply')}
-        cancelText={t('pages.init.templateSelect.cancel')}
+        cancelText={t('common.cancel')}
       >
         {selectedTemplate && (
           <div>

@@ -508,7 +508,7 @@ const InboundPoPullEntryPage: React.FC = () => {
       }
     } catch (e: unknown) {
       const err = e as { message?: string; response?: { data?: { detail?: string } } };
-      messageApi.error(err?.message || err?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.msg.saveFailed'));
+      messageApi.error(err?.message || err?.response?.data?.detail || t('common.saveFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -690,14 +690,14 @@ const InboundPoPullEntryPage: React.FC = () => {
       header={
         <>
           <Space align="center" size={8}>
-            <Button type="text" icon={<ArrowLeftOutlined />} aria-label={t('app.kuaizhizao.warehouseInbound.action.back')} onClick={leavePage} />
+            <Button type="text" icon={<ArrowLeftOutlined />} aria-label={t('common.back')} onClick={leavePage} />
             <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
               {pageTitle}
             </Typography.Title>
           </Space>
           <Space wrap>
             <Button disabled={submitting || loading} onClick={leavePage}>
-              {t('app.kuaizhizao.warehouseInbound.action.cancel')}
+              {t('common.cancel')}
             </Button>
             <Button loading={submitting} disabled={loading} onClick={() => void submit('draft')}>
               {t('app.kuaizhizao.warehouseInbound.action.generateDraft')}
@@ -867,7 +867,7 @@ const InboundPoPullEntryPage: React.FC = () => {
         }}
         confirmLoading={batchWhApplying}
         okText={t('app.kuaizhizao.warehouseInbound.action.applyToAllLines')}
-        cancelText={t('app.kuaizhizao.warehouseInbound.action.cancel')}
+        cancelText={t('common.cancel')}
         width={MODAL_CONFIG.SMALL_WIDTH}
         destroyOnHidden
       >

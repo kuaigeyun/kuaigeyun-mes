@@ -181,11 +181,11 @@ const MoldScrapApplicationsPage: React.FC = () => {
       { title: t(`${P}.col.scrapDate`), dataIndex: 'scrap_date', valueType: 'date' },
       { title: t(`${P}.col.applicant`), dataIndex: 'applicant_name' },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
-      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+      { title: t('common.remark'), dataIndex: 'remark', span: 2 },
     ],
     [t],
   );
@@ -208,7 +208,7 @@ const MoldScrapApplicationsPage: React.FC = () => {
         search: { order: 11 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         valueType: 'select',
         valueEnum: approvalStatusValueEnum,
@@ -243,7 +243,7 @@ const MoldScrapApplicationsPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<Record<string, unknown>>(t),
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
         width: 90,
@@ -294,7 +294,7 @@ const MoldScrapApplicationsPage: React.FC = () => {
                   void handleSubmitDoc(record);
                 }}
               >
-                {t(`${P}.action.submit`)}
+                {t('common.submit')}
               </Button>
             )}
             {canAudit && record.status === '已提交' && (
@@ -423,7 +423,7 @@ const MoldScrapApplicationsPage: React.FC = () => {
             />
           </Col>
           <Col span={24}>
-            <ProFormTextArea name="remark" label={t(`${P}.form.remark`)} fieldProps={{ rows: 2 }} />
+            <ProFormTextArea name="remark" label={t('common.remark')} fieldProps={{ rows: 2 }} />
           </Col>
         </Row>
       </FormModalTemplate>

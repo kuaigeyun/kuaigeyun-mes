@@ -881,7 +881,7 @@ const DemandManagementPage: React.FC = () => {
         ),
       },
       {
-        title: t('app.kuaizhizao.salesOrder.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'required_quantity',
         width: 110,
         align: 'right' as const,
@@ -894,7 +894,7 @@ const DemandManagementPage: React.FC = () => {
             ]}
             style={{ margin: 0 }}
           >
-            <InputNumber placeholder={t('app.kuaizhizao.demandManagement.quantityPlaceholder')} min={0} precision={4} style={{ width: '100%' }} size="small" />
+            <InputNumber placeholder={t('common.quantity')} min={0} precision={4} style={{ width: '100%' }} size="small" />
           </AntForm.Item>
         ),
       },
@@ -1179,7 +1179,7 @@ const DemandManagementPage: React.FC = () => {
 
         <Row gutter={16}>
           <Col span={24}>
-            <ProFormTextArea name="notes" label={t('app.kuaizhizao.salesOrder.notes')} fieldProps={{ rows: 2 }} />
+            <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 2 }} />
           </Col>
         </Row>
       </FormModalTemplate>
@@ -1230,7 +1230,7 @@ const DemandManagementPage: React.FC = () => {
               <Col span={24}>
                 <ProFormTextArea
                   name="notes"
-                  label={t('app.kuaizhizao.salesOrder.notes')}
+                  label={t('common.remark')}
                   fieldProps={{ rows: 3 }}
                 />
               </Col>
@@ -1292,7 +1292,7 @@ const DemandManagementPage: React.FC = () => {
               <Col span={24}>
                 <ProFormTextArea
                   name="notes"
-                  label={t('app.kuaizhizao.salesOrder.notes')}
+                  label={t('common.remark')}
                   fieldProps={{ rows: 3 }}
                 />
               </Col>

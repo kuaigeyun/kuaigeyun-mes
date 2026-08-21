@@ -36,22 +36,22 @@ export const PERFORMANCE_ROSTER_STATUS_I18N: Record<string, string> = {
 
 export function getPerformanceActiveValueEnum(t: TFunction) {
   return {
-    true: { text: t('app.kuaizhizao.performance.common.active.enabled') },
-    false: { text: t('app.kuaizhizao.performance.common.active.disabled') },
+    true: { text: t('common.enabled') },
+    false: { text: t('common.disabled') },
   };
 }
 
 export function getPerformanceInactiveActiveValueEnum(t: TFunction) {
   return {
-    true: { text: t('app.kuaizhizao.performance.common.active.enabled') },
+    true: { text: t('common.enabled') },
     false: { text: t('app.kuaizhizao.performance.common.active.inactive') },
   };
 }
 
 export function getPerformanceYesNoValueEnum(t: TFunction) {
   return {
-    true: { text: t('app.kuaizhizao.performance.common.yesNo.yes') },
-    false: { text: t('app.kuaizhizao.performance.common.yesNo.no') },
+    true: { text: t('common.yes') },
+    false: { text: t('common.no') },
   };
 }
 
@@ -102,19 +102,19 @@ export function getKpiCalcTypeText(t: TFunction, type?: string | null): string {
 
 export function renderActiveTag(t: TFunction, active?: boolean, variant: 'enabled' | 'inactive' = 'enabled'): React.ReactNode {
   const text = active
-    ? t('app.kuaizhizao.performance.common.active.enabled')
+    ? t('common.enabled')
     : t(
         variant === 'inactive'
           ? 'app.kuaizhizao.performance.common.active.inactive'
-          : 'app.kuaizhizao.performance.common.active.disabled',
+          : 'common.disabled',
       );
   return React.createElement(MarkerTag, { color: active ? 'success' : 'default' }, text);
 }
 
 export function renderYesNoTag(t: TFunction, value?: boolean): React.ReactNode {
   const text = value
-    ? t('app.kuaizhizao.performance.common.yesNo.yes')
-    : t('app.kuaizhizao.performance.common.yesNo.no');
+    ? t('common.yes')
+    : t('common.no');
   return React.createElement(MarkerTag, { color: value ? 'processing' : 'default' }, text);
 }
 
@@ -153,7 +153,7 @@ export function buildPerformanceSalaryReportColumns(t: TFunction): ProColumns[] 
     { title: t('app.kuaizhizao.performance.common.columns.kpiCoefficient'), dataIndex: 'kpi_coefficient', width: 90, align: 'right', hideInSearch: true },
     { title: t('app.kuaizhizao.performance.common.columns.totalAmount'), dataIndex: 'total_amount', valueType: 'money', width: 120, align: 'right', hideInSearch: true },
     {
-      title: t('app.kuaizhizao.performance.common.columns.status'),
+      title: t('common.status'),
       dataIndex: 'status',
       width: 100,
       hideInSearch: true,

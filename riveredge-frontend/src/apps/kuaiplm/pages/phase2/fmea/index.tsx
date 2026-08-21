@@ -218,7 +218,7 @@ const FmeaPage: React.FC = () => {
       },
       ...plmCreatedUpdatedColumns<RdFmeaRecord>(t),
       {
-        title: t('app.kuaiplm.phase2.fmea.columns.status'),
+        title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
         width: 90,
@@ -450,7 +450,7 @@ const FmeaPage: React.FC = () => {
         />
         <ProFormSelect
           name="status"
-          label={t('app.kuaiplm.phase2.fmea.form.status')}
+          label={t('common.status')}
           options={fmeaStatusOptions}
         />
         <ProFormText name="material_code" label={t('app.kuaiplm.phase2.fmea.form.materialCode')} />
@@ -486,12 +486,12 @@ const FmeaPage: React.FC = () => {
         />
         <ProFormSelect
           name="status"
-          label={t('app.kuaiplm.phase2.fmea.form.status')}
+          label={t('common.status')}
           options={fmeaStatusOptions}
         />
         <ProFormText name="material_code" label={t('app.kuaiplm.phase2.fmea.form.materialCode')} />
         <ProFormText name="material_name" label={t('app.kuaiplm.phase2.fmea.form.materialName')} />
-        <ProFormTextArea name="description" label={t('app.kuaiplm.phase2.fmea.form.description')} />
+        <ProFormTextArea name="description" label={t('common.remark')} />
       </FormModalTemplate>
     </ListPageTemplate>
   );

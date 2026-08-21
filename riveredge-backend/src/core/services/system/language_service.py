@@ -389,6 +389,13 @@ class LanguageService:
                 "is_default": False,
                 "sort_order": 4,
             },
+            {
+                "code": "lo-LA",
+                "name": "ພາສາລາວ",
+                "native_name": "ພາສາລາວ",
+                "is_default": False,
+                "sort_order": 5,
+            },
         ]
         # 不删除记录；停用已注册项。启用时移入 SYSTEM_LANGUAGES 并设 is_active=True。
         UNREGISTERED_SYSTEM_LANGUAGE_CODES: tuple[str, ...] = ()

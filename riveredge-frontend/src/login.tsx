@@ -18,6 +18,7 @@ import enUS from 'antd/locale/en_US';
 import zhTW from 'antd/locale/zh_TW';
 import jaJP from 'antd/locale/ja_JP';
 import viVN from 'antd/locale/vi_VN';
+import loLA from './locales/antd/lo_LA';
 import { App } from 'antd';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
@@ -26,11 +27,14 @@ import enUSLocale from './locales/en-US.login';
 import zhHantLocale from './locales/zh-Hant.login';
 import jaJPLocale from './locales/ja-JP.login';
 import viVNLocale from './locales/vi-VN.login';
+import loLALocale from './locales/lo-LA.login';
 import LoginPage from './pages/login';
 import { AntdAppBridge } from './utils/antdAppApis';
 import { getGuestLanguageStorageKey, resolveLoginInitialLanguage } from './utils/localeBootstrap';
+import { syncUiLocaleChrome } from './constants/fonts';
 
 const initialLang = resolveLoginInitialLanguage();
+syncUiLocaleChrome(initialLang);
 
 const LOGIN_LOCALE_BUNDLES: Record<string, Record<string, string>> = {
   'zh-CN': zhCNLocale,
@@ -38,6 +42,7 @@ const LOGIN_LOCALE_BUNDLES: Record<string, Record<string, string>> = {
   'zh-Hant': zhHantLocale,
   'ja-JP': jaJPLocale,
   'vi-VN': viVNLocale,
+  'lo-LA': loLALocale,
 };
 
 const LOGIN_ANT_LOCALE_MAP: Record<string, typeof zhCN> = {
@@ -46,6 +51,7 @@ const LOGIN_ANT_LOCALE_MAP: Record<string, typeof zhCN> = {
   'en-US': enUS,
   'ja-JP': jaJP,
   'vi-VN': viVN,
+  'lo-LA': loLA,
 };
 
 // 登录页最小 i18n
@@ -88,6 +94,7 @@ function LoginRoot() {
   useEffect(() => {
     const handleLanguageChange = (lng: string) => {
       setLocale(LOGIN_ANT_LOCALE_MAP[lng] ?? zhCN);
+      syncUiLocaleChrome(lng);
       sessionStorage.setItem(getGuestLanguageStorageKey(), lng);
     };
     i18n.on('languageChanged', handleLanguageChange);

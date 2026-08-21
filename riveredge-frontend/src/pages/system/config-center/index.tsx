@@ -375,12 +375,12 @@ const ConfigCenterPage: React.FC = () => {
       if (Object.keys(stageUpdate).length > 0) {
         await qualityApi.stageToggles.update(stageUpdate);
       }
-      messageApi.success(t('pages.system.configCenter.saveSuccess'));
+      messageApi.success(t('common.saveSuccess'));
       await refetchBusinessConfig();
       await queryClient.invalidateQueries({ queryKey: TRIAL_RUN_MODE_QUERY_KEY });
       await queryClient.invalidateQueries({ queryKey: DETAIL_DRAWER_FEATURES_QUERY_KEY });
     } catch (error: any) {
-      if (!error?.errorFields) messageApi.error(error.message || t('pages.system.configCenter.saveFailed'));
+      if (!error?.errorFields) messageApi.error(error.message || t('common.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -510,8 +510,8 @@ const ConfigCenterPage: React.FC = () => {
                 </Spin>
 
             <Space style={{ marginTop: 24 }}>
-              <Button icon={<ReloadOutlined />} onClick={() => refetchBusinessConfig()} loading={isFetching}>{t('pages.system.configCenter.refresh')}</Button>
-              <Button type="primary" icon={<SaveOutlined />} onClick={() => handleSave(categories)} loading={saving}>{t('pages.system.configCenter.save')}</Button>
+              <Button icon={<ReloadOutlined />} onClick={() => refetchBusinessConfig()} loading={isFetching}>{t('common.refresh')}</Button>
+              <Button type="primary" icon={<SaveOutlined />} onClick={() => handleSave(categories)} loading={saving}>{t('common.save')}</Button>
             </Space>
           </div>
         </Content>

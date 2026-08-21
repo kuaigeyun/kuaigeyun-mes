@@ -1458,7 +1458,7 @@ const BusinessBoardPage: React.FC = () => {
         open={titleModalOpen}
         onOk={saveBoardTitle}
         onCancel={() => setTitleModalOpen(false)}
-        okText={t('dashboard.businessBoard.saveTitle')}
+        okText={t('common.save')}
         cancelText={t('common.cancel')}
         destroyOnHidden
         width={480}

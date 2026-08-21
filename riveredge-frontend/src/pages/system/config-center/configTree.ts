@@ -296,7 +296,7 @@ export const AUTOMATION_CATEGORIES: ConfigCategory[] = createCategories({
       sourcePath: 'parameters.work_order.last_operation_auto_inbound_mode',
       type: 'select',
       selectOptions: [
-        { value: 'none', labelKey: 'pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode_opt_none' },
+        { value: 'none', labelKey: 'common.close' },
         { value: 'direct_inbound', labelKey: 'pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode_opt_direct' },
         { value: 'inbound_notice', labelKey: 'pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode_opt_notice' },
       ],

@@ -63,7 +63,7 @@ export function buildInspectionPlanTypeValueEnum(t: TFunction): Record<string, {
 
 export function buildInspectionPlanActiveValueEnum(t: TFunction): Record<string, { text: string }> {
   return {
-    true: { text: t('app.kuaizhizao.quality.plans.active.enabled') },
+    true: { text: t('common.enabled') },
     false: { text: t('app.kuaizhizao.quality.plans.active.disabled') },
   };
 }

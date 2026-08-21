@@ -134,7 +134,7 @@ const KuaioaDetailDrawer: React.FC<Props> = ({
       title={
         titleName
           ? `${titleName}${titleCode ? ` (${titleCode})` : ''}`
-          : t('app.kuaioa.common.detail')
+          : t('common.detail')
       }
       extra={extra}
       basic={

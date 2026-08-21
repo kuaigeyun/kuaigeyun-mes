@@ -203,11 +203,11 @@ const InventoryPage: React.FC = () => {
       t('app.master-data.materials.model'),
       t('app.kuaizhizao.warehouseInventory.colBrand'),
       t('app.kuaizhizao.warehouseInventory.colTexture'),
-      t('app.kuaizhizao.warehouseCommon.colUnit'),
+      t('common.unit'),
       t('app.kuaizhizao.warehouseReports.colStockQty'),
       t('app.kuaizhizao.warehouseInventory.colInTransit'),
       t('app.kuaizhizao.warehouseInventory.colAlert'),
-      t('app.kuaizhizao.warehouseCommon.colStatus'),
+      t('common.status'),
       t('app.kuaizhizao.warehouseReports.colWarehouse'),
     ];
     const lines = rows.map((r) =>
@@ -328,7 +328,7 @@ const InventoryPage: React.FC = () => {
         render: (_, r) => renderCell(r.texture),
       },
       {
-        title: t('app.kuaizhizao.warehouseCommon.colUnit'),
+        title: t('common.unit'),
         dataIndex: 'material_unit',
         width: 72,
         hideInSearch: true,
@@ -367,7 +367,7 @@ const InventoryPage: React.FC = () => {
         render: (_, record) => renderAlertCell(record, t),
       },
       {
-        title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+        title: t('common.status'),
         dataIndex: 'status',
         width: 100,
         hideInTable: false,
@@ -452,13 +452,13 @@ const InventoryPage: React.FC = () => {
         rows = allRes.items || [];
       }
       if (!rows.length) {
-        messageApi.warning(t('app.kuaizhizao.warehouseCommon.exportNoData'));
+        messageApi.warning(t('common.exportNoData'));
         return;
       }
       exportRows(rows);
       messageApi.success(t('app.kuaizhizao.warehouseCommon.exportSuccess', { count: rows.length }));
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.exportFailed'));
+      messageApi.error(error?.message || t('common.exportFailed'));
     }
   };
 

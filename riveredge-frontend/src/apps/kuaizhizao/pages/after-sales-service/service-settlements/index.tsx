@@ -118,7 +118,7 @@ const ServiceSettlementsPage: React.FC = () => {
             render: (_, row) => (row.total_amount != null ? row.total_amount : '-'),
           },
           {
-            title: t('app.kuaizhizao.afterSalesService.serviceSettlement.field.status'),
+            title: t('common.status'),
             key: 'lifecycle',
             dataIndex: 'status',
             fixed: 'right',

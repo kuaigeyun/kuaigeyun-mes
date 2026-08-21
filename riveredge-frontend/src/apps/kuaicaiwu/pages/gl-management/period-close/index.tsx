@@ -171,7 +171,7 @@ const PeriodClosePage: React.FC = () => {
         `${r.period_year}-${String(r.period_month).padStart(2, '0')}`,
     },
     {
-      title: t(`${NS}.col.status`, { defaultValue: '状态' }),
+      title: t('common.status', { defaultValue: '状态' }),
       dataIndex: 'status',
       render: (v: string) =>
         v === 'closed'
@@ -252,8 +252,8 @@ const PeriodClosePage: React.FC = () => {
   ];
 
   const accrualColumns = [
-    { title: t(`${NS}.col.itemCode`, { defaultValue: '编码' }), dataIndex: 'item_code', width: 120 },
-    { title: t(`${NS}.col.itemName`, { defaultValue: '名称' }), dataIndex: 'item_name', ellipsis: true },
+    { title: t('common.code', { defaultValue: '编码' }), dataIndex: 'item_code', width: 120 },
+    { title: t('common.name', { defaultValue: '名称' }), dataIndex: 'item_name', ellipsis: true },
     {
       title: t(`${NS}.col.remaining`, { defaultValue: '剩余' }),
       dataIndex: 'remaining',
@@ -540,8 +540,8 @@ const PeriodClosePage: React.FC = () => {
         }}
         initialValues={{ accrual_type: 'accrual', periods: 12 }}
       >
-        <ProFormText name="item_code" label={t(`${NS}.col.itemCode`, { defaultValue: '编码' })} rules={[{ required: true }]} />
-        <ProFormText name="item_name" label={t(`${NS}.col.itemName`, { defaultValue: '名称' })} rules={[{ required: true }]} />
+        <ProFormText name="item_code" label={t('common.code', { defaultValue: '编码' })} rules={[{ required: true }]} />
+        <ProFormText name="item_name" label={t('common.name', { defaultValue: '名称' })} rules={[{ required: true }]} />
         <ProFormSelect
           name="accrual_type"
           label={t(`${NS}.accrualType`, { defaultValue: '类型' })}

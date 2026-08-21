@@ -622,7 +622,7 @@ const MaterialsManagementPage: React.FC = () => {
   const [importModalVisible, setImportModalVisible] = useState(false)
 
   const materialActiveValueEnum = useMemo(
-    () => buildMasterCrudActiveValueEnum(t, 'app.master-data.materials.enabled', 'app.master-data.materials.disabled'),
+    () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
     [t],
   )
 
@@ -2117,7 +2117,7 @@ const MaterialsManagementPage: React.FC = () => {
             t('app.master-data.materialForm.sourceMake'),
           ),
           materialGroupImportOptions[0] ?? t('app.master-data.materials.importExample.groupCode'),
-          t('app.master-data.materials.importExample.variantManaged'),
+          t('common.yes'),
           '是',
           '否',
           '否',
@@ -2248,7 +2248,7 @@ const MaterialsManagementPage: React.FC = () => {
           },
           {
             field: 'description',
-            labelKey: 'app.master-data.codeMapping.description',
+            labelKey: 'common.remark',
             aliases: ['描述'],
           },
         ],
@@ -3518,7 +3518,7 @@ const MaterialsManagementPage: React.FC = () => {
         t('app.master-data.materials.specification'),
         t('app.master-data.materials.baseUnit'),
         t('app.master-data.materials.sourceType'),
-        t('app.master-data.warehouses.status'),
+        t('common.status'),
         t('common.createdAt'),
       ]
       const csvRows = [headers.join(',')]
@@ -3696,17 +3696,17 @@ const MaterialsManagementPage: React.FC = () => {
             record.shelfLifeManaged ?? (record as any).shelf_life_managed ?? false
           const days = record.shelfLifeDays ?? (record as any).shelf_life_days
           if (!managed) {
-            return renderMasterYesNoTag(t, false, 'app.master-data.bom.yes', 'app.master-data.bom.no')
+            return renderMasterYesNoTag(t, false, 'common.yes', 'common.no')
           }
           if (days != null) {
             return (
               <span>
-                {t('app.master-data.bom.yes')} - {days}
+                {t('common.yes')} - {days}
                 {t('app.master-data.materialForm.shelfLifeDayUnit')}
               </span>
             )
           }
-          return renderMasterYesNoTag(t, true, 'app.master-data.bom.yes', 'app.master-data.bom.no')
+          return renderMasterYesNoTag(t, true, 'common.yes', 'common.no')
         },
       },
       {
@@ -3714,7 +3714,7 @@ const MaterialsManagementPage: React.FC = () => {
         dataIndex: 'isGiftable',
         render: (_, record) => {
           const giftable = record.isGiftable ?? (record as any).is_giftable ?? false
-          return renderMasterYesNoTag(t, giftable, 'app.master-data.bom.yes', 'app.master-data.bom.no')
+          return renderMasterYesNoTag(t, giftable, 'common.yes', 'common.no')
         },
       },
       {
@@ -3732,16 +3732,16 @@ const MaterialsManagementPage: React.FC = () => {
         title: t('app.master-data.materials.batchManaged'),
         dataIndex: 'batchManaged',
         render: (_, record) =>
-          renderMasterYesNoTag(t, record.batchManaged, 'app.master-data.bom.yes', 'app.master-data.bom.no'),
+          renderMasterYesNoTag(t, record.batchManaged, 'common.yes', 'common.no'),
       },
       {
         title: t('app.master-data.materials.variantManaged'),
         dataIndex: 'variantManaged',
         render: (_, record) =>
-          renderMasterYesNoTag(t, record.variantManaged, 'app.master-data.bom.yes', 'app.master-data.bom.no'),
+          renderMasterYesNoTag(t, record.variantManaged, 'common.yes', 'common.no'),
       },
       {
-        title: t('app.master-data.materials.description'),
+        title: t('common.remark'),
         dataIndex: 'description',
       },
       {
@@ -3751,17 +3751,17 @@ const MaterialsManagementPage: React.FC = () => {
           renderMasterActiveTag(
             t,
             record.isActive,
-            'app.master-data.materials.enabled',
-            'app.master-data.materials.disabled',
+            'common.enabled',
+            'common.disabled',
           ),
       },
       {
-        title: t('app.master-data.materials.createTime'),
+        title: t('common.createdAt'),
         dataIndex: 'createdAt',
         valueType: 'dateTime',
       },
       {
-        title: t('app.master-data.materials.updateTime'),
+        title: t('common.updatedAt'),
         dataIndex: 'updatedAt',
         valueType: 'dateTime',
       },
@@ -3938,8 +3938,8 @@ const MaterialsManagementPage: React.FC = () => {
             renderMasterYesNoTag(
               t,
               record.batchManaged,
-              'app.master-data.bom.yes',
-              'app.master-data.bom.no',
+              'common.yes',
+              'common.no',
             ),
           ),
       },
@@ -3956,8 +3956,8 @@ const MaterialsManagementPage: React.FC = () => {
           return renderMasterYesNoTag(
             t,
             record.variantManaged,
-            'app.master-data.bom.yes',
-            'app.master-data.bom.no',
+            'common.yes',
+            'common.no',
           )
         },
       },
@@ -3996,8 +3996,8 @@ const MaterialsManagementPage: React.FC = () => {
             renderMasterActiveTag(
               t,
               record.isActive,
-              'app.master-data.materials.enabled',
-              'app.master-data.materials.disabled',
+              'common.enabled',
+              'common.disabled',
             ),
           ),
       },
@@ -4037,7 +4037,7 @@ const MaterialsManagementPage: React.FC = () => {
         formItemProps: formDateRangeFormItemProps,
       },
       {
-        title: t('app.master-data.materials.action'),
+        title: t('common.actions'),
         key: 'action',
         valueType: 'option',
         fixed: 'right',
@@ -4045,21 +4045,21 @@ const MaterialsManagementPage: React.FC = () => {
         render: (_, record) => (
           <Space>
             <Button key="view" {...rowActionKind('read')} onClick={() => handleViewMaterial(record)}>
-              {t('app.master-data.bom.detail')}
+              {t('common.detail')}
             </Button>
             <Button key="edit" {...rowActionKind('update')}
               size="small"
               icon={<EditOutlined />}
               onClick={() => handleEditMaterial(record)}
             >
-              {t('app.master-data.bom.editTitle')}
+              {t('common.edit')}
             </Button>
             <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.materials.deleteMaterialConfirm')}
               description={t('app.master-data.materials.deleteMaterialDesc')}
               onConfirm={() => handleDeleteMaterial(record)}
             >
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('app.master-data.bom.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>
           </Space>
@@ -4270,7 +4270,7 @@ const MaterialsManagementPage: React.FC = () => {
                     <UniBatchSplitToolbar
                       selectedRowKeys={selectedRowKeys}
                       onDelete={executeBatchDelete}
-                      deleteButtonText={t('app.master-data.materials.batchDelete')}
+                      deleteButtonText={t('common.batchDelete')}
                       confirmTitle={(count) =>
                         t('app.master-data.materials.batchDeleteConfirm', { count })
                       }
@@ -4820,7 +4820,7 @@ const MaterialsManagementPage: React.FC = () => {
           />
           <div>
             <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-              {t('app.master-data.materials.batchTrackingMode')}
+              {t('common.actions')}
             </Typography.Text>
             <Segmented
               block

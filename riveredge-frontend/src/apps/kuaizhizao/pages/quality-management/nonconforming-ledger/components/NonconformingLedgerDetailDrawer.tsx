@@ -160,11 +160,11 @@ export const NonconformingLedgerDetailDrawer: React.FC<NonconformingLedgerDetail
             render: (_, row) => (row.other_inbound_id ? `#${row.other_inbound_id}` : '-'),
           },
           {
-            title: t('app.kuaizhizao.quality.common.columns.status'),
+            title: t('common.status'),
             dataIndex: 'status',
             render: (_, row) => renderNcLedgerStatusTag(t, row.status),
           },
-          { title: t('app.kuaizhizao.quality.common.form.remarks'), dataIndex: 'remarks' },
+          { title: t('common.remark'), dataIndex: 'remarks' },
         ],
         GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK,
       ),

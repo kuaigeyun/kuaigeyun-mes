@@ -165,7 +165,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
       { title: t('app.kuaizhizao.salesContract.terms.colGroupCode'), dataIndex: 'group_code', width: 120 },
       { title: t('app.kuaizhizao.salesContract.terms.colGroupName'), dataIndex: 'group_name', width: 180 },
       {
-        title: t('app.kuaizhizao.salesContract.terms.colDescription'),
+        title: t('common.remark'),
         dataIndex: 'description',
         ellipsis: true,
       },
@@ -334,7 +334,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
             } else {
               await salesContractTermApi.createItem(values);
             }
-            message.success(t('app.kuaizhizao.salesContract.terms.saved'));
+            message.success(t('common.saveSuccess'));
             setItemFormOpen(false);
             itemActionRef.current?.reload();
             loadAllItems();
@@ -390,7 +390,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
             } else {
               await salesContractTermApi.createGroup(payload);
             }
-            message.success(t('app.kuaizhizao.salesContract.terms.saved'));
+            message.success(t('common.saveSuccess'));
             setGroupFormOpen(false);
             groupActionRef.current?.reload();
             return true;
@@ -422,7 +422,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
           }}
           showSearch
         />
-        <ProFormTextArea name="description" label={t('app.kuaizhizao.salesContract.terms.colDescription')} />
+        <ProFormTextArea name="description" label={t('common.remark')} />
         <ProFormSwitch name="is_active" label={t('common.enabled')} />
       </ModalForm>
     </>

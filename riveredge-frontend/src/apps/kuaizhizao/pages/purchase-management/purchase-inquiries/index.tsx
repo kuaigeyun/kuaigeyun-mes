@@ -680,7 +680,7 @@ const PurchaseInquiriesPage: React.FC = () => {
       ),
     },
     { title: t('app.kuaizhizao.purchaseInquiry.colInquiryCode'), dataIndex: 'inquiry_code', hideInTable: true, hideInSearch: false },
-    { title: t('app.kuaizhizao.purchaseInquiry.colName'), dataIndex: 'inquiry_name', hideInTable: true, hideInSearch: false, ellipsis: true },
+    { title: t('common.name'), dataIndex: 'inquiry_name', hideInTable: true, hideInSearch: false, ellipsis: true },
     {
       title: t('app.kuaizhizao.purchaseInquiry.colSourceCode'),
       dataIndex: 'source_code',
@@ -804,7 +804,7 @@ const PurchaseInquiriesPage: React.FC = () => {
                 actionRef.current?.reload();
               }}
             >
-              {t('app.kuaizhizao.purchaseInquiry.submit')}
+              {t('common.submit')}
             </Button>,
           );
           parts.push(
@@ -905,7 +905,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         hideInTable: true,
       },
       {
-        title: t('app.kuaizhizao.purchaseInquiry.colName'),
+        title: t('common.name'),
         dataIndex: 'inquiry_name',
         hideInTable: true,
       },
@@ -928,7 +928,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         hideInTable: true,
       },
       {
-        title: t('app.kuaizhizao.purchaseInquiry.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'quantity',
         width: 120,
         align: 'right',
@@ -1135,7 +1135,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         width: 80,
         render: (_: unknown, r: PurchaseInquiryVendor) => (
           <Button type="link" danger size="small" onClick={() => setEditVendors((prev) => prev.filter((v) => v.supplier_id !== r.supplier_id))}>
-            {t('app.kuaizhizao.purchaseInquiry.remove')}
+            {t('common.remove')}
           </Button>
         ),
       },
@@ -1178,7 +1178,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         ),
       },
       {
-        title: t('app.kuaizhizao.purchaseInquiry.quantity'),
+        title: t('common.quantity'),
         width: 120,
         render: (_: unknown, r: PurchaseInquiryItem, idx: number) => (
           <InputNumber
@@ -1276,8 +1276,8 @@ const PurchaseInquiriesPage: React.FC = () => {
     () => [
       { title: t('app.kuaizhizao.purchaseInquiry.colMaterialCode'), dataIndex: 'material_code', width: 120 },
       { title: t('app.kuaizhizao.purchaseInquiry.colMaterialName'), dataIndex: 'material_name' },
-      { title: t('app.kuaizhizao.purchaseInquiry.quantity'), dataIndex: 'quantity', width: 90, render: formatQuantity },
-      { title: t('app.kuaizhizao.purchaseInquiry.colUnit'), dataIndex: 'unit', width: 60 },
+      { title: t('common.quantity'), dataIndex: 'quantity', width: 90, render: formatQuantity },
+      { title: t('common.unit'), dataIndex: 'unit', width: 60 },
       { title: t('app.kuaizhizao.purchaseInquiry.requiredDate'), dataIndex: 'required_date', width: 110, render: (v: string) => (v ? formatDateBySiteSetting(v) : '-') },
     ],
     [t],
@@ -1314,7 +1314,7 @@ const PurchaseInquiriesPage: React.FC = () => {
           valueType: 'date',
         },
         {
-          title: t('app.kuaizhizao.purchaseInquiry.notes'),
+          title: t('common.remark'),
           dataIndex: 'notes',
           span: 3,
         },
@@ -1445,7 +1445,7 @@ const PurchaseInquiriesPage: React.FC = () => {
   const compareColumns = useMemo(
     () => [
       { title: t('app.kuaizhizao.purchaseInquiry.material'), width: 220, render: (_: unknown, r: ComparisonRow) => `${r.material_code} ${r.material_name}` },
-      { title: t('app.kuaizhizao.purchaseInquiry.quantity'), dataIndex: 'quantity', width: 80, align: 'right' as const, render: formatQuantity },
+      { title: t('common.quantity'), dataIndex: 'quantity', width: 80, align: 'right' as const, render: formatQuantity },
       ...(compareRows[0]?.cells ?? []).map((cell, idx) => ({
         title: cell.supplier_name ?? t('app.kuaizhizao.purchaseInquiry.supplierFallback', { index: idx + 1 }),
         width: 148,
@@ -1506,7 +1506,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         ),
       },
       {
-        title: t('app.kuaizhizao.salesOrder.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'suggested_quantity',
         width: 100,
         align: 'right' as const,
@@ -1734,7 +1734,7 @@ const PurchaseInquiriesPage: React.FC = () => {
           />
         </div>
 
-        <ProFormTextArea name="notes" label={t('app.kuaizhizao.purchaseInquiry.notes')} fieldProps={{ rows: 2 }} />
+        <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 2 }} />
         <DocumentAttachmentsField category="purchase_inquiry_attachments" />
       </FormModalTemplate>
 
@@ -1828,7 +1828,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         collaborationTitleSuffix={
           inquiryShowNextInTitle ? (
             <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-              {t('components.uniLifecycle.nextStep')}：
+              {t('common.next')}：
               {inquiryNextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
             </Typography.Text>
           ) : undefined
@@ -1925,7 +1925,7 @@ const PurchaseInquiriesPage: React.FC = () => {
             />
           </div>
 
-          <Form.Item name="notes" label={t('app.kuaizhizao.purchaseInquiry.notes')}>
+          <Form.Item name="notes" label={t('common.remark')}>
             <Input.TextArea rows={2} placeholder={t('app.kuaizhizao.purchaseInquiry.quoteNotesPlaceholder')} />
           </Form.Item>
         </Form>
@@ -2090,7 +2090,7 @@ const PurchaseInquiriesPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
                 ]}

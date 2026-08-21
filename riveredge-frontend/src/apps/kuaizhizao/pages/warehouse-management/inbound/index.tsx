@@ -731,7 +731,7 @@ const InboundPage: React.FC = () => {
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || error?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.msg.saveFailed'));
+      messageApi.error(error?.message || error?.response?.data?.detail || t('common.saveFailed'));
     } finally {
       setSavingPurchaseReceipt(false);
     }
@@ -1567,7 +1567,7 @@ const InboundPage: React.FC = () => {
       onOk: async () => {
         try {
           await deleteInboundDocument(record);
-          messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.deleteSuccess'));
+          messageApi.success(t('common.deleteSuccess'));
           invalidateMenuBadgeCounts();
 
           await actionRef.current?.reload?.();
@@ -1576,8 +1576,8 @@ const InboundPage: React.FC = () => {
             error?.response?.data?.detail ??
             error?.response?.data?.message ??
             error?.message ??
-            t('app.kuaizhizao.warehouseInbound.msg.deleteFailed');
-          messageApi.error(typeof msg === 'string' ? msg : t('app.kuaizhizao.warehouseInbound.msg.deleteFailed'));
+            t('common.deleteFailed');
+          messageApi.error(typeof msg === 'string' ? msg : t('common.deleteFailed'));
         }
       },
     });
@@ -1659,7 +1659,7 @@ const InboundPage: React.FC = () => {
       render: (_, record) => renderInboundReceiptTypeMarkerTag(t, record.receipt_type),
     },
     {
-      title: t('app.kuaizhizao.warehouseInbound.col.status'),
+      title: t('common.status'),
       dataIndex: 'status',
       hideInTable: true,
       valueType: 'select',
@@ -1772,7 +1772,7 @@ const InboundPage: React.FC = () => {
     ...productionReturnCustomFieldColumns,
     ...finishedGoodsReceiptCustomFieldColumns,
     {
-      title: t('app.kuaizhizao.warehouseInbound.col.actions'),
+      title: t('common.actions'),
       width: 200,
       fixed: 'right',
       render: (_, record) => {
@@ -2291,7 +2291,7 @@ const InboundPage: React.FC = () => {
                 },
               },
               {
-                title: t('app.kuaizhizao.warehouseInbound.col.unit'),
+                title: t('common.unit'),
                 dataIndex: 'material_unit',
                 width: 72,
                 render: (_: unknown, row: InboundOrderItem) => {
@@ -2420,7 +2420,7 @@ const InboundPage: React.FC = () => {
                 },
                 {
                   key: 'quantity',
-                  label: t('app.kuaizhizao.warehouseInbound.col.quantity'),
+                  label: t('common.quantity'),
                   children: String(simpleConfirmPreviewDetail?.quantity ?? simpleConfirmPreviewTarget.total_quantity ?? '—'),
                 },
                 {
@@ -2458,7 +2458,7 @@ const InboundPage: React.FC = () => {
                   ellipsis: true,
                 },
                 {
-                  title: t('app.kuaizhizao.warehouseInbound.col.quantity'),
+                  title: t('common.quantity'),
                   key: 'qty',
                   width: 100,
                   align: 'right',
@@ -2592,7 +2592,7 @@ const InboundPage: React.FC = () => {
                               { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
                               { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
                               {
-                                title: t('app.kuaizhizao.warehouseInbound.col.unit'),
+                                title: t('common.unit'),
                                 dataIndex: 'material_unit',
                                 width: 72,
                                 render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
@@ -2636,7 +2636,7 @@ const InboundPage: React.FC = () => {
                                   },
                                 },
                                 {
-                                  title: t('app.kuaizhizao.warehouseInbound.col.unit'),
+                                  title: t('common.unit'),
                                   dataIndex: 'material_unit',
                                   width: 72,
                                   render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
@@ -2656,14 +2656,14 @@ const InboundPage: React.FC = () => {
                                 { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
                                 { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
                                 {
-                                  title: t('app.kuaizhizao.warehouseInbound.col.quantity'),
+                                  title: t('common.quantity'),
                                   dataIndex: 'receipt_quantity',
                                   width: 100,
                                   align: 'right' as const,
                                   render: formatQuantity,
                                 },
                                 {
-                                  title: t('app.kuaizhizao.warehouseInbound.col.unit'),
+                                  title: t('common.unit'),
                                   dataIndex: 'material_unit',
                                   width: 72,
                                   render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),

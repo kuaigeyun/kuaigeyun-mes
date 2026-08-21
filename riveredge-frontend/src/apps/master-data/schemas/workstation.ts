@@ -38,7 +38,7 @@ export const workstationFormSchema: FieldConfig[] = [
   {
     name: 'description',
     type: 'textarea',
-    labelKey: 'field.workstation.description',
+    labelKey: 'common.remark',
     colSpan: 24,
     fieldProps: { rows: 2, maxLength: 1000 },
   },
@@ -52,7 +52,7 @@ export const workstationFormSchema: FieldConfig[] = [
   {
     name: 'isActive',
     type: 'switch',
-    labelKey: 'field.workstation.isActive',
+    labelKey: 'common.enabled',
     colSpan: 12,
   },
 ];

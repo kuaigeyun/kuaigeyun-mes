@@ -92,7 +92,7 @@ const ComputationHistoryTab: React.FC = () => {
       );
       messageApi.success(t('app.kuaizhizao.demandComputation.exportedCount', { count: items.length }));
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.demandComputation.exportFailed'));
+      messageApi.error(error?.message || t('common.exportFailed'));
     }
   };
 
@@ -200,7 +200,7 @@ const ComputationHistoryTab: React.FC = () => {
         render: (_, record) => formatDateTimeBySiteSetting(record.computation_end_time),
       },
       {
-        title: t('app.kuaizhizao.demandComputation.colCreatedAt'),
+        title: t('common.createdAt'),
         dataIndex: 'created_at',
         width: 132,
         uniTableKeepWidth: true,

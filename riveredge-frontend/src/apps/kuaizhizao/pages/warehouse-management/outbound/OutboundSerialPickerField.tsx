@@ -97,7 +97,7 @@ const OutboundSerialPickerField: React.FC<OutboundSerialPickerFieldProps> = ({
               : t('app.kuaizhizao.warehouseOutbound.field.selectSerial')}
         </Typography.Text>
         <Button size="small" type="link" disabled={disabled || loading} onClick={openPicker}>
-          {t('app.kuaizhizao.warehouseOutbound.confirm.serialPicker.open')}
+          {t('common.select')}
         </Button>
       </Space>
 
@@ -106,8 +106,8 @@ const OutboundSerialPickerField: React.FC<OutboundSerialPickerFieldProps> = ({
         open={open}
         width={640}
         destroyOnHidden
-        okText={t('app.kuaizhizao.warehouseOutbound.confirm.serialPicker.confirm')}
-        cancelText={t('app.kuaizhizao.warehouseOutbound.action.cancel')}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
         onCancel={closePicker}
         onOk={applyDraft}
         maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}

@@ -223,7 +223,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
       setNodes(applyVerticalLayout(nodesData, normalizedEdges) as any);
       setEdges(normalizedEdges);
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.approval.designer.loadFailed'));
+      messageApi.error(error.message || t('common.loadFailed'));
       navigate('/system/approval-processes');
     } finally {
       setLoading(false);
@@ -316,9 +316,9 @@ const ApprovalProcessDesignerPage: React.FC = () => {
       await updateApprovalProcess(processUuid, { ...processData, nodes: graph });
       const refreshed = await getApprovalProcessByUuid(processUuid);
       setProcessData(refreshed);
-      messageApi.success(t('pages.approval.designer.saveSuccess'));
+      messageApi.success(t('common.saveSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.approval.designer.saveFailed'));
+      messageApi.error(error.message || t('common.saveFailed'));
     } finally {
       setSaving(false);
     }

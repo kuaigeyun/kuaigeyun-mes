@@ -1557,7 +1557,7 @@ const DemandComputationPage: React.FC = () => {
         render: (val: string | null | undefined) => (val?.trim() ? val : dash),
       },
       {
-        title: t('app.kuaizhizao.demandComputation.colMaterialUnit'),
+        title: t('common.unit'),
         dataIndex: 'material_unit',
         width: 64,
         render: (val: string | null | undefined) => (val?.trim() ? val : dash),
@@ -1922,10 +1922,10 @@ const DemandComputationPage: React.FC = () => {
       onOk: async () => {
         try {
           await deleteDemandComputation(record.id!)
-          messageApi.success(t('app.kuaizhizao.demandComputation.deleteSuccess'))
+          messageApi.success(t('common.deleteSuccess'))
           invalidateStatistics(); actionRef.current?.reload()
         } catch (error: any) {
-          messageApi.error(error?.response?.data?.detail || t('app.kuaizhizao.demandComputation.deleteFailed'))
+          messageApi.error(error?.response?.data?.detail || t('common.deleteFailed'))
         }
       },
     })
@@ -2163,7 +2163,7 @@ const DemandComputationPage: React.FC = () => {
                   e.stopPropagation()
                   void navigator.clipboard.writeText(record.computation_code!).then(
                     () => messageApi.success(t('app.kuaizhizao.demandComputation.copied')),
-                    () => messageApi.error(t('app.kuaizhizao.demandComputation.copyFailed'))
+                    () => messageApi.error(t('common.copyFailed'))
                   )
                 }}
               />
@@ -2302,7 +2302,7 @@ const DemandComputationPage: React.FC = () => {
       },
     },
     {
-      title: t('app.kuaizhizao.demandComputation.colActions'),
+      title: t('common.actions'),
       key: 'option',
       valueType: 'option',
       fixed: 'right',
@@ -2312,7 +2312,7 @@ const DemandComputationPage: React.FC = () => {
         const canExecuteByCapability = record.capabilities?.execute?.allowed !== false
         const parts: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="d" onClick={() => handleDetail([record.id!])}>
-            {t('app.kuaizhizao.demandComputation.actionDetail')}
+            {t('common.detail')}
           </Button>,
         ]
         if (canExecute && canExecuteByCapability && (computationPerms.canAction?.('submit') ?? false)) {
@@ -2325,7 +2325,7 @@ const DemandComputationPage: React.FC = () => {
         if (computationPerms.canDelete) {
           parts.push(
             <Button {...rowActionKind('delete')} key="del" onClick={() => handleDelete(record)}>
-              {t('app.kuaizhizao.demandComputation.actionDelete')}
+              {t('common.delete')}
             </Button>
           )
         }
@@ -2578,7 +2578,7 @@ const DemandComputationPage: React.FC = () => {
             invalidateStatistics()
             actionRef.current?.reload()
           } catch (error: any) {
-            messageApi.error(error?.response?.data?.detail || t('app.kuaizhizao.demandComputation.deleteFailed'))
+            messageApi.error(error?.response?.data?.detail || t('common.deleteFailed'))
           }
         }}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.demandComputation.batchDeleteConfirm', { count })}
@@ -2707,14 +2707,14 @@ const DemandComputationPage: React.FC = () => {
             render: (v) => renderDemandBusinessModeMarkerTag(t, v),
           },
           {
-            title: t('app.kuaizhizao.demandComputation.colStatus'),
+            title: t('common.status'),
             dataIndex: 'status',
             width: 100,
             align: 'center' as const,
             render: (v) => renderPullQueryDocStatus(t, v),
           },
           {
-            title: t('app.kuaizhizao.demandComputation.colUpdatedAt'),
+            title: t('common.updatedAt'),
             dataIndex: 'updated_at',
             width: 180,
             render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
@@ -2767,7 +2767,7 @@ const DemandComputationPage: React.FC = () => {
           { title: t('app.kuaizhizao.salesOrder.orderCode'), dataIndex: 'order_code', width: 180, ellipsis: true },
           { title: t('app.kuaizhizao.quotation.form.customer'), dataIndex: 'customer_name', width: 200, ellipsis: true },
           {
-            title: t('app.kuaizhizao.salesOrder.status'),
+            title: t('common.status'),
             dataIndex: 'status',
             width: 100,
             align: 'center' as const,
@@ -2841,7 +2841,7 @@ const DemandComputationPage: React.FC = () => {
           { title: t('app.kuaizhizao.salesForecast.forecastName'), dataIndex: 'forecast_name', width: 220, ellipsis: true },
           { title: t('app.kuaizhizao.salesForecast.forecastPeriod'), dataIndex: 'forecast_period', width: 120, align: 'center' },
           {
-            title: t('app.kuaizhizao.salesForecast.status'),
+            title: t('common.status'),
             dataIndex: 'status',
             width: 100,
             align: 'center' as const,
@@ -2949,7 +2949,7 @@ const DemandComputationPage: React.FC = () => {
             setModalVisible(false)
             invalidateStatistics(); actionRef.current?.reload()
           } catch (error: any) {
-            messageApi.error(error?.response?.data?.detail || t('app.kuaizhizao.demandComputation.createFailed'))
+            messageApi.error(error?.response?.data?.detail || t('common.createFailed'))
           } finally {
             setCreateSubmitting(false)
           }
@@ -3006,7 +3006,7 @@ const DemandComputationPage: React.FC = () => {
             warehouseOptions={warehouseSelectOptions}
           />
         </ProForm.Item>
-        <ProFormTextArea name="notes" label={t('app.kuaizhizao.demandComputation.colNotes')} placeholder={t('app.kuaizhizao.demandComputation.notesPlaceholder')} />
+        <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('app.kuaizhizao.demandComputation.notesPlaceholder')} />
       </FormModalTemplate>
 
       {/* 单一下推面板 Modal */}
@@ -3163,7 +3163,7 @@ const DemandComputationPage: React.FC = () => {
                           renderPushPreviewTargetBadge(v, t),
                       },
                       {
-                        title: t('app.kuaizhizao.salesOrder.quantity'),
+                        title: t('common.quantity'),
                         dataIndex: 'quantity',
                         width: 90,
                         align: 'right',
@@ -3364,7 +3364,7 @@ const DemandComputationPage: React.FC = () => {
                           ),
                         },
                         {
-                          title: t('app.kuaizhizao.demandComputation.colUnit'),
+                          title: t('common.unit'),
                           dataIndex: 'material_unit',
                           width: 100,
                           render: (_: unknown, r: DemandComputationItem) => (
@@ -3740,7 +3740,7 @@ const DemandComputationPage: React.FC = () => {
                   ),
                 },
                 {
-                  title: t('app.kuaizhizao.demandComputation.colUnit'),
+                  title: t('common.unit'),
                   dataIndex: 'material_unit',
                   width: 100,
                   render: (_: unknown, r) => (

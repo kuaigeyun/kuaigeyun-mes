@@ -347,7 +347,7 @@ const ReturnVisitsPage: React.FC = () => {
           <Form.Item name="feedback" label={t('app.kuaizhizao.afterSalesService.returnVisit.field.feedback')}>
             <Input.TextArea rows={3} />
           </Form.Item>
-          <Form.Item name="notes" label={t('app.kuaizhizao.afterSalesService.returnVisit.field.notes')}>
+          <Form.Item name="notes" label={t('common.remark')}>
             <Input.TextArea rows={2} />
           </Form.Item>
         </Form>

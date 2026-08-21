@@ -14,6 +14,24 @@ MAX_STRIKES = 3
 _CACHE_PREFIX = "content:sensitive_word"
 
 
+async def tenant_has_sensitive_word_control(tenant_id: Optional[int]) -> bool:
+    """组织未开启敏感词控制时返回 False（含无组织）。"""
+    if tenant_id is None:
+        return False
+    try:
+        parsed = int(tenant_id)
+    except (TypeError, ValueError):
+        return False
+    if parsed <= 0:
+        return False
+    from infra.models.tenant import Tenant
+
+    tenant = await Tenant.get_or_none(id=parsed)
+    if tenant is None:
+        return False
+    return bool(tenant.sensitive_word_enabled)
+
+
 @dataclass(frozen=True)
 class SensitiveWordViolationResult:
     strike_count: int

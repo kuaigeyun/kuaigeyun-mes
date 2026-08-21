@@ -66,14 +66,14 @@ const SalesReturnDetail: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: t('app.kuaizhizao.reports.unit'),
+        title: t('common.unit'),
         dataIndex: 'material_unit',
         width: 80,
         minWidth: 80,
         hideInSearch: true,
       },
       {
-        title: t('app.kuaizhizao.reports.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'quantity',
         valueType: 'digit',
         width: 90,

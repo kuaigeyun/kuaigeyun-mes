@@ -717,7 +717,7 @@ const CustomerFollowUpsPage: React.FC = () => {
         collaborationTitleSuffix={
           showDetailLifecycleTitleSuffix ? (
             <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-              {t('components.uniLifecycle.nextStep')}：
+              {t('common.next')}：
               {detailNextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
             </Typography.Text>
           ) : undefined

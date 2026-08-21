@@ -225,7 +225,7 @@ const ServiceSettlementFormModal: React.FC<ServiceSettlementFormModalProps> = ({
         <Col span={12}>
           <Form.Item
             name="notes"
-            label={t('app.kuaizhizao.afterSalesService.serviceSettlement.field.notes')}
+            label={t('common.remark')}
           >
             <Input.TextArea rows={1} />
           </Form.Item>

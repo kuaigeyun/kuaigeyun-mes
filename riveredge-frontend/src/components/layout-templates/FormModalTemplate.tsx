@@ -179,7 +179,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
               <Button type="primary" loading={loading} onClick={triggerFormSubmit}>
                 {(isEdit
                   ? t('components.layoutTemplates.formModal.submitUpdate')
-                  : submitText ?? t('components.layoutTemplates.formModal.submitCreate')) + SUBMIT_SHORTCUT_HINT}
+                  : submitText ?? t('common.create')) + SUBMIT_SHORTCUT_HINT}
               </Button>
             ) : null}
             {extraFooterAfter}

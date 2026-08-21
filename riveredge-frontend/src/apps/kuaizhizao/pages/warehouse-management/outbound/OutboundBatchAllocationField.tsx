@@ -147,7 +147,7 @@ const OutboundBatchAllocationField: React.FC<OutboundBatchAllocationFieldProps> 
           {summaryText}
         </Typography.Text>
         <Button size="small" type="link" disabled={disabled || loading} onClick={openPicker}>
-          {t('app.kuaizhizao.warehouseOutbound.confirm.batchPicker.open')}
+          {t('common.select')}
         </Button>
       </Space>
       <Modal
@@ -162,7 +162,7 @@ const OutboundBatchAllocationField: React.FC<OutboundBatchAllocationFieldProps> 
         open={open}
         onCancel={closePicker}
         onOk={applyDraft}
-        okText={t('app.kuaizhizao.warehouseOutbound.confirm.batchPicker.confirm')}
+        okText={t('common.confirm')}
         okButtonProps={{ disabled: sumMismatch && target > 0 }}
         width={showDateCols ? 720 : 560}
         destroyOnHidden

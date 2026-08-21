@@ -56,11 +56,11 @@ export default function InfraSuperAdminPage() {
   const updateMutation = useMutation({
     mutationFn: (data: InfraSuperAdminUpdateRequest) => updateInfraSuperAdmin(data),
     onSuccess: () => {
-      messageApi.success(t('pages.infra.admin.updateSuccess'));
+      messageApi.success(t('common.updateSuccess'));
       queryClient.invalidateQueries({ queryKey: ['infraSuperAdmin'] });
     },
     onError: (error: any) => {
-      messageApi.error(error?.message || t('pages.infra.admin.updateFailed'));
+      messageApi.error(error?.message || t('common.updateFailed'));
     },
   });
 
@@ -146,7 +146,7 @@ export default function InfraSuperAdminPage() {
                 { title: t('pages.infra.admin.email'), dataIndex: 'email' },
                 { title: t('pages.infra.admin.fullName'), dataIndex: 'full_name' },
                 {
-                  title: t('pages.infra.admin.status'),
+                  title: t('common.status'),
                   dataIndex: 'is_active',
                   valueType: 'switch',
                   valueEnum: {
@@ -155,8 +155,8 @@ export default function InfraSuperAdminPage() {
                   },
                 },
                 { title: t('pages.infra.admin.lastLogin'), dataIndex: 'last_login', valueType: 'dateTime' },
-                { title: t('pages.infra.admin.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-                { title: t('pages.infra.admin.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+                { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+                { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
               ]}
             />
           )}

@@ -287,8 +287,8 @@ const TypedStepFields: React.FC<{
         >
           <ThemedSegmented
             options={[
-              { label: t('app.kuaizhizao.quality.plans.stepSpec.passWhenYes'), value: 'true' },
-              { label: t('app.kuaizhizao.quality.plans.stepSpec.passWhenNo'), value: 'false' },
+              { label: t('common.yes'), value: 'true' },
+              { label: t('common.no'), value: 'false' },
               ...(allowsNa ? [{ label: naLabel, value: 'na' }] : []),
             ]}
           />

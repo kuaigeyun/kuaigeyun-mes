@@ -158,7 +158,7 @@ export const OutboundDetailDrawer: React.FC<OutboundDetailDrawerProps> = ({
         ...(showNotes
           ? [
               {
-                title: t('app.kuaizhizao.common.fieldNotes'),
+                title: t('common.remark'),
                 dataIndex: 'notes' as const,
                 span: 3,
                 render: (_: unknown, record: OutboundDetailRecord) =>
@@ -206,7 +206,7 @@ export const OutboundDetailDrawer: React.FC<OutboundDetailDrawerProps> = ({
               render: (v, row) => v ?? row.picked_quantity ?? row.quantity ?? '-',
             },
             {
-              title: t('app.kuaizhizao.warehouseOutbound.col.unit'),
+              title: t('common.unit'),
               dataIndex: 'material_unit',
               width: 60,
               render: (v, row) => String(v ?? row.unit ?? '-'),
@@ -216,7 +216,7 @@ export const OutboundDetailDrawer: React.FC<OutboundDetailDrawerProps> = ({
               dataIndex: 'batch_number',
               width: 100,
             },
-            { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes' },
+            { title: t('common.remark'), dataIndex: 'notes' },
           ]}
         />
       ) : (
@@ -280,7 +280,7 @@ export const OutboundDetailDrawer: React.FC<OutboundDetailDrawerProps> = ({
       collaborationTitleSuffix={
         contentReady && nextSteps?.length ? (
           <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-            {t('components.uniLifecycle.nextStep')}：
+            {t('common.next')}：
             {nextSteps.join(t('components.uniLifecycle.nextStepSeparator'))}
           </Typography.Text>
         ) : undefined

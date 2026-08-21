@@ -287,7 +287,7 @@ const StageBlock: React.FC<StageBlockProps> = ({ stage, isActive, releasing, onA
         render: (v: string) => <Text style={{ fontSize: TYPO.body }}>{v || '-'}</Text>,
       },
       {
-        title: t('app.kuaizhizao.coordinationPipeline.colName'),
+        title: t('common.name'),
         dataIndex: 'material_name',
         width: 140,
         ellipsis: true,
@@ -303,7 +303,7 @@ const StageBlock: React.FC<StageBlockProps> = ({ stage, isActive, releasing, onA
         ),
       },
       {
-        title: t('app.kuaizhizao.coordinationPipeline.colQuantity'),
+        title: t('common.quantity'),
         dataIndex: 'quantity',
         width: 90,
         align: 'right' as const,

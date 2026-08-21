@@ -540,7 +540,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
         ),
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colQuantity'),
+      title: t('common.quantity'),
       dataIndex: 'requested_quantity',
       width: 96,
       minWidth: 96,
@@ -653,7 +653,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
       hideInSearch: true,
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      title: t('common.status'),
       key: 'lifecycle',
       dataIndex: 'status',
       fixed: 'right',
@@ -676,7 +676,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
     },
     ...buildDocumentAuditColumns<BatchingTaskRow>(t),
     {
-      title: t('app.kuaizhizao.warehouseCommon.colActions'),
+      title: t('common.actions'),
       key: 'action',
       fixed: 'right',
       hideInSearch: true,
@@ -707,7 +707,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
                 size="small"
                 onClick={() => onOpenDetail?.({ kind: 'material_call', id: record.task_id })}
               >
-                {t('app.kuaizhizao.warehouseCommon.detail')}
+                {t('common.detail')}
               </Button>,
             );
           }
@@ -752,7 +752,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
                   });
                 }}
               >
-                {t('app.kuaizhizao.warehouseCommon.cancel')}
+                {t('common.cancel')}
               </Button>,
             );
           }
@@ -767,7 +767,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
                 size="small"
                 onClick={() => onOpenDetail?.({ kind: 'batching_order', id: record.task_id })}
               >
-                {t('app.kuaizhizao.warehouseCommon.detail')}
+                {t('common.detail')}
               </Button>,
             );
           }
@@ -805,7 +805,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
                 size="small"
                 onClick={() => onOpenDetail?.({ kind: 'backflush_record', id: record.task_id })}
               >
-                {t('app.kuaizhizao.warehouseCommon.detail')}
+                {t('common.detail')}
               </Button>,
             );
           }
@@ -850,12 +850,12 @@ const BatchingTaskQueue: React.FC<Props> = ({
               align: 'center',
               render: (_, it) => (
                 <Form.Item name={`pick_${it.id}`} valuePropName="checked" initialValue style={{ marginBottom: 0 }}>
-                  <Switch size="small" checkedChildren={t('app.kuaizhizao.warehouseCommon.yes')} unCheckedChildren={t('app.kuaizhizao.warehouseCommon.no')} />
+                  <Switch size="small" checkedChildren={t('common.yes')} unCheckedChildren={t('common.no')} />
                 </Form.Item>
               ),
             },
             {
-              title: t('app.kuaizhizao.warehouseCommon.colQuantity'),
+              title: t('common.quantity'),
               key: 'qty',
               width: 120,
               align: 'right',
@@ -934,7 +934,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
         : [
             { title: t('app.kuaizhizao.warehouseCommon.colMaterial'), key: 'mat', render: (_, it) => `${it.material_code ?? ''} ${it.material_name ?? ''}`.trim() },
             {
-              title: t('app.kuaizhizao.warehouseCommon.colQuantity'),
+              title: t('common.quantity'),
               key: 'qty',
               width: 100,
               align: 'right',
@@ -997,8 +997,8 @@ const BatchingTaskQueue: React.FC<Props> = ({
               : t('app.kuaizhizao.batchingCenter.confirmPicking')
         }
         open={completeOpen}
-        okText={t('app.kuaizhizao.warehouseCommon.confirm')}
-        cancelText={t('app.kuaizhizao.warehouseCommon.cancel')}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
         confirmLoading={completeSubmitting}
         destroyOnHidden
         width={840}
@@ -1075,7 +1075,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
                   render: (value: unknown) => String(value ?? '').trim() || '-',
                 },
                 {
-                  title: t('app.kuaizhizao.warehouseCommon.colUnit'),
+                  title: t('common.unit'),
                   dataIndex: 'material_unit',
                   width: 90,
                   render: (value: unknown) => String(value ?? '').trim() || '-',

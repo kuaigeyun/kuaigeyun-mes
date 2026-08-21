@@ -254,15 +254,15 @@ const ToolRepairItemsPage: React.FC = () => {
 
     () => [
 
-      { title: t(`${P}.col.code`), dataIndex: 'code' },
+      { title: t('common.code'), dataIndex: 'code' },
 
-      { title: t(`${P}.col.name`), dataIndex: 'name' },
+      { title: t('common.name'), dataIndex: 'name' },
 
       { title: t(`${P}.col.faultCategory`), dataIndex: 'fault_category' },
 
       { title: t(`${P}.col.requirement`), dataIndex: 'requirement', span: 2 },
 
-      buildIsActiveDescriptionColumn<RepairItem>(t, `${P}.col.isActive`),
+      buildIsActiveDescriptionColumn<RepairItem>(t),
 
     ],
 
@@ -292,7 +292,7 @@ const ToolRepairItemsPage: React.FC = () => {
 
       {
 
-        title: t(`${P}.col.isActive`),
+        title: t('common.enabled'),
 
         dataIndex: 'is_active',
 
@@ -308,7 +308,7 @@ const ToolRepairItemsPage: React.FC = () => {
 
       {
 
-        title: t(`${P}.col.code`),
+        title: t('common.code'),
 
         dataIndex: 'code',
 
@@ -324,7 +324,7 @@ const ToolRepairItemsPage: React.FC = () => {
 
       {
 
-        title: t(`${P}.col.name`),
+        title: t('common.name'),
 
         dataIndex: 'name',
 
@@ -344,7 +344,7 @@ const ToolRepairItemsPage: React.FC = () => {
 
       {
 
-        title: t(`${P}.col.isActive`),
+        title: t('common.enabled'),
 
         dataIndex: 'is_active',
 
@@ -552,13 +552,13 @@ const ToolRepairItemsPage: React.FC = () => {
 
           <Col span={12}>
 
-            <ProFormText name="code" label={t(`${P}.col.code`)} rules={[{ required: true }]} />
+            <ProFormText name="code" label={t('common.code')} rules={[{ required: true }]} />
 
           </Col>
 
           <Col span={12}>
 
-            <ProFormText name="name" label={t(`${P}.col.name`)} rules={[{ required: true }]} />
+            <ProFormText name="name" label={t('common.name')} rules={[{ required: true }]} />
 
           </Col>
 
@@ -576,7 +576,7 @@ const ToolRepairItemsPage: React.FC = () => {
 
           <Col span={24}>
 
-            <ProFormSwitch name="is_active" label={t(`${P}.col.isActive`)} />
+            <ProFormSwitch name="is_active" label={t('common.enabled')} />
 
           </Col>
 

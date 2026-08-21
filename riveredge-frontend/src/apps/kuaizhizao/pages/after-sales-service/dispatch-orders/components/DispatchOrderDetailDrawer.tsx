@@ -94,7 +94,7 @@ export const DispatchOrderDetailDrawer: React.FC<DispatchOrderDetailDrawerProps>
           span: 3,
         },
         {
-          title: t('app.kuaizhizao.afterSalesService.dispatchOrder.field.status'),
+          title: t('common.status'),
           dataIndex: 'status',
           render: (_, row) => renderAfterSalesStatusTag(row.status, AFTER_SALES_DISPATCH_STATUS_COLOR),
         },
@@ -104,7 +104,7 @@ export const DispatchOrderDetailDrawer: React.FC<DispatchOrderDetailDrawerProps>
           span: 3,
         },
         {
-          title: t('app.kuaizhizao.afterSalesService.dispatchOrder.field.notes'),
+          title: t('common.remark'),
           dataIndex: 'notes',
           span: 3,
         },

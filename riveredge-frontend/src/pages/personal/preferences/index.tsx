@@ -253,7 +253,7 @@ const UserPreferencesPage: React.FC = () => {
 
       messageApi.success(t('pages.personal.preferences.updateSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.personal.preferences.updateFailed'));
+      messageApi.error(error.message || t('common.updateFailed'));
     }
   };
 
@@ -267,7 +267,7 @@ const UserPreferencesPage: React.FC = () => {
           initialValues={formInitialValues}
           onFinish={handleSubmit}
           submitter={{
-            searchConfig: { submitText: t('pages.personal.preferences.save') },
+            searchConfig: { submitText: t('common.save') },
             render: (_, dom) => <div style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--ant-color-border)' }}><Space>{dom}</Space></div>,
           }}
           layout="vertical"
@@ -360,7 +360,7 @@ const UserPreferencesPage: React.FC = () => {
                     <ProFormSwitch 
                       name="tabs_persistence" 
                       label={t('pages.personal.preferences.tabsPersistence')} 
-                      fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} 
+                      fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('common.close') }} 
                     />
                   </Col>
                 </Row>

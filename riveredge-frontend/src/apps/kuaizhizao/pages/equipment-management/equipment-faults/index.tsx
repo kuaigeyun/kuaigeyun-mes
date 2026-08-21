@@ -490,7 +490,7 @@ const EquipmentFaultsPage: React.FC = () => {
       dataIndex: 'fault_description',
     },
     {
-      title: t(`${P}.col.status`),
+      title: t('common.status'),
       dataIndex: 'status',
       render: (_, record) => {
         const status = record.status;
@@ -505,7 +505,7 @@ const EquipmentFaultsPage: React.FC = () => {
       dataIndex: 'repair_required',
       render: (_, record) => (
         <MarkerTag color={record.repair_required ? 'warning' : 'success'}>
-          {record.repair_required ? t(`${P}.yes`) : t(`${P}.no`)}
+          {record.repair_required ? t('common.yes') : t('common.no')}
         </MarkerTag>
       ),
     },
@@ -531,7 +531,7 @@ const EquipmentFaultsPage: React.FC = () => {
         ),
     },
     {
-      title: t(`${P}.col.createdAt`),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
     },
@@ -647,7 +647,7 @@ const EquipmentFaultsPage: React.FC = () => {
       search: { order: 11 } as ProColumns['search'],
     },
     {
-      title: t(`${P}.col.status`),
+      title: t('common.status'),
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: faultStatusValueEnum,
@@ -731,7 +731,7 @@ const EquipmentFaultsPage: React.FC = () => {
       hideInSearch: true,
       render: (_, record) => (
         <MarkerTag color={record.repair_required ? 'warning' : 'success'}>
-          {record.repair_required ? t(`${P}.yes`) : t(`${P}.no`)}
+          {record.repair_required ? t('common.yes') : t('common.no')}
         </MarkerTag>
       ),
     },
@@ -902,7 +902,7 @@ const EquipmentFaultsPage: React.FC = () => {
           <Col span={12}>
             <ProFormSelect
               name="status"
-              label={t(`${P}.col.status`)}
+              label={t('common.status')}
               placeholder={t(`${P}.form.selectStatus`)}
               options={[
                 { label: t(`${P}.status.pending`), value: '待处理' },
@@ -919,8 +919,8 @@ const EquipmentFaultsPage: React.FC = () => {
               label={t(`${P}.col.repairRequired`)}
               placeholder={t(`${P}.form.selectRepairRequired`)}
               options={[
-                { label: t(`${P}.yes`), value: true },
-                { label: t(`${P}.no`), value: false },
+                { label: t('common.yes'), value: true },
+                { label: t('common.no'), value: false },
               ]}
               rules={[{ required: true, message: t(`${P}.form.selectRepairRequired`) }]}
             />

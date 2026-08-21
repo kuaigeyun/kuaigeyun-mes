@@ -1,6 +1,8 @@
 /**
- * Specialized language pack for the login page (English)
- * Contains pages.login.* keys and component keys needed for the login flow.
+ * 登录页专用语言包（精简版）
+ * 包含 pages.login.* 及登录流程内嵌组件所需 key（如多组织选择弹窗），减少首屏 bundle 约 400KB
+ *
+ * 与 zh-CN.ts 中同名 key 的文案、标点需保持一致；主应用若加载完整 zh-CN，会与登录 MPA 共用 RegisterDrawer 等组件，分叉会导致「本地无句号、线上有句號」类问题。
  */
 export default {
   'pages.login.title': 'サインイン',
@@ -23,7 +25,7 @@ export default {
   'pages.login.descriptionTitle': 'マルチテナントフレームワーク',
   'pages.login.descriptionText': '現代の企業向けの安全で効率的、スケーラブルな SaaS ソリューション',
   'pages.login.guestLogin': 'ゲストアクセスを試す',
-  'pages.login.noAccount': "Don't have an account?",
+  'pages.login.noAccount': 'アカウントをお持ちでない場合',
   'pages.login.registerNow': '作成する',
   'pages.login.userTerms': '利用規約',
   'pages.login.privacyTerms': 'プライバシーポリシー',
@@ -178,7 +180,7 @@ export default {
   'pages.login.wecomQrLoginHint': 'WeCom で QR コードをスキャンしてログインを確認してください',
   'common.cancel': 'キャンセル',
 
-  // Tenant Selection Modal
+  // 多组织选择弹窗（TenantSelectionModal，与 zh-CN.ts 保持一致）
   'components.tenantSelection.title': '組織の選択',
   'components.tenantSelection.hint': 'あなたは複数の組織のメンバーです。続行するには 1 つ選択してください:',
   'components.tenantSelection.statusActive': 'アクティブ',

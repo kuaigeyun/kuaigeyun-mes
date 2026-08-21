@@ -444,7 +444,7 @@ const BOMPage: React.FC = () => {
           labelKey: 'app.master-data.bom.importHeaderIsActive',
           options: [...IMPORT_YES_NO_OPTIONS],
         },
-        { field: 'remark', labelKey: 'app.master-data.bom.importHeaderRemark' },
+        { field: 'remark', labelKey: 'common.remark' },
         {
           field: 'materialName',
           labelKey: 'app.master-data.bom.importHeaderMaterialName',
@@ -469,8 +469,8 @@ const BOMPage: React.FC = () => {
         t('app.master-data.bom.importExample.quantity'),
         pickImportExampleValue(materialUnitImportOptions, t('app.master-data.bom.importExample.unit')),
         t('app.master-data.bom.importExample.wasteRate'),
-        pickImportExampleValue([...IMPORT_YES_NO_OPTIONS], t('app.master-data.bom.importExample.isRequired')),
-        pickImportExampleValue([...IMPORT_YES_NO_OPTIONS], t('app.master-data.bom.importExample.isActive')),
+        pickImportExampleValue([...IMPORT_YES_NO_OPTIONS], t('common.yes')),
+        pickImportExampleValue([...IMPORT_YES_NO_OPTIONS], t('common.yes')),
         '',
         '',
         '',
@@ -920,7 +920,7 @@ const BOMPage: React.FC = () => {
       ),
       okText: t('app.master-data.bom.okUnapprove'),
       okType: 'danger',
-      cancelText: t('app.master-data.bom.cancel'),
+      cancelText: t('common.cancel'),
       onOk: async () => {
         try {
           await bomApi.batchApprove(uuids, true, t('app.master-data.bom.unapproveComment'), recursiveUnapproveRef.current, true);
@@ -1010,8 +1010,8 @@ const BOMPage: React.FC = () => {
     getAntdModal().confirm({
       title: t('app.master-data.bom.deleteConfirmTitle'),
       content: t('app.master-data.bom.deleteConfirmContent', { count: uuids.length }),
-      okText: t('app.master-data.bom.ok'),
-      cancelText: t('app.master-data.bom.cancel'),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -1061,7 +1061,7 @@ const BOMPage: React.FC = () => {
           successCount++;
         } catch (error: any) {
           failCount++;
-          errors.push(error.message || t('app.master-data.bom.deleteFailed'));
+          errors.push(error.message || t('common.deleteFailed'));
         }
       }
       if (successCount > 0) messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
@@ -1125,7 +1125,7 @@ const BOMPage: React.FC = () => {
         </div>
       ),
       okText: t('app.master-data.bom.okApprove'),
-      cancelText: t('app.master-data.bom.cancel'),
+      cancelText: t('common.cancel'),
       onOk: async () => {
         try {
           // 直接调用批量审核API
@@ -1184,7 +1184,7 @@ const BOMPage: React.FC = () => {
       ),
       okText: t('app.master-data.bom.okUnapprove'),
       okType: 'danger',
-      cancelText: t('app.master-data.bom.cancel'),
+      cancelText: t('common.cancel'),
       onOk: async () => {
         try {
           await bomApi.batchApprove(toProcess, true, t('app.master-data.bom.batchUnapproveComment'), recursiveApprovalRef.current, true);
@@ -2324,7 +2324,7 @@ const BOMPage: React.FC = () => {
       setObsoleteReason('');
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.master-data.bom.operationFailed'));
+      messageApi.error(error?.message || t('common.operationFailed'));
     } finally {
       setObsoleteLoading(false);
     }
@@ -2341,15 +2341,15 @@ const BOMPage: React.FC = () => {
     getAntdModal().confirm({
       title: t('app.master-data.bom.setDefaultVersionTitle'),
       content: t('app.master-data.bom.setDefaultVersionContent', { bomCode: record.bomCode, version: record.version }),
-      okText: t('app.master-data.bom.ok'),
-      cancelText: t('app.master-data.bom.cancel'),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       onOk: async () => {
         try {
           await bomApi.update(record.uuid, { isDefault: true });
           messageApi.success(t('app.master-data.bom.setDefaultSuccess'));
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || t('app.master-data.bom.operationFailed'));
+          messageApi.error(error.message || t('common.operationFailed'));
         }
       },
     });
@@ -2433,7 +2433,7 @@ const BOMPage: React.FC = () => {
         messageApi.error(result.message || t('app.master-data.bom.printFailed'));
         return;
       }
-      const win = openPrintHtmlWindow(result.content, t('app.master-data.bom.printBom'));
+      const win = openPrintHtmlWindow(result.content, t('common.print'));
       if (!win) {
         messageApi.error(t('app.master-data.bom.printFailed'));
       }
@@ -2736,7 +2736,7 @@ const BOMPage: React.FC = () => {
       }
     },
     { 
-      title: t('app.master-data.bom.unitTitle'), 
+      title: t('common.unit'), 
       dataIndex: 'unit', 
       width: 80, 
       hideInSearch: true,
@@ -2787,7 +2787,7 @@ const BOMPage: React.FC = () => {
       },
     },
     {
-      title: t('app.master-data.bom.actionTitle'),
+      title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
       /** 主行直出详情/编辑/设计/审核；页面自管「更多」由 uni-action 钉住，不再二次折叠 */
@@ -2806,7 +2806,7 @@ const BOMPage: React.FC = () => {
         const moreItems: MenuProps['items'] = [
           {
             type: 'group',
-            label: t('app.master-data.bom.view'),
+            label: t('common.view'),
             children: [
               { key: 'calculateQuantity', icon: <CalculatorOutlined />, label: t('app.master-data.bom.calculateQuantity'), onClick: () => handleCalculateQuantity(r) },
               { key: 'whereUsed', label: t('app.master-data.bom.whereUsed'), onClick: () => handleOpenWhereUsed(r.materialId) },
@@ -2826,7 +2826,7 @@ const BOMPage: React.FC = () => {
           ...(bomPerms.canDelete ? [{
             key: 'delete',
             icon: <DeleteOutlined />,
-            label: t('app.master-data.bom.delete'),
+            label: t('common.delete'),
             danger: true,
             onClick: () => handleDeleteGroup(record),
             disabled: isApproved,
@@ -2840,10 +2840,10 @@ const BOMPage: React.FC = () => {
             type="link"
             size="small"
             onClick={() => handleOpenDetail(r)}
-            title={t('app.master-data.bom.detail')}
+            title={t('common.detail')}
             data-action-priority={0}
           >
-            {t('app.master-data.bom.detail')}
+            {t('common.detail')}
           </Button>,
           bomPerms.canUpdate ? (
           <Button
@@ -2854,11 +2854,11 @@ const BOMPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(r)}
             disabled={isApproved}
-            title={isApproved ? t('app.master-data.bom.approvedCannotEditTitle') : t('app.master-data.bom.editTitle')}
+            title={isApproved ? t('app.master-data.bom.approvedCannotEditTitle') : t('common.edit')}
             data-action-priority={1}
             {...(isApproved ? { 'data-row-action-visible-when-disabled': true } : {})}
           >
-            {t('app.master-data.bom.editTitle')}
+            {t('common.edit')}
           </Button>
           ) : null,
           bomPerms.canUpdate ? (
@@ -2908,7 +2908,7 @@ const BOMPage: React.FC = () => {
           ),
           <Dropdown key="more" {...rowActionKind('skip')} menu={{ items: moreItems }} trigger={['click']} data-action-priority={4}>
             <Button type="text" className="ant-btn-row-action" icon={<MoreOutlined />}>
-              {t('app.master-data.bom.more')}
+              {t('common.more')}
             </Button>
           </Dropdown>,
         ].filter(Boolean);
@@ -2957,7 +2957,7 @@ const BOMPage: React.FC = () => {
       dataIndex: 'quantity',
     },
     {
-      title: t('app.master-data.bom.unitTitle'),
+      title: t('common.unit'),
       dataIndex: 'unit',
       render: (_, record) => record.unit || '-',
     },
@@ -2971,7 +2971,7 @@ const BOMPage: React.FC = () => {
       dataIndex: 'isRequired',
       render: (_, record) => (
         <Tag color={record.isRequired !== false ? 'success' : 'default'}>
-          {record.isRequired !== false ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+          {record.isRequired !== false ? t('common.yes') : t('common.no')}
         </Tag>
       ),
     },
@@ -3009,7 +3009,7 @@ const BOMPage: React.FC = () => {
       dataIndex: 'isAlternative',
       render: (_, record) => (
         <Tag color={record.isAlternative ? 'orange' : 'default'}>
-          {record.isAlternative ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+          {record.isAlternative ? t('common.yes') : t('common.no')}
         </Tag>
       ),
     },
@@ -3023,7 +3023,7 @@ const BOMPage: React.FC = () => {
         const isConfigurableItem = manualCfg || autoCfg;
         return (
           <Tag color={isConfigurableItem ? 'cyan' : 'default'}>
-            {isConfigurableItem ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+            {isConfigurableItem ? t('common.yes') : t('common.no')}
           </Tag>
         );
       },
@@ -3038,12 +3038,12 @@ const BOMPage: React.FC = () => {
       dataIndex: 'priority',
     },
     {
-      title: t('app.master-data.bom.descTitle'),
+      title: t('common.remark'),
       dataIndex: 'description',
       span: 3,
     },
     {
-      title: t('app.master-data.bom.remarkTitle'),
+      title: t('common.remark'),
       dataIndex: 'remark',
       span: 2,
     },
@@ -3071,17 +3071,17 @@ const BOMPage: React.FC = () => {
       dataIndex: 'isActive',
       render: (_, record) => (
         <Tag color={record.isActive ? 'success' : 'default'} variant="solid">
-          {record.isActive ? t('app.master-data.bom.enabled') : t('app.master-data.bom.disabled')}
+          {record.isActive ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
     {
-      title: t('app.master-data.bom.createTimeTitle'),
+      title: t('common.createdAt'),
       dataIndex: 'createdAt',
       valueType: 'dateTime',
     },
     {
-      title: t('app.master-data.bom.updateTimeTitle'),
+      title: t('common.updatedAt'),
       dataIndex: 'updatedAt',
       valueType: 'dateTime',
     },
@@ -3109,7 +3109,7 @@ const BOMPage: React.FC = () => {
         align: 'right',
       },
       {
-        title: t('app.master-data.bom.unitTitle'),
+        title: t('common.unit'),
         dataIndex: 'unit',
         width: 60,
         align: 'center',
@@ -3132,7 +3132,7 @@ const BOMPage: React.FC = () => {
         align: 'center',
         render: (_, record) => (
           <Tag color={record.isRequired !== false ? 'success' : 'default'} style={{ marginRight: 0 }}>
-            {record.isRequired !== false ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+            {record.isRequired !== false ? t('common.yes') : t('common.no')}
           </Tag>
         ),
       },
@@ -3161,7 +3161,7 @@ const BOMPage: React.FC = () => {
         align: 'center',
         render: (_, record) => (
           <Tag color={record.isAlternative ? 'orange' : 'default'} style={{ marginRight: 0 }}>
-            {record.isAlternative ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+            {record.isAlternative ? t('common.yes') : t('common.no')}
           </Tag>
         ),
       },
@@ -3177,7 +3177,7 @@ const BOMPage: React.FC = () => {
           const isConfigurableItem = manualCfg || autoCfg;
           return (
             <Tag color={isConfigurableItem ? 'cyan' : 'default'} style={{ marginRight: 0 }}>
-              {isConfigurableItem ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+              {isConfigurableItem ? t('common.yes') : t('common.no')}
             </Tag>
           );
         },
@@ -3198,7 +3198,7 @@ const BOMPage: React.FC = () => {
         render: (_, record) => record.priority ?? 0,
       },
       {
-        title: t('app.master-data.bom.descTitle'),
+        title: t('common.remark'),
         dataIndex: 'description',
         width: 150,
         ellipsis: true,
@@ -3554,7 +3554,7 @@ const BOMPage: React.FC = () => {
               { key: 'wasteRate', title: t('app.master-data.bom.importHeaderWasteRate') },
               { key: 'isRequired', title: t('app.master-data.bom.importHeaderIsRequired') },
               { key: 'isActive', title: t('app.master-data.bom.importHeaderIsActive') },
-              { key: 'remark', title: t('app.master-data.bom.importHeaderRemark') },
+              { key: 'remark', title: t('common.remark') },
               { key: 'materialName', title: t('app.master-data.bom.importHeaderMaterialName') },
               { key: 'specification', title: t('app.master-data.bom.importHeaderSpecification') },
               { key: 'baseUnit', title: t('app.master-data.bom.importHeaderBaseUnit') },
@@ -3576,7 +3576,7 @@ const BOMPage: React.FC = () => {
             );
             messageApi.success(t('common.exportSuccess', { count: flatRows.length }));
           } catch (error: any) {
-            messageApi.error(error?.message || t('app.master-data.exportFailed'));
+            messageApi.error(error?.message || t('common.exportFailed'));
           }
         }}
         enableRowSelection
@@ -3615,7 +3615,7 @@ const BOMPage: React.FC = () => {
                   icon={<PrinterOutlined />}
                   onClick={() => handlePrintBom(bomDetail.materialId, bomDetail.version)}
                 >
-                  {t('app.master-data.bom.printBom')}
+                  {t('common.print')}
                 </Button>
               ) : null}
             </Space>
@@ -4010,7 +4010,7 @@ const BOMPage: React.FC = () => {
                 ),
               },
               {
-                title: t('app.master-data.bom.unitTitle'),
+                title: t('common.unit'),
                 dataIndex: 'unit',
                 width: 80,
                 render: (_, __, index) => (
@@ -4209,7 +4209,7 @@ const BOMPage: React.FC = () => {
                 ),
               },
               {
-                title: t('app.master-data.bom.descLabel'),
+                title: t('common.remark'),
                 dataIndex: 'description',
                 width: 150,
                 render: (_, __, index) => (
@@ -4232,14 +4232,14 @@ const BOMPage: React.FC = () => {
         </ProForm.Item>
         <ProFormTextArea
           name="description"
-          label={t('app.master-data.bom.descFormLabel')}
+          label={t('common.remark')}
           placeholder={t('app.master-data.bom.descFormPlaceholder')}
           colProps={{ span: 24 }}
           fieldProps={{ rows: 2, maxLength: 500, showCount: true }}
         />
         <ProFormSwitch
           name="isActive"
-          label={t('app.master-data.bom.isEnabledLabel')}
+          label={t('common.enabled')}
           colProps={{ span: 12 }}
         />
       </FormModalTemplate>
@@ -4486,8 +4486,8 @@ const BOMPage: React.FC = () => {
         }}
         onOk={handleSetObsoleteSubmit}
         confirmLoading={obsoleteLoading}
-        okText={t('app.master-data.bom.ok')}
-        cancelText={t('app.master-data.bom.cancel')}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
       >
         <p style={{ marginBottom: 8 }}>{t('app.master-data.bom.setObsoleteConfirm')}</p>
         {obsoleteRecord && (
@@ -4631,7 +4631,7 @@ const BOMPage: React.FC = () => {
                           )}
                           {v1.unit !== v2.unit && (
                             <div style={{ paddingLeft: 16 }}>
-                              {t('app.master-data.bom.unitTitle')}：
+                              {t('common.unit')}：
                               <span style={{ textDecoration: 'line-through', color: '#ff4d4f', marginLeft: 8 }}>{v1.unit ?? '-'}</span>
                               {' → '}
                               <span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.unit ?? '-'}</span>
@@ -4649,11 +4649,11 @@ const BOMPage: React.FC = () => {
                             <div style={{ paddingLeft: 16 }}>
                               {t('app.master-data.bom.isRequiredTitle')}：
                               <span style={{ textDecoration: 'line-through', color: '#ff4d4f', marginLeft: 8 }}>
-                                {v1.isRequired ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+                                {v1.isRequired ? t('common.yes') : t('common.no')}
                               </span>
                               {' → '}
                               <span style={{ color: '#52c41a', fontWeight: 500 }}>
-                                {v2.isRequired ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+                                {v2.isRequired ? t('common.yes') : t('common.no')}
                               </span>
                             </div>
                           )}
@@ -4929,7 +4929,7 @@ const BOMPage: React.FC = () => {
                   render: (status) => (status ? getApprovalStatusTag(String(status)) : '-'),
                 },
                 {
-                  title: t('app.master-data.bom.actionTitle'),
+                  title: t('common.actions'),
                   width: 80,
                   render: (_, row) => (
                     <Button type="link" size="small" onClick={() => navigateToParentBom(row)}>

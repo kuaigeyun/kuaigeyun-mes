@@ -1159,7 +1159,7 @@ const SalesOrdersPage: React.FC = () => {
       if (actionRef.current?.clearSelected) actionRef.current.clearSelected();
       setSelectedRowKeys([]);
     } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.salesOrder.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
       throw error;
     }
   };
@@ -1225,7 +1225,7 @@ const SalesOrdersPage: React.FC = () => {
             setCurrentSalesOrder(null);
           }
         } catch (error: any) {
-          messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.deleteFailed')));
+          messageApi.error(salesOrderCatchMessage(error, t('common.deleteFailed')));
         }
       },
     });
@@ -1452,7 +1452,7 @@ const SalesOrdersPage: React.FC = () => {
       }
     } catch (error: any) {
       console.error(error);
-      messageApi.error(error.message || t('app.kuaizhizao.salesOrder.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
     }
   };
 
@@ -1467,7 +1467,7 @@ const SalesOrdersPage: React.FC = () => {
       if (err?.errorFields?.length) {
         messageApi.warning(err?.message ?? t('app.kuaizhizao.salesOrder.completeRequired'));
       } else {
-        messageApi.error(err?.message ?? t('app.kuaizhizao.salesOrder.operationFailed'));
+        messageApi.error(err?.message ?? t('common.operationFailed'));
       }
     }
   };
@@ -2322,7 +2322,7 @@ const SalesOrdersPage: React.FC = () => {
             : '-',
       },
       {
-        title: t('app.kuaizhizao.salesOrder.status'),
+        title: t('common.status'),
         dataIndex: 'status',
         width: 100,
         align: 'center' as const,
@@ -2397,7 +2397,7 @@ const SalesOrdersPage: React.FC = () => {
             : '-',
       },
       {
-        title: t('app.kuaizhizao.salesOrder.status'),
+        title: t('common.status'),
         dataIndex: 'status',
         width: 100,
         align: 'center' as const,
@@ -2463,7 +2463,7 @@ const SalesOrdersPage: React.FC = () => {
             : '-',
       },
       {
-        title: t('app.kuaizhizao.salesReview.colStatus'),
+        title: t('common.status'),
         dataIndex: 'status',
         width: 100,
         align: 'center' as const,
@@ -2604,7 +2604,7 @@ const SalesOrdersPage: React.FC = () => {
         [t('app.kuaizhizao.salesOrder.paymentTerms')]: 'payment_terms',
         [t('app.kuaizhizao.quotation.form.currency')]: 'currency_code',
         [t('app.kuaizhizao.salesOrder.priceType')]: 'price_type',
-        [t('app.kuaizhizao.salesOrder.notes')]: 'notes',
+        [t('common.remark')]: 'notes',
       };
 
       // 转换数据
@@ -3056,7 +3056,7 @@ const SalesOrdersPage: React.FC = () => {
     () => (
       <Space key="highlight-overdue-switch" align="center">
         <Switch checked={highlightDeliveryOverdue} onChange={setHighlightDeliveryOverdue} />
-        <span style={{ fontSize: 13, color: 'var(--ant-color-text)' }}>
+        <span className="uni-table-toolbar-plain-label" style={{ fontSize: 13, color: 'var(--ant-color-text)' }}>
           {t('app.kuaizhizao.salesOrder.highlightOverdue')}
         </span>
       </Space>
@@ -3312,7 +3312,7 @@ const SalesOrdersPage: React.FC = () => {
     },
     ...salesOrderCustomFieldColumns,
     {
-      title: t('app.kuaizhizao.salesOrder.actions'),
+      title: t('common.actions'),
       key: 'option',
       fixed: 'right' as const,
       hideInSearch: true,
@@ -3427,7 +3427,7 @@ const SalesOrdersPage: React.FC = () => {
       hideInTable: true,
     },
     {
-      title: t('app.kuaizhizao.salesOrder.unit'),
+      title: t('common.unit'),
       dataIndex: 'material_unit',
       width: 72,
       hideInTable: true,
@@ -3436,7 +3436,7 @@ const SalesOrdersPage: React.FC = () => {
       ),
     },
     {
-      title: t('app.kuaizhizao.salesOrder.quantity'),
+      title: t('common.quantity'),
       dataIndex: 'required_quantity',
       width: 120,
       align: 'right' as const,
@@ -4043,7 +4043,7 @@ const SalesOrdersPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: t('app.kuaizhizao.salesOrder.unit'),
+                      title: t('common.unit'),
                       dataIndex: 'material_unit',
                       width: DOCUMENT_DETAIL_COL_WIDTH.unit,
                       ...DOCUMENT_DETAIL_TEXT_COL,
@@ -4070,13 +4070,13 @@ const SalesOrdersPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: t('app.kuaizhizao.salesOrder.quantity'),
+                      title: t('common.quantity'),
                       dataIndex: 'required_quantity',
                       width: DOCUMENT_DETAIL_COL_WIDTH.quantity,
                       ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item name={[index, 'required_quantity']} rules={[{ required: true, message: t('common.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.salesOrder.quantityMinHint') }]} style={{ margin: 0 }}>
-                          <InputNumber placeholder={t('app.kuaizhizao.salesOrder.quantity')} min={0} precision={2} style={{ width: '100%' }} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
+                          <InputNumber placeholder={t('common.quantity')} min={0} precision={2} style={{ width: '100%' }} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                         </AntForm.Item>
                       ),
                     },
@@ -4339,13 +4339,13 @@ const SalesOrdersPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: t('app.kuaizhizao.salesOrder.notes'),
+                      title: t('common.remark'),
                       dataIndex: 'notes',
                       width: DOCUMENT_DETAIL_COL_WIDTH.notes,
                       ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item name={[index, 'notes']} style={{ margin: 0 }}>
-                          <Input placeholder={t('app.kuaizhizao.salesOrder.notes')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
+                          <Input placeholder={t('common.remark')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                         </AntForm.Item>
                       ),
                     },
@@ -4428,7 +4428,7 @@ const SalesOrdersPage: React.FC = () => {
 
           <ProFormTextArea
             name="notes"
-            label={t('app.kuaizhizao.salesOrder.notes')}
+            label={t('common.remark')}
             placeholder={t('app.kuaizhizao.salesOrder.notesPlaceholder')}
           />
       </DetailDrawerSection>
@@ -4460,7 +4460,7 @@ const SalesOrdersPage: React.FC = () => {
             onCancel={() => setImportModalVisible(false)}
             onConfirm={handleItemImport}
             title={t('app.kuaizhizao.salesOrder.importItemsTitle')}
-            headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('app.kuaizhizao.salesOrder.unit'), t('app.kuaizhizao.salesOrder.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
+            headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('common.unit'), t('common.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
             exampleRow={['MAT001', 'Spec X', pickImportExampleValue(salesOrderLineUnitOptions, 'PCS'), '100', '1.5', '2026-03-01']}
             columnOptions={salesOrderLineImportColumnOptions}
           />
@@ -4757,7 +4757,7 @@ const SalesOrdersPage: React.FC = () => {
           onCreate={handleCreate}
           toolBarRender={() => salesOrderToolbarRenderItems}
           showDeleteButton={viewTypeState !== 'detailTable'}
-          deleteButtonText={t('app.kuaizhizao.salesOrder.batchDelete')}
+          deleteButtonText={t('common.batchDelete')}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={t('app.kuaizhizao.salesOrder.confirmDelete')}
           deleteConfirmDescription={(count) => t('app.kuaizhizao.salesOrder.deleteConfirm', { count })}
@@ -4906,7 +4906,7 @@ const SalesOrdersPage: React.FC = () => {
                 toExport = flatRows.filter((r) => keys.includes(r._rowKey));
               }
               if (toExport.length === 0) {
-                messageApi.warning(t('app.kuaizhizao.salesOrder.noDataToExport'));
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               await downloadRecordsAsXlsx(
@@ -4915,7 +4915,7 @@ const SalesOrdersPage: React.FC = () => {
               );
               messageApi.success(t('app.kuaizhizao.salesOrder.exportSuccess', { count: toExport.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.exportFailed'));
+              messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
           showSyncButton
@@ -4936,7 +4936,7 @@ const SalesOrdersPage: React.FC = () => {
             t('app.kuaizhizao.salesOrder.paymentTerms'),
             t('app.kuaizhizao.quotation.form.currency'),
             t('app.kuaizhizao.salesOrder.priceType'),
-            t('app.kuaizhizao.salesOrder.notes'),
+            t('common.remark'),
           ]}
           importColumnOptions={salesOrderImportColumnOptions}
           importExampleRow={[
@@ -4971,7 +4971,7 @@ const SalesOrdersPage: React.FC = () => {
             [t('app.kuaizhizao.salesOrder.paymentTerms')]: 'payment_terms',
             [t('app.kuaizhizao.quotation.form.currency')]: 'currency_code',
             [t('app.kuaizhizao.salesOrder.priceType')]: 'price_type',
-            [t('app.kuaizhizao.salesOrder.notes')]: 'notes',
+            [t('common.remark')]: 'notes',
           }}
         />
         </SalesOrderIndicatorsProvider>
@@ -5011,12 +5011,12 @@ const SalesOrdersPage: React.FC = () => {
                     handleEdit([currentSalesOrder.id!]);
                   }}
                 >
-                  {t('app.kuaizhizao.salesOrder.editAction')}
+                  {t('common.edit')}
                 </Button>
               )}
               {!detailCapabilityGates.delete.disabled && (
                 <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteSingle(currentSalesOrder.id!)}>
-                  {t('app.kuaizhizao.salesOrder.delete')}
+                  {t('common.delete')}
                 </Button>
               )}
               <UniWorkflowActions
@@ -5298,7 +5298,7 @@ const SalesOrdersPage: React.FC = () => {
               ]}
             />
           </AntForm.Item>
-          <AntForm.Item name="remarks" label={t('app.kuaizhizao.salesOrder.notes')}>
+          <AntForm.Item name="remarks" label={t('common.remark')}>
             <Input.TextArea rows={3} placeholder={t('app.kuaizhizao.salesOrder.remarksPlaceholder')} maxLength={500} showCount />
           </AntForm.Item>
         </AntForm>
@@ -5428,7 +5428,7 @@ const SalesOrdersPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 140, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const, render: formatQuantity },
+                  { title: t('common.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   {
@@ -5544,7 +5544,7 @@ const SalesOrdersPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const, render: formatQuantity },
+                  { title: t('common.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   {
@@ -5636,7 +5636,7 @@ const SalesOrdersPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 120, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 140, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 80, align: 'right' as const, render: formatQuantity },
+                  { title: t('common.quantity'), dataIndex: 'quantity', key: 'quantity', width: 80, align: 'right' as const, render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 80, align: 'right' as const, render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 80, align: 'right' as const, render: formatQuantity },
                   {
@@ -5726,7 +5726,7 @@ const SalesOrdersPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const, render: formatQuantity },
+                  { title: t('common.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   {
@@ -5819,7 +5819,7 @@ const SalesOrdersPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const, render: formatQuantity },
+                  { title: t('common.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   {
@@ -5959,7 +5959,7 @@ const SalesOrdersPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const, render: formatQuantity },
+                  { title: t('common.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const, render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', key: 'delivery_date', width: 110 },
@@ -5975,7 +5975,7 @@ const SalesOrdersPage: React.FC = () => {
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 120, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 140, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 80, align: 'right' as const, render: formatQuantity },
+                  { title: t('common.quantity'), dataIndex: 'quantity', key: 'quantity', width: 80, align: 'right' as const, render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', key: 'delivery_date', width: 100 },
                   ...(pushPreviewData.items[0]?.suggested_action
                     ? [{ title: t('app.kuaizhizao.salesOrder.suggestion'), dataIndex: 'suggested_action', key: 'suggested_action', width: 70 }]

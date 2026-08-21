@@ -250,8 +250,8 @@ export function formatConductStepValue(
   if (vt === 'boolean') {
     const actual = value === true || value === 'true' || value === 1;
     return actual
-      ? t('app.kuaizhizao.quality.plans.stepSpec.passWhenYes')
-      : t('app.kuaizhizao.quality.plans.stepSpec.passWhenNo');
+      ? t('common.yes')
+      : t('common.no');
   }
   if (vt === 'single_select') {
     const opts = (spec.options as Array<{ value: string; label: string }>) || [];

@@ -1016,7 +1016,7 @@ const CustomMenuLayoutEditor: React.FC<CustomMenuLayoutEditorProps> = ({
   return (
     <Space direction="vertical" style={{ width: '100%' }} size={12}>
       <Space align="center" size={12} wrap>
-        <Typography.Text>{t('pages.system.menus.customLayoutEnabled')}</Typography.Text>
+        <Typography.Text>{t('common.enabled')}</Typography.Text>
         <Switch
           checked={state.enabled}
           onChange={(enabled) => onStateChange({ enabled })}

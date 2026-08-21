@@ -177,7 +177,7 @@ const SparePartRequisitionFormModal: React.FC<SparePartRequisitionFormModalProps
         <Col span={12}>
           <Form.Item
             name="notes"
-            label={t('app.kuaizhizao.afterSalesService.sparePartRequisition.field.notes')}
+            label={t('common.remark')}
           >
             <Input.TextArea rows={1} />
           </Form.Item>
@@ -229,7 +229,7 @@ const SparePartRequisitionFormModal: React.FC<SparePartRequisitionFormModalProps
             ),
           },
           {
-            title: t('app.kuaizhizao.afterSalesService.sparePartRequisition.field.quantity'),
+            title: t('common.quantity'),
             dataIndex: 'quantity',
             width: 120,
             render: (_: unknown, __: unknown, index: number) => (

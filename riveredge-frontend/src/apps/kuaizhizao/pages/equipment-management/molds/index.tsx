@@ -138,7 +138,7 @@ const MoldsPage: React.FC = () => {
           },
           { field: 'cavity_count', labelKey: 'app.kuaizhizao.mold.import.cavityCount', aliases: ['腔数（模数）', '腔数'] },
           { field: 'design_lifetime', labelKey: 'app.kuaizhizao.mold.import.designLifetime', aliases: ['设计寿命（次）', '设计寿命'] },
-          { field: 'description', labelKey: 'app.kuaizhizao.mold.import.description', aliases: ['备注', '描述'] },
+          { field: 'description', labelKey: 'common.remark', aliases: ['备注', '描述'] },
           {
             field: 'is_active',
             labelKey: 'app.kuaizhizao.mold.import.isActive',
@@ -163,7 +163,7 @@ const MoldsPage: React.FC = () => {
           t('app.kuaizhizao.mold.importExample.cavityCount'),
           t('app.kuaizhizao.mold.importExample.designLifetime'),
           '',
-          pickImportExampleValue([...IMPORT_YES_NO_OPTIONS], t('app.kuaizhizao.mold.importExample.isActive')),
+          pickImportExampleValue([...IMPORT_YES_NO_OPTIONS], t('common.yes')),
         ],
       ),
     [t, i18n.language, moldDictOptions],
@@ -825,7 +825,7 @@ const MoldsPage: React.FC = () => {
           <Col span={24}>
             <ProFormTextArea
               name="description"
-              label={t('app.kuaizhizao.mold.fieldDescription')}
+              label={t('common.remark')}
               placeholder={t('app.kuaizhizao.mold.phDescription')}
               fieldProps={{ rows: 3 }}
             />

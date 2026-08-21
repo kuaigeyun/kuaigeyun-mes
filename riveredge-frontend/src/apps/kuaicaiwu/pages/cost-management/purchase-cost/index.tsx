@@ -133,7 +133,7 @@ const PurchaseCostPage: React.FC<PurchaseCostPageProps> = ({ embedded = false })
       },
       { title: t('app.kuaicaiwu.costCommon.col.supplier'), dataIndex: 'supplier_name', hide: !result?.supplier_name },
       { title: t('app.kuaicaiwu.costCommon.col.sourceType'), dataIndex: 'source_type' },
-      { title: t('app.kuaicaiwu.costCommon.col.quantity'), dataIndex: 'quantity' },
+      { title: t('common.quantity'), dataIndex: 'quantity' },
       { title: t('app.kuaicaiwu.purchaseCost.col.purchasePrice'), dataIndex: 'purchase_price' },
       { title: t('app.kuaicaiwu.purchaseCost.col.purchaseFee'), dataIndex: 'purchase_fee' },
       { title: t('app.kuaicaiwu.costCommon.col.totalCost'), dataIndex: 'total_cost' },
@@ -234,7 +234,7 @@ const PurchaseCostPage: React.FC<PurchaseCostPageProps> = ({ embedded = false })
             />
             <ProFormDigit
               name="quantity"
-              label={t('app.kuaicaiwu.costCommon.col.quantity')}
+              label={t('common.quantity')}
               placeholder={t('app.kuaicaiwu.costCommon.field.quantityPlaceholder')}
               rules={[
                 { required: true, message: t('app.kuaicaiwu.costCommon.field.quantityRequired') },

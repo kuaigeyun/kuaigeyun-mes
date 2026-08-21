@@ -440,7 +440,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
           span: 3,
         },
         {
-          title: t('app.kuaizhizao.purchaseOrderChange.notes'),
+          title: t('common.remark'),
           dataIndex: 'notes',
           span: 3,
         },
@@ -831,7 +831,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       >
         <ProFormTextArea name="change_reason" label={t('app.kuaizhizao.purchaseOrderChange.colChangeReason')} rules={[{ required: true }]} />
-        <ProFormTextArea name="notes" label={t('app.kuaizhizao.purchaseOrderChange.notes')} />
+        <ProFormTextArea name="notes" label={t('common.remark')} />
         <DocumentAttachmentsField category="purchase_order_change_attachments" />
         <OrderChangeItemsTable items={editItems ?? []} editable onChange={setEditItems} />
       </FormModalTemplate>
@@ -848,7 +848,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
               detail.capabilities?.preview_impact?.allowed &&
               purchaseOrderChangePerms.canAction?.('submit') ? (
                 <Button icon={<ThunderboltOutlined />} onClick={() => runSubmitWithPreview(detail.id!)}>
-                  {t('app.kuaizhizao.purchaseOrderChange.submit')}
+                  {t('common.submit')}
                 </Button>
               ) : null}
               {detail.capabilities?.update?.allowed && purchaseOrderChangePerms.canUpdate ? (
@@ -880,7 +880,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
         collaborationTitleSuffix={
           changeShowNextInTitle ? (
             <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-              {t('components.uniLifecycle.nextStep')}：
+              {t('common.next')}：
               {changeNextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
             </Typography.Text>
           ) : undefined

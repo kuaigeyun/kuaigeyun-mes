@@ -158,11 +158,11 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
             template_name: name.trim(),
             copy_from_id: detail?.id,
           });
-          messageApi.success(t('app.kuaiplm.common.messages.createSuccess'));
+          messageApi.success(t('common.createSuccess'));
           await loadTemplates();
           setSelectedId(created.id);
         } catch (error: any) {
-          messageApi.error(error?.message || t('app.kuaiplm.common.messages.createFailed'));
+          messageApi.error(error?.message || t('common.createFailed'));
           return Promise.reject();
         }
       },
@@ -176,11 +176,11 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
         template_name: `${tpl.template_name} ${t('app.kuaiplm.gateTemplates.copySuffix')}`,
         copy_from_id: tpl.id,
       });
-      messageApi.success(t('app.kuaiplm.common.messages.createSuccess'));
+      messageApi.success(t('common.createSuccess'));
       await loadTemplates();
       setSelectedId(created.id);
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaiplm.common.messages.createFailed'));
+      messageApi.error(error?.message || t('common.createFailed'));
     }
   };
 
@@ -200,21 +200,21 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
     if (!detail?.id) return;
     try {
       await updateGateTemplate(detail.id, { is_active: checked });
-      messageApi.success(t('app.kuaiplm.common.messages.updateSuccess'));
+      messageApi.success(t('common.updateSuccess'));
       await loadTemplates();
       await loadDetail(detail.id);
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaiplm.common.messages.updateFailed'));
+      messageApi.error(error?.message || t('common.updateFailed'));
     }
   };
 
   const handleDeleteTemplate = async (tpl: GateTemplateSummary) => {
     try {
       await deleteGateTemplate(tpl.id);
-      messageApi.success(t('app.kuaiplm.common.messages.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       await loadTemplates();
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaiplm.common.messages.deleteFailed'));
+      messageApi.error(error?.message || t('common.deleteFailed'));
     }
   };
 
@@ -264,7 +264,7 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
         })),
       }));
       const updated = await saveGateTemplateStages(detail.id, payload);
-      messageApi.success(t('app.kuaiplm.common.messages.updateSuccess'));
+      messageApi.success(t('common.updateSuccess'));
       setDetail(updated);
       setStages(
         (updated.stages ?? []).map((stage) => ({
@@ -275,7 +275,7 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
       );
       await loadTemplates();
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaiplm.common.messages.updateFailed'));
+      messageApi.error(error?.message || t('common.updateFailed'));
     } finally {
       setSaving(false);
     }
@@ -335,7 +335,7 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
       ),
     },
     {
-      title: t('app.kuaiplm.common.columns.actions'),
+      title: t('common.actions'),
       width: 100,
       render: (_, __, index) =>
         perms.canUpdate ? (
@@ -345,7 +345,7 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
             size="small"
             onClick={() => setStages((prev) => prev.filter((_, i) => i !== index))}
           >
-            {t('app.kuaiplm.common.actions.delete')}
+            {t('common.delete')}
           </Button>
         ) : null,
     },
@@ -360,7 +360,7 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
           </Button>
         ) : null}
         <Button icon={<ReloadOutlined />} onClick={() => void loadTemplates()}>
-          {t('app.kuaiplm.common.actions.refresh')}
+          {t('common.refresh')}
         </Button>
       </Space>
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
@@ -466,7 +466,7 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
         ) : null}
         {perms.canUpdate ? (
           <>
-            <span>{t('app.kuaiplm.gateTemplates.form.isActive')}</span>
+            <span>{t('common.enabled')}</span>
             <Switch
               checked={detail.is_active}
               disabled={detail.is_default}
@@ -573,7 +573,7 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
                       ),
                     },
                     {
-                      title: t('app.kuaiplm.common.columns.actions'),
+                      title: t('common.actions'),
                       width: 80,
                       render: (_, __, dIdx) =>
                         perms.canUpdate ? (
@@ -593,7 +593,7 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
                               );
                             }}
                           >
-                            {t('app.kuaiplm.common.actions.delete')}
+                            {t('common.delete')}
                           </Button>
                         ) : null,
                     },

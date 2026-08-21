@@ -354,11 +354,11 @@ const CustomFieldListPage: React.FC = () => {
   const handleDelete = async (record: CustomField) => {
     try {
       await deleteCustomField(record.uuid);
-      messageApi.success(t('pages.system.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
       void loadTableFieldCounts();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -377,22 +377,22 @@ const CustomFieldListPage: React.FC = () => {
           successCount++;
         } catch (error: any) {
           failCount++;
-          errors.push(error.message || t('pages.system.deleteFailed'));
+          errors.push(error.message || t('common.deleteFailed'));
         }
       }
 
       if (successCount > 0) {
-        messageApi.success(t('pages.system.deleteSuccess'));
+        messageApi.success(t('common.deleteSuccess'));
       }
       if (failCount > 0) {
-        messageApi.error(t('pages.system.deleteFailed') + (errors.length > 0 ? t('field.customField.errorDetailPrefix') + errors.join('; ') : ''));
+        messageApi.error(t('common.deleteFailed') + (errors.length > 0 ? t('field.customField.errorDetailPrefix') + errors.join('; ') : ''));
       }
 
       setSelectedRowKeys([]);
       actionRef.current?.reload();
       void loadTableFieldCounts();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -509,20 +509,20 @@ const CustomFieldListPage: React.FC = () => {
           ...fieldData,
           config: Object.keys(config).length > 0 ? config : undefined,
         } as UpdateCustomFieldData);
-        messageApi.success(t('pages.system.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createCustomField({
           ...fieldData,
           config: Object.keys(config).length > 0 ? config : undefined,
         } as CreateCustomFieldData);
-        messageApi.success(t('pages.system.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
 
       setModalVisible(false);
       actionRef.current?.reload();
       void loadTableFieldCounts();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -1018,8 +1018,8 @@ const CustomFieldListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('field.customField.yes'), status: 'Success' },
-        false: { text: t('field.customField.no'), status: 'Default' },
+        true: { text: t('common.yes'), status: 'Success' },
+        false: { text: t('common.no'), status: 'Default' },
       },
       render: (_, record) => renderSystemYesNoTag(t, record.is_required),
     },
@@ -1034,7 +1034,7 @@ const CustomFieldListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('field.customField.status'),
+      title: t('common.status'),
       dataIndex: 'is_active',
       width: 100,
       minWidth: 100,
@@ -1042,14 +1042,14 @@ const CustomFieldListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('field.customField.enabled'), status: 'Success' },
-        false: { text: t('field.customField.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) =>
-        renderSystemActiveTag(t, record.is_active, 'field.customField.enabled', 'field.customField.disabled'),
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
-      title: t('field.customField.createdAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       minWidth: 180,
@@ -1067,14 +1067,14 @@ const CustomFieldListPage: React.FC = () => {
       hideInSearch: true,
       render: (_, record) => [
             <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
-              {t('field.customField.view')}
+              {t('common.view')}
             </Button>,
             <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
-              {t('field.customField.edit')}
+              {t('common.edit')}
             </Button>,
             <Popconfirm {...rowActionKind('delete')} key="delete" title={t('field.customField.deleteConfirm')} onConfirm={() => handleDelete(record)}>
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('field.customField.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>,
           ],
@@ -1145,13 +1145,13 @@ const CustomFieldListPage: React.FC = () => {
     },
     { title: t('field.customField.sortOrderLabel'), dataIndex: 'sort_order' },
     {
-      title: t('field.customField.status'),
+      title: t('common.status'),
       dataIndex: 'is_active',
       render: (_: any, entity: CustomField) =>
-        renderSystemActiveTag(t, entity?.is_active, 'field.customField.enabled', 'field.customField.disabled'),
+        renderSystemActiveTag(t, entity?.is_active, 'common.enabled', 'common.disabled'),
     },
-    { title: t('field.customField.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' as const },
-    { title: t('field.customField.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' as const },
+    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' as const },
+    { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' as const },
   ];
 
   return (
@@ -1370,7 +1370,7 @@ const CustomFieldListPage: React.FC = () => {
                     onRowSelectionChange={setSelectedRowKeys}
                     showDeleteButton
                     onDelete={handleBatchDelete}
-                    deleteButtonText={t('field.customField.batchDeleteButton')}
+                    deleteButtonText={t('common.batchDelete')}
                     deleteConfirmTitle={t('field.customField.batchDeleteConfirmTitle')}
                     deleteConfirmDescription={(c) => t('field.customField.batchDeleteConfirmDescription', { count: c })}
                     showImportButton={false}
@@ -1390,7 +1390,7 @@ const CustomFieldListPage: React.FC = () => {
                           items = items.filter((d) => keys.includes(d.uuid));
                         }
                         if (items.length === 0) {
-                          messageApi.warning(t('field.customField.exportNoData'));
+                          messageApi.warning(t('common.exportNoData'));
                           return;
                         }
                         await downloadRecordsAsXlsx(
@@ -1399,7 +1399,7 @@ const CustomFieldListPage: React.FC = () => {
                         );
                         messageApi.success(t('field.customField.exportSuccess', { count: items.length }));
                       } catch (error: any) {
-                        messageApi.error(error?.message || t('pages.system.deleteFailed'));
+                        messageApi.error(error?.message || t('common.deleteFailed'));
                       }
                     }}
                   />
@@ -1585,7 +1585,7 @@ const CustomFieldListPage: React.FC = () => {
           />
           <ProFormSwitch
             name="is_active"
-            label={t('field.customField.isActiveLabel')}
+            label={t('common.enabled')}
             colProps={{ span: 6 }}
           />
       </FormModalTemplate>

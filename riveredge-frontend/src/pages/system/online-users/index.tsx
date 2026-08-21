@@ -466,7 +466,7 @@ const OnlineUsersPage: React.FC = () => {
                 items = items.filter((d) => keys.includes(d.user_id));
               }
               if (items.length === 0) {
-                messageApi.warning(t('pages.system.onlineUsers.noDataExport'));
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               await downloadRecordsAsXlsx(
@@ -475,7 +475,7 @@ const OnlineUsersPage: React.FC = () => {
               );
               messageApi.success(t('pages.system.onlineUsers.exportSuccessCount', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || t('pages.system.onlineUsers.exportFailed'));
+              messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
           toolBarRender={() => [

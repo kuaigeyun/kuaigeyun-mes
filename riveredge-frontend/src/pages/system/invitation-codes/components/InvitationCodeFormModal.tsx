@@ -64,10 +64,10 @@ export const InvitationCodeFormModal: React.FC<InvitationCodeFormModalProps> = (
       setFormLoading(true);
       if (isEdit && editUuid) {
         await updateInvitationCode(editUuid, values as UpdateInvitationCodeData);
-        messageApi.success(t('pages.system.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createInvitationCode(values as CreateInvitationCodeData);
-        messageApi.success(t('pages.system.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
       onClose();
       formRef.current?.resetFields();

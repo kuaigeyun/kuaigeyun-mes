@@ -59,7 +59,7 @@ const InputCertificationPage: React.FC = () => {
       width: 220,
       render: (_, row) => [
         <Button key="view" type="link" size="small" onClick={() => navigate(`/apps/kuaicaiwu/finance-management/purchase-invoices/${row.id}`)}>
-          {t(`${NS}.view`, { defaultValue: '详情' })}
+          {t('common.detail', { defaultValue: '详情' })}
         </Button>,
         canUpdate && row.verification_status === 'pending' && (
           <Button

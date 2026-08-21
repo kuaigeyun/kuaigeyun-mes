@@ -223,7 +223,7 @@ const VatLedgerPage: React.FC = () => {
           <Space>
             <Button onClick={() => setPrintOpen(false)}>{t('common.close', { defaultValue: '关闭' })}</Button>
             <Button type="primary" onClick={() => printRef.current && printVatLedgerNode(printRef.current)}>
-              {t(`${NS}.printConfirm`, { defaultValue: '打印' })}
+              {t('common.print', { defaultValue: '打印' })}
             </Button>
           </Space>
         }

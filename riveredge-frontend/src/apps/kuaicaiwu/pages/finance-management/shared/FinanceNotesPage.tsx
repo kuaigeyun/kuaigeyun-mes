@@ -200,7 +200,7 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
             formItemProps: formDateRangeFormItemProps,
           },
           {
-            title: t(`${NS}.col.status`),
+            title: t('common.status'),
             dataIndex: 'status',
             valueType: 'select',
             valueEnum: Object.fromEntries(
@@ -419,7 +419,7 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
         {editing && !isReceivable ? (
           <ProFormDigit name="payment_id" label={t(`${NS}.field.paymentId`)} min={1} />
         ) : null}
-        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.costCommon.description')} />
+        <ProFormTextArea name="notes" label={t('common.remark')} />
       </FormModalTemplate>
 
       <DetailDrawerTemplate
@@ -446,7 +446,7 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
               </Descriptions.Item>
               <Descriptions.Item label={t(`${NS}.col.issueDate`)}>{detail.issue_date}</Descriptions.Item>
               <Descriptions.Item label={t(`${NS}.col.dueDate`)}>{detail.due_date}</Descriptions.Item>
-              <Descriptions.Item label={t(`${NS}.col.status`)}>{statusTag(detail.status)}</Descriptions.Item>
+              <Descriptions.Item label={t('common.status')}>{statusTag(detail.status)}</Descriptions.Item>
               <Descriptions.Item label={t(`${NS}.field.acceptingBank`)}>
                 {detail.accepting_bank || '—'}
               </Descriptions.Item>
@@ -459,7 +459,7 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
               {detail.discount_bank ? (
                 <Descriptions.Item label={t(`${NS}.field.discountBank`)}>{detail.discount_bank}</Descriptions.Item>
               ) : null}
-              <Descriptions.Item label={t('app.kuaicaiwu.costCommon.description')} span={2}>
+              <Descriptions.Item label={t('common.remark')} span={2}>
                 {detail.notes || '—'}
               </Descriptions.Item>
             </Descriptions>

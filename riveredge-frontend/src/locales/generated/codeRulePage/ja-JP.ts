@@ -230,7 +230,7 @@ const codeRulePagejaJP = {
   'codeRulePage.master-data-warehouse-warehouse.pageName': '倉庫',
   'codeRulePage.module.主数据管理': 'マスターデータ',
   'codeRulePage.module.好力 GO': 'ハオリGO',
-  'codeRulePage.module.快格轻制造': '会志竿',
+  'codeRulePage.module.快格轻制造': '快製造',
   'codeRulePage.module.快研发': 'クアイPLM',
   'codeRulePage.module.系统配置': 'システム構成',
   'codeRulePage.module.轻管理会计': 'ファイナンス ライト',

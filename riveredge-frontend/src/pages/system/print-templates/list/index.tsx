@@ -266,10 +266,10 @@ const PrintTemplateListPage: React.FC = () => {
   const handleDelete = async (record: PrintTemplate) => {
     try {
       await deletePrintTemplate(record.uuid);
-      messageApi.success(t('pages.system.printTemplates.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.printTemplates.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -332,7 +332,7 @@ const PrintTemplateListPage: React.FC = () => {
           config: { ...(currentEditDetail?.config || {}), document_type: values.document_type },
         };
         await updatePrintTemplate(currentPrintTemplateUuid, updateData);
-        messageApi.success(t('pages.system.printTemplates.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         const data: CreatePrintTemplateData = {
           name: values.name,
@@ -344,14 +344,14 @@ const PrintTemplateListPage: React.FC = () => {
           is_active: values.is_active !== false,
         };
         await createPrintTemplate(data);
-        messageApi.success(t('pages.system.printTemplates.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
       
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.printTemplates.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -412,7 +412,7 @@ const PrintTemplateListPage: React.FC = () => {
             okText={t('common.confirm')}
             cancelText={t('common.cancel')}
           >
-            <Tooltip title={t('pages.system.printTemplates.deleteTooltip')}>
+            <Tooltip title={t('common.delete')}>
               <DeleteOutlined
                 style={{ fontSize: 16, color: '#ff4d4f' }}
               />
@@ -453,14 +453,14 @@ const PrintTemplateListPage: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printTemplates.statusLabel')}</Text>
               <Tag color={template.is_active ? 'success' : 'default'}>
-                {template.is_active ? t('pages.system.printTemplates.enabled') : t('pages.system.printTemplates.disabled')}
+                {template.is_active ? t('common.enabled') : t('common.disabled')}
               </Tag>
             </div>
             
             {template.is_default && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printTemplates.defaultLabel')}</Text>
-                <Tag color="processing">{t('pages.system.printTemplates.isDefault')}</Tag>
+                <Tag color="processing">{t('common.yes')}</Tag>
               </div>
             )}
             
@@ -530,7 +530,7 @@ const PrintTemplateListPage: React.FC = () => {
       },
     },
     {
-      title: t('pages.system.printTemplates.columnActive'),
+      title: t('common.enabled'),
       dataIndex: 'is_active',
       width: 100,
       minWidth: 100,
@@ -538,11 +538,11 @@ const PrintTemplateListPage: React.FC = () => {
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('pages.system.printTemplates.enabled'), status: 'Success' },
-        false: { text: t('pages.system.printTemplates.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) =>
-        renderSystemActiveTag(t, record.is_active, 'pages.system.printTemplates.enabled', 'pages.system.printTemplates.disabled'),
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
       title: t('pages.system.printTemplates.columnDefault'),
@@ -577,7 +577,7 @@ const PrintTemplateListPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('pages.system.printTemplates.columnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       minWidth: 180,
@@ -596,10 +596,10 @@ const PrintTemplateListPage: React.FC = () => {
       render: (_, record) =>
         [
             <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)}>
-              {t('pages.system.printTemplates.detail')}
+              {t('common.detail')}
             </Button>,
             <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-              {t('pages.system.printTemplates.edit')}
+              {t('common.edit')}
             </Button>,
             <Button
               key="design"
@@ -621,7 +621,7 @@ const PrintTemplateListPage: React.FC = () => {
               cancelText={t('common.cancel')}
             >
               <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                {t('pages.system.printTemplates.deleteTooltip')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>,
           ],
@@ -640,15 +640,15 @@ const PrintTemplateListPage: React.FC = () => {
     { title: t('pages.system.printTemplates.columnCode'), dataIndex: 'code' },
     { title: t('pages.system.printTemplates.columnType'), dataIndex: 'type' },
     {
-      title: t('pages.system.printTemplates.labelDescription'),
+      title: t('common.remark'),
       dataIndex: 'description',
       render: (_: unknown, record: PrintTemplate) => resolvePresetPrintTemplateDescription(record, t),
     },
     {
-      title: t('pages.system.printTemplates.columnActive'),
+      title: t('common.enabled'),
       dataIndex: 'is_active',
       render: (_: unknown, record: PrintTemplate) =>
-        renderSystemActiveTag(t, record.is_active, 'pages.system.printTemplates.enabled', 'pages.system.printTemplates.disabled'),
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
       title: t('pages.system.printTemplates.columnDefault'),
@@ -681,8 +681,8 @@ const PrintTemplateListPage: React.FC = () => {
     },
     { title: t('pages.system.printTemplates.columnUsage'), dataIndex: 'usage_count' },
     { title: t('pages.system.printTemplates.columnLastUsed'), dataIndex: 'last_used_at', valueType: 'dateTime' },
-    { title: t('pages.system.printTemplates.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-    { title: t('pages.system.printTemplates.columnUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
 
   return (
@@ -741,7 +741,7 @@ const PrintTemplateListPage: React.FC = () => {
           onCreate={handleCreate}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText={t('pages.system.printTemplates.batchDelete')}
+          deleteButtonText={t('common.batchDelete')}
           toolBarActionsAfterDelete={[companySeal.toolbarActions]}
           toolBarRender={() => [
             <Button {...rowActionKind('import')} key="loadPreset" onClick={handleLoadPreset} loading={presetLoading}>
@@ -759,7 +759,7 @@ const PrintTemplateListPage: React.FC = () => {
               items = await fetchAllListItems((p) => getPrintTemplateList(p));
             }
             if (items.length === 0) {
-              messageApi.warning(t('pages.system.printTemplates.noDataToExport'));
+              messageApi.warning(t('common.exportNoData'));
               return;
             }
             await downloadRecordsAsXlsx(
@@ -846,13 +846,13 @@ const PrintTemplateListPage: React.FC = () => {
         />
         <ProFormTextArea
           name="description"
-          label={t('pages.system.printTemplates.labelDescription')}
+          label={t('common.remark')}
           fieldProps={{ rows: 3 }}
         />
         {isEdit && (
           <ProFormSwitch name="is_default" label={t('pages.system.printTemplates.labelDefault')} />
         )}
-        <ProFormSwitch name="is_active" label={t('pages.system.printTemplates.labelActive')} />
+        <ProFormSwitch name="is_active" label={t('common.enabled')} />
       </FormModalTemplate>
 
       {/* 渲染模板 Modal */}

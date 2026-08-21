@@ -133,7 +133,7 @@ export const FreightOrderDetailDrawer: React.FC<FreightOrderDetailDrawerProps> =
             ]
           : []),
         {
-          title: t('app.kuaizhizao.logistics.field.status'),
+          title: t('common.status'),
           dataIndex: 'status',
           render: (_, record) => renderFreightOrderStatusTag(t, record.status),
         },

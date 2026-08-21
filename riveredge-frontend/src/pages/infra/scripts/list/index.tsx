@@ -182,10 +182,10 @@ const ScriptListPage: React.FC = () => {
   const handleDelete = async (record: Script) => {
     try {
       await deleteScript(record.uuid);
-      messageApi.success(t('pages.infra.scripts.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.infra.scripts.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -233,17 +233,17 @@ const ScriptListPage: React.FC = () => {
       
       if (isEdit && currentScriptUuid) {
         await updateScript(currentScriptUuid, data as UpdateScriptData);
-        messageApi.success(t('pages.infra.scripts.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createScript(data as CreateScriptData);
-        messageApi.success(t('pages.infra.scripts.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
       
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.infra.scripts.operationFailed'));
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -291,17 +291,17 @@ const ScriptListPage: React.FC = () => {
       },
     },
     {
-      title: t('pages.infra.scripts.columnActive'),
+      title: t('common.enabled'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('pages.infra.scripts.activeEnabled'), status: 'Success' },
-        false: { text: t('pages.infra.scripts.activeDisabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('pages.infra.scripts.activeEnabled') : t('pages.infra.scripts.activeDisabled')}
+          {record.is_active ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
@@ -340,14 +340,14 @@ const ScriptListPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('pages.infra.scripts.columnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
       hideInSearch: true,
     },
     {
-      title: t('pages.infra.scripts.columnActions'),
+      title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
       render: (_, record) => {
@@ -359,7 +359,7 @@ const ScriptListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            {t('pages.infra.scripts.view')}
+            {t('common.view')}
           </Button>,
           <Button {...rowActionKind('update')}
             key="edit"
@@ -368,7 +368,7 @@ const ScriptListPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            {t('pages.infra.scripts.edit')}
+            {t('common.edit')}
           </Button>,
           <Button {...rowActionKind('execute')}
             key="execute"
@@ -391,7 +391,7 @@ const ScriptListPage: React.FC = () => {
               danger
               icon={<DeleteOutlined />}
             >
-              {t('pages.infra.scripts.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>,
         ];
@@ -439,7 +439,7 @@ const ScriptListPage: React.FC = () => {
           onCreate={handleCreate}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText={t('pages.infra.scripts.batchDelete')}
+          deleteButtonText={t('common.batchDelete')}
           showExportButton
           onExport={async (type, keys, pageData) => {
             const allData = await fetchAllListItems((p) => getScriptList(p));
@@ -448,7 +448,7 @@ const ScriptListPage: React.FC = () => {
               items = allData.filter((d) => keys.includes(d.uuid));
             }
             if (items.length === 0) {
-              messageApi.warning(t('pages.infra.scripts.noDataToExport'));
+              messageApi.warning(t('common.exportNoData'));
               return;
             }
             await downloadRecordsAsXlsx(
@@ -533,14 +533,14 @@ const ScriptListPage: React.FC = () => {
         />
         <ProFormTextArea
           name="description"
-          label={t('pages.infra.scripts.labelDescription')}
+          label={t('common.remark')}
           fieldProps={{
             rows: 3,
           }}
         />
         <ProFormSwitch
           name="is_active"
-          label={t('pages.infra.scripts.labelActive')}
+          label={t('common.enabled')}
         />
       </FormModalTemplate>
 
@@ -645,17 +645,17 @@ const ScriptListPage: React.FC = () => {
             dataIndex: 'type',
           },
           {
-            title: t('pages.infra.scripts.labelDescription'),
+            title: t('common.remark'),
             dataIndex: 'description',
           },
           {
-            title: t('pages.infra.scripts.columnActive'),
+            title: t('common.enabled'),
             dataIndex: 'is_active',
             render: (_: React.ReactNode, record: Script) => {
               const value = record.is_active;
               return (
               <MarkerTag color={value ? 'success' : 'default'}>
-                {value ? t('pages.infra.scripts.activeEnabled') : t('pages.infra.scripts.activeDisabled')}
+                {value ? t('common.enabled') : t('common.disabled')}
               </MarkerTag>
             ); },
           },
@@ -726,12 +726,12 @@ const ScriptListPage: React.FC = () => {
             ); },
           },
           {
-            title: t('pages.infra.scripts.columnCreatedAt'),
+            title: t('common.createdAt'),
             dataIndex: 'created_at',
             valueType: 'dateTime',
           },
           {
-            title: t('pages.infra.scripts.columnUpdatedAt'),
+            title: t('common.updatedAt'),
             dataIndex: 'updated_at',
             valueType: 'dateTime',
           },

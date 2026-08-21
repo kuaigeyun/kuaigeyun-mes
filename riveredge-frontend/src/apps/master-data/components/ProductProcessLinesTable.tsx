@@ -719,7 +719,7 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
             icon={<DeleteOutlined />}
             onClick={() => removeLine(index)}
           >
-            {t('app.master-data.operationSequence.delete')}
+            {t('common.delete')}
           </Button>
         ),
       },

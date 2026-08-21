@@ -7,6 +7,7 @@ import React from 'react';
 import type { TFunction } from 'i18next';
 import { MarkerTag } from '../../../constants/statusBadges';
 import { renderDocumentStatusTag } from '../../../utils/documentLifecycleStatusTag';
+import { translateLifecycleStageByKey } from '../../../utils/globalLifecycleI18n';
 
 /** 紧急度：低灰 → 正常蓝 → 高橙 → 加急红（非流程状态，仍用 MarkerTag） */
 export function salesReviewUrgencyMarkerColor(value?: string | null): string {
@@ -39,18 +40,27 @@ export function salesReviewRiskMarkerColor(value?: string | null): string {
 }
 
 export function translateSalesReviewStatus(t: TFunction, status?: string | null): string {
-  const key = status || 'draft';
-  return t(`app.kuaizhizao.salesReview.status.${key}`, { defaultValue: status || '—' });
+  const key = String(status || 'draft').trim().toLowerCase();
+  const domainKey = `app.kuaizhizao.salesReview.status.${key}`;
+  const domain = t(domainKey);
+  if (domain && domain !== domainKey) return domain;
+  return translateLifecycleStageByKey(t, key);
 }
 
 export function translateSalesReviewUrgency(t: TFunction, value?: string | null): string {
-  const key = value || 'normal';
-  return t(`app.kuaizhizao.salesReview.urgency.${key}`, { defaultValue: value || '—' });
+  const key = String(value || 'normal').trim().toLowerCase();
+  const domainKey = `app.kuaizhizao.salesReview.urgency.${key}`;
+  const domain = t(domainKey);
+  if (domain && domain !== domainKey) return domain;
+  return '—';
 }
 
 export function translateSalesReviewRisk(t: TFunction, value?: string | null): string {
-  const key = value || 'medium';
-  return t(`app.kuaizhizao.salesReview.risk.${key}`, { defaultValue: value || '—' });
+  const key = String(value || 'medium').trim().toLowerCase();
+  const domainKey = `app.kuaizhizao.salesReview.risk.${key}`;
+  const domain = t(domainKey);
+  if (domain && domain !== domainKey) return domain;
+  return '—';
 }
 
 export function renderSalesReviewStatusTag(t: TFunction, status?: string | null): React.ReactNode {

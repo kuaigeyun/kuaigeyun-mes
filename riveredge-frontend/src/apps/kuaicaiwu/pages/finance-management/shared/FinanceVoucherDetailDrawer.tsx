@@ -193,7 +193,7 @@ export const FinanceVoucherDetailDrawer: React.FC<FinanceVoucherDetailDrawerProp
           render: (_, row) => formatMoney(row.unsettled_amount),
         },
         {
-          title: t('app.kuaicaiwu.common.notes'),
+          title: t('common.remark'),
           dataIndex: 'notes',
           span: 3,
         },

@@ -140,7 +140,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
   const isCustomer = partnerType === 'customer';
 
   const priceBookActiveValueEnum = useMemo(
-    () => buildMasterCrudActiveValueEnum(t, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
+    () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
     [t],
   );
 
@@ -452,11 +452,11 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
       { title: t('app.master-data.materialForm.baseUnit', '单位'), dataIndex: 'unit' },
       { title: t('app.master-data.priceBook.effectiveFrom', '生效起始'), dataIndex: 'effectiveFrom', valueType: 'date' },
       { title: t('app.master-data.priceBook.effectiveTo', '生效截止'), dataIndex: 'effectiveTo', valueType: 'date' },
-      { title: t('app.master-data.materialForm.description', '备注'), dataIndex: 'remark' },
+      { title: t('common.remark', '备注'), dataIndex: 'remark' },
       {
-        title: t('field.defectType.isActive', '状态'),
+        title: t('common.enabled', '状态'),
         dataIndex: 'isActive',
-        render: (_, r) => renderMasterActiveTag(t, r?.isActive, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
+        render: (_, r) => renderMasterActiveTag(t, r?.isActive, 'common.enabled', 'common.disabled'),
       },
     ],
     [isCustomer, t],
@@ -573,7 +573,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         sorter: true,
       },
       {
-        title: t('field.defectType.isActive', '状态'),
+        title: t('common.enabled', '状态'),
         dataIndex: 'isActive',
         hideInTable: true,
         order: 20,
@@ -582,7 +582,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         fieldProps: { allowClear: true },
       },
       {
-        title: t('field.defectType.isActive', '状态'),
+        title: t('common.enabled', '状态'),
         dataIndex: 'isActive',
         width: 88,
         minWidth: 88,
@@ -591,7 +591,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         hideInSearch: true,
         sorter: true,
         valueEnum: priceBookActiveValueEnum,
-        render: (_, r) => renderMasterActiveTag(t, r.isActive, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
+        render: (_, r) => renderMasterActiveTag(t, r.isActive, 'common.enabled', 'common.disabled'),
       },
       ...masterCrudCreatedUpdatedColumns<PartnerPriceBook>(t),
       {
@@ -939,10 +939,10 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item name="remark" label={t('app.master-data.materialForm.description', '备注')}>
+          <Form.Item name="remark" label={t('common.remark', '备注')}>
             <Input.TextArea rows={2} />
           </Form.Item>
-          <Form.Item name="isActive" label={t('field.defectType.isActive', '启用')} valuePropName="checked">
+          <Form.Item name="isActive" label={t('common.enabled', '启用')} valuePropName="checked">
             <Switch />
           </Form.Item>
         </Form>

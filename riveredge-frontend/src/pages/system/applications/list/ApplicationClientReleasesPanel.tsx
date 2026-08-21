@@ -51,7 +51,7 @@ export function ApplicationClientReleasesPanel({ appCode }: Props) {
             </Descriptions.Item>
           )}
           {r.release_notes ? (
-            <Descriptions.Item label={t('pages.infra.clientReleases.columnNotes')}>
+            <Descriptions.Item label={t('common.remark')}>
               {r.release_notes}
             </Descriptions.Item>
           ) : null}

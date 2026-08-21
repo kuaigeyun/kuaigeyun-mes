@@ -205,7 +205,7 @@ export const BatchCreateStorageLocationModal: React.FC<BatchCreateStorageLocatio
     }
     return (
       <Space>
-        <Button onClick={handleBack}>{t('field.storageLocation.batchCreateBack')}</Button>
+        <Button onClick={handleBack}>{t('common.previous')}</Button>
         <Button type="primary" loading={loading} onClick={handleConfirmCreate}>
           {t('field.storageLocation.batchCreateConfirm')}
         </Button>

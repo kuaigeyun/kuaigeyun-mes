@@ -206,7 +206,7 @@ const BatchesPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('app.master-data.batches.status'),
+      title: t('common.status'),
       dataIndex: 'status',
       hideInTable: true,
       order: 20,
@@ -215,7 +215,7 @@ const BatchesPage: React.FC = () => {
       fieldProps: { allowClear: true },
     },
     {
-      title: t('app.master-data.batches.status'),
+      title: t('common.status'),
       dataIndex: 'status',
       width: 100,
       minWidth: 100,
@@ -239,7 +239,7 @@ const BatchesPage: React.FC = () => {
       },
     },
     {
-      title: t('app.master-data.batches.quantity'),
+      title: t('common.quantity'),
       dataIndex: 'quantity',
       width: 90,
       minWidth: 90,
@@ -288,7 +288,7 @@ const BatchesPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            {t('field.customField.edit')}
+            {t('common.edit')}
           </Button>
           <Popconfirm
             key="delete"
@@ -297,7 +297,7 @@ const BatchesPage: React.FC = () => {
             onConfirm={() => handleDelete(record)}
           >
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              {t('field.customField.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -339,7 +339,7 @@ const BatchesPage: React.FC = () => {
           labelWidth: 'auto',
         }}
         showCreateButton
-        createButtonText={t('pages.system.create')}
+        createButtonText={t('common.create')}
         onCreate={handleCreate}
         showDeleteButton
         onDelete={handleBatchDelete}
@@ -404,14 +404,14 @@ const BatchesPage: React.FC = () => {
         />
         <ProFormDigit
           name="quantity"
-          label={t('app.master-data.batches.quantity')}
+          label={t('common.quantity')}
           initialValue={0}
           min={0}
           colProps={{ span: 12 }}
         />
         <ProFormSelect
           name="status"
-          label={t('app.master-data.batches.status')}
+          label={t('common.status')}
           options={batchStatusOptions}
           initialValue="in_stock"
           colProps={{ span: 12 }}

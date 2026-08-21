@@ -70,10 +70,10 @@ const SchedulingPoolToolbar: React.FC<SchedulingPoolToolbarProps> = ({
         className="scheduling-pool-toolbar__keyword"
       />
       <Button size="small" type="primary" icon={<SearchOutlined />} onClick={onSearch}>
-        {t('app.kuaizhizao.scheduling.poolToolbar.search')}
+        {t('common.search')}
       </Button>
       <Button size="small" icon={<ReloadOutlined />} onClick={onReset}>
-        {t('app.kuaizhizao.scheduling.poolToolbar.reset')}
+        {t('common.reset')}
       </Button>
       <Checkbox
         checked={overdueOnly}

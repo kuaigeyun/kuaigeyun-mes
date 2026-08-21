@@ -274,7 +274,7 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
       collaborationTitleSuffix={
         contentReady && nextLabel ? (
           <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-            {t('components.uniLifecycle.nextStep')}：{nextLabel}
+            {t('common.next')}：{nextLabel}
           </Typography.Text>
         ) : undefined
       }

@@ -266,7 +266,7 @@ const ReportColumnFilterPanel: React.FC<FilterPanelProps> = ({
           allowClear
           value={keyword}
           prefix={<SearchOutlined style={{ color: 'rgba(0,0,0,0.35)' }} />}
-          placeholder={t('components.uniReport.columnFilter.search')}
+          placeholder={t('common.search')}
           onChange={(e) => setKeyword(e.target.value)}
         />
         <div style={{ maxHeight: 280, overflowY: 'auto', paddingRight: 4 }}>

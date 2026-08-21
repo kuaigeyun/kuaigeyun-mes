@@ -86,9 +86,9 @@ const ProcessDeviationPage: React.FC = () => {
 
         { name: 'applicant_name', labelKey: 'app.kuaioa.common.applicant', width: 100 },
 
-        { name: 'status', labelKey: 'app.kuaioa.common.status', width: 100 },
+        { name: 'status', labelKey: 'common.status', width: 100 },
 
-        { name: 'notes', labelKey: 'app.kuaioa.common.notes', hideInTable: true, type: 'textarea' },
+        { name: 'notes', labelKey: 'common.remark', hideInTable: true, type: 'textarea' },
 
       ]}
 

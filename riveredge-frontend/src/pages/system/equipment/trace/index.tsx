@@ -122,7 +122,7 @@ const EquipmentTracePage: React.FC = () => {
       width: 120,
     },
     {
-      title: t('pages.system.equipmentFaults.columnStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       width: 100,
@@ -147,7 +147,7 @@ const EquipmentTracePage: React.FC = () => {
       render: (date: string) => date ? formatDateTimeBySiteSetting(date) : '-',
     },
     {
-      title: t('pages.system.equipmentFaults.columnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180,
@@ -186,7 +186,7 @@ const EquipmentTracePage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: t('pages.system.equipmentFaults.columnStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       width: 100,
@@ -197,7 +197,7 @@ const EquipmentTracePage: React.FC = () => {
       },
     },
     {
-      title: t('pages.system.equipmentFaults.columnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180,
@@ -240,7 +240,7 @@ const EquipmentTracePage: React.FC = () => {
       },
     },
     {
-      title: t('pages.system.equipmentFaults.columnStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       width: 100,
@@ -251,7 +251,7 @@ const EquipmentTracePage: React.FC = () => {
       },
     },
     {
-      title: t('pages.system.equipmentFaults.columnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180,
@@ -290,7 +290,7 @@ const EquipmentTracePage: React.FC = () => {
       render: (cost: number) => cost ? `¥${cost.toFixed(2)}` : '-',
     },
     {
-      title: t('pages.system.equipmentFaults.columnStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       width: 100,
@@ -301,7 +301,7 @@ const EquipmentTracePage: React.FC = () => {
       },
     },
     {
-      title: t('pages.system.equipmentFaults.columnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180,

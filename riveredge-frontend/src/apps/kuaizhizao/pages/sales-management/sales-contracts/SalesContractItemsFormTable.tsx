@@ -128,7 +128,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                       ),
                     },
                     {
-                      title: t('app.kuaizhizao.salesOrder.unit'),
+                      title: t('common.unit'),
                       dataIndex: 'material_unit',
                       width: DOCUMENT_DETAIL_COL_WIDTH.unit,
                       ...DOCUMENT_DETAIL_TEXT_COL,
@@ -151,7 +151,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                       ),
                     },
                     {
-                      title: t('app.kuaizhizao.salesOrder.quantity'),
+                      title: t('common.quantity'),
                       dataIndex: 'contract_quantity',
                       width: DOCUMENT_DETAIL_COL_WIDTH.quantity,
                       ...DOCUMENT_DETAIL_NUM_COL,
@@ -162,7 +162,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                           style={{ margin: 0 }}
                         >
                           <InputNumber
-                            placeholder={t('app.kuaizhizao.salesOrder.quantity')}
+                            placeholder={t('common.quantity')}
                             min={0.01}
                             precision={2}
                             style={{ width: '100%' }}
@@ -384,13 +384,13 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                       ),
                     },
                     {
-                      title: t('app.kuaizhizao.salesOrder.notes'),
+                      title: t('common.remark'),
                       dataIndex: 'notes',
                       width: DOCUMENT_DETAIL_COL_WIDTH.notes,
                       ...DOCUMENT_DETAIL_TEXT_COL,
                       render: (_: unknown, __: unknown, index: number) => (
                         <Form.Item name={[index, 'notes']} style={{ margin: 0 }}>
-                          <Input placeholder={t('app.kuaizhizao.salesOrder.notes')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
+                          <Input placeholder={t('common.remark')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                         </Form.Item>
                       ),
                     },

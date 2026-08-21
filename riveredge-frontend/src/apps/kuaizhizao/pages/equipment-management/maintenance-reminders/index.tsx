@@ -574,8 +574,8 @@ const MaintenanceRemindersPage: React.FC = () => {
         rowKey="uuid"
         search={{
           labelWidth: 'auto',
-          searchText: t(`${P}.search`),
-          resetText: t(`${P}.reset`),
+          searchText: t('common.search'),
+          resetText: t('common.reset'),
         }}
         pagination={{
           defaultPageSize: 20,
@@ -674,11 +674,11 @@ const MaintenanceRemindersPage: React.FC = () => {
               })()}
               <Typography.Text type="secondary">
                 {t(`${P}.readHandleStatus`, {
-                  read: detail.is_read ? t(`${P}.yes`) : t(`${P}.no`),
+                  read: detail.is_read ? t('common.yes') : t('common.no'),
                   readAt: detail.read_at
                     ? `（${formatDateTime(detail.read_at, 'YYYY-MM-DD HH:mm:ss')}）`
                     : '',
-                  handled: detail.is_handled ? t(`${P}.yes`) : t(`${P}.no`),
+                  handled: detail.is_handled ? t('common.yes') : t('common.no'),
                   handledAt: detail.handled_at
                     ? `（${formatDateTime(detail.handled_at, 'YYYY-MM-DD HH:mm:ss')}，${detail.handled_by_name || '-'}）`
                     : '',

@@ -98,7 +98,7 @@ export default function PackageForm({ isEdit = false }: PackageFormProps) {
 
       <ProFormText
         name="description"
-        label={t('pages.infra.package.description')}
+        label={t('common.remark')}
       />
 
       <ProFormTextArea

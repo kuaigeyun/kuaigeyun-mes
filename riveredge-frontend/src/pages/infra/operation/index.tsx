@@ -248,7 +248,7 @@ export default function OperationsDashboard() {
 
   const handleExport = useCallback(() => {
     if (!tenantStats && !userStats && !accessStats) {
-      messageApi.warning(t('pages.infra.operation.noDataExport'));
+      messageApi.warning(t('common.exportNoData'));
       return;
     }
     try {
@@ -352,10 +352,10 @@ export default function OperationsDashboard() {
                   {autoRefresh ? t('pages.infra.operation.autoRefreshOn') : t('pages.infra.operation.autoRefresh')}
                 </Button>
                 <Button icon={<ReloadOutlined />} onClick={handleRefresh} loading={loading}>
-                  {t('pages.infra.operation.refresh')}
+                  {t('common.refresh')}
                 </Button>
                 <Button icon={<DownloadOutlined />} onClick={handleExport}>
-                  {t('pages.infra.operation.export')}
+                  {t('common.export')}
                 </Button>
                 <Button
                   icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}

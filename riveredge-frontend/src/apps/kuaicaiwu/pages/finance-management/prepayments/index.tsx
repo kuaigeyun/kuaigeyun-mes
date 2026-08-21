@@ -211,7 +211,7 @@ const PrepaymentsPage: React.FC = () => {
       render: (_, r) => prepaymentTag(String(r.settlement_type ?? 'normal'), t),
     },
     {
-      title: t(`${P}.col.status`),
+      title: t('common.status'),
       dataIndex: 'status',
       width: 100,
       minWidth: 100,
@@ -316,7 +316,7 @@ const PrepaymentsPage: React.FC = () => {
       render: (_, r) => prepaymentTag(String(r.settlement_type ?? 'normal'), t),
     },
     {
-      title: t(`${P}.col.status`),
+      title: t('common.status'),
       dataIndex: 'status',
       width: 100,
       minWidth: 100,
@@ -733,7 +733,7 @@ const PrepaymentsPage: React.FC = () => {
           accountLabel={t('app.kuaicaiwu.receipt.bankAccount')}
           noteLabel={t('app.kuaicaiwu.receipt.bankAccountNote')}
         />
-        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
+        <ProFormTextArea name="notes" label={t('common.remark')} />
         <DocumentAttachmentsField name="attachments" />
       </FormModalTemplate>
 
@@ -795,7 +795,7 @@ const PrepaymentsPage: React.FC = () => {
           accountLabel={t('app.kuaicaiwu.payment.outBankAccount')}
           noteLabel={t('app.kuaicaiwu.payment.outAccountNote')}
         />
-        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
+        <ProFormTextArea name="notes" label={t('common.remark')} />
         <DocumentAttachmentsField name="attachments" />
       </FormModalTemplate>
     </>

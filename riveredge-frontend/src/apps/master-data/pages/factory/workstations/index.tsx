@@ -123,8 +123,8 @@ const WorkstationsPage: React.FC = () => {
             required: true,
             labelKey: 'app.master-data.workstations.productionLineCode',
           },
-          { field: 'description', labelKey: 'app.master-data.workstations.description' },
-          { field: 'isActive', labelKey: 'field.workstation.isActive', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
+          { field: 'description', labelKey: 'common.remark' },
+          { field: 'isActive', labelKey: 'common.enabled', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
         ],
         [
           t('app.master-data.workstations.importExample.code'),
@@ -498,7 +498,7 @@ const WorkstationsPage: React.FC = () => {
       }
 
       // 构建 CSV 内容
-      const headers = [t('app.master-data.workstations.code'), t('app.master-data.workstations.name'), t('app.master-data.workstations.productionLineName'), t('app.master-data.workstations.description'), t('app.master-data.workstations.status'), t('common.createdAt')];
+      const headers = [t('app.master-data.workstations.code'), t('app.master-data.workstations.name'), t('app.master-data.workstations.productionLineName'), t('common.remark'), t('common.status'), t('common.createdAt')];
       const rows = exportData.map(item => {
         const productionLine = productionLines.find(p => p.id === item.productionLineId);
         const plLabel =
@@ -527,7 +527,7 @@ const WorkstationsPage: React.FC = () => {
       downloadFile(csvContent, filename, 'text/csv;charset=utf-8;');
       messageApi.success(t('common.exportSuccess', { count: exportData.length }));
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.exportFailed'));
+      messageApi.error(error.message || t('common.exportFailed'));
     }
   };
 
@@ -637,7 +637,7 @@ const WorkstationsPage: React.FC = () => {
       render: (_, record) => formatProductionLineDisplay(record),
     },
     {
-      title: t('app.master-data.workstations.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -678,14 +678,14 @@ const WorkstationsPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            {t('field.customField.view')}
+            {t('common.view')}
           </Button>
           <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            {t('field.customField.edit')}
+            {t('common.edit')}
           </Button>
           <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.workstations.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
@@ -696,7 +696,7 @@ const WorkstationsPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              {t('field.customField.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -724,11 +724,11 @@ const WorkstationsPage: React.FC = () => {
       render: (_, record) => formatProductionLineDisplay(record),
     },
     {
-      title: t('app.master-data.workstations.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
     },
     {
-      title: t('app.master-data.workstations.status'),
+      title: t('common.status'),
       dataIndex: 'isActive',
       render: (_, record) => {
         return renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled');

@@ -114,7 +114,7 @@ const ToolCalibrationsPage: React.FC = () => {
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || t(`${P}.saveFailed`));
+      messageApi.error(e?.message || t('common.saveFailed'));
       throw e;
     }
   };
@@ -153,7 +153,7 @@ const ToolCalibrationsPage: React.FC = () => {
         render: (_, r) => (r.expiry_date ? formatDateTime(r.expiry_date, 'YYYY-MM-DD') : '-'),
       },
       { title: t(`${P}.colCalibrationOrg`), dataIndex: 'calibration_org' },
-      { title: t(`${P}.formRemark`), dataIndex: 'remark', span: 2 },
+      { title: t('common.remark'), dataIndex: 'remark', span: 2 },
     ],
     [t],
   );
@@ -233,7 +233,7 @@ const ToolCalibrationsPage: React.FC = () => {
         render: (_, r) => (r.expiry_date ? formatDateTime(r.expiry_date, 'YYYY-MM-DD') : '-'),
       },
       { title: t(`${P}.colCalibrationOrg`), dataIndex: 'calibration_org', width: 140, sorter: true, hideInSearch: true },
-      { title: t(`${P}.formRemark`), dataIndex: 'remark', ellipsis: true, hideInSearch: true },
+      { title: t('common.remark'), dataIndex: 'remark', ellipsis: true, hideInSearch: true },
       ...buildDocumentAuditColumns<ToolCalibration>(t),
       {
         title: t('common.actions'),
@@ -347,7 +347,7 @@ const ToolCalibrationsPage: React.FC = () => {
         />
         <ProFormText name="calibration_org" label={t(`${P}.formCalibrationOrg`)} colProps={{ span: 12 }} />
         <DocumentAttachmentsField category="tool_calibration_attachments" />
-        <ProFormText name="remark" label={t(`${P}.formRemark`)} colProps={{ span: 24 }} />
+        <ProFormText name="remark" label={t('common.remark')} colProps={{ span: 24 }} />
       </FormModalTemplate>
 
       <DetailDrawerTemplate

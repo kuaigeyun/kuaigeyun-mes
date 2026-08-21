@@ -111,7 +111,7 @@ const FeeDetailsTable: React.FC<FeeDetailsTableProps> = ({
       ),
     },
     {
-      title: t('app.kuaizhizao.salesOrder.notes'),
+      title: t('common.remark'),
       width: 200,
       render: (_: unknown, __: unknown, index: number) => (
         <ProFormText

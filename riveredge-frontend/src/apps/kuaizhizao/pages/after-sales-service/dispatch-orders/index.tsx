@@ -131,7 +131,7 @@ const DispatchOrdersPage: React.FC = () => {
             render: (_, row) => (row.planned_start_at ? formatDateTime(row.planned_start_at) : '-'),
           },
           {
-            title: t('app.kuaizhizao.afterSalesService.dispatchOrder.field.status'),
+            title: t('common.status'),
             key: 'lifecycle',
             dataIndex: 'status',
             fixed: 'right',
@@ -284,7 +284,7 @@ const DispatchOrdersPage: React.FC = () => {
                       messageApi.success(t('app.kuaizhizao.afterSalesService.dispatchOrder.closeSuccess'));
                     }}
                   >
-                    {t('app.kuaizhizao.afterSalesService.dispatchOrder.actionClose')}
+                    {t('common.close')}
                   </Button>
                 ),
               },

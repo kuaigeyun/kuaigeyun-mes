@@ -1041,7 +1041,7 @@ const SalesInvoicesPage: React.FC = () => {
         scopeOptions={pullFromSalesOrderQuery.scopeOptions}
         scope={pullFromSalesOrderQuery.scope}
         onScopeChange={pullFromSalesOrderQuery.handleScopeChange}
-        okText={t('components.uniLifecycle.nextStep')}
+        okText={t('common.next')}
       />
 
       <UniPullQueryModal<SalesInvoicePullCandidate>
@@ -1074,7 +1074,7 @@ const SalesInvoicesPage: React.FC = () => {
         scopeOptions={pullFromSalesDeliveryQuery.scopeOptions}
         scope={pullFromSalesDeliveryQuery.scope}
         onScopeChange={pullFromSalesDeliveryQuery.handleScopeChange}
-        okText={t('components.uniLifecycle.nextStep')}
+        okText={t('common.next')}
       />
 
       <UniPullQueryModal<SalesInvoicePullCandidate>
@@ -1107,7 +1107,7 @@ const SalesInvoicesPage: React.FC = () => {
         scopeOptions={pullFromReceivableQuery.scopeOptions}
         scope={pullFromReceivableQuery.scope}
         onScopeChange={pullFromReceivableQuery.handleScopeChange}
-        okText={t('components.uniLifecycle.nextStep')}
+        okText={t('common.next')}
       />
 
       <Modal
@@ -1289,7 +1289,7 @@ const SalesInvoicesPage: React.FC = () => {
                   colProps={financeColHalf}
                   fieldProps={{ precision: 2, style: { width: '100%' } }}
                 />
-                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 2 }} colProps={financeColFull} />
+                <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 2 }} colProps={financeColFull} />
                 {canConcurrentReceipt ? (
                   <>
                     <ProFormSwitch
@@ -1474,7 +1474,7 @@ const SalesInvoicesPage: React.FC = () => {
           label={t(`${P}.col.partnerAddressPhone`)}
           colProps={financeColFull}
         />
-        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} colProps={financeColFull} />
+        <ProFormTextArea name="notes" label={t('common.remark')} colProps={financeColFull} />
         <DocumentAttachmentsField category="sales_invoice_attachments" />
       </ModalForm>
     </ListPageTemplate>

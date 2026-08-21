@@ -53,8 +53,8 @@ const FormTemplatesPage: React.FC = () => {
           width: 100,
           type: 'switch',
         },
-        { name: 'description', labelKey: 'app.kuaioa.common.description', hideInTable: true, type: 'textarea' },
-        { name: 'is_active', labelKey: 'app.kuaioa.common.enabled', type: 'switch' },
+        { name: 'description', labelKey: 'common.remark', hideInTable: true, type: 'textarea' },
+        { name: 'is_active', labelKey: 'common.enabled', type: 'switch' },
       ]}
       listFn={listFormTemplates}
       createFn={createFormTemplate}

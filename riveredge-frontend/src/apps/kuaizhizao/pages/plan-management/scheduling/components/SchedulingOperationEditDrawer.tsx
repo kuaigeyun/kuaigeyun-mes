@@ -322,8 +322,8 @@ const SchedulingOperationEditDrawer: React.FC<SchedulingOperationEditDrawerProps
       width={MODAL_CONFIG.LARGE_WIDTH}
       onCancel={onClose}
       destroyOnClose
-      okText={t('app.kuaizhizao.scheduling.common.save')}
-      cancelText={t('app.kuaizhizao.scheduling.common.cancel')}
+      okText={t('common.save')}
+      cancelText={t('common.cancel')}
       onOk={() => void handleSubmit()}
       okButtonProps={{ disabled: !canUpdate || rows.length === 0, loading: saving }}
       confirmLoading={saving}

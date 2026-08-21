@@ -135,7 +135,7 @@ export const ParameterConfigTemplate: React.FC<ParameterConfigTemplateProps> = (
               </Space>
               <Space>
                 <Button onClick={() => props.form?.resetFields()}>
-                  {t('components.layoutTemplates.parameter.reset')}
+                  {t('common.reset')}
                 </Button>
                 {onSave && (
                   <Button

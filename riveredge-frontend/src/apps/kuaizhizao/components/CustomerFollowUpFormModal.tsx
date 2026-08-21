@@ -410,7 +410,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
           opportunity_id: opportunityId ?? null,
           stage_code_after: stageAfter,
         });
-        message.success(t('pages.system.siteSettings.saveSuccess'));
+        message.success(t('common.saveSuccess'));
       } else {
         await customerFollowUpApi.create({
           customer_id: customerId,

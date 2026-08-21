@@ -129,7 +129,7 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
             ),
           },
           {
-            title: t('app.kuaizhizao.afterSalesService.sparePartRequisition.field.status'),
+            title: t('common.status'),
             key: 'lifecycle',
             dataIndex: 'status',
             fixed: 'right',

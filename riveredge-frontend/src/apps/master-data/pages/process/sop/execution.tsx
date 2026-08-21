@@ -285,7 +285,7 @@ const SOPExecutionPage: React.FC = () => {
             </div>
           </div>
           <Button icon={<CloseOutlined />} onClick={handleBack}>
-            {t('app.master-data.bom.back')}
+            {t('common.back')}
           </Button>
         </Space>
       </Card>

@@ -240,14 +240,14 @@ const MoldListPage: React.FC = () => {
         },
       },
       {
-        title: t('pages.system.molds.columnActive'),
+        title: t('common.enabled'),
         dataIndex: 'is_active',
         render: (_: unknown, entity: Mold) =>
-          renderSystemActiveTag(t, entity?.is_active, 'pages.system.molds.enabled', 'pages.system.molds.disabled'),
+          renderSystemActiveTag(t, entity?.is_active, 'common.enabled', 'common.disabled'),
       },
-      { title: t('pages.system.molds.labelDescription'), dataIndex: 'description', span: 2 },
-      { title: t('pages.system.molds.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-      { title: t('pages.system.molds.labelUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+      { title: t('common.remark'), dataIndex: 'description', span: 2 },
+      { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
     ],
     [t]
   );
@@ -331,22 +331,22 @@ const MoldListPage: React.FC = () => {
       },
     },
     {
-      title: t('pages.system.molds.columnActive'),
+      title: t('common.enabled'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('pages.system.molds.enabled'), status: 'Success' },
-        false: { text: t('pages.system.molds.disabled'), status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('pages.system.molds.enabled') : t('pages.system.molds.disabled')}
+          {record.is_active ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
     {
-      title: t('pages.system.molds.columnCreatedAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -354,7 +354,7 @@ const MoldListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: t('pages.system.molds.columnActions'),
+      title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
       render: (_, record) => [
@@ -365,7 +365,7 @@ const MoldListPage: React.FC = () => {
               icon={<EyeOutlined />}
               onClick={() => handleView(record)}
             >
-              {t('pages.system.molds.view')}
+              {t('common.view')}
             </Button>,
             <Button {...rowActionKind('update')}
               key="edit"
@@ -374,7 +374,7 @@ const MoldListPage: React.FC = () => {
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
             >
-              {t('pages.system.molds.edit')}
+              {t('common.edit')}
             </Button>,
             <Popconfirm {...rowActionKind('delete')}
               key="delete"
@@ -382,7 +382,7 @@ const MoldListPage: React.FC = () => {
               onConfirm={() => handleDelete(record)}
             >
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('pages.system.molds.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>,
           ],
@@ -420,7 +420,7 @@ const MoldListPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText={t('pages.system.molds.batchDelete')}
+          deleteButtonText={t('common.batchDelete')}
           deleteConfirmTitle={t('pages.system.molds.batchDeleteTitle')}
           deleteConfirmDescription={(c) => t('pages.system.molds.batchDeleteDescription', { count: c })}
           showImportButton={false}
@@ -552,12 +552,12 @@ const MoldListPage: React.FC = () => {
         />
         <ProFormSwitch
           name="is_active"
-          label={t('pages.system.molds.columnActive')}
+          label={t('common.enabled')}
           initialValue={true}
         />
         <ProFormTextArea
           name="description"
-          label={t('pages.system.molds.labelDescription')}
+          label={t('common.remark')}
           placeholder={t('pages.system.molds.descPlaceholder')}
         />
       </FormModalTemplate>

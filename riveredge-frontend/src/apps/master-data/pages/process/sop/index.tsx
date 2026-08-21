@@ -93,7 +93,7 @@ const SOPPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const sopActiveValueEnum = useMemo(
-    () => buildMasterCrudActiveValueEnum(t, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
+    () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
     [t],
   );
   
@@ -651,8 +651,8 @@ const SOPPage: React.FC = () => {
         messageApi.warning(t('app.master-data.noExportData'));
         return;
       }
-      const enabledLabel = t('app.master-data.plants.enabled');
-      const disabledLabel = t('app.master-data.plants.disabled');
+      const enabledLabel = t('common.enabled');
+      const disabledLabel = t('common.disabled');
       const headers = [
         t('app.master-data.sop.codeLabel'),
         t('app.master-data.sop.nameLabel'),
@@ -872,7 +872,7 @@ const SOPPage: React.FC = () => {
         title: col.title,
       })),
       {
-        title: t('app.master-data.sop.remarkLabel'),
+        title: t('common.remark'),
         dataIndex: 'content',
         span: 2,
         render: (_: unknown, record: SOP) => {
@@ -886,14 +886,14 @@ const SOPPage: React.FC = () => {
         },
       },
       {
-        title: t('field.route.isActive'),
+        title: t('common.enabled'),
         dataIndex: 'isActive',
         render: (_: unknown, record: SOP) =>
           renderMasterActiveTag(
             t,
             record?.isActive ?? (record as any)?.is_active,
-            'app.master-data.plants.enabled',
-            'app.master-data.plants.disabled',
+            'common.enabled',
+            'common.disabled',
           ),
       },
       { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
@@ -1194,7 +1194,7 @@ const SOPPage: React.FC = () => {
       },
     },
     {
-      title: t('app.master-data.sop.remarkLabel'),
+      title: t('common.remark'),
       dataIndex: 'content',
       ellipsis: true,
       width: 200,
@@ -1220,7 +1220,7 @@ const SOPPage: React.FC = () => {
         const isActive = record?.isActive ?? (record as any)?.is_active;
         return (
           <Tag color={isActive ? 'success' : 'default'} variant="solid">
-            {isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
+            {isActive ? t('common.enabled') : t('common.disabled')}
           </Tag>
         );
       },
@@ -1241,7 +1241,7 @@ const SOPPage: React.FC = () => {
         return (
           <Space size={ROW_ACTIONS_INLINE_GAP} wrap={false} style={{ whiteSpace: 'nowrap' }}>
             <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-              {t('field.customField.view')}
+              {t('common.view')}
             </Button>
             {carrier !== 'paper' ? (
               <Button
@@ -1264,7 +1264,7 @@ const SOPPage: React.FC = () => {
               {...rowActionKind('update')}
               onClick={() => handleEdit(record)}
             >
-              {t('field.customField.edit')}
+              {t('common.edit')}
             </Button>
             <Popconfirm
               key="delete"
@@ -1278,7 +1278,7 @@ const SOPPage: React.FC = () => {
                 size="small"
                 icon={<DeleteOutlined />}
               >
-                {t('field.customField.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>
           </Space>
@@ -1659,7 +1659,7 @@ const SOPPage: React.FC = () => {
           </ProFormDependency>
           <ProFormTextArea
             name="content"
-            label={t('app.master-data.sop.remarkLabel')}
+            label={t('common.remark')}
             placeholder={t('app.master-data.sop.remarkPlaceholder')}
             colProps={{ span: 24 }}
             fieldProps={{ rows: 3, maxLength: 5000 }}

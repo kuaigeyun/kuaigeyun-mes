@@ -135,7 +135,7 @@ function matchesToMessages(
       title: t(`${I18N}.suggestionTitle`, { code: item.mainCode, name: item.name }),
       text: t(`${I18N}.suggestionContent`, { code: item.mainCode, name: item.name }) + detail,
       tone: 'danger',
-      actionLabel: onOpenMaterial ? t(`${I18N}.openMaterial`) : undefined,
+      actionLabel: onOpenMaterial ? t('common.view') : undefined,
       onAction: onOpenMaterial ? () => onOpenMaterial(item.uuid) : undefined,
     }
   })

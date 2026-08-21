@@ -161,7 +161,7 @@ const MenuListPage: React.FC = () => {
   const menuDetailDescColumns = useMemo<ProDescriptionsItemProps<Menu>[]>(
     () => [
       {
-        title: t('pages.system.menus.name'),
+        title: t('common.name'),
         dataIndex: 'name',
         render: (_: unknown, row: Menu) =>
           translateAppMenuItemName(row?.name, row?.path, t, (row as any)?.children, row?.meta),
@@ -176,23 +176,23 @@ const MenuListPage: React.FC = () => {
       { title: t('pages.system.menus.permissionCode'), dataIndex: 'permission_code' },
       { title: t('pages.system.menus.sort'), dataIndex: 'sort_order' },
       {
-        title: t('pages.system.menus.status'),
+        title: t('common.status'),
         dataIndex: 'is_active',
         render: (_: unknown, entity: Menu) =>
-          renderSystemActiveTag(t, entity?.is_active, 'pages.system.menus.enabled', 'pages.system.menus.disabled'),
+          renderSystemActiveTag(t, entity?.is_active, 'common.enabled', 'common.disabled'),
       },
       {
         title: t('pages.system.menus.externalLink'),
         dataIndex: 'is_external',
         render: (_: unknown, entity: Menu) =>
           renderSystemTypeMarker(
-            entity?.is_external ? t('pages.system.menus.externalYes') : t('pages.system.menus.externalNo'),
+            entity?.is_external ? t('common.yes') : t('common.no'),
             entity?.is_external ? 'processing' : 'default',
           ),
       },
       { title: t('pages.system.menus.externalUrl'), dataIndex: 'external_url' },
-      { title: t('pages.system.menus.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-      { title: t('pages.system.menus.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+      { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
     ],
     [t]
   );
@@ -557,11 +557,11 @@ const MenuListPage: React.FC = () => {
   const handleDelete = useCallback(async (record: Menu) => {
     try {
       await deleteMenu(record.uuid);
-      messageApi.success(t('pages.system.deleteSuccess'));
+      messageApi.success(t('common.deleteSuccess'));
       refreshLayoutMenus();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.deleteFailed'));
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   }, [messageApi, refreshLayoutMenus, t]);
 
@@ -704,16 +704,16 @@ const MenuListPage: React.FC = () => {
         
         if (isEdit && currentMenuUuid) {
             await updateMenu(currentMenuUuid, payload as any);
-            messageApi.success(t('pages.system.updateSuccess'));
+            messageApi.success(t('common.updateSuccess'));
         } else {
             await createMenu(payload as any);
-            messageApi.success(t('pages.system.createSuccess'));
+            messageApi.success(t('common.createSuccess'));
         }
         setModalVisible(false);
         refreshLayoutMenus();
         actionRef.current?.reload();
     } catch (error: any) {
-        messageApi.error(error.message || t('pages.system.operationFailed'));
+        messageApi.error(error.message || t('common.operationFailed'));
     } finally {
         setFormLoading(false);
     }
@@ -789,16 +789,16 @@ const MenuListPage: React.FC = () => {
         sorter: (a: Menu, b: Menu) => a.sort_order - b.sort_order,
     },
     {
-        title: t('pages.system.menus.status'),
+        title: t('common.status'),
         dataIndex: 'is_active',
         width: 100,
         valueType: 'select',
         valueEnum: {
-            true: { text: t('pages.system.applications.enabled'), status: 'Success' },
-            false: { text: t('pages.system.applications.disabled'), status: 'Default' },
+            true: { text: t('common.enabled'), status: 'Success' },
+            false: { text: t('common.disabled'), status: 'Default' },
         },
         render: (_: any, record: Menu) =>
-            renderSystemActiveTag(t, record.is_active, 'pages.system.applications.enabled', 'pages.system.applications.disabled'),
+            renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
     {
         title: t('pages.system.menus.source'),
@@ -831,7 +831,7 @@ const MenuListPage: React.FC = () => {
                 {t('common.detail')}
               </Button>,
               <Button {...rowActionKind('update')} key="edit" type="primary" onClick={() => handleEdit(record)}>
-                {t('pages.system.menus.edit')}
+                {t('common.edit')}
               </Button>,
               <Tooltip {...rowActionKind('update')}
                 key="setHome"
@@ -864,7 +864,7 @@ const MenuListPage: React.FC = () => {
                 >
                   <span>
                     <Button type="default" size="small" danger icon={<DeleteOutlined />} disabled={!canDelete}>
-                      {t('pages.system.menus.delete')}
+                      {t('common.delete')}
                     </Button>
                   </span>
                 </Tooltip>
@@ -915,7 +915,7 @@ const MenuListPage: React.FC = () => {
                 items = allMenus;
               }
               if (items.length === 0) {
-                messageApi.warning(t('pages.system.menus.noDataToExport'));
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               await downloadRecordsAsXlsx(
@@ -1027,7 +1027,7 @@ const MenuListPage: React.FC = () => {
                       menuFormRef.current?.setFieldsValue({ name: defaultLabel });
                     }}
                   >
-                    {t('pages.system.menus.resetDisplayName')}
+                    {t('common.reset')}
                   </Button>
                 </Tooltip>
               ) : undefined
@@ -1115,7 +1115,7 @@ const MenuListPage: React.FC = () => {
                disabled={isEdit && editingMenuMeta.isManifestMenu}
                colProps={{ span: 12 }}
              />
-             <ProFormSwitch name="is_active" label={t('pages.system.menus.enabled')} colProps={{ span: 12 }} />
+             <ProFormSwitch name="is_active" label={t('common.enabled')} colProps={{ span: 12 }} />
              <ProFormSwitch name="is_external" label={t('pages.system.menus.externalLink')} colProps={{ span: 12 }} />
              <ProFormText
                name="external_url"

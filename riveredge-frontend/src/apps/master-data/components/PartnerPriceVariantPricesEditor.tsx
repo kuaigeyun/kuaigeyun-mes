@@ -58,8 +58,8 @@ function VariantAttributeCell({
           disabled={readOnly}
           size="small"
           options={[
-            { label: t('app.master-data.bom.yes'), value: true },
-            { label: t('app.master-data.bom.no'), value: false },
+            { label: t('common.yes'), value: true },
+            { label: t('common.no'), value: false },
           ]}
         />
       ) : def.attribute_type === 'date' ? (
@@ -143,7 +143,7 @@ function VariantPricesFormListTable({
         ),
       },
       {
-        title: t('app.common.actions', '操作'),
+        title: t('common.actions', '操作'),
         key: 'actions',
         width: 56,
         fixed: 'right' as const,

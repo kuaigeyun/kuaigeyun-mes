@@ -121,7 +121,7 @@ const ToolLedgerPage: React.FC = () => {
           },
           { field: 'maintenance_period', labelKey: 'app.kuaizhizao.toolLedger.import.maintenancePeriod', aliases: ['保养周期（天）', '保养周期'] },
           { field: 'calibration_period', labelKey: 'app.kuaizhizao.toolLedger.import.calibrationPeriod', aliases: ['校验周期（天）', '校验周期'] },
-          { field: 'description', labelKey: 'app.kuaizhizao.toolLedger.import.description', aliases: ['备注', '描述'] },
+          { field: 'description', labelKey: 'common.remark', aliases: ['备注', '描述'] },
           {
             field: 'is_active',
             labelKey: 'app.kuaizhizao.toolLedger.import.isActive',
@@ -144,7 +144,7 @@ const ToolLedgerPage: React.FC = () => {
           '',
           pickImportExampleValue(
             [...IMPORT_YES_NO_OPTIONS],
-            t('app.kuaizhizao.toolLedger.importExample.isActive'),
+            t('common.yes'),
           ),
         ],
       ),
@@ -627,7 +627,7 @@ const ToolLedgerPage: React.FC = () => {
             <DocumentAttachmentsField category="tool_ledger_attachments" />
           </Col>
           <Col span={24}>
-            <ProFormTextArea name="description" label={t('app.kuaizhizao.toolLedger.fieldDescription')} placeholder={t('app.kuaizhizao.toolLedger.phDescription')} fieldProps={{ rows: 2 }} />
+            <ProFormTextArea name="description" label={t('common.remark')} placeholder={t('app.kuaizhizao.toolLedger.phDescription')} fieldProps={{ rows: 2 }} />
           </Col>
           <Col span={24}>
             <ProFormSwitch name="is_active" label={t('app.kuaizhizao.toolLedger.fieldIsActive')} />

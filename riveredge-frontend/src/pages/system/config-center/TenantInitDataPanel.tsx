@@ -106,7 +106,7 @@ export const TenantInitDataPanel: React.FC = () => {
       setLastResults(res.results);
       messageApi.success(res.message);
     } catch (e: any) {
-      messageApi.error(e?.message || t('pages.system.configCenter.tenantInit.runFailed'));
+      messageApi.error(e?.message || t('common.loadFailed'));
     } finally {
       setRunningRequired(false);
     }
@@ -123,7 +123,7 @@ export const TenantInitDataPanel: React.FC = () => {
       setLastResults((prev) => ({ ...prev, ...res.results }));
       messageApi.success(res.message);
     } catch (e: any) {
-      messageApi.error(e?.message || t('pages.system.configCenter.tenantInit.runFailed'));
+      messageApi.error(e?.message || t('common.loadFailed'));
     } finally {
       setRunningOptional(false);
     }
@@ -213,7 +213,7 @@ export const TenantInitDataPanel: React.FC = () => {
                   },
                 },
                 {
-                  title: t('pages.system.configCenter.tenantInit.colStatus'),
+                  title: t('common.status'),
                   dataIndex: 'success',
                   width: 100,
                   render: (ok: boolean) =>
@@ -224,7 +224,7 @@ export const TenantInitDataPanel: React.FC = () => {
                     ),
                 },
                 {
-                  title: t('pages.system.configCenter.tenantInit.colDetail'),
+                  title: t('common.detail'),
                   render: (_, row) =>
                     row.success
                       ? row.created != null

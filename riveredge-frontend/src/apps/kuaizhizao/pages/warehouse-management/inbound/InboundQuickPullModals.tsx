@@ -615,7 +615,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           ),
         },
         {
-          title: t('app.kuaizhizao.salesOrder.quantity'),
+          title: t('common.quantity'),
           dataIndex: 'suggested_quantity',
           width: 100,
           align: 'right' as const,
@@ -668,7 +668,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           ),
         },
         {
-          title: t('app.kuaizhizao.salesOrder.quantity'),
+          title: t('common.quantity'),
           dataIndex: 'suggested_quantity',
           width: 100,
           align: 'right' as const,
@@ -721,7 +721,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           ),
         },
         {
-          title: t('app.kuaizhizao.salesOrder.quantity'),
+          title: t('common.quantity'),
           dataIndex: 'suggested_quantity',
           width: 100,
           align: 'right' as const,
@@ -774,7 +774,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           ),
         },
         {
-          title: t('app.kuaizhizao.salesOrder.quantity'),
+          title: t('common.quantity'),
           dataIndex: 'suggested_quantity',
           width: 100,
           align: 'right' as const,
@@ -826,7 +826,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           ),
         },
         {
-          title: t('app.kuaizhizao.salesOrder.quantity'),
+          title: t('common.quantity'),
           dataIndex: 'suggested_quantity',
           width: 100,
           align: 'right' as const,
@@ -879,7 +879,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           ),
         },
         {
-          title: t('app.kuaizhizao.salesOrder.quantity'),
+          title: t('common.quantity'),
           dataIndex: 'suggested_quantity',
           width: 100,
           align: 'right' as const,

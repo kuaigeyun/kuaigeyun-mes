@@ -92,7 +92,7 @@ export const MrpExceptionInboxTab: React.FC<MrpExceptionInboxTabProps> = ({
         ),
       },
       {
-        title: t('app.kuaizhizao.demandComputation.inboxColMessage'),
+        title: t('common.remark'),
         key: 'mrp_inbox_message',
         dataIndex: 'message',
         hideInSearch: true,
@@ -169,7 +169,7 @@ export const MrpExceptionInboxTab: React.FC<MrpExceptionInboxTabProps> = ({
         valueEnum: exceptionCodeValueEnum,
       },
       {
-        title: t('app.kuaizhizao.demandComputation.colActions'),
+        title: t('common.actions'),
         key: 'option',
         valueType: 'option',
         fixed: 'right',

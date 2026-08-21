@@ -92,7 +92,7 @@ export function buildContractListImportTemplate(
       {
         field: 'quantity',
         required: true,
-        labelKey: 'app.kuaizhizao.salesContract.importHeaders.quantity',
+        labelKey: 'common.quantity',
         aliases: ['数量'],
       },
       {
@@ -102,7 +102,7 @@ export function buildContractListImportTemplate(
       },
       {
         field: 'unit',
-        labelKey: 'app.kuaizhizao.salesContract.importHeaders.unit',
+        labelKey: 'common.unit',
         aliases: ['单位'],
         options: unitOpts,
       },
@@ -113,7 +113,7 @@ export function buildContractListImportTemplate(
       },
       {
         field: 'notes',
-        labelKey: 'app.kuaizhizao.salesContract.importHeaders.notes',
+        labelKey: 'common.remark',
         aliases: ['备注'],
       },
     ],

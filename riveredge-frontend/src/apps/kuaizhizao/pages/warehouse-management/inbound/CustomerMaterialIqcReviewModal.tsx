@@ -68,7 +68,7 @@ export const CustomerMaterialIqcReviewModal: React.FC<Props> = ({
       dataIndex: 'iqc_required',
       width: 100,
       render: (v: boolean) =>
-        v ? t('app.kuaizhizao.warehouseInbound.iqcReview.requiredYes') : t('app.kuaizhizao.warehouseInbound.iqcReview.requiredNo'),
+        v ? t('common.yes') : t('common.no'),
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.iqcReview.colPlan'),

@@ -115,8 +115,8 @@ const WarehousesPage: React.FC = () => {
           { field: 'warehouseType', labelKey: 'field.warehouse.warehouseType', options: ['普通仓', '线边仓', '在制品仓', '委外仓', '寄售仓', 'VMI仓', '不良品仓', '待检仓'] },
           { field: 'workshopCode', labelKey: 'app.master-data.warehouses.workshopCode' },
           { field: 'workCenterCode', labelKey: 'app.master-data.warehouses.workCenterCode' },
-          { field: 'description', labelKey: 'app.master-data.warehouses.description' },
-          { field: 'isActive', labelKey: 'field.warehouse.isActive', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
+          { field: 'description', labelKey: 'common.remark' },
+          { field: 'isActive', labelKey: 'common.enabled', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
         ],
         [
           t('app.master-data.warehouses.importExample.code'),
@@ -498,9 +498,9 @@ const WarehousesPage: React.FC = () => {
         t('field.warehouse.warehouseType'),
         t('field.warehouse.workshopName'),
         t('field.warehouse.workCenterName'),
-        t('app.master-data.warehouses.description'),
-        t('app.master-data.warehouses.status'),
-        t('app.master-data.warehouses.createTime'),
+        t('common.remark'),
+        t('common.status'),
+        t('common.createdAt'),
       ];
       const warehouseTypeLabels: Record<string, string> = {
         normal: t('warehouse.type.normal'),
@@ -533,7 +533,7 @@ const WarehousesPage: React.FC = () => {
       downloadFile(csvContent, filename, 'text/csv;charset=utf-8;');
       messageApi.success(t('app.master-data.exportSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.exportFailed'));
+      messageApi.error(error.message || t('common.exportFailed'));
     }
   };
 
@@ -665,7 +665,7 @@ const WarehousesPage: React.FC = () => {
       render: (_, record) => record.workCenterName || '-',
     },
     {
-      title: t('app.master-data.warehouses.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -673,7 +673,7 @@ const WarehousesPage: React.FC = () => {
     // 插入自定义字段列
     ...customFieldColumns,
     {
-      title: t('app.master-data.warehouses.status'),
+      title: t('common.status'),
       dataIndex: 'isActive',
       hideInTable: true,
       order: 20,
@@ -682,7 +682,7 @@ const WarehousesPage: React.FC = () => {
       fieldProps: { allowClear: true },
     },
     {
-      title: t('app.master-data.warehouses.status'),
+      title: t('common.status'),
       dataIndex: 'isActive',
       width: 88,
       minWidth: 88,
@@ -695,7 +695,7 @@ const WarehousesPage: React.FC = () => {
     },
     ...masterCrudCreatedUpdatedColumns<Warehouse>(t),
     {
-      title: t('app.master-data.warehouses.action'),
+      title: t('common.actions'),
       key: 'action',
       valueType: 'option',
       fixed: 'right',
@@ -705,14 +705,14 @@ const WarehousesPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            {t('field.customField.view')}
+            {t('common.view')}
           </Button>
           <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            {t('field.customField.edit')}
+            {t('common.edit')}
           </Button>
           <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.warehouses.deleteConfirm')}
             description={t('app.master-data.warehouses.deleteDescription')}
@@ -724,7 +724,7 @@ const WarehousesPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              {t('field.customField.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -764,21 +764,21 @@ const WarehousesPage: React.FC = () => {
       render: (_, record) => record.workCenterName || '-',
     },
     {
-      title: t('app.master-data.warehouses.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
     },
     {
-      title: t('app.master-data.warehouses.status'),
+      title: t('common.status'),
       dataIndex: 'isActive',
       render: (_, record) => renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled'),
     },
     {
-      title: t('app.master-data.warehouses.createTime'),
+      title: t('common.createdAt'),
       dataIndex: 'createdAt',
       valueType: 'dateTime',
     },
     {
-      title: t('app.master-data.warehouses.updateTime'),
+      title: t('common.updatedAt'),
       dataIndex: 'updatedAt',
       valueType: 'dateTime',
     },
@@ -1001,7 +1001,7 @@ const WarehousesPage: React.FC = () => {
           }}
           columns={[
             { title: t('app.master-data.warehouses.name'), dataIndex: 'name', width: 120 },
-            { title: t('app.master-data.warehouses.description'), dataIndex: 'description', ellipsis: true },
+            { title: t('common.remark'), dataIndex: 'description', ellipsis: true },
             {
               title: t('field.warehouse.warehouseType'),
               dataIndex: 'warehouse_type',

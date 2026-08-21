@@ -197,7 +197,7 @@ const CustomersPage: React.FC = () => {
           { field: 'contactTitle', labelKey: 'field.customer.contactTitle' , options: importDropdownLabelsFromCodeLabelMap(dictLabelMaps.CONTACT_TITLE ?? {}) },
           { field: 'phone', labelKey: 'field.customer.phone' },
           { field: 'email', labelKey: 'field.customer.email' },
-          { field: 'isActive', labelKey: 'field.customer.isActive' , options: [...IMPORT_YES_NO_OPTIONS] },
+          { field: 'isActive', labelKey: 'common.enabled' , options: [...IMPORT_YES_NO_OPTIONS] },
           { field: 'taxRegistrationNo', labelKey: 'field.partner.taxRegistrationNo' },
           { field: 'invoiceTitle', labelKey: 'field.partner.invoiceTitle' },
           { field: 'invoiceAddress', labelKey: 'field.partner.invoiceAddress' },
@@ -656,7 +656,7 @@ const CustomersPage: React.FC = () => {
         t('field.customer.email'),
         t('field.partner.deliveryAddress'),
         t('field.customer.salesman'),
-        t('app.master-data.warehouses.status'),
+        t('common.status'),
         t('common.createdAt'),
       ];
       const csvRows: string[] = [headers.join(',')];
@@ -694,7 +694,7 @@ const CustomersPage: React.FC = () => {
       downloadFile(blob, filename);
       messageApi.success(t('common.exportSuccess', { count: exportData.length }));
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.exportFailed'));
+      messageApi.error(error.message || t('common.exportFailed'));
     }
   };
 
@@ -837,7 +837,7 @@ const CustomersPage: React.FC = () => {
       },
     },
     {
-      title: t('app.master-data.warehouses.status'),
+      title: t('common.status'),
       dataIndex: 'isActive',
       hideInTable: true,
       order: 20,
@@ -846,7 +846,7 @@ const CustomersPage: React.FC = () => {
       fieldProps: { allowClear: true },
     },
     {
-      title: t('app.master-data.warehouses.status'),
+      title: t('common.status'),
       dataIndex: 'isActive',
       width: 88,
       minWidth: 88,
@@ -860,7 +860,7 @@ const CustomersPage: React.FC = () => {
     ...customFieldColumns,
     ...masterCrudCreatedUpdatedColumns<Customer>(t),
     {
-      title: t('app.master-data.warehouses.action'),
+      title: t('common.actions'),
       key: 'action',
       valueType: 'option',
       fixed: 'right',
@@ -871,14 +871,14 @@ const CustomersPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            {t('field.customField.view')}
+            {t('common.view')}
           </Button>
           <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            {t('field.customField.edit')}
+            {t('common.edit')}
           </Button>
           <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.customers.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
@@ -889,7 +889,7 @@ const CustomersPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              {t('field.customField.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -928,7 +928,7 @@ const CustomersPage: React.FC = () => {
       valueType: 'dateTime',
     },
     {
-      title: t('app.master-data.warehouses.status'),
+      title: t('common.status'),
       dataIndex: 'isActive',
       render: (_, record) => renderMasterActiveTag(t, record?.isActive ?? (record as any)?.is_active, 'common.enabled', 'common.disabled'),
     },
@@ -1010,8 +1010,8 @@ const CustomersPage: React.FC = () => {
     { title: t('field.partner.deliveryContactName'), dataIndex: 'deliveryContactName' },
     { title: t('field.partner.deliveryContactPhone'), dataIndex: 'deliveryContactPhone' },
     { title: t('field.partner.deliveryAddress'), dataIndex: 'deliveryAddress', span: 2 },
-    { title: t('app.master-data.warehouses.createTime'), dataIndex: 'createdAt', valueType: 'dateTime' },
-    { title: t('app.master-data.warehouses.updateTime'), dataIndex: 'updatedAt', valueType: 'dateTime' },
+    { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
+    { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
   ];
 
   return (

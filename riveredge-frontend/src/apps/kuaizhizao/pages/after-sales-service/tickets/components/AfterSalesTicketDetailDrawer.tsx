@@ -62,7 +62,7 @@ export const AfterSalesTicketDetailDrawer: React.FC<AfterSalesTicketDetailDrawer
           render: (_, row) => renderAfterSalesTypeMarker(row.request_type),
         },
         {
-          title: t('app.kuaizhizao.afterSalesTicket.colStatus'),
+          title: t('common.status'),
           dataIndex: 'status',
           render: (_, row) => renderAfterSalesStatusTag(row.status, AFTER_SALES_TICKET_STATUS_COLOR),
         },
@@ -186,7 +186,7 @@ export const AfterSalesTicketDetailDrawer: React.FC<AfterSalesTicketDetailDrawer
               width: 120,
             },
             {
-              title: t('app.kuaizhizao.afterSalesTicket.fieldQuantity'),
+              title: t('common.quantity'),
               dataIndex: 'quantity',
               width: 100,
               align: 'right',

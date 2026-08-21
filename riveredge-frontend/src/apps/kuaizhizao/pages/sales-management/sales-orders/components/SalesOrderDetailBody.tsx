@@ -242,7 +242,7 @@ export const SalesOrderDetailCollaborationTitleSuffix: React.FC = () => {
   if (!next?.length) return null;
   return (
     <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
-      {t('components.uniLifecycle.nextStep')}：
+      {t('common.next')}：
       {next.join(t('components.uniLifecycle.nextStepSeparator'))}
     </Typography.Text>
   );
@@ -280,7 +280,7 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
           render: (_, record) => (
             <Space size={4}>
               <span>{record.order_code ?? '-'}</span>
-              <Tooltip title={t('app.kuaizhizao.salesOrder.printPdf')}>
+              <Tooltip title={t('common.print')}>
                 <Button
                   type="link"
                   size="small"
@@ -374,7 +374,7 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
   const noteColumns = useMemo(
     () =>
       alignDescriptionColumns<SalesOrder>([
-        { title: t('app.kuaizhizao.salesOrder.notes'), dataIndex: 'notes', span: 3 },
+        { title: t('common.remark'), dataIndex: 'notes', span: 3 },
       ] as ProDescriptionsItemProps<SalesOrder>[]),
     [t],
   );
@@ -544,7 +544,7 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
                       ? t('app.kuaizhizao.salesOrder.feeBearerOurSide')
                       : t('app.kuaizhizao.salesOrder.feeBearerCounterparty'),
                 },
-                { title: t('app.kuaizhizao.salesOrder.notes'), dataIndex: 'notes' },
+                { title: t('common.remark'), dataIndex: 'notes' },
               ]}
               dataSource={order.fee_details}
               rowKey={(_: any, i?: number) => i ?? 0}
@@ -574,7 +574,7 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
               },
               { title: t('app.kuaizhizao.salesOrder.materialSpec'), dataIndex: 'material_spec', width: 120 },
               {
-                title: t('app.kuaizhizao.salesOrder.unit'),
+                title: t('common.unit'),
                 dataIndex: 'material_unit',
                 width: 80,
                 render: (v: string) => <MaterialUnitLabel value={v} />,
@@ -586,7 +586,7 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
                 render: (_: unknown, record: SalesOrderItem) => <MaterialBomIndicator materialId={record.material_id} />,
               },
               {
-                title: t('app.kuaizhizao.salesOrder.quantity'),
+                title: t('common.quantity'),
                 dataIndex: 'required_quantity',
                 width: 100,
                 align: 'right' as const,

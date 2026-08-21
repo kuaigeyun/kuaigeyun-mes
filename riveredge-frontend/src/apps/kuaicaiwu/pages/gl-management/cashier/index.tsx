@@ -538,7 +538,7 @@ const GlCashierPage: React.FC = () => {
                   width: 120,
                   render: (v: unknown) => money(v),
                 },
-                { title: t(`${NS}.col.status`, { defaultValue: '状态' }), dataIndex: 'status', width: 100 },
+                { title: t('common.status', { defaultValue: '状态' }), dataIndex: 'status', width: 100 },
                 {
                   title: t('common.action', { defaultValue: '操作' }),
                   key: 'action',
@@ -671,7 +671,7 @@ const GlCashierPage: React.FC = () => {
         />
         <ProFormText name="payee" label={t(`${NS}.col.payee`, { defaultValue: '收款人' })} />
         <ProFormDigit name="amount" label={t(`${NS}.col.amount`, { defaultValue: '金额' })} min={0} fieldProps={{ precision: 2 }} />
-        <ProFormText name="notes" label={t(`${NS}.col.notes`, { defaultValue: '备注' })} />
+        <ProFormText name="notes" label={t('common.remark', { defaultValue: '备注' })} />
       </FormModalTemplate>
     </ListPageTemplate>
   );

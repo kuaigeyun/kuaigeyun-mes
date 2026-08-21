@@ -220,7 +220,7 @@ const KanbanView: React.FC = () => {
               handleViewDetail(instance);
             }}
           >
-            {t('pages.system.approvalInstances.view')}
+            {t('common.view')}
           </Button>
         </div>
       </div>
@@ -335,7 +335,7 @@ const KanbanView: React.FC = () => {
                   <Text strong>
                     {item.action === 'approve' ? t('pages.system.approvalInstances.timelineApprove') :
                      item.action === 'reject' ? t('pages.system.approvalInstances.timelineReject') :
-                     item.action === 'cancel' ? t('pages.system.approvalInstances.timelineCancel') :
+                     item.action === 'cancel' ? t('common.cancel') :
                      t('pages.system.approvalInstances.timelineTransfer')}
                   </Text>
                   <Text type="secondary" style={{ marginLeft: 8 }}>
@@ -455,7 +455,7 @@ const KanbanView: React.FC = () => {
                 icon={<StopOutlined />}
                 onClick={() => handleAction(selectedInstance, 'cancel')}
               >
-                {t('pages.system.approvalInstances.cancel')}
+                {t('common.cancel')}
               </Button>
             </Space>
           ) : null
@@ -470,7 +470,7 @@ const KanbanView: React.FC = () => {
               <Descriptions.Item label={t('pages.system.approvalInstances.content')}>
                 {selectedInstance.content || t('pages.system.approvalInstances.noContent')}
               </Descriptions.Item>
-              <Descriptions.Item label={t('pages.system.approvalInstances.statusLabel')}>
+              <Descriptions.Item label={t('common.status')}>
                 {getStatusTag(selectedInstance.status)}
               </Descriptions.Item>
               {selectedInstance.current_node && (

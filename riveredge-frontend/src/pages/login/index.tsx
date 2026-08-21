@@ -46,6 +46,7 @@ import { switchTenant } from '../../services/auth';
 import { setToken, setTenantId, setUserInfo, getTenantId, getToken } from '../../utils/auth';
 import { clearSessionScopedQueries } from '../../utils/clearSessionQueries';
 import { applySessionUserAfterLogin } from '../../utils/restoredUser';
+import { LANGUAGE_TOOLBAR_SHORT, SUPPORTED_UI_LANGUAGES, normalizeUiLanguage } from '../../utils/localeBootstrap';
 import { getImmediatePostLoginHomePath, refinePostLoginHomeInBackground } from '../../utils/tenantHomePath';
 import { buildTenantLoginPathForHistoryReplace, resolvePlatformAdminLoginPathFromUrl, resolveTenantDomainFromUrl } from '../../utils/tenantDomainAccess';
 import { captureLoginEntryFromCurrentUrl } from '../../utils/loginEntry';
@@ -1857,8 +1858,9 @@ export default function LoginPage() {
           <Button
             type="default"
             onClick={() => {
-              const currentLang = i18n.language;
-              const nextLang = currentLang === 'zh-CN' ? 'en-US' : 'zh-CN';
+              const order = SUPPORTED_UI_LANGUAGES;
+              const current = normalizeUiLanguage(i18n.language) ?? order[0];
+              const nextLang = order[(order.indexOf(current) + 1) % order.length];
               i18n.changeLanguage(nextLang);
             }}
             style={{
@@ -1878,7 +1880,7 @@ export default function LoginPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <GlobalOutlined style={{ fontSize: '16px' }} />
               <span style={{ fontSize: '14px', lineHeight: 1 }}>
-                {i18n.language === 'zh-CN' ? '中' : 'EN'}
+                {LANGUAGE_TOOLBAR_SHORT[normalizeUiLanguage(i18n.language) ?? 'zh-CN']}
               </span>
             </div>
           </Button>

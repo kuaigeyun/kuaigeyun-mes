@@ -198,7 +198,7 @@ const DataQualityPage: React.FC = () => {
       },
     },
     {
-      title: t('pages.system.dataQuality.columnDesc'),
+      title: t('common.remark'),
       dataIndex: 'description',
       key: 'description',
     },
@@ -221,7 +221,7 @@ const DataQualityPage: React.FC = () => {
       width: 100,
       render: (fixable: boolean) => (
         <Tag color={fixable ? 'green' : 'default'}>
-          {fixable ? t('pages.system.dataQuality.yes') : t('pages.system.dataQuality.no')}
+          {fixable ? t('common.yes') : t('common.no')}
         </Tag>
       ),
     },

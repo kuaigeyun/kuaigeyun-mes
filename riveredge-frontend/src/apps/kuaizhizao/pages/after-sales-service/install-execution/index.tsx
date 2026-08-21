@@ -290,7 +290,7 @@ const InstallExecutionPage: React.FC = () => {
         render: (_, row) => row.sales_order_code || '—',
       },
       {
-        title: t('app.kuaizhizao.afterSalesTicket.colStatus'),
+        title: t('common.status'),
         dataIndex: 'status',
         width: 100,
         align: 'center' as const,

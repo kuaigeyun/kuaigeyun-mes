@@ -89,7 +89,7 @@ const EightDReportsPage: React.FC = () => {
   const columns: ProColumns<Quality8DReport>[] = useMemo(
     () => alignProColumns<Quality8DReport>([
     {
-      title: t('app.kuaizhizao.eightD.columns.createdAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at_range',
       valueType: 'dateRange',
       hideInTable: true,

@@ -47,8 +47,8 @@ const AssetsRegistryPage: React.FC = () => {
           { name: 'location', labelKey: 'app.kuaioa.asset.location', width: 140 },
           { name: 'department_name', labelKey: 'app.kuaioa.common.department', hideInTable: true },
           { name: 'purchase_date', labelKey: 'app.kuaioa.asset.purchaseDate', hideInTable: true, type: 'date' },
-          { name: 'status', labelKey: 'app.kuaioa.common.status', width: 100 },
-          { name: 'notes', labelKey: 'app.kuaioa.common.notes', hideInTable: true, type: 'textarea' },
+          { name: 'status', labelKey: 'common.status', width: 100 },
+          { name: 'notes', labelKey: 'common.remark', hideInTable: true, type: 'textarea' },
         ]}
         listFn={listFixedAssets}
         createFn={createFixedAsset}

@@ -32,14 +32,14 @@ export const skillFormSchema: FieldConfig[] = [
   {
     name: 'description',
     type: 'textarea',
-    labelKey: 'field.skill.description',
+    labelKey: 'common.remark',
     colSpan: 24,
     fieldProps: { rows: 2 },
   },
   {
     name: 'isActive',
     type: 'switch',
-    labelKey: 'field.skill.isActive',
+    labelKey: 'common.enabled',
     colSpan: 12,
   },
 ];

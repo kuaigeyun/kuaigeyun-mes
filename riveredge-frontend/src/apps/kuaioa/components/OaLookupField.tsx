@@ -161,7 +161,7 @@ export const OaDepartmentSelect: React.FC<{
         setOptions(flattenDepartmentOptions(res.items ?? []));
       })
       .catch((error: { message?: string }) => {
-        message.error(error?.message || t('app.kuaioa.common.operationFailed'));
+        message.error(error?.message || t('common.operationFailed'));
       });
   }, [message, t]);
 

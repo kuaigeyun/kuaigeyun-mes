@@ -31,7 +31,7 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
 
   const changeTypeLabel = (value: string) => {
     const labels: Record<string, string> = {
-      QUANTITY: t('app.kuaizhizao.orderChange.changeTypeQuantity'),
+      QUANTITY: t('common.quantity'),
       DELIVERY_DATE: t('app.kuaizhizao.orderChange.changeTypeDeliveryDate'),
       UNIT_PRICE: t('app.kuaizhizao.orderChange.changeTypeUnitPrice'),
       LINE_CANCEL: t('app.kuaizhizao.orderChange.changeTypeLineCancel'),

@@ -158,7 +158,7 @@ const BackflushRecordsPage: React.FC = () => {
         render: (_, record) => record.warehouse_name || '-',
       },
       {
-        title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+        title: t('common.status'),
         dataIndex: 'status',
         hideInTable: true,
         valueEnum: buildBackflushRecordStatusValueEnum(t),
@@ -172,7 +172,7 @@ const BackflushRecordsPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<BackflushRecordItem>(t),
       {
-        title: t('app.kuaizhizao.warehouseCommon.colActions'),
+        title: t('common.actions'),
         valueType: 'option',
         fixed: 'right',
         render: (_, record) => {
@@ -205,7 +205,7 @@ const BackflushRecordsPage: React.FC = () => {
         ),
       },
       {
-        title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+        title: t('common.status'),
         dataIndex: 'status',
         render: (_, r) => renderStatusTag(r.status),
       },
@@ -220,8 +220,8 @@ const BackflushRecordsPage: React.FC = () => {
       { title: t('app.kuaizhizao.backflushRecords.colOutboundWarehouse'), dataIndex: 'warehouse_name', render: (_, r) => r.warehouse_name || '-' },
       { title: t('app.kuaizhizao.backflushRecords.colErrorMessage'), dataIndex: 'error_message', span: 3, render: (_, r) => r.error_message || '-' },
       { title: t('app.kuaizhizao.warehouseCommon.colProcessedBy'), dataIndex: 'processed_by_name', render: (_, r) => r.processed_by_name || '-' },
-      { title: t('app.kuaizhizao.warehouseCommon.colCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-      { title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+      { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
     ]),
     [t, statusValueEnum]
   );

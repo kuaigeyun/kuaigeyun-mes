@@ -77,7 +77,7 @@ const AnnouncementsPage: React.FC = () => {
           hideInTable: true,
         },
         { name: 'is_pinned', labelKey: 'app.kuaioa.announcement.pinned', width: 80, type: 'switch' },
-        { name: 'status', labelKey: 'app.kuaioa.common.status', width: 100 },
+        { name: 'status', labelKey: 'common.status', width: 100 },
       ]}
       listFn={listAnnouncements}
       createFn={createAnnouncement}

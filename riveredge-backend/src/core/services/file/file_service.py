@@ -20,7 +20,10 @@ from core.schemas.file import FileCreate, FileUpdate
 from core.services.file.image_compress import compress_image_content, effective_storage_extension
 from core.services.file.image_tier_service import ImageTierService
 from core.services.content.sensitive_word_service import SensitiveWordService
-from core.services.content.sensitive_word_ip_guard import SensitiveWordIpGuardService
+from core.services.content.sensitive_word_ip_guard import (
+    SensitiveWordIpGuardService,
+    tenant_has_sensitive_word_control,
+)
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.config.infra_config import infra_settings as settings
 from core.utils.timezone_utils import resolve_business_datetime
@@ -534,13 +537,14 @@ class FileService:
         Raises:
             ValidationError: 当文件大小超过限制或文件名/描述含不当用语时抛出
         """
-        await FileService._assert_upload_texts_clean(
-            client_ip=client_ip,
-            user_id=user_id,
-            original_name=original_name,
-            description=description,
-            tags=tags,
-        )
+        if await tenant_has_sensitive_word_control(tenant_id):
+            await FileService._assert_upload_texts_clean(
+                client_ip=client_ip,
+                user_id=user_id,
+                original_name=original_name,
+                description=description,
+                tags=tags,
+            )
 
         # 检查文件大小
         file_size = len(file_content)

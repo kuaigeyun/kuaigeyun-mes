@@ -87,13 +87,13 @@ export const CarrierFormModal: React.FC<CarrierFormModalProps> = ({
       {!isEdit ? (
         <ProFormText
           name="code"
-          label={t('app.kuaizhizao.logistics.field.code')}
+          label={t('common.code')}
           placeholder={t('app.kuaizhizao.logistics.placeholder.autoCode')}
         />
       ) : null}
       <ProFormText
         name="name"
-        label={t('app.kuaizhizao.logistics.field.name')}
+        label={t('common.name')}
         rules={[{ required: true }]}
       />
       <ProFormSelect
@@ -127,7 +127,7 @@ export const CarrierFormModal: React.FC<CarrierFormModalProps> = ({
         }))}
       />
       <ProFormTextArea name="remark" label={t('common.remark')} fieldProps={{ rows: 2 }} />
-      <ProFormSwitch name="is_enabled" label={t('app.kuaizhizao.logistics.field.enabled')} />
+      <ProFormSwitch name="is_enabled" label={t('common.enabled')} />
     </FormModalTemplate>
   );
 };

@@ -72,7 +72,7 @@ export const InstallExecutionCostFormModal: React.FC<Props> = ({
         label={t('app.kuaizhizao.installExecution.costOccurredAt')}
         rules={[{ required: true }]}
       />
-      <ProFormText name="description" label={t('app.kuaizhizao.installExecution.costDescription')} />
+      <ProFormText name="description" label={t('common.remark')} />
     </FormModalTemplate>
   );
 };

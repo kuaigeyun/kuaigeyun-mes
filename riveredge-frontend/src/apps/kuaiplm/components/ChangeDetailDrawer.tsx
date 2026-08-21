@@ -169,7 +169,7 @@ const ChangeDetailDrawer: React.FC<ChangeDetailDrawerProps> = ({ row, onClose })
                 <Descriptions.Item label={t('app.kuaiplm.common.columns.category')}>
                   {renderPlmChangeCategoryMarker(t, category as ChangeDeskCategory)}
                 </Descriptions.Item>
-                <Descriptions.Item label={t('app.kuaiplm.common.columns.status')}>
+                <Descriptions.Item label={t('common.status')}>
                   {renderPlmChangeStatusTag(t, detail.status)}
                 </Descriptions.Item>
                 <Descriptions.Item label={t('app.kuaiplm.common.columns.changeType')} span={2}>

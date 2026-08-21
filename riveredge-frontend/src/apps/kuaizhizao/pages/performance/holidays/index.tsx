@@ -74,14 +74,14 @@ const HolidaysPage: React.FC = () => {
         dataIndex: 'holidayType',
         render: (_, record) => renderPerformanceTypeMarker(record?.holidayType),
       },
-      { title: t('app.kuaizhizao.performance.common.columns.description'), dataIndex: 'description', span: 2 },
+      { title: t('common.remark'), dataIndex: 'description', span: 2 },
       {
         title: t('app.kuaizhizao.performance.holidays.columns.activeStatus'),
         dataIndex: 'isActive',
         render: (_, record) => renderActiveTag(t, record?.isActive),
       },
-      { title: t('app.kuaizhizao.performance.common.columns.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
-      { title: t('app.kuaizhizao.performance.common.columns.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
+      { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
     ],
     [t],
   );
@@ -199,7 +199,7 @@ const HolidaysPage: React.FC = () => {
       render: (_, r) => renderPerformanceTypeMarker(r.holidayType),
     },
     {
-      title: t('app.kuaizhizao.performance.common.columns.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       width: 200,
       minWidth: 200,
@@ -210,7 +210,7 @@ const HolidaysPage: React.FC = () => {
     },
     ...customFieldColumns,
     {
-      title: t('app.kuaizhizao.performance.common.active.enabled'),
+      title: t('common.enabled'),
       dataIndex: 'isActive',
       hideInTable: true,
       valueType: 'select',
@@ -218,7 +218,7 @@ const HolidaysPage: React.FC = () => {
     },
     ...buildDocumentAuditColumns<Holiday>(t),
     {
-      title: t('app.kuaizhizao.performance.common.columns.status'),
+      title: t('common.status'),
       dataIndex: 'isActive',
       width: 88,
       minWidth: 88,
@@ -228,7 +228,7 @@ const HolidaysPage: React.FC = () => {
       render: (_, r) => renderActiveTag(t, r.isActive),
     },
     {
-      title: t('app.kuaizhizao.performance.common.columns.actions'),
+      title: t('common.actions'),
       key: 'action',
       valueType: 'option',
       fixed: 'right',
@@ -237,18 +237,18 @@ const HolidaysPage: React.FC = () => {
         <Space>
           {holidayPerms.canRead ? (
             <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-              {t('app.kuaizhizao.performance.common.actions.detail')}
+              {t('common.detail')}
             </Button>
           ) : null}
           {holidayPerms.canUpdate ? (
             <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-              {t('app.kuaizhizao.performance.common.actions.edit')}
+              {t('common.edit')}
             </Button>
           ) : null}
           {holidayPerms.canDelete ? (
             <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.holidays.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('app.kuaizhizao.performance.common.actions.delete')}
+                {t('common.delete')}
               </Button>
             </Popconfirm>
           ) : null}
@@ -309,7 +309,7 @@ const HolidaysPage: React.FC = () => {
           showDeleteButton={holidayPerms.canDelete}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('common.confirmBatchDeleteContent', { count })}
-          deleteButtonText={t('app.kuaizhizao.performance.holidays.messages.deleteBatchButton')}
+          deleteButtonText={t('common.batchDelete')}
         />
       </ListPageTemplate>
       <PerformanceConfigDetailDrawer

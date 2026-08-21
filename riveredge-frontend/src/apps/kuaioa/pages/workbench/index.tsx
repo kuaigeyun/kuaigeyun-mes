@@ -160,7 +160,7 @@ const WorkbenchPage: React.FC = () => {
           <Col span={24}>
             <Result
               status="error"
-              title={t('app.kuaioa.workbench.loadFailed')}
+              title={t('common.loadFailed')}
               extra={
                 <Button type="primary" onClick={() => void load()}>
                   {t('common.retry', { defaultValue: '重试' })}

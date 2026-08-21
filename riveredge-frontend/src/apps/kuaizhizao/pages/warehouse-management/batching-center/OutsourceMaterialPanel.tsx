@@ -231,7 +231,7 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode, o
               ]
             : []),
           {
-            title: t('app.kuaizhizao.warehouseCommon.colQuantity'),
+            title: t('common.quantity'),
             dataIndex: 'quantity',
             width: 96,
             minWidth: 96,
@@ -260,7 +260,7 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode, o
               ]
             : []),
           {
-            title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+            title: t('common.status'),
             key: 'lifecycle',
             dataIndex: 'status',
             fixed: 'right',
@@ -279,7 +279,7 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode, o
           },
           ...buildDocumentAuditColumns<OutsourceMaterialRow>(t),
           {
-            title: t('app.kuaizhizao.warehouseCommon.colActions'),
+            title: t('common.actions'),
             key: 'action',
             valueType: 'option',
             fixed: 'right',
@@ -296,7 +296,7 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode, o
                       onOpenDetail?.({ kind: OUTSOURCE_DETAIL_KIND[mode], id: record.id! })
                     }
                   >
-                    {t('app.kuaizhizao.warehouseCommon.detail')}
+                    {t('common.detail')}
                   </Button>,
                 );
               }
@@ -668,7 +668,7 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode, o
         {(isReceipt || isMaterialReturn) && (
           <ProFormText name="batchNumber" label={t('app.kuaizhizao.batchingCenter.batchNumber')} colProps={{ span: 12 }} />
         )}
-        <ProFormTextArea name="remarks" label={t('app.kuaizhizao.warehouseCommon.colRemarks')} colProps={{ span: 24 }} fieldProps={{ rows: 2 }} />
+        <ProFormTextArea name="remarks" label={t('common.remark')} colProps={{ span: 24 }} fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
     </>
   );

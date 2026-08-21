@@ -46,13 +46,13 @@ export default function InfraSuperAdminPage() {
   const updateMutation = useMutation({
     mutationFn: (data: InfraSuperAdminUpdateRequest) => updateInfraSuperAdmin(data),
     onSuccess: () => {
-      messageApi.success(t('pages.infra.admin.updateSuccess'));
+      messageApi.success(t('common.updateSuccess'));
       // setEditModalVisible(false);
       // setEditFormData(null);
       queryClient.invalidateQueries({ queryKey: ['infraSuperAdmin'] });
     },
     onError: (error: any) => {
-      messageApi.error(error?.message || t('pages.infra.admin.updateFailed'));
+      messageApi.error(error?.message || t('common.updateFailed'));
     },
   });
 
@@ -109,7 +109,7 @@ export default function InfraSuperAdminPage() {
               onClick={handleEdit}
               loading={isLoading}
             >
-              {t('pages.infra.admin.edit')}
+              {t('common.edit')}
             </Button> */}
             <Button
               icon={<LogoutOutlined />}
@@ -143,7 +143,7 @@ export default function InfraSuperAdminPage() {
                 dataIndex: 'full_name',
               },
               {
-                title: t('pages.infra.admin.status'),
+                title: t('common.status'),
                 dataIndex: 'is_active',
                 valueType: 'switch',
                 valueEnum: {
@@ -157,12 +157,12 @@ export default function InfraSuperAdminPage() {
                 valueType: 'dateTime',
               },
               {
-                title: t('pages.infra.admin.createdAt'),
+                title: t('common.createdAt'),
                 dataIndex: 'created_at',
                 valueType: 'dateTime',
               },
               {
-                title: t('pages.infra.admin.updatedAt'),
+                title: t('common.updatedAt'),
                 dataIndex: 'updated_at',
                 valueType: 'dateTime',
               },

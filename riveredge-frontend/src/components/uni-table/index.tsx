@@ -76,7 +76,7 @@ import { UniExportMenuButton } from '../uni-export/UniExportMenuButton'
 // 懒加载：UniImport 内含 UniverJS（约 2MB+），仅在用户点击导入时加载
 const LazyUniImport = lazy(() => import('../uni-import'))
 
-/** 容器宽度低于此值时，工具栏右侧导入/导出/同步仅显示图标 */
+/** 工具栏 DOM 尚未就绪时的回退：整表宽度低于此值则导入/导出/同步仅图标 */
 const DATA_ACTION_ICON_ONLY_MAX_WIDTH = 1280
 
 /** 行点击切换勾选：命中可操作子元素时不切换，避免误选（成本仅一次 DOM closest） */
@@ -284,7 +284,7 @@ function TableColumnResetButton({
   }
   return (
     <Button type="link" size="small" className="uni-table-column-setting-reset" onClick={handleClick}>
-      {t('components.uniTable.columnReset', '重置')}
+      {t('common.reset', '重置')}
     </Button>
   )
 }
@@ -375,7 +375,7 @@ function generateImportConfigFromColumns<T extends Record<string, any>>(
     } else if (col.valueType === 'digit') {
       exampleValue = '0'
     } else if (col.valueType === 'switch' || col.valueType === 'checkbox') {
-      exampleValue = t('components.uniTable.exampleYes')
+      exampleValue = t('common.yes')
     } else {
       exampleValue = t('components.uniTable.exampleField', { title })
     }
@@ -1251,6 +1251,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const internalFormRef = useRef<ProFormInstance>()
   const containerRef = useRef<HTMLDivElement>(null)
   const [dataActionIconOnly, setDataActionIconOnly] = useState(false)
+  const dataActionIconOnlyRef = useRef(false)
+  dataActionIconOnlyRef.current = dataActionIconOnly
+  /** 带文案时右侧工具栏固有宽；icon-only 时仍用此值判断，避免量到缩小宽度后振荡 */
+  const labeledRightToolbarWidthRef = useRef(0)
   /** 操作列 key → 实测内容宽度；见 utils/uniTableLayoutColumns.ts 的两段式推导 */
   const [measuredOperationWidths, setMeasuredOperationWidths] = useState<Record<string, number>>({})
   /** 堆叠主列 key → 不可截断内容（标识行 + 树形缩进）的实测宽度下界 */
@@ -2404,7 +2408,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     if (gatedShowCreateButton && onCreate) {
       actions.push(
         <Button key="create" type="primary" icon={<PlusOutlined />} onClick={onCreate} size={toolBarButtonSize}>
-          {withSingleNewShortcutHint(createButtonText ?? t('components.uniTable.create'))}
+          {withSingleNewShortcutHint(createButtonText ?? t('common.create'))}
         </Button>
       )
     }
@@ -2474,7 +2478,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           }}
           disabled={selectedRowKeys.length !== 1}
         >
-          {t('components.uniTable.edit')}
+          {t('common.edit')}
         </Button>
       )
     }
@@ -2492,7 +2496,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           }}
           disabled={selectedRowKeys.length !== 1}
         >
-          {detailButtonText ?? t('components.uniTable.detail')}
+          {detailButtonText ?? t('common.detail')}
         </Button>
       )
     }
@@ -2572,12 +2576,16 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           disabled={selectedRowKeys.length !== 1}
           onClick={() => onPrint(selectedRowKeys, tableData)}
         >
-          {printButtonText ?? t('components.uniTable.print')}
+          {printButtonText ?? t('common.print')}
         </Button>
       )
     }
 
-    return rightButtons.length > 0 ? <Space size="small">{rightButtons}</Space> : undefined
+    return rightButtons.length > 0 ? (
+      <Space size="small" wrap={false}>
+        {rightButtons}
+      </Space>
+    ) : undefined
   }
 
   const buildHeaderActions = () => {
@@ -3187,18 +3195,45 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     const root = containerRef.current
     if (!root) return
 
+    const TOOLBAR_CLUSTER_GAP = 16
+
     const syncContainerLayout = () => {
       const width = root.clientWidth
       if (width > 0) {
         setContainerLayoutWidth((prev) => (prev === width ? prev : width))
       }
-      setDataActionIconOnly(width < DATA_ACTION_ICON_ONLY_MAX_WIDTH)
+
+      const toolbar = root.querySelector(
+        '.ant-pro-table-list-toolbar-container',
+      ) as HTMLElement | null
+      if (!toolbar) {
+        const next = width > 0 && width < DATA_ACTION_ICON_ONLY_MAX_WIDTH
+        setDataActionIconOnly((prev) => (prev === next ? prev : next))
+        return
+      }
+
+      const left = toolbar.querySelector('.ant-pro-table-list-toolbar-left') as HTMLElement | null
+      const right = toolbar.querySelector('.ant-pro-table-list-toolbar-right') as HTMLElement | null
+      if (right && !dataActionIconOnlyRef.current) {
+        labeledRightToolbarWidthRef.current = right.scrollWidth
+      }
+      const labeledRight =
+        labeledRightToolbarWidthRef.current || right?.scrollWidth || 0
+      const need = (left?.scrollWidth ?? 0) + labeledRight + TOOLBAR_CLUSTER_GAP
+      const next = toolbar.clientWidth > 0 && need > toolbar.clientWidth
+      setDataActionIconOnly((prev) => (prev === next ? prev : next))
     }
 
     syncContainerLayout()
     const ro =
       typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => syncContainerLayout()) : null
     ro?.observe(root)
+    const toolbar = root.querySelector('.ant-pro-table-list-toolbar-container')
+    if (ro && toolbar) ro.observe(toolbar)
+    const left = root.querySelector('.ant-pro-table-list-toolbar-left')
+    const right = root.querySelector('.ant-pro-table-list-toolbar-right')
+    if (ro && left) ro.observe(left)
+    if (ro && right) ro.observe(right)
     window.addEventListener('resize', syncContainerLayout)
     return () => {
       ro?.disconnect()
@@ -3281,7 +3316,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   size={effectiveToolbarButtonSize}
                   style={{ flexShrink: 0 }}
                 >
-                  {createButtonText ?? t('components.uniTable.create')}
+                  {createButtonText ?? t('common.create')}
                 </Button>
               ) : null}
             </>

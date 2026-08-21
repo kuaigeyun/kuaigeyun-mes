@@ -116,14 +116,14 @@ function buildBasicColumns(
         { title: t('app.kuaizhizao.warehouseCommon.colWorkOrder'), dataIndex: 'work_order_code' },
         { title: t('app.kuaizhizao.batchingCenter.batchingDate'), dataIndex: 'batching_date', render: (_, r) => formatDateTime(r.batching_date) },
         {
-          title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+          title: t('common.status'),
           dataIndex: 'status',
           render: (_, r) =>
             renderDocumentStatusTag(getBatchingOrderStageName(String(r.status ?? '')), String(r.status ?? '')),
         },
         { title: t('app.kuaizhizao.warehouseCommon.colMaterialKindCount'), dataIndex: 'total_items' },
         { title: t('app.kuaizhizao.warehouseCommon.colTargetLineSideWarehouse'), dataIndex: 'target_warehouse_name' },
-        { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 2 },
+        { title: t('common.remark'), dataIndex: 'remarks', span: 2 },
         { title: t('app.kuaizhizao.warehouseCommon.colExecutor'), dataIndex: 'executed_by_name' },
         { title: t('app.kuaizhizao.warehouseCommon.colExecutedAt'), dataIndex: 'executed_at', render: (_, r) => formatDateTime(r.executed_at) },
       ];
@@ -132,7 +132,7 @@ function buildBasicColumns(
         { title: t('app.kuaizhizao.warehouseCommon.colCode'), dataIndex: 'code' },
         { title: t('app.kuaizhizao.warehouseCommon.colWorkOrder'), dataIndex: 'work_order_code' },
         {
-          title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+          title: t('common.status'),
           dataIndex: 'status',
           render: (_, r) =>
             renderDocumentStatusTag(resolveMaterialCallStatusLabel(t, String(r.status ?? '')), String(r.status ?? '')),
@@ -141,7 +141,7 @@ function buildBasicColumns(
         { title: t('app.kuaizhizao.batchingCenter.colHandler'), dataIndex: 'handler_name' },
         { title: t('app.kuaizhizao.warehouseCommon.colNeededAt'), dataIndex: 'needed_at', render: (_, r) => formatDateTime(r.needed_at) },
         { title: t('app.kuaizhizao.warehouseCommon.colPriority'), dataIndex: 'priority' },
-        { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 2 },
+        { title: t('common.remark'), dataIndex: 'remarks', span: 2 },
         { title: t('app.kuaizhizao.batchingCenter.colCompletedAt'), dataIndex: 'completed_at', render: (_, r) => formatDateTime(r.completed_at) },
       ];
     case 'backflush_record':
@@ -154,7 +154,7 @@ function buildBasicColumns(
           render: (_, r) => `${String(r.material_code ?? '')} ${String(r.material_name ?? '')}`.trim() || '-',
         },
         {
-          title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+          title: t('common.status'),
           dataIndex: 'status',
           render: (_, r) =>
             renderDocumentStatusTag(resolveBackflushStatusLabel(t, String(r.status ?? '')), String(r.status ?? '')),
@@ -170,7 +170,7 @@ function buildBasicColumns(
         { title: t('app.kuaizhizao.backflushRecords.colOutboundWarehouse'), dataIndex: 'warehouse_name' },
         { title: t('app.kuaizhizao.backflushRecords.colErrorMessage'), dataIndex: 'error_message', span: 2 },
         { title: t('app.kuaizhizao.warehouseCommon.colProcessedBy'), dataIndex: 'processed_by_name' },
-        { title: t('app.kuaizhizao.warehouseCommon.colCreatedAt'), dataIndex: 'created_at', render: (_, r) => formatDateTime(r.created_at) },
+        { title: t('common.createdAt'), dataIndex: 'created_at', render: (_, r) => formatDateTime(r.created_at) },
       ];
     case 'outsource_issue':
     case 'outsource_receipt':
@@ -184,19 +184,19 @@ function buildBasicColumns(
           render: (_, r) => `${String(r.material_code ?? '')} ${String(r.material_name ?? '')}`.trim() || '-',
         },
         {
-          title: t('app.kuaizhizao.warehouseCommon.colQuantity'),
+          title: t('common.quantity'),
           key: 'quantity',
           render: (_, r) => `${formatQuantity(r.quantity)} ${String(r.unit ?? '')}`.trim(),
         },
         { title: t('app.kuaizhizao.warehouseCommon.colWarehouse'), dataIndex: 'warehouse_name' },
         {
-          title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+          title: t('common.status'),
           dataIndex: 'status',
           render: (_, r) =>
             renderDocumentStatusTag(resolveOutsourceStatusLabel(t, String(r.status ?? '')), String(r.status ?? '')),
         },
         { title: t('app.kuaizhizao.batchInventoryQuery.colBatchNo'), dataIndex: 'batch_number' },
-        { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 2 },
+        { title: t('common.remark'), dataIndex: 'remarks', span: 2 },
         {
           title: kind === 'outsource_issue' ? t('app.kuaizhizao.batchingCenter.colIssuedAt') : t('app.kuaizhizao.batchingCenter.colReceivedAt'),
           dataIndex: kind === 'outsource_issue' ? 'issued_at' : 'received_at',
@@ -208,18 +208,18 @@ function buildBasicColumns(
         { title: t('app.kuaizhizao.warehouseCommon.colCode'), dataIndex: 'code' },
         { title: t('app.kuaizhizao.warehouseCommon.colOutsourceWorkOrder'), dataIndex: 'outsource_work_order_code' },
         {
-          title: t('app.kuaizhizao.warehouseCommon.colQuantity'),
+          title: t('common.quantity'),
           key: 'quantity',
           render: (_, r) => `${formatQuantity(r.quantity)} ${String(r.unit ?? '')}`.trim(),
         },
         { title: t('app.kuaizhizao.warehouseCommon.colReturnReason'), dataIndex: 'return_reason', span: 2 },
         {
-          title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+          title: t('common.status'),
           dataIndex: 'status',
           render: (_, r) =>
             renderDocumentStatusTag(resolveOutsourceStatusLabel(t, String(r.status ?? '')), String(r.status ?? '')),
         },
-        { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 2 },
+        { title: t('common.remark'), dataIndex: 'remarks', span: 2 },
         { title: t('app.kuaizhizao.batchingCenter.colReturnedAt'), dataIndex: 'returned_at', render: (_, r) => formatDateTime(r.returned_at) },
       ];
   }
@@ -233,7 +233,7 @@ function buildLineColumns(t: TFunction, kind: MaterialCenterDetailKind): Columns
       { title: t('app.kuaizhizao.batchingCenter.requiredQty'), dataIndex: 'required_quantity', width: 100, align: 'right', render: formatQuantity },
       { title: t('app.kuaizhizao.warehouseCommon.colPickedQty'), dataIndex: 'picked_quantity', width: 100, align: 'right', render: formatQuantity },
       {
-        title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+        title: t('common.status'),
         dataIndex: 'status',
         width: 100,
         render: (status: string) => {

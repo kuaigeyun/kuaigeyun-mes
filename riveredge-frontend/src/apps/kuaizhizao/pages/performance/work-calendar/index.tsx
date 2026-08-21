@@ -134,7 +134,7 @@ const WorkCalendarPage: React.FC = () => {
     } catch (e: any) {
       if (e?.errorFields) return;
       messageApi.error(
-        e?.message || t('app.kuaizhizao.performance.workCalendar.messages.saveFailed'),
+        e?.message || t('common.saveFailed'),
       );
     } finally {
       setConfigSaving(false);
@@ -199,7 +199,7 @@ const WorkCalendarPage: React.FC = () => {
     } catch (e: any) {
       if (e?.errorFields) return;
       messageApi.error(
-        e?.message || t('app.kuaizhizao.performance.workCalendar.messages.saveFailed'),
+        e?.message || t('common.saveFailed'),
       );
     } finally {
       setSavingOt(false);
@@ -211,7 +211,7 @@ const WorkCalendarPage: React.FC = () => {
       alignProColumns<OvertimePlan>(
         [
           {
-            title: t('app.kuaizhizao.performance.workCalendar.columns.name'),
+            title: t('common.name'),
             key: 'performance_holiday_stacked',
             dataIndex: 'name',
             ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -249,7 +249,7 @@ const WorkCalendarPage: React.FC = () => {
               `${(r.startTime || '').slice(0, 5)} ~ ${(r.endTime || '').slice(0, 5)}`,
           },
           {
-            title: t('app.kuaizhizao.performance.common.columns.status'),
+            title: t('common.status'),
             dataIndex: 'isActive',
             hideInSearch: true,
             width: 88,
@@ -259,7 +259,7 @@ const WorkCalendarPage: React.FC = () => {
             render: (_, r) => renderActiveTag(t, r.isActive, 'inactive'),
           },
           {
-            title: t('app.kuaizhizao.performance.common.columns.actions'),
+            title: t('common.actions'),
             key: 'action',
             valueType: 'option',
             fixed: 'right',
@@ -268,7 +268,7 @@ const WorkCalendarPage: React.FC = () => {
               <Space>
                 {overtimePerms.canUpdate ? (
                   <Button key="edit" {...rowActionKind('update')} onClick={() => openEdit(row)}>
-                    {t('app.kuaizhizao.performance.common.actions.edit')}
+                    {t('common.edit')}
                   </Button>
                 ) : null}
                 {overtimePerms.canDelete ? (
@@ -286,13 +286,13 @@ const WorkCalendarPage: React.FC = () => {
                       } catch (e: any) {
                         messageApi.error(
                           e?.message ||
-                            t('app.kuaizhizao.performance.workCalendar.messages.saveFailed'),
+                            t('common.saveFailed'),
                         );
                       }
                     }}
                   >
                     <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                      {t('app.kuaizhizao.performance.common.actions.delete')}
+                      {t('common.delete')}
                     </Button>
                   </Popconfirm>
                 ) : null}
@@ -347,7 +347,7 @@ const WorkCalendarPage: React.FC = () => {
             ellipsis: true,
           },
           {
-            title: t('app.kuaizhizao.performance.common.columns.status'),
+            title: t('common.status'),
             dataIndex: 'isActive',
             width: 88,
             minWidth: 88,
@@ -356,7 +356,7 @@ const WorkCalendarPage: React.FC = () => {
             render: (_, r) => renderActiveTag(t, r.isActive, 'inactive'),
           },
           {
-            title: t('app.kuaizhizao.performance.common.columns.actions'),
+            title: t('common.actions'),
             key: 'action',
             valueType: 'option',
             fixed: 'right',
@@ -378,7 +378,7 @@ const WorkCalendarPage: React.FC = () => {
                       setDowntimeOpen(true);
                     }}
                   >
-                    {t('app.kuaizhizao.performance.common.actions.edit')}
+                    {t('common.edit')}
                   </Button>
                 ) : null}
                 {calendarPerms.canDelete ? (
@@ -396,13 +396,13 @@ const WorkCalendarPage: React.FC = () => {
                       } catch (e: any) {
                         messageApi.error(
                           e?.message ||
-                            t('app.kuaizhizao.performance.workCalendar.messages.saveFailed'),
+                            t('common.saveFailed'),
                         );
                       }
                     }}
                   >
                     <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                      {t('app.kuaizhizao.performance.common.actions.delete')}
+                      {t('common.delete')}
                     </Button>
                   </Popconfirm>
                 ) : null}
@@ -598,12 +598,12 @@ const WorkCalendarPage: React.FC = () => {
           >
             <TimePicker.RangePicker format="HH:mm" needConfirm={false} style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="name" label={t('app.kuaizhizao.performance.workCalendar.columns.name')}>
+          <Form.Item name="name" label={t('common.name')}>
             <Input maxLength={200} />
           </Form.Item>
           <Form.Item
             name="isActive"
-            label={t('app.kuaizhizao.performance.common.columns.status')}
+            label={t('common.status')}
             valuePropName="checked"
           >
             <Switch />
@@ -645,7 +645,7 @@ const WorkCalendarPage: React.FC = () => {
           } catch (e: any) {
             if (e?.errorFields) return;
             messageApi.error(
-              e?.message || t('app.kuaizhizao.performance.workCalendar.messages.saveFailed'),
+              e?.message || t('common.saveFailed'),
             );
           } finally {
             setSavingDowntime(false);
@@ -675,7 +675,7 @@ const WorkCalendarPage: React.FC = () => {
           </Form.Item>
           <Form.Item
             name="isActive"
-            label={t('app.kuaizhizao.performance.common.columns.status')}
+            label={t('common.status')}
             valuePropName="checked"
           >
             <Switch />

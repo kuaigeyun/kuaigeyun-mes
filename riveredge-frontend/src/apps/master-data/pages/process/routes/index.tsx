@@ -60,7 +60,7 @@ const ProcessRoutesPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const routeActiveValueEnum = useMemo(
-    () => buildMasterCrudActiveValueEnum(t, 'app.master-data.plants.enabled', 'app.master-data.plants.disabled'),
+    () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
     [t],
   );
 
@@ -98,10 +98,10 @@ const ProcessRoutesPage: React.FC = () => {
         [
           { field: 'code', required: true, labelKey: 'field.route.code' },
           { field: 'name', required: true, labelKey: 'field.route.name' },
-          { field: 'description', labelKey: 'field.route.description', aliases: ['备注', '描述'] },
+          { field: 'description', labelKey: 'common.remark', aliases: ['备注', '描述'] },
           {
             field: 'isActive',
-            labelKey: 'field.route.isActive',
+            labelKey: 'common.enabled',
             aliases: ['是否启用', '启用'],
             options: [...IMPORT_YES_NO_OPTIONS],
           },
@@ -120,16 +120,16 @@ const ProcessRoutesPage: React.FC = () => {
     () => [
       { title: t('field.route.code'), dataIndex: 'code' },
       { title: t('field.route.name'), dataIndex: 'name' },
-      { title: t('field.route.description'), dataIndex: 'description' },
+      { title: t('common.remark'), dataIndex: 'description' },
       {
-        title: t('field.route.isActive'),
+        title: t('common.enabled'),
         dataIndex: 'is_active',
         render: (_: unknown, record: ProcessRoute) =>
           renderMasterActiveTag(
             t,
             record?.is_active ?? (record as any)?.isActive,
-            'app.master-data.plants.enabled',
-            'app.master-data.plants.disabled',
+            'common.enabled',
+            'common.disabled',
           ),
       },
       { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
@@ -451,12 +451,12 @@ const ProcessRoutesPage: React.FC = () => {
         messageApi.warning(t('app.master-data.noExportData'));
         return;
       }
-      const enabledLabel = t('app.master-data.plants.enabled');
-      const disabledLabel = t('app.master-data.plants.disabled');
+      const enabledLabel = t('common.enabled');
+      const disabledLabel = t('common.disabled');
       const headers = [
         t('field.route.code'),
         t('field.route.name'),
-        t('field.route.description'),
+        t('common.remark'),
         t('app.master-data.routes.status'),
         t('common.createdAt'),
       ];
@@ -543,7 +543,7 @@ const ProcessRoutesPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('field.route.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -559,7 +559,7 @@ const ProcessRoutesPage: React.FC = () => {
         const isActive = record?.is_active ?? (record as any)?.isActive;
         return (
           <Tag color={isActive ? 'success' : 'default'} variant="solid">
-            {isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
+            {isActive ? t('common.enabled') : t('common.disabled')}
           </Tag>
         );
       },
@@ -577,14 +577,14 @@ const ProcessRoutesPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            {t('field.customField.view')}
+            {t('common.view')}
           </Button>
           <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            {t('field.customField.edit')}
+            {t('common.edit')}
           </Button>
           <Button
             key="change"
@@ -605,7 +605,7 @@ const ProcessRoutesPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              {t('field.customField.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>

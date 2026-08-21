@@ -111,8 +111,8 @@ const OperationLogsPage: React.FC = () => {
     const typeMap: Record<string, { color: string; text: string }> = {
       create: { color: 'success', text: t('pages.system.operationLogs.typeCreate') },
       update: { color: 'processing', text: t('pages.system.operationLogs.typeUpdate') },
-      delete: { color: 'error', text: t('pages.system.operationLogs.typeDelete') },
-      view: { color: 'default', text: t('pages.system.operationLogs.typeView') },
+      delete: { color: 'error', text: t('common.delete') },
+      view: { color: 'default', text: t('common.view') },
       error: { color: 'error', text: t('pages.system.operationLogs.typeError') },
       unknown: { color: 'default', text: t('pages.system.operationLogs.typeUnknown') },
     };
@@ -223,8 +223,8 @@ const OperationLogsPage: React.FC = () => {
             const typeMap: Record<string, { color: string; text: string }> = {
               create: { color: 'success', text: t('pages.system.operationLogs.typeCreate') },
               update: { color: 'processing', text: t('pages.system.operationLogs.typeUpdate') },
-              delete: { color: 'error', text: t('pages.system.operationLogs.typeDelete') },
-              view: { color: 'default', text: t('pages.system.operationLogs.typeView') },
+              delete: { color: 'error', text: t('common.delete') },
+              view: { color: 'default', text: t('common.view') },
               error: { color: 'error', text: t('pages.system.operationLogs.typeError') },
               unknown: { color: 'default', text: t('pages.system.operationLogs.typeUnknown') },
             };
@@ -262,8 +262,8 @@ const OperationLogsPage: React.FC = () => {
       valueEnum: {
         create: { text: t('pages.system.operationLogs.typeCreate') },
         update: { text: t('pages.system.operationLogs.typeUpdate') },
-        delete: { text: t('pages.system.operationLogs.typeDelete') },
-        view: { text: t('pages.system.operationLogs.typeView') },
+        delete: { text: t('common.delete') },
+        view: { text: t('common.view') },
         error: { text: t('pages.system.operationLogs.typeError') },
         unknown: { text: t('pages.system.operationLogs.typeUnknown') },
       },
@@ -418,7 +418,7 @@ const OperationLogsPage: React.FC = () => {
                 items = items.filter((d) => keys.includes(d.uuid));
               }
               if (items.length === 0) {
-                messageApi.warning(t('pages.system.operationLogs.noDataExport'));
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               await downloadRecordsAsXlsx(
@@ -427,7 +427,7 @@ const OperationLogsPage: React.FC = () => {
               );
               messageApi.success(t('pages.system.operationLogs.exportSuccessCount', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || t('pages.system.operationLogs.exportFailed'));
+              messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
           toolBarRender={() => [

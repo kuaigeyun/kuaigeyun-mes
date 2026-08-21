@@ -96,7 +96,7 @@ export const DocumentTrackingTimelineBody: React.FC<{
     () => ({
       create: t('components.documentTrackingPanel.typeCreate'),
       state_transition: t('components.documentTrackingPanel.typeStateTransition'),
-      edit: t('components.documentTrackingPanel.typeEdit'),
+      edit: t('common.edit'),
       approve: t('components.documentTrackingPanel.typeApprove'),
       push: t('components.documentTrackingPanel.typePush'),
       pull: t('components.documentTrackingPanel.typePull'),

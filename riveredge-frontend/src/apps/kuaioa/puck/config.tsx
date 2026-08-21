@@ -62,8 +62,8 @@ function commonFields(t: TFunction, extras?: Record<string, unknown>) {
       type: 'radio' as const,
       label: t('app.kuaioa.formSchema.required'),
       options: [
-        { label: t('app.kuaioa.formSchema.requiredYes'), value: 'on' },
-        { label: t('app.kuaioa.formSchema.requiredNo'), value: 'off' },
+        { label: t('common.yes'), value: 'on' },
+        { label: t('common.no'), value: 'off' },
       ],
     },
     span: {

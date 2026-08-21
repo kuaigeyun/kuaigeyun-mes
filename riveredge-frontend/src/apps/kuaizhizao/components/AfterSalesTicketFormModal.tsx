@@ -396,7 +396,7 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
         ),
       },
       {
-        title: t('app.kuaizhizao.afterSalesTicket.fieldQuantity'),
+        title: t('common.quantity'),
         dataIndex: 'quantity',
         width: DOCUMENT_DETAIL_COL_WIDTH.quantity,
         ...DOCUMENT_DETAIL_NUM_COL,
@@ -455,7 +455,7 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
         render: (_: unknown, row: SalesOrderItem) => row.material_name || '—',
       },
       {
-        title: t('app.kuaizhizao.afterSalesTicket.fieldQuantity'),
+        title: t('common.quantity'),
         dataIndex: 'order_quantity',
         width: 100,
         align: 'right' as const,
@@ -516,7 +516,7 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
     try {
       if (editing) {
         await afterSalesTicketApi.update(editing.id, payload);
-        message.success(t('pages.system.siteSettings.saveSuccess'));
+        message.success(t('common.saveSuccess'));
       } else {
         await afterSalesTicketApi.create({
           customer_id: customerId,
@@ -623,7 +623,7 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
           </Col>
           {editing ? (
             <Col xs={24} md={12}>
-              <Form.Item name="status" label={t('app.kuaizhizao.afterSalesTicket.fieldStatus')}>
+              <Form.Item name="status" label={t('common.status')}>
                 <Select
                   options={AFTER_SALES_TICKET_STATUSES.filter((s) => s !== '已关闭').map((v) => ({
                     label: v,

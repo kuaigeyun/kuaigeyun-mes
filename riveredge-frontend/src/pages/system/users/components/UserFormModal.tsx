@@ -38,7 +38,7 @@ export interface UserFormModalProps {
 }
 
 function parseErrorMessage(error: any, t: (key: string) => string): string {
-  const message = error.message || error.detail || t('pages.system.deleteFailed');
+  const message = error.message || error.detail || t('common.deleteFailed');
 
   if (message.includes('用户名') && message.includes('已存在')) {
     return t('field.user.errorUsernameExists');
@@ -322,7 +322,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
             items: manufacturerCodes.map((code: string) => ({ dimension: 'manufacturer', scope_code: code })),
           }),
         ]);
-        messageApi.success(t('pages.system.updateSuccess'));
+        messageApi.success(t('common.updateSuccess'));
       } else {
         if (!submitData.password) {
           messageApi.error(t('field.user.passwordRequired'));
@@ -343,7 +343,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
             items: manufacturerCodes.map((code: string) => ({ dimension: 'manufacturer', scope_code: code })),
           }),
         ]);
-        messageApi.success(t('pages.system.createSuccess'));
+        messageApi.success(t('common.createSuccess'));
       }
 
       handleClose();
@@ -560,7 +560,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       )}
       <ProFormSwitch
         name="is_active"
-        label={t('field.user.isActiveLabel')}
+        label={t('common.enabled')}
         colProps={{ span: 12 }}
       />
       <ProFormSwitch

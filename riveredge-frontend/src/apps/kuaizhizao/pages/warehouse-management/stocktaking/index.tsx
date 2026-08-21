@@ -476,7 +476,7 @@ const StocktakingPage: React.FC = () => {
       search: { order: 10 } as ProColumns['search'],
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: workflowStatusValueEnum,
@@ -606,7 +606,7 @@ const StocktakingPage: React.FC = () => {
       },
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colActions'),
+      title: t('common.actions'),
       width: 300,
       fixed: 'right',
       render: (_, record) => (
@@ -668,7 +668,7 @@ const StocktakingPage: React.FC = () => {
       render: (_: unknown, entity: Stocktaking) => granularityLabel(entity.line_granularity, t),
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       valueEnum: {
         draft: { text: t('app.kuaizhizao.warehouseCommon.statusDraft'), status: 'default' },
@@ -695,7 +695,7 @@ const StocktakingPage: React.FC = () => {
       render: (dom: React.ReactNode, entity: Stocktaking) => `¥${Number(entity.total_difference_amount ?? 0).toFixed(2)}`,
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colRemarks'),
+      title: t('common.remark'),
       dataIndex: 'remarks',
       span: 3,
     },
@@ -726,7 +726,7 @@ const StocktakingPage: React.FC = () => {
       width: 150,
     },
     {
-      title: t('app.kuaizhizao.warehouseOutbound.col.unit'),
+      title: t('common.unit'),
       dataIndex: 'material_unit',
       width: 72,
     },
@@ -796,7 +796,7 @@ const StocktakingPage: React.FC = () => {
       },
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      title: t('common.status'),
       dataIndex: 'status',
       width: 100,
       render: (status: string) => {
@@ -810,7 +810,7 @@ const StocktakingPage: React.FC = () => {
       },
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colActions'),
+      title: t('common.actions'),
       width: 100,
       render: (_: unknown, item: StocktakingItem) => (
         currentStocktaking?.status === 'in_progress' && item.status === 'pending' && canUpdate ? (
@@ -820,7 +820,7 @@ const StocktakingPage: React.FC = () => {
             loading={savingItemId === item.id}
             onClick={() => handleSaveActualQuantity(item)}
           >
-            {t('app.kuaizhizao.warehouseCommon.save')}
+            {t('common.save')}
           </Button>
         ) : null
       ),
@@ -899,7 +899,7 @@ const StocktakingPage: React.FC = () => {
             invalidateMenuBadgeCounts();
             actionRef.current?.reload();
           } catch (error: any) {
-            messageApi.error(error.message || t('app.kuaizhizao.warehouseCommon.deleteFailed'));
+            messageApi.error(error.message || t('common.deleteFailed'));
           }
         }}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.stocktaking.deleteConfirm', { count })}
@@ -978,7 +978,7 @@ const StocktakingPage: React.FC = () => {
         <DocumentAttachmentsField category="stocktaking_attachments" />
         <ProFormTextArea
           name="remarks"
-          label={t('app.kuaizhizao.warehouseCommon.colRemarks')}
+          label={t('common.remark')}
           placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')}
           fieldProps={{ rows: 3 }}
         />
@@ -1029,7 +1029,7 @@ const StocktakingPage: React.FC = () => {
         />
         <ProFormTextArea
           name="remarks"
-          label={t('app.kuaizhizao.warehouseCommon.colRemarks')}
+          label={t('common.remark')}
           placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')}
           fieldProps={{ rows: 3 }}
         />

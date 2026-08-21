@@ -347,7 +347,7 @@ const SpotChecksPage: React.FC = () => {
   const lineColumns = [
     { title: t(`${P}.line.item`), dataIndex: 'item_name', width: 140 },
     { title: t(`${P}.line.requirement`), dataIndex: 'requirement', ellipsis: true },
-    { title: t(`${P}.line.unit`), dataIndex: 'unit', width: 60 },
+    { title: t('common.unit'), dataIndex: 'unit', width: 60 },
     {
       title: t(`${P}.line.measuredValue`),
       dataIndex: 'measured_value',
@@ -422,7 +422,7 @@ const SpotChecksPage: React.FC = () => {
       { title: t(`${P}.col.checkDate`), dataIndex: 'check_date', valueType: 'date' },
       { title: t(`${P}.col.inspector`), dataIndex: 'inspector_name' },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status),
       },
@@ -454,7 +454,7 @@ const SpotChecksPage: React.FC = () => {
             '-'
           ),
       },
-      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+      { title: t('common.remark'), dataIndex: 'remark', span: 2 },
     ],
     [t, navigate],
   );
@@ -463,7 +463,7 @@ const SpotChecksPage: React.FC = () => {
     () => [
       { title: t(`${P}.line.item`), dataIndex: 'item_name', width: 140 },
       { title: t(`${P}.line.requirement`), dataIndex: 'requirement', ellipsis: true },
-      { title: t(`${P}.line.unit`), dataIndex: 'unit', width: 60 },
+      { title: t('common.unit'), dataIndex: 'unit', width: 60 },
       { title: t(`${P}.line.measuredValue`), dataIndex: 'measured_value', width: 120 },
       {
         title: t(`${P}.line.isPass`),
@@ -511,7 +511,7 @@ const SpotChecksPage: React.FC = () => {
         search: { order: 11 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         valueType: 'select',
         valueEnum: spotCheckStatusValueEnum,
@@ -600,7 +600,7 @@ const SpotChecksPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<SpotCheck>(t),
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
         hideInSearch: true,
@@ -766,7 +766,7 @@ const SpotChecksPage: React.FC = () => {
             />
           </Col>
           <Col span={24}>
-            <ProFormTextArea name="remark" label={t(`${P}.form.remark`)} fieldProps={{ rows: 2 }} />
+            <ProFormTextArea name="remark" label={t('common.remark')} fieldProps={{ rows: 2 }} />
           </Col>
         </Row>
         {previewLines.length > 0 && (

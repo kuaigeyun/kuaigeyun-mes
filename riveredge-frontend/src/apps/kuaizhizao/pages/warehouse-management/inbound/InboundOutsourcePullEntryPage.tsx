@@ -315,7 +315,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
     () => [
       { title: t('app.kuaizhizao.warehouseInbound.col.productCode'), dataIndex: 'productCode', width: 120, ellipsis: true },
       { title: t('app.kuaizhizao.warehouseInbound.col.productName'), dataIndex: 'productName', width: 160, ellipsis: true },
-      { title: t('app.kuaizhizao.warehouseInbound.col.unit'), dataIndex: 'unit', width: 70, align: 'center' as const },
+      { title: t('common.unit'), dataIndex: 'unit', width: 70, align: 'center' as const },
       { title: t('app.kuaizhizao.warehouseInbound.col.outsourceQty'), dataIndex: 'orderedQuantity', width: 100, align: 'right' as const },
       { title: t('app.kuaizhizao.warehouseInbound.col.receivedOutsource'), dataIndex: 'receivedQuantity', width: 90, align: 'right' as const },
       { title: t('app.kuaizhizao.warehouseInbound.col.pendingReceipt'), dataIndex: 'pendingQuantity', width: 90, align: 'right' as const },
@@ -444,7 +444,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
     () => [
       { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
       { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
-      { title: t('app.kuaizhizao.warehouseInbound.col.unit'), dataIndex: 'unit', width: 70, align: 'center' as const },
+      { title: t('common.unit'), dataIndex: 'unit', width: 70, align: 'center' as const },
       { title: t('app.kuaizhizao.warehouseInbound.col.returnableQty'), dataIndex: 'returnable_quantity', width: 100, align: 'right' as const },
       {
         title: t('app.kuaizhizao.warehouseInbound.col.thisReturn'),
@@ -475,7 +475,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
   const productReturnColumns = useMemo(
     () => [
       { title: t('app.kuaizhizao.warehouseInbound.col.receiptDoc'), dataIndex: 'receipt_id', width: 100 },
-      { title: t('app.kuaizhizao.warehouseInbound.col.unit'), dataIndex: 'unit', width: 70, align: 'center' as const },
+      { title: t('common.unit'), dataIndex: 'unit', width: 70, align: 'center' as const },
       { title: t('app.kuaizhizao.warehouseInbound.col.returnableQty'), dataIndex: 'returnable_quantity', width: 100, align: 'right' as const },
       {
         title: t('app.kuaizhizao.warehouseInbound.col.thisSalesReturn'),
@@ -661,7 +661,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           : detail && typeof detail === 'object' && typeof detail.message === 'string'
             ? detail.message
             : undefined;
-      messageApi.error(detailMessage || err?.message || t('app.kuaizhizao.warehouseInbound.msg.saveFailed'));
+      messageApi.error(detailMessage || err?.message || t('common.saveFailed'));
     } finally {
       setSubmittingAction(null);
     }
@@ -672,14 +672,14 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
       header={
         <>
           <Space align="center" size={8}>
-            <Button type="text" icon={<ArrowLeftOutlined />} aria-label={t('app.kuaizhizao.warehouseInbound.action.back')} onClick={leavePage} />
+            <Button type="text" icon={<ArrowLeftOutlined />} aria-label={t('common.back')} onClick={leavePage} />
             <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
               {pageTitle}
             </Typography.Title>
           </Space>
           <Space wrap>
             <Button disabled={submittingAction !== null || loading} onClick={leavePage}>
-              {t('app.kuaizhizao.warehouseInbound.action.cancel')}
+              {t('common.cancel')}
             </Button>
             <Button
               loading={submittingAction === 'draft'}

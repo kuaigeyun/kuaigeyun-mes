@@ -679,7 +679,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         render: (v) => renderDemandBusinessModeMarkerTag(t, v),
       },
       {
-        title: t('app.kuaizhizao.salesOrder.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'suggested_quantity',
         width: 100,
         align: 'right',
@@ -1504,7 +1504,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       ),
     },
     {
-      title: t('app.kuaizhizao.purchaseRequisition.col.quantity'),
+      title: t('common.quantity'),
       dataIndex: 'total_quantity',
       width: 100,
       align: 'right',
@@ -1655,7 +1655,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         hideInTable: true,
       },
       {
-        title: t('app.kuaizhizao.purchaseRequisition.col.quantity'),
+        title: t('common.quantity'),
         dataIndex: 'quantity',
         width: 120,
         align: 'right',
@@ -1914,7 +1914,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.purchaseRequisition.form.unit'),
+                    title: t('common.unit'),
                     dataIndex: 'unit',
                     width: 100,
                     render: (_: any, __: any, index: number) => (
@@ -1945,7 +1945,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.purchaseRequisition.form.quantity'),
+                    title: t('common.quantity'),
                     dataIndex: 'quantity',
                     width: 100,
                     align: 'right' as const,
@@ -1958,7 +1958,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                         ]}
                         style={{ margin: 0 }}
                       >
-                        <InputNumber placeholder={t('app.kuaizhizao.purchaseRequisition.form.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size="small" />
+                        <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size="small" />
                       </AntForm.Item>
                     ),
                   },
@@ -2026,7 +2026,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     width: 120,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'notes']} style={{ margin: 0 }}>
-                        <Input placeholder={t('app.kuaizhizao.common.fieldNotes')} size="small" />
+                        <Input placeholder={t('common.remark')} size="small" />
                       </AntForm.Item>
                     ),
                   },
@@ -2040,7 +2040,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
             style: { width: '100%', margin: 0 },
           }}
         />
-        <ProFormTextArea name="notes" label={t('app.kuaizhizao.common.fieldNotes')} placeholder={t('app.kuaizhizao.purchaseRequisition.form.notesPlaceholder')} />
+        <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('common.remark')} />
       </DetailDrawerSection>
 
       <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionAttachments')} marginBottom={0}>
@@ -2118,7 +2118,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
             onCancel={() => setImportModalVisible(false)}
             onConfirm={handleItemImport}
             title={t('app.kuaizhizao.purchaseRequisition.import.title')}
-            headers={[t('app.kuaizhizao.purchaseRequisition.import.materialCode'), t('app.kuaizhizao.purchaseRequisition.import.spec'), t('app.kuaizhizao.purchaseRequisition.import.unit'), t('app.kuaizhizao.purchaseRequisition.import.quantity'), t('app.kuaizhizao.purchaseRequisition.import.suggestedPrice'), t('app.kuaizhizao.purchaseRequisition.import.lineDelivery'), t('app.kuaizhizao.purchaseRequisition.import.lineNotes')]}
+            headers={[t('app.kuaizhizao.purchaseRequisition.import.materialCode'), t('app.kuaizhizao.purchaseRequisition.import.spec'), t('common.unit'), t('common.quantity'), t('app.kuaizhizao.purchaseRequisition.import.suggestedPrice'), t('app.kuaizhizao.purchaseRequisition.import.lineDelivery'), t('app.kuaizhizao.purchaseRequisition.import.lineNotes')]}
             exampleRow={['MAT001', 'Spec X', pickImportExampleValue(requisitionLineUnitOptions, t('app.kuaizhizao.purchaseRequisition.import.exampleUnit')), '10', '100', '2026-03-01', '']}
             columnOptions={requisitionLineImportColumnOptions}
           />
@@ -2369,7 +2369,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         scopeOptions={pullFromComputationQuery.scopeOptions}
         scope={pullFromComputationQuery.scope}
         onScopeChange={pullFromComputationQuery.handleScopeChange}
-        okText={t('app.kuaizhizao.purchaseRequisition.pull.next')}
+        okText={t('common.next')}
       />
 
       <Modal
@@ -2582,7 +2582,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
                 ]}

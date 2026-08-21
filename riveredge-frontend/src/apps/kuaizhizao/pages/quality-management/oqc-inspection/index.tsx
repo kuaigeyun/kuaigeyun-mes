@@ -231,7 +231,7 @@ const OQCInspectionPage: React.FC = () => {
         resetPullPreview();
         actionRef.current?.reload();
       } else {
-        messageApi.error(errMsg || t('app.kuaizhizao.quality.oqc.messages.createFailed'));
+        messageApi.error(errMsg || t('common.createFailed'));
       }
     } finally {
       setPullPreviewConfirming(false);
@@ -422,7 +422,7 @@ const OQCInspectionPage: React.FC = () => {
             handleDetail(record);
           }}
         >
-          {t('app.kuaizhizao.quality.common.actions.detail')}
+          {t('common.detail')}
         </Button>,
       ];
       if (gates.conduct.allowed) {
@@ -584,7 +584,7 @@ const OQCInspectionPage: React.FC = () => {
         },
       },
       {
-        title: t('app.kuaizhizao.quality.common.columns.actions'),
+        title: t('common.actions'),
         key: 'action',
         fixed: 'right',
         hideInSearch: true,
@@ -619,7 +619,7 @@ const OQCInspectionPage: React.FC = () => {
               const res = await qualityImprovementApi.oqc.export();
               const items = res.items || [];
               if (items.length === 0) {
-                messageApi.warning(t('app.kuaizhizao.quality.common.messages.exportEmpty'));
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               await downloadRecordsAsXlsx(
@@ -628,7 +628,7 @@ const OQCInspectionPage: React.FC = () => {
               );
               messageApi.success(t('common.exportCountSuccess', { count: items.length }));
             } catch (e: any) {
-              messageApi.error(e?.message || t('app.kuaizhizao.quality.common.messages.exportFailed'));
+              messageApi.error(e?.message || t('common.exportFailed'));
             }
           }}
           showDeleteButton
@@ -649,7 +649,7 @@ const OQCInspectionPage: React.FC = () => {
               setSelectedRowKeys([]);
               actionRef.current?.reload();
             } catch (e: any) {
-              messageApi.error(e?.message || t('app.kuaizhizao.quality.common.messages.deleteFailed'));
+              messageApi.error(e?.message || t('common.deleteFailed'));
             }
           }}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.quality.oqc.messages.deleteConfirm', { count })}
@@ -849,7 +849,7 @@ const OQCInspectionPage: React.FC = () => {
                   columns={[
                     { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                     { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                    { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', width: 90, align: 'right' , render: formatQuantity },
+                    { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right' , render: formatQuantity },
                     { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right' , render: formatQuantity },
                     { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right' , render: formatQuantity },
                   ]}

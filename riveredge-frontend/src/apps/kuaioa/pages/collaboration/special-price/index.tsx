@@ -80,7 +80,7 @@ const SpecialPricePage: React.FC = () => {
 
         { name: 'current_price', labelKey: 'app.kuaioa.specialPrice.currentPrice', width: 120, type: 'number', hideInTable: true },
 
-        { name: 'quantity', labelKey: 'app.kuaioa.specialPrice.quantity', width: 100, type: 'number', hideInTable: true },
+        { name: 'quantity', labelKey: 'common.quantity', width: 100, type: 'number', hideInTable: true },
 
         { name: 'valid_until', labelKey: 'app.kuaioa.specialPrice.validUntil', width: 120, type: 'date', hideInTable: true },
 
@@ -90,9 +90,9 @@ const SpecialPricePage: React.FC = () => {
 
         { name: 'reason', labelKey: 'app.kuaioa.specialPrice.reason', hideInTable: true, type: 'textarea' },
 
-        { name: 'status', labelKey: 'app.kuaioa.common.status', width: 100 },
+        { name: 'status', labelKey: 'common.status', width: 100 },
 
-        { name: 'notes', labelKey: 'app.kuaioa.common.notes', hideInTable: true, type: 'textarea' },
+        { name: 'notes', labelKey: 'common.remark', hideInTable: true, type: 'textarea' },
 
       ]}
 

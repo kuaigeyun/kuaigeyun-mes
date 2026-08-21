@@ -265,7 +265,7 @@ const ToolMaintenancesPage: React.FC = () => {
       ),
     },
     {
-      title: t(`${P}.line.remark`),
+      title: t('common.remark'),
       dataIndex: 'remark',
       width: 140,
       render: (_: unknown, row: MaintenanceLine, index: number) => (
@@ -301,11 +301,11 @@ const ToolMaintenancesPage: React.FC = () => {
       },
       { title: t(`${P}.col.executor`), dataIndex: 'applicant_name' },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
-      { title: t(`${P}.form.remark`), dataIndex: 'remark', span: 2 },
+      { title: t('common.remark'), dataIndex: 'remark', span: 2 },
     ],
     [t],
   );
@@ -320,7 +320,7 @@ const ToolMaintenancesPage: React.FC = () => {
         width: 80,
         render: (_, row) => (row.executed ? t('common.yes') : t('common.no')),
       },
-      { title: t(`${P}.line.remark`), dataIndex: 'remark', width: 140 },
+      { title: t('common.remark'), dataIndex: 'remark', width: 140 },
     ],
     [t],
   );
@@ -343,7 +343,7 @@ const ToolMaintenancesPage: React.FC = () => {
         search: { order: 11 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         dataIndex: 'status',
         valueType: 'select',
         valueEnum: workflowStatusValueEnum,
@@ -377,7 +377,7 @@ const ToolMaintenancesPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<ToolMaintenance>(t),
       {
-        title: t(`${P}.col.status`),
+        title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
         width: 90,
@@ -429,7 +429,7 @@ const ToolMaintenancesPage: React.FC = () => {
                   void handleSubmitDoc(record);
                 }}
               >
-                {t(`${P}.action.submit`)}
+                {t('common.submit')}
               </Button>
             )}
             {canAudit && record.status === '已提交' && (
@@ -625,7 +625,7 @@ const ToolMaintenancesPage: React.FC = () => {
             />
           </Col>
           <Col span={24}>
-            <ProFormTextArea name="remark" label={t(`${P}.form.remark`)} fieldProps={{ rows: 2 }} />
+            <ProFormTextArea name="remark" label={t('common.remark')} fieldProps={{ rows: 2 }} />
           </Col>
         </Row>
         {previewLines.length > 0 && (

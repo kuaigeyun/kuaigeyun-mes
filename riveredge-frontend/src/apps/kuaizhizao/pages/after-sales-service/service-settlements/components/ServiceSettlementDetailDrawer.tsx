@@ -77,7 +77,7 @@ export const ServiceSettlementDetailDrawer: React.FC<ServiceSettlementDetailDraw
           valueType: 'dateTime',
         },
         {
-          title: t('app.kuaizhizao.afterSalesService.serviceSettlement.field.status'),
+          title: t('common.status'),
           dataIndex: 'status',
           render: (_, row) => renderAfterSalesStatusTag(row.status, AFTER_SALES_REVIEW_STATUS_COLOR),
         },
@@ -87,7 +87,7 @@ export const ServiceSettlementDetailDrawer: React.FC<ServiceSettlementDetailDraw
           span: 3,
         },
         {
-          title: t('app.kuaizhizao.afterSalesService.serviceSettlement.field.notes'),
+          title: t('common.remark'),
           dataIndex: 'notes',
           span: 3,
         },

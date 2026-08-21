@@ -8,7 +8,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormDigit, ProFormDateTimePicker, ProFormInstance, ProFormGroup } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormDigit, ProFormDateTimePicker, ProFormInstance, ProFormGroup, ProFormSwitch } from '@ant-design/pro-components';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Divider, Spin, Alert } from 'antd';
@@ -201,7 +201,7 @@ const SuperAdminTenantList: React.FC = () => {
         render: (_, record) => record.parent_tenant_id ?? '-',
       },
       {
-        title: t('pages.infra.tenant.status'),
+        title: t('common.status'),
         dataIndex: 'status',
         render: (_, record) => {
           const statusInfo = statusTagMap[record.status] ?? { color: 'default', textKey: '' };
@@ -211,6 +211,17 @@ const SuperAdminTenantList: React.FC = () => {
             </MarkerTag>
           );
         },
+      },
+      {
+        title: t('pages.infra.tenant.formSensitiveWordEnabled'),
+        dataIndex: 'sensitive_word_enabled',
+        render: (_, record) => (
+          <MarkerTag color={record.sensitive_word_enabled ? 'success' : 'default'}>
+            {record.sensitive_word_enabled
+              ? t('pages.infra.tenant.sensitiveWordEnabledOn')
+              : t('pages.infra.tenant.sensitiveWordEnabledOff')}
+          </MarkerTag>
+        ),
       },
       {
         title: t('pages.infra.tenant.plan'),
@@ -231,12 +242,12 @@ const SuperAdminTenantList: React.FC = () => {
         valueType: 'dateTime',
       },
       {
-        title: t('pages.infra.tenant.createdAt'),
+        title: t('common.createdAt'),
         dataIndex: 'created_at',
         valueType: 'dateTime',
       },
       {
-        title: t('pages.infra.tenant.updatedAt'),
+        title: t('common.updatedAt'),
         dataIndex: 'updated_at',
         valueType: 'dateTime',
       },
@@ -361,14 +372,14 @@ const SuperAdminTenantList: React.FC = () => {
     };
     m[t('pages.infra.tenant.importHeaderName')] = 'name';
     m[t('pages.infra.tenant.name')] = 'name';
-    m[t('pages.infra.tenant.nameShort')] = 'name';
+    m[t('common.name')] = 'name';
     m[t('pages.infra.tenant.importHeaderDomain')] = 'domain';
     m[t('pages.infra.tenant.domain')] = 'domain';
     m[t('pages.infra.tenant.importHeaderPlan')] = 'plan';
     m[t('pages.infra.tenant.plan')] = 'plan';
     m[t('pages.infra.tenant.planType')] = 'plan';
-    m[t('pages.infra.tenant.importHeaderStatus')] = 'status';
-    m[t('pages.infra.tenant.status')] = 'status';
+    m[t('common.status')] = 'status';
+    m[t('common.status')] = 'status';
     m[t('pages.infra.tenant.importHeaderMaxUsers')] = 'max_users';
     m[t('pages.infra.tenant.maxUsers')] = 'max_users';
     m[t('pages.infra.tenant.maxUsersShort')] = 'max_users';
@@ -658,7 +669,7 @@ const SuperAdminTenantList: React.FC = () => {
       setSharedQuota(quota);
     } catch (error: any) {
       setSharedQuota(null);
-      message.error(error.message || t('pages.infra.tenant.operationFailed'));
+      message.error(error.message || t('common.operationFailed'));
     } finally {
       setSharedQuotaLoading(false);
     }
@@ -799,10 +810,11 @@ const SuperAdminTenantList: React.FC = () => {
     // 重置表单
     setTimeout(() => {
       formRef.current?.resetFields();
-      formRef.current?.setFieldsValue({
-        status: TenantStatus.INACTIVE,
-        plan: defaultPlan,
-      });
+        formRef.current?.setFieldsValue({
+          status: TenantStatus.INACTIVE,
+          plan: defaultPlan,
+          sensitive_word_enabled: false,
+        });
     }, 0);
   };
 
@@ -818,10 +830,11 @@ const SuperAdminTenantList: React.FC = () => {
     setModalVisible(true);
     setTimeout(() => {
       formRef.current?.resetFields();
-      formRef.current?.setFieldsValue({
-        status: TenantStatus.ACTIVE,
-        plan: defaultPlan,
-      });
+        formRef.current?.setFieldsValue({
+          status: TenantStatus.ACTIVE,
+          plan: defaultPlan,
+          sensitive_word_enabled: false,
+        });
     }, 0);
   };
 
@@ -849,6 +862,7 @@ const SuperAdminTenantList: React.FC = () => {
           max_users: data.max_users,
           max_storage: data.max_storage,
           expires_at: data.expires_at,
+          sensitive_word_enabled: Boolean(data.sensitive_word_enabled),
         });
       }, 0);
     } catch (error: any) {
@@ -868,7 +882,7 @@ const SuperAdminTenantList: React.FC = () => {
       message.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      message.error(error?.message || error?.detail || t('pages.infra.tenant.operationFailed'));
+      message.error(error?.message || error?.detail || t('common.operationFailed'));
     }
   };
 
@@ -903,13 +917,14 @@ const SuperAdminTenantList: React.FC = () => {
           max_users: values.max_users,
           max_storage: values.max_storage,
           expires_at: values.expires_at,
+          sensitive_word_enabled: Boolean(values.sensitive_word_enabled),
         };
         // 使用平台超级管理员接口更新组织
         await apiRequest<Tenant>(`/infra/tenants/${currentTenantId}`, {
           method: 'PUT',
           data: updateData,
         });
-        message.success(t('pages.infra.tenant.updateSuccess'));
+        message.success(t('common.updateSuccess'));
       } else {
         const adminAccount = values.admin_account;
         const createData: CreateTenantData = {
@@ -922,6 +937,7 @@ const SuperAdminTenantList: React.FC = () => {
           max_users: values.max_users,
           max_storage: values.max_storage,
           expires_at: values.expires_at,
+          sensitive_word_enabled: Boolean(values.sensitive_word_enabled),
           admin_account: {
             username: adminAccount.username,
             password: adminAccount.password,
@@ -933,7 +949,7 @@ const SuperAdminTenantList: React.FC = () => {
           method: 'POST',
           data: createData,
         });
-        message.success(t('pages.infra.tenant.createSuccess'));
+        message.success(t('common.createSuccess'));
       }
 
       handleCloseModal();
@@ -943,7 +959,7 @@ const SuperAdminTenantList: React.FC = () => {
         loadSharedQuota(currentTenantId);
       }
     } catch (error: any) {
-      message.error(error.message || t('pages.infra.tenant.operationFailed'));
+      message.error(error.message || t('common.operationFailed'));
     } finally {
       setFormLoading(false);
     }
@@ -1013,7 +1029,7 @@ const SuperAdminTenantList: React.FC = () => {
       ),
     },
     {
-      title: t('pages.infra.tenant.status'),
+      title: t('common.status'),
       dataIndex: 'status',
       valueType: 'select',
       sorter: true,
@@ -1064,7 +1080,7 @@ const SuperAdminTenantList: React.FC = () => {
       responsive: ['lg'],
     },
     {
-      title: t('pages.infra.tenant.createdAt'),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
       hideInSearch: true,
@@ -1081,7 +1097,7 @@ const SuperAdminTenantList: React.FC = () => {
       responsive: ['xl'],
     },
     {
-      title: t('pages.infra.tenant.actions'),
+      title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
       // 保证「设为/取消默认」留在主行，使用 Popconfirm 气泡而非折叠进「更多」后的 Modal
@@ -1098,7 +1114,7 @@ const SuperAdminTenantList: React.FC = () => {
               size="small"
               onClick={() => handleOpenDetail(record.id)}
             >
-              {t('pages.infra.tenant.detail')}
+              {t('common.detail')}
             </Button>
             <Button key="edit" {...rowActionKind('update')}
               size="small"
@@ -1165,7 +1181,7 @@ const SuperAdminTenantList: React.FC = () => {
                 }}
               >
                 <Button type="link" size="small" icon={<PlayCircleOutlined />}>
-                  {t('pages.infra.tenant.activate')}
+                  {t('common.enabled')}
                 </Button>
               </Popconfirm>
             )}
@@ -1239,7 +1255,7 @@ const SuperAdminTenantList: React.FC = () => {
       onCreate={handleCreate}
       showImportButton={true}
       onImport={handleImport}
-      importHeaders={[t('pages.infra.tenant.importHeaderName'), t('pages.infra.tenant.importHeaderDomain'), t('pages.infra.tenant.importHeaderPlan'), t('pages.infra.tenant.importHeaderStatus'), t('pages.infra.tenant.importHeaderMaxUsers'), t('pages.infra.tenant.importHeaderMaxStorage'), t('pages.infra.tenant.importHeaderExpiresAt')]}
+      importHeaders={[t('pages.infra.tenant.importHeaderName'), t('pages.infra.tenant.importHeaderDomain'), t('pages.infra.tenant.importHeaderPlan'), t('common.status'), t('pages.infra.tenant.importHeaderMaxUsers'), t('pages.infra.tenant.importHeaderMaxStorage'), t('pages.infra.tenant.importHeaderExpiresAt')]}
       importExampleRow={[t('pages.infra.tenant.importExampleName'), 'example', packagePlanOptions[0]?.label || '-', t('pages.infra.tenant.statusInactive'), '10', '1024', '']}
       importFieldMap={headerToFieldMap}
       showExportButton={true}
@@ -1399,6 +1415,7 @@ const SuperAdminTenantList: React.FC = () => {
       initialValues={{
         status: TenantStatus.ACTIVE,
         plan: defaultPlan || undefined,
+        sensitive_word_enabled: false,
       }}
     >
         {!isEdit && createParentTenantId && (
@@ -1452,6 +1469,12 @@ const SuperAdminTenantList: React.FC = () => {
             { label: t('pages.infra.tenant.statusExpired'), value: TenantStatus.EXPIRED },
             { label: t('pages.infra.tenant.statusSuspended'), value: TenantStatus.SUSPENDED },
           ]}
+        />
+        <ProFormSwitch
+          name="sensitive_word_enabled"
+          label={t('pages.infra.tenant.formSensitiveWordEnabled')}
+          extra={t('pages.infra.tenant.formSensitiveWordEnabledExtra')}
+          colProps={{ span: 8 }}
         />
         </ProFormGroup>
         <ProFormGroup colProps={{ span: 24 }}>

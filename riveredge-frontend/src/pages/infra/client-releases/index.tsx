@@ -101,7 +101,7 @@ const ClientReleasesPage: React.FC = () => {
       }
       actionRef.current?.reload();
     } catch (e) {
-      messageApi.error(e instanceof Error ? e.message : t('pages.infra.clientReleases.deleteFailed'));
+      messageApi.error(e instanceof Error ? e.message : t('common.deleteFailed'));
     } finally {
       setDeletingId(null);
     }
@@ -158,7 +158,7 @@ const ClientReleasesPage: React.FC = () => {
         ),
     },
     {
-      title: t('pages.infra.clientReleases.columnStatus'),
+      title: t('common.status'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
@@ -181,7 +181,7 @@ const ClientReleasesPage: React.FC = () => {
       render: (v) => `${v ?? 100}%`,
     },
     {
-      title: t('pages.infra.clientReleases.columnNotes'),
+      title: t('common.remark'),
       dataIndex: 'release_notes',
       ellipsis: true,
       hideInSearch: true,

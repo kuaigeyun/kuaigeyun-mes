@@ -39,7 +39,7 @@ export const CORE_NOTIFICATION_ACTION_OPTIONS: Record<
   Array<{ value: string; labelKey: string; fallback: string }>
 > = {
   sales_order: [
-    { value: 'submitted', labelKey: 'pages.system.configCenter.notification.action.sales_order.submitted', fallback: '提交' },
+    { value: 'submitted', labelKey: 'common.submit', fallback: '提交' },
     { value: 'approved', labelKey: 'pages.system.configCenter.notification.action.sales_order.approved', fallback: '审核通过' },
     {
       value: 'pushed_to_work_order',
@@ -53,7 +53,7 @@ export const CORE_NOTIFICATION_ACTION_OPTIONS: Record<
     },
   ],
   quotation: [
-    { value: 'submitted', labelKey: 'pages.system.configCenter.notification.action.quotation.submitted', fallback: '提交' },
+    { value: 'submitted', labelKey: 'common.submit', fallback: '提交' },
     { value: 'approved', labelKey: 'pages.system.configCenter.notification.action.quotation.approved', fallback: '审核通过' },
     {
       value: 'customer_confirmed',
@@ -67,7 +67,7 @@ export const CORE_NOTIFICATION_ACTION_OPTIONS: Record<
     },
   ],
   purchase_order: [
-    { value: 'submitted', labelKey: 'pages.system.configCenter.notification.action.purchase_order.submitted', fallback: '提交' },
+    { value: 'submitted', labelKey: 'common.submit', fallback: '提交' },
     { value: 'approved', labelKey: 'pages.system.configCenter.notification.action.purchase_order.approved', fallback: '审核通过' },
     {
       value: 'pushed_to_receipt',
@@ -92,7 +92,7 @@ export const CORE_NOTIFICATION_ACTION_OPTIONS: Record<
     { value: 'reworked', labelKey: 'pages.system.configCenter.notification.action.work_order.reworked', fallback: '转返工' },
   ],
   quality_inspection: [
-    { value: 'submitted', labelKey: 'pages.system.configCenter.notification.action.quality_inspection.submitted', fallback: '提交' },
+    { value: 'submitted', labelKey: 'common.submit', fallback: '提交' },
     { value: 'approved', labelKey: 'pages.system.configCenter.notification.action.quality_inspection.approved', fallback: '审核通过' },
     { value: 'rejected', labelKey: 'pages.system.configCenter.notification.action.quality_inspection.rejected', fallback: '驳回' },
     {
@@ -117,7 +117,7 @@ export const CORE_NOTIFICATION_ACTION_OPTIONS: Record<
     { value: 'completed', labelKey: 'pages.system.configCenter.notification.action.maintenance_order.completed', fallback: '完成维保' },
   ],
   shipment_notice: [
-    { value: 'submitted', labelKey: 'pages.system.configCenter.notification.action.shipment_notice.submitted', fallback: '提交' },
+    { value: 'submitted', labelKey: 'common.submit', fallback: '提交' },
     { value: 'confirmed', labelKey: 'pages.system.configCenter.notification.action.shipment_notice.confirmed', fallback: '确认发货' },
     {
       value: 'delivery_delayed',
@@ -126,11 +126,11 @@ export const CORE_NOTIFICATION_ACTION_OPTIONS: Record<
     },
   ],
   inbound: [
-    { value: 'submitted', labelKey: 'pages.system.configCenter.notification.action.inbound.submitted', fallback: '提交' },
+    { value: 'submitted', labelKey: 'common.submit', fallback: '提交' },
     { value: 'confirmed', labelKey: 'pages.system.configCenter.notification.action.inbound.confirmed', fallback: '确认入库' },
   ],
   outbound: [
-    { value: 'submitted', labelKey: 'pages.system.configCenter.notification.action.outbound.submitted', fallback: '提交' },
+    { value: 'submitted', labelKey: 'common.submit', fallback: '提交' },
     { value: 'confirmed', labelKey: 'pages.system.configCenter.notification.action.outbound.confirmed', fallback: '确认出库' },
   ],
 };

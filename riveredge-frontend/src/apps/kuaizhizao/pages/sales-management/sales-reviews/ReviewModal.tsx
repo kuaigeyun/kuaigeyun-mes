@@ -124,7 +124,7 @@ export const SalesReviewReviewModal: React.FC<SalesReviewReviewModalProps> = ({
         ellipsis: true,
       },
       {
-        title: t('app.kuaizhizao.salesReview.colQuantity'),
+        title: t('common.quantity'),
         dataIndex: 'quantity',
         width: 90,
         align: 'right' as const,
@@ -215,7 +215,7 @@ export const SalesReviewReviewModal: React.FC<SalesReviewReviewModalProps> = ({
               <Descriptions.Item label={t('app.kuaizhizao.salesReview.colSalesman')}>
                 {review.salesman_name || '—'}
               </Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.salesReview.colStatus')}>
+              <Descriptions.Item label={t('common.status')}>
                 {renderSalesReviewStatusTag(t, review.status)}
               </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.salesReview.fieldSettlement')}>
@@ -230,7 +230,7 @@ export const SalesReviewReviewModal: React.FC<SalesReviewReviewModalProps> = ({
                 </Descriptions.Item>
               ) : null}
               {review.remarks ? (
-                <Descriptions.Item label={t('app.kuaizhizao.salesReview.fieldRemarks')} span={2}>
+                <Descriptions.Item label={t('common.remark')} span={2}>
                   {review.remarks}
                 </Descriptions.Item>
               ) : null}

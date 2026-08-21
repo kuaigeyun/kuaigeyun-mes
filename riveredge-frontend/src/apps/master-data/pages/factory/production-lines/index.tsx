@@ -118,8 +118,8 @@ const ProductionLinesPage: React.FC = () => {
           { field: 'code', required: true, labelKey: 'app.master-data.productionLines.code' },
           { field: 'name', required: true, labelKey: 'app.master-data.productionLines.name' },
           { field: 'workshopCode', required: true, labelKey: 'app.master-data.productionLines.workshopCode' },
-          { field: 'description', labelKey: 'app.master-data.productionLines.description' },
-          { field: 'isActive', labelKey: 'field.productionLine.isActive', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
+          { field: 'description', labelKey: 'common.remark' },
+          { field: 'isActive', labelKey: 'common.enabled', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
         ],
         [
           t('app.master-data.productionLines.importExample.code'),
@@ -494,7 +494,7 @@ const ProductionLinesPage: React.FC = () => {
       }
 
       // 构建 CSV 内容
-      const headers = [t('app.master-data.productionLines.code'), t('app.master-data.productionLines.name'), t('app.master-data.productionLines.workshopName'), t('app.master-data.productionLines.description'), t('app.master-data.productionLines.status'), t('common.createdAt')];
+      const headers = [t('app.master-data.productionLines.code'), t('app.master-data.productionLines.name'), t('app.master-data.productionLines.workshopName'), t('common.remark'), t('common.status'), t('common.createdAt')];
       const rows = exportData.map(item => {
         const workshop = workshops.find(w => w.id === item.workshopId);
         const wsLabel =
@@ -523,7 +523,7 @@ const ProductionLinesPage: React.FC = () => {
       downloadFile(csvContent, filename, 'text/csv;charset=utf-8;');
       messageApi.success(t('common.exportSuccess', { count: exportData.length }));
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.exportFailed'));
+      messageApi.error(error.message || t('common.exportFailed'));
     }
   };
 
@@ -628,7 +628,7 @@ const ProductionLinesPage: React.FC = () => {
       render: (_, record) => formatWorkshopDisplay(record),
     },
     {
-      title: t('app.master-data.productionLines.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -670,14 +670,14 @@ const ProductionLinesPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            {t('field.customField.view')}
+            {t('common.view')}
           </Button>
           <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            {t('field.customField.edit')}
+            {t('common.edit')}
           </Button>
           <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.productionLines.deleteConfirm')}
             description={t('app.master-data.productionLines.deleteDescription')}
@@ -689,7 +689,7 @@ const ProductionLinesPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              {t('field.customField.delete')}
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -717,7 +717,7 @@ const ProductionLinesPage: React.FC = () => {
       render: (_, record) => formatWorkshopDisplay(record),
     },
     {
-      title: t('app.master-data.productionLines.description'),
+      title: t('common.remark'),
       dataIndex: 'description',
     },
     {

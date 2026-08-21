@@ -492,7 +492,7 @@ const MaintenancePlansPage: React.FC = () => {
       valueType: 'date',
     },
     {
-      title: t(`${P}.col.status`),
+      title: t('common.status'),
       dataIndex: 'status',
       render: (_, record) => {
         const status = record.status;
@@ -503,7 +503,7 @@ const MaintenancePlansPage: React.FC = () => {
       },
     },
     {
-      title: t(`${P}.col.createdAt`),
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
     },
@@ -530,7 +530,7 @@ const MaintenancePlansPage: React.FC = () => {
             : String(row.spare_part_id ?? '-'),
       },
       {
-        title: t(`${P}.form.sparePartQty`),
+        title: t('common.quantity'),
         dataIndex: 'quantity',
         width: 100,
       },
@@ -627,7 +627,7 @@ const MaintenancePlansPage: React.FC = () => {
       search: { order: 11 } as ProColumns['search'],
     },
     {
-      title: t(`${P}.col.status`),
+      title: t('common.status'),
       dataIndex: 'status',
       valueType: 'select',
       valueEnum: planStatusValueEnum,
@@ -925,7 +925,7 @@ const MaintenancePlansPage: React.FC = () => {
           <Col span={12}>
             <ProFormSelect
               name="status"
-              label={t(`${P}.col.status`)}
+              label={t('common.status')}
               placeholder={t(`${P}.form.selectStatus`)}
               options={[
                 { label: t(`${P}.status.draft`), value: '草稿' },
@@ -1115,7 +1115,7 @@ const MaintenancePlansPage: React.FC = () => {
                   ),
                 },
                 {
-                  title: t(`${P}.form.sparePartQty`),
+                  title: t('common.quantity'),
                   width: 100,
                   render: (_, __, index) => (
                     <InputNumber
