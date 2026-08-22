@@ -115,6 +115,9 @@ class SensitiveWordIpGuardService:
         field: str,
         matched: str,
         user_id: Optional[int] = None,
+        tenant_id: Optional[int] = None,
+        request_path: Optional[str] = None,
+        content_snippet: Optional[str] = None,
     ) -> SensitiveWordViolationResult:
         normalized_ip = self._normalize_ip(ip)
         normalized_user = self._normalize_user_id(user_id)
@@ -150,6 +153,28 @@ class SensitiveWordIpGuardService:
             field,
             matched,
         )
+
+        parsed_tenant_id: Optional[int] = None
+        if tenant_id is not None:
+            try:
+                parsed_tenant_id = int(tenant_id)
+            except (TypeError, ValueError):
+                parsed_tenant_id = None
+        if parsed_tenant_id and parsed_tenant_id > 0:
+            from infra.services.sensitive_word_blacklist_service import SensitiveWordBlacklistService
+
+            await SensitiveWordBlacklistService().record_violation_event(
+                tenant_id=parsed_tenant_id,
+                user_id=normalized_user,
+                client_ip=normalized_ip,
+                request_path=(request_path or "").strip() or "-",
+                field_path=field,
+                matched_word=matched,
+                content_snippet=content_snippet,
+                strike_count=strike_count,
+                ip_banned=ip_banned,
+            )
+
         return SensitiveWordViolationResult(
             strike_count=strike_count,
             ip_banned=ip_banned,
@@ -163,8 +188,19 @@ class SensitiveWordIpGuardService:
         field: str,
         matched: str,
         user_id: Optional[int] = None,
+        tenant_id: Optional[int] = None,
+        request_path: Optional[str] = None,
+        content_snippet: Optional[str] = None,
     ) -> ValidationError:
-        result = await self.record_violation(ip, field=field, matched=matched, user_id=user_id)
+        result = await self.record_violation(
+            ip,
+            field=field,
+            matched=matched,
+            user_id=user_id,
+            tenant_id=tenant_id,
+            request_path=request_path,
+            content_snippet=content_snippet,
+        )
         return ValidationError(
             result.message,
             details={
@@ -194,3 +230,21 @@ class SensitiveWordIpGuardService:
             self._memory_banned.add(subject)
             return
         await cache.set(self._ban_key(ip, user_id), "1")
+
+    async def clear_subject(
+        self,
+        ip: str,
+        user_id: int,
+        tenant_id: Optional[int] = None,
+    ) -> None:
+        normalized_ip = self._normalize_ip(ip)
+        normalized_user = self._normalize_user_id(user_id)
+        if normalized_user is None:
+            return
+        subject = self._subject_key(normalized_ip, normalized_user)
+        if self._memory_mode:
+            self._memory_banned.discard(subject)
+            self._memory_strikes.pop(subject, None)
+            return
+        await cache.delete(self._ban_key(normalized_ip, normalized_user))
+        await cache.delete(self._strike_key(normalized_ip, normalized_user))

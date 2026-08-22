@@ -485,6 +485,7 @@ class FileService:
     @staticmethod
     async def _assert_upload_texts_clean(
         *,
+        tenant_id: int,
         client_ip: Optional[str],
         user_id: Optional[int],
         original_name: str,
@@ -493,6 +494,9 @@ class FileService:
     ) -> None:
         service = SensitiveWordService.instance()
         guard = SensitiveWordIpGuardService.instance()
+        from infra.services.sensitive_word_blacklist_service import SensitiveWordBlacklistService
+
+        blacklist_service = SensitiveWordBlacklistService()
         ip = client_ip or "0.0.0.0"
         checks = [("original_name", original_name), ("description", description or "")]
         if tags:
@@ -502,11 +506,16 @@ class FileService:
                 continue
             matched = service.find_sensitive_word(value)
             if matched:
+                if await blacklist_service.is_tenant_word_allowlisted(tenant_id, matched):
+                    continue
                 raise await guard.build_validation_error(
                     ip,
                     field=field,
                     matched=matched,
                     user_id=user_id,
+                    tenant_id=tenant_id,
+                    request_path="file/upload",
+                    content_snippet=value,
                 )
 
     @staticmethod
@@ -539,6 +548,7 @@ class FileService:
         """
         if await tenant_has_sensitive_word_control(tenant_id):
             await FileService._assert_upload_texts_clean(
+                tenant_id=tenant_id,
                 client_ip=client_ip,
                 user_id=user_id,
                 original_name=original_name,

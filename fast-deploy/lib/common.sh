@@ -3785,6 +3785,17 @@ resolve_pg_config() {
         return 0
     fi
     if [ -n "$major" ]; then
+        if is_windows_gitbash; then
+            for candidate in \
+                "/c/Program Files/PostgreSQL/${major}/bin/pg_config.exe" \
+                "/c/Program Files/PostgreSQL/${major}/bin/pg_config"
+            do
+                if [ -f "$candidate" ]; then
+                    echo "$candidate"
+                    return 0
+                fi
+            done
+        fi
         for candidate in \
             "/usr/lib/postgresql/${major}/bin/pg_config" \
             "/usr/pgsql-${major}/bin/pg_config"
@@ -3934,8 +3945,27 @@ install_pgvector_from_source() {
 ensure_postgresql_pgvector() {
     local major pg_config sharedir control host
     if is_windows_gitbash; then
-        log_warn "Windows 不自动安装 pgvector；若迁移需要 vector，请在目标 PostgreSQL 主机安装扩展"
-        return 0
+        if pgvector_available_in_app_db; then
+            log_ok "应用库已具备 pgvector（pg_available_extensions）"
+            return 0
+        fi
+        host="$(read_env_value DB_HOST 2>/dev/null || echo localhost)"
+        if ! is_app_db_local_host; then
+            log_error "应用库 ${host} 为远程主机，无法在本机安装 pgvector"
+            log_error "请在 PostgreSQL 所在机器安装 vector 扩展后重试迁移"
+            return 1
+        fi
+        log_info "Windows: 安装 pgvector 扩展文件..."
+        if ! powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$FAST_DEPLOY_DIR/windows/install-pgvector.ps1" -FastDeployDir "$FAST_DEPLOY_DIR" -UseMirror "${USE_MIRROR:-1}"; then
+            log_error "Windows pgvector 安装失败（需管理员权限写入 PostgreSQL 目录）"
+            return 1
+        fi
+        if pgvector_available_in_app_db; then
+            log_ok "pgvector 已对应用库可用"
+            return 0
+        fi
+        log_error "pgvector 安装后应用库仍无 vector（请重启 PostgreSQL 后重试 migrate）"
+        return 1
     fi
     if [[ "$(uname -s)" == "Darwin" ]]; then
         log_warn "macOS 请自行安装 pgvector（如 brew install pgvector）后再迁移"
@@ -4069,10 +4099,29 @@ postgres_superuser_sql_on_app_db() {
 ensure_vector_extension_created() {
     if is_windows_gitbash || [[ "$(uname -s)" == "Darwin" ]]; then
         if vector_extension_installed_in_app_db; then
+            log_ok "应用库已启用 vector 扩展"
             return 0
         fi
-        log_warn "非 Linux 部署：请确认应用库已执行 CREATE EXTENSION vector"
-        return 0
+        if ! pgvector_available_in_app_db; then
+            log_error "应用库尚无 pgvector 系统扩展，无法 CREATE EXTENSION"
+            return 1
+        fi
+        if ! is_app_db_local_host; then
+            log_error "远程库需超级用户执行: CREATE EXTENSION IF NOT EXISTS vector;"
+            return 1
+        fi
+        log_info "以超级用户在应用库创建 vector 扩展..."
+        if ! postgres_superuser_sql_on_app_db "CREATE EXTENSION IF NOT EXISTS vector;"; then
+            log_error "超级用户 CREATE EXTENSION vector 失败"
+            log_error "请手动以 postgres 连接应用库执行: CREATE EXTENSION IF NOT EXISTS vector;"
+            return 1
+        fi
+        if vector_extension_installed_in_app_db; then
+            log_ok "已在应用库创建 vector 扩展"
+            return 0
+        fi
+        log_error "CREATE EXTENSION 后应用库仍无 vector"
+        return 1
     fi
 
     if vector_extension_installed_in_app_db; then

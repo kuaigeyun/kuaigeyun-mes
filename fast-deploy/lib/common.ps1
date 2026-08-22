@@ -1173,10 +1173,99 @@ function Ensure-TimezoneEnv {
     }
 }
 
+function Test-PgvectorAvailableInAppDb {
+    $host_ = Read-EnvValue 'DB_HOST'; if (-not $host_) { $host_ = 'localhost' }
+    $port = Read-EnvValue 'DB_PORT'; if (-not $port) { $port = '5432' }
+    $user = Read-EnvValue 'DB_USER'; if (-not $user) { $user = 'postgres' }
+    $pass = Read-EnvValue 'DB_PASSWORD'
+    $dbname = Read-EnvValue 'DB_NAME'; if (-not $dbname) { $dbname = 'riveredge' }
+    $env:PGPASSWORD = $pass
+    try {
+        $out = & psql -h $host_ -p $port -U $user -d $dbname -tAc "SELECT 1 FROM pg_available_extensions WHERE name = 'vector'" 2>$null
+        return ($out.Trim() -eq '1')
+    } finally {
+        Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+    }
+}
+
+function Test-VectorExtensionInstalledInAppDb {
+    $host_ = Read-EnvValue 'DB_HOST'; if (-not $host_) { $host_ = 'localhost' }
+    $port = Read-EnvValue 'DB_PORT'; if (-not $port) { $port = '5432' }
+    $user = Read-EnvValue 'DB_USER'; if (-not $user) { $user = 'postgres' }
+    $pass = Read-EnvValue 'DB_PASSWORD'
+    $dbname = Read-EnvValue 'DB_NAME'; if (-not $dbname) { $dbname = 'riveredge' }
+    $env:PGPASSWORD = $pass
+    try {
+        $out = & psql -h $host_ -p $port -U $user -d $dbname -tAc "SELECT 1 FROM pg_extension WHERE extname = 'vector'" 2>$null
+        return ($out.Trim() -eq '1')
+    } finally {
+        Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+    }
+}
+
+function Invoke-PgvectorSuperuserSql([string]$Sql) {
+    $host_ = Read-EnvValue 'DB_HOST'; if (-not $host_) { $host_ = 'localhost' }
+    $port = Read-EnvValue 'DB_PORT'; if (-not $port) { $port = '5432' }
+    $pass = Read-EnvValue 'DB_PASSWORD'
+    $dbname = Read-EnvValue 'DB_NAME'; if (-not $dbname) { $dbname = 'riveredge' }
+    $env:PGPASSWORD = $pass
+    try {
+        & psql -h $host_ -p $port -U postgres -d $dbname -v ON_ERROR_STOP=1 -c $Sql
+        return ($LASTEXITCODE -eq 0)
+    } finally {
+        Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+    }
+}
+
+function Ensure-Pgvector {
+    if (Test-PgvectorAvailableInAppDb) {
+        Write-LogOk '应用库已具备 pgvector'
+        return
+    }
+    $host_ = Read-EnvValue 'DB_HOST'; if (-not $host_) { $host_ = 'localhost' }
+    if ($host_ -ne 'localhost' -and $host_ -ne '127.0.0.1') {
+        throw '远程数据库无法在本机安装 pgvector，请在数据库服务器安装 vector 扩展'
+    }
+    $ps = Join-Path $script:FastDeployDir 'windows\install-pgvector.ps1'
+    if (-not (Test-Path $ps)) { throw "缺少 pgvector 安装脚本: $ps" }
+    Write-LogInfo '安装 pgvector 扩展文件（写入 PostgreSQL 目录）...'
+    $mirror = if ($script:UseMirror) { '1' } else { '0' }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ps -FastDeployDir $script:FastDeployDir -UseMirror $mirror
+    if ($LASTEXITCODE -ne 0) { throw 'pgvector 安装失败（请以管理员身份运行安装/迁移）' }
+    if (-not (Test-PgvectorAvailableInAppDb)) {
+        throw 'pgvector 安装后应用库仍不可用，请重启 PostgreSQL 服务后重试 migrate'
+    }
+    Write-LogOk 'pgvector 已对应用库可用'
+}
+
+function Ensure-VectorExtensionCreated {
+    if (Test-VectorExtensionInstalledInAppDb) {
+        Write-LogOk '应用库已启用 vector 扩展'
+        return
+    }
+    if (-not (Test-PgvectorAvailableInAppDb)) {
+        throw '应用库尚无 pgvector 系统扩展，无法 CREATE EXTENSION'
+    }
+    $host_ = Read-EnvValue 'DB_HOST'; if (-not $host_) { $host_ = 'localhost' }
+    if ($host_ -ne 'localhost' -and $host_ -ne '127.0.0.1') {
+        throw '远程库需超级用户执行: CREATE EXTENSION IF NOT EXISTS vector;'
+    }
+    Write-LogInfo '以超级用户在应用库创建 vector 扩展...'
+    if (-not (Invoke-PgvectorSuperuserSql 'CREATE EXTENSION IF NOT EXISTS vector;')) {
+        throw '超级用户 CREATE EXTENSION vector 失败'
+    }
+    if (-not (Test-VectorExtensionInstalledInAppDb)) {
+        throw 'CREATE EXTENSION 后应用库仍无 vector'
+    }
+    Write-LogOk '已在应用库创建 vector 扩展'
+}
+
 function Invoke-Migrate {
     Sync-BackendDeps
     Ensure-TimezoneEnv
     Ensure-SensitiveLexiconPack
+    Ensure-Pgvector
+    Ensure-VectorExtensionCreated
     Write-LogInfo '执行数据库迁移...'
     $uv = Resolve-Uv
     Push-Location $script:BackendDir

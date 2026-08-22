@@ -14,11 +14,12 @@ import { getToken } from '../utils/auth';
 import { isKuaireportSharedBrowsePath } from '../utils/kuaireportSharedPath';
 import { useUserPreferenceStore } from './userPreferenceStore';
 import { getThemeFromPreferenceCache } from './userPreferenceStore';
+import { clampBorderRadius, DEFAULT_THEME_BORDER_RADIUS } from '../utils/themeBorderRadius';
 import { useConfigStore } from './configStore';
 
 const DEFAULT_CONFIG = {
   colorPrimary: '#1890ff',
-  borderRadius: 6,
+  borderRadius: DEFAULT_THEME_BORDER_RADIUS,
   fontSize: 14,
   compact: false,
   siderBgColor: '',
@@ -89,7 +90,7 @@ export function normalizeThemeConfig(c: Partial<ThemeConfig> | Record<string, un
       typeof src.colorPrimary === 'string' && src.colorPrimary.trim()
         ? src.colorPrimary.trim()
         : DEFAULT_CONFIG.colorPrimary,
-    borderRadius: clampFinite(br, 0, 24, DEFAULT_CONFIG.borderRadius),
+    borderRadius: clampBorderRadius(br, DEFAULT_CONFIG.borderRadius),
     fontSize: clampFinite(fs, 10, 22, DEFAULT_CONFIG.fontSize),
     compact: false,
     themeStyle: normalizeThemeStyle(src.themeStyle),

@@ -4,6 +4,8 @@
  * 提供 Token 管理、用户信息存储等工具函数
  */
 
+import { clearLastActivity, updateLastActivity } from './activityUtils';
+
 /**
  * Token 存储键名
  */
@@ -31,6 +33,9 @@ const USER_INFO_KEY = 'user_info';
  */
 export function setToken(token: string): void {
   localStorage.setItem(TOKEN_KEY, token);
+  if (token) {
+    updateLastActivity(true);
+  }
 }
 
 /**
@@ -134,6 +139,7 @@ export function clearAuth(): void {
   removeRefreshToken();
   removeTenantId();
   removeUserInfo();
+  clearLastActivity();
 }
 
 /**

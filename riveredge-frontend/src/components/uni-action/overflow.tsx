@@ -47,9 +47,27 @@ export const ROW_ACTIONS_STRIP_CLASS = 'uni-table-operation-actions'
  * 否则「直出几个」与「列宽够放几个」会成为两个互相竞争的真源。
  * 列宽推导见 `utils/uniTableLayoutColumns.ts`。
  */
-export function resolveRowActionInlineSlots(directMax?: number): number {
-  const max = typeof directMax === 'number' && Number.isFinite(directMax) ? directMax : ROW_ACTIONS_DIRECT_MAX
-  return Math.max(1, max - 1, ROW_ACTIONS_MIN_PRIMARY_VISIBLE)
+export type ResolveRowActionInlineSlotOptions = {
+  directMax?: number
+  minPrimaryVisible?: number
+}
+
+export function resolveRowActionInlineSlots(
+  options?: number | ResolveRowActionInlineSlotOptions,
+): number {
+  let directMax = ROW_ACTIONS_DIRECT_MAX
+  let minPrimaryVisible = ROW_ACTIONS_MIN_PRIMARY_VISIBLE
+  if (typeof options === 'number' && Number.isFinite(options)) {
+    directMax = options
+  } else if (options != null && typeof options === 'object') {
+    if (typeof options.directMax === 'number' && Number.isFinite(options.directMax)) {
+      directMax = options.directMax
+    }
+    if (typeof options.minPrimaryVisible === 'number' && Number.isFinite(options.minPrimaryVisible)) {
+      minPrimaryVisible = options.minPrimaryVisible
+    }
+  }
+  return Math.max(1, directMax - 1, minPrimaryVisible)
 }
 
 /** 列表操作列内联按钮横向间距（Ant Design Space） */
@@ -310,17 +328,22 @@ function withRowActionKeys(nodes: React.ReactNode[], keyPrefix: string): React.R
 
 function parseOverflowArgs(directMaxOrOptions?: number | RenderRowActionsOverflowOptions): {
   directMax: number
+  minPrimaryVisible?: number
   ctx: NormalizeActionContext
 } {
   let directMax = ROW_ACTIONS_DIRECT_MAX
+  let minPrimaryVisible: number | undefined
   let suppressAudit = false
   if (typeof directMaxOrOptions === 'number') {
     directMax = directMaxOrOptions
   } else if (directMaxOrOptions != null && typeof directMaxOrOptions === 'object') {
     if (typeof directMaxOrOptions.directMax === 'number') directMax = directMaxOrOptions.directMax
+    if (typeof directMaxOrOptions.minPrimaryVisible === 'number') {
+      minPrimaryVisible = directMaxOrOptions.minPrimaryVisible
+    }
     if (directMaxOrOptions.suppressAuditSemanticActions === true) suppressAudit = true
   }
-  return { directMax, ctx: { suppressAuditSemanticActions: suppressAudit } }
+  return { directMax, minPrimaryVisible, ctx: { suppressAuditSemanticActions: suppressAudit } }
 }
 
 /**
@@ -368,11 +391,11 @@ export function renderRowActionsOverflow(
   keyPrefix: string,
   directMaxOrOptions?: number | RenderRowActionsOverflowOptions,
 ): React.ReactNode {
-  const { directMax, ctx } = parseOverflowArgs(directMaxOrOptions)
+  const { directMax, minPrimaryVisible, ctx } = parseOverflowArgs(directMaxOrOptions)
   const sorted = normalizeAndSortActions(nodes, ctx)
   const enabled = dedupeInlineRowIcons(sorted.filter(isClickableVisibleAction))
   /** 主行槽位：与操作列宽度共用 resolveRowActionInlineSlots，禁止在此另写公式 */
-  const primarySlotsBeforeMore = resolveRowActionInlineSlots(directMax)
+  const primarySlotsBeforeMore = resolveRowActionInlineSlots({ directMax, minPrimaryVisible })
 
   if (enabled.length === 0) {
     return null

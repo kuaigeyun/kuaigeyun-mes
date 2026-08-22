@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Drawer, Form, Input, ColorPicker, Switch, Button, Space, Divider, message, ConfigProvider, Card, Typography, Tooltip, Popover, Segmented, Spin } from 'antd';
+import { Drawer, Form, Input, ColorPicker, Button, Space, Divider, message, ConfigProvider, Card, Typography, Tooltip, Popover, Spin } from 'antd';
 import { SaveOutlined, ReloadOutlined, SunOutlined, MoonOutlined, DesktopOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { theme } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -21,7 +21,7 @@ import {
 } from '../../stores/themeStore';
 import { clearTabsData } from '../../stores/tabsStorage';
 import { getDrawerFloatingWrapperStyle } from '../layout-templates/drawerFloatingChrome';
-import { clampBorderRadius, readBorderRadius } from '../../utils/themeBorderRadius';
+import { clampBorderRadius, DEFAULT_THEME_BORDER_RADIUS, readBorderRadius } from '../../utils/themeBorderRadius';
 import { clampFontSize, readFontSize } from '../../utils/themeFontSize';
 import { ThemeBorderRadiusSlider, ThemeFontSizeSlider } from './ThemeStyleSliders';
 import {
@@ -35,9 +35,47 @@ import {
   readSidebarSearchBgFollowPref,
   type SidebarSearchBgFollow,
 } from '../../layouts/basicLayout/sidebarSearchBgFollow';
+import {
+  DEFAULT_SIDEBAR_MENU_DENSITY,
+  SIDEBAR_MENU_DENSITY_PREF_KEY,
+  readSidebarMenuDensityPref,
+  type SidebarMenuDensity,
+} from '../../layouts/basicLayout/sidebarMenuDensity';
+import { ThemedSegmented } from '../themed-segmented';
 import '../layout-templates/drawerSlideMotion.css';
 
 const { Text } = Typography;
+
+/** 主题配置 2×2 网格项：窄列下单行说明不换行 */
+const THEME_CONFIG_ITEM_STYLE: React.CSSProperties = { marginBottom: 0, minWidth: 0 };
+const THEME_CONFIG_EXTRA_STYLE: React.CSSProperties = {
+  fontSize: 12,
+  lineHeight: 1.35,
+  display: 'block',
+  whiteSpace: 'nowrap',
+};
+
+/** 主题面板分段：与列表工具栏同款 32px 壳 + 铺满列宽 */
+const THEME_EDITOR_SEGMENTED_PROPS = {
+  surfaceBackground: true,
+  block: true,
+};
+
+/** 标题行内主题风格分段：自适应宽度 + medium 尺寸 */
+const THEME_STYLE_SEGMENTED_PROPS = {
+  surfaceBackground: true,
+  size: 'medium' as const,
+};
+
+type TabsPersistenceFormValue = 'on' | 'off';
+
+function toTabsPersistenceFormValue(enabled: boolean): TabsPersistenceFormValue {
+  return enabled ? 'on' : 'off';
+}
+
+function fromTabsPersistenceFormValue(value: unknown): boolean {
+  return value === 'on' || value === true;
+}
 
 function colorFieldToHex(raw: unknown, fallback: string): string {
   if (!raw) return fallback;
@@ -128,16 +166,42 @@ interface TitleWithHintProps {
   hint?: React.ReactNode;
   /** 标题右侧内联提示（用于压缩卡片高度） */
   inlineTip?: React.ReactNode;
+  /** 标题文字后内联控件（如分段选择器） */
+  suffix?: React.ReactNode;
+  /** suffix 贴标题行右端（需卡片标题区占满宽度） */
+  suffixAlignEnd?: boolean;
 }
 
-const TitleWithHint: React.FC<TitleWithHintProps> = ({ title, hint, inlineTip }) => {
+const TitleWithHint: React.FC<TitleWithHintProps> = ({
+  title,
+  hint,
+  inlineTip,
+  suffix,
+  suffixAlignEnd,
+}) => {
   const { token } = theme.useToken();
+  const suffixNode = suffix
+    ? (
+        <div style={suffixAlignEnd ? { marginLeft: 'auto', flexShrink: 0 } : undefined}>
+          {suffix}
+        </div>
+      )
+    : null;
+  const rowStyle: React.CSSProperties = suffixAlignEnd
+    ? { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', width: '100%' }
+    : { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' };
+
   if (!hint) {
-    return <span>{title}</span>;
+    return (
+      <div style={rowStyle}>
+        <span>{title}</span>
+        {suffixNode}
+      </div>
+    );
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+    <div style={rowStyle}>
       <span>{title}</span>
       {inlineTip ? (
         <div style={{
@@ -187,6 +251,7 @@ const TitleWithHint: React.FC<TitleWithHintProps> = ({ title, hint, inlineTip })
           }}
         />
       </Popover>
+      {suffixNode}
     </div>
   );
 };
@@ -222,7 +287,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
     };
   } | null>(null);
   const [colorMode, setColorMode] = useState<'light' | 'dark' | 'auto'>('light');
-  const [tabsPersistenceValue, setTabsPersistenceValue] = useState<boolean>(false);
   /**
    * B端主流配色最佳实践 - 统一预设颜色配置
    * 
@@ -249,7 +313,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
     { color: '#52c41a', labelKey: 'components.themeEditor.presetPlainColor.successGreen', label: '成功绿' },
     { color: '#f5222d', labelKey: 'components.themeEditor.presetPlainColor.dangerRed', label: '危险红' },
     { color: '#434343', labelKey: 'components.themeEditor.presetPlainColor.graphiteGray', label: '石墨灰' },
-    { color: '#595959', labelKey: 'components.themeEditor.presetPlainColor.neutralGray', label: '中性灰' },
     { color: '#1d39c4', labelKey: 'components.themeEditor.presetPlainColor.navy', label: '藏青' },
   ];
 
@@ -463,6 +526,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
           ? 'split'
           : DEFAULT_SIDEBAR_MENU_LAYOUT;
       const loadedSidebarSearchBgFollow = readSidebarSearchBgFollowPref(prefs);
+      const loadedSidebarMenuDensity = readSidebarMenuDensityPref(prefs);
 
       const formValues = {
         colorPrimary: colorPrimaryValue,
@@ -473,8 +537,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         tabsBgColor: applied.tabsBgColor || '',
         tabBgColor: applied.tabBgColor || '',
         colorMode: userThemeMode,
-        tabsPersistence,
+        tabsPersistence: toTabsPersistenceFormValue(tabsPersistence),
         sidebarSearchBgFollow: loadedSidebarSearchBgFollow,
+        sidebarMenuDensity: loadedSidebarMenuDensity,
         layoutMode: 'mix',
         themeStyle: loadedThemeStyle,
         sidebarMenuLayout: loadedSidebarMenuLayout,
@@ -487,8 +552,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       setHeaderBgColorValue(applied.headerBgColor || '');
       setTabsBgColorValue(applied.tabsBgColor || '');
       setTabBgColorValue(applied.tabBgColor || '');
-      setTabsPersistenceValue(tabsPersistence);
-
       // 应用预览主题
       applyPreviewTheme(form.getFieldsValue(), userThemeMode);
     } catch (error: any) {
@@ -531,9 +594,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
    * 处理表单值变化（实时预览）
    */
   const handleValuesChange = (changedValues: any, allValues: any) => {
-    if (changedValues.tabsPersistence !== undefined) {
-      setTabsPersistenceValue(changedValues.tabsPersistence);
-    }
     // 确保 colorPrimary 是字符串格式
     if (changedValues.colorPrimary) {
       const colorValue = typeof changedValues.colorPrimary === 'string'
@@ -675,11 +735,13 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         'light';
       values.colorMode = resolvedColorMode;
 
-      const tabsPersistenceValue = Boolean(form.getFieldValue('tabsPersistence'));
+      const tabsPersistenceValue = fromTabsPersistenceFormValue(form.getFieldValue('tabsPersistence'));
       const sidebarMenuLayoutValue: SidebarMenuLayout =
         form.getFieldValue('sidebarMenuLayout') === 'split' ? 'split' : DEFAULT_SIDEBAR_MENU_LAYOUT;
       const sidebarSearchBgFollowValue: SidebarSearchBgFollow =
         form.getFieldValue('sidebarSearchBgFollow') === 'tabs' ? 'tabs' : DEFAULT_SIDEBAR_SEARCH_BG_FOLLOW;
+      const sidebarMenuDensityValue: SidebarMenuDensity =
+        form.getFieldValue('sidebarMenuDensity') === 'compact' ? 'compact' : DEFAULT_SIDEBAR_MENU_DENSITY;
 
       const { themeMode, themeConfigForPreference } = buildThemeConfigFromForm(
         values,
@@ -697,6 +759,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         tabs_persistence: tabsPersistenceValue,
         [SIDEBAR_MENU_LAYOUT_PREF_KEY]: sidebarMenuLayoutValue,
         [SIDEBAR_SEARCH_BG_FOLLOW_PREF_KEY]: sidebarSearchBgFollowValue,
+        [SIDEBAR_MENU_DENSITY_PREF_KEY]: sidebarMenuDensityValue,
       });
 
       useThemeStore.getState().applyTheme(themeMode, cleanedThemeConfig);
@@ -731,7 +794,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
 
       const defaultThemeConfig = normalizeThemeConfig({
         colorPrimary: '#1890ff',
-        borderRadius: 6,
+        borderRadius: DEFAULT_THEME_BORDER_RADIUS,
         fontSize: 14,
         siderBgColor: '',
         headerBgColor: '',
@@ -740,7 +803,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         themeStyle: 'vivid',
       });
 
-      setTabsPersistenceValue(true);
       setColorMode('light');
       setColorPrimaryValue('#1890ff');
       setSiderBgColorValue('');
@@ -752,8 +814,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       form.setFieldsValue({
         ...defaultThemeConfig,
         colorMode: 'light',
-        tabsPersistence: true,
+        tabsPersistence: 'on',
         sidebarSearchBgFollow: DEFAULT_SIDEBAR_SEARCH_BG_FOLLOW,
+        sidebarMenuDensity: DEFAULT_SIDEBAR_MENU_DENSITY,
         layoutMode: 'mix',
         themeStyle: 'vivid',
         sidebarMenuLayout: DEFAULT_SIDEBAR_MENU_LAYOUT,
@@ -772,6 +835,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         theme_config: defaultThemeConfig,
         [SIDEBAR_MENU_LAYOUT_PREF_KEY]: DEFAULT_SIDEBAR_MENU_LAYOUT,
         [SIDEBAR_SEARCH_BG_FOLLOW_PREF_KEY]: DEFAULT_SIDEBAR_SEARCH_BG_FOLLOW,
+        [SIDEBAR_MENU_DENSITY_PREF_KEY]: DEFAULT_SIDEBAR_MENU_DENSITY,
       });
 
       useThemeStore.getState().applyTheme('light', defaultThemeConfig);
@@ -850,13 +914,15 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
             onValuesChange={handleValuesChange}
             initialValues={{
               colorPrimary: '#1890ff',
-              borderRadius: 6,
+              borderRadius: DEFAULT_THEME_BORDER_RADIUS,
               fontSize: 14,
               colorMode: 'light',
               layoutMode: 'mix',
               themeStyle: 'vivid',
               sidebarMenuLayout: DEFAULT_SIDEBAR_MENU_LAYOUT,
               sidebarSearchBgFollow: DEFAULT_SIDEBAR_SEARCH_BG_FOLLOW,
+              sidebarMenuDensity: DEFAULT_SIDEBAR_MENU_DENSITY,
+              tabsPersistence: 'on',
             }}
           >
             {/* 颜色模式 */}
@@ -996,54 +1062,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               </Form.Item>
             </Card>
 
-            {/* 主题风格 + 菜单布局：同一行 */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
-                gap: 16,
-                marginBottom: 16,
-              }}
-            >
-              <Card
-                size="small"
-                title={t('ui.theme.style.label')}
-                styles={{ body: { padding: '16px' } }}
-              >
-                <Form.Item name="themeStyle" style={{ marginBottom: 8 }}>
-                  <Segmented
-                    block
-                    options={[
-                      { label: t('ui.theme.style.vivid'), value: 'vivid' },
-                      { label: t('ui.theme.style.plain'), value: 'plain' },
-                    ]}
-                  />
-                </Form.Item>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {isPlainStyle ? t('ui.theme.style.plainDesc') : t('ui.theme.style.vividDesc')}
-                </Text>
-              </Card>
-
-              <Card
-                size="small"
-                title={t('components.themeEditor.sidebarMenuLayout.label')}
-                styles={{ body: { padding: '16px' } }}
-              >
-                <Form.Item name="sidebarMenuLayout" style={{ marginBottom: 8 }}>
-                  <Segmented
-                    block
-                    options={[
-                      { label: t('components.themeEditor.sidebarMenuLayout.flat'), value: 'flat' },
-                      { label: t('components.themeEditor.sidebarMenuLayout.split'), value: 'split' },
-                    ]}
-                  />
-                </Form.Item>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {t('components.themeEditor.sidebarMenuLayout.desc')}
-                </Text>
-              </Card>
-            </div>
-
+            {/* 主题风格及以下：预览主题驱动圆角，分段选择器 thumb 与轨道对齐 */}
+            <ConfigProvider theme={previewTheme || undefined}>
             {/* 主题颜色 */}
             <Card
               size="small"
@@ -1051,11 +1071,30 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 <TitleWithHint
                   title={t('ui.theme.color')}
                   hint={t('components.themeEditor.primaryColor.hint')}
+                  suffixAlignEnd
+                  suffix={
+                    <Form.Item name="themeStyle" noStyle>
+                      <ThemedSegmented
+                        {...THEME_STYLE_SEGMENTED_PROPS}
+                        options={[
+                          { label: t('ui.theme.style.vivid'), value: 'vivid' },
+                          { label: t('ui.theme.style.plain'), value: 'plain' },
+                        ]}
+                      />
+                    </Form.Item>
+                  }
                 />
               }
               style={{ marginBottom: 16 }}
-              styles={{ body: { padding: '16px' } }}
+              styles={{
+                body: { padding: '16px' },
+                header: { width: '100%' },
+                title: { flex: 1, minWidth: 0, width: '100%' },
+              }}
             >
+              <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 16 }}>
+                {isPlainStyle ? t('ui.theme.style.plainDesc') : t('ui.theme.style.vividDesc')}
+              </Text>
               {brandThemeColor && (
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>
@@ -1689,28 +1728,39 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 <Form.Item
                   name="tabsPersistence"
                   label={t('components.themeEditor.tabsPersistence.label')}
-                  valuePropName="checked"
-                  style={{ marginBottom: 0 }}
+                  style={THEME_CONFIG_ITEM_STYLE}
                   extra={
-                    <Text type="secondary" style={{ fontSize: 12 }}>
+                    <Text type="secondary" style={THEME_CONFIG_EXTRA_STYLE}>
                       {t('components.themeEditor.tabsPersistence.desc')}
                     </Text>
                   }
                 >
-                  <Switch />
+                  <ThemedSegmented
+                    {...THEME_EDITOR_SEGMENTED_PROPS}
+                    options={[
+                      {
+                        label: t('pages.personal.preferences.on'),
+                        value: 'on',
+                      },
+                      {
+                        label: t('common.close'),
+                        value: 'off',
+                      },
+                    ]}
+                  />
                 </Form.Item>
                 <Form.Item
                   name="sidebarSearchBgFollow"
                   label={t('components.themeEditor.sidebarSearchBgFollow.label')}
-                  style={{ marginBottom: 0 }}
+                  style={THEME_CONFIG_ITEM_STYLE}
                   extra={
-                    <Text type="secondary" style={{ fontSize: 12 }}>
+                    <Text type="secondary" style={THEME_CONFIG_EXTRA_STYLE}>
                       {t('components.themeEditor.sidebarSearchBgFollow.desc')}
                     </Text>
                   }
                 >
-                  <Segmented
-                    block
+                  <ThemedSegmented
+                    {...THEME_EDITOR_SEGMENTED_PROPS}
                     options={[
                       {
                         label: t('components.themeEditor.sidebarSearchBgFollow.tabs'),
@@ -1723,8 +1773,51 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                     ]}
                   />
                 </Form.Item>
+                <Form.Item
+                  name="sidebarMenuLayout"
+                  label={t('components.themeEditor.sidebarMenuLayout.label')}
+                  style={THEME_CONFIG_ITEM_STYLE}
+                  extra={
+                    <Text type="secondary" style={THEME_CONFIG_EXTRA_STYLE}>
+                      {t('components.themeEditor.sidebarMenuLayout.desc')}
+                    </Text>
+                  }
+                >
+                  <ThemedSegmented
+                    {...THEME_EDITOR_SEGMENTED_PROPS}
+                    options={[
+                      { label: t('components.themeEditor.sidebarMenuLayout.flat'), value: 'flat' },
+                      { label: t('components.themeEditor.sidebarMenuLayout.split'), value: 'split' },
+                    ]}
+                  />
+                </Form.Item>
+                <Form.Item
+                  name="sidebarMenuDensity"
+                  label={t('components.themeEditor.sidebarMenuDensity.label')}
+                  style={THEME_CONFIG_ITEM_STYLE}
+                  extra={
+                    <Text type="secondary" style={THEME_CONFIG_EXTRA_STYLE}>
+                      {t('components.themeEditor.sidebarMenuDensity.desc')}
+                    </Text>
+                  }
+                >
+                  <ThemedSegmented
+                    {...THEME_EDITOR_SEGMENTED_PROPS}
+                    options={[
+                      {
+                        label: t('components.themeEditor.sidebarMenuDensity.standard'),
+                        value: 'standard',
+                      },
+                      {
+                        label: t('components.themeEditor.sidebarMenuDensity.compact'),
+                        value: 'compact',
+                      },
+                    ]}
+                  />
+                </Form.Item>
               </div>
             </Card>
+            </ConfigProvider>
           </Form>
 
           <Divider style={{ margin: '24px 0' }}>

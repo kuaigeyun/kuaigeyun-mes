@@ -227,13 +227,24 @@ export function resolveUniTableOperationColumnWidth(col: {
 }): number | undefined {
   if (col.fixed !== 'right') return undefined;
   const options = col.uniActionRenderOptions;
-  const directMax =
+  const slotOptions =
     options && typeof options === 'object'
-      ? (options as { directMax?: unknown }).directMax
+      ? {
+          directMax: (options as { directMax?: unknown }).directMax,
+          minPrimaryVisible: (options as { minPrimaryVisible?: unknown }).minPrimaryVisible,
+        }
       : undefined;
-  return resolveUniTableOperationWidthForSlots(
-    resolveRowActionInlineSlots(typeof directMax === 'number' ? directMax : undefined),
-  );
+  const resolvedSlotOptions =
+    slotOptions &&
+    (typeof slotOptions.directMax === 'number' || typeof slotOptions.minPrimaryVisible === 'number')
+      ? {
+          ...(typeof slotOptions.directMax === 'number' ? { directMax: slotOptions.directMax } : {}),
+          ...(typeof slotOptions.minPrimaryVisible === 'number'
+            ? { minPrimaryVisible: slotOptions.minPrimaryVisible }
+            : {}),
+        }
+      : undefined;
+  return resolveUniTableOperationWidthForSlots(resolveRowActionInlineSlots(resolvedSlotOptions));
 }
 
 export function getUniTableLifecycleCellClassName(col: { fixed?: unknown }): string {

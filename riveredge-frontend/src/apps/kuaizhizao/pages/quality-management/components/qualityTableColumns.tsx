@@ -27,6 +27,7 @@ import {
   hasInspectionPlanSteps,
 } from './inspectionTemplateUtils';
 import { renderNcSourceInspectionStackedCell } from '../nonconforming-ledger/ncLedgerSource';
+import { resolveQualityInspectionKindMarkerColor } from './qualityMeta';
 
 /** 不良处理源检验单列 key → rank 10.6（台账编号后） */
 export const NC_SOURCE_INSPECTION_KEY = 'nc_source_inspection';
@@ -260,7 +261,7 @@ export function buildQualityInspectionListKindColumn<T extends object>(t: TFunct
         getInspectionTemplateSource(record as Record<string, unknown>),
       );
       return (
-        <MarkerTag color={isPlan ? 'processing' : 'default'}>
+        <MarkerTag color={resolveQualityInspectionKindMarkerColor(isPlan)}>
           {isPlan
             ? t('app.kuaizhizao.quality.common.inspectionKind.plan')
             : t('app.kuaizhizao.quality.common.inspectionKind.simple')}

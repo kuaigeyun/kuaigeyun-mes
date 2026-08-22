@@ -246,6 +246,45 @@ export const TWO_COLUMN_LAYOUT = {
 } as const;
 
 /**
+ * 两栏左栏背景：在 layout 底色上略加深，与标签栏/内容区（常同 colorBgLayout）拉开层次。
+ */
+export const TWO_COLUMN_LEFT_PANEL_BACKGROUND =
+  'color-mix(in srgb, var(--ant-color-bg-layout, #f5f5f5) 58%, var(--ant-color-fill-secondary, #e8e8e8) 42%)';
+
+/** 自定义字段 / 编号规则等：左侧功能页面列表项（默认与 hover 同为 fill-secondary） */
+export const FEATURE_PAGE_LIST_ITEM_CLASS = 'feature-page-list-item';
+
+/** 功能页右栏标题行背景（与 TwoColumnLayout header 槽位配合） */
+export const FEATURE_PAGE_RIGHT_PANEL_HEADER_STYLE: CSSProperties = {
+  backgroundColor: 'var(--ant-color-fill-alter, #fafafa)',
+};
+
+/** 功能页右栏标题行：名称 + 路径同排 */
+export const FEATURE_PAGE_RIGHT_PANEL_TITLE_ROW_STYLE: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  minWidth: 0,
+  flex: 1,
+};
+
+export const FEATURE_PAGE_RIGHT_PANEL_NAME_STYLE: CSSProperties = {
+  fontSize: 14,
+  fontWeight: 500,
+  flexShrink: 0,
+  lineHeight: '32px',
+};
+
+export const FEATURE_PAGE_RIGHT_PANEL_PATH_STYLE: CSSProperties = {
+  fontSize: 12,
+  lineHeight: '32px',
+  minWidth: 0,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+};
+
+/**
  * 画板页布局配置（审批流设计、BOM 设计等带画布的页面）
  */
 export const CANVAS_PAGE_LAYOUT = {

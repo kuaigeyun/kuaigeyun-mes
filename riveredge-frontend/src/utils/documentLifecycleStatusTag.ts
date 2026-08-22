@@ -11,6 +11,7 @@ import { resolveDocumentStatusTagColor } from '../constants/documentStatusColors
 import {
   RE_STATUS_BADGE_DRAFT,
   RE_STATUS_BADGE_DRAFT_CLASS,
+  RE_STATUS_BADGE_CLASS,
   STATUS_TAG_VARIANT,
   StatusTag,
 } from '../constants/statusBadges';
@@ -24,14 +25,17 @@ export function getDocumentLifecycleStageTagProps(
 ): Pick<TagProps, 'color' | 'className' | 'variant'> {
   const raw = (stageNameOrCode ?? '').trim();
   if (!raw || raw === '-' || raw === '—') {
-    return { color: 'default', variant: STATUS_TAG_VARIANT };
+    return { color: 'default', variant: STATUS_TAG_VARIANT, className: RE_STATUS_BADGE_CLASS };
   }
 
   const color = resolveDocumentStatusTagColor(raw);
   if (color === RE_STATUS_BADGE_DRAFT) {
-    return { className: RE_STATUS_BADGE_DRAFT_CLASS, variant: STATUS_TAG_VARIANT };
+    return {
+      className: [RE_STATUS_BADGE_DRAFT_CLASS, RE_STATUS_BADGE_CLASS].join(' '),
+      variant: STATUS_TAG_VARIANT,
+    };
   }
-  return { color, variant: STATUS_TAG_VARIANT };
+  return { color, variant: STATUS_TAG_VARIANT, className: RE_STATUS_BADGE_CLASS };
 }
 
 /**

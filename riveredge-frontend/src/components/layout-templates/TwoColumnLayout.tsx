@@ -47,7 +47,7 @@ import { Input, Space, Spin, Tree, theme } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { DataNode, TreeProps } from 'antd/es/tree';
-import { TWO_COLUMN_LAYOUT } from './constants';
+import { TWO_COLUMN_LAYOUT, TWO_COLUMN_LEFT_PANEL_BACKGROUND } from './constants';
 
 const { useToken } = theme;
 
@@ -164,6 +164,10 @@ export interface RightPanelConfig {
     right?: ReactNode;
   };
   /**
+   * 顶部工具栏附加样式（如功能页标题行背景色）
+   */
+  headerStyle?: React.CSSProperties;
+  /**
    * 内容区（必需）
    */
   content: ReactNode;
@@ -227,6 +231,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
 
   const {
     header,
+    headerStyle,
     content,
     footer,
     contentBackgroundColor = token.colorFillAlter || '#fafafa',
@@ -286,7 +291,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
         ...style,
       }}
     >
-      {/* 左侧面板：中灰用 token.colorBgLayout，不用 --ant-colorBgLayout（已被标签背景改写） */}
+      {/* 左侧面板：略深于 layout，避免与标签栏背景贴太近 */}
       <div
         className="two-column-layout-left"
         style={{
@@ -297,7 +302,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
           borderBottom: `1px solid ${token.colorBorder}`,
           borderLeft: `1px solid ${token.colorBorder}`,
           borderRight: collapsed ? 'none' : `1px solid ${token.colorBorder}`,
-          backgroundColor: token.colorBgLayout,
+          backgroundColor: TWO_COLUMN_LEFT_PANEL_BACKGROUND,
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
@@ -364,7 +369,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
               overflow: 'auto',
               display: 'flex',
               flexDirection: 'column',
-              backgroundColor: token.colorBgLayout,
+              backgroundColor: TWO_COLUMN_LEFT_PANEL_BACKGROUND,
             }}
           >
             {leftContent}
@@ -377,7 +382,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
               minHeight: 0,
               overflow: 'auto',
               padding: '8px',
-              backgroundColor: token.colorBgLayout,
+              backgroundColor: TWO_COLUMN_LEFT_PANEL_BACKGROUND,
             }}
           >
             {treeProps.loading ? (
@@ -436,6 +441,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
               height: TWO_COLUMN_LAYOUT.PANEL_HEADER_HEIGHT,
               boxSizing: 'border-box',
               lineHeight: '32px',
+              ...headerStyle,
             }}
           >
             {header.left && <Space>{header.left}</Space>}

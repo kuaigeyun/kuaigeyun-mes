@@ -35,7 +35,7 @@ import { resolveIsInfraSuperAdminSession } from './utils/infraSuperAdminSession'
 import { getSessionCurrentUser } from './utils/sessionCurrentUser';
 import { buildRestoredUserFromStorage, seedCurrentUserFromAuthStorage } from './utils/restoredUser';
 import { isEquivalentCurrentUser } from './utils/currentUserSnapshot';
-import { NAVIGATION_MENU_TREE_QUERY_KEY } from './hooks/useNavigationMenuTreeQuery';
+import { CURRENT_USER_QUERY_ROOT } from './config/sessionQueries';
 import { queryClient } from './queryClient';
 import { refreshAccessTokenDetailed } from './utils/tokenRefresh';
 import { prefetchAvatarUrl } from './utils/avatar';
@@ -218,7 +218,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     }
   }, [currentUser, isPublicPath]);
 
-  // 拉取当前用户失败的兜底：优先从 localStorage 恢复；否则退出到登录页
+  // 拉取当前用户失败：先尝试静默续期；网络失败保留会话；仅续期被拒或无缓存时才清认证
   useEffect(() => {
     if (!isError) return;
     const token = getToken();
@@ -227,15 +227,40 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       setCurrentUser(undefined);
       return;
     }
-    const restoredUser = buildRestoredUserFromStorage();
-    if (restoredUser) {
-      setCurrentUser(restoredUser);
-      setUserInfo(restoredUser);
-      console.warn('获取用户信息失败，使用本地缓存:', error);
-    } else {
+
+    let cancelled = false;
+
+    void (async () => {
+      const restoredUser = buildRestoredUserFromStorage();
+      if (restoredUser) {
+        if (!cancelled) {
+          setCurrentUser(restoredUser);
+          setUserInfo(restoredUser);
+          console.warn('获取用户信息失败，使用本地缓存:', error);
+        }
+        return;
+      }
+
+      const refreshResult = await refreshAccessTokenDetailed();
+      if (cancelled) return;
+
+      if (refreshResult.ok) {
+        await queryClient.invalidateQueries({ queryKey: [CURRENT_USER_QUERY_ROOT] });
+        return;
+      }
+
+      if (refreshResult.reason === 'network') {
+        console.warn('获取用户信息失败且续期网络异常，暂保留会话:', error);
+        return;
+      }
+
       clearAuth();
       setCurrentUser(undefined);
-    }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [isError, error, setCurrentUser]);
 
   useEffect(() => {
@@ -255,6 +280,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   /** 拆出具体项作依赖，避免 fetchConfigs 更新后定时器仍闭包旧阈值 */
   const tokenCheckIntervalSec = useConfigStore((s) => s.configs['security.token_check_interval']);
   const inactivityTimeoutSec = useConfigStore((s) => s.configs['security.inactivity_timeout']);
+  const configInitialized = useConfigStore((s) => s.initialized);
 
   // 监听用户活动；API 请求由 api.ts 在请求结束（含失败）时强制刷新活动时间
   useEffect(() => {
@@ -399,11 +425,9 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       if (remaining > 0 && remaining < proactiveRefreshMs) {
         const proactive = await refreshAccessTokenDetailed();
         if (cancelled) return false;
-        // 临近过期时的网络失败：保留会话，下个周期再试
+        // 访问令牌仍有效时续期失败：仅记录，下个周期再试；禁止误踢操作中用户
         if (!proactive.ok && proactive.reason === 'rejected') {
-          console.warn('⚠️ TOKEN 临近过期且续期被拒绝，清除认证信息并跳转到登录页');
-          handleLogout();
-          return false;
+          console.warn('⚠️ TOKEN 临近过期但续期被拒绝，访问令牌仍有效，保留会话待下次续期');
         }
       }
 
@@ -423,7 +447,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
         }
       }
 
-      if (inactivityTimeout > 0) {
+      if (inactivityTimeout > 0 && configInitialized) {
         // 后台标签 / 窗口失焦不累计、不踢出；切回时由 bumpLastActivityBy 暂停补偿
         if (typeof document !== 'undefined') {
           if (document.visibilityState !== 'visible') {
@@ -516,6 +540,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     message,
     tokenCheckIntervalSec,
     inactivityTimeoutSec,
+    configInitialized,
     navigate,
   ]);
 

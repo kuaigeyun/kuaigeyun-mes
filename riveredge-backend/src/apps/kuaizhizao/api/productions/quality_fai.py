@@ -91,7 +91,7 @@ async def create_fai_order(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> FaiOrderResponse:
-    return await fai_service.create_order(tenant_id=tenant_id, payload=payload)
+    return await fai_service.create_order(tenant_id=tenant_id, payload=payload, user=current_user)
 
 
 @router.get("/fai-orders", response_model=FaiOrderListResponse, summary="List FAI orders")
@@ -135,7 +135,9 @@ async def update_fai_order(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> FaiOrderResponse:
-    return await fai_service.update_order(tenant_id=tenant_id, order_id=order_id, payload=payload)
+    return await fai_service.update_order(
+        tenant_id=tenant_id, order_id=order_id, payload=payload, user=current_user
+    )
 
 
 @router.delete("/fai-orders/{order_id}", summary="Delete FAI order")
@@ -145,7 +147,7 @@ async def delete_fai_order(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    await fai_service.delete_order(tenant_id=tenant_id, order_id=order_id)
+    await fai_service.delete_order(tenant_id=tenant_id, order_id=order_id, user=current_user)
     return {"success": True}
 
 
@@ -156,7 +158,7 @@ async def submit_fai_order(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> FaiOrderResponse:
-    return await fai_service.submit(tenant_id=tenant_id, order_id=order_id)
+    return await fai_service.submit(tenant_id=tenant_id, order_id=order_id, user=current_user)
 
 
 @router.post("/fai-orders/{order_id}/approve", response_model=FaiOrderResponse, summary="Approve FAI")
@@ -166,12 +168,7 @@ async def approve_fai_order(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> FaiOrderResponse:
-    return await fai_service.approve(
-        tenant_id=tenant_id,
-        order_id=order_id,
-        user_id=current_user.id,
-        user_name=getattr(current_user, "display_name", None) or getattr(current_user, "username", None),
-    )
+    return await fai_service.approve(tenant_id=tenant_id, order_id=order_id, user=current_user)
 
 
 @router.post("/fai-orders/{order_id}/reject", response_model=FaiOrderResponse, summary="Reject FAI")
@@ -182,7 +179,9 @@ async def reject_fai_order(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> FaiOrderResponse:
-    return await fai_service.reject(tenant_id=tenant_id, order_id=order_id, remarks=remarks)
+    return await fai_service.reject(
+        tenant_id=tenant_id, order_id=order_id, remarks=remarks, user=current_user
+    )
 
 
 @router.post("/fai-orders/{order_id}/close", response_model=FaiOrderResponse, summary="Close FAI")
@@ -192,7 +191,7 @@ async def close_fai_order(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> FaiOrderResponse:
-    return await fai_service.close(tenant_id=tenant_id, order_id=order_id)
+    return await fai_service.close(tenant_id=tenant_id, order_id=order_id, user=current_user)
 
 
 @router.post(
@@ -207,7 +206,9 @@ async def import_fai_from_plan(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> FaiOrderResponse:
-    return await fai_service.import_from_plan(tenant_id=tenant_id, order_id=order_id, payload=payload)
+    return await fai_service.import_from_plan(
+        tenant_id=tenant_id, order_id=order_id, payload=payload, user=current_user
+    )
 
 
 @router.get(
@@ -236,7 +237,9 @@ async def confirm_fai_balloons(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> FaiOrderResponse:
-    return await fai_service.confirm_balloons(tenant_id=tenant_id, order_id=order_id, payload=payload)
+    return await fai_service.confirm_balloons(
+        tenant_id=tenant_id, order_id=order_id, payload=payload, user=current_user
+    )
 
 
 @router.put(
@@ -256,6 +259,7 @@ async def save_balloon_candidates(
         tenant_id=tenant_id,
         order_id=order_id,
         payload=FaiOrderUpdate(balloon_candidates=candidates, drawing_file_url=drawing_file_url),
+        user=current_user,
     )
 
 
@@ -294,5 +298,6 @@ async def ocr_fai_balloons(
             payload=FaiOrderUpdate(
                 balloon_candidates=[c.model_dump(exclude_none=True) for c in result.candidates]
             ),
+            user=current_user,
         )
     return result

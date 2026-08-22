@@ -95,9 +95,12 @@ export function buildEightDListStepNodes(
   });
 }
 
-/** 与 WorkOrderOperationStepsStrip compact 默认单槽宽对齐略宽；9 节点完整展开列宽 */
+/** 列表阶段节点轴单槽宽（D1–D8 / 已关闭 标签较短，略窄于工单工序列） */
 export const EIGHT_D_LIST_STEP_SLOT_PX = 60;
-export const EIGHT_D_LIST_STAGE_COLUMN_WIDTH = EIGHT_D_STATUS_ORDER.length * EIGHT_D_LIST_STEP_SLOT_PX;
+/** 列宽 = 节点条带宽 + 单元格 inline padding 余量，避免 strip 与列宽相等触发横滚 */
+export const EIGHT_D_LIST_STAGE_COLUMN_PADDING_BUFFER = 32;
+export const EIGHT_D_LIST_STAGE_COLUMN_WIDTH =
+  EIGHT_D_STATUS_ORDER.length * EIGHT_D_LIST_STEP_SLOT_PX + EIGHT_D_LIST_STAGE_COLUMN_PADDING_BUFFER;
 
 export function resolveEightDSourceDisplay(
   t: TFunction,

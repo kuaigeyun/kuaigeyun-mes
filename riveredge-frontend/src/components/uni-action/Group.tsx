@@ -14,10 +14,15 @@ export function UniActionGroup({
   rowKey,
   children,
   directMax,
+  minPrimaryVisible,
   suppressAuditSemanticActions,
 }: UniActionGroupProps): React.ReactNode {
   const arr = React.Children.toArray(children).filter(Boolean)
   if (arr.length === 0) return null
   const payload: React.ReactNode = arr.length === 1 ? arr[0] : arr
-  return renderUniTableOperationCell(payload, rowKey, { directMax, suppressAuditSemanticActions })
+  return renderUniTableOperationCell(payload, rowKey, {
+    directMax,
+    minPrimaryVisible,
+    suppressAuditSemanticActions,
+  })
 }

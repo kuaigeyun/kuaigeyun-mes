@@ -8,26 +8,37 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Col, Empty, Input, InputNumber, Row, Space, Table } from 'antd';
-import { DeleteOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EyeOutlined, CheckOutlined, CloseOutlined, SendOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import CodeField from '../../../../../components/code-field';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniTable } from '../../../../../components/uni-table';
-import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { rowActionBalloonAnnotate, rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import {
+  buildQualityInspectionListMaterialColumn,
+  buildQualityInspectionListMaterialHiddenColumns,
+} from '../components/qualityTableColumns';
+import { MaterialStackedCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { faiOrderApi, FaiCharacteristic, FaiOrder } from '../../../services/fai-order';
 import { inspectionPlanApi } from '../../../services/production';
 import { renderFaiConclusionTag, renderFaiStatusTag } from '../components/qualityMeta';
 import { faiBalloonPath } from './paths';
 
 const RESOURCE = 'kuaizhizao:quality-management-fai-orders';
+
+const FAI_BATCH_SUBMIT_STATUSES = new Set(['draft', 'in_progress', 'rejected']);
+const FAI_BATCH_DELETABLE_STATUSES = new Set(['draft', 'rejected']);
 
 const TRIGGER_OPTIONS = [
   { value: 'new_part', labelKey: 'app.kuaizhizao.quality.fai.trigger.newPart' },
@@ -59,7 +70,9 @@ const FaiOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const tableRowsRef = useRef<FaiOrder[]>([]);
   const formRef = useRef<any>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<FaiOrder | null>(null);
   const [chars, setChars] = useState<FaiCharacteristic[]>([emptyChar(1)]);
@@ -70,13 +83,143 @@ const FaiOrdersPage: React.FC = () => {
   const canApprove = !!canAction?.('approve');
   const canReject = !!canAction?.('reject');
   const canExport = !!canAction?.('export');
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
+
+  const resolveSelectedRows = useCallback((keys: React.Key[]) => {
+    const keySet = new Set(keys.map(String));
+    return tableRowsRef.current.filter((row) => row.id != null && keySet.has(String(row.id)));
+  }, []);
+
+  const runFaiBatchAction = useCallback(
+    async (
+      rows: FaiOrder[],
+      runner: (id: number) => Promise<unknown>,
+      emptyMessage: string,
+      successMessage: (count: number) => string,
+    ) => {
+      if (!rows.length) {
+        messageApi.warning(emptyMessage);
+        return;
+      }
+      let success = 0;
+      let failed = 0;
+      for (const row of rows) {
+        try {
+          await runner(row.id);
+          success += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+      if (success > 0) {
+        messageApi.success(successMessage(success));
+        setSelectedRowKeys([]);
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
+      }
+      if (failed > 0) {
+        messageApi.warning(t('components.uniBatch.capability.partial', { success, failed }));
+      }
+    },
+    [invalidateMenuBadgeCounts, messageApi, t],
+  );
+
+  const batchMenuItems = useMemo(() => {
+    const selected = resolveSelectedRows(selectedRowKeys);
+    const submittable = selected.filter((row) => FAI_BATCH_SUBMIT_STATUSES.has(row.status ?? ''));
+    const reviewable = selected.filter((row) => row.status === 'submitted');
+    const items: Array<{
+      key: string;
+      label: React.ReactNode;
+      icon?: React.ReactNode;
+      disabled?: boolean;
+      requireConfirm?: boolean;
+      confirmTitle?: React.ReactNode;
+      confirmDescription?: React.ReactNode;
+      onClick: (keys: React.Key[]) => void | Promise<void>;
+    }> = [];
+
+    if (canSubmit) {
+      items.push({
+        key: 'batch-submit',
+        label: t('components.uniBatch.audit.submit'),
+        icon: <SendOutlined />,
+        disabled: submittable.length === 0,
+        requireConfirm: true,
+        confirmTitle: t('components.uniBatch.audit.submit'),
+        confirmDescription: t('app.kuaizhizao.quality.fai.batch.submitConfirm', {
+          count: submittable.length,
+        }),
+        onClick: () =>
+          runFaiBatchAction(
+            submittable,
+            (id) => faiOrderApi.submit(id),
+            t('app.kuaizhizao.quality.fai.batch.submitNotAllowed'),
+            (count) => t('app.kuaizhizao.quality.fai.batch.submitSuccess', { count }),
+          ),
+      });
+    }
+    if (canApprove) {
+      items.push({
+        key: 'batch-approve',
+        label: t('components.uniBatch.audit.approve'),
+        icon: <CheckOutlined />,
+        disabled: reviewable.length === 0,
+        requireConfirm: true,
+        confirmTitle: t('components.uniBatch.audit.approve'),
+        confirmDescription: t('app.kuaizhizao.quality.fai.batch.approveConfirm', {
+          count: reviewable.length,
+        }),
+        onClick: () =>
+          runFaiBatchAction(
+            reviewable,
+            (id) => faiOrderApi.approve(id),
+            t('app.kuaizhizao.quality.fai.batch.approveNotAllowed'),
+            (count) => t('app.kuaizhizao.quality.fai.batch.approveSuccess', { count }),
+          ),
+      });
+    }
+    if (canReject) {
+      items.push({
+        key: 'batch-reject',
+        label: t('app.kuaizhizao.quality.fai.batch.reject'),
+        icon: <CloseOutlined />,
+        disabled: reviewable.length === 0,
+        requireConfirm: true,
+        confirmTitle: t('app.kuaizhizao.quality.fai.batch.reject'),
+        confirmDescription: t('app.kuaizhizao.quality.fai.batch.rejectConfirm', {
+          count: reviewable.length,
+        }),
+        onClick: () =>
+          runFaiBatchAction(
+            reviewable,
+            (id) => faiOrderApi.reject(id),
+            t('app.kuaizhizao.quality.fai.batch.rejectNotAllowed'),
+            (count) => t('app.kuaizhizao.quality.fai.batch.rejectSuccess', { count }),
+          ),
+      });
+    }
+    return items;
+  }, [
+    canApprove,
+    canReject,
+    canSubmit,
+    resolveSelectedRows,
+    runFaiBatchAction,
+    selectedRowKeys,
+    t,
+  ]);
+
+  const editableStatuses = ['draft', 'in_progress', 'rejected'] as const;
+  const isFaiOrderEditable = (status?: string) =>
+    editableStatuses.includes(status as (typeof editableStatuses)[number]);
 
   const statusEnum = useMemo(
     () => Object.fromEntries(STATUS_OPTIONS.map((o) => [o.value, { text: t(o.labelKey) }])),
     [t],
   );
 
-  const editable = !editing || ['draft', 'in_progress', 'rejected'].includes(editing.status);
+  const editable = !editing || isFaiOrderEditable(editing.status);
 
   const openCreate = useCallback(() => {
     setEditing(null);
@@ -112,6 +255,205 @@ const FaiOrdersPage: React.FC = () => {
     [navigate],
   );
 
+  const handleSubmitRow = useCallback(
+    async (row: FaiOrder) => {
+      await faiOrderApi.submit(row.id);
+      messageApi.success(t('app.kuaizhizao.quality.fai.messages.submitSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    },
+    [invalidateMenuBadgeCounts, messageApi, t],
+  );
+
+  const handleApproveRow = useCallback(
+    async (row: FaiOrder) => {
+      await faiOrderApi.approve(row.id);
+      messageApi.success(t('app.kuaizhizao.quality.fai.messages.approveSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    },
+    [invalidateMenuBadgeCounts, messageApi, t],
+  );
+
+  const handleRejectRow = useCallback(
+    async (row: FaiOrder) => {
+      await faiOrderApi.reject(row.id);
+      messageApi.success(t('app.kuaizhizao.quality.fai.messages.rejectSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    },
+    [invalidateMenuBadgeCounts, messageApi, t],
+  );
+
+  const handleExportFairRow = useCallback(async (row: FaiOrder) => {
+    const fair = await faiOrderApi.fairExport(row.id);
+    const blob = new Blob([JSON.stringify(fair, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${fair.fai_code || 'FAIR'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const handleDeleteRow = useCallback(
+    async (row: FaiOrder) => {
+      await faiOrderApi.delete(row.id);
+      messageApi.success(t('common.deleteSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    },
+    [invalidateMenuBadgeCounts, messageApi, t],
+  );
+
+  const renderFaiRowNodes = useCallback(
+    (row: FaiOrder): React.ReactNode[] => {
+      const editable = isFaiOrderEditable(row.status);
+      const nodes: React.ReactNode[] = [];
+
+      if (canRead) {
+        nodes.push(
+          <Button
+            {...rowActionKind('read')}
+            key="detail"
+            size="small"
+            type="link"
+            icon={<EyeOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              void openEdit(row);
+            }}
+          >
+            {t('common.detail')}
+          </Button>,
+        );
+      }
+      if (canRead || canUpdate) {
+        nodes.push(
+          <Button
+            {...rowActionBalloonAnnotate(canRead ? 'read' : 'update')}
+            key="balloon"
+            size="small"
+            type="link"
+            onClick={(e) => {
+              e.stopPropagation();
+              openBalloon(row);
+            }}
+          />,
+        );
+      }
+      if (canUpdate && editable) {
+        nodes.push(
+          <Button
+            {...rowActionKind('update')}
+            key="edit"
+            size="small"
+            type="link"
+            onClick={(e) => {
+              e.stopPropagation();
+              void openEdit(row);
+            }}
+          >
+            {t('common.edit')}
+          </Button>,
+        );
+      }
+      if (canSubmit && editable) {
+        nodes.push(
+          <Button
+            {...rowActionKind('submit')}
+            key="submit"
+            size="small"
+            type="link"
+            onClick={(e) => {
+              e.stopPropagation();
+              void handleSubmitRow(row);
+            }}
+          >
+            {t('common.submit')}
+          </Button>,
+        );
+      }
+      if (canApprove && row.status === 'submitted') {
+        nodes.push(
+          <Button
+            {...rowActionKind('approve')}
+            key="approve"
+            size="small"
+            type="link"
+            onClick={(e) => {
+              e.stopPropagation();
+              void handleApproveRow(row);
+            }}
+          />,
+        );
+      }
+      if (canReject && row.status === 'submitted') {
+        nodes.push(
+          <Button
+            {...rowActionKind('reject')}
+            key="reject"
+            size="small"
+            type="link"
+            onClick={(e) => {
+              e.stopPropagation();
+              void handleRejectRow(row);
+            }}
+          />,
+        );
+      }
+      if (canExport) {
+        nodes.push(
+          <Button
+            {...rowActionKind('export')}
+            {...rowActionLabelKeep()}
+            key="export"
+            size="small"
+            type="link"
+            onClick={(e) => {
+              e.stopPropagation();
+              void handleExportFairRow(row);
+            }}
+          >
+            {t('app.kuaizhizao.quality.fai.actions.exportFair')}
+          </Button>,
+        );
+      }
+      if (canDelete && editable) {
+        nodes.push(
+          <Button
+            {...rowActionKind('delete')}
+            key="delete"
+            size="small"
+            type="link"
+            onClick={(e) => {
+              e.stopPropagation();
+              void handleDeleteRow(row);
+            }}
+          >
+            {t('common.delete')}
+          </Button>,
+        );
+      }
+      return nodes;
+    },
+    [
+      canDelete,
+      canExport,
+      canRead,
+      canReject,
+      canSubmit,
+      canUpdate,
+      handleApproveRow,
+      handleDeleteRow,
+      handleExportFairRow,
+      handleRejectRow,
+      handleSubmitRow,
+      openBalloon,
+      t,
+    ],
+  );
+
   const columns: ProColumns<FaiOrder>[] = useMemo(
     () =>
       alignProColumns(
@@ -120,12 +462,21 @@ const FaiOrdersPage: React.FC = () => {
             title: t('app.kuaizhizao.quality.fai.faiCode'),
             dataIndex: 'fai_code',
             width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: false,
             copyable: true,
             hideInSearch: true,
           },
           {
+            // 余宽在 uniTablePrimaryFlexMaxWidth 内分给标题列（与 8D / 来料等列表同一引擎契约）
             title: t('app.kuaizhizao.quality.fai.title'),
             dataIndex: 'title',
+            minWidth: 200,
+            uniTablePrimaryFlex: true,
+            uniTablePrimaryFlexMaxWidth: 480,
+            resizable: false,
             ellipsis: true,
             hideInSearch: true,
           },
@@ -135,16 +486,22 @@ const FaiOrdersPage: React.FC = () => {
             hideInTable: true,
           },
           {
-            title: t('app.kuaizhizao.quality.fai.material'),
-            dataIndex: 'material_code',
-            width: 120,
-            hideInSearch: true,
-            render: (_, r) => r.material_code || r.part_number || '-',
+            ...buildQualityInspectionListMaterialColumn<FaiOrder>(t),
+            render: (_, r) => (
+              <MaterialStackedCell
+                material_name={r.material_name || r.part_name}
+                material_code={r.material_code || r.part_number}
+              />
+            ),
           },
+          ...buildQualityInspectionListMaterialHiddenColumns<FaiOrder>(t),
           {
             title: t('app.kuaizhizao.quality.fai.workOrder'),
             dataIndex: 'work_order_code',
-            width: 120,
+            width: 150,
+            minWidth: 150,
+            uniTableKeepWidth: true,
+            resizable: false,
             hideInSearch: true,
           },
           {
@@ -156,6 +513,7 @@ const FaiOrdersPage: React.FC = () => {
             hideInSearch: true,
             render: (_, r) => renderFaiConclusionTag(t, r.conclusion),
           },
+          ...buildDocumentAuditColumns<FaiOrder>(t),
           {
             title: t('common.status'),
             dataIndex: 'status',
@@ -168,131 +526,19 @@ const FaiOrdersPage: React.FC = () => {
             dataIndex: 'status',
             fixed: 'right',
             hideInSearch: true,
-            width: 96,
-            minWidth: 96,
-            uniTableKeepWidth: true,
             render: (_, r) => renderFaiStatusTag(t, r.status),
           },
           {
             title: t('common.actions'),
             key: 'action',
-            valueType: 'option',
             fixed: 'right',
-            render: (_, row) => [
-              <Button
-                key="view"
-                {...rowActionKind(
-                  canUpdate && ['draft', 'in_progress', 'rejected'].includes(row.status)
-                    ? 'update'
-                    : 'read',
-                )}
-                onClick={() => void openEdit(row)}
-              >
-                {canUpdate && ['draft', 'in_progress', 'rejected'].includes(row.status)
-                  ? t('common.edit')
-                  : t('common.view')}
-              </Button>,
-              canRead || canUpdate ? (
-                <Button
-                  key="balloon"
-                  {...rowActionKind('update')}
-                  {...rowActionLabelKeep()}
-                  onClick={() => openBalloon(row)}
-                >
-                  {t('app.kuaizhizao.quality.fai.actions.balloon')}
-                </Button>
-              ) : null,
-              canSubmit && ['draft', 'in_progress', 'rejected'].includes(row.status) ? (
-                <Button
-                  key="submit"
-                  {...rowActionKind('submit')}
-                  onClick={async () => {
-                    await faiOrderApi.submit(row.id);
-                    messageApi.success(t('app.kuaizhizao.quality.fai.messages.submitSuccess'));
-                    actionRef.current?.reload();
-                  }}
-                >
-                  {t('common.submit')}
-                </Button>
-              ) : null,
-              canApprove && row.status === 'submitted' ? (
-                <Button
-                  key="approve"
-                  {...rowActionKind('approve')}
-                  onClick={async () => {
-                    await faiOrderApi.approve(row.id);
-                    messageApi.success(t('app.kuaizhizao.quality.fai.messages.approveSuccess'));
-                    actionRef.current?.reload();
-                  }}
-                >
-                  {t('app.kuaizhizao.quality.fai.actions.approve')}
-                </Button>
-              ) : null,
-              canReject && row.status === 'submitted' ? (
-                <Button
-                  key="reject"
-                  {...rowActionKind('reject')}
-                  onClick={async () => {
-                    await faiOrderApi.reject(row.id);
-                    messageApi.success(t('app.kuaizhizao.quality.fai.messages.rejectSuccess'));
-                    actionRef.current?.reload();
-                  }}
-                >
-                  {t('app.kuaizhizao.quality.fai.actions.reject')}
-                </Button>
-              ) : null,
-              canExport ? (
-                <Button
-                  key="export"
-                  {...rowActionKind('export')}
-                  {...rowActionLabelKeep()}
-                  onClick={async () => {
-                    const fair = await faiOrderApi.fairExport(row.id);
-                    const blob = new Blob([JSON.stringify(fair, null, 2)], {
-                      type: 'application/json',
-                    });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${fair.fai_code || 'FAIR'}.json`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                >
-                  {t('app.kuaizhizao.quality.fai.actions.exportFair')}
-                </Button>
-              ) : null,
-              canDelete && ['draft', 'rejected'].includes(row.status) ? (
-                <Button
-                  key="delete"
-                  {...rowActionKind('delete')}
-                  onClick={async () => {
-                    await faiOrderApi.delete(row.id);
-                    messageApi.success(t('common.deleteSuccess'));
-                    actionRef.current?.reload();
-                  }}
-                >
-                  {t('common.delete')}
-                </Button>
-              ) : null,
-            ],
+            hideInSearch: true,
+            render: (_, row) => renderFaiRowNodes(row),
           },
         ],
         GLOBAL_DOC_LIST_FIELD_RANK,
       ),
-    [
-      canApprove,
-      canDelete,
-      canExport,
-      canRead,
-      canReject,
-      canSubmit,
-      canUpdate,
-      messageApi,
-      openBalloon,
-      statusEnum,
-      t,
-    ],
+    [renderFaiRowNodes, statusEnum, t],
   );
 
   const charColumns = [
@@ -446,9 +692,53 @@ const FaiOrdersPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.menu.quality-management.fai-orders')}
           actionRef={actionRef}
           rowKey="id"
+          permissionResource={RESOURCE}
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
           columns={columns}
           showAdvancedSearch
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.fai-orders.list-v3"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.fai-orders.list-v9"
+          onTableDataChange={(rows) => {
+            tableRowsRef.current = rows;
+          }}
+          showDeleteButton={canDelete}
+          onDelete={async (keys) => {
+            try {
+              const deletable = resolveSelectedRows(keys).filter((row) =>
+                FAI_BATCH_DELETABLE_STATUSES.has(row.status ?? ''),
+              );
+              if (!deletable.length) {
+                messageApi.warning(t('app.kuaizhizao.quality.fai.batch.deleteEmpty'));
+                return;
+              }
+              for (const row of deletable) {
+                await faiOrderApi.delete(row.id);
+              }
+              messageApi.success(
+                t('app.kuaizhizao.quality.common.messages.deleteSuccess', { count: deletable.length }),
+              );
+              setSelectedRowKeys([]);
+              invalidateMenuBadgeCounts();
+              actionRef.current?.reload();
+            } catch (e: any) {
+              messageApi.error(e?.message || t('common.deleteFailed'));
+            }
+          }}
+          deleteConfirmTitle={(count) =>
+            t('app.kuaizhizao.quality.fai.batch.deleteConfirm', { count })
+          }
+          toolBarActionsAfterDelete={
+            batchMenuItems.length > 0
+              ? [
+                  <UniBatchMenuButton
+                    key="fai-batch-actions"
+                    selectedRowKeys={selectedRowKeys}
+                    menuItems={batchMenuItems}
+                  />,
+                ]
+              : undefined
+          }
           toolBarRender={() =>
             canCreate
               ? [
@@ -501,6 +791,7 @@ const FaiOrdersPage: React.FC = () => {
               messageApi.success(t('common.saveSuccess'));
               setEditing(saved);
               setChars(saved.characteristics?.length ? saved.characteristics : chars);
+              invalidateMenuBadgeCounts();
               actionRef.current?.reload();
               return true;
             } catch (e: any) {

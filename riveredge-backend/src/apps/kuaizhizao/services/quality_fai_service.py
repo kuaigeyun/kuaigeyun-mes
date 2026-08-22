@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from tortoise.transactions import in_transaction
 
+from apps.common.audit_actor import apply_create_audit, apply_update_audit, audit_response_fields, operator_name_from_user
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.fai_characteristic import FaiCharacteristic
 from apps.kuaizhizao.models.fai_order import FaiOrder
@@ -28,6 +29,7 @@ from apps.kuaizhizao.services.inspection_step_spec import (
 )
 from core.utils.timezone_utils import resolve_business_datetime
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+from infra.models.user import User
 
 FAI_STATUSES = {"draft", "in_progress", "submitted", "approved", "rejected", "closed"}
 FAI_TRIGGERS = {"new_part", "ecn", "changeover", "restart", "customer"}
@@ -103,6 +105,8 @@ class FaiOrderService(AppBaseService[FaiOrder]):
 
     def _to_response(self, row: FaiOrder, chars: Optional[List[FaiCharacteristic]] = None) -> FaiOrderResponse:
         resp = FaiOrderResponse.model_validate(row)
+        audit = audit_response_fields(row)
+        resp = resp.model_copy(update=audit)
         if chars is not None:
             resp.characteristics = [FaiCharacteristicResponse.model_validate(c) for c in chars]
         return resp
@@ -146,7 +150,9 @@ class FaiOrderService(AppBaseService[FaiOrder]):
             created.append(row)
         return created
 
-    async def create_order(self, tenant_id: int, payload: FaiOrderCreate) -> FaiOrderResponse:
+    async def create_order(
+        self, tenant_id: int, payload: FaiOrderCreate, user: Optional[User] = None
+    ) -> FaiOrderResponse:
         data = payload.model_dump(exclude={"characteristics"})
         if data.get("trigger_reason") not in FAI_TRIGGERS:
             raise BusinessLogicError("非法触发原因")
@@ -160,11 +166,14 @@ class FaiOrderService(AppBaseService[FaiOrder]):
         if exists:
             raise BusinessLogicError("FAI 编码已存在")
         async with in_transaction():
-            row = await FaiOrder.create(tenant_id=tenant_id, **data)
+            row = FaiOrder(tenant_id=tenant_id, **data)
+            apply_create_audit(row, user)
+            await row.save()
             chars: List[FaiCharacteristic] = []
             if payload.characteristics:
                 chars = await self._replace_characteristics(tenant_id, row.id, payload.characteristics)
                 row.conclusion = self._refresh_conclusion(chars)
+                apply_update_audit(row, user)
                 await row.save()
             return self._to_response(row, chars)
 
@@ -201,7 +210,7 @@ class FaiOrderService(AppBaseService[FaiOrder]):
         return self._to_response(row, chars)
 
     async def update_order(
-        self, tenant_id: int, order_id: int, payload: FaiOrderUpdate
+        self, tenant_id: int, order_id: int, payload: FaiOrderUpdate, user: Optional[User] = None
     ) -> FaiOrderResponse:
         row = await self._get_order(tenant_id, order_id)
         if row.status not in EDITABLE_STATUSES and payload.characteristics is not None:
@@ -224,17 +233,19 @@ class FaiOrderService(AppBaseService[FaiOrder]):
             row.conclusion = self._refresh_conclusion(chars)
             if row.status == "draft" and chars:
                 row.status = "in_progress"
+            apply_update_audit(row, user)
             await row.save()
             return self._to_response(row, chars)
 
-    async def delete_order(self, tenant_id: int, order_id: int) -> None:
+    async def delete_order(self, tenant_id: int, order_id: int, user: Optional[User] = None) -> None:
         row = await self._get_order(tenant_id, order_id)
         if row.status not in ("draft", "rejected"):
             raise BusinessLogicError("仅草稿或已驳回可删除")
         row.deleted_at = resolve_business_datetime()
+        apply_update_audit(row, user)
         await row.save()
 
-    async def submit(self, tenant_id: int, order_id: int) -> FaiOrderResponse:
+    async def submit(self, tenant_id: int, order_id: int, user: Optional[User] = None) -> FaiOrderResponse:
         row = await self._get_order(tenant_id, order_id)
         if row.status not in ("draft", "in_progress", "rejected"):
             raise BusinessLogicError("当前状态不可提交")
@@ -244,12 +255,11 @@ class FaiOrderService(AppBaseService[FaiOrder]):
         row.conclusion = self._refresh_conclusion(chars)
         row.status = "submitted"
         row.submitted_at = resolve_business_datetime()
+        apply_update_audit(row, user)
         await row.save()
         return self._to_response(row, chars)
 
-    async def approve(
-        self, tenant_id: int, order_id: int, user_id: int, user_name: Optional[str] = None
-    ) -> FaiOrderResponse:
+    async def approve(self, tenant_id: int, order_id: int, user: Optional[User] = None) -> FaiOrderResponse:
         row = await self._get_order(tenant_id, order_id)
         if row.status != "submitted":
             raise BusinessLogicError("仅已提交单据可批准")
@@ -261,28 +271,34 @@ class FaiOrderService(AppBaseService[FaiOrder]):
             raise BusinessLogicError("特性尚未全部判定，不能批准")
         row.status = "approved"
         row.approved_at = resolve_business_datetime()
-        row.approved_by = user_id
-        row.approved_by_name = user_name
+        if user is not None:
+            row.approved_by = int(user.id)
+            row.approved_by_name = operator_name_from_user(user)
         row.cpk_summary = self._build_cpk_summary(chars)
+        apply_update_audit(row, user)
         await row.save()
         return self._to_response(row, chars)
 
-    async def reject(self, tenant_id: int, order_id: int, remarks: Optional[str] = None) -> FaiOrderResponse:
+    async def reject(
+        self, tenant_id: int, order_id: int, remarks: Optional[str] = None, user: Optional[User] = None
+    ) -> FaiOrderResponse:
         row = await self._get_order(tenant_id, order_id)
         if row.status != "submitted":
             raise BusinessLogicError("仅已提交单据可驳回")
         row.status = "rejected"
         if remarks:
             row.remarks = ((row.remarks or "") + f"\n驳回：{remarks}").strip()
+        apply_update_audit(row, user)
         await row.save()
         chars = await self._load_chars(tenant_id, order_id)
         return self._to_response(row, chars)
 
-    async def close(self, tenant_id: int, order_id: int) -> FaiOrderResponse:
+    async def close(self, tenant_id: int, order_id: int, user: Optional[User] = None) -> FaiOrderResponse:
         row = await self._get_order(tenant_id, order_id)
         if row.status != "approved":
             raise BusinessLogicError("仅已批准单据可关闭")
         row.status = "closed"
+        apply_update_audit(row, user)
         await row.save()
         chars = await self._load_chars(tenant_id, order_id)
         return self._to_response(row, chars)
@@ -321,7 +337,7 @@ class FaiOrderService(AppBaseService[FaiOrder]):
         return {"items": items}
 
     async def import_from_plan(
-        self, tenant_id: int, order_id: int, payload: FaiImportFromPlanRequest
+        self, tenant_id: int, order_id: int, payload: FaiImportFromPlanRequest, user: Optional[User] = None
     ) -> FaiOrderResponse:
         row = await self._get_order(tenant_id, order_id)
         if row.status not in EDITABLE_STATUSES:
@@ -369,6 +385,7 @@ class FaiOrderService(AppBaseService[FaiOrder]):
             row.conclusion = self._refresh_conclusion(chars)
             if row.status == "draft":
                 row.status = "in_progress"
+            apply_update_audit(row, user)
             await row.save()
             return self._to_response(row, chars)
 
@@ -415,7 +432,7 @@ class FaiOrderService(AppBaseService[FaiOrder]):
         )
 
     async def confirm_balloons(
-        self, tenant_id: int, order_id: int, payload: FaiConfirmBalloonsRequest
+        self, tenant_id: int, order_id: int, payload: FaiConfirmBalloonsRequest, user: Optional[User] = None
     ) -> FaiOrderResponse:
         """三期：将气泡候选确认为特性行（候选可由外部 OCR 写入 balloon_candidates）。"""
         row = await self._get_order(tenant_id, order_id)
@@ -473,6 +490,7 @@ class FaiOrderService(AppBaseService[FaiOrder]):
             row.conclusion = self._refresh_conclusion(chars)
             if row.status == "draft":
                 row.status = "in_progress"
+            apply_update_audit(row, user)
             await row.save()
             return self._to_response(row, chars)
 

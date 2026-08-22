@@ -5,7 +5,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { rowActionKind, rowActionLabelKeep } from '../../../components/uni-action';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Popconfirm, Space, Tag } from 'antd';
+import { App, Button, Popconfirm } from 'antd';
 import { DeleteOutlined, DownloadOutlined, EditOutlined, EyeOutlined, QrcodeOutlined, SettingOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +13,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import { ListPageTemplate } from '../../../components/layout-templates';
 import { UniTable } from '../../../components/uni-table';
+import { StatusTag } from '../../../constants/statusBadges';
 import {
   activateClientRelease,
   deleteClientRelease,
@@ -107,13 +108,25 @@ const ClientReleasesPage: React.FC = () => {
     }
   };
 
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    const ids = keys.map((key) => Number(key)).filter((id) => Number.isFinite(id) && id > 0);
+    if (!ids.length) {
+      return;
+    }
+    const results = await Promise.allSettled(ids.map((id) => deleteClientRelease(id)));
+    const failed = results.filter((item) => item.status === 'rejected').length;
+    const success = ids.length - failed;
+    if (success > 0) {
+      messageApi.success(t('common.batchDeleteSuccess', { count: success }));
+      actionRef.current?.clearSelected?.();
+      actionRef.current?.reload();
+    }
+    if (failed > 0) {
+      messageApi.error(t('common.batchDeletePartial', { count: failed, errors: '' }));
+    }
+  };
+
   const columns: ProColumns<ClientRelease>[] = [
-    {
-      title: 'ID',
-      dataIndex: 'id',
-      width: 64,
-      hideInSearch: true,
-    },
     {
       title: t('pages.infra.clientReleases.columnClient'),
       dataIndex: 'client_key',
@@ -147,33 +160,6 @@ const ClientReleasesPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('pages.infra.clientReleases.columnPackage'),
-      width: 96,
-      hideInSearch: true,
-      render: (_, record) =>
-        record.package?.url || record.apk?.url ? (
-          <Tag color="success">{t('pages.infra.clientReleases.packageUploaded')}</Tag>
-        ) : (
-          <Tag>{t('pages.infra.clientReleases.packageMissing')}</Tag>
-        ),
-    },
-    {
-      title: t('common.status'),
-      dataIndex: 'is_active',
-      width: 100,
-      valueType: 'select',
-      valueEnum: {
-        true: { text: t('pages.infra.clientReleases.statusActive'), status: 'Success' },
-        false: { text: t('pages.infra.clientReleases.statusHistory'), status: 'Default' },
-      },
-      render: (_, record) =>
-        record.is_active ? (
-          <Tag color="success">{t('pages.infra.clientReleases.statusActive')}</Tag>
-        ) : (
-          <Tag>{t('pages.infra.clientReleases.statusHistory')}</Tag>
-        ),
-    },
-    {
       title: t('pages.infra.clientReleases.columnRollout'),
       dataIndex: 'rollout_percent',
       width: 80,
@@ -194,6 +180,26 @@ const ClientReleasesPage: React.FC = () => {
       hideInSearch: true,
     },
     {
+      title: t('common.status'),
+      dataIndex: 'is_active',
+      key: 'lifecycle',
+      width: 100,
+      fixed: 'right',
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'select',
+      valueEnum: {
+        true: { text: t('pages.infra.clientReleases.statusActive'), status: 'Success' },
+        false: { text: t('pages.infra.clientReleases.statusHistory'), status: 'Default' },
+      },
+      render: (_, record) =>
+        record.is_active ? (
+          <StatusTag color="success">{t('pages.infra.clientReleases.statusActive')}</StatusTag>
+        ) : (
+          <StatusTag color="default">{t('pages.infra.clientReleases.statusHistory')}</StatusTag>
+        ),
+    },
+    {
       title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
@@ -206,7 +212,6 @@ const ClientReleasesPage: React.FC = () => {
           <Button
             {...rowActionKind('read')}
             key="detail"
-            type="link"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleOpenDetail(record)}
@@ -217,7 +222,6 @@ const ClientReleasesPage: React.FC = () => {
           <Button
             {...rowActionKind('update')}
             key="edit"
-            type="link"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
@@ -232,7 +236,6 @@ const ClientReleasesPage: React.FC = () => {
               {...rowActionKind('skip')}
               {...rowActionLabelKeep()}
               key="download"
-              type="link"
               size="small"
               icon={<DownloadOutlined />}
               onClick={() => window.open(packageUrl, '_blank', 'noopener,noreferrer')}
@@ -247,7 +250,6 @@ const ClientReleasesPage: React.FC = () => {
             <Button
               {...rowActionKind('update')}
               key="activate"
-              type="link"
               size="small"
               icon={<ThunderboltOutlined />}
               loading={activatingId === record.id}
@@ -272,9 +274,7 @@ const ClientReleasesPage: React.FC = () => {
             onConfirm={() => void handleDelete(record)}
           >
             <Button
-              type="link"
               size="small"
-              danger
               icon={<DeleteOutlined />}
               loading={deletingId === record.id}
             >
@@ -283,7 +283,7 @@ const ClientReleasesPage: React.FC = () => {
           </Popconfirm>,
         );
 
-        return actions.length ? <Space size={0} wrap>{actions}</Space> : '—';
+        return actions.length ? actions : '—';
       },
     },
   ];
@@ -292,7 +292,7 @@ const ClientReleasesPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<ClientRelease>
-          columnPersistenceId="pages.infra.client-releases"
+          columnPersistenceId="pages.infra.client-releases-v4"
           actionRef={actionRef}
           columns={columns}
           rowKey="id"
@@ -330,7 +330,9 @@ const ClientReleasesPage: React.FC = () => {
           onCreate={handleCreate}
           showImportButton={false}
           showExportButton={false}
-          showDeleteButton={false}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteButtonText={t('common.batchDelete')}
           enableRowSelection
           toolBarActionsAfterCreate={[
             <Button key="miniprogram-qr" icon={<QrcodeOutlined />} onClick={() => setMiniprogramQrOpen(true)}>

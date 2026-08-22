@@ -20,6 +20,7 @@ import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag } f
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, DatabaseOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { FormModalTemplate, MODAL_CONFIG, TwoColumnLayout } from '../../../../components/layout-templates';
+import { FEATURE_PAGE_LIST_ITEM_CLASS, FEATURE_PAGE_RIGHT_PANEL_HEADER_STYLE, FEATURE_PAGE_RIGHT_PANEL_NAME_STYLE, FEATURE_PAGE_RIGHT_PANEL_PATH_STYLE, FEATURE_PAGE_RIGHT_PANEL_TITLE_ROW_STYLE } from '../../../../components/layout-templates/constants';
 import { CustomFieldJsonEditor, CustomFieldJsonModeSegmented, type CustomFieldJsonEditorMode } from '../../../../components/custom-fields/CustomFieldJsonEditor';
 import { CustomFieldFormulaConfigEditor } from '../../../../components/custom-fields/CustomFieldFormulaConfigEditor';
 import { normalizeJsonFieldValue, isFlatJsonObject } from '../../../../components/custom-fields/customFieldJsonUtils';
@@ -1217,29 +1218,20 @@ const CustomFieldListPage: React.FC = () => {
                         return (
                           <div
                             key={page.pageCode}
+                            className={`${FEATURE_PAGE_LIST_ITEM_CLASS}${isSelected ? ' is-selected' : ''}`}
                             onClick={() => setSelectedPageCode(page.pageCode)}
                             style={{
                               padding: '12px',
                               marginBottom: '4px',
                               cursor: 'pointer',
                               borderRadius: token.borderRadius,
-                              backgroundColor: isSelected ? token.colorPrimaryBg : 'transparent',
+                              backgroundColor: isSelected ? token.colorPrimaryBg : undefined,
                               border: isSelected ? `1px solid ${token.colorPrimary}` : `1px solid transparent`,
                               transition: 'all 0.2s',
                               display: 'flex',
                               justifyContent: 'space-between',
                               alignItems: 'center',
                               gap: 8,
-                            }}
-                            onMouseEnter={(e) => {
-                              if (!isSelected) {
-                                e.currentTarget.style.backgroundColor = token.colorFillSecondary;
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (!isSelected) {
-                                e.currentTarget.style.backgroundColor = 'transparent';
-                              }
                             }}
                           >
                             <div style={{ flex: 1, minWidth: 0 }}>
@@ -1279,32 +1271,28 @@ const CustomFieldListPage: React.FC = () => {
             ),
           }}
           rightPanel={{
+            header: selectedPage
+              ? {
+                  center: (
+                    <div style={FEATURE_PAGE_RIGHT_PANEL_TITLE_ROW_STYLE}>
+                      <span style={FEATURE_PAGE_RIGHT_PANEL_NAME_STYLE}>{selectedPage.pageName}</span>
+                      <span
+                        style={{
+                          ...FEATURE_PAGE_RIGHT_PANEL_PATH_STYLE,
+                          color: token.colorTextSecondary,
+                        }}
+                      >
+                        {selectedPage.pagePath}
+                      </span>
+                    </div>
+                  ),
+                }
+              : undefined,
+            headerStyle: selectedPage ? FEATURE_PAGE_RIGHT_PANEL_HEADER_STYLE : undefined,
             contentPadding: 0,
             contentBackgroundColor: token.colorBgContainer,
             content: selectedPage ? (
               <>
-                {/* 顶部标题栏 */}
-                <div
-                  style={{
-                    borderBottom: `1px solid ${token.colorBorderSecondary}`,
-                    padding: '16px',
-                    backgroundColor: token.colorFillAlter,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: '16px', fontWeight: 500, marginBottom: '4px' }}>
-                      {selectedPage.pageName}
-                    </div>
-                    <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>
-                      {selectedPage.pagePath}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 字段列表 */}
                 <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '24px' }}>
                   <UniTable<CustomField>
                     columnPersistenceId="pages.system.custom-fields.list-v1"

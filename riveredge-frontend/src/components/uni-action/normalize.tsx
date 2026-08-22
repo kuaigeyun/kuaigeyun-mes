@@ -29,6 +29,7 @@ import {
   CommentOutlined,
   ReloadOutlined,
   ApiOutlined,
+  HighlightOutlined,
 } from '@ant-design/icons'
 import type { NormalizeActionContext } from './types'
 import {
@@ -119,6 +120,9 @@ function defaultIconForRowActionWithKind(
   }
   if (readActionVisualProfile(node) === 'test-connection') {
     return <ApiOutlined />
+  }
+  if (readActionVisualProfile(node) === 'balloon-annotate') {
+    return <HighlightOutlined />
   }
   const explicit = readExplicitActionKind(node) ?? inheritedExplicit ?? null
   if (explicit === 'read' || explicit === 'display') return <EyeOutlined />

@@ -114,6 +114,10 @@ class FaiOrderResponse(FaiOrderBase):
     approved_at: Optional[datetime] = None
     approved_by: Optional[int] = None
     approved_by_name: Optional[str] = None
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     characteristics: Optional[List[FaiCharacteristicResponse]] = None

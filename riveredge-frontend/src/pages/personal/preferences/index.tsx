@@ -15,7 +15,7 @@ import { getLanguageList, Language } from '../../../services/language';
 import { SUPPORTED_UI_LANGUAGES, normalizeUiLanguage } from '../../../utils/localeBootstrap';
 import { LANGUAGE_MAP } from '../../../config/i18n';
 import type { Color } from 'antd/es/color-picker';
-import { clampBorderRadius, readBorderRadius } from '../../../utils/themeBorderRadius';
+import { clampBorderRadius, DEFAULT_THEME_BORDER_RADIUS, readBorderRadius } from '../../../utils/themeBorderRadius';
 import { clampFontSize, readFontSize } from '../../../utils/themeFontSize';
 import { ThemeStyleSliders } from '../../../components/theme-editor/ThemeStyleSliders';
 
@@ -43,7 +43,7 @@ function normalizeThemeConfigFields(
   const merged = { ...fallback, ...(tc || {}) };
   return {
     ...merged,
-    borderRadius: readBorderRadius(merged.borderRadius, 6),
+    borderRadius: readBorderRadius(merged.borderRadius, DEFAULT_THEME_BORDER_RADIUS),
     fontSize: readFontSize(merged.fontSize, 14),
   };
 }
@@ -56,7 +56,7 @@ const defaultPreferenceValues: Record<string, any> = {
   theme: 'light',
   theme_config: {
     colorPrimary: '#1890ff',
-    borderRadius: 6,
+    borderRadius: DEFAULT_THEME_BORDER_RADIUS,
     fontSize: 14,
     siderBgColor: '',
     headerBgColor: '',
@@ -174,7 +174,7 @@ const UserPreferencesPage: React.FC = () => {
       theme_config: normalizeThemeConfigFields(
         {
           colorPrimary: getPreference<string>('theme_config.colorPrimary', '#1890ff'),
-          borderRadius: getPreference<number>('theme_config.borderRadius', 6),
+          borderRadius: getPreference<number>('theme_config.borderRadius', DEFAULT_THEME_BORDER_RADIUS),
           fontSize: getPreference<number>('theme_config.fontSize', 14),
           themeStyle: getPreference<string>('theme_config.themeStyle', 'vivid'),
           siderBgColor: getPreference<string>('theme_config.siderBgColor', '') ?? '',
@@ -220,7 +220,7 @@ const UserPreferencesPage: React.FC = () => {
           theme_config: {
             ...tc,
             colorPrimary: normalizeColor(tc.colorPrimary, '#1890ff'),
-            borderRadius: clampBorderRadius(tc.borderRadius, 6),
+            borderRadius: clampBorderRadius(tc.borderRadius, DEFAULT_THEME_BORDER_RADIUS),
             fontSize: clampFontSize(tc.fontSize, 14),
             compact: false,
             themeStyle: tc.themeStyle ?? preferences?.theme_config?.themeStyle ?? 'vivid',

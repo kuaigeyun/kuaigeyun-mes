@@ -221,20 +221,32 @@ async def _section_purchase(tenant_id: int, now_date) -> BadgeFragment:
 
 
 async def _section_quality_inspection(tenant_id: int) -> BadgeFragment:
+    from apps.kuaizhizao.models.fai_order import FaiOrder
     from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
     from apps.kuaizhizao.models.process_inspection import ProcessInspection
     from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
 
-    c1, c2, c3 = await asyncio.gather(
+    c1, c2, c3, fai_pending, fai_prog = await asyncio.gather(
         IncomingInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待检验").count(),
         ProcessInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待检验").count(),
         FinishedGoodsInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待检验").count(),
+        FaiOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="submitted").count(),
+        FaiOrder.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status__in=["draft", "in_progress", "rejected"],
+        ).count(),
     )
     return {
         "incoming_inspection": {"overdue": 0, "pending": c1, "in_progress": 0},
         "process_inspection": {"overdue": 0, "pending": c2, "in_progress": 0},
         "finished_goods_inspection": {"overdue": 0, "pending": c3, "in_progress": 0},
-        "quality_inspection": {"overdue": 0, "pending": c1 + c2 + c3, "in_progress": 0},
+        "fai_order": {"overdue": 0, "pending": fai_pending, "in_progress": fai_prog},
+        "quality_inspection": {
+            "overdue": 0,
+            "pending": c1 + c2 + c3 + fai_pending,
+            "in_progress": fai_prog,
+        },
     }
 
 

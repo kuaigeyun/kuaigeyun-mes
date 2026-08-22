@@ -3,9 +3,9 @@
  */
 import type { GlobalToken } from 'antd/es/theme/interface';
 import { useMemo } from 'react';
-import {
-  SPLIT_SIDEBAR_PRIMARY_WIDTH,
-} from './sidebarMenuLayout';
+import type { SidebarMenuDensity } from './sidebarMenuDensity';
+import { SPLIT_SIDEBAR_PRIMARY_WIDTH, resolveSiderMenuMetrics } from './sidebarMenuLayout';
+import { readSiderMenuItemBorderRadius } from '../../utils/themeBorderRadius';
 
 export type BasicLayoutStyleContext = {
   token: GlobalToken;
@@ -25,6 +25,8 @@ export type BasicLayoutStyleContext = {
   startMenuTheme: Record<string, any>;
   /** 侧栏搜索条背景跟随：tabs=标签栏 / sider=菜单栏 */
   sidebarSearchBgFollow: 'tabs' | 'sider';
+  /** 侧栏菜单行间距：standard=标准 / compact=紧凑 */
+  sidebarMenuDensity: SidebarMenuDensity;
   sidebarSearchStripBg: string;
   sidebarSearchStripUsesLightText: boolean;
 };
@@ -343,9 +345,23 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
     startMenuPanelRadius,
     startMenuTheme,
     sidebarSearchBgFollow,
+    sidebarMenuDensity,
     sidebarSearchStripBg,
     sidebarSearchStripUsesLightText,
   } = ctx;
+  const siderMenuMetrics = resolveSiderMenuMetrics(sidebarMenuDensity);
+  const siderMenuItemHeight = siderMenuMetrics.itemHeight;
+  const forceSiderMenuCapsule = sidebarMenuDensity === 'compact';
+  const siderMenuItemBorderRadius = readSiderMenuItemBorderRadius(
+    token.borderRadius,
+    siderMenuItemHeight,
+    { forceCapsule: forceSiderMenuCapsule },
+  );
+  const splitPrimaryIconRadius = readSiderMenuItemBorderRadius(
+    token.borderRadius,
+    siderMenuMetrics.splitPrimaryIconSize,
+    { forceCapsule: forceSiderMenuCapsule },
+  );
   const siderDividerColor =
     isDarkMode || siderTextColor === '#ffffff'
       ? 'rgba(255, 255, 255, 0.15)'
@@ -378,8 +394,12 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           --ant-colorBorderSecondary: ${token.colorBorderSecondary ?? token.colorBorder};
           --ant-borderRadius: ${token.borderRadius}px;
           --ant-borderRadiusLG: ${token.borderRadiusLG ?? token.borderRadius + 2}px;
+          --riveredge-sider-menu-item-height: ${siderMenuItemHeight}px;
+          --riveredge-sider-menu-item-radius: ${siderMenuItemBorderRadius}px;
           /* 布局框线唯一色：顶栏底 / 侧栏右 / 搜索底 / 标签底轨 / 配置按钮顶 */
           --riveredge-layout-frame-color: ${token.colorBorder};
+          --riveredge-chrome-strip-height: 40px;
+          --riveredge-layout-rail-size: 1px;
         }
         /* 侧栏内部分割（非主框线）仍随侧栏明暗适配 */
         .ant-pro-layout .ant-pro-sider,
@@ -583,6 +603,25 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
            完全不命中（零匹配），已清理。 */
         /* ==================== 菜单项样式 - 使用 Ant Design 原生 ==================== */
         /* 让 Ant Design 使用其默认的菜单项高度和行高 */
+
+        /* 侧栏菜单行高与圆角：略低于 antd 默认，高圆角档位时收成胶囊 */
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-inline:not(.ant-menu-inline-collapsed) .ant-menu-item,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-inline:not(.ant-menu-inline-collapsed) .ant-menu-submenu > .ant-menu-submenu-title {
+          height: ${siderMenuItemHeight}px !important;
+          line-height: ${siderMenuItemHeight}px !important;
+          margin-block: ${siderMenuMetrics.itemMarginBlock}px !important;
+          border-radius: ${siderMenuItemBorderRadius}px !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-inline-collapsed > .ant-menu-item,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu-inline-collapsed > .ant-menu-submenu > .ant-menu-submenu-title {
+          height: ${siderMenuItemHeight}px !important;
+          line-height: ${siderMenuItemHeight}px !important;
+          border-radius: ${siderMenuItemBorderRadius}px !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content {
+          line-height: ${siderMenuItemHeight}px !important;
+        }
 
         /* 子菜单标题样式（ant-menu-submenu-title）- 使用 Ant Design 原生样式 */
         /* 使用主题颜色变量，支持深色模式 */
@@ -1406,8 +1445,8 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           overflow: hidden !important;
         }
         .ant-pro-layout .ant-pro-sider-menu {
-          padding-top: 8px !important;
-          padding-bottom: 8px !important;
+          padding-top: ${siderMenuMetrics.menuPadding}px !important;
+          padding-bottom: ${siderMenuMetrics.menuPadding}px !important;
           height: auto !important;
           min-height: auto !important;
           overflow: visible !important;
@@ -2009,7 +2048,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         }
         /* 侧栏搜索条：平铺/双列唯一几何真源（总高 40px = 上下各 5px + 输入 30px） */
         :root {
-          --riveredge-sidebar-search-strip-height: 40px;
+          --riveredge-sidebar-search-strip-height: var(--riveredge-chrome-strip-height, 40px);
           --riveredge-sidebar-search-padding-inline: 16px;
           --riveredge-sidebar-search-input-height: 30px;
         }
@@ -2026,20 +2065,20 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           flex-shrink: 0 !important;
           position: relative !important;
           background: ${searchStripFollowTabs ? sidebarSearchStripBg : 'transparent'} !important;
-          /* 不用 border-bottom：与 UniTabs 同为底边 1px 渐变/伪元素，避免盒模型错位 */
           border-bottom: none !important;
         }
-        /* 搜索条底线：与标签栏底线同色同高；向右伸出 1px 盖住侧栏右边框，与激活标签底轨无缝衔接 */
+        /* 搜索条底线：与 UniTabs 同色同高；向右 1px 与标签栏底轨在侧栏右边框处重合 */
         .ant-layout-sider .riveredge-sidebar-search-wrapper::after {
           content: '';
           position: absolute;
           left: 0;
           right: -1px;
           bottom: 0;
-          height: 1px;
+          height: var(--riveredge-layout-rail-size, 1px);
           background: var(--riveredge-layout-frame-color, var(--ant-colorBorder, var(--ant-color-border, #d9d9d9)));
           pointer-events: none;
           z-index: 2;
+          transform: translateZ(0);
         }
         html[data-sidebar-menu-layout="flat"] .ant-pro-sider .ant-pro-sider-extra {
           margin: 0 !important;
@@ -2492,6 +2531,9 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-search {
           flex-shrink: 0;
           width: 100%;
+          height: var(--riveredge-chrome-strip-height, 40px);
+          min-height: var(--riveredge-chrome-strip-height, 40px);
+          max-height: var(--riveredge-chrome-strip-height, 40px);
         }
         html[data-sidebar-menu-layout="split"] .riveredge-split-sidebar-body {
           flex: 1 1 0;
@@ -2537,7 +2579,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           justify-content: center;
           gap: 5px;
           width: 100%;
-          min-height: 58px;
+          min-height: ${siderMenuMetrics.splitPrimaryMinHeight}px;
           padding: 2px 1px 4px;
           border: none;
           border-radius: ${token.borderRadius}px;
@@ -2559,9 +2601,9 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
-          width: 34px;
-          height: 34px;
-          border-radius: ${token.borderRadiusSM ?? token.borderRadius}px;
+          width: ${siderMenuMetrics.splitPrimaryIconSize}px;
+          height: ${siderMenuMetrics.splitPrimaryIconSize}px;
+          border-radius: ${splitPrimaryIconRadius}px;
           background: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.05)' : 'var(--ant-colorFillQuaternary, var(--ant-colorFillTertiary))'} !important;
           color: ${siderTextColor} !important;
           transition: background-color 0s, color 0s;
@@ -2644,7 +2686,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           width: var(--riveredge-split-menu-row-width) !important;
           max-width: var(--riveredge-split-menu-row-width) !important;
           box-sizing: border-box !important;
-          border-radius: ${token.borderRadius}px !important;
+          border-radius: ${siderMenuItemBorderRadius}px !important;
           padding-inline-end: 6px !important;
           padding-inline-start: var(--riveredge-split-menu-pad-l1) !important;
         }
@@ -2740,6 +2782,7 @@ export function useBasicLayoutInlineStyles(ctx: BasicLayoutStyleContext) {
       startMenuPanelRadius,
       startMenuTheme,
       ctx.sidebarSearchBgFollow,
+      ctx.sidebarMenuDensity,
       ctx.sidebarSearchStripBg,
       ctx.sidebarSearchStripUsesLightText,
     ],

@@ -17,11 +17,12 @@ SYSTEM_MENU_CONFIG: Dict[str, Any] = {
     "title": "menu.system",
     "path": "/system",
     "permission": "system:entry:read",
-    "icon": "Setting",
+    "icon": "systemConfig",
     "sort_order": 10,
     "children": [
         {
             "title": "menu.group.core-config",
+            "icon": "mdConfiguration",
             "sort_order": 10,
             "children": [
                 {"title": "menu.system.applications", "path": "/system/applications", "permission": "system:application:read", "sort_order": 1},
@@ -37,6 +38,7 @@ SYSTEM_MENU_CONFIG: Dict[str, Any] = {
         },
         {
             "title": "menu.group.user-management",
+            "icon": "users",
             "sort_order": 20,
             "children": [
                 {"title": "menu.system.departments", "path": "/system/departments", "permission": "system:department:read", "sort_order": 1},
@@ -47,6 +49,7 @@ SYSTEM_MENU_CONFIG: Dict[str, Any] = {
         },
         {
             "title": "menu.group.data-center",
+            "icon": "database",
             "sort_order": 30,
             "children": [
                 {"title": "menu.system.files", "path": "/system/files", "permission": "system:file:read", "sort_order": 1},
@@ -58,6 +61,7 @@ SYSTEM_MENU_CONFIG: Dict[str, Any] = {
         },
         {
             "title": "menu.group.process-management",
+            "icon": "workflow",
             "sort_order": 40,
             "children": [
                 {"title": "menu.system.approval-processes", "path": "/system/approval-processes", "permission": "system:approval-process:read", "sort_order": 1},
@@ -70,6 +74,7 @@ SYSTEM_MENU_CONFIG: Dict[str, Any] = {
         },
         {
             "title": "menu.group.monitoring-ops",
+            "icon": "monitor",
             "sort_order": 50,
             "children": [
                 {"title": "menu.system.operation-logs", "path": "/system/operation-logs", "permission": "system:operation-log:read", "sort_order": 1},
@@ -80,6 +85,7 @@ SYSTEM_MENU_CONFIG: Dict[str, Any] = {
         },
         {
             "title": "menu.personal",
+            "icon": "userCircle",
             "sort_order": 60,
             "children": [
                 {"title": "menu.personal.profile", "path": "/personal/profile", "permission": "system:user-profile:read", "sort_order": 1},

@@ -7,6 +7,7 @@ import React from 'react';
 import { Tag, Tooltip } from 'antd';
 import type { TagProps } from 'antd';
 import { CheckCircle, CircleMinus, PlayCircle } from 'lucide-react';
+import { resolveDocumentStatusSemantic } from '../../constants/documentStatusColors';
 import {
   RE_STATUS_BADGE_DRAFT,
   resolveStatusTagDisplayProps,
@@ -35,10 +36,10 @@ export function resolveLifecycleStageBadgeTagProps(
   stageName: string,
   lifecycle?: Pick<LifecycleResult, 'status' | 'percent'>,
 ): Pick<TagProps, 'color' | 'style' | 'className' | 'variant'> {
-  const stageProps = getDocumentLifecycleStageTagProps(stageName);
-  // 登记阶段带 color 或草稿 className；未登记仅有中性 style
-  if (stageProps.color || stageProps.className) {
-    return stageProps;
+  const semantic = resolveDocumentStatusSemantic(stageName);
+  // 已知语义（含草稿/关闭等 muted）走全局色板；未登记文案再回落 lifecycle status/percent
+  if (semantic != null) {
+    return getDocumentLifecycleStageTagProps(stageName);
   }
   return resolveStatusTagDisplayProps({
     text: stageName,

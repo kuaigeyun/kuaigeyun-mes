@@ -160,6 +160,7 @@ TORTOISE_ORM = {
                 "infra.models.face_template",  # 工位人脸特征模板
                 "infra.models.infra_superadmin",  # 平台超级管理员模型
                 "infra.models.package",
+                "infra.models.sensitive_word_control",
                 "infra.models.saved_search",  # 保存搜索条件模型
                 "infra.models.industry_template",  # 行业模板模型
                 "infra.models.platform_settings",  # 平台设置模型

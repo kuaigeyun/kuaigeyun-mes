@@ -172,7 +172,7 @@ const SuperAdminTenantDetail: React.FC = () => {
       <ProDescriptions<Tenant>
         dataSource={tenant}
         loading={loading}
-        column={2}
+        column={1}
         columns={[
           {
             title: t('pages.infra.tenant.name'),

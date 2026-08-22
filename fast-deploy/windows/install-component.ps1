@@ -187,7 +187,8 @@ function Test-PostgresqlReady {
     foreach ($p in @(
         "$env:ProgramFiles\PostgreSQL\15\bin\psql.exe",
         "$env:ProgramFiles\PostgreSQL\16\bin\psql.exe",
-        "$env:ProgramFiles\PostgreSQL\17\bin\psql.exe"
+        "$env:ProgramFiles\PostgreSQL\17\bin\psql.exe",
+        "$env:ProgramFiles\PostgreSQL\18\bin\psql.exe"
     )) {
         if (Test-Path $p) { return $true }
     }
@@ -475,6 +476,15 @@ function Install-Postgresql {
     if (Invoke-WingetInstallVerified @('-e', '--id', 'PostgreSQL.PostgreSQL', '--accept-package-agreements', '--accept-source-agreements') { Test-PostgresqlReady }) {
         Start-PostgresqlWindowsService
         Write-Ok 'PostgreSQL installed via winget'
+        try {
+            $pgv = Join-Path $FastDeployDir 'windows\install-pgvector.ps1'
+            if (Test-Path $pgv) {
+                Write-Info 'installing pgvector for PostgreSQL...'
+                & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $pgv -FastDeployDir $FastDeployDir -UseMirror $UseMirror
+            }
+        } catch {
+            Write-Info "pgvector install skipped: $($_.Exception.Message)"
+        }
         return
     }
 
@@ -491,6 +501,15 @@ function Install-Postgresql {
         ) -join [Environment]::NewLine
     }
     Write-Ok 'PostgreSQL installed via EDB installer (reopen terminal to refresh PATH)'
+    try {
+        $pgv = Join-Path $FastDeployDir 'windows\install-pgvector.ps1'
+        if (Test-Path $pgv) {
+            Write-Info 'installing pgvector for PostgreSQL...'
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $pgv -FastDeployDir $FastDeployDir -UseMirror $UseMirror
+        }
+    } catch {
+        Write-Info "pgvector install skipped: $($_.Exception.Message)"
+    }
 }
 
 function Get-GhProxyUrls([string]$Url) {

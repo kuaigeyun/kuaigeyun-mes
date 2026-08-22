@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col, InputNumber, Card, ColorPicker, Modal, Table, Tag, Typography, theme, Radio, Cascader } from 'antd';
 import dayjs from 'dayjs';
 import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined, InfoCircleOutlined, SettingOutlined, CloudDownloadOutlined, ApartmentOutlined, GlobalOutlined, FolderOpenOutlined, BgColorsOutlined } from '@ant-design/icons';
+import { DEFAULT_THEME_BORDER_RADIUS } from '../../../utils/themeBorderRadius';
 import {
   CHINA_ADMIN_REGION_OPTIONS,
   resolveChinaAdminRegionLabels,
@@ -93,7 +94,7 @@ function getInitialValuesFromConfigStore(
     default_language: configs.default_language ?? 'zh-CN',
     timezone: configs.timezone ?? '',
     theme_color: normalizedThemeColor,
-    theme_borderRadius: themeConfig.borderRadius ?? 6,
+    theme_borderRadius: themeConfig.borderRadius ?? DEFAULT_THEME_BORDER_RADIUS,
     theme_fontSize: themeConfig.fontSize ?? 14,
     theme_compact: false,
     enable_register: configs.enable_register !== false,
@@ -714,7 +715,7 @@ const SiteSettingsPage: React.FC = () => {
         default_language: setting.settings?.default_language || 'zh-CN',
         timezone: setting.settings?.timezone,
         theme_color: normalizedThemeColor,
-        theme_borderRadius: themeConfig.borderRadius ?? 6,
+        theme_borderRadius: themeConfig.borderRadius ?? DEFAULT_THEME_BORDER_RADIUS,
         theme_fontSize: themeConfig.fontSize || 14,
         theme_compact: false,
         enable_register: setting.settings?.enable_register !== false,

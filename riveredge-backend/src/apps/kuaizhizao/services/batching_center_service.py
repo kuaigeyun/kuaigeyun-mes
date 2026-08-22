@@ -57,6 +57,23 @@ class BatchingCenterService:
     # 主动备料仅扫描计划开工最近的工单，避免全量活跃工单齐套分析
     _PROACTIVE_PREP_WO_LIMIT = 40
 
+    @staticmethod
+    def _resolve_work_order_product_label(wo: Optional[WorkOrder]) -> Optional[str]:
+        if wo is None:
+            return None
+        name = (wo.product_name or "").strip()
+        if name:
+            return name
+        code = (wo.product_code or "").strip()
+        return code or None
+
+    @staticmethod
+    def _format_batching_order_line_summary(line: BatchingOrderItem) -> str:
+        name = (line.material_name or "").strip()
+        code = (line.material_code or "").strip()
+        label = name or code or str(line.material_id or "?")
+        return f"{label}({float(line.required_quantity or 0):g})"
+
     async def _batch_picked_quantities(
         self, tenant_id: int, work_order_id: int, material_ids: List[int]
     ) -> Dict[int, Decimal]:
@@ -498,7 +515,8 @@ class BatchingCenterService:
                         doc_code=wo.code,
                         work_order_id=wo.id,
                         work_order_code=wo.code,
-                        product_name=wo.product_name,
+                        product_name=self._resolve_work_order_product_label(wo),
+                        product_code=(wo.product_code or "").strip() or None,
                         picking_score=score_detail.composite_score if score_detail else None,
                         picking_rank_band=score_detail.rank_band if score_detail else None,
                         kitting_rate=display_rate,
@@ -698,7 +716,7 @@ class BatchingCenterService:
             wo = wo_map.get(order.work_order_id) if order.work_order_id else None
             lines = items_by_order.get(order.id, [])
             summary = "、".join(
-                f"{ln.material_name}({float(ln.required_quantity or 0):g})" for ln in lines[:3]
+                self._format_batching_order_line_summary(ln) for ln in lines[:3]
             )
             if len(lines) > 3:
                 summary += f" 等{len(lines)}项"
@@ -747,7 +765,8 @@ class BatchingCenterService:
                     doc_code=order.code,
                     work_order_id=order.work_order_id,
                     work_order_code=order.work_order_code,
-                    product_name=wo.product_name if wo else None,
+                    product_name=self._resolve_work_order_product_label(wo),
+                    product_code=(wo.product_code or "").strip() or None if wo else None,
                     picking_score=score_detail.composite_score if score_detail else None,
                     picking_rank_band=score_detail.rank_band if score_detail else None,
                     score_breakdown=score_detail.breakdown if score_detail else None,

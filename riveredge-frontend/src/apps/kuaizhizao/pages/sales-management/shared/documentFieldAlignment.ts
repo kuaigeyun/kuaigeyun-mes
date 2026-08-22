@@ -176,7 +176,7 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   quality_inspection_partner_stacked: 11,
   quality_inspection_material: 12,
   /**
-   * 8D 管理：标题/编号叠列 → 严重度 → 阶段节点轴 → 来源 → 负责人 → 验证结果 → 计划完成
+   * 8D 报告：标题/编号叠列 → 严重度 → 阶段节点轴 → 来源 → 负责人 → 验证结果 → 计划完成
    */
   eightDStacked: 10,
   eight_d_stages: 23,

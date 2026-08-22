@@ -6,18 +6,18 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { rowActionKind } from '../../../../components/uni-action';
+import { rowActionKind, rowActionToneDestructive } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormDigit, ProFormDateTimePicker, ProFormInstance, ProFormGroup, ProFormSwitch } from '@ant-design/pro-components';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Divider, Spin, Alert } from 'antd';
-import { CheckOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined, EditOutlined, DeleteOutlined, SyncOutlined, StarOutlined, StarFilled } from '@ant-design/icons';
+import { App, Popconfirm, Button, Space, Modal, List, Typography, Divider, Spin, Alert, Tooltip } from 'antd';
+import { CheckOutlined, CloseOutlined, EditOutlined, DeleteOutlined, SyncOutlined, StarOutlined, StarFilled } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { SystemMasterDetailDrawer } from '../../../system/shared/systemMasterDetailDrawer';
-import { MarkerTag } from '../../../../constants/statusBadges';
+import { MarkerTag, StatusTag } from '../../../../constants/statusBadges';
 import { isReservedTenantDomain } from '../../../../utils/reservedTenantDomain';
 import {
   getTenantList,
@@ -35,6 +35,7 @@ import {
   deleteTenantBySuperAdmin,
   getSharedUserQuota,
   syncTenantLimitsFromPlan,
+  resolveTenantPlanMarkerColor,
 } from '../../../../services/tenant';
 import { getPlatformSettings, updatePlatformSettings } from '../../../../services/platformSettings';
 // 使用 apiRequest 统一处理 HTTP 请求
@@ -135,14 +136,7 @@ const SuperAdminTenantList: React.FC = () => {
     return valueEnum;
   }, [packagePlanOptions]);
 
-  const getPlanTagColor = (plan: string): string => {
-    const planKey = String(plan || '').toLowerCase();
-    if (planKey === TenantPlan.TRIAL) return 'default';
-    if (planKey === TenantPlan.BASIC) return 'blue';
-    if (planKey === TenantPlan.PROFESSIONAL) return 'purple';
-    if (planKey === TenantPlan.ENTERPRISE) return 'gold';
-    return 'blue';
-  };
+  const getPlanTagColor = (plan: string): string => resolveTenantPlanMarkerColor(plan);
 
   const getPlanName = (plan: string): string => {
     const planKey = String(plan || '').toLowerCase();
@@ -206,9 +200,9 @@ const SuperAdminTenantList: React.FC = () => {
         render: (_, record) => {
           const statusInfo = statusTagMap[record.status] ?? { color: 'default', textKey: '' };
           return (
-            <MarkerTag color={statusInfo.color}>
+            <StatusTag color={statusInfo.color}>
               {statusInfo.textKey ? t(statusInfo.textKey) : (record.status ?? '-')}
-            </MarkerTag>
+            </StatusTag>
           );
         },
       },
@@ -970,20 +964,44 @@ const SuperAdminTenantList: React.FC = () => {
    */
   const columns: ProColumns<Tenant>[] = [
     {
+      title: t('pages.infra.admin.id'),
+      dataIndex: 'id',
+      key: 'id',
+      width: 80,
+      uniTableKeepWidth: true,
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
       title: t('pages.infra.tenant.name'),
       dataIndex: 'name',
+      width: 260,
+      minWidth: 260,
+      uniTableKeepWidth: true,
       ellipsis: true,
       sorter: true,
       responsive: ['md'],
       render: (_, record) => (
-        <Space size={6} wrap>
-          <span>{record.name}</span>
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            maxWidth: '100%',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{record.name}</span>
           {defaultTenantId === record.id && (
-            <Tag color="gold" icon={<StarFilled />}>
-              {t('pages.infra.tenant.defaultLoginTag')}
-            </Tag>
+            <Tooltip title={t('pages.infra.tenant.defaultLoginTag')}>
+              <MarkerTag
+                color="gold"
+                icon={<StarFilled />}
+                style={{ marginInlineEnd: 0, flexShrink: 0, cursor: 'default' }}
+              />
+            </Tooltip>
           )}
-        </Space>
+        </span>
       ),
     },
     {
@@ -1023,36 +1041,22 @@ const SuperAdminTenantList: React.FC = () => {
       hideInSearch: true,
       width: 120,
       render: (_, record) => (
-        <Tag color={record.is_subtenant ? 'purple' : 'blue'}>
+        <MarkerTag color={record.is_subtenant ? 'purple' : 'processing'}>
           {record.is_subtenant ? '子组织' : '主组织'}
-        </Tag>
+        </MarkerTag>
       ),
-    },
-    {
-      title: t('common.status'),
-      dataIndex: 'status',
-      valueType: 'select',
-      sorter: true,
-      valueEnum: {
-        [TenantStatus.ACTIVE]: { text: t('pages.infra.tenant.statusActive') },
-        [TenantStatus.INACTIVE]: { text: t('pages.infra.tenant.statusInactive') },
-        [TenantStatus.EXPIRED]: { text: t('pages.infra.tenant.statusExpired') },
-        [TenantStatus.SUSPENDED]: { text: t('pages.infra.tenant.statusSuspended') },
-      },
-      render: (_, record) => {
-        const statusInfo = statusTagMap[record.status] ?? { color: 'default', textKey: '' };
-        return <Tag color={statusInfo.color}>{statusInfo.textKey ? t(statusInfo.textKey) : (record.status ?? '-')}</Tag>;
-      },
     },
     {
       title: t('pages.infra.tenant.plan'),
       dataIndex: 'plan',
+      width: 112,
+      uniTableKeepWidth: true,
       valueType: 'select',
       sorter: true,
       valueEnum: packagePlanValueEnum,
-      render: (_, record) => {
-        return <Tag color={getPlanTagColor(String(record.plan))}>{getPlanName(String(record.plan))}</Tag>;
-      },
+      render: (_, record) => (
+        <MarkerTag color={getPlanTagColor(String(record.plan))}>{getPlanName(String(record.plan))}</MarkerTag>
+      ),
     },
     {
       title: t('pages.infra.tenant.maxUsers'),
@@ -1097,11 +1101,34 @@ const SuperAdminTenantList: React.FC = () => {
       responsive: ['xl'],
     },
     {
+      title: t('common.status'),
+      dataIndex: 'status',
+      key: 'lifecycle',
+      fixed: 'right',
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'select',
+      sorter: true,
+      valueEnum: {
+        [TenantStatus.ACTIVE]: { text: t('pages.infra.tenant.statusActive') },
+        [TenantStatus.INACTIVE]: { text: t('pages.infra.tenant.statusInactive') },
+        [TenantStatus.EXPIRED]: { text: t('pages.infra.tenant.statusExpired') },
+        [TenantStatus.SUSPENDED]: { text: t('pages.infra.tenant.statusSuspended') },
+      },
+      render: (_, record) => {
+        const statusInfo = statusTagMap[record.status] ?? { color: 'default', textKey: '' };
+        return (
+          <StatusTag color={statusInfo.color}>
+            {statusInfo.textKey ? t(statusInfo.textKey) : (record.status ?? '-')}
+          </StatusTag>
+        );
+      },
+    },
+    {
       title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
-      // 保证「设为/取消默认」留在主行，使用 Popconfirm 气泡而非折叠进「更多」后的 Modal
-      uniActionRenderOptions: { directMax: 6 },
+      uniActionRenderOptions: { minPrimaryVisible: 2 },
       render: (_, record) => {
         const isInactive = record.status === TenantStatus.INACTIVE;
         const isActive = record.status === TenantStatus.ACTIVE;
@@ -1138,7 +1165,7 @@ const SuperAdminTenantList: React.FC = () => {
                 description={t('pages.infra.tenant.deleteRowConfirmContent')}
                 onConfirm={() => handleDeleteRow(record.id)}
               >
-                <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                <Button size="small" icon={<DeleteOutlined />}>
                   {t('common.delete')}
                 </Button>
               </Popconfirm>
@@ -1152,7 +1179,7 @@ const SuperAdminTenantList: React.FC = () => {
                   }
                 }}
               >
-                <Button type="link" size="small" icon={<CheckOutlined />}>
+                <Button size="small" icon={<CheckOutlined />}>
                   {t('pages.infra.tenant.approve')}
                 </Button>
               </Popconfirm>
@@ -1166,13 +1193,13 @@ const SuperAdminTenantList: React.FC = () => {
                   }
                 }}
               >
-                <Button type="link" size="small" danger icon={<CloseOutlined />}>
+                <Button size="small" icon={<CloseOutlined />}>
                   {t('pages.infra.tenant.reject')}
                 </Button>
               </Popconfirm>
             )}
             {isSuspended && (
-              <Popconfirm key="activate" {...rowActionKind('update')} title={t('pages.infra.tenant.activateConfirm')}
+              <Popconfirm key="activate" title={t('pages.infra.tenant.activateConfirm')}
                 onConfirm={async () => {
                   const success = await activateTenant(record.id);
                   if (success) {
@@ -1180,13 +1207,13 @@ const SuperAdminTenantList: React.FC = () => {
                   }
                 }}
               >
-                <Button type="link" size="small" icon={<PlayCircleOutlined />}>
+                <Button {...rowActionKind('execute')}>
                   {t('common.enabled')}
                 </Button>
               </Popconfirm>
             )}
             {isActive && (
-              <Popconfirm key="activate" {...rowActionKind('update')} title={t('pages.infra.tenant.deactivateConfirm')}
+              <Popconfirm key="deactivate" title={t('pages.infra.tenant.deactivateConfirm')}
                 onConfirm={async () => {
                   const success = await deactivateTenant(record.id);
                   if (success) {
@@ -1194,7 +1221,7 @@ const SuperAdminTenantList: React.FC = () => {
                   }
                 }}
               >
-                <Button type="link" size="small" danger icon={<PauseCircleOutlined />}>
+                <Button {...rowActionKind('close')} {...rowActionToneDestructive()}>
                   {t('pages.infra.tenant.deactivate')}
                 </Button>
               </Popconfirm>
@@ -1208,7 +1235,6 @@ const SuperAdminTenantList: React.FC = () => {
                 onConfirm={() => handleSetDefaultTenant(record.id)}
               >
                 <Button
-                  type="link"
                   size="small"
                   icon={<StarOutlined />}
                   loading={defaultTenantLoadingId === record.id}
@@ -1226,7 +1252,6 @@ const SuperAdminTenantList: React.FC = () => {
                 onConfirm={() => handleSetDefaultTenant(null)}
               >
                 <Button
-                  type="link"
                   size="small"
                   icon={<StarFilled />}
                   loading={defaultTenantLoadingId === record.id}
@@ -1245,7 +1270,7 @@ const SuperAdminTenantList: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Tenant>
-      columnPersistenceId="pages.infra.tenants.list"
+      columnPersistenceId="pages.infra.tenants.list-lifecycle-v2"
       actionRef={actionRef}
       columns={columns}
       rowKey="id"
@@ -1364,6 +1389,7 @@ const SuperAdminTenantList: React.FC = () => {
       title={t('pages.infra.tenant.detailTitle')}
       open={drawerVisible}
       onClose={handleCloseDetail}
+      basicColumn={1}
       loading={detailLoading}
       error={detailError}
       onRetry={() => {

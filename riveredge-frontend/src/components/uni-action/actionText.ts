@@ -53,6 +53,7 @@ export type RowActionVisualProfile =
   | 'add-follow-up-from-document'
   | 'reset-password'
   | 'test-connection'
+  | 'balloon-annotate'
 
 export function rowActionKind(
   kind: RowActionPermissionKind,
@@ -99,13 +100,27 @@ export function rowActionTestConnection(
   }
 }
 
+/** 图纸气泡标注：排序紧随详情（与检验「执行检验」同级）；RBAC 由页面门控 */
+export function rowActionBalloonAnnotate(
+  permission: 'skip' | 'read' | 'update' = 'skip',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'balloon-annotate',
+  }
+}
+
 export function readActionVisualProfile(node: React.ReactNode): RowActionVisualProfile | null {
   if (!React.isValidElement(node)) return null
   const raw = (node.props as Record<string, unknown>)?.[ROW_ACTION_VISUAL_PROFILE_ATTR]
   if (
     raw === 'add-follow-up-from-document' ||
     raw === 'reset-password' ||
-    raw === 'test-connection'
+    raw === 'test-connection' ||
+    raw === 'balloon-annotate'
   ) {
     return raw
   }

@@ -93,6 +93,7 @@ Node.js 22+ · Python 3.12+（系统）/ 3.11（uv 虚拟环境）· uv · npm �
 
 - Git Bash 运行 `./fast-deploy/deploy.sh`；依赖安装走 PowerShell
 - winget 不可用时自动 fallback（MSI / 官方安装包 / 便携版）
+- 本地 PostgreSQL 迁移前自动安装 pgvector（`windows/install-pgvector.ps1`）；**须管理员权限**写入 `Program Files\PostgreSQL`
 - Caddyfile 使用 `C:/...` 原生路径，避免静态资源 404
 
 详细故障排查与运维命令见 [部署指南](../docs/部署指南.md)。

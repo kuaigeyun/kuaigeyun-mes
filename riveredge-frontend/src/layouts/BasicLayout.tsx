@@ -51,6 +51,7 @@ import {
   type MenuDataItemWithLocaleKey,
 } from '../utils/menuTranslation';
 import { resolveCustomPageTitle } from '../utils/customPageTitle';
+import { DEFAULT_THEME_BORDER_RADIUS } from '../utils/themeBorderRadius';
 import { prefetchPlugin } from '../utils/pluginLoader';
 import { prefetchKuaizhizaoRoute } from '../apps/kuaizhizao/routePrefetch';
 import { prefetchMasterDataRoute } from '../apps/master-data/routePrefetch';
@@ -72,6 +73,7 @@ import {
   readSidebarSearchBgFollowPref,
   type SidebarSearchBgFollow,
 } from './basicLayout/sidebarSearchBgFollow';
+import { readSidebarMenuDensityPref } from './basicLayout/sidebarMenuDensity';
 import dayjs from 'dayjs';
 import { nextSiteLogoUrlAfterImageError } from '../constants/siteAssets';
 import { useSiteLogoUrl } from '../hooks/useSiteLogoUrl';
@@ -116,12 +118,12 @@ const AiAssistant = React.lazy(() => import('../components/ai-assistant'));
 import { getTenantById, getPackageConfigs } from '../services/tenant';
 import { getToken, clearAuth, getTenantId } from '../utils/auth';
 import { resolveIsInfraSuperAdminSession } from '../utils/infraSuperAdminSession';
-import { useGlobalStore } from '../stores';
+import { useGlobalStore, useThemeStore, useUserPreferenceStore } from '../stores';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useCurrentUserQuery } from '../hooks/useCurrentUserQuery';
 import { buildRestoredUserFromStorage } from '../utils/restoredUser';
 import { getLanguageList, Language } from '../services/language';
-import { LANGUAGE_MAP, applyLanguageWithPersist } from '../config/i18n';
+import { LANGUAGE_MAP, applyLanguageWithPersist, clearLanguageForLogout } from '../config/i18n';
 import { SUPPORTED_UI_LANGUAGES, normalizeUiLanguage } from '../utils/localeBootstrap';
 import i18n from '../config/i18n';
 import {
@@ -147,9 +149,7 @@ import { AiAssistantHeaderButton } from './AiAssistantHeaderButton';
 import OnboardingGuide from '../components/onboarding-guide';
 import { OnboardingWizardEntry } from '../components/onboarding-guide/OnboardingWizardEntry';
 import { HeaderQuickEntryPopover } from '../components/quick-entry';
-import { useUserPreferenceStore } from '../stores/userPreferenceStore';
 import { useConfigStore, resolveEffectiveHomePath, getDefaultTenantHomePath } from '../stores/configStore';
-import { useThemeStore } from '../stores/themeStore';
 import { getMenuBadgeCounts, type MenuBadgeEntry } from '../services/dashboard';
 import { verifyCopyright } from '../utils/copyrightIntegrity';
 import { getBuildProvenance, getPlatformSettingsPublic, registerInstallInstance } from '../services/platformSettings';
@@ -235,6 +235,7 @@ const MENU_BADGE_PATH_KEY: Record<string, string> = {
   '/apps/kuaizhizao/quality-management/process-inspection': 'process_inspection',
   '/apps/kuaizhizao/quality-management/finished-goods-inspection': 'finished_goods_inspection',
   '/apps/kuaizhizao/quality-management/oqc-inspection': 'oqc_inspection',
+  '/apps/kuaizhizao/quality-management/fai-orders': 'fai_order',
   '/apps/kuaizhizao/quality-management/inspection-plans': 'inspection_plan',
   // 仓储
   '/apps/kuaizhizao/warehouse-management/inbound': 'inbound',
@@ -379,12 +380,9 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       if (restoredUser) {
         setCurrentUser(restoredUser);
         console.warn('⚠️ 获取用户信息失败，使用本地缓存:', error);
-      } else {
-        const isInApp = window.location.pathname.startsWith('/apps/');
-        if ((error as any)?.response?.status === 401 && !isInApp) {
-          clearAuth();
-          setCurrentUser(undefined);
-        }
+      } else if ((error as { response?: { status?: number } })?.response?.status === 401) {
+        // 401 已由 apiRequest 续期链处理；勿在此处 clearAuth，避免与全局 AuthGuard 竞态误踢
+        console.warn('⚠️ 获取用户信息失败 (401)，保留会话等待全局续期');
       }
     } else if (!getToken()) {
       clearAuth();
@@ -530,6 +528,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/infra/operation': ManufacturingIcons.analytics, // 运营中心 - 使用分析图标
       '/infra/tenants': ManufacturingIcons.building, // 租户管理 - 使用建筑图标（保持）
       '/infra/packages': ManufacturingIcons.package, // 应用包管理 - 使用包裹图标
+      '/infra/sensitive-word-blacklist': ManufacturingIcons.shield,
       '/infra/scripts': ManufacturingIcons.fileCode, // 脚本管理
       '/infra/scheduled-tasks': ManufacturingIcons.clock, // 定时任务
       '/infra/admin': ManufacturingIcons.shield, // 平台管理 - 使用盾牌图标
@@ -554,6 +553,8 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/apps/kuaicaiwu/cost-management': ManufacturingIcons.calculator, // 成本管理
       '/apps/kuaizhizao/performance': ManufacturingIcons.trophy, // 绩效管理 - 奖杯图标（与分析中心区分）
       '/apps/master-data': ManufacturingIcons.database, // 主数据 - 使用数据库图标
+      '/apps/kuaioa': ManufacturingIcons.briefcase, // 轻办公
+      '/apps/kuaiplm': ManufacturingIcons.layers, // 快研发
       '/apps/master-data/warehouse': ManufacturingIcons.archive, // 主数据-仓库数据 - 使用归档图标（区别于仓储管理）
       '/apps/master-data/supply-chain': ManufacturingIcons.handshake, // 主数据-客户供应商（客户+供应商）- 握手/合作图标
       '/apps/kuaireport': ManufacturingIcons.fileBarChart, // 快报表 - 报表/图表图标（与仪表盘、大屏中心区分）
@@ -679,7 +680,10 @@ function computeMenuOpenKeysForPath(items: MenuDataItem[], currentPath: string):
   return [...new Set(openKeys)];
 }
 
-const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => [
+const getMenuConfig = (
+  t: (key: string) => string,
+  options?: { showSensitiveWordBlacklist?: boolean },
+): PermissionMenuDataItem[] => [
   {
     path: '/system/dashboard',
     name: t('menu.dashboard'),
@@ -824,6 +828,13 @@ const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => 
       { path: '/infra/scheduled-tasks', name: t('menu.infra.scheduled-tasks'), icon: getMenuIcon(t('menu.infra.scheduled-tasks'), '/infra/scheduled-tasks') },
       { path: '/infra/client-releases', name: t('menu.infra.client-releases'), icon: getMenuIcon(t('menu.infra.client-releases'), '/infra/client-releases') },
       { path: '/infra/license-management', name: t('menu.infra.license-management'), icon: getMenuIcon(t('menu.infra.license-management'), '/infra/license-management') },
+      ...(options?.showSensitiveWordBlacklist
+        ? [{
+            path: '/infra/sensitive-word-blacklist',
+            name: t('menu.infra.sensitive-word-blacklist'),
+            icon: getMenuIcon(t('menu.infra.sensitive-word-blacklist'), '/infra/sensitive-word-blacklist'),
+          }]
+        : []),
     ],
   },
 ];
@@ -836,6 +847,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const location = useLocation();
   const { token } = theme.useToken(); // 获取主题 token
   const { i18n: i18nInstance, t } = useSafeTranslation(); // 获取 i18n 实例和翻译函数（安全的）
+  const isInfraSuperAdmin = resolveIsInfraSuperAdminSession();
+  /** 平台超管始终展示入口；页内按 meta 判断是否已有开启敏感词控制的组织 */
+  const showSensitiveWordBlacklistMenu = isInfraSuperAdmin;
   
   // 精确订阅：只读取 BasicLayout 需要的 sidebar_collapsed 字段
   // 避免订阅整个 preferences 对象，防止无关偏好更新导致整个布局重渲染
@@ -852,6 +866,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   );
   const sidebarSearchBgFollowPref = useUserPreferenceStore((s) =>
     readSidebarSearchBgFollowPref(s.preferences as Record<string, unknown> | undefined),
+  );
+  const sidebarMenuDensityPref = useUserPreferenceStore((s) =>
+    readSidebarMenuDensityPref(s.preferences as Record<string, unknown> | undefined),
   );
 
   // 侧边栏折叠状态
@@ -893,6 +910,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       sidebarSearchBgFollowPref,
     );
   }, [sidebarSearchBgFollowPref]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-sidebar-menu-density', sidebarMenuDensityPref);
+  }, [sidebarMenuDensityPref]);
 
   // 工作区最大化模式 (由 UniTab 控制)
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -1059,6 +1080,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   /** 登出前清理租户相关 Query 缓存，避免重新登录后仍显示旧侧边栏菜单（applicationMenus staleTime 内不 refetch） */
   const performLogout = useCallback(() => {
     clearSessionScopedQueries(queryClient);
+    useUserPreferenceStore.getState().clearForLogout();
+    useThemeStore.getState().clearForLogout();
+    clearLanguageForLogout();
     logout();
     redirectAfterLogout(navigate);
   }, [queryClient, logout, navigate]);
@@ -1320,8 +1344,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return menuItem;
   }, [t]); // 添加 t 作为依赖项，确保翻译函数是最新的
 
-  // 稳定引用：避免每次渲染创建新函数导致 useUnifiedMenuData 重复计算
-  const getSystemMenuConfig = React.useCallback(() => getMenuConfig(t), [t]);
+  const getSystemMenuConfig = React.useCallback(
+    () => getMenuConfig(t, { showSensitiveWordBlacklist: showSensitiveWordBlacklistMenu }),
+    [t, showSensitiveWordBlacklistMenu],
+  );
 
   const {
     sidebarMenuData: filteredMenuData,
@@ -1440,8 +1466,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     });
     return Math.max(6, Math.min(24, maxRowSpan));
   }, [systemSettingsGroups]);
-
-  const isInfraSuperAdmin = resolveIsInfraSuperAdminSession();
 
   const { data: infraTenantInfo } = useQuery({
     queryKey: ['systemPanelTenantInfo', currentUser?.tenant_id],
@@ -1786,7 +1810,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   );
   /** 开始菜单圆角：跟随系统 token，保底 4px */
   const startMenuBaseRadius = React.useMemo(
-    () => Math.max(4, Number(token.borderRadius ?? 6)),
+    () => Math.max(4, Number(token.borderRadius ?? DEFAULT_THEME_BORDER_RADIUS)),
     [token.borderRadius],
   );
   const startMenuPanelRadius = React.useMemo(
@@ -2621,6 +2645,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       startMenuPanelRadius,
       startMenuTheme,
       sidebarSearchBgFollow: sidebarSearchBgFollowPref,
+      sidebarMenuDensity: sidebarMenuDensityPref,
       sidebarSearchStripBg,
       sidebarSearchStripUsesLightText,
     }),
@@ -2640,6 +2665,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       startMenuPanelRadius,
       startMenuTheme,
       sidebarSearchBgFollowPref,
+      sidebarMenuDensityPref,
       sidebarSearchStripBg,
       sidebarSearchStripUsesLightText,
     ],

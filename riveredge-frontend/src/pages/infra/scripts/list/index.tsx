@@ -17,7 +17,7 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../c
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
 import { SystemMasterDetailDrawer } from '../../../system/shared/systemMasterDetailDrawer';
-import { MarkerTag } from '../../../../constants/statusBadges';
+import { MarkerTag, StatusTag } from '../../../../constants/statusBadges';
 import {
   getScriptList,
   getScriptByUuid,
@@ -192,19 +192,20 @@ const ScriptListPage: React.FC = () => {
   /**
    * 处理批量删除
    */
-  const handleBatchDelete = async () => {
-    if (selectedRowKeys.length === 0) {
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    if (!keys.length) {
       messageApi.warning(t('pages.infra.scripts.selectToDelete'));
       return;
     }
-    
+
     try {
-      await Promise.all(selectedRowKeys.map((key) => deleteScript(key as string)));
+      await Promise.all(keys.map((key) => deleteScript(key as string)));
       messageApi.success(t('pages.infra.scripts.batchDeleteSuccess'));
       setSelectedRowKeys([]);
+      actionRef.current?.clearSelected?.();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(t('pages.infra.scripts.batchDeleteFailed'));
+      messageApi.error(error.message || t('pages.infra.scripts.batchDeleteFailed'));
     }
   };
 
@@ -291,21 +292,6 @@ const ScriptListPage: React.FC = () => {
       },
     },
     {
-      title: t('common.enabled'),
-      dataIndex: 'is_active',
-      width: 100,
-      valueType: 'select',
-      valueEnum: {
-        true: { text: t('common.enabled'), status: 'Success' },
-        false: { text: t('common.disabled'), status: 'Default' },
-      },
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('common.enabled') : t('common.disabled')}
-        </Tag>
-      ),
-    },
-    {
       title: t('pages.infra.scripts.columnRunning'),
       dataIndex: 'is_running',
       width: 100,
@@ -347,6 +333,25 @@ const ScriptListPage: React.FC = () => {
       hideInSearch: true,
     },
     {
+      title: t('common.status'),
+      dataIndex: 'is_active',
+      key: 'lifecycle',
+      width: 100,
+      fixed: 'right',
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'select',
+      valueEnum: {
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
+      },
+      render: (_, record) => (
+        <StatusTag color={record.is_active ? 'success' : 'default'}>
+          {record.is_active ? t('common.enabled') : t('common.disabled')}
+        </StatusTag>
+      ),
+    },
+    {
       title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
@@ -354,7 +359,6 @@ const ScriptListPage: React.FC = () => {
         return [
           <Button {...rowActionKind('read')}
             key="view"
-            type="link"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
@@ -363,7 +367,6 @@ const ScriptListPage: React.FC = () => {
           </Button>,
           <Button {...rowActionKind('update')}
             key="edit"
-            type="link"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
@@ -372,7 +375,6 @@ const ScriptListPage: React.FC = () => {
           </Button>,
           <Button {...rowActionKind('execute')}
             key="execute"
-            type="link"
             size="small"
             icon={<PlayCircleOutlined />}
             onClick={() => handleExecute(record)}
@@ -386,9 +388,7 @@ const ScriptListPage: React.FC = () => {
             onConfirm={() => handleDelete(record)}
           >
             <Button
-              type="link"
               size="small"
-              danger
               icon={<DeleteOutlined />}
             >
               {t('common.delete')}
@@ -403,7 +403,7 @@ const ScriptListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Script>
-          columnPersistenceId="pages.infra.scripts.list"
+          columnPersistenceId="pages.infra.scripts.list-v2"
           headerTitle={t('pages.infra.scripts.title')}
           actionRef={actionRef}
           columns={columns}
@@ -429,10 +429,8 @@ const ScriptListPage: React.FC = () => {
             };
           }}
           rowKey="uuid"
-          rowSelection={{
-            selectedRowKeys,
-            onChange: setSelectedRowKeys,
-          }}
+          enableRowSelection
+          onRowSelectionChange={setSelectedRowKeys}
           showAdvancedSearch={true}
           showCreateButton
           createButtonText={t('pages.infra.scripts.createButton')}

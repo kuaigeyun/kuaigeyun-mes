@@ -512,6 +512,51 @@ export function resolveBarcodeMappingRuleListParams(
   };
 }
 
+export type BatchingCenterTaskListRow = {
+  task_type?: string;
+  product_name?: string | null;
+  product_code?: string | null;
+  shortage_summary?: string | null;
+  material_name?: string | null;
+  material_code?: string | null;
+};
+
+function trimBatchingDisplayText(value?: string | null): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+/** 物料中心任务队列「产品/物料」叠列：成品名优先，缺则编码/备料摘要 */
+export function resolveBatchingTaskProductMaterialCell(row: BatchingCenterTaskListRow): {
+  primary: string;
+  secondary: string;
+} {
+  const productName = trimBatchingDisplayText(row.product_name);
+  const productCode = trimBatchingDisplayText(row.product_code);
+  const shortage = trimBatchingDisplayText(row.shortage_summary);
+  const materialName = trimBatchingDisplayText(row.material_name);
+  const materialCode = trimBatchingDisplayText(row.material_code);
+  const taskType = trimBatchingDisplayText(row.task_type);
+
+  if (taskType === 'proactive_prep') {
+    return {
+      primary: productName || productCode || shortage || '-',
+      secondary: '-',
+    };
+  }
+
+  if (taskType === 'batching_draft') {
+    const primary = productName || productCode || shortage || '-';
+    if (productName || productCode) {
+      return { primary, secondary: shortage || '-' };
+    }
+    return { primary, secondary: '-' };
+  }
+
+  const primary = materialName || shortage || '-';
+  const secondary = materialCode || '-';
+  return { primary, secondary };
+}
+
 export function resolveBatchingCenterTaskListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,

@@ -4,6 +4,22 @@ import type { CSSProperties } from 'react';
 /** 列表工具栏控件统一高度（与 UniSearch 模糊搜索框一致） */
 export const UNI_TOOLBAR_CONTROL_HEIGHT = 32;
 
+/** Segmented 轨道内边距（与 ThemedSegmented surfaceBackground / antd trackPadding 一致） */
+export const UNI_TOOLBAR_SEGMENTED_TRACK_PADDING = 2;
+
+/**
+ * 分段选择器激活 thumb / 选项内圆角：外框圆角减去轨道 padding，与 Input 等控件跟随系统 borderRadius。
+ * antd 默认 borderRadiusSM 在 borderRadius≥16 时封顶 8px，会与外框圆角脱节。
+ */
+export function computeSegmentedInsetBorderRadius(
+  borderRadius: number,
+  trackPadding = UNI_TOOLBAR_SEGMENTED_TRACK_PADDING,
+): number {
+  const pad = Number.isFinite(trackPadding) ? trackPadding : UNI_TOOLBAR_SEGMENTED_TRACK_PADDING;
+  const outer = Number.isFinite(borderRadius) ? borderRadius : 0;
+  return Math.max(0, outer - pad);
+}
+
 /**
  * 列表工具栏控件外框：圆角 / 描边 / 背景与 ant Input 默认一致，无额外阴影。
  * 用于分段选择器、模糊搜索等并排控件的设计对齐。

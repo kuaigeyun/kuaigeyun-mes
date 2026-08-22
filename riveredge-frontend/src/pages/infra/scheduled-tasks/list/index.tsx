@@ -17,7 +17,7 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../c
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
 import { SystemMasterDetailDrawer } from '../../../system/shared/systemMasterDetailDrawer';
-import { MarkerTag } from '../../../../constants/statusBadges';
+import { MarkerTag, StatusTag } from '../../../../constants/statusBadges';
 import {
   getScheduledTaskList,
   getScheduledTaskByUuid,
@@ -353,21 +353,6 @@ const ScheduledTaskListPage: React.FC = () => {
       ),
     },
     {
-      title: t('field.scheduledTask.activeStatus'),
-      dataIndex: 'is_active',
-      width: 100,
-      valueType: 'select',
-      valueEnum: {
-        true: { text: t('common.enabled'), status: 'Success' },
-        false: { text: t('common.disabled'), status: 'Default' },
-      },
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('common.enabled') : t('common.disabled')}
-        </Tag>
-      ),
-    },
-    {
       title: t('field.scheduledTask.lastRunAt'),
       dataIndex: 'last_run_at',
       width: 180,
@@ -399,6 +384,25 @@ const ScheduledTaskListPage: React.FC = () => {
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
+    },
+    {
+      title: t('common.status'),
+      dataIndex: 'is_active',
+      key: 'lifecycle',
+      width: 100,
+      fixed: 'right',
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'select',
+      valueEnum: {
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
+      },
+      render: (_, record) => (
+        <StatusTag color={record.is_active ? 'success' : 'default'}>
+          {record.is_active ? t('common.enabled') : t('common.disabled')}
+        </StatusTag>
+      ),
     },
     {
       title: t('common.actions'),
@@ -441,8 +445,6 @@ const ScheduledTaskListPage: React.FC = () => {
             onConfirm={() => handleDelete(record)}
           >
             <Button
-              type="link"
-              danger
               size="small"
               icon={<DeleteOutlined />}
             >
@@ -458,7 +460,7 @@ const ScheduledTaskListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<ScheduledTask>
-          columnPersistenceId="pages.infra.scheduled-tasks.list"
+          columnPersistenceId="pages.infra.scheduled-tasks.list-v2"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

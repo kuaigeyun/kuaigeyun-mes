@@ -28,6 +28,7 @@ import {
   Bot,
   Box,
   Boxes,
+  Briefcase,
   Building2,
   Calculator,
   Calendar,
@@ -182,6 +183,7 @@ const LUCIDE_BY_NAME: Record<string, React.ComponentType<any>> = {
   Bot,
   Box,
   Boxes,
+  Briefcase,
   Building2,
   Calculator,
   Calendar,
@@ -316,6 +318,14 @@ const LUCIDE_BY_NAME: Record<string, React.ComponentType<any>> = {
 /**
  * 从预置表取 Lucide 组件；未知名称走 DynamicIcon。
  */
+export function resolveMenuIconComponent(iconKey: string): React.ComponentType<any> {
+  const trimmed = iconKey.trim();
+  if (!trimmed) return getLucideIcon('Factory');
+  const fromCatalog = ManufacturingIcons[trimmed as keyof typeof ManufacturingIcons];
+  if (fromCatalog) return fromCatalog;
+  return getLucideIcon(trimmed);
+}
+
 function getLucideIcon(iconName: string): React.ComponentType<any> {
   const direct = LUCIDE_BY_NAME[iconName];
   if (direct) return direct;
@@ -502,6 +512,8 @@ export const ManufacturingIcons = {
   industrialDashboard: getLucideIcon('Gauge'), // 工业仪表盘
   mesSystem: getLucideIcon('Factory'), // MES 制造执行系统
   systemConfig: getLucideIcon('Cog'), // 系统配置（齿轮）
+  Setting: getLucideIcon('Settings'), // 历史落库 PascalCase，与 systemConfig 同语义
+  briefcase: getLucideIcon('Briefcase'), // 轻办公
   operationsCenter: getLucideIcon('Factory'), // 运营中心（工厂）
   
   // 新增图标映射

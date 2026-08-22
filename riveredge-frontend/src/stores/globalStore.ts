@@ -8,9 +8,6 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { CurrentUser } from '../types/api';
 import { clearAuth } from '../utils/auth';
-import { useUserPreferenceStore } from './userPreferenceStore';
-import { useThemeStore } from './themeStore';
-import { clearLanguageForLogout } from '../config/i18n';
 
 /**
  * 全局状态接口
@@ -84,12 +81,8 @@ export const useGlobalStore = create<GlobalState>()(
       logout: () => {
         clearAuth();
         set({ currentUser: undefined, isLocked: false, lockedPath: undefined, loading: false });
-        // 清空用户偏好和主题缓存，避免下一账户读到当前账户的偏好（账户与租户隔离）
-        useUserPreferenceStore.getState().clearForLogout();
-        useThemeStore.getState().clearForLogout();
-        clearLanguageForLogout();
-        // ⚠️ 关键修复：不在这里直接跳转，由调用方使用 navigate 进行跳转，避免页面刷新
-        // 路由守卫会自动处理重定向到登录页
+        // 偏好 / 主题 / i18n 由 BasicLayout.performLogout 清理。
+        // 本 store 不得静态引用 config/i18n，否则登录 MPA 经 restoredUser 会打进整包文案。
       },
       incrementApplicationMenuVersion: () =>
         set((s) => ({ applicationMenuVersion: (s.applicationMenuVersion ?? 0) + 1 })),

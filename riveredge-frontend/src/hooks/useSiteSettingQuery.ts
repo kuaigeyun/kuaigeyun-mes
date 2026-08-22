@@ -7,6 +7,7 @@ import {
 } from '../config/sessionQueries';
 import { useConfigStore } from '../stores/configStore';
 import { useThemeStore } from '../stores/themeStore';
+import { updateLastActivity } from '../utils/activityUtils';
 import { getToken } from '../utils/auth';
 
 export interface UseSiteSettingQueryOptions {
@@ -32,6 +33,12 @@ export function useSiteSettingQuery(options: UseSiteSettingQueryOptions = {}) {
     if (!settings || typeof settings !== 'object') return;
     useConfigStore.getState().hydrateFromSettings(settings);
     useThemeStore.setState({ siteThemeSettings: settings });
+    const inactivity = Number(
+      (settings as { security?: { inactivity_timeout?: number } }).security?.inactivity_timeout,
+    );
+    if (Number.isFinite(inactivity) && inactivity > 0) {
+      updateLastActivity(true);
+    }
   }, [query.data]);
 
   return query;

@@ -51,6 +51,9 @@ from infra.api.platform_settings.provenance import router as platform_provenance
 from infra.api.platform_settings.install_register import router as install_register_router
 from infra.api.business_config.business_config import router as business_config_router
 from infra.api.application_dedicated.application_dedicated import router as application_dedicated_router
+from infra.api.sensitive_word_blacklist.sensitive_word_blacklist import (
+    router as sensitive_word_blacklist_router,
+)
 
 # 导入所有系统级 API 路由（core）
 import sys
@@ -875,6 +878,7 @@ app.include_router(client_releases_public_router, prefix="/api/v1/infra")
 app.include_router(client_releases_router, prefix="/api/v1/infra")
 app.include_router(client_releases_tenant_router, prefix="/api/v1/core")
 app.include_router(application_dedicated_router, prefix="/api/v1/infra")
+app.include_router(sensitive_word_blacklist_router, prefix="/api/v1/infra")
 
 # 系统级功能路由 (System Level APIs) - 对应 core/ 文件夹
 app.include_router(users_router, prefix="/api/v1/core")

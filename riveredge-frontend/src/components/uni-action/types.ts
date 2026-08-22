@@ -7,15 +7,18 @@ export type UniActionRenderOptions = {
   /** 行内操作按功能权限隐藏（由 UniTable 注入） */
   permissionGates?: ResourcePermissionGates;
   /**
-   * 与 `ROW_ACTIONS_DIRECT_MAX` 配合：溢出时主行保留 `max(directMax - 1, ROW_ACTIONS_MIN_PRIMARY_VISIBLE)` 个可点击项。
+   * 与 `ROW_ACTIONS_DIRECT_MAX` 配合：溢出时主行保留 `max(directMax - 1, minPrimaryVisible ?? ROW_ACTIONS_MIN_PRIMARY_VISIBLE)` 个可点击项。
    */
   directMax?: number
+  /** 覆盖默认主行最少直出数（默认 3）；例如组织列表仅保留详情+编辑时设为 2 */
+  minPrimaryVisible?: number
   /** 为 true 时，在无站点级审核配置下隐藏「确认 / 审核 / 审批 / 驳回」等审核语义按钮 */
   suppressAuditSemanticActions?: boolean
 }
 
 export type RenderRowActionsOverflowOptions = {
   directMax?: number
+  minPrimaryVisible?: number
   suppressAuditSemanticActions?: boolean
 }
 

@@ -1,13 +1,12 @@
 /**
- * 线边备料：产品工艺同款两栏
- * - 左：仅备料建议（proactive_prep）；无数据 Empty
- * - 右：线边备料单常驻（batching_draft）
+ * 线边备料：左栏备料建议 + 右栏线边备料单列表
  */
 import React, { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { App, Button, Empty, Spin } from 'antd'
+import { App, Button, Empty, Spin, theme } from 'antd'
 import { MarkerTag } from '../../../../../constants/statusBadges'
 import { TwoColumnLayout } from '../../../../../components/layout-templates'
+import { FEATURE_PAGE_LIST_ITEM_CLASS } from '../../../../../components/layout-templates/constants'
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry'
 import { batchingOrderApi } from '../../../services/batching-order'
 import { normalizeWarehouseListResponse } from '../../../utils/warehouseListCore'
@@ -46,6 +45,7 @@ const LineSidePrepSplitView: React.FC<Props> = ({
 }) => {
   const { t } = useTranslation()
   const { message: messageApi } = App.useApp()
+  const { token } = theme.useToken()
   const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(
     t,
     'batching_order.pull_from_work_order',
@@ -125,9 +125,9 @@ const LineSidePrepSplitView: React.FC<Props> = ({
   }
 
   const leftList = (
-    <div className="product-process-material-list">
+    <div style={{ padding: 8 }}>
       {loading ? (
-        <div className="product-process-material-list__loading">
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '32px 0' }}>
           <Spin />
         </div>
       ) : suggestions.length === 0 ? (
@@ -146,37 +146,110 @@ const LineSidePrepSplitView: React.FC<Props> = ({
               ? `${Math.round(row.kitting_rate)}%`
               : t('app.kuaizhizao.batchingCenter.taskType.proactivePrep')
           const showPullAction = canPullBatchingFromSuggestion(row)
+          const itemStyle: React.CSSProperties = {
+            padding: 12,
+            marginBottom: 4,
+            borderRadius: token.borderRadius,
+            border: active ? `1px solid ${token.colorPrimary}` : '1px solid transparent',
+            backgroundColor: active ? token.colorPrimaryBg : undefined,
+            transition: 'background-color 0.15s, border-color 0.15s',
+            display: showPullAction ? 'flex' : undefined,
+            flexDirection: showPullAction ? 'column' : undefined,
+            gap: showPullAction ? 8 : undefined,
+            cursor: showPullAction ? 'default' : 'pointer',
+          }
+          const selectRow = () => setSelectedKey(key)
           return (
             <div
               key={key}
-              className={`product-process-material-list__item${
-                showPullAction ? ' product-process-material-list__item--with-action' : ''
-              }${active ? ' product-process-material-list__item--active' : ''}`}
+              className={`${FEATURE_PAGE_LIST_ITEM_CLASS}${active ? ' is-selected' : ''}`}
+              style={itemStyle}
+              onClick={showPullAction ? undefined : selectRow}
+              onKeyDown={
+                showPullAction
+                  ? undefined
+                  : (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        selectRow()
+                      }
+                    }
+              }
+              role={showPullAction ? undefined : 'button'}
+              tabIndex={showPullAction ? undefined : 0}
             >
               <div
-                className="product-process-material-list__body"
-                role="button"
-                tabIndex={0}
-                onClick={() => setSelectedKey(key)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    setSelectedKey(key)
-                  }
-                }}
+                style={{ minWidth: 0, cursor: 'pointer' }}
+                onClick={showPullAction ? selectRow : undefined}
+                onKeyDown={
+                  showPullAction
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          selectRow()
+                        }
+                      }
+                    : undefined
+                }
+                role={showPullAction ? 'button' : undefined}
+                tabIndex={showPullAction ? 0 : undefined}
               >
-                <div className="product-process-material-list__row">
-                  <span className="product-process-material-list__code">{title}</span>
-                  <MarkerTag color="processing" className="product-process-material-list__tag">
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 6,
+                    minWidth: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: token.colorText,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {title}
+                  </span>
+                  <MarkerTag
+                    color="processing"
+                    style={{
+                      margin: 0,
+                      maxWidth: '52%',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      fontSize: 11,
+                      lineHeight: '18px',
+                    }}
+                  >
                     {tagText}
                   </MarkerTag>
                 </div>
-                <div className="product-process-material-list__name" title={subtitle}>
+                <div
+                  style={{
+                    marginTop: 4,
+                    fontSize: 12,
+                    color: token.colorTextSecondary,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={subtitle}
+                >
                   {subtitle}
                 </div>
                 {row.shortage_summary && row.product_name ? (
                   <div
-                    className="product-process-material-list__name product-process-material-list__name--wrap"
+                    style={{
+                      marginTop: 2,
+                      fontSize: 12,
+                      color: token.colorTextSecondary,
+                      whiteSpace: 'normal',
+                      lineHeight: 1.4,
+                    }}
                     title={row.shortage_summary}
                   >
                     {row.shortage_summary}
@@ -188,7 +261,6 @@ const LineSidePrepSplitView: React.FC<Props> = ({
                   type="primary"
                   size="small"
                   block
-                  className="product-process-material-list__action"
                   loading={generatingKey === key}
                   onClick={() => void handleGenerate(row)}
                 >

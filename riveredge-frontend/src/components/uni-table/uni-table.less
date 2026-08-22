@@ -423,11 +423,40 @@
   margin-inline: auto;
 }
 
+/* 固定节点数（如 8D D1–D8+已关闭）：条带已按列宽预算，禁止单元格内横滚条 */
+.uni-table-container .ant-table-tbody > tr > td.uni-table-operation-steps-cell.uni-table-operation-steps-cell-fit {
+  overflow-x: hidden;
+}
+
 /* 固定列背景 / z-index / overflow 交给 antd 原生 sticky 单元格，禁止第二套叠层补丁 */
+
+/* 斑马纹（用户偏好 ui.table_zebra_stripe；ProTable / antd Table 无原生 striped） */
+.uni-table-container.uni-table-zebra {
+  /*
+   * 与 antd selection.js 一致：对 .ant-table-cell 设 background（非 td + background-color），
+   * 才能覆盖 .ant-table-cell-fix 的 tableBg，固定列与滚动区同色；禁止另写 fix-* 补丁。
+   */
+  .ant-table-wrapper .ant-table-tbody > tr:nth-child(even) > .ant-table-cell {
+    background: var(--ant-table-row-hover-bg, var(--ant-color-fill-alter, rgba(0, 0, 0, 0.02)));
+  }
+
+  .ant-table-wrapper .ant-table-tbody > tr > .ant-table-cell-row-hover {
+    background: var(--ant-table-row-hover-bg, var(--ant-color-fill-secondary, rgba(0, 0, 0, 0.04)));
+  }
+
+  .ant-table-wrapper .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell {
+    background: var(--ant-table-row-selected-bg, var(--ant-color-primary-bg, #e6f4ff));
+  }
+
+  .ant-table-wrapper .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-row-hover {
+    background: var(--ant-table-row-selected-hover-bg, var(--ant-color-primary-bg-hover, #bae0ff));
+  }
+}
 
 /* 列展示 Popover */
 .ant-pro-table-column-setting-title {
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .ant-pro-table-column-setting-title .uni-table-column-setting-reset.ant-btn-link {
@@ -438,6 +467,67 @@
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
+}
+
+/* 列设置：固定操作区宽度，避免悬停显隐固定按钮时 panel 横向抖动 */
+.ant-pro-table-column-setting-overlay.ant-popover {
+  .ant-popover-inner-content {
+    width: 220px;
+    min-width: 220px;
+    max-width: 220px;
+    box-sizing: border-box;
+    background: var(--ant-color-bg-elevated, #ffffff);
+  }
+
+  .ant-pro-table-column-setting-list-item {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+
+    &-title {
+      flex: 1;
+      min-width: 0;
+      max-width: none;
+
+      .ant-typography {
+        width: 100% !important;
+        max-width: 100%;
+      }
+    }
+
+    &-option {
+      display: flex !important;
+      visibility: hidden;
+      flex: 0 0 56px;
+      width: 56px;
+      min-width: 56px;
+      max-width: 56px;
+      justify-content: flex-end;
+      align-items: center;
+      float: none;
+      margin-inline-start: 4px;
+      box-sizing: border-box;
+
+      > span {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+    }
+
+    &:not(:has(.ant-pro-table-column-setting-list-item-option))::after {
+      content: '';
+      flex: 0 0 56px;
+      width: 56px;
+      min-width: 56px;
+      flex-shrink: 0;
+    }
+  }
+
+  .ant-tree-treenode:hover .ant-pro-table-column-setting-list-item-option {
+    visibility: visible;
+    display: flex !important;
+  }
 }
 
 .ant-pro-table-column-setting-overlay.ant-popover .ant-popover-inner,

@@ -30,6 +30,19 @@ export enum TenantPlan {
   ENTERPRISE = 'enterprise',  // 企业版
 }
 
+/** 套餐类型 MarkerTag 颜色（套餐管理 / 组织管理共用，禁止页面各自映射） */
+export const TENANT_PLAN_MARKER_COLORS: Record<TenantPlan, string> = {
+  [TenantPlan.TRIAL]: 'blue',
+  [TenantPlan.BASIC]: 'green',
+  [TenantPlan.PROFESSIONAL]: 'orange',
+  [TenantPlan.ENTERPRISE]: 'red',
+};
+
+export function resolveTenantPlanMarkerColor(plan: string | TenantPlan | null | undefined): string {
+  const planKey = String(plan || '').toLowerCase() as TenantPlan;
+  return TENANT_PLAN_MARKER_COLORS[planKey] ?? 'default';
+}
+
 /**
  * 套餐配置接口
  */

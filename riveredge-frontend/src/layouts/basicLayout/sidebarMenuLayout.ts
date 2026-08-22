@@ -1,5 +1,6 @@
 import type { MenuDataItem } from '@ant-design/pro-components';
 import { extractAppCodeFromPath } from '../../utils/menuTranslation';
+import type { SidebarMenuDensity } from './sidebarMenuDensity';
 
 /** 侧栏菜单布局：平铺（默认） / 双列 */
 export type SidebarMenuLayout = 'flat' | 'split';
@@ -14,6 +15,53 @@ export const SPLIT_SIDEBAR_PRIMARY_WIDTH = 56;
 export const SPLIT_SIDEBAR_SECONDARY_WIDTH = FLAT_SIDEBAR_WIDTH - SPLIT_SIDEBAR_PRIMARY_WIDTH;
 export const SPLIT_SIDEBAR_WIDTH = FLAT_SIDEBAR_WIDTH;
 export const SPLIT_SIDEBAR_COLLAPSED_WIDTH = SPLIT_SIDEBAR_PRIMARY_WIDTH;
+
+/** 侧栏菜单行高：标准档对齐 antd Menu controlHeightLG(40) */
+export const SIDER_MENU_ITEM_HEIGHT_STANDARD = 40;
+
+/** 紧凑档行高（更多菜单可见） */
+export const SIDER_MENU_ITEM_HEIGHT_COMPACT = 34;
+
+export const SIDER_MENU_PADDING_STANDARD = 8;
+export const SIDER_MENU_PADDING_COMPACT = 6;
+
+/** 紧凑档行间距 */
+export const SIDER_MENU_ITEM_MARGIN_BLOCK_COMPACT = 2;
+
+/** 双列左列应用格最小高度 */
+export const SPLIT_SIDEBAR_PRIMARY_ITEM_MIN_HEIGHT_STANDARD = 58;
+export const SPLIT_SIDEBAR_PRIMARY_ITEM_MIN_HEIGHT_COMPACT = 52;
+
+/** 双列左列图标磁贴尺寸 */
+export const SPLIT_SIDEBAR_PRIMARY_ICON_SIZE_STANDARD = 34;
+export const SPLIT_SIDEBAR_PRIMARY_ICON_SIZE_COMPACT = 32;
+
+export type SiderMenuMetrics = {
+  itemHeight: number;
+  menuPadding: number;
+  itemMarginBlock: number;
+  splitPrimaryMinHeight: number;
+  splitPrimaryIconSize: number;
+};
+
+export function resolveSiderMenuMetrics(density: SidebarMenuDensity): SiderMenuMetrics {
+  if (density === 'compact') {
+    return {
+      itemHeight: SIDER_MENU_ITEM_HEIGHT_COMPACT,
+      menuPadding: SIDER_MENU_PADDING_COMPACT,
+      itemMarginBlock: SIDER_MENU_ITEM_MARGIN_BLOCK_COMPACT,
+      splitPrimaryMinHeight: SPLIT_SIDEBAR_PRIMARY_ITEM_MIN_HEIGHT_COMPACT,
+      splitPrimaryIconSize: SPLIT_SIDEBAR_PRIMARY_ICON_SIZE_COMPACT,
+    };
+  }
+  return {
+    itemHeight: SIDER_MENU_ITEM_HEIGHT_STANDARD,
+    menuPadding: SIDER_MENU_PADDING_STANDARD,
+    itemMarginBlock: 0,
+    splitPrimaryMinHeight: SPLIT_SIDEBAR_PRIMARY_ITEM_MIN_HEIGHT_STANDARD,
+    splitPrimaryIconSize: SPLIT_SIDEBAR_PRIMARY_ICON_SIZE_STANDARD,
+  };
+}
 
 export function readSidebarMenuLayoutPref(preferences: Record<string, unknown> | null | undefined): SidebarMenuLayout {
   const nested = preferences?.ui as Record<string, unknown> | undefined;

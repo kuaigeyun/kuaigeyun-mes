@@ -1063,6 +1063,23 @@ class AuthService:
         else:
             tenant_id = user.tenant_id
 
+        is_infra_superadmin = payload.get("is_infra_superadmin") is True
+        if tenant_id is not None and not is_infra_superadmin:
+            from infra.models.tenant import Tenant, TenantStatus
+
+            tid = int(tenant_id)
+            tenant = await Tenant.get_or_none(id=tid, status=TenantStatus.ACTIVE)
+            if not tenant:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="会话组织已失效，请重新登录",
+                )
+            if user.tenant_id is not None and user.tenant_id != tid:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="会话组织已失效，请重新登录",
+                )
+
         # 生成新的 Token（保留当前会话 tenant_id）
         access_token = create_token_for_user(
             user_id=user.id,

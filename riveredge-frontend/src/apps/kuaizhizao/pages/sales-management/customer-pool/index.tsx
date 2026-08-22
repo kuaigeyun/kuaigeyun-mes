@@ -33,6 +33,7 @@ import {
   DeleteOutlined,
   FormOutlined,
 } from '@ant-design/icons';
+import { CollaboratorMarkerTags } from './collaboratorMarkerTags';
 import { useCustomerPoolPermissions } from '../../../hooks/useCustomerPoolPermissions';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -263,16 +264,7 @@ const CustomerPoolPage: React.FC = () => {
 
   const renderCollaboratorsCell = useCallback((collaborators?: CustomerPoolItem['collaborators']) => {
     if (!collaborators?.length) return '—';
-    const visible = collaborators.slice(0, 2);
-    const rest = collaborators.length - visible.length;
-    return (
-      <Space size={4} wrap>
-        {visible.map((item) => (
-          <Tag key={item.user_id}>{item.user_name}</Tag>
-        ))}
-        {rest > 0 ? <Tag>{`+${rest}`}</Tag> : null}
-      </Space>
-    );
+    return <CollaboratorMarkerTags collaborators={collaborators} />;
   }, []);
 
   const openCollaboratorsModal = useCallback(

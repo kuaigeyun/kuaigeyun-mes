@@ -4,13 +4,15 @@
  * 用于管理平台套餐信息（查看、编辑、创建、删除）
  */
 
-import { App, Button, Space, Popconfirm, Tag } from 'antd';
+import { App, Button, Popconfirm } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import React, { useState, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createPackage, getPackageList, deletePackage, updatePackage, type Package, type PackageCreate, type PackageUpdate, TenantPlan } from '../../../services/tenant';
+import { rowActionKind } from '../../../components/uni-action';
+import { createPackage, getPackageList, deletePackage, updatePackage, type Package, type PackageCreate, type PackageUpdate, TenantPlan, TENANT_PLAN_MARKER_COLORS } from '../../../services/tenant';
 import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
+import { MarkerTag, StatusTag } from '../../../constants/statusBadges';
 import { useTranslation } from 'react-i18next';
 import PackageForm from './form';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
@@ -222,20 +224,13 @@ export default function PackageManagementPage() {
 
   // 套餐类型映射
   const planMap: Record<string, { text: string; color: string }> = {
-    [TenantPlan.TRIAL]: { text: t('pages.infra.package.planTrial'), color: 'blue' },
-    [TenantPlan.BASIC]: { text: t('pages.infra.package.planBasic'), color: 'green' },
-    [TenantPlan.PROFESSIONAL]: { text: t('pages.infra.package.planProfessional'), color: 'orange' },
-    [TenantPlan.ENTERPRISE]: { text: t('pages.infra.package.planEnterprise'), color: 'red' },
+    [TenantPlan.TRIAL]: { text: t('pages.infra.package.planTrial'), color: TENANT_PLAN_MARKER_COLORS[TenantPlan.TRIAL] },
+    [TenantPlan.BASIC]: { text: t('pages.infra.package.planBasic'), color: TENANT_PLAN_MARKER_COLORS[TenantPlan.BASIC] },
+    [TenantPlan.PROFESSIONAL]: { text: t('pages.infra.package.planProfessional'), color: TENANT_PLAN_MARKER_COLORS[TenantPlan.PROFESSIONAL] },
+    [TenantPlan.ENTERPRISE]: { text: t('pages.infra.package.planEnterprise'), color: TENANT_PLAN_MARKER_COLORS[TenantPlan.ENTERPRISE] },
   };
 
   const columns: ProColumns<Package>[] = [
-    {
-      title: t('pages.infra.admin.id'),
-      dataIndex: 'id',
-      key: 'id',
-      width: 80,
-      sorter: true,
-    },
     {
       title: t('pages.infra.package.name'),
       dataIndex: 'name',
@@ -249,7 +244,7 @@ export default function PackageManagementPage() {
       sorter: true,
       render: (_: any, record: Package) => {
         const planInfo = planMap[record.plan] || { text: record.plan, color: 'default' };
-        return <Tag color={planInfo.color}>{planInfo.text}</Tag>;
+        return <MarkerTag color={planInfo.color}>{planInfo.text}</MarkerTag>;
       },
     },
     {
@@ -281,9 +276,9 @@ export default function PackageManagementPage() {
       dataIndex: 'allow_pro_apps',
       key: 'allow_pro_apps',
       render: (_, record) => (
-        <Tag color={record.allow_pro_apps ? 'success' : 'default'}>
+        <MarkerTag color={record.allow_pro_apps ? 'success' : 'default'}>
           {record.allow_pro_apps ? t('common.yes') : t('common.no')}
-        </Tag>
+        </MarkerTag>
       ),
     },
     {
@@ -292,19 +287,15 @@ export default function PackageManagementPage() {
       key: 'allowed_app_codes',
       render: (_, record) => {
         const codes = record.allowed_app_codes || [];
-        if (!codes.length) return <Tag>{t('pages.infra.package.unlimited')}</Tag>;
-        return <Tag color="processing">{t('pages.infra.package.allowedAppsCount', { count: codes.length })}</Tag>;
+        if (!codes.length) {
+          return <MarkerTag>{t('pages.infra.package.unlimited')}</MarkerTag>;
+        }
+        return (
+          <MarkerTag color="processing">
+            {t('pages.infra.package.allowedAppsCount', { count: codes.length })}
+          </MarkerTag>
+        );
       },
-    },
-    {
-      title: t('common.status'),
-      dataIndex: 'is_active',
-      key: 'is_active',
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? t('pages.infra.package.statusActive') : t('pages.infra.package.statusInactive')}
-        </Tag>
-      ),
     },
     {
       title: t('common.createdAt'),
@@ -314,38 +305,47 @@ export default function PackageManagementPage() {
       sorter: true,
     },
     {
+      title: t('common.status'),
+      dataIndex: 'is_active',
+      key: 'lifecycle',
+      fixed: 'right',
+      uniTableKeepWidth: true,
+      resizable: false,
+      render: (_, record) => (
+        <StatusTag color={record.is_active ? 'success' : 'default'}>
+          {record.is_active ? t('pages.infra.package.statusActive') : t('pages.infra.package.statusInactive')}
+        </StatusTag>
+      ),
+    },
+    {
       title: t('common.actions'),
       key: 'action',
-      width: 120,
-      render: (_: any, record: Package) => (
-        <Space size="small">
-          <Button
-            type="link"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-            size="small"
-          >
-            {t('common.edit')}
+      valueType: 'option',
+      fixed: 'right',
+      render: (_: any, record: Package) => [
+        <Button
+          key="edit"
+          {...rowActionKind('update')}
+          size="small"
+          icon={<EditOutlined />}
+          onClick={() => handleEdit(record)}
+        >
+          {t('common.edit')}
+        </Button>,
+        <Popconfirm
+          key="delete"
+          {...rowActionKind('delete')}
+          title={t('pages.infra.package.deleteConfirmTitle')}
+          description={t('pages.infra.package.deleteConfirmContent', { name: record.name })}
+          onConfirm={() => handleSingleDelete(record.id)}
+          okText={t('common.confirm')}
+          cancelText={t('common.cancel')}
+        >
+          <Button size="small" icon={<DeleteOutlined />} loading={deleteMutation.isPending}>
+            {t('common.delete')}
           </Button>
-          <Popconfirm
-            title={t('pages.infra.package.deleteConfirmTitle')}
-            description={t('pages.infra.package.deleteConfirmContent', { name: record.name })}
-            onConfirm={() => handleSingleDelete(record.id)}
-            okText={t('common.confirm')}
-            cancelText={t('common.cancel')}
-          >
-            <Button
-              type="link"
-              danger
-              icon={<DeleteOutlined />}
-              size="small"
-              loading={deleteMutation.isPending}
-            >
-              {t('common.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+        </Popconfirm>,
+      ],
     },
   ];
 
@@ -353,7 +353,7 @@ export default function PackageManagementPage() {
     <>
       <ListPageTemplate>
         <UniTable<Package>
-          columnPersistenceId="pages.infra.packages"
+          columnPersistenceId="pages.infra.packages-lifecycle-v2"
           actionRef={actionRef}
           columns={columns}
           request={handleRequest}

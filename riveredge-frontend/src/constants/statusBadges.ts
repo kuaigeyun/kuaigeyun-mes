@@ -19,6 +19,9 @@ export const RE_STATUS_BADGE_DRAFT = '__re_status_badge_draft__';
 /** 与 global.less 中 `.re-status-badge-draft` 对应 */
 export const RE_STATUS_BADGE_DRAFT_CLASS = 're-status-badge-draft';
 
+/** 与 global.less 中 `.re-status-badge` 配套：状态类 solid 徽章粗体 */
+export const RE_STATUS_BADGE_CLASS = 're-status-badge';
+
 /** 状态类 Tag（与 ConfigProvider 默认一致；可省略） */
 export const STATUS_TAG_VARIANT = 'solid' as const;
 
@@ -34,9 +37,12 @@ export function resolveStatusTagDisplayProps(display: {
   color: string;
 }): Pick<TagProps, 'className' | 'color' | 'variant'> {
   if (display.color === RE_STATUS_BADGE_DRAFT) {
-    return { className: RE_STATUS_BADGE_DRAFT_CLASS, variant: STATUS_TAG_VARIANT };
+    return {
+      className: [RE_STATUS_BADGE_DRAFT_CLASS, RE_STATUS_BADGE_CLASS].filter(Boolean).join(' '),
+      variant: STATUS_TAG_VARIANT,
+    };
   }
-  return { color: display.color, variant: STATUS_TAG_VARIANT };
+  return { color: display.color, variant: STATUS_TAG_VARIANT, className: RE_STATUS_BADGE_CLASS };
 }
 
 /**
@@ -44,14 +50,15 @@ export function resolveStatusTagDisplayProps(display: {
  * `color={RE_STATUS_BADGE_DRAFT}` 时自动挂草稿类名，勿把占位符当 antd 预设色。
  */
 export function StatusTag({ variant = STATUS_TAG_VARIANT, color, className, ...rest }: TagProps) {
+  const statusClassName = [RE_STATUS_BADGE_CLASS, className].filter(Boolean).join(' ') || undefined;
   if (color === RE_STATUS_BADGE_DRAFT) {
     return React.createElement(Tag, {
       ...rest,
       variant,
-      className: [RE_STATUS_BADGE_DRAFT_CLASS, className].filter(Boolean).join(' ') || undefined,
+      className: [RE_STATUS_BADGE_DRAFT_CLASS, statusClassName].filter(Boolean).join(' ') || undefined,
     });
   }
-  return React.createElement(Tag, { variant, color, className, ...rest });
+  return React.createElement(Tag, { variant, color, className: statusClassName, ...rest });
 }
 
 /**

@@ -4,9 +4,10 @@
  */
 @uni-toolbar-control-height: 32px;
 @uni-toolbar-segmented-item-height: 26px;
+@uni-toolbar-segmented-track-padding: 2px;
 
 .uni-toolbar-segmented.ant-segmented {
-  padding: 2px;
+  padding: @uni-toolbar-segmented-track-padding;
   border-radius: var(--ant-border-radius);
   border: 1px solid var(--ant-color-border);
   background-color: var(--ant-color-bg-container);
@@ -20,6 +21,23 @@
     min-height: @uni-toolbar-segmented-item-height;
     line-height: @uni-toolbar-segmented-item-height;
     white-space: nowrap;
+  }
+
+  /* 激活 thumb 内圆角 = 系统圆角 − 轨道 padding（与 getUniToolbarControlShellStyle 外框对齐） */
+  .ant-segmented-item,
+  .ant-segmented-thumb {
+    border-radius: max(0px, calc(var(--ant-border-radius) - @uni-toolbar-segmented-track-padding));
+  }
+}
+
+/* 非工具栏壳的 ThemedSegmented：thumb 圆角跟随系统 borderRadius */
+.themed-segmented.ant-segmented:not(.uni-toolbar-segmented):not(.ant-segmented-sm) {
+  .ant-segmented-item,
+  .ant-segmented-thumb {
+    border-radius: max(
+      0px,
+      calc(var(--ant-border-radius) - var(--ant-line-width-bold, 2px))
+    ) !important;
   }
 }
 

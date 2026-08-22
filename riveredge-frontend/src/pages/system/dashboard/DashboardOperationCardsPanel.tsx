@@ -107,7 +107,6 @@ export function DashboardOperationCardsPanel({
                 shape="circle"
                 type="text"
                 className="dashboard-operation-cards-panel__load-more-btn"
-                icon={hasMoreItems ? <DownOutlined /> : <UpOutlined />}
                 aria-label={
                   hasMoreItems
                     ? t('common.loadMore', { defaultValue: '加载更多' })
@@ -120,7 +119,9 @@ export function DashboardOperationCardsPanel({
                     setVisibleCount(initialVisibleCount);
                   }
                 }}
-              />
+              >
+                {hasMoreItems ? <DownOutlined /> : <UpOutlined />}
+              </Button>
             </div>
           ) : null}
         </>

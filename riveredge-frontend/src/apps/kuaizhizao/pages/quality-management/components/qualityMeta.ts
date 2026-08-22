@@ -201,6 +201,18 @@ const QUALITY_DISPOSITION_MARKER_COLORS: Record<string, string> = {
   other: 'default',
 };
 
+/** 检验四单据「类型」列 MarkerTag 颜色（分类标识，filled） */
+export const QUALITY_INSPECTION_KIND_MARKER_COLORS = {
+  simple: 'cyan',
+  plan: 'processing',
+} as const;
+
+export function resolveQualityInspectionKindMarkerColor(isPlan: boolean): string {
+  return isPlan
+    ? QUALITY_INSPECTION_KIND_MARKER_COLORS.plan
+    : QUALITY_INSPECTION_KIND_MARKER_COLORS.simple;
+}
+
 export function renderQualityDispositionMarkerTag(
   t: TFunction,
   disposition?: string | null,

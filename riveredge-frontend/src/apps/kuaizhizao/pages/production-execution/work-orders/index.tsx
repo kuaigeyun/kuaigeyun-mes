@@ -79,7 +79,6 @@ import {
   SendOutlined,
   RetweetOutlined,
   SplitCellsOutlined,
-  DisconnectOutlined,
   GroupOutlined,
   FlagOutlined,
   LockOutlined,
@@ -289,8 +288,11 @@ import { coerceReportingCreateStrings } from '../../../utils/reportingPayload'
 import { getSessionCurrentUser } from '../../../../../utils/sessionCurrentUser'
 import type { CurrentUser } from '../../../../../types/api'
 import { hasModulePermission } from '../../../../../utils/permissionContract';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { Ungroup } from 'lucide-react';
 import { useGlobalStore } from '../../../../../stores'
+
+const dissolveWorkOrderGroupIcon = <Ungroup size={14} strokeWidth={2} aria-hidden />
 
 const WORK_ORDER_STATISTICS_STALE_MS = 60_000
 const WORK_ORDER_EXECUTION_CONFIG_STALE_MS = 5 * 60_000
@@ -6233,7 +6235,7 @@ const WorkOrdersPage: React.FC = () => {
               key="dissolve-group"
               selectedRowKeys={selectedRowKeys}
               size="middle"
-              icon={<DisconnectOutlined />}
+              icon={dissolveWorkOrderGroupIcon}
               loading={dissolveGroupLoading}
               onAction={(keys) =>
                 handleDissolveGroups(
@@ -7183,12 +7185,14 @@ const WorkOrdersPage: React.FC = () => {
           const groupId = resolveWorkOrderGroupIdFromListRow(record)
           if (groupId == null) return null
           return [
-              <Button {...rowActionKind('update')}
+              <Button
+                {...rowActionKind('skip')}
+                {...rowActionLabelKeep()}
                 key="dissolve-group"
                 type="link"
                 size="small"
                 danger
-                icon={<DisconnectOutlined />}
+                icon={dissolveWorkOrderGroupIcon}
                 loading={dissolveGroupLoading}
                 onClick={() => handleDissolveGroups([groupId])}
               >

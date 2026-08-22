@@ -177,6 +177,13 @@ const EightDReportsPage: React.FC = () => {
       resizable: false,
       ellipsis: false,
       hideInSearch: true,
+      className: 'uni-table-operation-steps-cell uni-table-operation-steps-cell-fit',
+      onHeaderCell: () => ({
+        className: 'uni-table-operation-steps-cell uni-table-operation-steps-cell-fit',
+      }),
+      onCell: () => ({
+        className: 'uni-table-operation-steps-cell uni-table-operation-steps-cell-fit',
+      }),
       render: (_, row) => (
         <WorkOrderOperationStepsStrip
           steps={buildEightDListStepNodes(t, row.status, row.lifecycle_stages)}
@@ -337,7 +344,7 @@ const EightDReportsPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           permissionResource={EIGHT_D_RESOURCE}
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.eight-d-reports.stage-source-v6"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.eight-d-reports.stage-source-v8"
           showAdvancedSearch
           pinnedTabsField={EIGHT_D_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter

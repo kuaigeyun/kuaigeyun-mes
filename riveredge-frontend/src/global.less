@@ -48,6 +48,11 @@
   border-color: var(--re-badge-draft-border) !important;
 }
 
+/* 状态类徽章（StatusTag / renderDocumentStatusTag / LifecycleStageBadge）粗体 */
+.ant-tag.re-status-badge {
+  font-weight: var(--ant-font-weight-strong, 600);
+}
+
 /* 与 statusBadges.ts MarkerTag（re-marker-tag）配套：Lucide svg / anticon 与文字垂直居中 */
 .ant-tag.re-marker-tag {
   display: inline-flex;
@@ -566,11 +571,15 @@ code {
 }
 
 
-/* 两栏左栏中灰：用 antd layout token，不用 --ant-colorBgLayout（已被标签背景改写） */
+/* 两栏左栏：略深于 layout，与标签栏背景区分 */
 .two-column-layout-left,
 .two-column-layout-left-custom,
 .two-column-layout-left-tree {
-  background-color: var(--ant-color-bg-layout, #f5f5f5);
+  background-color: color-mix(
+    in srgb,
+    var(--ant-color-bg-layout, #f5f5f5) 58%,
+    var(--ant-color-fill-secondary, #e8e8e8) 42%
+  );
 }
 
 /* 两栏布局内容区骨架；UniTable 填高 / scroll / table-layout 唯一控制面见 uni-table.less */
@@ -1166,12 +1175,14 @@ code {
   }
 }
 
-/* 编号规则 / 自定义字段等左侧功能页面列表项 hover 用 CSS 实现，避免 JS 操作 style */
-.code-rule-page-item:not(.is-selected):hover {
-  background-color: rgba(0, 0, 0, 0.04);
+/* 编号规则 / 自定义字段等左侧功能页面列表项：默认与 hover 同为 fill-secondary */
+.feature-page-list-item,
+.code-rule-page-item {
+  background-color: var(--ant-color-fill-secondary);
 }
-[data-theme='dark'] .code-rule-page-item:not(.is-selected):hover {
-  background-color: rgba(255, 255, 255, 0.06);
+.feature-page-list-item:not(.is-selected):hover,
+.code-rule-page-item:not(.is-selected):hover {
+  background-color: var(--ant-color-fill-tertiary);
 }
 
 /* 全局：Modal 确认按钮组默认居左 */
@@ -1564,8 +1575,8 @@ code {
   flex-shrink: 0;
 }
 .kuaizhizao-work-orders-table .wo-readiness-ring-inner {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: var(--ant-color-bg-container);
   display: flex;
@@ -2618,26 +2629,39 @@ code {
   justify-content: center;
 }
 .dashboard-operation-cards-panel__load-more-btn {
-  width: 22px;
-  min-width: 22px;
-  height: 22px;
-  border-radius: 999px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 !important;
+  border-radius: 50%;
   color: var(--ant-color-text-tertiary, rgba(0, 0, 0, 0.45));
   background: var(--ant-color-fill-quaternary, rgba(0, 0, 0, 0.04));
   border: var(--dashboard-card-border);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  line-height: 1;
   transition: all 0.2s ease;
 }
+.dashboard-operation-cards-panel__load-more-btn.ant-btn-icon-only {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding-inline: 0 !important;
+}
+.dashboard-operation-cards-panel__load-more-btn .ant-btn-icon,
 .dashboard-operation-cards-panel__load-more-btn .anticon {
-  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 !important;
+  font-size: 12px;
+  line-height: 1;
 }
 .dashboard-operation-cards-panel__load-more-btn:hover {
   color: var(--ant-color-primary, #1677ff) !important;
   border-color: color-mix(in srgb, var(--ant-color-primary, #1677ff) 35%, transparent);
   background: color-mix(in srgb, var(--ant-color-primary, #1677ff) 10%, transparent) !important;
-  transform: translateY(1px);
 }
 .dashboard-wip-operation-card {
   appearance: none;

@@ -6,11 +6,13 @@ import { rowActionKind } from '../../../components/uni-action';
 import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Modal, Space, Tag } from 'antd';
+import { App, Button, Space } from 'antd';
 import { CopyOutlined, ReloadOutlined } from '@ant-design/icons';
 import { ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { FormModalTemplate, ListPageTemplate } from '../../../components/layout-templates';
 import { UniTable } from '../../../components/uni-table';
+import { UniBatchButton } from '../../../components/uni-batch';
+import { StatusTag } from '../../../constants/statusBadges';
 import {
   PRO_APP_CODES,
   PRO_PLACEHOLDER_META,
@@ -36,6 +38,7 @@ export default function LicenseManagementPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const appCodeLabelMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -90,22 +93,6 @@ export default function LicenseManagementPage() {
       render: (_, record) => `****${record.key_last4}`,
     },
     {
-      title: t('common.status', { defaultValue: '状态' }),
-      dataIndex: 'is_active',
-      width: 120,
-      valueType: 'select',
-      valueEnum: {
-        true: { text: t('pages.infra.licenseCenter.active', { defaultValue: '生效中' }), status: 'Success' },
-        false: { text: t('pages.infra.licenseCenter.revoked', { defaultValue: '已撤销' }), status: 'Default' },
-      },
-      render: (_, record) =>
-        record.is_active ? (
-          <Tag color="success">{t('pages.infra.licenseCenter.active', { defaultValue: '生效中' })}</Tag>
-        ) : (
-          <Tag>{t('pages.infra.licenseCenter.revoked', { defaultValue: '已撤销' })}</Tag>
-        ),
-    },
-    {
       title: t('pages.infra.licenseCenter.activationUsage', { defaultValue: '激活使用' }),
       dataIndex: 'current_activations',
       width: 140,
@@ -127,8 +114,29 @@ export default function LicenseManagementPage() {
       hideInSearch: true,
     },
     {
+      title: t('common.status', { defaultValue: '状态' }),
+      dataIndex: 'is_active',
+      key: 'lifecycle',
+      width: 120,
+      fixed: 'right',
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'select',
+      valueEnum: {
+        true: { text: t('pages.infra.licenseCenter.active', { defaultValue: '生效中' }), status: 'Success' },
+        false: { text: t('pages.infra.licenseCenter.revoked', { defaultValue: '已撤销' }), status: 'Default' },
+      },
+      render: (_, record) =>
+        record.is_active ? (
+          <StatusTag color="success">{t('pages.infra.licenseCenter.active', { defaultValue: '生效中' })}</StatusTag>
+        ) : (
+          <StatusTag color="default">{t('pages.infra.licenseCenter.revoked', { defaultValue: '已撤销' })}</StatusTag>
+        ),
+    },
+    {
       title: t('common.actions', { defaultValue: '操作' }),
       valueType: 'option',
+      fixed: 'right',
       render: (_, record) => (
         <Space>
           <Button
@@ -156,7 +164,6 @@ export default function LicenseManagementPage() {
             key="revoke"
             {...rowActionKind('revoke')}
             size="small"
-            danger
             disabled={!record.is_active}
             onClick={() => {
               getAntdModal().confirm({
@@ -177,14 +184,38 @@ export default function LicenseManagementPage() {
     },
   ];
 
+  const handleBatchRevoke = async (keys: React.Key[]) => {
+    if (!keys.length) {
+      return;
+    }
+    const results = await Promise.allSettled(
+      keys.map((key) => revokePlatformLicense(String(key))),
+    );
+    const failed = results.filter((item) => item.status === 'rejected').length;
+    const success = keys.length - failed;
+    if (success > 0) {
+      messageApi.success(t('pages.infra.licenseCenter.batchRevokeSuccess', { count: success, defaultValue: '已撤销 {{count}} 条许可证' }));
+      actionRef.current?.clearSelected?.();
+      actionRef.current?.reload();
+    }
+    if (failed > 0) {
+      messageApi.error(t('pages.infra.licenseCenter.batchRevokeFailed', { count: failed, defaultValue: '撤销失败 {{count}} 条' }));
+    }
+  };
+
   return (
     <ListPageTemplate>
       <UniTable<PlatformLicenseItem>
-        columnPersistenceId="pages.infra.license-management"
+        columnPersistenceId="pages.infra.license-management-v2"
         headerTitle={t('menu.infra.license-management')}
         actionRef={actionRef}
         columns={columns}
         rowKey="uuid"
+        enableRowSelection
+        onRowSelectionChange={setSelectedRowKeys}
+        rowSelectionGetCheckboxProps={(record) => ({
+          disabled: !record.is_active,
+        })}
         request={async (params) => {
           const list = await listPlatformLicenses({
             app_code: (params as any).app_code || undefined,
@@ -198,10 +229,25 @@ export default function LicenseManagementPage() {
         showAdvancedSearch
         showExportButton={false}
         showImportButton={false}
-        toolBarRender={() => [
-          <Button {...rowActionKind('create')} key="create" type="primary" onClick={() => setModalOpen(true)}>
-            {t('pages.infra.licenseCenter.createButton', { defaultValue: '新增许可证' })}
-          </Button>,
+        showCreateButton
+        createButtonText={t('pages.infra.licenseCenter.createButton', { defaultValue: '新增许可证' })}
+        onCreate={() => setModalOpen(true)}
+        toolBarActionsAfterCreate={[
+          <UniBatchButton
+            key="batch-revoke"
+            danger
+            selectedRowKeys={selectedRowKeys}
+            requireConfirm
+            confirmTitle={(count) =>
+              t('pages.infra.licenseCenter.batchRevokeConfirm', {
+                count,
+                defaultValue: '确定批量撤销选中的 {{count}} 条许可证吗？',
+              })
+            }
+            onAction={handleBatchRevoke}
+          >
+            {t('pages.infra.licenseCenter.batchRevoke', { defaultValue: '批量撤销' })}
+          </UniBatchButton>,
         ]}
       />
 

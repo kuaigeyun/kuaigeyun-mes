@@ -148,6 +148,7 @@ class DynamicDatabaseConfigService:
             "infra.models.user",
             "infra.models.infra_superadmin",
             "infra.models.package",
+            "infra.models.sensitive_word_control",
             "infra.models.saved_search",
             "infra.models.industry_template",  # 行业模板模型（平台级）
             "infra.models.platform_settings",

@@ -40,6 +40,8 @@ export type ProcessMasterDetailDrawerProps<T extends Record<string, any>> = {
   supplementary?: React.ReactNode;
   linesTitle?: string;
   lines?: React.ReactNode;
+  /** 基本信息 Descriptions 列数，默认 2 */
+  basicColumn?: 1 | 2;
 };
 
 export function ProcessMasterDetailDrawer<T extends Record<string, any>>({
@@ -60,6 +62,7 @@ export function ProcessMasterDetailDrawer<T extends Record<string, any>>({
   supplementary,
   linesTitle,
   lines,
+  basicColumn = 2,
 }: ProcessMasterDetailDrawerProps<T>) {
   const { t } = useTranslation();
 
@@ -116,7 +119,7 @@ export function ProcessMasterDetailDrawer<T extends Record<string, any>>({
       basic={
         contentReady && detail ? (
           <Descriptions
-            column={2}
+            column={basicColumn}
             size="small"
             items={detailDrawerDescriptionItems(aligned, detail)}
           />

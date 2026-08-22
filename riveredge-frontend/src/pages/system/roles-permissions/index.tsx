@@ -136,6 +136,7 @@ import {
   mergeBaselinePermissionCodes,
   resolvePermissionLabel,
 } from '../../../utils/permissionContract';
+import { TWO_COLUMN_LEFT_PANEL_BACKGROUND } from '../../../components/layout-templates/constants';
 
 const ROLE_FUNCTIONAL_DOMAIN_I18N: Record<string, string> = {
   sales: 'field.role.functionalDomainSales',
@@ -1572,7 +1573,7 @@ const RolesPermissionsPage: React.FC = () => {
             minWidth: '300px',
             flexShrink: 0,
             borderRight: `1px solid ${token.colorBorder}`,
-            backgroundColor: token.colorBgLayout,
+            backgroundColor: TWO_COLUMN_LEFT_PANEL_BACKGROUND,
             display: 'flex',
             flexDirection: 'column',
             height: '100%',

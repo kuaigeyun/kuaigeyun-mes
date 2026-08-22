@@ -44,6 +44,7 @@ import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActi
 import {
   normalizeWarehouseListResponse,
   resolveBatchingCenterTaskListParams,
+  resolveBatchingTaskProductMaterialCell,
 } from '../../../utils/warehouseListCore';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { useBatchingPullFromWorkOrder } from './useBatchingPullFromWorkOrder';
@@ -66,6 +67,7 @@ export type BatchingTaskRow = {
   work_order_id?: number;
   work_order_code?: string;
   product_name?: string;
+  product_code?: string;
   picking_score?: number;
   picking_rank_band?: string;
   kitting_rate?: number;
@@ -495,31 +497,24 @@ const BatchingTaskQueue: React.FC<Props> = ({
     {
       title: t('app.kuaizhizao.warehouseCommon.colProductOrMaterial'),
       key: 'material',
+      dataIndex: 'shortage_summary',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       hideInSearch: true,
       render: (_, r) => {
-        if (r.task_type === 'proactive_prep') {
+        const { primary, secondary } = resolveBatchingTaskProductMaterialCell(r);
+        if (r.task_type === 'material_call' || r.task_type === 'backflush_alert') {
           return (
-            <UniTableStackedPrimaryCell
-              primary={String(r.product_name ?? r.shortage_summary ?? '-')}
-              secondary="-"
-              secondaryCopyable={false}
-            />
-          );
-        }
-        if (r.task_type === 'batching_draft') {
-          return (
-            <UniTableStackedPrimaryCell
-              primary={String(r.product_name ?? '-')}
-              secondary={String(r.shortage_summary ?? '-')}
-              secondaryCopyable={false}
+            <MaterialStackedCell
+              material_name={r.material_name ?? r.shortage_summary ?? '-'}
+              material_code={r.material_code}
             />
           );
         }
         return (
-          <MaterialStackedCell
-            material_name={r.material_name ?? r.shortage_summary ?? '-'}
-            material_code={r.material_code}
+          <UniTableStackedPrimaryCell
+            primary={primary}
+            secondary={secondary}
+            secondaryCopyable={false}
           />
         );
       },
@@ -1044,7 +1039,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
         actionRef={actionRef}
         rowKey={(r) => `${r.task_type}-${r.task_id}`}
         columns={columns}
-        columnPersistenceId={`apps.kuaizhizao.pages.warehouse-management.batching-center.tasks.${taskType}.v6`}
+        columnPersistenceId={`apps.kuaizhizao.pages.warehouse-management.batching-center.tasks.${taskType}.v7`}
         showAdvancedSearch
         polling={false}
         showCreateButton={Boolean(onCreate)}

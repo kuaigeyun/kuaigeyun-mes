@@ -59,6 +59,19 @@ export function syncMemoryActivityFromStorage(ts: number): void {
 }
 
 /**
+ * 登出或会话失效时清除活动时间，避免残留时间戳误触发空闲超时。
+ */
+export function clearLastActivity(): void {
+  memoryLastActivity = 0;
+  lastWriteWallClock = 0;
+  try {
+    localStorage.removeItem(ACTIVITY_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+/**
  * 更新最后活动时间
  *
  * @param force - 是否强制更新（忽略节流），用于 API 请求等低频场景

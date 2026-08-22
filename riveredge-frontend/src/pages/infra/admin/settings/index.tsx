@@ -9,8 +9,8 @@
  */
 
 import { useTranslation } from 'react-i18next';
-import { ProForm, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Card, Button, Space, Upload, Form, ColorPicker, Row, Col, Input, Switch, Typography, Select } from 'antd';
+import { ProForm, ProFormText, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
+import { App, Card, Button, Space, Upload, Form, ColorPicker, Row, Col, Input, Switch, Typography } from 'antd';
 import { UploadOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -23,7 +23,7 @@ import {
   type PlatformSettings,
   type PlatformSettingsUpdateRequest,
 } from '../../../../services/platformSettings';
-import { getTenantList, TenantStatus } from '../../../../services/tenant';
+import { getTenantList, getTenantById, TenantStatus } from '../../../../services/tenant';
 import { uploadFile, getSiteLogoPreview, invalidateSiteLogoPreviewCache, FileUploadResponse } from '../../../../services/file';
 import ImageCropper from '../../../../components/image-cropper';
 import { applyFavicon } from '../../../../utils/favicon';
@@ -89,11 +89,11 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
     placeholderData: (prev) => prev,
   });
 
-  const { data: activeTenants = [] } = useQuery({
+  const { data: activeTenants = [], isLoading: tenantsLoading } = useQuery({
     queryKey: ['infraActiveTenantsForDefault'],
     queryFn: async () => {
       const result = await getTenantList(
-        { page: 1, page_size: 200, status: TenantStatus.ACTIVE },
+        { page: 1, page_size: 100, status: TenantStatus.ACTIVE },
         true,
       );
       return result.items;
@@ -102,14 +102,31 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
     staleTime: 60_000,
   });
 
-  const defaultTenantOptions = useMemo(
-    () =>
-      activeTenants.map((tenant) => ({
-        label: `${tenant.name} (${tenant.domain})`,
-        value: tenant.id,
-      })),
-    [activeTenants],
-  );
+  const { data: fallbackDefaultTenant } = useQuery({
+    queryKey: ['infraDefaultTenantOption', settings?.default_tenant_id],
+    queryFn: () => getTenantById(settings!.default_tenant_id!, true),
+    enabled:
+      mode === 'basic'
+      && !!settings?.default_tenant_id
+      && !activeTenants.some((tenant) => tenant.id === settings.default_tenant_id),
+    staleTime: 60_000,
+  });
+
+  const defaultTenantOptions = useMemo(() => {
+    const optionMap = new Map<number, { label: string; value: number }>();
+    for (const tenant of activeTenants) {
+      optionMap.set(tenant.id, { label: tenant.name, value: tenant.id });
+    }
+    if (fallbackDefaultTenant) {
+      optionMap.set(fallbackDefaultTenant.id, {
+        label: fallbackDefaultTenant.name,
+        value: fallbackDefaultTenant.id,
+      });
+    }
+    return Array.from(optionMap.values()).sort((a, b) =>
+      a.label.localeCompare(b.label, 'zh-CN'),
+    );
+  }, [activeTenants, fallbackDefaultTenant]);
 
   // 更新平台设置
   const updateMutation = useMutation({
@@ -823,19 +840,19 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item
+                  <ProFormSelect
                     name="default_tenant_id"
                     label={t('pages.infra.platform.defaultTenant')}
                     tooltip={t('pages.infra.platform.defaultTenantTooltip')}
-                  >
-                    <Select
-                      allowClear
-                      showSearch
-                      optionFilterProp="label"
-                      placeholder={t('pages.infra.platform.defaultTenantPlaceholder')}
-                      options={defaultTenantOptions}
-                    />
-                  </Form.Item>
+                    placeholder={t('pages.infra.platform.defaultTenantPlaceholder')}
+                    allowClear
+                    showSearch
+                    fieldProps={{
+                      optionFilterProp: 'label',
+                      loading: tenantsLoading,
+                      options: defaultTenantOptions,
+                    }}
+                  />
                 </Col>
                 <Col xs={24} sm={12}>
                   <Form.Item

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Button, Empty, Input, Popover, Space, Tooltip, Typography } from 'antd';
 import { CloseCircleOutlined, SearchOutlined } from '@ant-design/icons';
-import { ManufacturingIcons } from '../../utils/manufacturingIcons';
+import { ManufacturingIcons, resolveMenuIconComponent } from '../../utils/manufacturingIcons';
 
 export const MENU_ICON_KEYS = Object.keys(ManufacturingIcons).sort((a, b) =>
   a.localeCompare(b, undefined, { sensitivity: 'base' }),
@@ -9,8 +9,9 @@ export const MENU_ICON_KEYS = Object.keys(ManufacturingIcons).sort((a, b) =>
 
 export function renderMenuIconByKey(icon?: string | null, size = 16): React.ReactNode {
   if (!icon) return null;
-  const Icon = ManufacturingIcons[icon as keyof typeof ManufacturingIcons];
-  if (!Icon) return null;
+  const trimmed = String(icon).trim();
+  if (!trimmed) return null;
+  const Icon = resolveMenuIconComponent(trimmed);
   return <Icon size={size} />;
 }
 

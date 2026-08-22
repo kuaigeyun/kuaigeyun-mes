@@ -44,8 +44,6 @@ import {
 } from '../../services/publicAuth';
 import { switchTenant } from '../../services/auth';
 import { setToken, setTenantId, setUserInfo, getTenantId, getToken } from '../../utils/auth';
-import { clearSessionScopedQueries } from '../../utils/clearSessionQueries';
-import { applySessionUserAfterLogin } from '../../utils/restoredUser';
 import { LANGUAGE_TOOLBAR_SHORT, SUPPORTED_UI_LANGUAGES, normalizeUiLanguage } from '../../utils/localeBootstrap';
 import { getImmediatePostLoginHomePath, refinePostLoginHomeInBackground } from '../../utils/tenantHomePath';
 import { buildTenantLoginPathForHistoryReplace, resolvePlatformAdminLoginPathFromUrl, resolveTenantDomainFromUrl } from '../../utils/tenantDomainAccess';
@@ -151,11 +149,22 @@ export default function LoginPage() {
     }
   }, [navigate]);
 
-  /** 登录成功：同步用户态并清理会话级 query，避免 navigate 时 AuthGuard 竞态 */
+  /** 登录成功：先写 localStorage（会话真源）。主应用会话模块不得静态进入本页，否则登录 MPA 会打进整包 i18n。 */
   const syncUserStateAfterLogin = useCallback((userInfo: Parameters<typeof setUserInfo>[0]) => {
     captureLoginEntryFromCurrentUrl('tenant');
-    applySessionUserAfterLogin(userInfo);
-    clearSessionScopedQueries(queryClient);
+    setUserInfo(userInfo);
+    if (userInfo?.tenant_id != null) {
+      setTenantId(userInfo.tenant_id);
+    }
+    const isLoginMpa = document.getElementById('root')?.getAttribute('data-login-mpa') === 'true';
+    if (!isLoginMpa) {
+      void import('../../utils/restoredUser').then(({ applySessionUserAfterLogin }) => {
+        applySessionUserAfterLogin(userInfo);
+      });
+      void import('../../utils/clearSessionQueries').then(({ clearSessionScopedQueries }) => {
+        clearSessionScopedQueries(queryClient);
+      });
+    }
     void import('../../stores/userPreferenceStore')
       .then(async ({ useUserPreferenceStore }) => {
         useUserPreferenceStore.getState().rehydrateFromStorage();

@@ -28,6 +28,7 @@ export function renderUniTableOperationCell(
   options?: UniActionRenderOptions,
 ): React.ReactNode {
   const directMax = options?.directMax ?? ROW_ACTIONS_DIRECT_MAX
+  const minPrimaryVisible = options?.minPrimaryVisible
   const suppressAuditSemanticActions = options?.suppressAuditSemanticActions ?? false
   const permissionGates = options?.permissionGates
   const ctx = { suppressAuditSemanticActions }
@@ -44,5 +45,9 @@ export function renderUniTableOperationCell(
       .map((n) => normalizeActionTree(n, ctx))
       .filter((n) => n != null && n !== false) as React.ReactNode[],
   )
-  return renderRowActionsOverflow(normalized, rowKey, { directMax, suppressAuditSemanticActions })
+  return renderRowActionsOverflow(normalized, rowKey, {
+    directMax,
+    minPrimaryVisible,
+    suppressAuditSemanticActions,
+  })
 }

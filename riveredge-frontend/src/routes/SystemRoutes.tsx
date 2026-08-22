@@ -174,6 +174,7 @@ const PersonalTasksPage = React.lazy(() => import('../pages/personal/tasks'));
 const PlatformOperationPage = React.lazy(() => import('../pages/infra/operation'));
 const TenantsPage = React.lazy(() => import('../pages/infra/tenants/list'));
 const PackagesPage = React.lazy(() => import('../pages/infra/packages'));
+const SensitiveWordBlacklistPage = React.lazy(() => import('../pages/infra/sensitive-word-blacklist'));
 const PlatformAdminPage = React.lazy(() => import('../pages/infra/admin'));
 const ClientReleasesPage = React.lazy(() => import('../pages/infra/client-releases'));
 const LicenseManagementPage = React.lazy(() => import('../pages/infra/license-management'));
@@ -272,6 +273,7 @@ const SystemRoutes: React.FC = () => (
     <Route path="/platform/operation" element={withSuspense(PlatformOperationPage)} />
     <Route path="/infra/tenants" element={withSuspense(TenantsPage)} />
     <Route path="/infra/packages" element={withSuspense(PackagesPage)} />
+    <Route path="/infra/sensitive-word-blacklist" element={withSuspense(SensitiveWordBlacklistPage)} />
     <Route path="/infra/scripts" element={withSuspense(ScriptsPage)} />
     <Route path="/infra/scheduled-tasks" element={withSuspense(ScheduledTasksPage)} />
     <Route path="/infra/monitoring" element={<Navigate to="/infra/admin" replace />} />

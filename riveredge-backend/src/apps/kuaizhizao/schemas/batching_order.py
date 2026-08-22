@@ -209,6 +209,7 @@ class BatchingCenterTaskItem(BaseModel):
     work_order_id: Optional[int] = None
     work_order_code: Optional[str] = None
     product_name: Optional[str] = None
+    product_code: Optional[str] = None
     picking_score: Optional[float] = None
     picking_rank_band: Optional[str] = None
     kitting_rate: Optional[float] = None

@@ -31,6 +31,7 @@ export {
   rowActionResetPassword,
   rowActionAddFollowUpFromDocument,
   rowActionTestConnection,
+  rowActionBalloonAnnotate,
   rowActionToneDestructive,
   ROW_ACTION_KIND_ATTR,
   ROW_ACTION_TONE_ATTR,

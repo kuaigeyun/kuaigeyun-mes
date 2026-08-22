@@ -11,6 +11,7 @@ import { ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance }
 import { App, Button, Tag, Alert, theme, Space, Collapse, Spin } from 'antd';
 import { DatabaseOutlined } from '@ant-design/icons';
 import { TwoColumnLayout } from '../../../../components/layout-templates';
+import { FEATURE_PAGE_LIST_ITEM_CLASS, FEATURE_PAGE_RIGHT_PANEL_HEADER_STYLE, FEATURE_PAGE_RIGHT_PANEL_NAME_STYLE, FEATURE_PAGE_RIGHT_PANEL_PATH_STYLE, FEATURE_PAGE_RIGHT_PANEL_TITLE_ROW_STYLE } from '../../../../components/layout-templates/constants';
 import {
   createCodeRule,
   updateCodeRule,
@@ -68,14 +69,14 @@ const PageListItem: React.FC<PageListItemProps> = React.memo(
     const handleClick = useCallback(() => onSelect(page.pageCode), [onSelect, page.pageCode]);
     return (
       <div
-        className={`code-rule-page-item${isSelected ? ' is-selected' : ''}`}
+        className={`${FEATURE_PAGE_LIST_ITEM_CLASS} code-rule-page-item${isSelected ? ' is-selected' : ''}`}
         onClick={handleClick}
         style={{
           padding: '12px',
           marginBottom: '4px',
           cursor: 'pointer',
           borderRadius: colors.borderRadius,
-          backgroundColor: isSelected ? colors.primaryBg : 'transparent',
+          backgroundColor: isSelected ? colors.primaryBg : undefined,
           border: `1px solid ${isSelected ? colors.primary : 'transparent'}`,
           transition: 'background-color 0.15s, border-color 0.15s',
           display: 'flex',
@@ -772,64 +773,62 @@ const CodeRuleListPage: React.FC = () => {
         ),
       }}
       rightPanel={{
+        header: selectedPage
+          ? {
+              center: (
+                <div style={FEATURE_PAGE_RIGHT_PANEL_TITLE_ROW_STYLE}>
+                  <span style={FEATURE_PAGE_RIGHT_PANEL_NAME_STYLE}>{selectedPage.pageName}</span>
+                  <span
+                    style={{
+                      ...FEATURE_PAGE_RIGHT_PANEL_PATH_STYLE,
+                      color: token.colorTextSecondary,
+                    }}
+                  >
+                    {selectedPage.pagePath}
+                  </span>
+                </div>
+              ),
+              right: (
+                <Space>
+                  {trialRunMode && (
+                    <Button
+                      loading={restoreSingleLoading}
+                      onClick={async () => {
+                        if (!selectedPageCode) {
+                          messageApi.warning(t('pages.system.codeRules.selectPageToRestore'));
+                          return;
+                        }
+                        try {
+                          setRestoreSingleLoading(true);
+                          await restorePresetRules('page', selectedPageCode);
+                          messageApi.success(t('pages.system.codeRules.restorePresetSuccess'));
+                          await loadCodeRules(true);
+                        } catch (e: any) {
+                          messageApi.error(e?.message || t('pages.system.codeRules.restorePresetFailed'));
+                        } finally {
+                          setRestoreSingleLoading(false);
+                        }
+                      }}
+                    >
+                      {t('pages.system.codeRules.restoreSingle')}
+                    </Button>
+                  )}
+                  <Button
+                    type="primary"
+                    loading={pageRuleFormLoading}
+                    onClick={handleSavePageRule}
+                  >
+                    {t('pages.system.codeRules.saveRule')}
+                  </Button>
+                </Space>
+              ),
+            }
+          : undefined,
+        headerStyle: selectedPage ? FEATURE_PAGE_RIGHT_PANEL_HEADER_STYLE : undefined,
         contentPadding: 0,
         contentBackgroundColor: token.colorBgContainer,
         content: selectedPage ? (
           <>
-            {/* 统一头部标题与操作工具栏 */}
-            <div
-              style={{
-                padding: '16px 24px',
-                borderBottom: `1px solid ${token.colorBorderSecondary}`,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                backgroundColor: token.colorFillAlter,
-              }}
-            >
-              <div>
-                <div style={{ fontSize: '16px', fontWeight: 500, marginBottom: '4px' }}>
-                  {selectedPage.pageName}
-                </div>
-                <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>
-                  {selectedPage.pagePath}
-                </div>
-              </div>
-              <Space>
-                {trialRunMode && (
-                <Button
-                  loading={restoreSingleLoading}
-                  onClick={async () => {
-                    if (!selectedPageCode) {
-                      messageApi.warning(t('pages.system.codeRules.selectPageToRestore'));
-                      return;
-                    }
-                    try {
-                      setRestoreSingleLoading(true);
-                      await restorePresetRules('page', selectedPageCode);
-                      messageApi.success(t('pages.system.codeRules.restorePresetSuccess'));
-                      await loadCodeRules(true);
-                    } catch (e: any) {
-                      messageApi.error(e?.message || t('pages.system.codeRules.restorePresetFailed'));
-                    } finally {
-                      setRestoreSingleLoading(false);
-                    }
-                  }}
-                >
-                  {t('pages.system.codeRules.restoreSingle')}
-                </Button>
-                )}
-                <Button
-                  type="primary"
-                  loading={pageRuleFormLoading}
-                  onClick={handleSavePageRule}
-                >
-                  {t('pages.system.codeRules.saveRule')}
-                </Button>
-              </Space>
-            </div>
-
-            {/* 配置表单 */}
             <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '24px' }}>
               <div style={{ marginBottom: '24px' }}>
                 <ProForm
