@@ -1,0 +1,1 @@
+import{r as o}from"./vendor-DpL5kx19.js";import{f as s,D as r}from"./clearSessionQueries-p0Xwkd5_.js";function c(a,e=""){return a+(e||"")}function i(a,e,n,t){a(e,{state:{closeTab:n,...t??{}}})}function f(a){const e=s(),n=r();return o.useCallback(()=>{i(e,a,c(n.pathname,n.search))},[e,a,n.pathname,n.search])}export{c as a,i as n,f as u};
