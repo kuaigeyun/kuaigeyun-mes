@@ -33,6 +33,7 @@ import {
 } from '../../../utils/performanceListCore';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const HOURLY_RATE_RESOURCE = 'kuaizhizao:performance-hourly-rates';
 
@@ -231,6 +232,8 @@ const HourlyRatesPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.performance.hourly-rates.v1"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.hourlyRates')}
           showAdvancedSearch
           skipFuzzyPinyinClientFilter
           pinnedTabsField={PERFORMANCE_PINNED_IS_ACTIVE_FIELD}

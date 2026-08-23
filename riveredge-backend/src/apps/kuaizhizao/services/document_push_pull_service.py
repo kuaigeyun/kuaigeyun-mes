@@ -356,6 +356,7 @@ class DocumentPushPullService:
         from apps.kuaizhizao.utils.material_source_helper import (
             SOURCE_TYPE_BUY,
             resolve_computation_item_source_config,
+            resolve_material_purchase_line_unit_price,
         )
         from decimal import Decimal
         from apps.master_data.models.material import Material
@@ -467,6 +468,7 @@ class DocumentPushPullService:
                     continue
                 seen_material_ids.add(item.material_id)
                 supplier_id = None
+                sc: Dict[str, Any] = {}
                 if item.material_source_config:
                     sc = resolve_computation_item_source_config(item.material_source_config)
                     supplier_id = sc.get("default_supplier_id")
@@ -500,6 +502,11 @@ class DocumentPushPullService:
                         f"物料 {material_code or mid} 缺少要求到货日期，请确认后再创建"
                     )
 
+                suggested_unit_price = resolve_material_purchase_line_unit_price(
+                    material=material,
+                    source_config=sc,
+                )
+
                 req_items.append(PurchaseRequisitionItemCreate(
                     material_id=item.material_id,
                     material_code=material_code or f"M{item.material_id}",
@@ -507,7 +514,7 @@ class DocumentPushPullService:
                     material_spec=material_spec or None,
                     unit=material_unit or "件",
                     quantity=Decimal(str(remaining)),
-                    suggested_unit_price=Decimal("0"),
+                    suggested_unit_price=suggested_unit_price,
                     required_date=line_required_date,
                     demand_computation_item_id=item.id,
                     supplier_id=supplier_id,

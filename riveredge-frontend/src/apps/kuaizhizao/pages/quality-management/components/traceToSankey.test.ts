@@ -5,7 +5,10 @@ import {
   dropBackwardSankeyLinks,
   dropDirectedSankeyCycles,
   floorSankeyLinkValues,
+  formatTraceSankeyIdLabel,
+  getTraceSankeyDocumentTypeColor,
   promoteSameRankSankeyLinks,
+  resolveSankeyDocumentType,
   sankeyStageRank,
   traceProfileToSankeyModel,
 } from './traceToSankey';
@@ -93,6 +96,26 @@ describe('traceToSankey', () => {
     );
     expect(model.labelById.get('reporting_record:R1')).toBe(
       'app.kuaizhizao.quality.traceability.nodeType.reportingRecord: R1',
+    );
+    expect(model.nodes).toEqual([
+      { key: 'production_picking:LL1', documentType: 'production_picking' },
+      { key: 'reporting_record:R1', documentType: 'reporting_record' },
+    ]);
+  });
+
+  it('assigns the same color to nodes of the same document type', () => {
+    expect(getTraceSankeyDocumentTypeColor('work_order')).toBe(
+      getTraceSankeyDocumentTypeColor('work_order'),
+    );
+    expect(getTraceSankeyDocumentTypeColor('work_order')).not.toBe(
+      getTraceSankeyDocumentTypeColor('reporting_record'),
+    );
+    expect(resolveSankeyDocumentType('production_picking:LL1', [])).toBe('production_picking');
+  });
+
+  it('formats unknown sankey endpoint ids with i18n document type', () => {
+    expect(formatTraceSankeyIdLabel('work_order:WO1', t)).toBe(
+      'app.kuaizhizao.quality.traceability.nodeType.workOrder: WO1',
     );
   });
 });

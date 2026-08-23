@@ -6,6 +6,7 @@ from apps.kuaizhizao.utils.material_source_helper import (
     is_make_and_buy_material,
     normalize_source_config_payload,
     resolve_computation_item_source_config,
+    resolve_material_purchase_line_unit_price,
     resolve_mrp_supply_source_type,
     SOURCE_TYPE_BUY,
     SOURCE_TYPE_MAKE,
@@ -89,3 +90,39 @@ def test_resolve_computation_item_source_config_prefers_top_level_fields():
     resolved = resolve_computation_item_source_config(snapshot)
     assert resolved["default_supplier_id"] == 99
     assert resolved["purchase_lead_time"] == 5
+
+
+def test_resolve_material_purchase_line_unit_price_from_computation_snapshot():
+    material = _material(
+        source_type=SOURCE_TYPE_BUY,
+        source_config={"purchase_price": 8},
+        defaults={"defaultPurchasePrice": 12},
+    )
+    price = resolve_material_purchase_line_unit_price(
+        material=material,
+        source_config={"purchase_price": 5.5},
+    )
+    assert price == 5.5
+
+
+def test_resolve_material_purchase_line_unit_price_from_material_defaults():
+    material = _material(
+        source_type=SOURCE_TYPE_BUY,
+        source_config={"purchase_price": 8},
+        defaults={"defaultPurchasePrice": 12, "defaultPurchasePriceType": "tax_exclusive"},
+    )
+    price = resolve_material_purchase_line_unit_price(material=material)
+    assert price == 12
+
+
+def test_resolve_material_purchase_line_unit_price_converts_tax_inclusive_default():
+    material = _material(
+        source_type=SOURCE_TYPE_BUY,
+        defaults={
+            "defaultPurchasePrice": 113,
+            "defaultPurchasePriceType": "tax_inclusive",
+            "finance": {"defaultTaxRate": 13},
+        },
+    )
+    price = resolve_material_purchase_line_unit_price(material=material)
+    assert price == 100

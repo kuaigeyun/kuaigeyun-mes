@@ -38,6 +38,7 @@ import {
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaizhizao.moldOps.scrap';
 const RESOURCE = 'kuaizhizao:mold-scrap';
@@ -357,6 +358,8 @@ const MoldScrapApplicationsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MoldScrapApplication>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.moldScrapApplications)}
           headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-scrap-applications-equip-rank-v1"
           actionRef={actionRef}

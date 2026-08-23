@@ -37,6 +37,7 @@ import {
 } from '../../../utils/planListCore';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const ComputationHistoryPage: React.FC = () => {
   const { t } = useTranslation();
@@ -263,6 +264,8 @@ const ComputationHistoryPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<DemandComputation>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.computationHistory')}
           columnPersistenceId="apps.kuaizhizao.pages.plan-management.computation-history"
           actionRef={actionRef}
           columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}

@@ -78,6 +78,7 @@ import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { mergeListKeyword } from '../../../../utils/tableQueryKey';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 const TYPE_COLORS: Record<string, { color: string; icon: React.ReactNode }> = {
   feishu: { color: 'blue', icon: <MessageOutlined /> },
@@ -1349,6 +1350,8 @@ const ApplicationConnectionsListPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<ApplicationConnection>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.applicationConnections')}
           columnPersistenceId="pages.system.application-connections.list-v1"
           actionRef={actionRef}
           columns={columns}

@@ -60,6 +60,7 @@ import { buildLogisticsTrackingUrl } from '../tracking/logisticsTrackingDeepLink
 import { CarrierSelectDropdown } from '../shared/CarrierSelectDropdown';
 import { DriverSelectDropdown } from '../shared/DriverSelectDropdown';
 import { VehicleSelectDropdown } from '../shared/VehicleSelectDropdown';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 function freightPullRowKey(row: FreightPullCandidate): string {
   return `${row.source_type}-${row.source_id}`;
@@ -516,6 +517,8 @@ const FreightOrdersPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<FreightOrder>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.freightOrder)}
         actionRef={actionRef}
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-orders.v4"

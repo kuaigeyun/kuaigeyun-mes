@@ -24,9 +24,20 @@ _DELETABLE_PRE_EFFECTIVE = frozenset({
 _PENDING_EXECUTION = frozenset({
     "待出库", "待领料", "待借出", "pending",
 })
-_EDITABLE_PRODUCTION_PICKING = frozenset({
-    "草稿", "draft", "待审核", "待领料", "pending",
-})
+_EDITABLE_PRE_POST_BY_TYPE = {
+    "production_picking": frozenset({
+        "草稿", "draft", "待审核", "待领料", "pending",
+    }),
+    "sales_delivery": frozenset({
+        "草稿", "draft", "待审核", "待出库", "pending",
+    }),
+    "other_outbound": frozenset({
+        "草稿", "draft", "待审核", "待出库", "pending",
+    }),
+    "material_borrow": frozenset({
+        "草稿", "draft", "待审核", "待借出", "pending",
+    }),
+}
 _REVIEW_APPROVED = frozenset({
     "已通过", "审核通过", "approved", "APPROVED", "通过",
 })
@@ -106,12 +117,13 @@ def derive_outbound_hub_capabilities(
     elif not withdraw_allowed:
         withdraw_reason = "outbound_hub.withdraw.not_posted"
 
-    # 生产领料：确认领料前可编辑应领数量/仓库/备注
+    # 确认出库/领料/借出前可编辑表头与明细
+    editable_statuses = _EDITABLE_PRE_POST_BY_TYPE.get(ot)
     if is_outsource_issue:
         update_allowed = False
         update_reason = "outbound_hub.update.outsource_issue"
-    elif ot == "production_picking":
-        update_allowed = status in _EDITABLE_PRODUCTION_PICKING
+    elif editable_statuses is not None:
+        update_allowed = status in editable_statuses
         update_reason = None if update_allowed else (
             "outbound_hub.update.posted"
             if status in _OUTBOUND_POSTED_STATUSES
@@ -119,7 +131,7 @@ def derive_outbound_hub_capabilities(
         )
     else:
         update_allowed = False
-        update_reason = "outbound_hub.update.production_picking_only"
+        update_reason = "outbound_hub.update.unsupported_type"
 
     return OutboundHubCapabilities(
         confirm=_cap(confirm_allowed, confirm_reason),

@@ -48,6 +48,7 @@ import {
   renderPlmChangeTypeMarker,
 } from '../../utils/plmListPresentation';
 import ChangeDetailDrawer from '../../components/ChangeDetailDrawer';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 type TabKey = 'all' | 'bom' | 'route' | 'drawing';
 
@@ -316,6 +317,8 @@ const ChangeManagementPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<UnifiedChangeRow>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaiplm.changeManagement')}
         headerTitle={t('app.kuaiplm.change.pageTitle')}
         actionRef={actionRef}
         rowKey="uuid"

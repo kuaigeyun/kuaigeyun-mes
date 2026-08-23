@@ -26,6 +26,7 @@ import {
   type DrawingWhereUsedUsage,
 } from '../../../services/drawingWhereUsed';
 import { workOrderApi } from '../../../../kuaizhizao/services/work-order';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const RESOURCE = 'master-data:process:drawing-where-used';
 
@@ -213,6 +214,8 @@ const DrawingWhereUsedPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<EngineeringDrawing | DrawingWhereUsedUsage>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.drawingWhereUsed')}
         actionRef={actionRef}
         rowKey="uuid"
         permissionResource={RESOURCE}

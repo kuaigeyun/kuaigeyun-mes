@@ -62,6 +62,7 @@ import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { renderMasterActiveTag } from '../../../../master-data/utils/masterListPresentation';
 import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 interface InspectionPlan {
   id?: number;
   uuid?: string;
@@ -465,6 +466,8 @@ const InspectionPlansPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<InspectionPlan>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.inspectionPlans')}
         headerTitle={t('app.kuaizhizao.quality.plans.pageTitle')}
         columnPersistenceId="apps.kuaizhizao.pages.quality-management.inspection-plans"
         showAdvancedSearch

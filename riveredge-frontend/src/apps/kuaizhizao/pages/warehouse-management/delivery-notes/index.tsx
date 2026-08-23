@@ -75,6 +75,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 interface DeliveryNotice {
   id?: number;
   notice_code?: string;
@@ -1103,6 +1104,8 @@ const DeliveryNotesPage: React.FC = () => {
                       size="small"
                       dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
                       rowKey="key"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.deliveryNote)}
                       pagination={false}
                       columns={cols}
                       scroll={fields.length > 0 ? { x: totalWidth } : undefined}

@@ -160,12 +160,34 @@ async def batch_document_item_counts(
     return {int(row[parent_field]): int(row["c"] or 0) for row in rows}
 
 
+async def batch_document_item_quantity_sums(
+    tenant_id: int,
+    item_model: Any,
+    parent_field: str,
+    quantity_field: str,
+    parent_ids: List[int],
+) -> Dict[int, float]:
+    """批量汇总单据明细数量（入库 Hub 列表 total_quantity）。"""
+    if not parent_ids:
+        return {}
+    from tortoise.functions import Sum
+
+    rows = await (
+        item_model.filter(tenant_id=tenant_id, **{f"{parent_field}__in": parent_ids})
+        .group_by(parent_field)
+        .annotate(q=Sum(quantity_field))
+        .values(parent_field, "q")
+    )
+    return {int(row[parent_field]): float(row["q"] or 0) for row in rows}
+
+
 def enrich_inbound_hub_list_capabilities(
     records: List[Any],
     responses: List[T],
     receipt_type: str,
     *,
     item_counts: Optional[Dict[int, int]] = None,
+    quantity_sums: Optional[Dict[int, float]] = None,
 ) -> List[T]:
     out: List[T] = []
     for record, resp in zip(records, responses):
@@ -174,6 +196,9 @@ def enrich_inbound_hub_list_capabilities(
         if item_counts is not None:
             rid = int(getattr(record, "id", 0) or 0)
             update["total_items"] = item_counts.get(rid, 0)
+        if quantity_sums is not None:
+            rid = int(getattr(record, "id", 0) or 0)
+            update["total_quantity"] = quantity_sums.get(rid, 0)
         if hasattr(resp, "model_copy"):
             out.append(resp.model_copy(update=update))
         else:
@@ -1279,6 +1304,19 @@ def enrich_packing_binding_list_capabilities(
         else:
             out.append(resp)
     return out
+
+
+def enrich_outbound_hub_detail_capabilities(
+    record: Any,
+    response: T,
+    outbound_type: str,
+    *,
+    audit_required: bool = False,
+) -> T:
+    caps = derive_outbound_hub_capabilities(
+        record, outbound_type=outbound_type, audit_required=audit_required
+    )
+    return _attach_capabilities_to_response(response, caps) if hasattr(response, "model_copy") else response
 
 
 def enrich_outbound_hub_list_capabilities(

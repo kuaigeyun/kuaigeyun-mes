@@ -39,6 +39,7 @@ import {
 } from '../../../utils/performanceListCore';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const KPI_RESOURCE = 'kuaizhizao:performance-kpi-definitions';
 
@@ -252,6 +253,8 @@ const KpiDefinitionsPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.performance.kpi-definitions.v1"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.kpiDefinitions')}
           showAdvancedSearch
           skipFuzzyPinyinClientFilter
           pinnedTabsField={PERFORMANCE_PINNED_IS_ACTIVE_FIELD}

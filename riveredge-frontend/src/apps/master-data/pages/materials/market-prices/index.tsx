@@ -25,6 +25,7 @@ import type {
   MaterialMarketPricePresetItem,
 } from '../../../types/material-market-price';
 import { materialMarketPriceApi } from '../../../services/material-market-price';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 function formatDate(v: unknown): string | undefined {
   if (!v) return undefined;
@@ -367,6 +368,8 @@ const MarketPricesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<MaterialMarketPrice>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.marketPrices')}
         columnPersistenceId="apps.master-data.pages.materials.market-prices.list-v4"
         headerTitle={t('app.master-data.menu.materials.market-prices')}
         actionRef={actionRef}

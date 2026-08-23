@@ -89,6 +89,7 @@ import {
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 /**
  * 客户管理列表页面组件
  */
@@ -1018,6 +1019,8 @@ const CustomersPage: React.FC = () => {
     <>
       <ListPageTemplate>
       <UniTable<Customer>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.customers')}
         columnPersistenceId="apps.master-data.pages.supply-chain.customers.list-v2"
         actionRef={actionRef}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}

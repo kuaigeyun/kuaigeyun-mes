@@ -19,6 +19,7 @@ import {
   normalizeEquipmentListResponse,
   resolveReminderListParams,
 } from '../../../utils/equipmentListCore';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   EquipmentMasterDetailDrawer,
   useEquipmentDetailDrawer,
@@ -188,6 +189,8 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MoldMaintenanceReminder>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.moldMaintenanceReminders')}
           headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-maintenance-reminders-equip-rank-v1"
           actionRef={actionRef}

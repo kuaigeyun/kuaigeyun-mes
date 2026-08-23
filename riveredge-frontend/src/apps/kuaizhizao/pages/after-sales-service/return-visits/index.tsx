@@ -24,6 +24,7 @@ import {
   type CustomerReturnVisitPayload,
 } from '../../../services/after-sales-service';
 import { CustomerReturnVisitDetailDrawer } from './components/CustomerReturnVisitDetailDrawer';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 function customerDisplayName(c: Customer | null | undefined): string {
   if (!c) return '';
@@ -234,6 +235,8 @@ const ReturnVisitsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<CustomerReturnVisit>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesReturnVisit)}
         actionRef={actionRef}
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.return-visits.v4"

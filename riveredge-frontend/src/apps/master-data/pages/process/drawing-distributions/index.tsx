@@ -33,6 +33,7 @@ import {
 } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../../../kuaizhizao/pages/shared/documentAuditColumns';
 import { drawingApi, type EngineeringDrawing } from '../../../services/drawing';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   drawingDistributionApi,
   type DrawingDistribution,
@@ -277,6 +278,8 @@ const DrawingDistributionsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<DrawingDistribution>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.drawingDistributions')}
         headerTitle={t('app.master-data.menu.process.drawing-distributions')}
         actionRef={actionRef}
         rowKey="uuid"

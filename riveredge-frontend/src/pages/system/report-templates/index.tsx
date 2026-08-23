@@ -33,6 +33,7 @@ import { fetchAllListItems } from '../../../utils/fetchAllListPages';
 import { pickListSearchKeyword } from '../../../utils/tableQueryKey';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
 
 /**
  * 报表模板接口定义
@@ -345,6 +346,8 @@ const ReportTemplatesPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         columnPersistenceId="pages.system.report-templates"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.reportTemplates')}
         headerTitle={t('pages.system.reportTemplates.headerTitle')}
         actionRef={actionRef}
         rowKey="id"

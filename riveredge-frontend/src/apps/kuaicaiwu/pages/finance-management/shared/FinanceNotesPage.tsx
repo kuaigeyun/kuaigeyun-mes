@@ -46,6 +46,7 @@ import {
 } from '../../../utils/financeUiLabels';
 import { renderFinanceTypeMarker } from '../../../utils/financeListPresentation';
 import { FINANCE_DOC_PINNED_STATUS_FIELD, financeDocCreatedUpdatedColumns } from '../../../utils/financeListCore';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 type Props = {
   direction: FinanceNoteDirection;
@@ -309,6 +310,10 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
         actionRef={actionRef}
         rowKey="id"
         columnPersistenceId={columnPersistenceId}
+        viewTypes={['table', 'help']}
+        helpViewConfig={buildDocumentListHelpViewConfig(
+          isReceivable ? DOCUMENT_LIST_HELP_KEYS.notesReceivable : DOCUMENT_LIST_HELP_KEYS.notesPayable,
+        )}
         columns={columns}
         headerTitle={isReceivable ? t(`${NS}.titleReceivable`) : t(`${NS}.titlePayable`)}
         toolBarRender={() =>

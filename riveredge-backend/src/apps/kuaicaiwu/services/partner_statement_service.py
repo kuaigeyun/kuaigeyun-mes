@@ -77,6 +77,56 @@ def _abs_money(value: Decimal | float | int | str) -> Decimal:
     return abs(_q_money(value))
 
 
+def _line_doc_amount(ln: Dict[str, Any]) -> Decimal:
+    if ln.get("doc_amount") is not None:
+        return _abs_money(ln["doc_amount"])
+    debit = _q_money(ln.get("debit", 0))
+    credit = _q_money(ln.get("credit", 0))
+    return debit if debit > 0 else credit
+
+
+def _line_statement_amount(ln: Dict[str, Any]) -> Decimal:
+    if ln.get("statement_amount") is not None:
+        return _q_money(ln["statement_amount"])
+    return _line_doc_amount(ln)
+
+
+def _line_is_debit_side(ln: Dict[str, Any]) -> bool:
+    return _q_money(ln.get("debit", 0)) > 0
+
+
+def _apply_statement_amount_to_line(
+    ln: Dict[str, Any],
+    statement_amount: Decimal,
+    doc_amount: Decimal,
+    prior_stated: Decimal,
+    remaining: Decimal,
+) -> Dict[str, Any]:
+    row = dict(ln)
+    row["doc_amount"] = float(doc_amount)
+    row["prior_stated_amount"] = float(prior_stated)
+    row["remaining_amount"] = float(remaining)
+    row["statement_amount"] = float(statement_amount)
+    amt = float(statement_amount)
+    if _line_is_debit_side(ln):
+        row["debit"] = amt
+        row["credit"] = 0.0
+    else:
+        row["debit"] = 0.0
+        row["credit"] = amt
+    return row
+
+
+def _normalize_statement_line_amounts(ln: Dict[str, Any]) -> Dict[str, Any]:
+    """旧快照补齐单据/已对/未对/本次对账金额字段。"""
+    row = dict(ln)
+    doc_amount = _line_doc_amount(row)
+    prior = _q_money(row.get("prior_stated_amount", 0))
+    statement_amount = _line_statement_amount(row)
+    remaining = _q_money(doc_amount - prior)
+    return _apply_statement_amount_to_line(row, statement_amount, doc_amount, prior, remaining)
+
+
 def _extract_waste_quantities(other_checks: Any) -> Tuple[Optional[float], Optional[float]]:
     """从检验 other_checks JSON 提取工废/料废数量。"""
     if not isinstance(other_checks, dict):
@@ -317,6 +367,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                     "debit": 0.0 if is_return else float(amt),
                     "credit": float(amt) if is_return else 0.0,
                     "doc_id": r.id,
+                    "doc_amount": float(amt),
                 })
             for r in receipts:
                 amt = _abs_money(r.total_amount)
@@ -330,6 +381,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                     "debit": float(amt) if is_refund else 0.0,
                     "credit": 0.0 if is_refund else float(amt),
                     "doc_id": r.id,
+                    "doc_amount": float(amt),
                 })
         else:
             payables = await Payable.filter(
@@ -363,6 +415,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                     "debit": 0.0 if is_return else float(amt),
                     "credit": float(amt) if is_return else 0.0,
                     "doc_id": p.id,
+                    "doc_amount": float(amt),
                 }
                 # 应付 source_type：库内可能是中文常量，也可能是加载 API 的英文码
                 src = str(p.source_type or "").strip()
@@ -393,6 +446,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                     "debit": float(amt) if is_refund else 0.0,
                     "credit": 0.0 if is_refund else float(amt),
                     "doc_id": p.id,
+                    "doc_amount": float(amt),
                 })
         lines.sort(key=lambda x: (x["sort_date"], x["doc_type"], x.get("doc_id", 0)))
         lines = await self._order_lines_by_settlement_hierarchy(
@@ -408,134 +462,33 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         partner_type: str,
         lines: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
-        """
-        将收/付款单挂到期间内对应的应收/应付单之下（扁平列表 + tree_level）。
-        关联优先 DocumentRelation（加载创建），其次 SettlementRecord（核销）；
-        一笔收/付款只挂到一个父单，避免金额重复。
-        """
+        from apps.kuaicaiwu.services.finance_settlement_hierarchy import (
+            order_lines_by_settlement_hierarchy,
+        )
+
         if not lines:
             return lines
         if partner_type == "Customer":
-            parent_types = {"应收单"}
-            child_types = {"收款单", "收款退款"}
-            rel_source, rel_target = "receivable", "receipt"
-            debit_doc_type, credit_doc_type = "Receivable", "Receipt"
-        else:
-            parent_types = {"应付单"}
-            child_types = {"付款单", "付款退款"}
-            rel_source, rel_target = "payable", "payment"
-            debit_doc_type, credit_doc_type = "Payable", "Payment"
-
-        parents = [ln for ln in lines if ln.get("doc_type") in parent_types]
-        children = [ln for ln in lines if ln.get("doc_type") in child_types]
-        others = [
-            ln
-            for ln in lines
-            if ln.get("doc_type") not in parent_types and ln.get("doc_type") not in child_types
-        ]
-        if not parents or not children:
-            for ln in lines:
-                ln.setdefault("tree_level", 0)
-            return lines
-
-        parent_by_id = {
-            int(p["doc_id"]): p for p in parents if p.get("doc_id") is not None
-        }
-        parent_ids = set(parent_by_id.keys())
-        child_ids = [int(c["doc_id"]) for c in children if c.get("doc_id") is not None]
-        child_parent: Dict[int, int] = {}
-
-        if child_ids:
-            from apps.kuaizhizao.models.document_relation import DocumentRelation
-
-            rels = await DocumentRelation.filter(
-                tenant_id=tenant_id,
-                source_type=rel_source,
-                target_type=rel_target,
-                target_id__in=child_ids,
-            ).all()
-            for rel in rels:
-                if not rel.source_id or not rel.target_id:
-                    continue
-                sid, tid = int(rel.source_id), int(rel.target_id)
-                if sid in parent_ids:
-                    child_parent.setdefault(tid, sid)
-
-        unset_ids = [cid for cid in child_ids if cid not in child_parent]
-        if unset_ids:
-            from apps.kuaicaiwu.models.settlement import SettlementRecord
-
-            settles = await SettlementRecord.filter(
-                tenant_id=tenant_id,
-                debit_doc_type=debit_doc_type,
-                credit_doc_type=credit_doc_type,
-                credit_doc_id__in=unset_ids,
-                is_active=True,
-                deleted_at__isnull=True,
-            ).all()
-            by_credit: Dict[int, List[Any]] = defaultdict(list)
-            for s in settles:
-                if s.debit_doc_id and int(s.debit_doc_id) in parent_ids:
-                    by_credit[int(s.credit_doc_id)].append(s)
-            for cid, lst in by_credit.items():
-                best = max(lst, key=lambda x: abs(float(x.amount or 0)))
-                child_parent[cid] = int(best.debit_doc_id)
-
-        buckets: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
-        orphans: List[Dict[str, Any]] = []
-        for c in children:
-            row = dict(c)
-            cid = int(row["doc_id"]) if row.get("doc_id") is not None else None
-            pid = child_parent.get(cid) if cid is not None else None
-            if pid is not None and pid in parent_by_id:
-                parent = parent_by_id[pid]
-                row["tree_level"] = 1
-                row["parent_doc_id"] = pid
-                row["parent_doc_code"] = parent.get("doc_code")
-                buckets[pid].append(row)
-            else:
-                row["tree_level"] = 0
-                orphans.append(row)
-
-        def _line_sort_key(ln: Dict[str, Any]) -> Tuple[Any, ...]:
-            return (
-                ln.get("sort_date") or ln.get("date") or "",
-                ln.get("doc_type") or "",
-                ln.get("doc_id") or 0,
+            return await order_lines_by_settlement_hierarchy(
+                tenant_id,
+                lines,
+                parent_doc_types={"应收单"},
+                child_doc_types={"收款单", "收款退款"},
+                rel_source="receivable",
+                rel_target="receipt",
+                debit_doc_type="Receivable",
+                credit_doc_type="Receipt",
             )
-
-        for pid in buckets:
-            buckets[pid].sort(key=_line_sort_key)
-
-        top_items: List[Tuple[str, Dict[str, Any]]] = []
-        for p in parents:
-            row = dict(p)
-            row["tree_level"] = 0
-            top_items.append(("parent", row))
-        for o in orphans:
-            top_items.append(("orphan", o))
-        for o in others:
-            row = dict(o)
-            row.setdefault("tree_level", 0)
-            top_items.append(("other", row))
-
-        top_items.sort(
-            key=lambda item: (
-                item[1].get("sort_date") or item[1].get("date") or "",
-                0 if item[0] == "parent" else 1,
-                item[1].get("doc_type") or "",
-                item[1].get("doc_id") or 0,
-            )
+        return await order_lines_by_settlement_hierarchy(
+            tenant_id,
+            lines,
+            parent_doc_types={"应付单"},
+            child_doc_types={"付款单", "付款退款"},
+            rel_source="payable",
+            rel_target="payment",
+            debit_doc_type="Payable",
+            credit_doc_type="Payment",
         )
-
-        result: List[Dict[str, Any]] = []
-        for kind, item in top_items:
-            result.append(item)
-            if kind == "parent":
-                pid = item.get("doc_id")
-                if pid is not None:
-                    result.extend(buckets.get(int(pid), []))
-        return result
 
     async def ensure_statement_line_hierarchy(
         self,
@@ -544,14 +497,16 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         opening_balance: Decimal,
         lines: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
-        """旧快照无 tree_level 时，按核销关系重排并重算行余额（不改库）。"""
+        """补齐层级并重算行余额（含本次对账金额）。"""
         if not lines:
             return lines
-        if any("tree_level" in ln for ln in lines):
-            return lines
-        ordered = await self._order_lines_by_settlement_hierarchy(
-            tenant_id, partner_type, [dict(ln) for ln in lines]
-        )
+        working = [_normalize_statement_line_amounts(dict(ln)) for ln in lines]
+        if not any(int(ln.get("tree_level") or 0) > 0 for ln in working):
+            ordered = await self._order_lines_by_settlement_hierarchy(
+                tenant_id, partner_type, working
+            )
+        else:
+            ordered = working
         _, _, _, with_bal = self._apply_running_balance(opening_balance, ordered)
         return with_bal
 
@@ -573,48 +528,115 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             result.append(row)
         return _q_money(debit_total), _q_money(credit_total), balance, result
 
-    async def _load_stated_doc_keys(
+    async def _load_prior_stated_amounts(
         self,
         tenant_id: int,
         partner_id: int,
         partner_type: str,
-    ) -> set[Tuple[str, int]]:
-        """已出现在该往来任意未删除对账单明细中的单据键（族, id）。"""
+        exclude_statement_id: Optional[int] = None,
+    ) -> Dict[Tuple[str, int], Decimal]:
+        """其它对账单中已累计的对账金额（按单据族+id）。"""
         rows = await PartnerStatement.filter(
             tenant_id=tenant_id,
             partner_id=partner_id,
             partner_type=partner_type,
             deleted_at__isnull=True,
         ).only("id", "transaction_details").all()
-        keys: set[Tuple[str, int]] = set()
+        totals: Dict[Tuple[str, int], Decimal] = defaultdict(Decimal)
         for stmt in rows:
+            if exclude_statement_id is not None and int(stmt.id) == int(exclude_statement_id):
+                continue
             details = stmt.transaction_details or {}
             for ln in details.get("lines") or []:
                 key = _line_doc_key(ln.get("doc_type"), ln.get("doc_id"))
-                if key:
-                    keys.add(key)
-        return keys
+                if not key:
+                    continue
+                totals[key] += _line_statement_amount(ln)
+        return dict(totals)
 
-    def _filter_unstated_lines(
+    def _apply_partial_statement_lines(
         self,
         lines: List[Dict[str, Any]],
-        stated_keys: set[Tuple[str, int]],
-    ) -> Tuple[List[Dict[str, Any]], Decimal]:
+        prior_map: Dict[Tuple[str, int], Decimal],
+        amount_overrides: Optional[Dict[Tuple[str, int], Decimal]] = None,
+    ) -> Tuple[List[Dict[str, Any]], int, Decimal]:
         """
-        剔除已对账单据；返回剩余行，以及已剔除行对余额的净影响（借-贷），
-        用于把已对账发生额并入本期预览的期初，避免余额断层。
+        按累计已对金额计算未对余额；默认本次对账金额=未对金额。
+        已全部对账的行剔除，并将其借贷净额并入期初调节。
         """
-        if not stated_keys:
-            return lines, Decimal("0.00")
-        remaining: List[Dict[str, Any]] = []
+        if not lines:
+            return [], 0, Decimal("0.00")
+        result: List[Dict[str, Any]] = []
+        excluded_count = 0
         excluded_net = Decimal("0.00")
+        overrides = amount_overrides or {}
         for ln in lines:
-            key = _line_doc_key(ln.get("doc_type"), ln.get("doc_id"))
-            if key and key in stated_keys:
-                excluded_net += _q_money(ln.get("debit", 0)) - _q_money(ln.get("credit", 0))
+            row = dict(ln)
+            doc_amount = _line_doc_amount(row)
+            key = _line_doc_key(row.get("doc_type"), row.get("doc_id"))
+            prior = prior_map.get(key, Decimal("0")) if key else Decimal("0")
+            remaining = _q_money(doc_amount - prior)
+            if remaining <= 0:
+                excluded_count += 1
+                excluded_net += _q_money(row.get("debit", 0)) - _q_money(row.get("credit", 0))
                 continue
-            remaining.append(ln)
-        return remaining, _q_money(excluded_net)
+            statement_amount = remaining
+            if key and key in overrides:
+                statement_amount = _q_money(overrides[key])
+            elif row.get("statement_amount") is not None:
+                statement_amount = _q_money(row["statement_amount"])
+            if statement_amount <= 0 or statement_amount > remaining:
+                code = row.get("doc_code") or row.get("doc_id")
+                raise ValidationError(
+                    f"单据 {code} 本次对账金额须在 0 与未对金额 {remaining} 之间"
+                )
+            result.append(
+                _apply_statement_amount_to_line(row, statement_amount, doc_amount, prior, remaining)
+            )
+        return result, excluded_count, _q_money(excluded_net)
+
+    def _build_line_amount_override_map(
+        self, line_amounts: Optional[List[Dict[str, Any]]]
+    ) -> Dict[Tuple[str, int], Decimal]:
+        overrides: Dict[Tuple[str, int], Decimal] = {}
+        if not line_amounts:
+            return overrides
+        for item in line_amounts:
+            key = _line_doc_key(item.get("doc_type"), item.get("doc_id"))
+            if not key:
+                continue
+            overrides[key] = _q_money(item.get("statement_amount"))
+        return overrides
+
+    def _apply_line_amount_overrides_to_preview_lines(
+        self,
+        lines: List[Dict[str, Any]],
+        prior_map: Dict[Tuple[str, int], Decimal],
+        overrides: Dict[Tuple[str, int], Decimal],
+    ) -> List[Dict[str, Any]]:
+        if not overrides:
+            return [_normalize_statement_line_amounts(dict(ln)) for ln in lines]
+        rebuilt: List[Dict[str, Any]] = []
+        for ln in lines:
+            row = dict(ln)
+            key = _line_doc_key(row.get("doc_type"), row.get("doc_id"))
+            if not key or key not in overrides:
+                continue
+            doc_amount = _line_doc_amount(row)
+            prior = prior_map.get(key, Decimal("0"))
+            remaining = _q_money(doc_amount - prior)
+            if remaining <= 0:
+                continue
+            statement_amount = _q_money(overrides[key])
+            if statement_amount <= 0 or statement_amount > remaining:
+                code = row.get("doc_code") or row.get("doc_id")
+                raise ValidationError(
+                    f"单据 {code} 本次对账金额须在 0 与未对金额 {remaining} 之间"
+                )
+            rebuilt.append(
+                _apply_statement_amount_to_line(row, statement_amount, doc_amount, prior, remaining)
+            )
+        return rebuilt
 
     async def preview_statement(
         self,
@@ -631,10 +653,11 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         raw_lines = await self._collect_period_raw_lines(
             tenant_id, partner_id, partner_type, start_date, end_date
         )
-        stated_keys = await self._load_stated_doc_keys(tenant_id, partner_id, partner_type)
+        prior_map = await self._load_prior_stated_amounts(tenant_id, partner_id, partner_type)
         before_count = len(raw_lines)
-        raw_lines, excluded_net = self._filter_unstated_lines(raw_lines, stated_keys)
-        excluded_from_period = before_count - len(raw_lines)
+        raw_lines, excluded_from_period, excluded_net = self._apply_partial_statement_lines(
+            raw_lines, prior_map
+        )
         # 已纳入其它对账单的本期发生额并入期初，剩余行续算余额
         opening = _q_money(opening + excluded_net)
         debit_total, credit_total, closing, lines = self._apply_running_balance(opening, raw_lines)
@@ -715,6 +738,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         attachments: Optional[list] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        line_amounts: Optional[List[Dict[str, Any]]] = None,
     ) -> PartnerStatement:
         if start_date and end_date:
             if end_date < start_date:
@@ -741,10 +765,27 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
 
         code = await self._generate_statement_code(tenant_id)
         company_name = preview["company_name"]
-        summary = preview["summary"]
+        summary = dict(preview["summary"])
+        lines = list(preview.get("lines") or [])
+        overrides = self._build_line_amount_override_map(line_amounts)
+        if line_amounts is not None and not overrides:
+            raise BusinessLogicError("请至少勾选一行对账明细")
+        if overrides:
+            prior_map = await self._load_prior_stated_amounts(tenant_id, partner_id, partner_type)
+            lines = self._apply_line_amount_overrides_to_preview_lines(lines, prior_map, overrides)
+            if not lines:
+                raise BusinessLogicError("对账明细不能为空")
+            opening = _q_money(summary["opening_balance"])
+            debit_total, credit_total, closing, lines = self._apply_running_balance(opening, lines)
+            summary = {
+                "opening_balance": float(opening),
+                "debit_total": float(debit_total),
+                "credit_total": float(credit_total),
+                "closing_balance": float(closing),
+            }
         details = {
             "summary": summary,
-            "lines": preview["lines"],
+            "lines": lines,
             "partner_snapshot": preview["partner_snapshot"],
             "balance_label": preview["balance_label"],
             "period_label": period_label,
@@ -881,6 +922,57 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         if user_id is not None:
             operator = await User.filter(id=user_id).first()
             apply_update_audit(obj, operator)
+        await obj.save()
+        return obj
+
+    async def update_statement_lines(
+        self,
+        tenant_id: int,
+        statement_id: int,
+        line_amounts: List[Dict[str, Any]],
+        user_id: int,
+    ) -> PartnerStatement:
+        obj = await self.get_statement(tenant_id, statement_id)
+        if obj.status not in ("Draft", "Disputed"):
+            raise BusinessLogicError("仅草稿或有异议的对账单可修改对账金额")
+        details = dict(obj.transaction_details or {})
+        current_lines = list(details.get("lines") or [])
+        if not current_lines:
+            raise BusinessLogicError("对账单无明细行")
+        prior_map = await self._load_prior_stated_amounts(
+            tenant_id,
+            obj.partner_id,
+            obj.partner_type,
+            exclude_statement_id=statement_id,
+        )
+        overrides = self._build_line_amount_override_map(line_amounts)
+        if not overrides:
+            raise ValidationError("请提供至少一行对账金额")
+        rebuilt = self._apply_line_amount_overrides_to_preview_lines(
+            current_lines, prior_map, overrides
+        )
+        if not rebuilt:
+            raise BusinessLogicError("对账明细不能为空")
+        opening = _q_money(obj.opening_balance)
+        if not any(int(ln.get("tree_level") or 0) > 0 for ln in rebuilt):
+            rebuilt = await self._order_lines_by_settlement_hierarchy(
+                tenant_id, obj.partner_type, rebuilt
+            )
+        debit_total, credit_total, closing, lines = self._apply_running_balance(opening, rebuilt)
+        summary = {
+            "opening_balance": float(opening),
+            "debit_total": float(debit_total),
+            "credit_total": float(credit_total),
+            "closing_balance": float(closing),
+        }
+        details["lines"] = lines
+        details["summary"] = summary
+        obj.transaction_details = details
+        obj.debit_total = debit_total
+        obj.credit_total = credit_total
+        obj.closing_balance = closing
+        operator = await User.filter(id=user_id).first()
+        apply_update_audit(obj, operator)
         await obj.save()
         return obj
 

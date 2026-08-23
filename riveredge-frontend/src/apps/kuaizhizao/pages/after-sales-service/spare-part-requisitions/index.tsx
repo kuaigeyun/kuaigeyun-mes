@@ -22,6 +22,7 @@ import {
 } from '../../../services/after-sales-service';
 import { SparePartRequisitionDetailDrawer } from './components/SparePartRequisitionDetailDrawer';
 import SparePartRequisitionFormModal from './SparePartRequisitionFormModal';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const RESOURCE = 'kuaizhizao:after-sales-spare-part-requisition';
 
@@ -186,6 +187,8 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<AfterSalesSparePartRequisition>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesSpareRequisition)}
         actionRef={actionRef}
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.spare-part-requisitions.v3"

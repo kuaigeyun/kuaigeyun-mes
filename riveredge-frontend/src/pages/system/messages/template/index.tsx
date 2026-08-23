@@ -48,6 +48,7 @@ import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { pickListSearchKeyword } from '../../../../utils/tableQueryKey';
 import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 /**
  * 消息模板管理列表页面组件
@@ -429,6 +430,8 @@ const MessageTemplateListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MessageTemplate>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.messageTemplates')}
         columnPersistenceId="pages.system.messages.template.list-v1"
         actionRef={actionRef}
         columns={columns}

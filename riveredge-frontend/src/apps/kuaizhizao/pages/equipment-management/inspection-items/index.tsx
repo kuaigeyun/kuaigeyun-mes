@@ -34,6 +34,7 @@ import {
   renderIsActiveTag,
 } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaizhizao.equipmentOps.inspectionItem';
 const RESOURCE = 'kuaizhizao:equipment-inspection-item';
@@ -248,6 +249,8 @@ const InspectionItemsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<InspectionItem>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.inspectionItems)}
           headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.inspection-items"
           actionRef={actionRef}

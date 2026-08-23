@@ -571,7 +571,54 @@ FINANCE_GAP_ITEM_SORT_FIELDS = frozenset({
     "max_push_quantity",
     "amount",
     "finance_related_count",
+    "sort_date",
 })
+
+
+def _finance_gap_sort_value(row: dict, key: str):
+    val = row.get(key)
+    if isinstance(val, (int, float)):
+        return val
+    if isinstance(val, date):
+        return val.isoformat()
+    return str(val or "")
+
+
+def _sort_finance_gap_items_preserve_hierarchy(
+    items: List[dict],
+    sort_field: str,
+    reverse: bool,
+) -> List[dict]:
+    if not items:
+        return items
+    has_hierarchy = any(int(row.get("tree_level") or 0) > 0 for row in items)
+    if not has_hierarchy:
+        return sorted(
+            items,
+            key=lambda row: _finance_gap_sort_value(row, sort_field),
+            reverse=reverse,
+        )
+
+    groups: List[List[dict]] = []
+    current: List[dict] = []
+    for row in items:
+        level = int(row.get("tree_level") or 0)
+        if level <= 0:
+            if current:
+                groups.append(current)
+            current = [row]
+        elif current:
+            current.append(row)
+        else:
+            groups.append([row])
+    if current:
+        groups.append(current)
+
+    groups.sort(
+        key=lambda group: _finance_gap_sort_value(group[0], sort_field),
+        reverse=reverse,
+    )
+    return [row for group in groups for row in group]
 
 
 def filter_sort_paginate_finance_gap_items(
@@ -623,16 +670,7 @@ def filter_sort_paginate_finance_gap_items(
     if key not in FINANCE_GAP_ITEM_SORT_FIELDS:
         key = "doc_code"
     reverse = (sort_order or "asc").lower() == "desc"
-
-    def _sort_value(row: dict):
-        val = row.get(key)
-        if isinstance(val, (int, float)):
-            return val
-        if isinstance(val, date):
-            return val.isoformat()
-        return str(val or "")
-
-    filtered.sort(key=_sort_value, reverse=reverse)
+    filtered = _sort_finance_gap_items_preserve_hierarchy(filtered, key, reverse)
     total = len(filtered)
     start = max(skip, 0)
     end = start + max(limit, 1)

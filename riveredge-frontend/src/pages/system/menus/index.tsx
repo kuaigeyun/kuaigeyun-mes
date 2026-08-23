@@ -69,6 +69,7 @@ import CustomMenuLayoutEditor, {
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 import { renderMenuIconMarker, renderMenuSourceMarker } from './menuMeta';
 import { todaySiteDateString } from '../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
 
 function isAppRootMenuPath(path?: string | null): boolean {
   if (!path) return false;
@@ -889,6 +890,8 @@ const MenuListPage: React.FC = () => {
   return (
     <ListPageTemplate>
         <UniTable<Menu>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.menus')}
             columnPersistenceId="pages.system.menus.list-v1"
             actionRef={actionRef}
             headerTitle={t('pages.system.menus.listTitle')}

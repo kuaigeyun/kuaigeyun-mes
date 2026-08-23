@@ -1107,6 +1107,11 @@ export function packingBindingBatchPrintAllowed(
 export const INBOUND_HUB_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'inbound_hub.confirm.not_pending': '当前状态不可确认入库',
   'inbound_hub.confirm.use_single_preview': '委外退料/退货请使用单行确认预览',
+  'inbound_hub.update.not_allowed': '当前状态不可编辑',
+  'inbound_hub.update.posted': '已入库单据不可编辑，请先撤回',
+  'inbound_hub.update.unsupported_type': '当前入库类型不支持编辑',
+  'inbound_hub.withdraw.not_posted': '当前状态不可撤回入库',
+  'inbound_hub.withdraw.unsupported_type': '当前入库类型不支持撤回',
   'customer_material.confirm.not_pending': '只有待入库状态的代工来料单才能确认入库',
 };
 
@@ -1138,7 +1143,7 @@ export const OUTBOUND_HUB_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'outbound_hub.update.not_allowed': '当前状态不可编辑',
   'outbound_hub.update.posted': '已领料/已出库单据不可编辑，请先撤回',
   'outbound_hub.update.outsource_issue': '委外发料不支持在此编辑',
-  'outbound_hub.update.production_picking_only': '当前仅支持编辑生产领料单',
+  'outbound_hub.update.unsupported_type': '当前出库类型不支持编辑',
 };
 
 export function outboundHubCapabilityReasonMessage(

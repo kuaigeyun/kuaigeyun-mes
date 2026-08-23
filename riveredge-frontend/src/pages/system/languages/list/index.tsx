@@ -53,6 +53,7 @@ import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { getAntdModal } from '../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 /**
  * 语言管理列表页面组件
  */
@@ -617,6 +618,8 @@ const LanguageListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Language>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.languages')}
           columnPersistenceId="pages.system.languages.list-v1"
           actionRef={actionRef}
           columns={columns}

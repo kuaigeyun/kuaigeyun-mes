@@ -36,6 +36,7 @@ import type { OvertimePlan, StationUnavailableWindow, WorkCalendarConfig } from 
 import { renderActiveTag } from '../components/performanceMeta';
 import { normalizePerformanceListResponse } from '../../../utils/performanceListCore';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const CALENDAR_RESOURCE = 'kuaizhizao:performance-work-calendar';
 const OVERTIME_RESOURCE = 'kuaizhizao:performance-overtimes';
@@ -509,6 +510,8 @@ const WorkCalendarPage: React.FC = () => {
                 <UniTable<OvertimePlan>
                   headerTitle={t('app.kuaizhizao.performance.workCalendar.overtimeTableTitle')}
                   columnPersistenceId="apps.kuaizhizao.pages.performance.work-calendar.v1"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.workCalendar')}
                   actionRef={actionRef}
                   columns={columns}
                   rowKey="uuid"

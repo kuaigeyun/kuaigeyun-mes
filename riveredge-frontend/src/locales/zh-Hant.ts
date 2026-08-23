@@ -14708,8 +14708,10 @@ export default {
   'app.kuaicaiwu.partnerStatement.previewHint': '選擇往來單位與對賬起止日期後，點選「預覽」檢視明細。',
   'app.kuaicaiwu.partnerStatement.provisionalPricingHint': '本期尚有 {{count}} 行訂單待月結定價',
   'app.kuaicaiwu.partnerStatement.goPriceSettlement': '前往月結定價',
-  'app.kuaicaiwu.partnerStatement.previewFooter': '對賬單彙總已審核應收/應付與已確認收/付款；已出現在其它對賬單中的單據會自動排除。確認生成後可匯出 Excel/PDF 傳送給對方核對。',
-  'app.kuaicaiwu.partnerStatement.excludedStatedHint': '已自動排除 {{count}} 筆已納入其它對賬單的單據',
+  'app.kuaicaiwu.partnerStatement.previewFooter': '對賬單彙總已審核應收/應付與已確認收/付款；預覽表可勾選本次納入的單據並調整本次對賬金額，彙總按已選行計算。同一單據可多次分批對賬直至對清；已對清明細不再出現。確認生成後可匯出 Excel/PDF 傳送給對方核對。',
+  'app.kuaicaiwu.partnerStatement.previewSelectHint': '勾選本次納入對賬單的單據，彙總按已選 {{count}} / {{total}} 行計算',
+  'app.kuaicaiwu.partnerStatement.selectLinesRequired': '請至少勾選一行對賬明細',
+  'app.kuaicaiwu.partnerStatement.excludedStatedHint': '已自動排除 {{count}} 筆已對清的單據',
   'app.kuaicaiwu.partnerStatement.periodAlreadyExists': '該往來單位在 {{period}} 已有對賬單 {{code}}，同一期間不能重複生成。請開啟已有對賬單，或刪除草稿後重新生成',
   'app.kuaicaiwu.partnerStatement.periodHasPriorStatement': '該往來單位在 {{period}} 已有對賬單 {{code}}；下方為尚未納入的單據，可繼續生成新對賬單',
   'app.kuaicaiwu.partnerStatement.periodFullyStated': '該往來單位在 {{period}} 的單據已全部納入對賬單 {{code}}，沒有可再生成的明細',
@@ -14721,12 +14723,20 @@ export default {
   'app.kuaicaiwu.partnerStatement.col.summary': '摘要',
   'app.kuaicaiwu.partnerStatement.col.debit': '借方',
   'app.kuaicaiwu.partnerStatement.col.credit': '貸方',
+  'app.kuaicaiwu.partnerStatement.col.docAmount': '單據金額',
+  'app.kuaicaiwu.partnerStatement.col.priorStatedAmount': '已對金額',
+  'app.kuaicaiwu.partnerStatement.col.remainingAmount': '未對金額',
+  'app.kuaicaiwu.partnerStatement.col.statementAmount': '本次對賬金額',
   'app.kuaicaiwu.partnerStatement.col.periodRange': '期間',
   'app.kuaicaiwu.partnerStatement.col.debitTotal': '本期借方',
   'app.kuaicaiwu.partnerStatement.col.creditTotal': '本期貸方',
   'app.kuaicaiwu.partnerStatement.selectCustomer': '選擇客戶',
   'app.kuaicaiwu.partnerStatement.selectSupplier': '選擇供應商',
   'app.kuaicaiwu.partnerStatement.detail.confirmTitle': '確認對賬單',
+  'app.kuaicaiwu.partnerStatement.detail.saveLines': '儲存對賬金額',
+  'app.kuaicaiwu.partnerStatement.detail.linesSaved': '對賬金額已儲存',
+  'app.kuaicaiwu.partnerStatement.detail.saveLinesBeforeConfirm': '請先儲存對賬金額後再確認',
+  'app.kuaicaiwu.partnerStatement.detail.unsavedLinesHint': '對賬金額已修改，請點擊「儲存對賬金額」後再確認或匯出',
   'app.kuaicaiwu.partnerStatement.detail.confirmContent': '確認對賬單 {{code}} 資料無誤？',
   'app.kuaicaiwu.partnerStatement.detail.confirmed': '已確認',
   'app.kuaicaiwu.partnerStatement.detail.internalConfirm': '內部確認',
@@ -19748,6 +19758,8 @@ export default {
   'app.kuaizhizao.quality.traceability.noGraphData': '未找到可展示的追溯關係',
   'app.kuaizhizao.quality.traceability.eventTimeline': '事件時間線',
   'app.kuaizhizao.quality.traceability.eventTime': '時間',
+  'app.kuaizhizao.quality.traceability.sankeyLinkSource': '來源',
+  'app.kuaizhizao.quality.traceability.sankeyLinkTarget': '目標',
   'app.kuaizhizao.quality.traceability.documentType': '單據型別',
   'app.kuaizhizao.quality.traceability.documentCode': '單據編號',
   'app.kuaizhizao.quality.traceability.exportReport': '匯出追溯報告',
@@ -23087,6 +23099,74 @@ export default {
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.title': '優化採購取單、質檢取單與行情列表載入速度',
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.description':
     '採購入庫與收貨通知取單不再逐張訂單寫回數量；來料/成品檢驗取單與入庫校驗改為批量解析物料質檢策略；工程變更列表讀取時不再逐行補建審批實例；原料行情當日列表改為只讀沿用上日單價、不再在打開列表時寫庫；收款單列表移除歷史資料回填。',
+  'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.title': '生產退料入庫數量列表展示修復',
+  'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.description':
+    '入庫 Hub 生產退料單列表與詳情補彙總退料數量，待退料與已退料不再顯示為「-」，入庫進度按數量正確展示。',
+  'pages.dashboard.updateLog.entries.sop-create-attachments-payload-fix.title': '新建 SOP 附件欄位提交修復',
+  'pages.dashboard.updateLog.entries.sop-create-attachments-payload-fix.description':
+    '修復電子 SOP 新建時無附件仍提交空陣列導致建立失敗；編輯回填相容受控掃描件儲存格式。',
+  'pages.dashboard.updateLog.entries.invoice-pull-tax-inclusive-rounding-fix.title':
+    '取單開票含稅錄入價稅合計精度修復',
+  'pages.dashboard.updateLog.entries.invoice-pull-tax-inclusive-rounding-fix.description':
+    '銷項/進項取單與合併開票在含稅錄入時以價稅合計為真源反算未稅與稅額，避免按上限開票時出現 60000.00 被算成 60000.01 而報超過可開票金額。',
+  'pages.dashboard.updateLog.entries.invoice-pull-amount-field-grid-fix.title':
+    '取單開票金額錄入對齊表單柵格',
+  'pages.dashboard.updateLog.entries.invoice-pull-amount-field-grid-fix.description':
+    '從源單建立銷項/進項發票時，「金額錄入」分段控件改用 FormModalGridBlock 包裹，標籤與輸入框與同排欄位左緣對齊，不再被裁切或擠出柵格。',
+  'pages.dashboard.updateLog.entries.merge-settlement-code-batch-fix.title':
+    '合併收付款核銷單號批量發號修復',
+  'pages.dashboard.updateLog.entries.merge-settlement-code-batch-fix.description':
+    '合併收款/合併付款對多張源單核銷時，改為一次事務連續生成不重複核銷單號，避免 HX 序號撞唯一約束導致伺服器錯誤。',
+  'pages.dashboard.updateLog.entries.merge-voucher-bank-summary-fix.title':
+    '合併收付款銀行流水自動寫入摘要',
+  'pages.dashboard.updateLog.entries.merge-voucher-bank-summary-fix.description':
+    '合併收款/合併付款確認入帳後，銀行流水摘要自動帶出收付款單號、往來單位與關聯應收/應付單號；歷史空摘要可執行 repair_merge_voucher_bank_summaries 腳本批量回填，無需打開銀行流水頁。',
+  'pages.dashboard.updateLog.entries.merge-invoice-source-allocation-fix.title':
+    '合併開票按源單分攤已開票金額',
+  'pages.dashboard.updateLog.entries.merge-invoice-source-allocation-fix.description':
+    '合併開票後列表按各源單分攤記錄已開票/收票金額與狀態；歷史資料可執行 repair_merge_invoice_allocations 腳本回填分攤關聯，避免整票記在第一張應收/應付上。',
+  'pages.dashboard.updateLog.entries.partner-statement-preview-line-selection.title':
+    '往來對賬單預覽支援勾選納入單據',
+  'pages.dashboard.updateLog.entries.partner-statement-preview-line-selection.description':
+    '新建對賬單預覽表增加行勾選，可手動選擇本次納入的單據；生成時僅寫入已選行，彙總隨勾選即時重算，避免期間內部分已對、部分未對時無法分批生成。',
+  'pages.dashboard.updateLog.entries.partner-statement-partial-reconciliation.title':
+    '往來對賬單支援分批對賬',
+  'pages.dashboard.updateLog.entries.partner-statement-partial-reconciliation.description':
+    '明細展示單據金額、已對金額與未對金額，本次對賬金額可在預覽與草稿中編輯；同一單據可多次分批對賬直至對清，已對清明細不再納入後續預覽。',
+  'pages.dashboard.updateLog.entries.document-reconciliation-gap-hierarchy.title':
+    '業務單據對賬往來缺口展示收付層級',
+  'pages.dashboard.updateLog.entries.document-reconciliation-gap-hierarchy.description':
+    '往來缺口列表中收款單、付款單按核銷關係掛在對應應收單、應付單之下縮排展示，與夥伴對賬單一致；排序時分組保持父子行不拆散。',
+  'pages.dashboard.updateLog.entries.warehouse-doc-edit-withdraw-unify.title':
+    '出入庫單據撤回與編輯邏輯統一',
+  'pages.dashboard.updateLog.entries.warehouse-doc-edit-withdraw-unify.description':
+    '銷售出庫在確認前可在出庫 Hub 詳情內編輯倉庫、備註與明細數量批號；出庫與入庫 Hub 的編輯、撤回門禁統一走後端 capabilities，已出庫或已入庫須先撤回再過帳前修改。',
+  'pages.dashboard.updateLog.entries.quality-traceability-ui-polish.title':
+    '追溯管理介面與流向圖體驗優化',
+  'pages.dashboard.updateLog.entries.quality-traceability-ui-polish.description':
+    '摘要資訊框線改為標準 1px；事件時間線時間列加寬單行顯示並增加表格外邊框；流向圖連線懸停提示改為中文來源與目標；桑基圖採用明亮配色且同類型單據同色。',
+  'pages.dashboard.updateLog.entries.work-order-reporting-producer-card-sync.title':
+    '工單報工所選生產人員與工序卡一致',
+  'pages.dashboard.updateLog.entries.work-order-reporting-producer-card-sync.description':
+    '快捷報工或報工管理中選擇非預設生產人員後，工序卡「人員」會同步為本次報工所選人員，不再仍顯示派工預設人員。',
+  'pages.dashboard.updateLog.entries.quality-inspection-inspector-sync.title':
+    '檢驗單列表檢驗員與開展檢驗所選人員一致',
+  'pages.dashboard.updateLog.entries.quality-inspection-inspector-sync.description':
+    '來料、工序、成品與出貨檢驗開展時，表單所選檢驗人員會正確寫入檢驗員欄位；列表與詳情不再固定顯示當前操作人。',
+  'pages.dashboard.updateLog.entries.purchase-order-header-delivery-sync.title':
+    '採購訂單表頭要求到貨日可同步明細',
+  'pages.dashboard.updateLog.entries.purchase-order-header-delivery-sync.description':
+    '編輯採購訂單時，修改表頭要求到貨日會自動同步至尚未單獨改過的明細行；明細行仍可各自調整，與銷售訂單一致。',
+  'pages.dashboard.updateLog.entries.purchase-order-delivery-date-from-requisition.title':
+    '採購訂單要求到貨日與採購申請對齊',
+  'pages.dashboard.updateLog.entries.purchase-order-delivery-date-from-requisition.description':
+    '採購申請轉採購訂單時，表頭與明細到貨日均依申請行日期、表頭要求到貨日繼承；表頭取明細最晚到貨日。保存採購訂單時表頭要求到貨日自動與明細同步。',
+  'pages.dashboard.updateLog.entries.purchase-price-auto-fill.title': '採購申請與訂單自動帶出物料採購價',
+  'pages.dashboard.updateLog.entries.purchase-price-auto-fill.description':
+    '需求計算下推採購申請時會讀取物料來源配置或預設採購價填入建議單價；採購申請轉採購訂單時，若行上單價為空則回退物料檔案採購價，與手工選料帶價邏輯一致。',
+  'pages.dashboard.updateLog.entries.rich-page-help-views.title': '全站頁面說明視圖接入',
+  'pages.dashboard.updateLog.entries.rich-page-help-views.description':
+    '業務單據列表、主數據與系統配置頁、模組中心工作台及報表支援切換到說明視圖，依當前頁面能力閱讀分章說明。已覆蓋快製造、快財務、基礎資料、PLM、IoT 等模組；報表統一使用通用說明。',
   'pages.dashboard.updateLog.entries.locale-pack-gap-sync.title': '補齊多語言包並提升寮國語覆蓋率',
   'pages.dashboard.updateLog.entries.locale-pack-gap-sync.description':
     '繁中、英、日、越、老五語 key 已與簡體中文對齊；寮國語補譯系統配置、快製造、基礎資料等模組，並新增 glossary 人工詞條與 locale 同步腳本，介面英文占位由約 58% 降至約 2%。',
@@ -23163,10 +23243,9 @@ export default {
   'pages.dashboard.updateLog.entries.price-settlement.description':
     '支援月結客戶零價下單、月結定價工作台批量補價，已出庫/入庫行自動產生應收應付差額調整單。',
   'pages.dashboard.updateLog.entries.update-log-panel.description': '支援按類型分類展示平台更新，點擊更新日誌查看全部記錄。',
-  'pages.dashboard.updateLog.entries.calendar-monday-first.title': '工作台日曆改為以星期一為每週第一天',
-  'pages.dashboard.updateLog.entries.weather-text-contrast.title': '優化天氣日曆插件頂部文字對比度',
-  'pages.dashboard.updateLog.entries.weather-sky-background.title': '天氣日曆插件頂部背景模擬天空顏色並與天氣聯動',
-  'pages.dashboard.updateLog.entries.weather-weekday-time.title': '天氣日曆插件調整星期位置、時間格式與字號',
+  'pages.dashboard.updateLog.entries.workbench-calendar-weather-polish.title': '工作台日曆與天氣插件體驗優化',
+  'pages.dashboard.updateLog.entries.workbench-calendar-weather-polish.description':
+    '日曆改為以星期一為每週第一天；天氣插件頂部背景模擬天空顏色並與天氣聯動，優化文字對比度，調整星期位置、時間格式與字號。',
   'pages.dashboard.operationCardsTitle': '在制工序',
   'pages.dashboard.operationCardsCount': '共 {{count}} 道工序',
   'pages.dashboard.operationCardsEmpty': '暫無在制工序',

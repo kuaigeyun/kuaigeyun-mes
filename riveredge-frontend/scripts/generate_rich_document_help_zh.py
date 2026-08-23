@@ -10,6 +10,9 @@ ROOT = Path(__file__).resolve().parents[1]
 PILOT_PATH = ROOT / "src" / "locales" / "help-pages" / "rich" / "zh-CN-pilot.ts"
 OUT_PATH = ROOT / "src" / "locales" / "help-pages" / "rich" / "zh-CN" / "documents" / "index.ts"
 
+from batch3_document_help_content import BATCH3_DOC_CONTENT, BATCH3_DOC_KEYS
+from batch4_document_help_content import BATCH4_DOC_CONTENT, BATCH4_DOC_KEYS
+
 BATCH1_DOC_KEYS = [
     "sales-order",
     "purchase-order",
@@ -28,7 +31,7 @@ BATCH2_DOC_KEYS = [
     "purchase-inquiry",
 ]
 
-ALL_DOC_KEYS = BATCH1_DOC_KEYS + BATCH2_DOC_KEYS
+ALL_DOC_KEYS = BATCH1_DOC_KEYS + BATCH2_DOC_KEYS + BATCH3_DOC_KEYS + BATCH4_DOC_KEYS
 
 STANDARD_VIEW_SUFFIXES = ("order", "detail")
 WORK_ORDER_VIEW_SUFFIXES = ("table", "productTree", "orderTree")
@@ -116,7 +119,7 @@ def prefix_doc_keys(doc_key: str, fields: dict[str, str]) -> dict[str, str]:
 
 def doc_content() -> dict[str, dict[str, str]]:
     sales_order = extract_pilot_sales_order()
-    return {
+    merged = {
         "sales-order": sales_order,
         "purchase-order": PURCHASE_ORDER,
         "work-order": WORK_ORDER,
@@ -130,13 +133,16 @@ def doc_content() -> dict[str, dict[str, str]]:
         "purchase-return": PURCHASE_RETURN,
         "purchase-inquiry": PURCHASE_INQUIRY,
     }
+    merged.update(BATCH3_DOC_CONTENT)
+    merged.update(BATCH4_DOC_CONTENT)
+    return merged
 
 
 def write_ts(data: dict[str, str]) -> None:
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         "/**",
-        " * 业务单据富文本帮助（batch 1+2，zh-CN）",
+        " * 业务单据富文本帮助（batch 1–4，zh-CN）",
         " * 由 scripts/generate_rich_document_help_zh.py 生成，请勿手工编辑。",
         " */",
         "export default {",

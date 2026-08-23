@@ -38,6 +38,7 @@ import {
   renderIsActiveTag,
 } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaizhizao.equipmentOps.patrolRoute';
 const RESOURCE = 'kuaizhizao:equipment-patrol-route';
@@ -310,6 +311,8 @@ const PatrolRoutesPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<PatrolRoute>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.patrolRoutes)}
           headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.patrol-routes"
           actionRef={actionRef}

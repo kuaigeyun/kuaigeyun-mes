@@ -49,6 +49,7 @@ import {
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaizhizao.toolOps.maintenance';
 const RESOURCE = 'kuaizhizao:tool-maintenance';
@@ -506,6 +507,8 @@ const ToolMaintenancesPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<ToolMaintenance>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.toolMaintenances)}
           headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenances-equip-rank-v1"
           actionRef={actionRef}

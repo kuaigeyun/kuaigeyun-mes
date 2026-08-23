@@ -32,6 +32,7 @@ import {
   renderPerformanceTypeMarker,
 } from '../components/performanceMeta';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   normalizePerformanceListResponse,
   PERFORMANCE_PINNED_ACTIVE_FIELD,
@@ -266,6 +267,8 @@ const HolidaysPage: React.FC = () => {
           actionRef={actionRef}
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.performance.holidays.v1"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.holidays')}
           request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;

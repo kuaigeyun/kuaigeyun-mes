@@ -26,6 +26,7 @@ import {
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { glService, type GlAccount, type GlCoaSeedTemplate } from '../../../services/gl';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const NS = 'app.kuaicaiwu.gl.chartOfAccounts';
 
@@ -311,6 +312,8 @@ const ChartOfAccountsPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.gl-management.chart-of-accounts.list-v1"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaicaiwu.chartOfAccounts')}
         columns={columns}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter

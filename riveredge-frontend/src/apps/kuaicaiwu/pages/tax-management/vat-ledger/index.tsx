@@ -13,6 +13,7 @@ import { useConfigStore } from '../../../../../stores';
 import { taxService, type VatLedgerSummary } from '../../../services/tax';
 import VatLedgerPrintTemplate from './VatLedgerPrintTemplate';
 import { printVatLedgerNode } from './printVatLedger';
+import { ListPageHelpToggle, RichListPageHelpView } from '../../../../../components/page-help-wiki';
 
 const NS = 'app.kuaicaiwu.tax.vatLedger';
 const money = (v: number) => Number(v || 0).toFixed(2);
@@ -134,6 +135,7 @@ const VatLedgerPage: React.FC = () => {
         </div>
       }
     >
+      <ListPageHelpToggle helpContent={<RichListPageHelpView pageKey="kuaicaiwu.vatLedger" />}>
       <Spin spinning={loading}>
         {summary ? (
           <Descriptions bordered column={2} size="small">
@@ -174,6 +176,7 @@ const VatLedgerPage: React.FC = () => {
         </Descriptions>
         ) : null}
       </Spin>
+      </ListPageHelpToggle>
 
       <Modal
         title={t(`${NS}.drillTitle.${drillKind}`, { defaultValue: '发票明细' })}

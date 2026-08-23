@@ -15,6 +15,7 @@ import {
 } from '../../../services/finance/document-reconciliation';
 import { formatSettlementType } from '../../../utils/financeUiLabels';
 import { documentReconciliationGapReasonMessage } from '../../../utils/documentReconciliationCapabilityMessages';
+import { renderFinanceHierarchyDocType } from '../../../utils/partnerStatementLineDisplay';
 import { formatQuantity } from '../../../../../utils/format';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
@@ -22,6 +23,7 @@ import {
   resolveDocumentReconciliationGapListParams,
 } from '../../../utils/financeListCore';
 import { MarkerTag } from '../../../../../constants/statusBadges';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 type GapRow = DocumentReconciliationGapItem;
 type GapSummary = {
@@ -259,7 +261,7 @@ const DocumentReconciliationPage: React.FC = () => {
       sorter: true,
       valueType: 'select',
       valueEnum: docTypeEnum,
-      render: (_, r) => formatDocType(r.doc_type, t),
+      render: (_, r) => renderFinanceHierarchyDocType(formatDocType(r.doc_type, t), r),
     },
     {
       title: t(`${D}.col.docCode`),
@@ -490,13 +492,15 @@ const DocumentReconciliationPage: React.FC = () => {
         </Card>
       ) : null}
       <UniTable<GapRow>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.documentReconciliation)}
         actionRef={actionRef}
         enableRowSelection
         headerActions={gapHeaderActions}
         request={gapRequest}
         tanstackQuery={{ enabled: false }}
         rowKey={(r) => `${r.doc_type}-${r.doc_id}`}
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.document-reconciliation.gaps.list-v2"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.document-reconciliation.gaps.list-v3"
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
         loading={loading}
         showAdvancedSearch

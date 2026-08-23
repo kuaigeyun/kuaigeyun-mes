@@ -94,6 +94,7 @@ import {
 } from './inboundHubDeepLink';
 import { fetchPurchaseReceiptIqcEnsure } from './inboundPurchaseIqcGate';
 import { PurchaseReceiptIqcReviewModal } from './PurchaseReceiptIqcReviewModal';
+import PurchaseReceiptEditModal from './PurchaseReceiptEditModal';
 import { fetchCustomerMaterialIqcEnsure } from './inboundCustomerMaterialIqcGate';
 import { CustomerMaterialIqcReviewModal } from './CustomerMaterialIqcReviewModal';
 import {
@@ -113,6 +114,8 @@ import {
   inboundReceiptTypeSegmentOptions,
   inboundDocumentTrackingType,
   isInboundConfirmable,
+  isInboundEditable,
+  isInboundWithdrawable,
   inboundConfirmCapabilityReasonMessage,
   inboundSourceDocNo,
   resolveInboundHubOperator,
@@ -137,6 +140,7 @@ import {
   resolveInboundHubListParams,
 } from '../../../utils/warehouseListCore';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 interface InboundOrder extends InboundHubOrder {
   workshop_name?: string;
@@ -532,8 +536,7 @@ const InboundPage: React.FC = () => {
   const [currentOrder, setCurrentOrder] = useState<InboundOrder | null>(null);
   const [inboundTrackingRefreshKey, setInboundTrackingRefreshKey] = useState(0);
   const detailRetryRecordRef = useRef<InboundOrder | null>(null);
-  const [editableReceiptQuantities, setEditableReceiptQuantities] = useState<Record<number, number>>({});
-  const [savingPurchaseReceipt, setSavingPurchaseReceipt] = useState(false);
+  const [editModalRecord, setEditModalRecord] = useState<InboundOrder | null>(null);
   const [purchaseReceiptAttachments, setPurchaseReceiptAttachments] = useState<any[]>([]);
 
   const [purchaseConfirmPreviewOpen, setPurchaseConfirmPreviewOpen] = useState(false);
@@ -599,6 +602,7 @@ const InboundPage: React.FC = () => {
     setDetailLoading(true);
     setDetailError(null);
     setCurrentOrder(null);
+    setPurchaseReceiptAttachments([]);
     try {
       let detailData: any;
       if (record.receipt_type === 'purchase') {
@@ -627,15 +631,7 @@ const InboundPage: React.FC = () => {
       if (detailData) {
         await prefetchMaterialsForUnitSelect((detailData.items || []).map((it: any) => it?.material_id));
         if (record.receipt_type === 'purchase') {
-          const quantities: Record<number, number> = {};
-          (detailData.items || []).forEach((it: any) => {
-            if (it?.id != null) quantities[it.id] = Number(it.receipt_quantity ?? 0);
-          });
-          setEditableReceiptQuantities(quantities);
           setPurchaseReceiptAttachments(mapAttachmentsToUploadList(detailData.attachments));
-        } else {
-          setEditableReceiptQuantities({});
-          setPurchaseReceiptAttachments([]);
         }
         setCurrentOrder(
           normalizeInboundHubDetail(record.receipt_type!, detailData as Record<string, unknown>, record),
@@ -664,85 +660,24 @@ const InboundPage: React.FC = () => {
   };
 
   const isEditablePurchaseReceipt = (order?: InboundOrder | null) =>
-    order?.receipt_type === 'purchase' && ['草稿', 'draft', 'DRAFT', '待入库'].includes(String(order?.status || ''));
+    order?.receipt_type === 'purchase' && isInboundEditable(order);
 
-  const handleSavePurchaseReceiptQuantities = async () => {
-    if (!currentOrder?.id || currentOrder?.receipt_type !== 'purchase') return;
-    const items = (currentOrder.items || []) as InboundOrderItem[];
-    if (!items.length) {
-      messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.noEditableLines'));
-      return;
+  const handleEdit = useCallback((record: InboundOrder) => {
+    setEditModalRecord(record);
+  }, []);
+
+  const handleEditModalClose = useCallback(() => {
+    setEditModalRecord(null);
+  }, []);
+
+  const handleEditModalSuccess = useCallback(() => {
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+    const editing = editModalRecord;
+    if (editing && currentOrder?.id === editing.id) {
+      void handleDetail(editing);
     }
-    const mappedItems = items
-      .filter((it) => it.material_id != null)
-      .map((it) => {
-        const rowId = Number(it.id);
-        const qty = Number(editableReceiptQuantities[rowId] ?? it.receipt_quantity ?? 0);
-        if (!(qty > 0)) {
-          throw new Error(
-            t('app.kuaizhizao.warehouseInbound.msg.actualQtyMustBePositive', {
-              material: it.material_code || it.material_name || '-',
-            }),
-          );
-        }
-        const unitPrice = Number(it.unit_price ?? 0);
-        const qualified = Number(it.qualified_quantity ?? it.receipt_quantity ?? qty);
-        const unqualified = Number(it.unqualified_quantity ?? 0);
-        return {
-          purchase_order_item_id: Number(it.purchase_order_item_id ?? 0),
-          material_id: Number(it.material_id),
-          material_code: it.material_code || '',
-          material_name: it.material_name || '',
-          material_spec: it.material_spec || undefined,
-          material_unit: it.material_unit || it.unit || '个',
-          receipt_quantity: qty,
-          unit_price: unitPrice,
-          total_amount: Number((qty * unitPrice).toFixed(2)),
-          qualified_quantity: Number((qualified + unqualified > qty ? qty : qualified).toFixed(2)),
-          unqualified_quantity: Number((qualified + unqualified > qty ? 0 : unqualified).toFixed(2)),
-          batch_number: it.batch_number || undefined,
-          location_code: it.location_code || undefined,
-          serial_numbers: it.serial_numbers?.length ? it.serial_numbers : undefined,
-          status: it.status || currentOrder.status || '草稿',
-          notes: it.notes || undefined,
-        };
-      });
-
-    setSavingPurchaseReceipt(true);
-    try {
-      await warehouseApi.purchaseReceipt.update(String(currentOrder.id), {
-        purchase_order_id: Number(currentOrder.purchase_order_id || 0),
-        purchase_order_code: currentOrder.purchase_order_code || '',
-        supplier_id: Number(currentOrder.supplier_id || 0),
-        supplier_name: currentOrder.supplier_name || '',
-        warehouse_id: Number(currentOrder.warehouse_id || 0),
-        warehouse_name: currentOrder.warehouse_name || '',
-        status: currentOrder.status || '草稿',
-        review_status: currentOrder.review_status || '待审核',
-        notes: currentOrder.notes || undefined,
-        attachments: normalizeDocumentAttachments(purchaseReceiptAttachments),
-        items: mappedItems,
-      });
-      const detail = await warehouseApi.purchaseReceipt.get(String(currentOrder.id));
-      setCurrentOrder(
-        normalizeInboundHubDetail('purchase', detail as Record<string, unknown>, currentOrder),
-      );
-      const quantities: Record<number, number> = {};
-      ((detail as any).items || []).forEach((it: any) => {
-        if (it?.id != null) quantities[it.id] = Number(it.receipt_quantity ?? 0);
-      });
-      setEditableReceiptQuantities(quantities);
-      messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.actualQtySaved'));
-      invalidateMenuBadgeCounts();
-      setInboundTrackingRefreshKey((k) => k + 1);
-
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error?.message || error?.response?.data?.detail || t('common.saveFailed'));
-    } finally {
-      setSavingPurchaseReceipt(false);
-    }
-  };
+  }, [currentOrder?.id, editModalRecord, invalidateMenuBadgeCounts]);
 
   const resetPurchaseConfirmPreview = () => {
     setPurchaseConfirmPreviewOpen(false);
@@ -828,11 +763,7 @@ const InboundPage: React.FC = () => {
       (detailData.items || []).forEach((it: any) => {
         if (it?.id == null) return;
         const id = Number(it.id);
-        const fromDrawer =
-          currentOrder?.id === record.id && currentOrder?.receipt_type === 'purchase'
-            ? editableReceiptQuantities[id]
-            : undefined;
-        qty[id] = fromDrawer != null ? Number(fromDrawer) : Number(it.receipt_quantity ?? it.return_quantity ?? 0);
+        qty[id] = Number(it.receipt_quantity ?? it.return_quantity ?? 0);
         batch[id] = String(it.batch_number ?? '');
         const poItemIdForBatch = Number(it.purchase_order_item_id ?? 0);
         if (purchaseReceiptHandoff && poItemIdForBatch > 0) {
@@ -1302,11 +1233,6 @@ const InboundPage: React.FC = () => {
           setCurrentOrder(
             normalizeInboundHubDetail(order.receipt_type!, detailData as Record<string, unknown>, order),
           );
-          const quantities: Record<number, number> = {};
-          (detailData.items || []).forEach((it: any) => {
-            if (it?.id != null) quantities[it.id] = Number(it.receipt_quantity ?? 0);
-          });
-          setEditableReceiptQuantities(quantities);
           if (order.receipt_type === 'purchase' && order.id != null) {
             await loadPurchaseReceiptFieldValuesForDetail(order.id);
           } else if (order.receipt_type === 'production_return' && order.id != null) {
@@ -1791,8 +1717,21 @@ const InboundPage: React.FC = () => {
         const hasConfirmPerm = inboundPerms.canAction?.('execute') ?? false;
         const canConfirm = confirmable && hasConfirmPerm;
         const nodes: React.ReactNode[] = [
-          <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail(record)} />,
+          <Button {...rowActionKind('read')} key="detail" onClick={() => void handleDetail(record)} />,
         ];
+        if (
+          record.receipt_type === 'purchase' &&
+          isInboundEditable(record) &&
+          inboundPerms.canUpdate
+        ) {
+          nodes.push(
+            <Button
+              {...rowActionKind('update')}
+              key="edit"
+              onClick={() => handleEdit(record)}
+            />,
+          );
+        }
         if (record.receipt_type === 'finished_goods' && record.id && packingBindingPerms.canRead) {
           nodes.push(
             <Button
@@ -1851,7 +1790,7 @@ const InboundPage: React.FC = () => {
             <Button {...rowActionKind('delete')} key="delete" onClick={() => handleDelete(record)} />
           );
         }
-        if (posted && (inboundPerms.canAction?.('revoke') ?? false)) {
+        if (isInboundWithdrawable(record) && (inboundPerms.canAction?.('revoke') ?? false)) {
           nodes.push(
             <Button
               {...rowActionKind('revoke')}
@@ -1893,7 +1832,6 @@ const InboundPage: React.FC = () => {
           closeDrawer={() => {
             setDetailDrawerVisible(false);
             setCurrentOrder(null);
-            setEditableReceiptQuantities({});
           }}
         />
       ),
@@ -2058,23 +1996,7 @@ const InboundPage: React.FC = () => {
             dataIndex: 'receipt_quantity',
             width: 140,
             align: 'right' as const,
-            render: (_: unknown, row: InboundOrderItem) => {
-              const editable = isEditablePurchaseReceipt(currentOrder) && row.id != null;
-              if (!editable) return formatQuantity(row.receipt_quantity);
-              const rid = Number(row.id);
-              return (
-                <InputNumber
-                  min={0.01}
-                  precision={2}
-                  value={editableReceiptQuantities[rid] ?? Number(row.receipt_quantity ?? 0)}
-                  onChange={(v) =>
-                    setEditableReceiptQuantities((prev) => ({ ...prev, [rid]: Number(v) || 0 }))
-                  }
-                  style={{ width: 110 }}
-                  size="small"
-                />
-              );
-            },
+            render: (_: unknown, row: InboundOrderItem) => formatQuantity(row.receipt_quantity),
           },
           {
             title: t('common.unit'),
@@ -2124,13 +2046,14 @@ const InboundPage: React.FC = () => {
     currentOrder,
     t,
     showAmount,
-    editableReceiptQuantities,
   ]);
 
   return (
     <ListPageTemplate>
       <UniTable
         headerTitle={t('app.kuaizhizao.warehouseInbound.title')}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.purchaseReceipt)}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inbound.v4"
         actionRef={actionRef}
         formRef={searchFormRef}
@@ -2607,7 +2530,6 @@ const InboundPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setCurrentOrder(null);
           setDetailError(null);
-          setEditableReceiptQuantities({});
           setPurchaseReceiptAttachments([]);
           resetPurchaseReceiptDetailFieldValues();
           resetProductionReturnDetailFieldValues();
@@ -2616,14 +2538,19 @@ const InboundPage: React.FC = () => {
         extra={
           currentOrder ? (
             <Space>
+              {isEditablePurchaseReceipt(currentOrder) && inboundPerms.canUpdate ? (
+                <Button
+                  {...rowActionKind('update')}
+                  onClick={() => {
+                    const order = currentOrder;
+                    setDetailDrawerVisible(false);
+                    handleEdit(order);
+                  }}
+                />
+              ) : null}
               {isInboundConfirmable(currentOrder) &&
               (inboundPerms.canAction?.('execute') ?? false) ? (
                 <>
-                  {isEditablePurchaseReceipt(currentOrder) && (
-                    <Button onClick={handleSavePurchaseReceiptQuantities} loading={savingPurchaseReceipt}>
-                      {t('app.kuaizhizao.warehouseInbound.action.saveActualQty')}
-                    </Button>
-                  )}
                   <Button
                     type="primary"
                     icon={<CheckCircleOutlined />}
@@ -2659,7 +2586,7 @@ const InboundPage: React.FC = () => {
                     : t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
                 </Button>
               ) : null}
-              {isInboundStockPosted(currentOrder) && (
+              {isInboundWithdrawable(currentOrder) && (inboundPerms.canAction?.('revoke') ?? false) && (
                 <Button
                   danger
                   icon={<RollbackOutlined />}
@@ -2740,6 +2667,12 @@ const InboundPage: React.FC = () => {
         navigate={navigate}
         onCancel={handleFqcReviewCancel}
         onContinue={() => void handleFqcReviewContinue()}
+      />
+      <PurchaseReceiptEditModal
+        open={editModalRecord != null}
+        record={editModalRecord}
+        onClose={handleEditModalClose}
+        onSuccess={handleEditModalSuccess}
       />
       {PrintModal}
     </ListPageTemplate>

@@ -75,6 +75,7 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 type PullReceivableCandidate = ReceiptPullCandidate;
 
 const R = 'app.kuaicaiwu.receipt';
@@ -732,6 +733,8 @@ const ReceiptsPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<ReceiptVoucher>
         headerTitle={t(`${R}.pageTitle`)}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.receipt)}
         actionRef={actionRef}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}

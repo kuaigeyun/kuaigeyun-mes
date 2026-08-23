@@ -14707,8 +14707,10 @@ export default {
   'app.kuaicaiwu.partnerStatement.previewHint': 'Chọn đối tác và ngày bắt đầu/kết thúc, rồi nhấn Xem trước để xem chi tiết.',
   'app.kuaicaiwu.partnerStatement.provisionalPricingHint': 'Còn {{count}} dòng đơn hàng chờ định giá tháng trong kỳ này',
   'app.kuaicaiwu.partnerStatement.goPriceSettlement': 'Đi tới định giá tháng',
-  'app.kuaicaiwu.partnerStatement.previewFooter': 'Báo cáo tóm tắt các khoản phải thu/phải trả đã được phê duyệt và các khoản thu/thanh toán đã được xác nhận. Chứng từ đã nằm trong báo cáo đối chiếu khác sẽ bị loại. Xuất Excel/PDF sau khi tạo để gửi cho đối tác.',
-  'app.kuaicaiwu.partnerStatement.excludedStatedHint': 'Đã tự động loại {{count}} chứng từ đã có trong báo cáo đối chiếu khác',
+  'app.kuaicaiwu.partnerStatement.previewFooter': 'Báo cáo tóm tắt các khoản phải thu/phải trả đã phê duyệt và thu/chi đã xác nhận. Trong bảng xem trước, hãy chọn các chứng từ cần đưa vào lần đối chiếu này và chỉnh số tiền; tổng hợp theo các dòng đã chọn. Xuất Excel/PDF sau khi tạo để gửi đối tác.',
+  'app.kuaicaiwu.partnerStatement.previewSelectHint': 'Chọn chứng từ đưa vào bảng đối chiếu lần này; tổng hợp theo {{count}} / {{total}} dòng đã chọn',
+  'app.kuaicaiwu.partnerStatement.selectLinesRequired': 'Vui lòng chọn ít nhất một dòng đối chiếu',
+  'app.kuaicaiwu.partnerStatement.excludedStatedHint': 'Đã tự động loại {{count}} chứng từ đã đối chiếu xong',
   'app.kuaicaiwu.partnerStatement.periodAlreadyExists': 'Đơn vị này đã có bảng đối chiếu {{code}} trong {{period}}. Mở bảng hiện có hoặc xóa bản nháp rồi tạo lại',
   'app.kuaicaiwu.partnerStatement.periodHasPriorStatement': 'Đơn vị này đã có bảng đối chiếu {{code}} trong {{period}}; bên dưới là chứng từ chưa đưa vào, có thể tạo bảng mới',
   'app.kuaicaiwu.partnerStatement.periodFullyStated': 'Mọi chứng từ trong {{period}} đã nằm trong bảng {{code}}, không còn chi tiết để tạo thêm',
@@ -14720,12 +14722,20 @@ export default {
   'app.kuaicaiwu.partnerStatement.col.summary': 'Bản tóm tắt',
   'app.kuaicaiwu.partnerStatement.col.debit': 'Ghi nợ',
   'app.kuaicaiwu.partnerStatement.col.credit': 'Tín dụng',
+  'app.kuaicaiwu.partnerStatement.col.docAmount': 'Số tiền chứng từ',
+  'app.kuaicaiwu.partnerStatement.col.priorStatedAmount': 'Đã đối chiếu',
+  'app.kuaicaiwu.partnerStatement.col.remainingAmount': 'Chưa đối chiếu',
+  'app.kuaicaiwu.partnerStatement.col.statementAmount': 'Số tiền lần này',
   'app.kuaicaiwu.partnerStatement.col.periodRange': 'Giai đoạn',
   'app.kuaicaiwu.partnerStatement.col.debitTotal': 'Ghi nợ kỳ',
   'app.kuaicaiwu.partnerStatement.col.creditTotal': 'Tín dụng kỳ',
   'app.kuaicaiwu.partnerStatement.selectCustomer': 'Chọn khách hàng',
   'app.kuaicaiwu.partnerStatement.selectSupplier': 'Chọn nhà cung cấp',
   'app.kuaicaiwu.partnerStatement.detail.confirmTitle': 'Xác nhận tuyên bố',
+  'app.kuaicaiwu.partnerStatement.detail.saveLines': 'Lưu số tiền đối chiếu',
+  'app.kuaicaiwu.partnerStatement.detail.linesSaved': 'Đã lưu số tiền đối chiếu',
+  'app.kuaicaiwu.partnerStatement.detail.saveLinesBeforeConfirm': 'Vui lòng lưu số tiền đối chiếu trước khi xác nhận',
+  'app.kuaicaiwu.partnerStatement.detail.unsavedLinesHint': 'Số tiền đối chiếu đã thay đổi. Nhấn Lưu số tiền đối chiếu trước khi xác nhận hoặc xuất.',
   'app.kuaicaiwu.partnerStatement.detail.confirmContent': 'Xác nhận tuyên bố {{code}} là đúng?',
   'app.kuaicaiwu.partnerStatement.detail.confirmed': 'Đã xác nhận',
   'app.kuaicaiwu.partnerStatement.detail.internalConfirm': 'Xác nhận nội bộ',
@@ -19747,6 +19757,8 @@ export default {
   'app.kuaizhizao.quality.traceability.noGraphData': 'Không có mối quan hệ truy xuất để hiển thị',
   'app.kuaizhizao.quality.traceability.eventTimeline': 'Dòng thời gian sự kiện',
   'app.kuaizhizao.quality.traceability.eventTime': 'Thời gian',
+  'app.kuaizhizao.quality.traceability.sankeyLinkSource': 'Nguồn',
+  'app.kuaizhizao.quality.traceability.sankeyLinkTarget': 'Đích',
   'app.kuaizhizao.quality.traceability.documentType': 'Loại chứng từ',
   'app.kuaizhizao.quality.traceability.documentCode': 'Số chứng từ',
   'app.kuaizhizao.quality.traceability.exportReport': 'Xuất báo cáo truy xuất',
@@ -23086,6 +23098,76 @@ export default {
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.title': 'Tăng tốc lấy đơn mua hàng, lấy đơn QC và danh sách giá thị trường',
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.description':
     'Lấy đơn nhập mua và thông báo nhận hàng không còn ghi ngược số lượng theo từng đơn. Lấy đơn kiểm tra nhập/TP và xác nhận nhập kho giải quyết chính sách kiểm tra vật tư theo lô. Danh sách thay đổi kỹ thuật không còn tạo phiên duyệt từng dòng khi đọc. Danh sách giá nguyên liệu hôm nay kế thừa giá ngày trước chỉ đọc, không ghi khi mở danh sách. Đã bỏ backfill dữ liệu lịch sử khỏi API danh sách phiếu thu.',
+  'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.title':
+    'Sửa hiển thị số lượng trả vật tư sản xuất trên hub nhập kho',
+  'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.description':
+    'Danh sách và chi tiết trả vật tư sản xuất trên hub nhập kho đã cộng dồn số lượng trả; trạng thái chờ trả và đã trả không còn hiển thị gạch ngang; tiến độ nhập kho theo đúng số lượng.',
+  'pages.dashboard.updateLog.entries.sop-create-attachments-payload-fix.title':
+    'Sửa lỗi tạo SOP khi không có tệp đính kèm',
+  'pages.dashboard.updateLog.entries.sop-create-attachments-payload-fix.description':
+    'Sửa lỗi tạo SOP điện tử khi không có tệp đính kèm; màn hình chỉnh sửa tương thích định dạng lưu bản quét kiểm soát.',
+  'pages.dashboard.updateLog.entries.invoice-pull-tax-inclusive-rounding-fix.title':
+    'Sửa làm tròn tổng gồm thuế khi lấy hóa đơn',
+  'pages.dashboard.updateLog.entries.invoice-pull-tax-inclusive-rounding-fix.description':
+    'Lấy hóa đơn bán/mua và hóa đơn gộp khi nhập theo số tiền gồm thuế lấy tổng gồm thuế làm chuẩn để tính ngược, tránh 60000.00 thành 60000.01 và báo vượt số tiền có thể xuất hóa đơn.',
+  'pages.dashboard.updateLog.entries.invoice-pull-amount-field-grid-fix.title':
+    'Căn ô nhập số tiền lấy hóa đơn vào lưới form',
+  'pages.dashboard.updateLog.entries.invoice-pull-amount-field-grid-fix.description':
+    'Khi tạo hóa đơn bán/mua từ chứng từ nguồn, điều khiển phân đoạn « nhập số tiền » được bọc FormModalGridBlock để nhãn và ô nhập thẳng hàng với các cột khác, không còn bị cắt hoặc tràn lưới.',
+  'pages.dashboard.updateLog.entries.merge-settlement-code-batch-fix.title':
+    'Sửa cấp mã đối soát thu/chi gộp',
+  'pages.dashboard.updateLog.entries.merge-settlement-code-batch-fix.description':
+    'Thu/chi gộp nhiều chứng từ nguồn giờ cấp dãy mã HX không trùng trong một giao dịch, tránh lỗi máy chủ do vi phạm ràng buộc duy nhất.',
+  'pages.dashboard.updateLog.entries.merge-voucher-bank-summary-fix.title':
+    'Thu/chi gộp tự ghi tóm tắt vào sao kê ngân hàng',
+  'pages.dashboard.updateLog.entries.merge-voucher-bank-summary-fix.description':
+    'Sau khi ghi sổ thu/chi gộp, dòng sao kê hiển thị số chứng từ, đối tác và các khoản phải thu/phải trả liên quan. Chạy repair_merge_voucher_bank_summaries để điền lại tóm tắt trống lịch sử mà không cần mở trang sao kê.',
+  'pages.dashboard.updateLog.entries.merge-invoice-source-allocation-fix.title':
+    'Hóa đơn gộp phân bổ số tiền đã xuất theo từng chứng từ',
+  'pages.dashboard.updateLog.entries.merge-invoice-source-allocation-fix.description':
+    'Sau hóa đơn gộp, danh sách phải thu/phải trả hiển thị số tiền và trạng thái theo từng dòng nguồn. Chạy repair_merge_invoice_allocations để sửa dữ liệu cũ, tránh ghi cả hóa đơn vào chứng từ đầu tiên.',
+  'pages.dashboard.updateLog.entries.partner-statement-preview-line-selection.title':
+    'Xem trước bảng đối chiếu hỗ trợ chọn dòng',
+  'pages.dashboard.updateLog.entries.partner-statement-preview-line-selection.description':
+    'Bảng xem trước khi tạo có thêm cột chọn; bạn chọn chứng từ cần đưa vào lần này, hệ thống chỉ ghi các dòng đã chọn và tính lại tổng theo lựa chọn.',
+  'pages.dashboard.updateLog.entries.partner-statement-partial-reconciliation.title':
+    'Bảng đối chiếu đối tác hỗ trợ đối chiếu từng phần',
+  'pages.dashboard.updateLog.entries.partner-statement-partial-reconciliation.description':
+    'Chi tiết hiển thị số tiền chứng từ, đã đối chiếu và chưa đối chiếu; số tiền lần này có thể chỉnh trong xem trước và bản nháp. Cùng một chứng từ có thể đối chiếu nhiều lần cho đến khi đối xong.',
+  'pages.dashboard.updateLog.entries.document-reconciliation-gap-hierarchy.title':
+    'Khoảng trống đối tác hiển thị cấp thu/chi',
+  'pages.dashboard.updateLog.entries.document-reconciliation-gap-hierarchy.description':
+    'Trong đối chiếu chứng từ nghiệp vụ, phiếu thu/chi được lồng dưới phiếu phải thu/phải trả theo quan hệ đối trừ, giống sao kê đối tác; sắp xếp giữ nguyên nhóm cha-con.',
+  'pages.dashboard.updateLog.entries.warehouse-doc-edit-withdraw-unify.title':
+    'Thống nhất quy tắc chỉnh sửa và thu hồi chứng từ nhập xuất kho',
+  'pages.dashboard.updateLog.entries.warehouse-doc-edit-withdraw-unify.description':
+    'Xuất bán có thể chỉnh sửa trong chi tiết Hub xuất kho trước khi xác nhận, gồm kho, ghi chú, số lượng dòng và số lô. Cổng chỉnh sửa và thu hồi của Hub nhập/xuất kho dùng chung capabilities phía backend; chứng từ đã ghi sổ phải thu hồi trước khi sửa.',
+  'pages.dashboard.updateLog.entries.quality-traceability-ui-polish.title':
+    'Cải thiện giao diện truy xuất và sơ đồ luồng',
+  'pages.dashboard.updateLog.entries.quality-traceability-ui-polish.description':
+    'Viền vùng tóm tắt dùng chuẩn 1px; cột thời gian trên dòng thời gian sự kiện rộng hơn, hiển thị một dòng và có viền ngoài bảng; tooltip liên kết trên sơ đồ luồng hiển thị nguồn và đích bằng tiếng Trung; biểu đồ Sankey dùng màu sáng và cùng loại chứng từ cùng màu.',
+  'pages.dashboard.updateLog.entries.work-order-reporting-producer-card-sync.title':
+    'Nhân sự báo công lệnh sản xuất khớp thẻ công đoạn',
+  'pages.dashboard.updateLog.entries.work-order-reporting-producer-card-sync.description':
+    'Sau khi chọn nhân sự sản xuất không mặc định trong báo công nhanh hoặc quản lý báo công, trường nhân sự trên thẻ công đoạn sẽ đồng bộ với người được chọn lần này, không còn hiển thị nhân sự mặc định khi phân công.',
+  'pages.dashboard.updateLog.entries.quality-inspection-inspector-sync.title':
+    'Danh sách kiểm tra hiển thị đúng người kiểm tra đã chọn',
+  'pages.dashboard.updateLog.entries.quality-inspection-inspector-sync.description':
+    'Khi thực hiện kiểm tra nhập liệu, công đoạn, thành phẩm hoặc OQC, người kiểm tra được chọn trên form sẽ được lưu đúng; danh sách và chi tiết không còn luôn hiển thị người thao tác hiện tại.',
+  'pages.dashboard.updateLog.entries.purchase-order-header-delivery-sync.title':
+    'Ngày giao hàng tiêu đề đơn mua hàng đồng bộ xuống dòng',
+  'pages.dashboard.updateLog.entries.purchase-order-header-delivery-sync.description':
+    'Khi sửa đơn mua hàng, đổi ngày giao hàng yêu cầu ở tiêu đề sẽ tự đồng bộ xuống các dòng chưa chỉnh riêng; từng dòng vẫn có thể sửa độc lập, giống đơn bán hàng.',
+  'pages.dashboard.updateLog.entries.purchase-order-delivery-date-from-requisition.title':
+    'Đồng bộ ngày giao hàng đơn mua với yêu cầu mua',
+  'pages.dashboard.updateLog.entries.purchase-order-delivery-date-from-requisition.description':
+    'Khi chuyển yêu cầu mua sang đơn mua, ngày giao của header và dòng kế thừa ngày dòng yêu cầu và ngày header yêu cầu; header lấy ngày muộn nhất trên dòng. Lưu đơn mua sẽ tự đồng bộ ngày giao header với dòng.',
+  'pages.dashboard.updateLog.entries.purchase-price-auto-fill.title': 'Tự điền giá mua trên yêu cầu và đơn mua',
+  'pages.dashboard.updateLog.entries.purchase-price-auto-fill.description':
+    'Khi kéo từ tính nhu cầu sang yêu cầu mua, đơn giá đề xuất lấy từ cấu hình nguồn hoặc giá mua mặc định của vật tư. Khi chuyển yêu cầu mua sang đơn mua, nếu dòng trống giá sẽ quay về giá mua trên hồ sơ vật tư, thống nhất với chọn vật tư thủ công.',
+  'pages.dashboard.updateLog.entries.rich-page-help-views.title': 'Bổ sung chế độ xem trợ giúp trên toàn hệ thống',
+  'pages.dashboard.updateLog.entries.rich-page-help-views.description':
+    'Danh sách chứng từ, dữ liệu gốc, cấu hình hệ thống, workbench module và báo cáo đều có thể chuyển sang trợ giúp theo từng chương, bám đúng thao tác của trang. Đã phủ Kuaizhizao, Kuaicaiwu, dữ liệu gốc, PLM, IoT; báo cáo dùng chung một bài trợ giúp.',
   'pages.dashboard.updateLog.entries.locale-pack-gap-sync.title': 'Đồng bộ gói ngôn ngữ và nâng độ phủ tiếng Lào',
   'pages.dashboard.updateLog.entries.locale-pack-gap-sync.description':
     'Các key i18n của phồn thể, Anh, Nhật, Việt và Lào đã khớp với tiếng Trung giản thể. Tiếng Lào được bổ sung dịch cho cấu hình hệ thống, Kuaizhizao, dữ liệu gốc và các module liên quan, kèm bảng thuật ngữ thủ công và script đồng bộ locale. Tỷ lệ fallback tiếng Anh trên giao diện Lào giảm từ khoảng 58% xuống khoảng 2%.',
@@ -23162,10 +23244,10 @@ export default {
   'pages.dashboard.updateLog.entries.price-settlement.description':
     'Hỗ trợ đặt hàng giá 0 cho đối tác tháng, quyết toán hàng loạt và tự động tạo điều chỉnh phải thu/phải trả cho số lượng đã giao/nhận.',
   'pages.dashboard.updateLog.entries.update-log-panel.description': 'Hiển thị cập nhật nền tảng theo loại; nhấn Nhật ký cập nhật để xem toàn bộ.',
-  'pages.dashboard.updateLog.entries.calendar-monday-first.title': 'Lịch bảng điều khiển bắt đầu tuần từ thứ Hai',
-  'pages.dashboard.updateLog.entries.weather-text-contrast.title': 'Cải thiện độ tương phản chữ ở phần đầu lịch thời tiết',
-  'pages.dashboard.updateLog.entries.weather-sky-background.title': 'Phần đầu lịch thời tiết dùng nền bầu trời liên kết thời tiết',
-  'pages.dashboard.updateLog.entries.weather-weekday-time.title': 'Điều chỉnh vị trí thứ, định dạng giờ và cỡ chữ trên lịch thời tiết',
+  'pages.dashboard.updateLog.entries.workbench-calendar-weather-polish.title':
+    'Cải thiện trải nghiệm lịch và plugin thời tiết trên bảng điều khiển',
+  'pages.dashboard.updateLog.entries.workbench-calendar-weather-polish.description':
+    'Lịch bắt đầu tuần từ thứ Hai; phần đầu plugin thời tiết dùng nền bầu trời liên kết thời tiết, cải thiện độ tương phản chữ, điều chỉnh vị trí thứ, định dạng giờ và cỡ chữ.',
   'pages.dashboard.operationCardsTitle': 'Hoạt động WIP',
   'pages.dashboard.operationCardsCount': 'hoạt động {{count}}',
   'pages.dashboard.operationCardsEmpty': 'Không có hoạt động nào đang diễn ra',

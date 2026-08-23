@@ -65,6 +65,10 @@ export function pickInspectionConductExtras(values: Record<string, unknown>): Re
   if (Number.isFinite(inspectorId) && inspectorId > 0) {
     extras.inspector_id = inspectorId;
   }
+  const inspectorUuid = values.inspector_uuid;
+  if (typeof inspectorUuid === 'string' && inspectorUuid.trim()) {
+    extras.inspector_uuid = inspectorUuid.trim();
+  }
   const measurement = values.measurement_data;
   const itemResults = values.item_results;
   const stepResults = values.conduct_step_results;

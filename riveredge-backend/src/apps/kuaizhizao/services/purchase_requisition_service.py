@@ -35,7 +35,10 @@ from apps.kuaizhizao.schemas.purchase_requisition import (
 )
 from apps.kuaizhizao.schemas.purchase import PurchaseOrderCreate, PurchaseOrderItemCreate
 from apps.kuaizhizao.services.purchase_service import PurchaseService
-from apps.kuaizhizao.utils.material_source_helper import SOURCE_TYPE_BUY
+from apps.kuaizhizao.utils.material_source_helper import (
+    SOURCE_TYPE_BUY,
+    resolve_material_purchase_line_unit_price,
+)
 from apps.kuaizhizao.services.document_action_policy.enricher import (
     enrich_purchase_requisition_detail_capabilities,
     enrich_purchase_requisition_list_capabilities,
@@ -952,6 +955,34 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             return int(data.supplier_id)
         return None
 
+    @staticmethod
+    def _resolve_purchase_order_unit_price(
+        item: PurchaseRequisitionItem,
+        material_by_id: Dict[int, Material],
+        price_override: Optional[Decimal] = None,
+    ) -> Decimal:
+        if price_override is not None:
+            return price_override
+        unit_price = item.suggested_unit_price or Decimal(0)
+        if unit_price > 0:
+            return unit_price
+        mid = int(item.material_id) if item.material_id is not None else None
+        material = material_by_id.get(mid) if mid is not None else None
+        return resolve_material_purchase_line_unit_price(material=material)
+
+    @staticmethod
+    def _resolve_requisition_item_required_date(
+        item: PurchaseRequisitionItem,
+        requisition_header_required: Optional[date],
+        fallback: date,
+    ) -> date:
+        """行到货日 → 采购申请表头到货日 → 转单基准日（与申请建单继承逻辑一致）。"""
+        if item.required_date is not None:
+            return item.required_date
+        if requisition_header_required is not None:
+            return requisition_header_required
+        return fallback
+
     async def _persist_buy_default_supplier(
         self,
         tenant_id: int,
@@ -1177,7 +1208,15 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         for item, sid in line_suppliers:
             groups.setdefault(sid, []).append(item)
 
-        today = date.today()
+        material_ids = sorted({int(i.material_id) for i in items if i.material_id is not None})
+        material_rows = (
+            await Material.filter(tenant_id=tenant_id, id__in=material_ids).all()
+            if material_ids
+            else []
+        )
+        material_by_id = {int(m.id): m for m in material_rows}
+
+        today = to_site_date(resolve_business_datetime())
         purchase_orders_out: List[Dict[str, Any]] = []
         persisted_material_ids: List[int] = []
         push_mode = await BusinessConfigService().get_push_default_mode(tenant_id)
@@ -1195,16 +1234,19 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             sup = supplier_by_id.get(supplier_id) if supplier_id > 0 else None
             supplier_name = (sup.name if sup else None) or data.supplier_name or "待定供应商"
 
-            max_required = max((i.required_date or today for i in group_items), default=today)
             po_items = []
             items_converted: List[tuple] = []
+            po_line_required_dates: List[date] = []
 
             for item in group_items:
-                unit_price = item.suggested_unit_price or Decimal(0)
+                price_override = None
                 if data.item_unit_prices:
                     price_override = data.item_unit_prices.get(item.id) or data.item_unit_prices.get(str(item.id))
                     if price_override is not None:
-                        unit_price = Decimal(str(price_override))
+                        price_override = Decimal(str(price_override))
+                unit_price = self._resolve_purchase_order_unit_price(
+                    item, material_by_id, price_override=price_override
+                )
                 full_qty = item.quantity
                 qty = full_qty
                 if data.item_quantities:
@@ -1213,6 +1255,10 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                         qty = Decimal(str(override))
                 if qty <= 0:
                     continue
+                line_required = self._resolve_requisition_item_required_date(
+                    item, req.required_date, today
+                )
+                po_line_required_dates.append(line_required)
                 if qty < full_qty:
                     remaining = full_qty - qty
                     await PurchaseRequisitionItem.create(
@@ -1245,7 +1291,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                         total_price=total_price,
                         received_quantity=Decimal(0),
                         outstanding_quantity=qty,
-                        required_date=item.required_date or max_required,
+                        required_date=line_required,
                         source_type="purchase_requisition",
                         source_id=item.id,
                         demand_computation_item_id=item.demand_computation_item_id,
@@ -1256,11 +1302,13 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             if not po_items:
                 continue
 
+            delivery_date = max(po_line_required_dates, default=today)
+
             po_data = PurchaseOrderCreate(
                 supplier_id=supplier_id,
                 supplier_name=supplier_name,
                 order_date=today,
-                delivery_date=max_required,
+                delivery_date=delivery_date,
                 order_type="标准采购",
                 status=DocumentStatus.DRAFT.value,
                 source_type="purchase_requisition",
@@ -1546,6 +1594,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             deleted_at__isnull=True,
         ).all()
         req_by_id = {int(r.id): r for r in requisitions}
+        req_header_required_by_id = {int(r.id): r.required_date for r in requisitions}
         if len(req_by_id) != len(requisition_ids):
             raise NotFoundError("采购申请不存在")
         for req in requisitions:
@@ -1575,6 +1624,14 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         for item, sid in line_suppliers:
             groups.setdefault(sid, []).append(item)
 
+        material_ids = sorted({int(i.material_id) for i in items if i.material_id is not None})
+        material_rows = (
+            await Material.filter(tenant_id=tenant_id, id__in=material_ids).all()
+            if material_ids
+            else []
+        )
+        material_by_id = {int(m.id): m for m in material_rows}
+
         today = to_site_date(resolve_business_datetime())
         purchase_orders_out: List[Dict[str, Any]] = []
         push_mode = await BusinessConfigService().get_push_default_mode(tenant_id)
@@ -1588,17 +1645,22 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         for supplier_id, group_items in groups.items():
             sup = supplier_by_id.get(supplier_id) if supplier_id > 0 else None
             supplier_name = (sup.name if sup else None) or "待定供应商"
-            max_required = max((i.required_date or today for i in group_items), default=today)
             source_req_ids = sorted({int(i.requisition_id) for i in group_items})
             primary = req_by_id[source_req_ids[0]]
             source_codes = " ".join(req_by_id[rid].requisition_code for rid in source_req_ids)
             po_items = []
             items_converted: List[tuple] = []
+            po_line_required_dates: List[date] = []
             for item in group_items:
                 qty = item.quantity
                 if qty <= 0:
                     continue
-                unit_price = item.suggested_unit_price or Decimal(0)
+                header_required = req_header_required_by_id.get(int(item.requisition_id))
+                line_required = self._resolve_requisition_item_required_date(
+                    item, header_required, today
+                )
+                po_line_required_dates.append(line_required)
+                unit_price = self._resolve_purchase_order_unit_price(item, material_by_id)
                 items_converted.append((item, qty))
                 po_items.append(
                     PurchaseOrderItemCreate(
@@ -1612,7 +1674,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                         total_price=qty * unit_price,
                         received_quantity=Decimal(0),
                         outstanding_quantity=qty,
-                        required_date=item.required_date or max_required,
+                        required_date=line_required,
                         source_type="purchase_requisition",
                         source_id=item.id,
                         notes=item.notes,
@@ -1620,11 +1682,12 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 )
             if not po_items:
                 continue
+            delivery_date = max(po_line_required_dates, default=today)
             po_data = PurchaseOrderCreate(
                 supplier_id=supplier_id,
                 supplier_name=supplier_name,
                 order_date=today,
-                delivery_date=max_required,
+                delivery_date=delivery_date,
                 order_type="标准采购",
                 status=DocumentStatus.DRAFT.value,
                 source_type="purchase_requisition",

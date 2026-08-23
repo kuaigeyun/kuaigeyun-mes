@@ -20,6 +20,7 @@ import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG
 import { exceptionApi } from '../../../services/production';
 import { ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES } from '../../../constants/exceptionStatuses';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 interface MaterialShortageException {
   id?: number;
@@ -247,6 +248,8 @@ const MaterialShortageExceptionPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         columnPersistenceId="apps.kuaizhizao.pages.exception-management.material-shortage"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.exceptionMaterialShortage)}
         headerTitle="缺料异常管理"
         actionRef={actionRef}
         rowKey="id"

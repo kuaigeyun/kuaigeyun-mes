@@ -104,6 +104,7 @@ import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar';
 import { outsourceWorkOrderPushPercent } from '../../sales-management/shared/pushProgress';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const OUTSOURCE_WORK_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_work_orders';
 const OUTSOURCE_ORDER_HOST_RESOURCE = 'kuaizhizao:outsource-order';
@@ -1835,6 +1836,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
         <UniTable<OutsourceWorkOrder>
           headerTitle={t('app.kuaizhizao.outsourceWorkOrder.title')}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.outsourceWorkOrder)}
           columnPersistenceId="apps.kuaizhizao.pages.production-execution.outsource-work-orders.v2"
           actionRef={actionRef}
           rowKey="id"

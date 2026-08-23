@@ -31,6 +31,7 @@ import {
   renderDemandReplanTaskStatusTag,
 } from '../../../utils/demandReplanTags';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const isActionableTaskStatus = (status?: string) => status === 'pending' || status === 'failed';
 
@@ -718,6 +719,8 @@ const DemandReplanDashboardPage: React.FC = () => {
             },
             content: (
               <UniTable<DemandReplanTaskItem>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.demandReplanDashboard')}
                 columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-replan-dashboard.tasks.rank-v3"
                 actionRef={taskTableActionRef}
                 columns={taskColumns}

@@ -4,7 +4,7 @@
  * 外层只输出一列 Col；内部关闭 ProForm grid，避免 Select 再套 Col 导致左右双重 gutter。
  */
 import React, { useCallback } from 'react';
-import { Col, Form, theme } from 'antd';
+import { Col, Form, Input, theme } from 'antd';
 import { ProFormItem } from '@ant-design/pro-components';
 import { GridContext } from '@ant-design/pro-form';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +19,10 @@ export type ReportingProducerMode = 'worker' | 'team';
 export type ReportingProducerFieldProps = {
   /** 生产人员表单字段（uuid） */
   workerFieldName?: string;
+  /** 生产人员 ID（hidden，提交真源） */
+  workerIdFieldName?: string;
+  /** 生产人员姓名（hidden，提交真源） */
+  workerNameFieldName?: string;
   /** 工作小组表单字段（id） */
   teamFieldName?: string;
   /** 工作小组名称表单字段（提交用） */
@@ -34,6 +38,8 @@ export type ReportingProducerFieldProps = {
 
 export const ReportingProducerField: React.FC<ReportingProducerFieldProps> = ({
   workerFieldName = 'proxy_worker_uuid',
+  workerIdFieldName = 'proxy_worker_id',
+  workerNameFieldName = 'proxy_worker_name',
   teamFieldName = 'report_team_id',
   teamNameFieldName = 'report_team_name',
   modeFieldName = 'producer_mode',
@@ -54,7 +60,11 @@ export const ReportingProducerField: React.FC<ReportingProducerFieldProps> = ({
         [modeFieldName]: next,
         ...(next === 'worker'
           ? { [teamFieldName]: undefined, [teamNameFieldName]: undefined }
-          : { [workerFieldName]: undefined }),
+          : {
+              [workerFieldName]: undefined,
+              [workerIdFieldName]: undefined,
+              [workerNameFieldName]: undefined,
+            }),
       });
       if (next === 'worker') {
         onTeamChange?.(null);
@@ -70,6 +80,8 @@ export const ReportingProducerField: React.FC<ReportingProducerFieldProps> = ({
       teamFieldName,
       teamNameFieldName,
       workerFieldName,
+      workerIdFieldName,
+      workerNameFieldName,
     ],
   );
 
@@ -82,6 +94,12 @@ export const ReportingProducerField: React.FC<ReportingProducerFieldProps> = ({
         <ProFormItem name={teamNameFieldName} hidden>
           <input type="hidden" />
         </ProFormItem>
+        <Form.Item name={workerIdFieldName} hidden>
+          <Input />
+        </Form.Item>
+        <Form.Item name={workerNameFieldName} hidden>
+          <Input />
+        </Form.Item>
         <div
           style={{
             display: 'flex',
@@ -129,11 +147,17 @@ export const ReportingProducerField: React.FC<ReportingProducerFieldProps> = ({
             style={{ width: '100%' }}
             formItemProps={{ style: { marginBottom: token.marginLG, width: '100%' } }}
             onChange={(_uuid, u) => {
-              onWorkerChange?.(
+              const picked =
                 u && !Array.isArray(u)
                   ? { id: u.id, full_name: u.full_name, username: u.username }
-                  : null,
-              );
+                  : null;
+              form?.setFieldsValue({
+                [workerIdFieldName]: picked?.id,
+                [workerNameFieldName]: picked
+                  ? picked.full_name || picked.username
+                  : undefined,
+              });
+              onWorkerChange?.(picked);
             }}
           />
         ) : (

@@ -428,6 +428,144 @@ class CodeGenerationService:
         )
 
     @staticmethod
+    async def generate_code_batch(
+        tenant_id: int,
+        rule_code: str,
+        count: int,
+        context: Optional[Dict] = None,
+    ) -> List[str]:
+        """
+        一次事务内连续生成多个不重复编码（合并收/付款等多笔核销场景）。
+
+        避免落库前多次单独 generate 时序号校准与库内最大号不同步而重复发号。
+        """
+        if count <= 0:
+            return []
+        if count == 1:
+            code = await CodeGenerationService.generate_code(tenant_id, rule_code, context)
+            return [code]
+
+        rule, effective_rule_code = await CodeRuleService.resolve_rule_by_code(
+            tenant_id, rule_code, active_only=True
+        )
+        if not rule:
+            raise ValidationError(f"编码规则 {rule_code} 不存在或未启用，请在「编码规则」中启用并保存该规则")
+
+        rule_code = effective_rule_code
+        components = rule.get_rule_components()
+        counter_config = None
+        if components:
+            counter_config = CodeRuleComponentService.get_counter_component_config(components)
+
+        if not counter_config and components:
+            rendered = CodeRuleComponentService.render_components(components, 0, context)
+            return [rendered] * count
+
+        scope_key = ""
+        if counter_config:
+            seq_start = counter_config.get("initial_value", 1)
+            seq_step = 1
+            seq_reset_rule = counter_config.get("reset_cycle", "never")
+            scope_fields_raw = counter_config.get("scope_fields") or counter_config.get("scopeFields") or []
+            scope_fields = [f for f in scope_fields_raw if f and str(f).strip()]
+            if not scope_fields and context and _get_context_value(context, "group_code"):
+                _rc = (rule_code or "").upper()
+                if "MATERIAL" in _rc or _rc == "MATERIAL_CODE":
+                    scope_fields = ["group_code"]
+            if scope_fields and context:
+                scope_key = _build_scope_key(scope_fields, context)
+        else:
+            seq_start = rule.seq_start
+            seq_step = rule.seq_step
+            seq_reset_rule = rule.seq_reset_rule or "never"
+
+        CodeGenerationService._assert_seq_sync_entity_bound(
+            rule, rule_code, context, components
+        )
+
+        codes: List[str] = []
+        async with in_transaction():
+            sequence = (
+                await CodeSequence.filter(
+                    code_rule_id=rule.id,
+                    tenant_id=tenant_id,
+                    scope_key=scope_key,
+                    deleted_at__isnull=True,
+                )
+                .select_for_update()
+                .first()
+            )
+            if not sequence:
+                try:
+                    sequence = await CodeSequence.create(
+                        code_rule_id=rule.id,
+                        tenant_id=tenant_id,
+                        scope_key=scope_key,
+                        current_seq=seq_start - seq_step,
+                    )
+                except Exception:
+                    sequence = (
+                        await CodeSequence.filter(
+                            code_rule_id=rule.id,
+                            tenant_id=tenant_id,
+                            scope_key=scope_key,
+                            deleted_at__isnull=True,
+                        )
+                        .select_for_update()
+                        .first()
+                    )
+                    if not sequence:
+                        raise
+                else:
+                    sequence = (
+                        await CodeSequence.filter(id=sequence.id)
+                        .select_for_update()
+                        .first()
+                    )
+
+            if seq_reset_rule and seq_reset_rule != "never":
+                now = to_site_date(resolve_business_datetime())
+                if not sequence.reset_date:
+                    sequence.reset_date = now
+                elif sequence.reset_date != now:
+                    if seq_reset_rule == "daily":
+                        sequence.current_seq = seq_start - seq_step
+                        sequence.reset_date = now
+                    elif seq_reset_rule == "monthly":
+                        if sequence.reset_date.month != now.month or sequence.reset_date.year != now.year:
+                            sequence.current_seq = seq_start - seq_step
+                            sequence.reset_date = now
+                    elif seq_reset_rule == "yearly":
+                        if sequence.reset_date.year != now.year:
+                            sequence.current_seq = seq_start - seq_step
+                            sequence.reset_date = now
+
+            await CodeGenerationService._recalibrate_sequence_from_db(
+                tenant_id=tenant_id,
+                rule=rule,
+                request_rule_code=rule_code,
+                scope_key=scope_key,
+                sequence=sequence,
+                seq_step=seq_step,
+                components=components,
+                context=context,
+            )
+
+            if not components:
+                raise ValidationError(f"编码规则 {rule_code} 缺少 rule_components，请在编码规则页面重新保存")
+
+            for _ in range(count):
+                sequence.current_seq += seq_step
+                codes.append(
+                    CodeRuleComponentService.render_components(
+                        components, sequence.current_seq, context
+                    )
+                )
+            await sequence.save()
+
+        return codes
+
+    @staticmethod
     async def test_generate_code(
         tenant_id: int,
         rule_code: str,

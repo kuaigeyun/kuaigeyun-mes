@@ -9,6 +9,10 @@ export interface PartnerStatementLine {
   credit: number;
   balance: number;
   doc_id?: number;
+  doc_amount?: number;
+  prior_stated_amount?: number;
+  remaining_amount?: number;
+  statement_amount?: number;
   /** 0=应收/应付等主行，1=其下核销的收/付款单 */
   tree_level?: number;
   parent_doc_id?: number;
@@ -76,8 +80,13 @@ export interface PartnerStatement {
   updated_by_name?: string;
 }
 
+export interface PartnerStatementLineAmountInput {
+  doc_type: string;
+  doc_id: number;
+  statement_amount: number;
+}
+
 export interface PartnerStatementListParams {
-  skip?: number;
   limit?: number;
   partner_type?: string;
   partner_id?: number;
@@ -113,12 +122,19 @@ export const partnerStatementService = {
     end_date?: string;
     notes?: string;
     attachments?: Array<{ uid?: string; name?: string; status?: string; url?: string }>;
+    line_amounts?: PartnerStatementLineAmountInput[];
   }) => apiRequest<PartnerStatement>(API, { method: 'POST', data }),
 
   list: (params?: PartnerStatementListParams) =>
     apiRequest<{ items: PartnerStatement[]; total: number }>(API, { method: 'GET', params }),
 
   get: (id: number) => apiRequest<PartnerStatement>(`${API}/${id}`, { method: 'GET' }),
+
+  updateLines: (id: number, lines: PartnerStatementLineAmountInput[]) =>
+    apiRequest<PartnerStatement>(`${API}/${id}/lines`, {
+      method: 'PATCH',
+      data: { lines },
+    }),
 
   confirm: (id: number) => apiRequest<PartnerStatement>(`${API}/${id}/confirm`, { method: 'POST' }),
 

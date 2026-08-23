@@ -22,6 +22,7 @@ import { StatusTag } from '../../../../../constants/statusBadges';
 import { formatBusinessDateOnly } from '../../../../../utils/format';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   normalizeWarehouseListResponse,
   resolveLineSideInventoryListParams,
@@ -317,6 +318,8 @@ const LineSideWarehousePage: React.FC = () => {
         actionRef={actionRef}
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.line-side-warehouse.rich-v5"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.lineSideWarehouse')}
         request={fetchInventory}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter

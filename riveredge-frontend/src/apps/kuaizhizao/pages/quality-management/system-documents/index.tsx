@@ -23,6 +23,7 @@ import {
   QMS_DOC_TYPE_OPTIONS,
 } from '../qms/qmsMeta';
 import QmsIsoClauseSelect from '../qms/QmsIsoClauseSelect';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const RESOURCE = 'kuaizhizao:quality-management-system-documents';
 
@@ -227,6 +228,8 @@ const SystemDocumentsPage: React.FC = () => {
           />
         ) : null}
         <UniTable<QmsSystemDocument>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.systemDocuments')}
           headerTitle={t('app.kuaizhizao.menu.quality-management.system-documents')}
           actionRef={actionRef}
           rowKey="id"

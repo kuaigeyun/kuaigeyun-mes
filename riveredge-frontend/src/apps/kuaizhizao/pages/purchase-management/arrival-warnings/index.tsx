@@ -26,6 +26,7 @@ import {
   submitPurchaseArrivalDelayReport,
   type PurchaseArrivalWarningRow,
 } from '../../../services/purchase-arrival';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   buildPurchaseArrivalProcessingStatusValueEnum,
   purchaseArrivalProcessingStatusLabel,
@@ -216,6 +217,8 @@ const PurchaseArrivalWarningsPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columnPersistenceId="apps.kuaizhizao.pages.purchase-management.arrival-warnings-v3"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.purchaseArrivalWarnings')}
         headerTitle={t('app.kuaizhizao.menu.purchase-management.arrival-warnings')}
         toolBarRender={() => [
           <Space key="summary" wrap>

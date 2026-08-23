@@ -47,6 +47,7 @@ import { useNewShortcut } from '../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
 import { formatDateTime } from '../../../../utils/format';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 const PAGE_CODE_RD = 'kuaiplm-rd-project';
 
@@ -315,6 +316,8 @@ const RdProjectsListPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<RdProject>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaiplm.rdProjects')}
         headerTitle={t('app.kuaiplm.rdProjects.pageTitle')}
         actionRef={actionRef}
         rowKey="id"

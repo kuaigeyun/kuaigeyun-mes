@@ -75,6 +75,7 @@ import {
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 type PullPayableCandidate = PaymentPullCandidate;
 
 const P = 'app.kuaicaiwu.payment';
@@ -694,6 +695,8 @@ const PaymentsPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<PaymentVoucher>
         headerTitle={t(`${P}.pageTitle`)}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.payment)}
         actionRef={actionRef}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}

@@ -44,6 +44,7 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { ROUTES } from '../../../constants/routes';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 interface MaterialReturn {
   id?: number;
   tenant_id?: number;
@@ -612,6 +613,8 @@ const MaterialReturnsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           headerTitle={t('app.kuaizhizao.warehouseMaterialReturn.title')}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.materialReturn)}
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

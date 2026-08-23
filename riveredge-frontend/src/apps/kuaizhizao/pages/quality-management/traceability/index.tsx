@@ -452,7 +452,7 @@ const TraceabilityPage: React.FC<TraceabilityPageProps> = ({
             theme={{
               token: {
                 colorSplit: CANVAS_VISUAL_BASE.BORDER_COLOR,
-                lineWidth: 2,
+                lineWidth: 1,
               },
             }}
           >
@@ -540,17 +540,28 @@ const TraceabilityPage: React.FC<TraceabilityPageProps> = ({
             <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>
               {t('app.kuaizhizao.quality.traceability.eventTimeline')}
             </Typography.Title>
-            <Table
-              size="small"
-              rowKey="eventId"
-              pagination={{ pageSize: 10, showSizeChanger: true }}
-              dataSource={timelineEvents}
-              columns={[
+            <div
+              style={{
+                border: `1px solid ${CANVAS_VISUAL_BASE.BORDER_COLOR}`,
+                borderRadius: CANVAS_VISUAL_BASE.BORDER_RADIUS,
+                overflow: 'hidden',
+              }}
+            >
+              <Table
+                size="small"
+                rowKey="eventId"
+                pagination={{ pageSize: 10, showSizeChanger: true }}
+                dataSource={timelineEvents}
+                columns={[
                 {
                   title: t('app.kuaizhizao.quality.traceability.eventTime'),
                   dataIndex: 'eventTime',
-                  width: 132,
-                  render: (v) => (v ? formatDateTimeBySiteSetting(String(v)) : '-'),
+                  width: 170,
+                  render: (v) => (
+                    <span style={{ whiteSpace: 'nowrap' }}>
+                      {v ? formatDateTimeBySiteSetting(String(v)) : '-'}
+                    </span>
+                  ),
                 },
                 {
                   title: t('app.kuaizhizao.quality.traceability.documentType'),
@@ -587,7 +598,8 @@ const TraceabilityPage: React.FC<TraceabilityPageProps> = ({
                   render: (v) => formatTraceEventRemark(v != null ? String(v) : undefined, t),
                 },
               ]}
-            />
+              />
+            </div>
           </>
         )}
 

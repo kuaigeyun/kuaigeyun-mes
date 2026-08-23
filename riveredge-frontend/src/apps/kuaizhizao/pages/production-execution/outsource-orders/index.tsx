@@ -91,6 +91,7 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_orders';
 const OUTSOURCE_ORDER_HOST_RESOURCE = 'kuaizhizao:outsource-order';
 
@@ -1117,6 +1118,8 @@ export const OutsourceOrdersTable: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
       <UniTable<OutsourceOrder>
         headerTitle={t('app.kuaizhizao.outsourceOrder.title')}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.outsourceOrder)}
         columnPersistenceId="apps.kuaizhizao.pages.production-execution.outsource-orders.v4"
         actionRef={actionRef}
         columns={columns}

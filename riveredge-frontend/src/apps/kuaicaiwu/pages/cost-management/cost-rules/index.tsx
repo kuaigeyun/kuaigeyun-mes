@@ -31,6 +31,7 @@ import { CostRuleDetailDrawer } from './components/CostRuleDetailDrawer';
 import { costRuleApi } from '../../../services/cost';
 import { getRuleTypeSelectOptions, getRuleTypeTag } from '../../../utils/costUiLabels';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   COST_CRUD_PINNED_ACTIVE_FIELD,
   costDocCreatedUpdatedColumns,
@@ -417,6 +418,8 @@ const CostRulePage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-rules.list-v1"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaicaiwu.costRules')}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={COST_CRUD_PINNED_ACTIVE_FIELD}

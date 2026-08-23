@@ -35,6 +35,7 @@ import {
 } from '../../../utils/costListCore';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const StandardCostsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -251,6 +252,8 @@ const StandardCostsPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.cost-management.standard-costs.list-v2"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaicaiwu.standardCosts')}
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter

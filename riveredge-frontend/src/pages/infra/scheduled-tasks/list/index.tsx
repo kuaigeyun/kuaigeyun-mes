@@ -34,6 +34,7 @@ import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 const { TextArea } = Input;
 
@@ -460,6 +461,8 @@ const ScheduledTaskListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<ScheduledTask>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('infra.scheduledTasks')}
           columnPersistenceId="pages.infra.scheduled-tasks.list-v2"
           actionRef={actionRef}
           columns={columns}

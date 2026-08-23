@@ -18,6 +18,7 @@ from apps.kuaicaiwu.schemas.finance import (
     PartnerStatementMarkSentRequest,
     PartnerStatementPreviewResponse,
     PartnerStatementResponse,
+    PartnerStatementUpdateLinesRequest,
 )
 from apps.kuaicaiwu.services.partner_statement_service import PartnerStatementService
 from core.api.deps.access import require_permission_codes
@@ -121,6 +122,7 @@ async def create_partner_statement(
             attachments=data.attachments,
             start_date=data.start_date,
             end_date=data.end_date,
+            line_amounts=[item.model_dump() for item in data.line_amounts] if data.line_amounts else None,
         )
         return await _to_response(obj)
     except (ValidationError, NotFoundError, BusinessLogicError) as e:
@@ -185,6 +187,27 @@ async def get_partner_statement(
         return await _to_response(obj)
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/partner-statements/{id}", tenant_id)
+
+
+@router.patch("/{id}/lines", response_model=PartnerStatementResponse)
+async def update_partner_statement_lines(
+    id: int,
+    body: PartnerStatementUpdateLinesRequest,
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:partner-statement:update")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        obj = await service.update_statement_lines(
+            tenant_id,
+            id,
+            [item.model_dump() for item in body.lines],
+            current_user.id,
+        )
+        return await _to_response(obj)
+    except (NotFoundError, BusinessLogicError, ValidationError) as e:
+        code = 404 if isinstance(e, NotFoundError) else 400
+        raise _http_exception_with_trace(code, str(e), "/partner-statements/{id}/lines", tenant_id)
 
 
 @router.post("/{id}/confirm", response_model=PartnerStatementResponse)

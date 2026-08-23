@@ -69,6 +69,7 @@ import { formatAgingBucket } from '../../../utils/financeUiLabels';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code/LinkedDocumentCode';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import MergeFinanceDocsModal, {
   type MergeFinanceMode,
   type MergeFinanceSourceRow,
@@ -865,6 +866,8 @@ const ReceivableList: React.FC = () => {
             ) : null}
             <UniTable<Receivable>
                 headerTitle={t(`${P}.pageTitle`)}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.receivable)}
                 actionRef={actionRef}
                 columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
                 columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receivables.list-v2"

@@ -69,6 +69,7 @@ import {
 
 } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 
 
@@ -471,6 +472,8 @@ const ToolMaintenanceItemsPage: React.FC = () => {
       <ListPageTemplate>
 
         <UniTable<MaintenanceItem>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.toolMaintenanceItems)}
 
           headerTitle={t(`${P}.title`)}
 

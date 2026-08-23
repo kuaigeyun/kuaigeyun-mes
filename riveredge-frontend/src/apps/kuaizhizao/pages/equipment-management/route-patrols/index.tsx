@@ -44,6 +44,7 @@ import {
 import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
 import type { DocumentAttachmentFile } from '../../../utils/documentAttachments';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const P = 'app.kuaizhizao.equipmentOps.routePatrol';
 const RESOURCE = 'kuaizhizao:equipment-route-patrol';
 
@@ -566,6 +567,8 @@ const RoutePatrolsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<RoutePatrol>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.routePatrols)}
           headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.route-patrols-equip-rank-v1"
           actionRef={actionRef}

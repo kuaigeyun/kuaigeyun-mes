@@ -48,6 +48,7 @@ import {
   type DrawingSecurityLevel,
 } from '../../../services/drawingLoan';
 import { getUserList } from '../../../../../services/user';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const RESOURCE = 'master-data:process:drawing-loan';
 
@@ -305,6 +306,8 @@ const DrawingLoansPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<DrawingLoan>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.drawingLoans')}
         headerTitle={t('app.master-data.menu.process.drawing-loans')}
         actionRef={actionRef}
         rowKey="uuid"

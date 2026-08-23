@@ -77,6 +77,7 @@ import {
   renderAfterSalesTypeMarker,
 } from '../shared/afterSalesListPresentation';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const AFTER_SALES_TICKET_RESOURCE = 'kuaizhizao:after-sales-ticket';
 const SALES_RETURN_RESOURCE = 'kuaizhizao:sales-return';
@@ -1012,6 +1013,8 @@ const AfterSalesTicketsPage: React.FC = () => {
       <ListPageTemplate style={{ padding: 0 }}>
         <UniTable<AfterSalesTicket>
           columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.tickets.v1"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesTicket)}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           headerTitle={t('app.kuaizhizao.menu.after-sales-service.tickets')}

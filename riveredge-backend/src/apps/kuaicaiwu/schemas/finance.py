@@ -136,7 +136,7 @@ class PurchaseInvoiceCreate(PurchaseInvoiceBase):
         None, ge=0, description="税额（服务端按未税金额×税率计算，入参可忽略）"
     )
     total_amount: Optional[Decimal] = Field(
-        None, ge=0, description="价税合计（服务端计算，入参可忽略）"
+        None, ge=0, description="价税合计（含税录入时须传入，服务端据此反算未税/税额）"
     )
     source_type: Optional[str] = Field(None, description="加载源单类型 purchase_order|purchase_receipt|payable")
     source_id: Optional[int] = Field(None, description="加载源单ID")
@@ -422,7 +422,7 @@ class SalesInvoiceCreate(SalesInvoiceBase):
         None, ge=0, description="税额（服务端按未税金额×税率计算，入参可忽略）"
     )
     total_amount: Optional[Decimal] = Field(
-        None, ge=0, description="价税合计（服务端计算，入参可忽略）"
+        None, ge=0, description="价税合计（含税录入时须传入，服务端据此反算未税/税额）"
     )
     source_type: Optional[str] = Field(None, description="加载源单类型 sales_order|sales_delivery|receivable")
     source_id: Optional[int] = Field(None, description="加载源单ID")
@@ -526,6 +526,10 @@ class PartnerStatementLineResponse(BaseSchema):
     credit: float = 0
     balance: float = 0
     doc_id: Optional[int] = None
+    doc_amount: Optional[float] = Field(None, description="单据金额")
+    prior_stated_amount: Optional[float] = Field(None, description="已对金额（其它对账单累计）")
+    remaining_amount: Optional[float] = Field(None, description="未对金额")
+    statement_amount: Optional[float] = Field(None, description="本次对账金额")
     tree_level: Optional[int] = Field(
         0, description="层级：0=应收/应付等主单据，1=其下核销的收/付款单"
     )
@@ -535,6 +539,16 @@ class PartnerStatementLineResponse(BaseSchema):
         None, description="可展开入库明细类型：purchase_receipt / outsource_material_receipt"
     )
     inbound_detail_doc_id: Optional[int] = Field(None, description="可展开入库明细单据 ID")
+
+
+class PartnerStatementLineAmountInput(BaseSchema):
+    doc_type: str
+    doc_id: int
+    statement_amount: float = Field(..., gt=0, description="本次对账金额")
+
+
+class PartnerStatementUpdateLinesRequest(BaseSchema):
+    lines: List[PartnerStatementLineAmountInput] = Field(..., min_length=1)
 
 
 class PartnerStatementLineDetailItemResponse(BaseSchema):
@@ -600,6 +614,9 @@ class PartnerStatementCreate(BaseSchema):
     end_date: Optional[date] = None
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    line_amounts: Optional[List[PartnerStatementLineAmountInput]] = Field(
+        None, description="勾选纳入的单据及本次对账金额；有值时仅生成列表中的单据"
+    )
 
 
 class PartnerStatementMarkSentRequest(BaseSchema):

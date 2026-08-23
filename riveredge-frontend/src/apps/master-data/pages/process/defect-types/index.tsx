@@ -49,6 +49,7 @@ import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 /**
  * 不良品信息管理列表页面组件
  */
@@ -546,6 +547,8 @@ const DefectTypesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<DefectType>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.defectTypes')}
         columnPersistenceId="apps.master-data.pages.process.defect-types.status-v2"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}

@@ -27,7 +27,7 @@ from apps.kuaicaiwu.schemas.finance import (
     PurchaseInvoiceCreate,
 )
 from apps.kuaicaiwu.services.finance_service import AccountSettlementService, PurchaseInvoiceService
-from apps.kuaicaiwu.services.finance_tax import compute_tax_from_excluding
+from apps.kuaicaiwu.services.finance_tax import resolve_invoice_amounts_for_create
 from apps.kuaicaiwu.services.payment_pull_service import PaymentPullService
 from apps.kuaicaiwu.services.purchase_invoice_pull_service import PurchaseInvoicePullService
 from apps.kuaicaiwu.services.receipt_pull_service import ReceiptPullService
@@ -123,12 +123,12 @@ class MergeSettlementService:
             source_codes=source_codes,
         )
         biz_day = resolve_business_datetime()
-        settlement_codes = [
-            await self.settlement.generate_code(
-                tenant_id, "SETTLEMENT_CODE", prefix=f"HX{biz_day.strftime('%Y%m%d')}"
-            )
-            for _ in lines
-        ]
+        settlement_codes = await self.settlement.generate_code_batch(
+            tenant_id,
+            "SETTLEMENT_CODE",
+            len(lines),
+            prefix=f"HX{biz_day.strftime('%Y%m%d')}",
+        )
 
         async with in_transaction():
             receipt_payload = {
@@ -248,12 +248,12 @@ class MergeSettlementService:
             source_codes=source_codes,
         )
         biz_day = resolve_business_datetime()
-        settlement_codes = [
-            await self.settlement.generate_code(
-                tenant_id, "SETTLEMENT_CODE", prefix=f"HX{biz_day.strftime('%Y%m%d')}"
-            )
-            for _ in lines
-        ]
+        settlement_codes = await self.settlement.generate_code_batch(
+            tenant_id,
+            "SETTLEMENT_CODE",
+            len(lines),
+            prefix=f"HX{biz_day.strftime('%Y%m%d')}",
+        )
 
         async with in_transaction():
             payment_payload = {
@@ -349,15 +349,11 @@ class MergeSettlementService:
         if tax_rate_pct < 0:
             raise BusinessLogicError("税率不能为负")
         rate = tax_rate_pct / Decimal("100")
-        if rate > 0:
-            invoice_amount = (total_with_tax / (Decimal("1") + rate)).quantize(
-                _TWOPLACES, rounding=ROUND_HALF_UP
-            )
-        else:
-            invoice_amount = total_with_tax
-        _, tax_amount, computed_total = compute_tax_from_excluding(invoice_amount, tax_rate_pct)
-        if computed_total != total_with_tax:
-            tax_amount = (total_with_tax - invoice_amount).quantize(_TWOPLACES)
+        invoice_amount, tax_amount, total_amount = resolve_invoice_amounts_for_create(
+            total_with_tax / (Decimal("1") + rate) if rate > 0 else total_with_tax,
+            tax_rate_pct,
+            total_with_tax,
+        )
 
         primary = previews[0]
         if len(lines) == 1:
@@ -389,7 +385,7 @@ class MergeSettlementService:
                 "tax_rate": float(rate),
                 "amount_excluding_tax": invoice_amount,
                 "tax_amount": tax_amount,
-                "total_amount": total_with_tax,
+                "total_amount": total_amount,
                 "source_document_code": source_document_code,
                 "receivable_id": receivable_id,
                 "receivable_code": receivable_code,
@@ -464,22 +460,18 @@ class MergeSettlementService:
         if tax_rate_pct < 0:
             raise BusinessLogicError("税率不能为负")
         rate = tax_rate_pct / Decimal("100")
-        if rate > 0:
-            invoice_amount = (total_with_tax / (Decimal("1") + rate)).quantize(
-                _TWOPLACES, rounding=ROUND_HALF_UP
-            )
-        else:
-            invoice_amount = total_with_tax
-        _, tax_amount, _ = compute_tax_from_excluding(invoice_amount, tax_rate_pct)
-        if (invoice_amount + tax_amount).quantize(_TWOPLACES) != total_with_tax:
-            tax_amount = (total_with_tax - invoice_amount).quantize(_TWOPLACES)
+        invoice_amount, tax_amount, total_amount = resolve_invoice_amounts_for_create(
+            total_with_tax / (Decimal("1") + rate) if rate > 0 else total_with_tax,
+            tax_rate_pct,
+            total_with_tax,
+        )
 
         primary = previews[0]
         if len(lines) == 1:
             payable_id = int(primary.get("payable_id") or lines[0][0])
             payable_code = str(primary.get("payable_code") or primary.get("source_code") or "")
         else:
-            payable_id = int(primary.get("payable_id") or lines[0][0])
+            payable_id = None
             payable_code = None
 
         create_data = PurchaseInvoiceCreate(
@@ -491,7 +483,7 @@ class MergeSettlementService:
             tax_rate=tax_rate_pct,
             invoice_amount=invoice_amount,
             tax_amount=tax_amount,
-            total_amount=total_with_tax,
+            total_amount=total_amount,
             payable_id=payable_id if len(lines) == 1 else None,
             payable_code=payable_code,
             notes=data.notes,
@@ -516,7 +508,7 @@ class MergeSettlementService:
             update_fields: Dict[str, Any] = {
                 "invoice_amount": invoice_amount,
                 "tax_amount": tax_amount,
-                "total_amount": total_with_tax,
+                "total_amount": total_amount,
             }
             if len(lines) > 1:
                 update_fields["payable_id"] = None

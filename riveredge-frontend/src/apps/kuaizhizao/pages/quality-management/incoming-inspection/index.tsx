@@ -155,6 +155,7 @@ import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { importExcelMatrixInChunks } from '../../../../../utils/chunkedBulkImport';
 import { todaySiteDateString } from '../../../../../utils/format';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const INCOMING_RESOURCE = 'kuaizhizao:quality-management-incoming-inspection';
 const INCOMING_INSPECTION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_incoming_inspections';
 const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
@@ -1235,6 +1236,8 @@ const IncomingInspectionPage: React.FC = () => {
       ]}
     >
       <UniTable<IncomingInspection>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.incomingInspection)}
         headerTitle={t('app.kuaizhizao.quality.incoming.pageTitle')}
         columnPersistenceId="apps.kuaizhizao.pages.quality-management.incoming-inspection.rank-v7"
         actionRef={actionRef}

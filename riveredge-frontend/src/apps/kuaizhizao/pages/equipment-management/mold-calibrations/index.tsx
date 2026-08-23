@@ -34,6 +34,7 @@ import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   normalizeEquipmentListResponse,
   resolveAssetWorkflowListParams,
@@ -260,6 +261,8 @@ const MoldCalibrationsPage: React.FC = () => {
     <>
     <ListPageTemplate>
       <UniTable<MoldCalibration>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.moldCalibrations)}
         headerTitle={t(`${P}.title`)}
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-calibrations-equip-rank-v1"
         actionRef={actionRef}

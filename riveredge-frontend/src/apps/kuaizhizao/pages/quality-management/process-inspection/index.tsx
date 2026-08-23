@@ -147,6 +147,7 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { importExcelMatrixInChunks } from '../../../../../utils/chunkedBulkImport';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const PROCESS_RESOURCE = 'kuaizhizao:quality-management-process-inspection';
 const PROCESS_INSPECTION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_process_inspections';
 const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
@@ -1031,6 +1032,8 @@ const ProcessInspectionPage: React.FC = () => {
       ]}
     >
       <UniTable<ProcessInspection>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.processInspection)}
         headerTitle={t('app.kuaizhizao.quality.process.pageTitle')}
         columnPersistenceId="apps.kuaizhizao.pages.quality-management.process-inspection.rank-v7"
         actionRef={actionRef}

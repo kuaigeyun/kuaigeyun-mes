@@ -203,13 +203,56 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             category="OUT",
             deleted_at__isnull=True,
         ).exclude(status__in=list(self._EXCLUDED_INVOICE_STATUSES))
-        for inv in direct_rows:
-            if int(inv.id) in counted_invoice_ids:
-                continue
-            rid = int(inv.receivable_id)
-            if rid in result:
-                result[rid] = result.get(rid, Decimal("0")) + Decimal(str(inv.total_amount or 0))
-                counted_invoice_ids.add(int(inv.id))
+        pending_direct = [
+            inv for inv in direct_rows if int(inv.id) not in counted_invoice_ids
+        ]
+        if pending_direct:
+            direct_ids = [int(inv.id) for inv in pending_direct]
+            extra_rels = await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="receivable",
+                target_type="sales_invoice",
+                target_id__in=direct_ids,
+            ).all()
+            direct_by_invoice: Dict[int, List[DocumentRelation]] = defaultdict(list)
+            extra_source_ids: set[int] = set()
+            for rel in extra_rels:
+                if not rel.target_id or not rel.source_id:
+                    continue
+                direct_by_invoice[int(rel.target_id)].append(rel)
+                extra_source_ids.add(int(rel.source_id))
+            extra_doc_totals: Dict[int, Decimal] = {
+                int(row["id"]): Decimal(str(row.get("total_amount") or 0))
+                for row in await Receivable.filter(
+                    tenant_id=tenant_id, id__in=sorted(extra_source_ids)
+                ).values("id", "total_amount")
+            } if extra_source_ids else {}
+            for inv in pending_direct:
+                iid = int(inv.id)
+                rels = direct_by_invoice.get(iid) or []
+                if rels:
+                    entries = [
+                        (
+                            int(r.source_id),
+                            parse_relation_allocated_amount(getattr(r, "notes", None)),
+                        )
+                        for r in rels
+                    ]
+                    attributed = attribute_invoice_total_to_sources(
+                        Decimal(str(inv.total_amount or 0)),
+                        entries,
+                        extra_doc_totals,
+                    )
+                    accumulate_attributed(
+                        result,
+                        ((sid, amt) for sid, amt in attributed.items() if sid in id_set),
+                    )
+                    counted_invoice_ids.add(iid)
+                    continue
+                rid = int(inv.receivable_id)
+                if rid in result:
+                    result[rid] = result.get(rid, Decimal("0")) + Decimal(str(inv.total_amount or 0))
+                    counted_invoice_ids.add(iid)
 
         codes = [c for c in code_by_id.values() if c]
         if codes:

@@ -48,6 +48,7 @@ import {
   resolveStocktakingListParams,
 } from '../../../utils/warehouseListCore';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 interface Stocktaking {
   id?: number;
@@ -851,6 +852,8 @@ const StocktakingPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         headerTitle={t('app.kuaizhizao.stocktaking.headerTitle')}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.stocktaking)}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.stocktaking.v2"
         actionRef={actionRef}
         rowKey="id"

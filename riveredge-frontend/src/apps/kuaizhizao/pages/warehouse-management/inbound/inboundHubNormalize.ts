@@ -75,6 +75,15 @@ export function normalizeInboundHubDetail(
     case 'production_return':
       row.receipt_code = pickString(row, 'receipt_code', 'return_code') ?? listRow?.receipt_code;
       row.return_code = pickString(row, 'return_code', 'receipt_code') ?? listRow?.return_code;
+      if (row.total_quantity == null && Array.isArray(row.items) && row.items.length > 0) {
+        const sum = row.items.reduce((acc, it) => {
+          const qty = resolveInboundHubLineQuantity(
+            typeof it === 'object' && it != null ? (it as Record<string, unknown>) : {},
+          );
+          return acc + (qty ?? 0);
+        }, 0);
+        if (sum > 0) row.total_quantity = sum;
+      }
       break;
     case 'customer_material':
       row.receipt_code =

@@ -189,6 +189,7 @@ const ProductionControlTower: React.FC = () => {
   return (
     <>
     <ModuleCenterLayout
+      moduleHelpKey="plan"
       loading={loading && !s}
       kpiRow={<ModuleKpiRow items={kpis} />}
       shortcutRow={

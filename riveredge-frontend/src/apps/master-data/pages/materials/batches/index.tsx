@@ -22,6 +22,7 @@ import {
 import { materialBatchApi, materialApi } from '../../../services/material';
 import type { MaterialBatch, MaterialBatchCreate, MaterialBatchUpdate } from '../../../types/material';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   renderMasterActiveTag,
   renderMasterYesNoTag,
@@ -308,6 +309,8 @@ const BatchesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<MaterialBatch>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.batches')}
         columnPersistenceId="apps.master-data.pages.materials.batches.list-v1"
         headerTitle={t('app.master-data.menu.materials.batches')}
         actionRef={actionRef}

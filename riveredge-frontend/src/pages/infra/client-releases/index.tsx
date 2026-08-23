@@ -25,6 +25,7 @@ import { ClientReleaseUploadModal } from './ClientReleaseUploadModal';
 import { ClientReleaseDetailDrawer } from './ClientReleaseDetailDrawer';
 import { ClientProductConfigDrawer } from './ClientProductConfigDrawer';
 import { ClientMiniprogramQrModal } from './ClientMiniprogramQrModal';
+import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
 
 const ClientReleasesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -292,6 +293,8 @@ const ClientReleasesPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<ClientRelease>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('infra.clientReleases')}
           columnPersistenceId="pages.infra.client-releases-v4"
           actionRef={actionRef}
           columns={columns}

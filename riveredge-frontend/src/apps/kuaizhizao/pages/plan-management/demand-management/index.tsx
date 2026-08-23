@@ -88,6 +88,7 @@ import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const DEMAND_RESOURCE = 'kuaizhizao:demand';
 
 /** 统一状态判断（兼容枚举与中文） */
@@ -926,6 +927,8 @@ const DemandManagementPage: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
         <UniTable<Demand>
           columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-management"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.demandManagement)}
           headerTitle={t('app.kuaizhizao.demandManagement.title')}
           formRef={tableSearchFormRef}
           actionRef={actionRef}

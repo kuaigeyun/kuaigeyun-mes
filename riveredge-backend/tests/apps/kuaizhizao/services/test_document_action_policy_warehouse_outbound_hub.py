@@ -109,3 +109,43 @@ def test_outsource_issue_cannot_delete():
     )
     assert not caps.delete.allowed
     assert caps.delete.reason == "outbound_hub.delete.outsource_issue"
+
+
+def test_sales_delivery_pending_outbound_can_update():
+    caps = derive_outbound_hub_capabilities(
+        _r(status="待出库", review_status="已通过"),
+        outbound_type="sales_delivery",
+        audit_required=True,
+    )
+    assert caps.update.allowed
+    assert caps.confirm.allowed
+
+
+def test_sales_delivery_pending_audit_can_update():
+    caps = derive_outbound_hub_capabilities(
+        _r(status="待审核", review_status="待审核"),
+        outbound_type="sales_delivery",
+        audit_required=True,
+    )
+    assert caps.update.allowed
+    assert not caps.confirm.allowed
+
+
+def test_sales_delivery_posted_cannot_update():
+    caps = derive_outbound_hub_capabilities(
+        _r(status="已出库", review_status="已通过"),
+        outbound_type="sales_delivery",
+        audit_required=True,
+    )
+    assert not caps.update.allowed
+    assert caps.update.reason == "outbound_hub.update.posted"
+    assert caps.withdraw.allowed
+
+
+def test_other_outbound_pending_can_update():
+    caps = derive_outbound_hub_capabilities(
+        _r(status="待出库"),
+        outbound_type="other_outbound",
+        audit_required=False,
+    )
+    assert caps.update.allowed

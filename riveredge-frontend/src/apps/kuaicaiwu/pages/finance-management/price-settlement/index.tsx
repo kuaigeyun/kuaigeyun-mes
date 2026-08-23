@@ -22,6 +22,7 @@ import {
   type PriceSettlementCandidate,
 } from '../../../services/finance/priceSettlement';
 import { apiRequest } from '../../../../../services/api';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaicaiwu.priceSettlement';
 const RESOURCE = 'kuaicaiwu:price-settlement';
@@ -527,6 +528,8 @@ const PriceSettlementPanel: React.FC<SettlementPanelProps> = ({
     <>
       <Alert type="info" showIcon style={{ marginBottom: 16 }} title={queryHint} />
       <UniTable<PriceSettlementRow>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.priceSettlement)}
         actionRef={actionRef}
         headerActions={headerActions}
         dataSource={tableData}

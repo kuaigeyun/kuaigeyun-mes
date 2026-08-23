@@ -360,6 +360,7 @@ import { useCustomFieldsForList } from '../../../../hooks/useCustomFieldsForList
 import { useCustomFields } from '../../../../hooks/useCustomFields'
 import { useTrialRunMode } from '../../../../hooks/useTrialRunMode'
 import { getAntdModal } from '../../../../utils/antdAppApis';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 /** 与 MaterialForm 一致：表示使用系统默认批号/序列号规则 */
 const SYSTEM_DEFAULT_BATCH_SERIAL_RULE = '__SYSTEM_DEFAULT__'
 
@@ -4248,6 +4249,8 @@ const MaterialsManagementPage: React.FC = () => {
             >
               <UniTable<Material>
                 columnPersistenceId="apps.master-data.pages.materials.management.list-v2"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.materials')}
                 tanstackQuery={{ queryKeyPrefix: ['apps.master-data.pages.materials.management', String(selectedGroupKeys[0] ?? 'all')] }}
                 size="small"
                 defaultPageSize={20}

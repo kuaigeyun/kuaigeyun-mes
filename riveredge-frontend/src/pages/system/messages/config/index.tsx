@@ -52,6 +52,7 @@ import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { pickListSearchKeyword } from '../../../../utils/tableQueryKey';
 import { getAntdModal } from '../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 /**
  * 消息配置管理列表页面组件
  */
@@ -539,6 +540,8 @@ const MessageConfigListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MessageConfig>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.messageConfig')}
         columnPersistenceId="pages.system.messages.config.list-v1"
         actionRef={actionRef}
         columns={columns}

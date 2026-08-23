@@ -18,3 +18,13 @@ export {
 } from './richListPageHelpRegistry';
 export { buildDocumentListHelpViewConfig } from './documentListHelpViewConfig';
 export { buildListPageHelpViewConfig } from './listPageHelpViewConfig';
+export { buildReportHelpViewConfig } from './reportHelpViewConfig';
+export { buildModuleCenterHelpViewConfig } from './moduleCenterHelpViewConfig';
+export { default as RichReportHelpView } from './RichReportHelpView';
+export { default as RichModuleCenterHelpView } from './RichModuleCenterHelpView';
+export { default as ListPageHelpToggle } from './ListPageHelpToggle';
+export {
+  HELP_BATCH3_ALL_PAGES,
+  HELP_BATCH3_STATS,
+  HELP_PROGRESS,
+} from './helpBatchPlan';

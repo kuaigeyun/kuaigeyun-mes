@@ -44,6 +44,7 @@ import { getEquipmentList, Equipment } from '../../../../services/equipment';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 /**
  * 维护保养计划管理列表页面组件
@@ -471,6 +472,8 @@ const MaintenancePlanListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MaintenancePlan>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.maintenancePlans')}
           columnPersistenceId="pages.system.maintenance-plans.list"
           actionRef={actionRef}
           columns={columns}

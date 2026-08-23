@@ -65,6 +65,7 @@ import {
 import { buildMoldDetailPath } from './moldPaths';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const MOLD_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_molds';
 
 interface Mold {
@@ -527,6 +528,8 @@ const MoldsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Mold>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.moldsLedger')}
           headerTitle={t('app.kuaizhizao.mold.title')}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.molds-equip-rank-v1"
           actionRef={actionRef}

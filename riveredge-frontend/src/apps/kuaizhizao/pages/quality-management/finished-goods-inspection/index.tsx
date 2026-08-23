@@ -152,6 +152,7 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { importExcelMatrixInChunks } from '../../../../../utils/chunkedBulkImport';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const FINISHED_RESOURCE = 'kuaizhizao:quality-management-finished-goods-inspection';
 const FINISHED_GOODS_INSPECTION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_finished_goods_inspections';
 const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
@@ -1124,6 +1125,8 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       ]}
     >
       <UniTable<FinishedGoodsInspection>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.finishedGoodsInspection)}
         headerTitle={t('app.kuaizhizao.quality.finished.pageTitle')}
         columnPersistenceId="apps.kuaizhizao.pages.quality-management.finished-goods-inspection.rank-v7"
         actionRef={actionRef}

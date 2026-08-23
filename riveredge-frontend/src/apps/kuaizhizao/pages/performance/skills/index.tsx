@@ -29,6 +29,7 @@ import {
 } from '../components/performanceMeta';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   normalizePerformanceListResponse,
   PERFORMANCE_PINNED_ACTIVE_FIELD,
@@ -243,6 +244,8 @@ const SkillsPage: React.FC = () => {
           actionRef={actionRef}
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.performance.skills.v1"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.skills')}
           request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;

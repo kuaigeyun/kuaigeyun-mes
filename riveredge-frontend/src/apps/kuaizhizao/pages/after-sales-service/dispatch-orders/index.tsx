@@ -17,6 +17,7 @@ import {
 import { serviceDispatchApi, type ServiceDispatchOrder } from '../../../services/after-sales-service';
 import DispatchOrderFormModal from './DispatchOrderFormModal';
 import { DispatchOrderDetailDrawer } from './components/DispatchOrderDetailDrawer';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const RESOURCE = 'kuaizhizao:service-dispatch';
 
@@ -172,6 +173,8 @@ const DispatchOrdersPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<ServiceDispatchOrder>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesDispatch)}
         actionRef={actionRef}
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.dispatch-orders.v3"

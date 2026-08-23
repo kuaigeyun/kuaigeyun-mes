@@ -34,6 +34,7 @@ import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   buildEightDSeverityValueEnum,
   buildEightDStatusValueEnum,
@@ -336,6 +337,8 @@ const EightDReportsPage: React.FC = () => {
     >
       <ListPageTemplate>
         <UniTable<Quality8DReport>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.eightDReport)}
           headerTitle={t('app.kuaizhizao.menu.quality-management.eight-d-reports')}
           actionRef={actionRef}
           rowKey="id"

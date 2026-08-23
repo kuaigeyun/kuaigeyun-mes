@@ -51,6 +51,7 @@ import type { WorkOrderOperationStep } from '../work-orders/workOrderOperationSt
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const EXCEPTION_PROCESS_RESOURCE = 'kuaizhizao:production-execution-exception-process';
 
 const P = 'app.kuaizhizao.productionException';
@@ -551,6 +552,8 @@ const ExceptionProcessPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<ExceptionProcessRecord>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.exceptionProcess)}
           columnPersistenceId="apps.kuaizhizao.pages.production-execution.exception-process.v3"
           actionRef={actionRef}
           columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}

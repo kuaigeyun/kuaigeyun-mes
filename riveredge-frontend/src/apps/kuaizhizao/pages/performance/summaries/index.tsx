@@ -35,6 +35,7 @@ import {
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { WorkGroupDistributeModal } from './components/WorkGroupDistributeModal';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const SUMMARY_RESOURCE = 'kuaizhizao:performance-summaries';
 
@@ -340,6 +341,8 @@ const SummariesPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.performance.summaries.v1"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.performanceSummaries')}
           showAdvancedSearch
           skipFuzzyPinyinClientFilter
           pinnedTabsField={PERFORMANCE_SUMMARY_PINNED_STATUS_FIELD}

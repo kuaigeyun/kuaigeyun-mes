@@ -35,6 +35,7 @@ import { qrcodeApi } from '../../../../services/qrcode';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 /**
  * 设备管理列表页面组件
@@ -451,6 +452,8 @@ const EquipmentListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Equipment>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.equipment')}
           columnPersistenceId="pages.system.equipment.list"
           actionRef={actionRef}
           columns={columns}

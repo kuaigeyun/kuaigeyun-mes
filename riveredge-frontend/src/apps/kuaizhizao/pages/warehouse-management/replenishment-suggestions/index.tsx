@@ -44,6 +44,7 @@ import {
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 interface ReplenishmentSuggestion {
   id?: number;
@@ -629,6 +630,8 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
           rowKey="id"
           columns={alignProColumns(columns, WAREHOUSE_DOC_LIST_FIELD_RANK)}
           columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.replenishment-suggestions"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.replenishmentSuggestions')}
           showAdvancedSearch={true}
           pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter

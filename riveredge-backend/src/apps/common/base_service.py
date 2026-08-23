@@ -77,6 +77,26 @@ class AppBaseService(BaseService[T]):
             context=context
         )
 
+    async def generate_code_batch(
+        self,
+        tenant_id: int,
+        code_type: str,
+        count: int,
+        prefix: Optional[str] = None,
+        **kwargs
+    ) -> List[str]:
+        """连续生成多个业务编码（合并核销等场景）。"""
+        if prefix is None:
+            today = today_site_str()
+            prefix = today
+        context = {"prefix": prefix, **kwargs}
+        return await CodeGenerationService.generate_code_batch(
+            tenant_id=tenant_id,
+            rule_code=code_type,
+            count=count,
+            context=context,
+        )
+
     # ==================== 用户信息获取 ====================
 
     async def get_user_info(self, user_id: int) -> Dict[str, Any]:

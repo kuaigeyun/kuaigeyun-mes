@@ -96,6 +96,7 @@ import {
 } from '../../../utils/costListCore';
 import { formDateRangeFormItemProps, toApiDateString } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 type TopCat = 'ledger' | 'compare' | 'analyze' | 'optimization' | 'trial';
 
@@ -806,6 +807,8 @@ const CostCalculationPage: React.FC = () => {
       <UniTable<CostCalculation>
         actionRef={actionRef}
         columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-calculations.list-v5"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaicaiwu.costCalculations')}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={COST_CALCULATION_PINNED_STATUS_FIELD}

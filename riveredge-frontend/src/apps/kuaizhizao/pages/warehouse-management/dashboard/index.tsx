@@ -335,6 +335,7 @@ const WarehouseDashboard: React.FC = () => {
 
   return (
     <ModuleCenterLayout
+      moduleHelpKey="warehouse"
       loading={loading && !s}
       kpiRow={<ModuleKpiRow items={kpis} />}
       shortcutRow={<ModuleShortcutGrid items={shortcuts} />}

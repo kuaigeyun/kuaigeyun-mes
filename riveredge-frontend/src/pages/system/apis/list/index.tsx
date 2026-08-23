@@ -62,6 +62,7 @@ import { extractProTableSort, mergeListKeyword, mapApiListSortField } from '../.
 import { rowActionKind } from '../../../../components/uni-action'
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 const { TextArea } = Input
 const { Text, Paragraph } = Typography
@@ -619,6 +620,8 @@ const APIListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<API>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.apis')}
           columnPersistenceId="pages.system.apis.list-v1"
           actionRef={actionRef}
           columns={columns}

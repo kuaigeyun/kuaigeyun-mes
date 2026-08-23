@@ -274,6 +274,8 @@ class PackingBindingCapabilities(BaseModel):
 
 class InboundHubCapabilities(BaseModel):
     confirm: ActionCapability
+    withdraw: ActionCapability
+    update: ActionCapability
     print: ActionCapability
 
 
@@ -641,6 +643,11 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "packing_binding.deleted": "装箱绑定记录已删除",
     "inbound_hub.confirm.not_pending": "当前状态不可确认入库",
     "inbound_hub.confirm.use_single_preview": "委外退料/退货请使用单行确认预览",
+    "inbound_hub.update.not_allowed": "当前状态不可编辑",
+    "inbound_hub.update.posted": "已入库单据不可编辑，请先撤回",
+    "inbound_hub.update.unsupported_type": "当前入库类型不支持编辑",
+    "inbound_hub.withdraw.not_posted": "当前状态不可撤回入库",
+    "inbound_hub.withdraw.unsupported_type": "当前入库类型不支持撤回",
     "customer_material.confirm.not_pending": "仅待入库状态可确认入库",
     "customer_material.withdraw.not_processed": "仅已入库状态可撤回",
     "customer_material.cancel.not_pending": "仅待入库状态可取消",
@@ -657,7 +664,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "outbound_hub.update.not_allowed": "当前状态不可编辑",
     "outbound_hub.update.posted": "已领料/已出库单据不可编辑，请先撤回",
     "outbound_hub.update.outsource_issue": "委外发料不支持在此编辑",
-    "outbound_hub.update.production_picking_only": "当前仅支持编辑生产领料单",
+    "outbound_hub.update.unsupported_type": "当前出库类型不支持编辑",
     "inventory_alert.handle.already_handled": "该预警已处理，无法再次标记",
     "replenishment_suggestion.process.not_pending": "仅待处理状态的补货建议可处理",
     "replenishment_suggestion.push.not_pending": "仅待处理状态的补货建议可下推",

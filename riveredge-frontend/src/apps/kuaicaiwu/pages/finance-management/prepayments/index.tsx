@@ -43,6 +43,7 @@ import {
 } from '../../../utils/financeListCore';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 type PrepaymentRow = Record<string, unknown>;
 
@@ -410,6 +411,8 @@ const PrepaymentsPage: React.FC = () => {
                     actionRef={customerBalanceRef}
                     enableRowSelection
                     rowKey={(r) => `c-${r.partner_id}`}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.prepayment)}
                     columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.customer-balance.list-v1"
                     columns={alignProColumns(balanceColumns, SALES_DOC_LIST_FIELD_RANK)}
                     showAdvancedSearch

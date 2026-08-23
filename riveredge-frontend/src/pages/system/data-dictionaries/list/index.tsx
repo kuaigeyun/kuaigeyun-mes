@@ -58,6 +58,7 @@ import {
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { getAntdModal } from '../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 const DataDictionaryListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -561,6 +562,8 @@ const DataDictionaryListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<DataDictionary>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.dataDictionaries')}
         columnPersistenceId="pages.system.data-dictionaries.list-v1"
         actionRef={actionRef}
         searchParamsRef={searchParamsRef}

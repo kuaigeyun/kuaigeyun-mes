@@ -74,6 +74,7 @@ import {
 import { formatDateTime, formatNumber } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const SALES_ORDER_CHANGE_RESOURCE = 'kuaizhizao:sales-order-change';
 type PullSalesOrderCandidate = {
@@ -837,6 +838,8 @@ const SalesOrderChangesPage: React.FC = () => {
       <UniTable<SalesOrderChange>
         actionRef={actionRef}
         rowKey="id"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.salesOrderChange)}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}

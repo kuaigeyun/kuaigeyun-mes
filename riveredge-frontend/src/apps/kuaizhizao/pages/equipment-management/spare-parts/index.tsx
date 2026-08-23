@@ -40,6 +40,7 @@ import {
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaizhizao.sparePart';
 const RESOURCE = 'kuaizhizao:spare-part';
@@ -368,6 +369,8 @@ const SparePartsPage: React.FC = () => {
             label: t(`${P}.tab.master`),
             children: (
               <UniTable<SparePart>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.spareParts)}
                 columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spare-parts.master"
                 actionRef={masterActionRef}
                 rowKey="id"

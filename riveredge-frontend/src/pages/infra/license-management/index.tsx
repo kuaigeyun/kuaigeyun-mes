@@ -27,6 +27,7 @@ import {
 } from '../../../services/licenseCenter';
 import { getAntdModal } from '../../../utils/antdAppApis';
 import { copyTextToClipboard } from '../../../utils/clipboard';
+import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
 
 const GLOBAL_SCOPE = '*';
 
@@ -206,6 +207,8 @@ export default function LicenseManagementPage() {
   return (
     <ListPageTemplate>
       <UniTable<PlatformLicenseItem>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('infra.licenseManagement')}
         columnPersistenceId="pages.infra.license-management-v2"
         headerTitle={t('menu.infra.license-management')}
         actionRef={actionRef}

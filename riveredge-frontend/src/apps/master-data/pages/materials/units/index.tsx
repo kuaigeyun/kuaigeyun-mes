@@ -47,6 +47,7 @@ import {
 } from '../../../utils/factoryImportTemplate';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 type TabKey = 'units' | 'conversions';
 
@@ -856,6 +857,8 @@ const UnitsPage: React.FC = () => {
             label: t('common.unit'),
             children: (
               <UniTable<MaterialUnit>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.units')}
                 columnPersistenceId="apps.master-data.pages.materials.units.catalog.list-v1"
                 permissionResource="master-data:material-unit"
                 actionRef={unitActionRef}

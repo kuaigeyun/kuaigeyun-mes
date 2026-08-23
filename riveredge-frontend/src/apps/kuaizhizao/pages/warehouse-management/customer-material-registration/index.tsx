@@ -52,6 +52,7 @@ import {
 } from '../../../utils/warehouseListCore';
 import { materialApi, materialBatchApi, materialSerialApi } from '../../../../master-data/services/material';
 import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 interface RegistrationItem {
   material_id?: number;
@@ -993,6 +994,8 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         rowKey="id"
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.customer-material-registration"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.customerMaterialRegistration')}
         showAdvancedSearch
         pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
         skipFuzzyPinyinClientFilter

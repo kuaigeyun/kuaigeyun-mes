@@ -44,6 +44,7 @@ import { downloadFile } from '../../../../utils';
 import { getAntdModal } from '../../../../utils/antdAppApis';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../utils/format';
 import { importExcelMatrixInChunks } from '../../../../utils/chunkedBulkImport';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 /**
  * 账户管理列表页面组件
  */
@@ -732,6 +733,8 @@ const UserListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<User>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.users')}
         columnPersistenceId="pages.system.users.list-v2"
         actionRef={actionRef}
         columns={columns}

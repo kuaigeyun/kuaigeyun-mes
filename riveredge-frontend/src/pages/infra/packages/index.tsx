@@ -16,6 +16,7 @@ import { MarkerTag, StatusTag } from '../../../constants/statusBadges';
 import { useTranslation } from 'react-i18next';
 import PackageForm from './form';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
 
 /**
  * 套餐管理页面组件
@@ -353,6 +354,8 @@ export default function PackageManagementPage() {
     <>
       <ListPageTemplate>
         <UniTable<Package>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('infra.packages')}
           columnPersistenceId="pages.infra.packages-lifecycle-v2"
           actionRef={actionRef}
           columns={columns}

@@ -48,3 +48,15 @@ def test_build_voucher_bank_summary_single_payment():
         )
         == "付款 FK1 供应商A 应付 YF001"
     )
+
+
+def test_build_voucher_bank_summary_merge_payment():
+    assert (
+        build_voucher_bank_summary(
+            voucher_kind="payment",
+            voucher_code="FK202403190001",
+            partner_name="深圳供应商",
+            source_codes=["YF001", "YF002"],
+        )
+        == "合并付款 FK202403190001 深圳供应商 应付 YF001,YF002"
+    )

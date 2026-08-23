@@ -35,6 +35,7 @@ import { CODE_FONT_FAMILY } from '../../../constants/fonts';
 import dayjs from 'dayjs';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../utils/format';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
+import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
 
 /**
  * 操作日志页面组件
@@ -345,6 +346,8 @@ const OperationLogsPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<OperationLog>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.operationLogs')}
           columnPersistenceId="pages.system.operation-logs.list-v1"
           actionRef={actionRef}
           columns={columns}

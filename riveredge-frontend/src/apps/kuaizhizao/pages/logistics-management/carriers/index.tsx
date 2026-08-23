@@ -28,6 +28,7 @@ import {
   type LogisticsCarrier,
 } from '../../../services/logistics';
 import { CarrierFormModal, LOGISTICS_SETTLEMENT_METHOD_OPTIONS } from '../shared/CarrierFormModal';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const CarriersPage: React.FC = () => {
   const { t } = useTranslation();
@@ -254,6 +255,8 @@ const CarriersPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<LogisticsCarrier>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.carriers')}
         actionRef={actionRef}
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.logistics-management.carriers.v3"

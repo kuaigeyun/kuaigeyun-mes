@@ -20,7 +20,10 @@ import {
   resolveSopControlStatus,
   sopControlDetailFields,
 } from './SopControlPanel';
-import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
+import {
+  mapSopAttachmentsToUploadList,
+  resolveSopAttachmentsPayload,
+} from '../../../utils/sopAttachments';
 import { DocumentAttachmentsField } from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
@@ -77,6 +80,7 @@ import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const SOP_PAGE_CODE = 'master-data-process-sop';
 
 /**
@@ -319,7 +323,7 @@ const SOPPage: React.FC = () => {
         page_count: detail.pageCount ?? d.page_count,
         paper_size: detail.paperSize ?? d.paper_size,
         change_reason: detail.changeReason ?? d.change_reason,
-        attachments: mapAttachmentsToUploadList(detail.attachments as any),
+        attachments: mapSopAttachmentsToUploadList(detail.attachments),
         isActive: detail.isActive ?? d.is_active ?? true,
         material_group_uuids: d.material_group_uuids ?? d.materialGroupUuids ?? undefined,
         material_uuids: d.material_uuids ?? d.materialUuids ?? undefined,
@@ -448,8 +452,11 @@ const SOPPage: React.FC = () => {
         page_count: standardValues.page_count ?? standardValues.pageCount ?? null,
         paper_size: standardValues.paper_size ?? standardValues.paperSize ?? null,
         change_reason: standardValues.change_reason ?? standardValues.changeReason ?? null,
-        attachments: normalizeDocumentAttachments(standardValues.attachments),
       };
+      const attachmentsPayload = resolveSopAttachmentsPayload(standardValues.attachments);
+      if (attachmentsPayload !== undefined) {
+        payload.attachments = attachmentsPayload;
+      }
       delete payload.operationId;
       delete payload.isActive;
       delete payload.materialGroupUuids;
@@ -1291,6 +1298,8 @@ const SOPPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<SOP>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.sop')}
         columnPersistenceId="apps.master-data.pages.process.sop.content-before-active-v4"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}

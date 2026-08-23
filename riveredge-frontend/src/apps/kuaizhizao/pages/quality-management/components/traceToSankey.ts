@@ -1,6 +1,10 @@
 import type { TFunction } from 'i18next';
 import type { TraceEdge, TraceEvent, TraceNode, TraceProfile } from '../../../services/traceability';
-import { formatTraceGraphNodeLabel, parseTraceNodeId } from './inspectionTemplateUtils';
+import {
+  formatTraceGraphNodeLabel,
+  getTraceabilityNodeTypeLabel,
+  parseTraceNodeId,
+} from './inspectionTemplateUtils';
 
 export type TraceSankeyLink = {
   source: string;
@@ -8,10 +12,66 @@ export type TraceSankeyLink = {
   value: number;
 };
 
+export type TraceSankeyNode = {
+  key: string;
+  documentType: string;
+};
+
 export type TraceSankeyModel = {
   links: TraceSankeyLink[];
+  nodes: TraceSankeyNode[];
   labelById: Map<string, string>;
 };
+
+/** 追溯桑基图：同单据类型同色（明亮系，与流程图节点色系对齐） */
+export const TRACE_SANKEY_DOCUMENT_TYPE_COLORS: Record<string, string> = {
+  serial: '#597ef7',
+  batch: '#a0d911',
+  purchase_receipt: '#36cfc9',
+  customer_material_registration: '#5cdbd3',
+  incoming_inspection: '#13c2c2',
+  work_order: '#4096ff',
+  production_picking: '#ffa940',
+  material_binding: '#ffc069',
+  inbound: '#36cfc9',
+  outbound: '#ff7a45',
+  reporting_record: '#9254de',
+  process_inspection: '#722ed1',
+  finished_goods_inspection: '#73d13d',
+  defect_record: '#ff4d4f',
+  finished_goods_receipt: '#52c41a',
+  semi_finished_goods_receipt: '#95de64',
+  oqc_inspection: '#fa8c16',
+  sales_delivery: '#ffc53d',
+  sales_return: '#ff85c0',
+  default: '#bfbfbf',
+};
+
+const TRACE_SANKEY_COLOR_DOMAIN = Object.keys(TRACE_SANKEY_DOCUMENT_TYPE_COLORS).filter(
+  (key) => key !== 'default',
+);
+
+export const TRACE_SANKEY_COLOR_SCALE = {
+  type: 'ordinal' as const,
+  domain: TRACE_SANKEY_COLOR_DOMAIN,
+  range: TRACE_SANKEY_COLOR_DOMAIN.map(
+    (key) => TRACE_SANKEY_DOCUMENT_TYPE_COLORS[key] ?? TRACE_SANKEY_DOCUMENT_TYPE_COLORS.default,
+  ),
+};
+
+export function getTraceSankeyDocumentTypeColor(documentType: string): string {
+  return TRACE_SANKEY_DOCUMENT_TYPE_COLORS[documentType] ?? TRACE_SANKEY_DOCUMENT_TYPE_COLORS.default;
+}
+
+export function resolveSankeyDocumentType(nodeId: string, profileNodes: TraceNode[]): string {
+  const parsed = parseTraceNodeId(nodeId).documentType;
+  if (parsed) return parsed;
+  const profileNode = profileNodes.find((n) => n.id === nodeId);
+  const fromData = profileNode?.data?.document_type;
+  if (typeof fromData === 'string' && fromData.trim()) return fromData.trim();
+  if (profileNode?.type) return profileNode.type;
+  return 'default';
+}
 
 /** 工艺阶段列：同类单据同列，避免报工链把桑基图拉成十多列后节点高度为 0 */
 const STAGE_RANK: Record<string, number> = {
@@ -232,6 +292,37 @@ function buildLabelById(nodes: TraceNode[], t: TFunction): Map<string, string> {
   return new Map(nodes.map((n) => [n.id, formatTraceGraphNodeLabel(n, t)]));
 }
 
+/** 桑基图 link 端点 id → 中文展示（单据类型 + 单号） */
+export function formatTraceSankeyIdLabel(id: string, t: TFunction): string {
+  const { documentType, documentCode } = parseTraceNodeId(id);
+  if (!documentType) return id;
+  const typeLabel = getTraceabilityNodeTypeLabel(documentType, t);
+  if (!documentCode) return typeLabel;
+  return `${typeLabel}: ${documentCode}`;
+}
+
+function enrichLabelByIdFromLinks(labelById: Map<string, string>, links: TraceSankeyLink[], t: TFunction) {
+  for (const link of links) {
+    for (const id of [link.source, link.target]) {
+      if (!labelById.has(id)) {
+        labelById.set(id, formatTraceSankeyIdLabel(id, t));
+      }
+    }
+  }
+}
+
+function buildSankeyNodes(links: TraceSankeyLink[], profileNodes: TraceNode[]): TraceSankeyNode[] {
+  const ids = new Set<string>();
+  for (const link of links) {
+    ids.add(link.source);
+    ids.add(link.target);
+  }
+  return [...ids].map((key) => ({
+    key,
+    documentType: resolveSankeyDocumentType(key, profileNodes),
+  }));
+}
+
 /** 将追溯 profile 转为桑基图（节点 id 作 source/target，展示文案走 i18n） */
 export function traceProfileToSankeyModel(profile: TraceProfile, t: TFunction): TraceSankeyModel {
   const labelById = buildLabelById(profile.nodes, t);
@@ -247,5 +338,7 @@ export function traceProfileToSankeyModel(profile: TraceProfile, t: TFunction): 
   links = promoteSameRankSankeyLinks(links);
   links = dropDirectedSankeyCycles(links);
   links = floorSankeyLinkValues(links);
-  return { links, labelById };
+  enrichLabelByIdFromLinks(labelById, links, t);
+  const nodes = buildSankeyNodes(links, profile.nodes);
+  return { links, nodes, labelById };
 }

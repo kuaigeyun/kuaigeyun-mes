@@ -31,6 +31,10 @@ export interface DocumentReconciliationGapItem extends FinanceAmountTriplet {
   finance_related_count?: number;
   settlement_type?: string;
   gap_reason?: string | null;
+  tree_level?: number;
+  parent_doc_id?: number;
+  parent_doc_code?: string;
+  sort_date?: string;
 }
 
 export interface DocumentReconciliationGapResult {

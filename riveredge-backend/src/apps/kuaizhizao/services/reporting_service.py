@@ -64,6 +64,32 @@ from infra.services.business_config_service import BusinessConfigService
 from infra.models.user import User
 
 
+def _sync_operation_assigned_producer_from_reporting(
+    work_order_operation: WorkOrderOperation,
+    *,
+    worker_id: Optional[int],
+    worker_name: Optional[str],
+    team_id: Optional[int],
+    team_name: Optional[str],
+) -> None:
+    """报工所选生产人员回写工序派工，使工序卡人员与本次报工一致。"""
+    if team_id is not None:
+        work_order_operation.assigned_team_id = int(team_id)
+        work_order_operation.assigned_team_name = (team_name or "").strip() or None
+        work_order_operation.assigned_worker_id = None
+        work_order_operation.assigned_worker_name = None
+        work_order_operation.assigned_worker_ids = []
+        return
+    if worker_id is not None:
+        wid = int(worker_id)
+        name = (worker_name or "").strip() or None
+        work_order_operation.assigned_worker_id = wid
+        work_order_operation.assigned_worker_name = name
+        work_order_operation.assigned_worker_ids = [wid]
+        work_order_operation.assigned_team_id = None
+        work_order_operation.assigned_team_name = None
+
+
 async def _resolve_work_order_operation_for_reporting(
     tenant_id: int,
     work_order_id: int,
@@ -1029,7 +1055,15 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 await _sync_operation_completion_status(
                     tenant_id, work_order, work_order_operation
                 )
-            
+
+            _sync_operation_assigned_producer_from_reporting(
+                work_order_operation,
+                worker_id=worker_id_int,
+                worker_name=reporting_data.worker_name,
+                team_id=int(team_id_val) if team_id_val is not None else None,
+                team_name=getattr(reporting_data, "team_name", None),
+            )
+
             await work_order_operation.save()
 
             # 更新工单状态为进行中（如果是从released变为in_progress）
@@ -2715,6 +2749,23 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             producer_changed = producer_fields.intersection(update_data_dict.keys())
             reported_at_changed = "reported_at" in update_data_dict
+
+            if producer_changed:
+                work_order_operation = await _resolve_work_order_operation_for_reporting(
+                    tenant_id=tenant_id,
+                    work_order_id=int(updated_record.work_order_id),
+                    operation_id=int(updated_record.operation_id),
+                )
+                if work_order_operation:
+                    _sync_operation_assigned_producer_from_reporting(
+                        work_order_operation,
+                        worker_id=updated_record.worker_id,
+                        worker_name=updated_record.worker_name,
+                        team_id=updated_record.team_id,
+                        team_name=updated_record.team_name,
+                    )
+                    await work_order_operation.save()
+
             if updated_record.status == "approved" and (producer_changed or reported_at_changed):
                 from apps.master_data.services.performance_calc_service import PerformanceCalcService
 

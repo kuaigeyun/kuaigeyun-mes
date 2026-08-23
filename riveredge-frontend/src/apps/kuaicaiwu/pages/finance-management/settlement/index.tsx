@@ -35,6 +35,7 @@ import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { settlementCapabilityReasonMessage } from '../../../utils/settlementCapabilityMessages';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   referenceDisplayToIdOptions,
   searchReferenceDisplay,
@@ -817,7 +818,8 @@ const SettlementPage: React.FC = () => {
         headerTitle={t(`${P}.history.title`)}
         actionRef={historyActionRef}
         rowKey="id"
-        viewTypes={[...tableOnlyViewTypes]}
+        viewTypes={[...tableOnlyViewTypes, 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.settlement)}
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement.history-v1"
         search={{ labelWidth: 'auto' }}
         showAdvancedSearch

@@ -90,6 +90,7 @@ import {
   type EquipmentLedgerGroupMode,
 } from '../../../utils/equipmentListCore';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const EQUIPMENT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_equipment';
 
@@ -908,6 +909,8 @@ const EquipmentPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Equipment>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.equipmentLedger')}
           headerTitle={t('app.kuaizhizao.equipment.title')}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment.v2"
           actionRef={actionRef}

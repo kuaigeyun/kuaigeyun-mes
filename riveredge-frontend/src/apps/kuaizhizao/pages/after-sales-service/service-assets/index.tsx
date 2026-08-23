@@ -16,6 +16,7 @@ import {
 import { serviceAssetApi, type ServiceAsset } from '../../../services/after-sales-service';
 import ServiceAssetFormModal from './ServiceAssetFormModal';
 import { ServiceAssetDetailDrawer } from './components/ServiceAssetDetailDrawer';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const RESOURCE = 'kuaizhizao:service-asset';
 
@@ -155,6 +156,8 @@ const ServiceAssetsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<ServiceAsset>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesServiceAsset)}
         actionRef={actionRef}
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.service-assets.v3"

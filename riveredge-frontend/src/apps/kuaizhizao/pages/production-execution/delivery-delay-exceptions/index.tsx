@@ -39,6 +39,7 @@ import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-manageme
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { StatusTag } from '../../../../../constants/statusBadges';
 import { UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH } from '../../../../../utils/uniTableLayoutColumns';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   buildProductionExceptionAlertLevelValueEnum,
   buildStandardProductionExceptionStatusValueEnum,
@@ -302,6 +303,8 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         columnPersistenceId="apps.kuaizhizao.pages.production-execution.delivery-delay-exceptions.v3"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.deliveryDelayException)}
         headerTitle={t(`${P}.deliveryDelay.pageTitle`)}
         actionRef={actionRef}
         rowKey="id"

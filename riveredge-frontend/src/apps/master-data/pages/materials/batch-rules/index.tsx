@@ -31,6 +31,7 @@ import { BATCH_RULE_AVAILABLE_FIELDS, DEFAULT_BATCH_RULE_COMPONENTS } from '../.
 import type { BatchRule, BatchRuleCreate, BatchRuleUpdate } from '../../../services/batchSerialRules';
 import type { CodeRuleComponent } from '../../../../../types/codeRuleComponent';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   renderMasterActiveTag,
   renderMasterYesNoTag,
@@ -254,6 +255,8 @@ const BatchRulesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<BatchRule>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.batchRules')}
         columnPersistenceId="apps.master-data.pages.materials.batch-rules.list-v1"
         headerTitle={t('app.master-data.batchRules.headerTitle')}
         actionRef={actionRef}

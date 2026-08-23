@@ -14,6 +14,7 @@ import { ServiceSettlementDetailDrawer } from './components/ServiceSettlementDet
 import ServiceSettlementFormModal from './ServiceSettlementFormModal';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   AFTER_SALES_REVIEW_STATUS_COLOR,
   renderAfterSalesStatusTag,
@@ -173,6 +174,8 @@ const ServiceSettlementsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<ServiceSettlement>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesSettlement)}
         actionRef={actionRef}
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.service-settlements.v3"

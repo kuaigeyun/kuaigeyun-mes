@@ -58,6 +58,7 @@ import {
 } from '../../../../../utils/presetEntityI18n';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { todaySiteDateString } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   buildOperationReportingTypeValueEnum,
   renderOperationActiveStatusTag,
@@ -711,6 +712,8 @@ const OperationsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<Operation>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.operations')}
         columnPersistenceId="apps.master-data.pages.process.operations.status-v2"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}

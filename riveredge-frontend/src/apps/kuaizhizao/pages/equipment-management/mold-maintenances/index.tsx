@@ -48,6 +48,7 @@ import {
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaizhizao.moldOps.maintenance';
 const RESOURCE = 'kuaizhizao:mold-maintenance';
@@ -497,6 +498,8 @@ const MoldMaintenancesPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MoldMaintenance>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.moldMaintenances)}
           headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-maintenances-equip-rank-v1"
           actionRef={actionRef}

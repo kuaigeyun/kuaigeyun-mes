@@ -27,6 +27,7 @@ import { MarkerTag } from '../../../../../constants/statusBadges';
 import type { VariantAttributeDefinition } from '../../../types/variant-attribute';
 import { variantAttributeApi, type PresetAttributeItem } from '../../../services/variant-attribute';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   renderMasterActiveTag,
   renderMasterYesNoTag,
@@ -392,6 +393,8 @@ const VariantAttributesPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<VariantAttributeDefinition>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.variantAttributes')}
           columnPersistenceId="apps.master-data.pages.materials.variant-attributes.list-v1"
           headerTitle={t('app.master-data.menu.materials.variant-attributes')}
           actionRef={actionRef}

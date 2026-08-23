@@ -22,7 +22,116 @@ export type RichListPageHelpKey =
   | 'system.approvalInstances'
   | 'system.onlineUsers'
   | 'system.dataBackups'
-  | 'personal.tasks';
+  | 'personal.tasks'
+  | 'masterData.customers'
+  | 'masterData.suppliers'
+  | 'masterData.partnerPriceBooks'
+  | 'masterData.materials'
+  | 'masterData.marketPrices'
+  | 'masterData.units'
+  | 'masterData.batches'
+  | 'masterData.batchRules'
+  | 'masterData.serials'
+  | 'masterData.serialRules'
+  | 'masterData.variantAttributes'
+  | 'masterData.routes'
+  | 'masterData.operations'
+  | 'masterData.sop'
+  | 'masterData.drawings'
+  | 'masterData.drawingWhereUsed'
+  | 'masterData.defectTypes'
+  | 'system.users'
+  | 'system.roles'
+  | 'system.menus'
+  | 'system.permissions'
+  | 'system.customFields'
+  | 'system.dataDictionaries'
+  | 'system.languages'
+  | 'system.approvalProcesses'
+  | 'system.messageTemplates'
+  | 'system.messageConfig'
+  | 'system.applicationConnections'
+  | 'system.apis'
+  | 'system.datasets'
+  | 'system.reportTemplates'
+  | 'system.operationLogs'
+  | 'system.loginLogs'
+  | 'system.invitationCodes'
+  | 'system.pluginManager'
+  | 'system.workingHoursConfigs'
+  | 'system.equipment'
+  | 'system.molds'
+  | 'kuaizhizao.purchaseArrivalWarnings'
+  | 'kuaizhizao.customerPool'
+  | 'kuaizhizao.customerFollowUps'
+  | 'kuaizhizao.inventory'
+  | 'kuaizhizao.inventoryAlert'
+  | 'kuaizhizao.equipmentLedger'
+  | 'kuaizhizao.moldsLedger'
+  | 'kuaizhizao.toolsLedger'
+  | 'kuaicaiwu.chartOfAccounts'
+  | 'kuaicaiwu.cashier'
+  | 'kuaicaiwu.books'
+  | 'kuaicaiwu.financialStatements'
+  | 'kuaicaiwu.glSettings'
+  | 'kuaicaiwu.taxSettings'
+  | 'kuaicaiwu.vatLedger'
+  | 'kuaicaiwu.inputCertification'
+  | 'kuaicaiwu.standardCosts'
+  | 'kuaicaiwu.costCalculations'
+  | 'kuaicaiwu.costRules'
+  | 'kuaizhizao.hourlyRates'
+  | 'kuaizhizao.performanceSummaries'
+  | 'kuaizhizao.employeeConfigs'
+  | 'kuaizhizao.kpiDefinitions'
+  | 'kuaizhizao.shifts'
+  | 'kuaizhizao.skills'
+  | 'kuaizhizao.holidays'
+  | 'kuaizhizao.workCalendar'
+  | 'kuaizhizao.carriers'
+  | 'kuaizhizao.drivers'
+  | 'kuaizhizao.vehicles'
+  | 'kuaizhizao.computationHistory'
+  | 'kuaizhizao.demandReplanDashboard'
+  | 'kuaizhizao.scheduling'
+  | 'kuaizhizao.inspectionPlans'
+  | 'kuaizhizao.isoClauses'
+  | 'kuaizhizao.spcMonitor'
+  | 'kuaizhizao.systemDocuments'
+  | 'kuaizhizao.backflushRecords'
+  | 'kuaizhizao.barcodeMappingRules'
+  | 'kuaizhizao.batchInventoryQuery'
+  | 'kuaizhizao.batchingCenter'
+  | 'kuaizhizao.customerMaterialRegistration'
+  | 'kuaizhizao.lineSideWarehouse'
+  | 'kuaizhizao.replenishmentSuggestions'
+  | 'kuaizhizao.moldMaintenanceReminders'
+  | 'kuaizhizao.toolMaintenanceReminders'
+  | 'kuaizhizao.documentTiming'
+  | 'masterData.drawingDistributions'
+  | 'masterData.drawingLoans'
+  | 'infra.clientReleases'
+  | 'infra.licenseManagement'
+  | 'infra.packages'
+  | 'infra.scheduledTasks'
+  | 'infra.scripts'
+  | 'infra.sensitiveWordBlacklist'
+  | 'system.equipmentFaults'
+  | 'system.maintenancePlans'
+  | 'kuaiai.knowledge'
+  | 'kuaiiot.alerts'
+  | 'kuaiiot.connections'
+  | 'kuaiiot.devices'
+  | 'kuaiiot.edgeConfigs'
+  | 'kuaiiot.products'
+  | 'kuaiiot.tags'
+  | 'kuaiplm.changeManagement'
+  | 'kuaiplm.knowledgeBase'
+  | 'kuaiplm.designReviews'
+  | 'kuaiplm.fmea'
+  | 'kuaiplm.requirements'
+  | 'kuaiplm.rdProjects'
+  | 'kuaicaiwu.marginReport';
 
 export type RichListPageProfile = 'standard' | 'bom';
 
@@ -49,6 +158,115 @@ export const RICH_LIST_PAGE_HELP_KEYS: RichListPageHelpKey[] = [
   'system.onlineUsers',
   'system.dataBackups',
   'personal.tasks',
+  'masterData.customers',
+  'masterData.suppliers',
+  'masterData.partnerPriceBooks',
+  'masterData.materials',
+  'masterData.marketPrices',
+  'masterData.units',
+  'masterData.batches',
+  'masterData.batchRules',
+  'masterData.serials',
+  'masterData.serialRules',
+  'masterData.variantAttributes',
+  'masterData.routes',
+  'masterData.operations',
+  'masterData.sop',
+  'masterData.drawings',
+  'masterData.drawingWhereUsed',
+  'masterData.defectTypes',
+  'system.users',
+  'system.roles',
+  'system.menus',
+  'system.permissions',
+  'system.customFields',
+  'system.dataDictionaries',
+  'system.languages',
+  'system.approvalProcesses',
+  'system.messageTemplates',
+  'system.messageConfig',
+  'system.applicationConnections',
+  'system.apis',
+  'system.datasets',
+  'system.reportTemplates',
+  'system.operationLogs',
+  'system.loginLogs',
+  'system.invitationCodes',
+  'system.pluginManager',
+  'system.workingHoursConfigs',
+  'system.equipment',
+  'system.molds',
+  'kuaizhizao.purchaseArrivalWarnings',
+  'kuaizhizao.customerPool',
+  'kuaizhizao.customerFollowUps',
+  'kuaizhizao.inventory',
+  'kuaizhizao.inventoryAlert',
+  'kuaizhizao.equipmentLedger',
+  'kuaizhizao.moldsLedger',
+  'kuaizhizao.toolsLedger',
+  'kuaicaiwu.chartOfAccounts',
+  'kuaicaiwu.cashier',
+  'kuaicaiwu.books',
+  'kuaicaiwu.financialStatements',
+  'kuaicaiwu.glSettings',
+  'kuaicaiwu.taxSettings',
+  'kuaicaiwu.vatLedger',
+  'kuaicaiwu.inputCertification',
+  'kuaicaiwu.standardCosts',
+  'kuaicaiwu.costCalculations',
+  'kuaicaiwu.costRules',
+  'kuaizhizao.hourlyRates',
+  'kuaizhizao.performanceSummaries',
+  'kuaizhizao.employeeConfigs',
+  'kuaizhizao.kpiDefinitions',
+  'kuaizhizao.shifts',
+  'kuaizhizao.skills',
+  'kuaizhizao.holidays',
+  'kuaizhizao.workCalendar',
+  'kuaizhizao.carriers',
+  'kuaizhizao.drivers',
+  'kuaizhizao.vehicles',
+  'kuaizhizao.computationHistory',
+  'kuaizhizao.demandReplanDashboard',
+  'kuaizhizao.scheduling',
+  'kuaizhizao.inspectionPlans',
+  'kuaizhizao.isoClauses',
+  'kuaizhizao.spcMonitor',
+  'kuaizhizao.systemDocuments',
+  'kuaizhizao.backflushRecords',
+  'kuaizhizao.barcodeMappingRules',
+  'kuaizhizao.batchInventoryQuery',
+  'kuaizhizao.batchingCenter',
+  'kuaizhizao.customerMaterialRegistration',
+  'kuaizhizao.lineSideWarehouse',
+  'kuaizhizao.replenishmentSuggestions',
+  'kuaizhizao.moldMaintenanceReminders',
+  'kuaizhizao.toolMaintenanceReminders',
+  'kuaizhizao.documentTiming',
+  'masterData.drawingDistributions',
+  'masterData.drawingLoans',
+  'infra.clientReleases',
+  'infra.licenseManagement',
+  'infra.packages',
+  'infra.scheduledTasks',
+  'infra.scripts',
+  'infra.sensitiveWordBlacklist',
+  'system.equipmentFaults',
+  'system.maintenancePlans',
+  'kuaiai.knowledge',
+  'kuaiiot.alerts',
+  'kuaiiot.connections',
+  'kuaiiot.devices',
+  'kuaiiot.edgeConfigs',
+  'kuaiiot.products',
+  'kuaiiot.tags',
+  'kuaiplm.changeManagement',
+  'kuaiplm.knowledgeBase',
+  'kuaiplm.designReviews',
+  'kuaiplm.fmea',
+  'kuaiplm.requirements',
+  'kuaiplm.rdProjects',
+  'kuaicaiwu.marginReport',
 ];
 
 export const RICH_LIST_PAGE_PROFILES: Record<RichListPageHelpKey, RichListPageProfile> = {
@@ -74,6 +292,115 @@ export const RICH_LIST_PAGE_PROFILES: Record<RichListPageHelpKey, RichListPagePr
   'system.onlineUsers': 'standard',
   'system.dataBackups': 'standard',
   'personal.tasks': 'standard',
+  'masterData.customers': 'standard',
+  'masterData.suppliers': 'standard',
+  'masterData.partnerPriceBooks': 'standard',
+  'masterData.materials': 'standard',
+  'masterData.marketPrices': 'standard',
+  'masterData.units': 'standard',
+  'masterData.batches': 'standard',
+  'masterData.batchRules': 'standard',
+  'masterData.serials': 'standard',
+  'masterData.serialRules': 'standard',
+  'masterData.variantAttributes': 'standard',
+  'masterData.routes': 'standard',
+  'masterData.operations': 'standard',
+  'masterData.sop': 'standard',
+  'masterData.drawings': 'standard',
+  'masterData.drawingWhereUsed': 'standard',
+  'masterData.defectTypes': 'standard',
+  'system.users': 'standard',
+  'system.roles': 'standard',
+  'system.menus': 'standard',
+  'system.permissions': 'standard',
+  'system.customFields': 'standard',
+  'system.dataDictionaries': 'standard',
+  'system.languages': 'standard',
+  'system.approvalProcesses': 'standard',
+  'system.messageTemplates': 'standard',
+  'system.messageConfig': 'standard',
+  'system.applicationConnections': 'standard',
+  'system.apis': 'standard',
+  'system.datasets': 'standard',
+  'system.reportTemplates': 'standard',
+  'system.operationLogs': 'standard',
+  'system.loginLogs': 'standard',
+  'system.invitationCodes': 'standard',
+  'system.pluginManager': 'standard',
+  'system.workingHoursConfigs': 'standard',
+  'system.equipment': 'standard',
+  'system.molds': 'standard',
+  'kuaizhizao.purchaseArrivalWarnings': 'standard',
+  'kuaizhizao.customerPool': 'standard',
+  'kuaizhizao.customerFollowUps': 'standard',
+  'kuaizhizao.inventory': 'standard',
+  'kuaizhizao.inventoryAlert': 'standard',
+  'kuaizhizao.equipmentLedger': 'standard',
+  'kuaizhizao.moldsLedger': 'standard',
+  'kuaizhizao.toolsLedger': 'standard',
+  'kuaicaiwu.chartOfAccounts': 'standard',
+  'kuaicaiwu.cashier': 'standard',
+  'kuaicaiwu.books': 'standard',
+  'kuaicaiwu.financialStatements': 'standard',
+  'kuaicaiwu.glSettings': 'standard',
+  'kuaicaiwu.taxSettings': 'standard',
+  'kuaicaiwu.vatLedger': 'standard',
+  'kuaicaiwu.inputCertification': 'standard',
+  'kuaicaiwu.standardCosts': 'standard',
+  'kuaicaiwu.costCalculations': 'standard',
+  'kuaicaiwu.costRules': 'standard',
+  'kuaizhizao.hourlyRates': 'standard',
+  'kuaizhizao.performanceSummaries': 'standard',
+  'kuaizhizao.employeeConfigs': 'standard',
+  'kuaizhizao.kpiDefinitions': 'standard',
+  'kuaizhizao.shifts': 'standard',
+  'kuaizhizao.skills': 'standard',
+  'kuaizhizao.holidays': 'standard',
+  'kuaizhizao.workCalendar': 'standard',
+  'kuaizhizao.carriers': 'standard',
+  'kuaizhizao.drivers': 'standard',
+  'kuaizhizao.vehicles': 'standard',
+  'kuaizhizao.computationHistory': 'standard',
+  'kuaizhizao.demandReplanDashboard': 'standard',
+  'kuaizhizao.scheduling': 'standard',
+  'kuaizhizao.inspectionPlans': 'standard',
+  'kuaizhizao.isoClauses': 'standard',
+  'kuaizhizao.spcMonitor': 'standard',
+  'kuaizhizao.systemDocuments': 'standard',
+  'kuaizhizao.backflushRecords': 'standard',
+  'kuaizhizao.barcodeMappingRules': 'standard',
+  'kuaizhizao.batchInventoryQuery': 'standard',
+  'kuaizhizao.batchingCenter': 'standard',
+  'kuaizhizao.customerMaterialRegistration': 'standard',
+  'kuaizhizao.lineSideWarehouse': 'standard',
+  'kuaizhizao.replenishmentSuggestions': 'standard',
+  'kuaizhizao.moldMaintenanceReminders': 'standard',
+  'kuaizhizao.toolMaintenanceReminders': 'standard',
+  'kuaizhizao.documentTiming': 'standard',
+  'masterData.drawingDistributions': 'standard',
+  'masterData.drawingLoans': 'standard',
+  'infra.clientReleases': 'standard',
+  'infra.licenseManagement': 'standard',
+  'infra.packages': 'standard',
+  'infra.scheduledTasks': 'standard',
+  'infra.scripts': 'standard',
+  'infra.sensitiveWordBlacklist': 'standard',
+  'system.equipmentFaults': 'standard',
+  'system.maintenancePlans': 'standard',
+  'kuaiai.knowledge': 'standard',
+  'kuaiiot.alerts': 'standard',
+  'kuaiiot.connections': 'standard',
+  'kuaiiot.devices': 'standard',
+  'kuaiiot.edgeConfigs': 'standard',
+  'kuaiiot.products': 'standard',
+  'kuaiiot.tags': 'standard',
+  'kuaiplm.changeManagement': 'standard',
+  'kuaiplm.knowledgeBase': 'standard',
+  'kuaiplm.designReviews': 'standard',
+  'kuaiplm.fmea': 'standard',
+  'kuaiplm.requirements': 'standard',
+  'kuaiplm.rdProjects': 'standard',
+  'kuaicaiwu.marginReport': 'standard',
 };
 
 const prefix = (pageKey: string) => `help.listPage.${pageKey}`;

@@ -81,6 +81,7 @@ import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { normalizeUserDisplayName } from '../../../../../utils/userDisplay';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   formatCustomerPoolDateTimeCell,
   resolveCustomerPoolListParams,
@@ -1174,6 +1175,8 @@ const CustomerPoolPage: React.FC = () => {
           showAdvancedSearch
           skipFuzzyPinyinClientFilter
           columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-pool"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.customerPool')}
           tanstackQuery={{ queryKeyPrefix: ['apps.kuaizhizao.pages.sales-management.customer-pool', scope] }}
           onTableDataChange={(data) => {
             tableRowsRef.current = data || [];

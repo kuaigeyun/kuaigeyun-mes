@@ -67,6 +67,7 @@ import {
   resolveInventoryAlertRuleListParams,
 } from '../../../utils/warehouseListCore';
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 interface InventoryAlert {
   id?: number;
@@ -758,6 +759,8 @@ const InventoryAlertPage: React.FC = () => {
             label: t('app.kuaizhizao.inventoryAlert.tabAlerts'),
             children: (
               <UniTable<InventoryAlert>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.inventoryAlert')}
                 actionRef={alertActionRef}
                 rowKey="id"
                 columns={alertColumns}

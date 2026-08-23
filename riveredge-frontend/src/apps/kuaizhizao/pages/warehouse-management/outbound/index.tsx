@@ -9,7 +9,7 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, type ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Tooltip, Typography, Spin, Empty, Select, Input, InputNumber, theme as AntdTheme } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Tooltip, Typography, Spin, Empty, Select, theme as AntdTheme } from 'antd';
 import { CheckCircleOutlined, PlayCircleOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
@@ -30,8 +30,6 @@ import { UniPullLoadButton } from '../../../../../components/uni-pull';
 import { OutboundDetailDrawer } from './components/OutboundDetailDrawer';
 import { WarehouseTraceBriefPrimaryActions } from '../WarehouseTraceBriefFooter';
 import { warehouseApi, workOrderApi, outsourceMaterialIssueApi } from '../../../services/production';
-import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
-import { mapWarehouseSelectOptions, type WarehouseSelectOption } from './outboundEntryShared';
 import { LinkedOqcPanel } from '../../quality-management/components/LinkedInspectionPanel';
 import { getOutboundLifecycle } from '../../../utils/outboundLifecycle';
 import dayjs from 'dayjs';
@@ -42,6 +40,7 @@ import { outboundTypeToPrintDocumentType } from '../../../utils/kuaizhizaoPrintC
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import OutboundQuickPullModals, { type OutboundQuickPullModalsRef } from './OutboundQuickPullModals';
 import OutboundConfirmPreviewModal from './OutboundConfirmPreviewModal';
+import OutboundHubEditModal from './OutboundHubEditModal';
 import { formatDateTime, formatDateTimeBySiteSetting, formatQuantity } from '../../../../../utils/format';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
@@ -90,7 +89,6 @@ import {
   OUTBOUND_POSTED_STATUSES,
   outboundConfirmCapabilityReasonMessage,
   outboundWithdrawCapabilityReasonMessage,
-  outboundUpdateCapabilityReasonMessage,
   mapOutsourceIssueToOutbound,
   outboundDocumentCode,
   outboundSourceDocNo,
@@ -103,6 +101,7 @@ import { StatusTag } from '../../../../../constants/statusBadges';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import type { OutboundPullEntryNavigationState } from './outboundPullEntryTypes';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 interface OutboundOrder extends OutboundHubOrder {
   items?: OutboundOrderItem[];
 }
@@ -123,6 +122,7 @@ interface OutboundOrderItem {
   warehouse_id?: number;
   warehouse_name?: string;
   batch_number?: string;
+  serial_numbers?: string[];
   material_unit?: string;
   delivery_quantity?: number;
   unit_price?: number;
@@ -132,6 +132,21 @@ interface OutboundOrderItem {
 const SALES_DELIVERY_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_deliveries';
 const PRODUCTION_PICKING_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_production_pickings';
 const OUTBOUND_RESOURCE = 'kuaizhizao:outbound';
+
+function parseOutboundLineSerialNumbers(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.map((x) => String(x).trim()).filter(Boolean);
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed.map((x) => String(x).trim()).filter(Boolean);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return [];
+}
 
 /** UniWorkflowActions 状态集合（与后端 review_status / status 对齐；领料/销售出库共用） */
 const OUTBOUND_WORKFLOW_DRAFT_STATUSES = ['草稿', 'draft'];
@@ -205,14 +220,7 @@ const OutboundPage: React.FC = () => {
   const [currentOrder, setCurrentOrder] = useState<OutboundOrder | null>(null);
   const [outboundTrackingRefreshKey, setOutboundTrackingRefreshKey] = useState(0);
   const detailRetryRecordRef = useRef<OutboundOrder | null>(null);
-  const [editablePickingQuantities, setEditablePickingQuantities] = useState<Record<number, number>>({});
-  const [editablePickingWarehouses, setEditablePickingWarehouses] = useState<
-    Record<number, { id: number; name: string }>
-  >({});
-  const [editablePickingBatches, setEditablePickingBatches] = useState<Record<number, string>>({});
-  const [editablePickingNotes, setEditablePickingNotes] = useState('');
-  const [savingPickingEdit, setSavingPickingEdit] = useState(false);
-  const [pickingWarehouseOptions, setPickingWarehouseOptions] = useState<WarehouseSelectOption[]>([]);
+  const [editModalRecord, setEditModalRecord] = useState<OutboundOrder | null>(null);
 
   const [executionConfig, setExecutionConfig] = useState<any>(null);
   const outboundPerms = useResourcePermissions('kuaizhizao:outbound');
@@ -237,7 +245,7 @@ const OutboundPage: React.FC = () => {
     [t, outboundAuditColumnEnabled],
   );
 
-  const canUpdateProductionPicking = useCallback(
+  const canUpdateOutboundDocument = useCallback(
     () => Boolean(inboundPerms.canUpdate || outboundPerms.canUpdate),
     [inboundPerms.canUpdate, outboundPerms.canUpdate],
   );
@@ -247,36 +255,21 @@ const OutboundPage: React.FC = () => {
       !!order &&
       order.outbound_type === 'production_picking' &&
       isOutboundEditable(order) &&
-      canUpdateProductionPicking(),
-    [canUpdateProductionPicking],
+      canUpdateOutboundDocument(),
+    [canUpdateOutboundDocument],
   );
 
-  const initProductionPickingEditState = useCallback((detailData: Record<string, unknown>) => {
-    const quantities: Record<number, number> = {};
-    const warehouses: Record<number, { id: number; name: string }> = {};
-    const batches: Record<number, string> = {};
-    ((detailData.items as OutboundOrderItem[] | undefined) || []).forEach((it) => {
-      if (it?.id == null) return;
-      const rid = Number(it.id);
-      quantities[rid] = Number(it.required_quantity ?? 0);
-      warehouses[rid] = {
-        id: Number(it.warehouse_id ?? 0),
-        name: String(it.warehouse_name ?? ''),
-      };
-      batches[rid] = String(it.batch_number ?? '');
-    });
-    setEditablePickingQuantities(quantities);
-    setEditablePickingWarehouses(warehouses);
-    setEditablePickingBatches(batches);
-    setEditablePickingNotes(String(detailData.notes ?? ''));
-  }, []);
+  const isEditableSalesDelivery = useCallback(
+    (order?: OutboundOrder | null) =>
+      !!order &&
+      order.outbound_type === 'sales_delivery' &&
+      isOutboundEditable(order) &&
+      canUpdateOutboundDocument(),
+    [canUpdateOutboundDocument],
+  );
 
-  const resetProductionPickingEditState = useCallback(() => {
-    setEditablePickingQuantities({});
-    setEditablePickingWarehouses({});
-    setEditablePickingBatches({});
-    setEditablePickingNotes('');
-    setPickingWarehouseOptions([]);
+  const handleEdit = useCallback((record: OutboundOrder) => {
+    setEditModalRecord(record);
   }, []);
 
   const handleProductionPickingAuditSuccess = useCallback(async () => {
@@ -290,13 +283,12 @@ const OutboundPage: React.FC = () => {
           outbound_type: 'production_picking' as const,
         };
         setCurrentOrder(merged);
-        initProductionPickingEditState(updated as Record<string, unknown>);
         setOutboundTrackingRefreshKey((k) => k + 1);
       } catch {
         /* 详情刷新失败不影响列表 */
       }
     }
-  }, [currentOrder, invalidateMenuBadgeCounts, initProductionPickingEditState]);
+  }, [currentOrder, invalidateMenuBadgeCounts]);
 
   const handleSalesDeliveryAuditSuccess = useCallback(async () => {
     invalidateMenuBadgeCounts();
@@ -304,10 +296,11 @@ const OutboundPage: React.FC = () => {
     if (currentOrder?.outbound_type === 'sales_delivery' && currentOrder.id != null) {
       try {
         const updated = await warehouseApi.salesDelivery.get(String(currentOrder.id));
-        setCurrentOrder({
+        const merged = {
           ...(updated as OutboundOrder),
-          outbound_type: 'sales_delivery',
-        });
+          outbound_type: 'sales_delivery' as const,
+        };
+        setCurrentOrder(merged);
         setOutboundTrackingRefreshKey((k) => k + 1);
       } catch {
         /* 详情刷新失败不影响列表 */
@@ -368,7 +361,6 @@ const OutboundPage: React.FC = () => {
     setDetailLoading(true);
     setDetailError(null);
     setCurrentOrder(null);
-    resetProductionPickingEditState();
     try {
       let detailData;
       if (record.outbound_type === 'production_picking') {
@@ -390,18 +382,6 @@ const OutboundPage: React.FC = () => {
         ? ({ ...detailData, outbound_type: record.outbound_type } as OutboundOrder)
         : null;
       setCurrentOrder(merged);
-      if (record.outbound_type === 'production_picking' && detailData) {
-        initProductionPickingEditState(detailData as Record<string, unknown>);
-        if (isOutboundEditable(merged as OutboundHubOrder) && canUpdateProductionPicking()) {
-          try {
-            const whRes = await masterWarehouseApi.list({ is_active: true, limit: 500 });
-            setPickingWarehouseOptions(mapWarehouseSelectOptions(whRes));
-          } catch (e: unknown) {
-            const err = e as { message?: string };
-            messageApi.error(err?.message || t('app.kuaizhizao.warehouseOutbound.msg.loadWarehouseFailed'));
-          }
-        }
-      }
       setOutboundTrackingRefreshKey((k) => k + 1);
       if (record.outbound_type === 'sales_delivery' && record.id != null) {
         await loadSalesDeliveryFieldValuesForDetail(record.id);
@@ -446,73 +426,18 @@ const OutboundPage: React.FC = () => {
     })();
   }, [searchParams, handleOutboundTypeFilterChange, messageApi, t]);
 
-  const handleSaveProductionPickingEdit = async () => {
-    if (!currentOrder?.id || currentOrder.outbound_type !== 'production_picking') return;
-    if (!isEditableProductionPicking(currentOrder)) {
-      messageApi.warning(
-        outboundUpdateCapabilityReasonMessage(currentOrder, t) ||
-          t('app.kuaizhizao.warehouseOutbound.msg.pickingEditFailed'),
-      );
-      return;
-    }
-    const items = (currentOrder.items || []) as OutboundOrderItem[];
-    if (!items.length) {
-      messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.noEditableLines'));
-      return;
-    }
-    try {
-      const mappedItems = items
-        .filter((it) => it.id != null)
-        .map((it) => {
-          const rid = Number(it.id);
-          const qty = Number(editablePickingQuantities[rid] ?? it.required_quantity ?? 0);
-          if (!(qty > 0)) {
-            throw new Error(
-              t('app.kuaizhizao.warehouseOutbound.msg.requiredQtyMustBePositive', {
-                material: it.material_code || it.material_name || '-',
-              }),
-            );
-          }
-          const wh = editablePickingWarehouses[rid];
-          const warehouseId = Number(wh?.id ?? it.warehouse_id ?? 0);
-          if (!(warehouseId > 0)) {
-            throw new Error(
-              t('app.kuaizhizao.warehouseOutbound.msg.selectLineWarehouse', {
-                material: it.material_code || it.material_name || '-',
-              }),
-            );
-          }
-          return {
-            id: rid,
-            required_quantity: qty,
-            warehouse_id: warehouseId,
-            warehouse_name: String(wh?.name ?? it.warehouse_name ?? ''),
-            batch_number: editablePickingBatches[rid] ?? it.batch_number ?? '',
-          };
-        });
+  const handleEditModalClose = useCallback(() => {
+    setEditModalRecord(null);
+  }, []);
 
-      setSavingPickingEdit(true);
-      await warehouseApi.productionPicking.update(String(currentOrder.id), {
-        notes: editablePickingNotes,
-        items: mappedItems,
-      });
-      const detail = await warehouseApi.productionPicking.get(String(currentOrder.id));
-      const merged = { ...(detail as OutboundOrder), outbound_type: 'production_picking' as const };
-      setCurrentOrder(merged);
-      initProductionPickingEditState(detail as Record<string, unknown>);
-      messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.pickingEditSaved'));
-      invalidateMenuBadgeCounts();
-      setOutboundTrackingRefreshKey((k) => k + 1);
-      actionRef.current?.reload();
-    } catch (error: unknown) {
-      const err = error as { message?: string; response?: { data?: { detail?: string } } };
-      messageApi.error(
-        err?.message || err?.response?.data?.detail || t('app.kuaizhizao.warehouseOutbound.msg.pickingEditFailed'),
-      );
-    } finally {
-      setSavingPickingEdit(false);
+  const handleEditModalSuccess = useCallback(() => {
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+    const editing = editModalRecord;
+    if (editing && currentOrder?.id === editing.id) {
+      void handleDetail(editing);
     }
-  };
+  }, [currentOrder?.id, editModalRecord, invalidateMenuBadgeCounts]);
 
   const refreshOrderAfterConfirm = async (record: OutboundOrder) => {
     actionRef.current?.reload();
@@ -530,7 +455,8 @@ const OutboundPage: React.FC = () => {
           detailData = (await warehouseApi.materialBorrow.get(id)) as Record<string, unknown>;
         }
         if (detailData) {
-          setCurrentOrder({ ...detailData, outbound_type: record.outbound_type } as OutboundOrder);
+          const mergedOrder = { ...detailData, outbound_type: record.outbound_type } as OutboundOrder;
+          setCurrentOrder(mergedOrder);
           if (record.outbound_type === 'sales_delivery' && record.id != null) {
             await loadSalesDeliveryFieldValuesForDetail(record.id);
           } else if (record.outbound_type === 'production_picking' && record.id != null) {
@@ -759,8 +685,6 @@ const OutboundPage: React.FC = () => {
   const salesDeliveryCustomFieldColumns = generateSalesDeliveryCustomFieldColumns();
   const productionPickingCustomFieldColumns = generateProductionPickingCustomFieldColumns();
 
-  const pickingDetailEditable = isEditableProductionPicking(currentOrder);
-
   const pickingDetailColumns = useMemo(
     () => [
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
@@ -768,93 +692,27 @@ const OutboundPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.warehouseOutbound.col.requiredQty'),
         dataIndex: 'required_quantity',
-        width: pickingDetailEditable ? 120 : 100,
+        width: 100,
         align: 'right' as const,
-        render: (_: unknown, row: OutboundOrderItem) => {
-          if (!pickingDetailEditable || row.id == null) {
-            return formatQuantity(row.required_quantity);
-          }
-          const rid = Number(row.id);
-          return (
-            <InputNumber
-              min={0.01}
-              precision={2}
-              value={editablePickingQuantities[rid] ?? Number(row.required_quantity ?? 0)}
-              onChange={(v) =>
-                setEditablePickingQuantities((prev) => ({ ...prev, [rid]: Number(v) || 0 }))
-              }
-              style={{ width: 100 }}
-              size="small"
-            />
-          );
-        },
+        render: (_: unknown, row: OutboundOrderItem) => formatQuantity(row.required_quantity),
       },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.pickedQty'), dataIndex: 'picked_quantity', width: 100, align: 'right' as const },
-      { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
       {
-        title: t('app.kuaizhizao.warehouseOutbound.col.warehouseName'),
-        dataIndex: 'warehouse_name',
-        width: pickingDetailEditable ? 160 : 120,
-        render: (_: unknown, row: OutboundOrderItem) => {
-          if (!pickingDetailEditable || row.id == null) {
-            return row.warehouse_name || '-';
-          }
-          const rid = Number(row.id);
-          const current = editablePickingWarehouses[rid];
-          return (
-            <Select
-              size="small"
-              style={{ width: 140 }}
-              options={pickingWarehouseOptions}
-              value={current?.id > 0 ? current.id : undefined}
-              placeholder={t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse')}
-              onChange={(value, option) => {
-                const opt = option as { label?: string; name?: string } | undefined;
-                const name =
-                  (typeof opt?.label === 'string' ? opt.label : undefined) ||
-                  opt?.name ||
-                  pickingWarehouseOptions.find((o) => o.value === value)?.name ||
-                  '';
-                setEditablePickingWarehouses((prev) => ({
-                  ...prev,
-                  [rid]: { id: Number(value), name },
-                }));
-              }}
-              showSearch
-              optionFilterProp="label"
-            />
-          );
-        },
+        title: t('app.kuaizhizao.warehouseOutbound.col.pickedQty'),
+        dataIndex: 'picked_quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (_: unknown, row: OutboundOrderItem) => formatQuantity(row.picked_quantity),
       },
+      { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.warehouseName'), dataIndex: 'warehouse_name', width: 120 },
       {
         title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'),
         dataIndex: 'batch_number',
-        width: pickingDetailEditable ? 120 : 100,
-        render: (_: unknown, row: OutboundOrderItem) => {
-          if (!pickingDetailEditable || row.id == null) {
-            return row.batch_number || '-';
-          }
-          const rid = Number(row.id);
-          return (
-            <Input
-              size="small"
-              value={editablePickingBatches[rid] ?? ''}
-              onChange={(e) =>
-                setEditablePickingBatches((prev) => ({ ...prev, [rid]: e.target.value }))
-              }
-            />
-          );
-        },
+        width: 100,
+        render: (_: unknown, row: OutboundOrderItem) => row.batch_number || '-',
       },
     ],
-    [
-      t,
-      pickingDetailEditable,
-      editablePickingQuantities,
-      editablePickingWarehouses,
-      editablePickingBatches,
-      pickingWarehouseOptions,
-    ],
+    [t],
   );
 
   const deliveryDetailColumns = useMemo(
@@ -863,9 +721,29 @@ const OutboundPage: React.FC = () => {
         [
           { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
           { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
-          { title: t('app.kuaizhizao.warehouseOutbound.col.deliveryQty'), dataIndex: 'delivery_quantity', width: 100, align: 'right' as const },
+          {
+            title: t('app.kuaizhizao.warehouseOutbound.col.deliveryQty'),
+            dataIndex: 'delivery_quantity',
+            width: 100,
+            align: 'right' as const,
+            render: (_: unknown, row: OutboundOrderItem) => formatQuantity(row.delivery_quantity),
+          },
           { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
-          { title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'), dataIndex: 'batch_number', width: 100 },
+          {
+            title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'),
+            dataIndex: 'batch_number',
+            width: 100,
+            render: (_: unknown, row: OutboundOrderItem) => row.batch_number || '-',
+          },
+          {
+            title: t('app.kuaizhizao.warehouseOutbound.col.serialNo'),
+            dataIndex: 'serial_numbers',
+            width: 140,
+            render: (_: unknown, row: OutboundOrderItem) => {
+              const serials = parseOutboundLineSerialNumbers(row.serial_numbers);
+              return serials.length ? serials.join(', ') : '-';
+            },
+          },
           { title: t('common.remark'), dataIndex: 'notes' },
         ],
         t,
@@ -1043,11 +921,11 @@ const OutboundPage: React.FC = () => {
       search: false,
       render: (_, record) => (
         <Space wrap>
-          <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
-          {record.outbound_type === 'production_picking' &&
+          <Button {...rowActionKind('read')} onClick={() => void handleDetail(record)} />
+          {(record.outbound_type === 'production_picking' || record.outbound_type === 'sales_delivery') &&
             isOutboundEditable(record) &&
-            canUpdateProductionPicking() && (
-              <Button {...rowActionKind('update')} onClick={() => void handleDetail(record)} />
+            canUpdateOutboundDocument() && (
+              <Button {...rowActionKind('update')} onClick={() => handleEdit(record)} />
             )}
           {record.outbound_type === 'sales_delivery' && record.id && packingBindingPerms.canRead && (
             <Button
@@ -1158,13 +1036,14 @@ const OutboundPage: React.FC = () => {
       t,
       executionConfig,
       handleDetail,
+      handleEdit,
       handleConfirm,
       handleWithdraw,
       handleDelete,
       navigate,
       inboundPerms,
       outboundPerms,
-      canUpdateProductionPicking,
+      canUpdateOutboundDocument,
       getOutboundConfirmBlockedReason,
       getOutboundConfirmLabel,
       canRunOutboundConfirm,
@@ -1265,6 +1144,8 @@ const OutboundPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         headerTitle={t('app.kuaizhizao.warehouseOutbound.title')}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.salesDelivery)}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.outbound.v4"
         actionRef={actionRef}
         formRef={searchFormRef}
@@ -1424,31 +1305,25 @@ const OutboundPage: React.FC = () => {
           if (record) void handleDetail(record);
         }}
         trackingRefreshKey={outboundTrackingRefreshKey}
-        notesEditor={
-          currentOrder && isEditableProductionPicking(currentOrder) ? (
-            <Input.TextArea
-              rows={2}
-              value={editablePickingNotes}
-              onChange={(e) => setEditablePickingNotes(e.target.value)}
-              placeholder={t('common.remark')}
-            />
-          ) : undefined
-        }
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentOrder(null);
           setDetailError(null);
-          resetProductionPickingEditState();
           resetSalesDeliveryDetailFieldValues();
           resetProductionPickingDetailFieldValues();
         }}
         extra={
           currentOrder ? (
             <Space>
-              {isEditableProductionPicking(currentOrder) ? (
-                <Button onClick={() => void handleSaveProductionPickingEdit()} loading={savingPickingEdit}>
-                  {t('app.kuaizhizao.warehouseOutbound.action.savePickingEdit')}
-                </Button>
+              {(isEditableProductionPicking(currentOrder) || isEditableSalesDelivery(currentOrder)) ? (
+                <Button
+                  {...rowActionKind('update')}
+                  onClick={() => {
+                    const order = currentOrder;
+                    setDetailDrawerVisible(false);
+                    handleEdit(order);
+                  }}
+                />
               ) : null}
               {currentOrder.outbound_type === 'production_picking' && productionPickingAuditEnabled ? (
                 <UniWorkflowActions
@@ -1524,25 +1399,32 @@ const OutboundPage: React.FC = () => {
         lines={
           currentOrder?.items && currentOrder.items.length > 0 ? (
             <>
-<style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
-                  <Table
-                    className="warehouse-detail-table"
-                    size="small"
-                    rowKey={(record, idx) => {
-                      const r = record as OutboundOrderItem;
-                      return r.id != null ? String(r.id) : `row-${idx ?? 0}`;
-                    }}
-                    pagination={false}
-                    columns={
-                      currentOrder.outbound_type === 'production_picking'
-                        ? pickingDetailColumns
-                        : deliveryDetailColumns
-                    }
-                    dataSource={currentOrder.items}
-                  />
+              <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+              <Table
+                className="warehouse-detail-table"
+                size="small"
+                rowKey={(record, idx) => {
+                  const r = record as OutboundOrderItem;
+                  return r.id != null ? String(r.id) : `row-${idx ?? 0}`;
+                }}
+                pagination={false}
+                columns={
+                  currentOrder.outbound_type === 'production_picking'
+                    ? pickingDetailColumns
+                    : deliveryDetailColumns
+                }
+                dataSource={currentOrder.items}
+              />
             </>
           ) : undefined
         }
+      />
+
+      <OutboundHubEditModal
+        open={editModalRecord != null}
+        record={editModalRecord}
+        onClose={handleEditModalClose}
+        onSuccess={handleEditModalSuccess}
       />
       {PrintModal}
     </ListPageTemplate>

@@ -38,6 +38,7 @@ import {
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaizhizao.moldOps.trial';
 const RESOURCE = 'kuaizhizao:mold-trial';
@@ -321,6 +322,8 @@ const MoldTrialsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MoldTrial>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.moldTrials)}
           headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-trials-equip-rank-v1"
           actionRef={actionRef}

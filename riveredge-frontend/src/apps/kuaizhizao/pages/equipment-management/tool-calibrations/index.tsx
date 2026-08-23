@@ -35,6 +35,7 @@ import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   normalizeEquipmentListResponse,
   resolveAssetWorkflowListParams,
@@ -265,6 +266,8 @@ const ToolCalibrationsPage: React.FC = () => {
     <>
     <ListPageTemplate>
       <UniTable<ToolCalibration>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.toolCalibrations)}
         headerTitle={t(`${P}.title`)}
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-calibrations-equip-rank-v1"
         actionRef={actionRef}

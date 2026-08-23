@@ -60,6 +60,7 @@ import {
   resolveWarehouseDocListParams,
 } from '../../../utils/warehouseListCore';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const REASON_TYPES_FALLBACK = [
   { value: '盘亏', label: '盘亏' },
@@ -683,6 +684,8 @@ const OtherOutboundPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           headerTitle={t('app.kuaizhizao.otherOutbound.title')}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.otherOutbound)}
           columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.other-outbound.v2"
           actionRef={actionRef}
           rowKey="id"

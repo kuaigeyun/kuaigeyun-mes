@@ -11,6 +11,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { taxService } from '../../../services/tax';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const NS = 'app.kuaicaiwu.tax.inputCert';
 const INPUT_CERT_PINNED_STATUS_FIELD = 'verification_status';
@@ -96,6 +97,8 @@ const InputCertificationPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<Row>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaicaiwu.inputCertification')}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

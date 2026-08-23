@@ -114,6 +114,7 @@ class DocumentReconciliationService:
                             "remaining_amount": float(amount),
                             "finance_related_count": 0,
                             "gap_reason": "confirmed_delivery_without_receivable",
+                            "sort_date": self._gap_sort_date(row.delivery_time),
                         },
                     )
                 )
@@ -160,6 +161,7 @@ class DocumentReconciliationService:
                         "remaining_amount": float(amount),
                         "finance_related_count": 0,
                         "gap_reason": "confirmed_receipt_without_payable",
+                        "sort_date": self._gap_sort_date(row.receipt_time),
                     },
                 )
             )
@@ -398,6 +400,50 @@ class DocumentReconciliationService:
             "is_balanced_hint": len(finance_nodes) > 0,
         }
 
+    @staticmethod
+    def _gap_sort_date(raw: Any) -> str:
+        if raw is None:
+            return ""
+        if isinstance(raw, date):
+            return raw.isoformat()
+        if isinstance(raw, datetime):
+            return raw.date().isoformat()
+        text = str(raw).strip()
+        return text[:10] if text else ""
+
+    async def _apply_finance_gap_hierarchy(
+        self,
+        tenant_id: int,
+        partner_type: str,
+        items: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        from apps.kuaicaiwu.services.finance_settlement_hierarchy import (
+            order_lines_by_settlement_hierarchy,
+        )
+
+        pt = partner_type.lower()
+        if pt in ("customer", "客户"):
+            return await order_lines_by_settlement_hierarchy(
+                tenant_id,
+                items,
+                parent_doc_types={"receivable"},
+                child_doc_types={"receipt"},
+                rel_source="receivable",
+                rel_target="receipt",
+                debit_doc_type="Receivable",
+                credit_doc_type="Receipt",
+            )
+        return await order_lines_by_settlement_hierarchy(
+            tenant_id,
+            items,
+            parent_doc_types={"payable"},
+            child_doc_types={"payment"},
+            rel_source="payable",
+            rel_target="payment",
+            debit_doc_type="Payable",
+            credit_doc_type="Payment",
+        )
+
     async def list_open_finance_gaps(
         self,
         tenant_id: int,
@@ -457,6 +503,7 @@ class DocumentReconciliationService:
                             "amount": float(row.total_amount or 0),
                             "remaining_amount": float(row.remaining_amount or 0),
                             "finance_related_count": rel["finance_related_count"],
+                            "sort_date": self._gap_sort_date(row.business_date),
                         },
                     )
                 )
@@ -485,6 +532,7 @@ class DocumentReconciliationService:
                             "unsettled_amount": float(unsettled),
                             "settlement_type": getattr(row, "settlement_type", "normal"),
                             "finance_related_count": rel["finance_related_count"],
+                            "sort_date": self._gap_sort_date(row.receipt_date),
                         },
                     )
                 )
@@ -520,6 +568,7 @@ class DocumentReconciliationService:
                             "amount": float(row.total_amount or 0),
                             "remaining_amount": float(row.remaining_amount or 0),
                             "finance_related_count": rel["finance_related_count"],
+                            "sort_date": self._gap_sort_date(row.business_date),
                         },
                     )
                 )
@@ -548,12 +597,15 @@ class DocumentReconciliationService:
                             "unsettled_amount": float(unsettled),
                             "settlement_type": getattr(row, "settlement_type", "normal"),
                             "finance_related_count": rel["finance_related_count"],
+                            "sort_date": self._gap_sort_date(row.payment_date),
                         },
                     )
                 )
 
         if only_gaps:
             items = [i for i in items if self._is_finance_gap(i)]
+
+        items = await self._apply_finance_gap_hierarchy(tenant_id, partner_type, items)
 
         from apps.kuaicaiwu.services.finance_list_core import filter_sort_paginate_finance_gap_items
 

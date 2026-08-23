@@ -43,6 +43,7 @@ import {
   PLM_PHASE2_PINNED_STATUS_FIELD,
   resolvePhase2DesignReviewListParams,
 } from '../../../utils/plmListCore';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   buildPhase2DesignReviewStatusValueEnum,
   getPhase2DesignReviewStatusOptions,
@@ -290,6 +291,8 @@ const DesignReviewsPage: React.FC = () => {
         />
       ) : null}
       <UniTable<RdDesignReview>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaiplm.designReviews')}
         headerTitle={t('app.kuaiplm.menu.phase2.design-reviews')}
         actionRef={actionRef}
         rowKey="id"

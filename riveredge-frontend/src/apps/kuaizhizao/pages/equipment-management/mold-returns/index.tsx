@@ -34,6 +34,7 @@ import {
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaizhizao.moldOps.return';
 const RESOURCE = 'kuaizhizao:mold-return';
@@ -278,6 +279,8 @@ const MoldReturnsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MoldReturn>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.moldReturns)}
           headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-returns-equip-rank-v1"
           actionRef={actionRef}

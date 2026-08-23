@@ -20,6 +20,7 @@ import {
   normalizeEquipmentListResponse,
   resolveReminderListParams,
 } from '../../../utils/equipmentListCore';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   EquipmentMasterDetailDrawer,
   useEquipmentDetailDrawer,
@@ -367,6 +368,8 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
             label: t(`${P}.tabMaintenance`),
             children: (
               <UniTable<ToolMaintenanceReminder>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.toolMaintenanceReminders')}
                 columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-reminders.maintenance-equip-rank-v1"
                 actionRef={maintenanceActionRef}
                 showAdvancedSearch

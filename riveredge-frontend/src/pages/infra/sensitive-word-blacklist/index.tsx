@@ -25,6 +25,7 @@ import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 
 import { formatDateTimeBySiteSetting } from '../../../utils/format';
 
+import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
 import {
 
   addTenantSensitiveWordAllowlist,
@@ -657,6 +658,8 @@ const SensitiveWordBlacklistPage: React.FC = () => {
           children: (
 
             <UniTable<SensitiveWordBanItem>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('infra.sensitiveWordBlacklist')}
 
               columnPersistenceId="pages.infra.sensitive-word-blacklist.bans-v2"
 

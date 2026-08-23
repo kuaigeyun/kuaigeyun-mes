@@ -25,6 +25,7 @@ import {
 import { api } from '../../../services/api';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
 
 interface PluginInfo {
   code: string;
@@ -252,6 +253,8 @@ const PluginManagerPage: React.FC = () => {
     <ListPageTemplate>
       <Card>
         <UniTable<PluginInfo>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.pluginManager')}
           columnPersistenceId="pages.system.plugin-manager"
           headerTitle={t('pages.system.pluginManager.title')}
           actionRef={actionRef}

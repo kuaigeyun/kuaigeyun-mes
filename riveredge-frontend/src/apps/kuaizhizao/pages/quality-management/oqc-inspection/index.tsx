@@ -93,6 +93,7 @@ import {
 } from '../components/qualityPullQueryColumns';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const OQC_RESOURCE = 'kuaizhizao:quality-management-oqc-inspection';
 
 type OqcPullSourceCandidate = QualityPullCandidateBase & {
@@ -601,6 +602,8 @@ const OQCInspectionPage: React.FC = () => {
     >
       <ListPageTemplate>
         <UniTable<OQCInspection>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.oqcInspection)}
           headerTitle={t('app.kuaizhizao.quality.oqc.pageTitle')}
           actionRef={actionRef}
           rowKey="id"

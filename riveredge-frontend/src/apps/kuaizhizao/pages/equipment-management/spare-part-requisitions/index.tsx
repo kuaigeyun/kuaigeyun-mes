@@ -37,6 +37,7 @@ import {
   resolveApprovalDocListParams,
 } from '../../../utils/equipmentListCore';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaizhizao.equipmentOps.sparePartRequisition';
 const RESOURCE = 'kuaizhizao:spare-part-requisition';
@@ -365,6 +366,8 @@ const SparePartRequisitionsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<SparePartRequisition>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.sparePartRequisitions)}
           headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spare-part-requisitions-equip-rank-v1"
           actionRef={actionRef}

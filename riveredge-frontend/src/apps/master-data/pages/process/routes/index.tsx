@@ -49,6 +49,7 @@ import { renderMasterActiveTag } from '../../../utils/masterListPresentation';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 /**
  * 工艺路线管理列表页面组件
  */
@@ -617,6 +618,8 @@ const ProcessRoutesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<ProcessRoute>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.routes')}
         columnPersistenceId="apps.master-data.pages.process.routes.status-v2"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}

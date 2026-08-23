@@ -17,6 +17,7 @@ import {
 import { repairOrderApi, type RepairOrder } from '../../../services/after-sales-service';
 import RepairOrderFormModal from './RepairOrderFormModal';
 import { RepairOrderDetailDrawer } from './components/RepairOrderDetailDrawer';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const RESOURCE = 'kuaizhizao:repair-order';
 
@@ -157,6 +158,8 @@ const RepairOrdersPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<RepairOrder>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesRepair)}
         actionRef={actionRef}
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.repair-orders.v3"

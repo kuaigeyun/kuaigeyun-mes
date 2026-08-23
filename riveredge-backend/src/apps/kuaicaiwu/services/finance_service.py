@@ -490,6 +490,8 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
         三单匹配硬门禁（金额口径最小实现）：
         新增发票总额不得超过“累计入库金额 - 已开票金额”。
         """
+        from apps.kuaicaiwu.services.finance_tax import resolve_invoice_amounts_for_create
+
         if not invoice_data.purchase_order_id:
             return
 
@@ -507,7 +509,15 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
         ).all()
         invoiced_total = sum((self._money(i.total_amount or Decimal("0.00")) for i in invoices), Decimal("0.00"))
 
-        requested_total = self._money(invoice_data.total_amount)
+        requested_total = self._money(
+            resolve_invoice_amounts_for_create(
+                Decimal(str(invoice_data.invoice_amount)),
+                Decimal(str(invoice_data.tax_rate)),
+                Decimal(str(invoice_data.total_amount))
+                if invoice_data.total_amount is not None
+                else None,
+            )[2]
+        )
         available_total = self._money(received_total - invoiced_total)
 
         if requested_total > available_total:
@@ -535,7 +545,7 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
             tenant_id, "PURCHASE_INVOICE_CODE", prefix=f"PI{today_site_str()}"
         )
         async with in_transaction():
-            from apps.kuaicaiwu.services.finance_tax import compute_tax_from_excluding
+            from apps.kuaicaiwu.services.finance_tax import resolve_invoice_amounts_for_create
 
             payload = invoice_data.model_dump(
                 exclude_unset=True,
@@ -551,10 +561,14 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                     "review_remarks",
                 },
             )
-            _, tax_amount, total_amount = compute_tax_from_excluding(
+            amount_excl, tax_amount, total_amount = resolve_invoice_amounts_for_create(
                 Decimal(str(payload["invoice_amount"])),
                 Decimal(str(payload["tax_rate"])),
+                Decimal(str(invoice_data.total_amount))
+                if invoice_data.total_amount is not None
+                else None,
             )
+            payload["invoice_amount"] = amount_excl
             payload["tax_amount"] = tax_amount
             payload["total_amount"] = total_amount
             from apps.kuaicaiwu.services.tax.purchase_invoice_tax_service import PurchaseInvoiceTaxService

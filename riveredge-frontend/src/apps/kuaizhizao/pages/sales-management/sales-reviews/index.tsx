@@ -85,6 +85,7 @@ import {
 } from '../../../services/quotation';
 import { SalesReviewFormModal } from './FormModal';
 import { SalesReviewReviewModal } from './ReviewModal';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   SalesReviewDeptOpinionsPanel,
   validateDeptOpinionForm,
@@ -1061,6 +1062,8 @@ const SalesReviewsPage: React.FC = () => {
       <ListPageTemplate style={{ padding: 0 }}>
         <UniTable<SalesReviewListItem>
           columnPersistenceId={COLUMN_PERSISTENCE_ID}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.salesReview)}
           permissionResource={SALES_REVIEW_RESOURCE}
           headerTitle={t('app.kuaizhizao.menu.sales-management.sales-reviews')}
           actionRef={actionRef}

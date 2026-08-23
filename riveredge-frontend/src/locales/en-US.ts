@@ -14715,8 +14715,10 @@ export default {
   'app.kuaicaiwu.partnerStatement.previewHint': 'Select partner and date range, then click Preview to view details.',
   'app.kuaicaiwu.partnerStatement.provisionalPricingHint': '{{count}} order line(s) pending monthly price settlement in this period',
   'app.kuaicaiwu.partnerStatement.goPriceSettlement': 'Go to price settlement',
-  'app.kuaicaiwu.partnerStatement.previewFooter': 'Statements summarize approved receivables/payables and confirmed receipts/payments. Documents already on other statements are excluded. Export Excel/PDF after generation to send to the partner.',
-  'app.kuaicaiwu.partnerStatement.excludedStatedHint': '{{count}} document(s) already on other statements were excluded',
+  'app.kuaicaiwu.partnerStatement.previewFooter': 'Statements summarize approved receivables/payables and confirmed receipts/payments. Check rows to include in this statement and adjust statement amounts; totals follow selected lines. The same document can be reconciled in multiple partial statements until fully cleared. Export Excel/PDF after generation to send to the partner.',
+  'app.kuaicaiwu.partnerStatement.previewSelectHint': 'Check documents to include in this statement; totals use {{count}} / {{total}} selected rows',
+  'app.kuaicaiwu.partnerStatement.selectLinesRequired': 'Select at least one line for reconciliation',
+  'app.kuaicaiwu.partnerStatement.excludedStatedHint': '{{count}} fully reconciled document(s) were excluded',
   'app.kuaicaiwu.partnerStatement.periodAlreadyExists': 'A statement {{code}} already exists for this partner in {{period}}. Open it, or delete the draft and generate again',
   'app.kuaicaiwu.partnerStatement.periodHasPriorStatement': 'Statement {{code}} already exists for {{period}}; lines below are not yet included and a new statement can be generated',
   'app.kuaicaiwu.partnerStatement.periodFullyStated': 'All documents for {{period}} are already on statement {{code}}; nothing left to generate',
@@ -14728,12 +14730,20 @@ export default {
   'app.kuaicaiwu.partnerStatement.col.summary': 'Summary',
   'app.kuaicaiwu.partnerStatement.col.debit': 'Debit',
   'app.kuaicaiwu.partnerStatement.col.credit': 'Credit',
+  'app.kuaicaiwu.partnerStatement.col.docAmount': 'Document Amount',
+  'app.kuaicaiwu.partnerStatement.col.priorStatedAmount': 'Prior Stated',
+  'app.kuaicaiwu.partnerStatement.col.remainingAmount': 'Remaining',
+  'app.kuaicaiwu.partnerStatement.col.statementAmount': 'Statement Amount',
   'app.kuaicaiwu.partnerStatement.col.periodRange': 'Period',
   'app.kuaicaiwu.partnerStatement.col.debitTotal': 'Period Debit',
   'app.kuaicaiwu.partnerStatement.col.creditTotal': 'Period Credit',
   'app.kuaicaiwu.partnerStatement.selectCustomer': 'Select customer',
   'app.kuaicaiwu.partnerStatement.selectSupplier': 'Select supplier',
   'app.kuaicaiwu.partnerStatement.detail.confirmTitle': 'Confirm Statement',
+  'app.kuaicaiwu.partnerStatement.detail.saveLines': 'Save Statement Amounts',
+  'app.kuaicaiwu.partnerStatement.detail.linesSaved': 'Statement amounts saved',
+  'app.kuaicaiwu.partnerStatement.detail.saveLinesBeforeConfirm': 'Save statement amounts before confirming',
+  'app.kuaicaiwu.partnerStatement.detail.unsavedLinesHint': 'Statement amounts were changed. Click Save Statement Amounts before confirming or exporting.',
   'app.kuaicaiwu.partnerStatement.detail.confirmContent': 'Confirm statement {{code}} is correct?',
   'app.kuaicaiwu.partnerStatement.detail.confirmed': 'Confirmed',
   'app.kuaicaiwu.partnerStatement.detail.internalConfirm': 'Internal Confirm',
@@ -19755,6 +19765,8 @@ export default {
   'app.kuaizhizao.quality.traceability.noGraphData': 'No trace relationships to display',
   'app.kuaizhizao.quality.traceability.eventTimeline': 'Event timeline',
   'app.kuaizhizao.quality.traceability.eventTime': 'Time',
+  'app.kuaizhizao.quality.traceability.sankeyLinkSource': 'Source',
+  'app.kuaizhizao.quality.traceability.sankeyLinkTarget': 'Target',
   'app.kuaizhizao.quality.traceability.documentType': 'Document type',
   'app.kuaizhizao.quality.traceability.documentCode': 'Document no.',
   'app.kuaizhizao.quality.traceability.exportReport': 'Export trace report',
@@ -23094,6 +23106,76 @@ export default {
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.title': 'Faster purchase pull, QC pull and market price list loading',
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.description':
     'Purchase receipt and receipt-notice pull queries no longer write back quantities per order. Incoming and finished-goods QC pull and inbound checks now resolve material inspection policies in batch. Engineering change lists no longer create approval instances row by row on read. Today\'s market price list carries forward prior-day prices read-only without writing on open. Legacy receipt backfill was removed from the receipt list API.',
+  'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.title':
+    'Production return inbound quantity on hub list',
+  'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.description':
+    'Inbound hub production return list and detail now sum return quantities so pending and completed returns no longer show a dash; receipt progress reflects the quantity.',
+  'pages.dashboard.updateLog.entries.sop-create-attachments-payload-fix.title':
+    'Fix SOP create when no attachments',
+  'pages.dashboard.updateLog.entries.sop-create-attachments-payload-fix.description':
+    'Fixes electronic SOP create failing when no attachments were uploaded; edit load now supports controlled scan file storage format.',
+  'pages.dashboard.updateLog.entries.invoice-pull-tax-inclusive-rounding-fix.title':
+    'Pull invoicing tax-inclusive total rounding fix',
+  'pages.dashboard.updateLog.entries.invoice-pull-tax-inclusive-rounding-fix.description':
+    'Sales/purchase pull and merge invoicing now treat the tax-inclusive total as authoritative when entered in inclusive mode, preventing 60000.00 from drifting to 60000.01 and failing the invoiceable limit check.',
+  'pages.dashboard.updateLog.entries.invoice-pull-amount-field-grid-fix.title':
+    'Pull invoice amount entry aligned to form grid',
+  'pages.dashboard.updateLog.entries.invoice-pull-amount-field-grid-fix.description':
+    'The amount-entry segmented control in sales/purchase pull invoice modals is wrapped with FormModalGridBlock so labels and inputs align with other fields instead of clipping outside the grid.',
+  'pages.dashboard.updateLog.entries.merge-settlement-code-batch-fix.title':
+    'Merge receipt/payment settlement codes generated in one batch',
+  'pages.dashboard.updateLog.entries.merge-settlement-code-batch-fix.description':
+    'Merge receipt and merge payment now reserve unique settlement numbers in one transaction for all source lines, preventing duplicate HX codes and internal server errors.',
+  'pages.dashboard.updateLog.entries.merge-voucher-bank-summary-fix.title':
+    'Merge receipt/payment bank entries now get auto summaries',
+  'pages.dashboard.updateLog.entries.merge-voucher-bank-summary-fix.description':
+    'After merge receipt or merge payment posting, bank transaction summaries include voucher code, partner, and linked receivable/payable numbers. Run repair_merge_voucher_bank_summaries to backfill legacy blank summaries without opening the bank ledger page.',
+  'pages.dashboard.updateLog.entries.merge-invoice-source-allocation-fix.title':
+    'Merge invoicing allocates billed amounts per source document',
+  'pages.dashboard.updateLog.entries.merge-invoice-source-allocation-fix.description':
+    'After merge invoicing, receivable/payable lists show invoiced amount and status per source line. Run repair_merge_invoice_allocations to backfill legacy relations so totals are no longer attributed entirely to the first document.',
+  'pages.dashboard.updateLog.entries.partner-statement-preview-line-selection.title':
+    'Partner statement preview supports line selection',
+  'pages.dashboard.updateLog.entries.partner-statement-preview-line-selection.description':
+    'The create preview table now has checkboxes so you can choose which documents to include; generation writes only selected lines and totals update with the selection.',
+  'pages.dashboard.updateLog.entries.partner-statement-partial-reconciliation.title':
+    'Partner statements support partial reconciliation',
+  'pages.dashboard.updateLog.entries.partner-statement-partial-reconciliation.description':
+    'Lines show document amount, prior stated amount, and remaining amount; statement amounts can be edited in preview and draft. The same document can be reconciled in multiple partial statements until fully cleared.',
+  'pages.dashboard.updateLog.entries.document-reconciliation-gap-hierarchy.title':
+    'Partner gap list shows receipt/payment hierarchy',
+  'pages.dashboard.updateLog.entries.document-reconciliation-gap-hierarchy.description':
+    'On Business Document Reconciliation partner gaps, receipt and payment documents now nest under their linked receivable or payable with indent, matching partner statements; sorting keeps parent-child rows together.',
+  'pages.dashboard.updateLog.entries.warehouse-doc-edit-withdraw-unify.title':
+    'Unified warehouse inbound/outbound edit and withdraw rules',
+  'pages.dashboard.updateLog.entries.warehouse-doc-edit-withdraw-unify.description':
+    'Sales deliveries can be edited in the outbound Hub detail before confirmation, including warehouse, notes, line quantities, and batch numbers. Outbound and inbound Hub edit and withdraw gates now share backend capabilities; posted documents must be withdrawn before editing.',
+  'pages.dashboard.updateLog.entries.quality-traceability-ui-polish.title':
+    'Traceability UI and flow chart experience improved',
+  'pages.dashboard.updateLog.entries.quality-traceability-ui-polish.description':
+    'Summary borders use the standard 1px width; event timeline timestamps stay on one line with an outer table border; flow link tooltips show Chinese source and target labels; the Sankey chart uses bright colors with one color per document type.',
+  'pages.dashboard.updateLog.entries.work-order-reporting-producer-card-sync.title':
+    'Work order reporting producer matches operation card',
+  'pages.dashboard.updateLog.entries.work-order-reporting-producer-card-sync.description':
+    'After choosing a non-default producer in quick reporting or reporting management, the operation card personnel field now shows the selected producer instead of the dispatch default.',
+  'pages.dashboard.updateLog.entries.quality-inspection-inspector-sync.title':
+    'Inspection list inspector matches conduct form selection',
+  'pages.dashboard.updateLog.entries.quality-inspection-inspector-sync.description':
+    'When conducting incoming, in-process, finished goods, or OQC inspections, the selected inspector is now saved correctly; list and detail views no longer always show the current operator.',
+  'pages.dashboard.updateLog.entries.purchase-order-header-delivery-sync.title':
+    'Purchase order header delivery date syncs to lines',
+  'pages.dashboard.updateLog.entries.purchase-order-header-delivery-sync.description':
+    'When editing a purchase order, changing the header required delivery date now syncs to detail lines that have not been customized individually, matching sales order behavior. Each line can still be edited separately.',
+  'pages.dashboard.updateLog.entries.purchase-order-delivery-date-from-requisition.title':
+    'Purchase order delivery dates align with requisitions',
+  'pages.dashboard.updateLog.entries.purchase-order-delivery-date-from-requisition.description':
+    'When converting a purchase requisition to a purchase order, header and line required dates inherit requisition line dates and header required date; the header uses the latest line date. Saving a purchase order now keeps the header delivery date in sync with lines.',
+  'pages.dashboard.updateLog.entries.purchase-price-auto-fill.title': 'Purchase prices auto-fill on requisitions and orders',
+  'pages.dashboard.updateLog.entries.purchase-price-auto-fill.description':
+    'When demand computation pushes a purchase requisition, suggested unit prices now come from material source config or default purchase prices. Converting a requisition to a purchase order falls back to material purchase prices when line prices are blank.',
+  'pages.dashboard.updateLog.entries.rich-page-help-views.title': 'Rich page help views rolled out',
+  'pages.dashboard.updateLog.entries.rich-page-help-views.description':
+    'Document lists, master-data and system settings pages, module workbenches, and reports now include a Help view with chaptered guidance matched to each page. Covers Kuaizhizao, Kuaicaiwu, master data, PLM, IoT, and more; reports share one common help article.',
   'pages.dashboard.updateLog.entries.locale-pack-gap-sync.title': 'Locale packs aligned and Lao coverage improved',
   'pages.dashboard.updateLog.entries.locale-pack-gap-sync.description':
     'Traditional Chinese, English, Japanese, Vietnamese and Lao now share the same i18n keys as Simplified Chinese. Lao translations were backfilled for system config, Kuaizhizao, master data and related modules, with a manual glossary and locale sync scripts. English fallback in the Lao UI dropped from about 58% to about 2%.',
@@ -23170,10 +23252,10 @@ export default {
   'pages.dashboard.updateLog.entries.price-settlement.description':
     'Support zero-price orders for monthly partners, batch settlement workbench, and automatic AR/AP delta adjustments for delivered/received quantities.',
   'pages.dashboard.updateLog.entries.update-log-panel.description': 'Platform updates are grouped by type. Click Changelog to view all records.',
-  'pages.dashboard.updateLog.entries.calendar-monday-first.title': 'Dashboard calendar now starts weeks on Monday',
-  'pages.dashboard.updateLog.entries.weather-text-contrast.title': 'Improved text contrast on weather calendar header',
-  'pages.dashboard.updateLog.entries.weather-sky-background.title': 'Weather calendar header now uses sky-like background linked to weather',
-  'pages.dashboard.updateLog.entries.weather-weekday-time.title': 'Adjusted weekday position, time format, and clock size on weather calendar',
+  'pages.dashboard.updateLog.entries.workbench-calendar-weather-polish.title':
+    'Workbench calendar and weather plugin UX polish',
+  'pages.dashboard.updateLog.entries.workbench-calendar-weather-polish.description':
+    'Calendar weeks now start on Monday; weather plugin header uses a sky-like background linked to weather, with improved text contrast and adjusted weekday position, time format, and clock size.',
   'pages.dashboard.operationCardsTitle': 'WIP operations',
   'pages.dashboard.operationCardsCount': '{{count}} operations',
   'pages.dashboard.operationCardsEmpty': 'No operations in progress',

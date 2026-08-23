@@ -51,6 +51,7 @@ import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-manageme
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { StatusTag } from '../../../../../constants/statusBadges';
 import { UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH } from '../../../../../utils/uniTableLayoutColumns';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   buildQualityExceptionStatusValueEnum,
   resolveProductionExceptionListStatusParams,
@@ -355,6 +356,8 @@ const QualityExceptionsPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         headerTitle={t(`${Q}.pageTitle`)}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.qualityException)}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

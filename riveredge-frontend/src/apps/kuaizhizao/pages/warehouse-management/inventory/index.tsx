@@ -14,6 +14,7 @@ import {
 import { apiRequest } from '../../../../../services/api';
 import { warehouseApi } from '../../../../master-data/services/warehouse';
 import { resolveInventoryMaterialBalanceListParams } from '../../../utils/warehouseListCore';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 interface InTransitBreakdown {
   purchase_quantity: number;
@@ -484,6 +485,8 @@ const InventoryPage: React.FC = () => {
       statCardsPreferenceKey="apps.kuaizhizao.pages.warehouse-management.inventory"
     >
       <UniTable<InventoryItem>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.inventory')}
         headerActions={tableHeaderActions}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory"
         actionRef={actionRef}

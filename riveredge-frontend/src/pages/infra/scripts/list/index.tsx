@@ -35,6 +35,7 @@ import { countWithPagedRequests } from '../../../../utils/pagedCount';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 const { TextArea } = Input;
 
@@ -403,6 +404,8 @@ const ScriptListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Script>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('infra.scripts')}
           columnPersistenceId="pages.infra.scripts.list-v2"
           headerTitle={t('pages.infra.scripts.title')}
           actionRef={actionRef}

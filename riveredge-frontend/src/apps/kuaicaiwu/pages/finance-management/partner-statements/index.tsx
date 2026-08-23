@@ -40,7 +40,15 @@ import {
   usePartnerStatementInboundDetail,
 } from '../../../components/PartnerStatementInboundDetail';
 import { buildPartnerStatementStatusEnum } from '../../../utils/financeSharedOptions';
-import { renderPartnerStatementDocType } from '../../../utils/partnerStatementLineDisplay';
+import {
+  allPreviewLineKeys,
+  buildLineAmountPayload,
+  filterLinesBySelectedKeys,
+  patchLineStatementAmount,
+  previewLineKey,
+  recalcPartnerStatementLines,
+} from '../../../utils/partnerStatementAmountUtils';
+import { usePartnerStatementLineColumns } from '../../../utils/partnerStatementLineColumns';
 import { apiRequest } from '../../../../../services/api';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
@@ -58,8 +66,9 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { buildReportHelpViewConfig } from '../../../../../components/page-help-wiki';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 const money = (v: number | string | undefined) =>
   `¥${Number(v ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -78,6 +87,8 @@ const PartnerStatementsPage: React.FC = () => {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [preview, setPreview] = useState<PartnerStatementPreview | null>(null);
+  const [previewEditableLines, setPreviewEditableLines] = useState<PartnerStatementLine[]>([]);
+  const [previewSelectedRowKeys, setPreviewSelectedRowKeys] = useState<React.Key[]>([]);
   const [provisionalSummary, setProvisionalSummary] = useState<ProvisionalSummary | null>(null);
   const { cache: previewLineDetailCache, loadLineDetail: loadPreviewLineDetail, clearCache: clearPreviewLineDetailCache } =
     usePartnerStatementInboundDetail();
@@ -125,6 +136,8 @@ const PartnerStatementsPage: React.FC = () => {
   const resetCreate = () => {
     clearPreviewLineDetailCache();
     setPreview(null);
+    setPreviewEditableLines([]);
+    setPreviewSelectedRowKeys([]);
     setProvisionalSummary(null);
     setPartnerId(null);
     const month = dayjs().subtract(1, 'month');
@@ -147,6 +160,9 @@ const PartnerStatementsPage: React.FC = () => {
         end_date: periodRange.end.format('YYYY-MM-DD'),
       });
       setPreview(data);
+      const recalc = recalcPartnerStatementLines(data.summary.opening_balance, data.lines || []);
+      setPreviewEditableLines(recalc.lines);
+      setPreviewSelectedRowKeys(allPreviewLineKeys(recalc.lines));
       try {
         const summary = await priceSettlementService.getProvisionalSummary({
           period: periodRange.label,
@@ -169,6 +185,11 @@ const PartnerStatementsPage: React.FC = () => {
       messageApi.warning(t(`${PS}.previewFirst`));
       return;
     }
+    const selectedLines = filterLinesBySelectedKeys(previewEditableLines, previewSelectedRowKeys);
+    if (selectedLines.length === 0) {
+      messageApi.warning(t(`${PS}.selectLinesRequired`));
+      return;
+    }
     setSubmitting(true);
     try {
       const created = await partnerStatementService.create({
@@ -178,6 +199,7 @@ const PartnerStatementsPage: React.FC = () => {
         start_date: periodRange.start.format('YYYY-MM-DD'),
         end_date: periodRange.end.format('YYYY-MM-DD'),
         attachments: normalizeDocumentAttachments(createForm.getFieldValue('attachments')),
+        line_amounts: buildLineAmountPayload(selectedLines),
       });
       messageApi.success(t(`${PS}.generateSuccess`));
       setCreateOpen(false);
@@ -382,38 +404,49 @@ const PartnerStatementsPage: React.FC = () => {
     [t, navigate, statusEnum, partnerOptions, statementPerms.canDelete],
   );
 
-  const previewLineColumns = useMemo(() => [
-    { title: t(`${PS}.col.date`), dataIndex: 'date', width: 110 },
-    {
-      title: t(`${PS}.col.docType`),
-      dataIndex: 'doc_type',
-      width: 110,
-      render: (v: string, record: PartnerStatementLine) => renderPartnerStatementDocType(v, record),
-    },
-    { title: t(`${PS}.col.docCode`), dataIndex: 'doc_code', width: 140, ellipsis: true },
-    { title: t(`${PS}.col.summary`), dataIndex: 'summary', ellipsis: true },
-    {
-      title: t(`${PS}.col.debit`),
-      dataIndex: 'debit',
-      width: 100,
-      align: 'right' as const,
-      render: (v: unknown) => (v ? money(v as number) : '—'),
-    },
-    {
-      title: t(`${PS}.col.credit`),
-      dataIndex: 'credit',
-      width: 100,
-      align: 'right' as const,
-      render: (v: unknown) => (v ? money(v as number) : '—'),
-    },
-    {
-      title: preview?.balance_label || t(`${PS}.col.closingBalance`),
-      dataIndex: 'balance',
-      width: 110,
-      align: 'right' as const,
-      render: (v: unknown) => money(v as number),
-    },
-  ], [t, preview?.balance_label]);
+  const selectedPreviewLines = useMemo(
+    () => filterLinesBySelectedKeys(previewEditableLines, previewSelectedRowKeys),
+    [previewEditableLines, previewSelectedRowKeys],
+  );
+
+  const previewSummary = useMemo(() => {
+    if (!preview) return null;
+    const recalc = recalcPartnerStatementLines(preview.summary.opening_balance, selectedPreviewLines);
+    return {
+      ...preview.summary,
+      debit_total: recalc.debitTotal,
+      credit_total: recalc.creditTotal,
+      closing_balance: recalc.closingBalance,
+    };
+  }, [preview, selectedPreviewLines]);
+
+  const handlePreviewStatementAmountChange = (lineKey: string, amount: number) => {
+    setPreviewEditableLines((prev) => {
+      const next = prev.map((ln, idx) => {
+        const key = previewLineKey(ln, idx);
+        if (key !== lineKey) return ln;
+        return patchLineStatementAmount(ln, amount);
+      });
+      const opening = Number(preview?.summary.opening_balance ?? 0);
+      return recalcPartnerStatementLines(opening, next).lines;
+    });
+  };
+
+  const previewLineColumns = usePartnerStatementLineColumns({
+    t,
+    balanceLabel: preview?.balance_label || t(`${PS}.col.closingBalance`),
+    editable: true,
+    onStatementAmountChange: handlePreviewStatementAmountChange,
+    lineKey: previewLineKey,
+  });
+
+  const previewRowSelection = useMemo(
+    () => ({
+      selectedRowKeys: previewSelectedRowKeys,
+      onChange: (keys: React.Key[]) => setPreviewSelectedRowKeys(keys),
+    }),
+    [previewSelectedRowKeys],
+  );
 
   const tableRequest = (type: 'Customer' | 'Supplier') => async (
     params: { current?: number; pageSize?: number },
@@ -445,6 +478,8 @@ const PartnerStatementsPage: React.FC = () => {
       onRowSelectionChange={setCustomerSelectedRowKeys}
       rowKey="id"
       columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Customer.list-v1"
+      viewTypes={['table', 'help']}
+      helpViewConfig={buildReportHelpViewConfig()}
       showAdvancedSearch
       search={{ labelWidth: 100 }}
       showCreateButton
@@ -491,6 +526,8 @@ const PartnerStatementsPage: React.FC = () => {
       onRowSelectionChange={setSupplierSelectedRowKeys}
       rowKey="id"
       columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Supplier.list-v1"
+      viewTypes={['table', 'help']}
+      helpViewConfig={buildReportHelpViewConfig()}
       showAdvancedSearch
       search={{ labelWidth: 100 }}
       showCreateButton
@@ -566,7 +603,11 @@ const PartnerStatementsPage: React.FC = () => {
             key="ok"
             type="primary"
             loading={submitting}
-            disabled={!preview || !(preview.lines && preview.lines.length > 0)}
+            disabled={
+              !preview
+              || previewEditableLines.length === 0
+              || previewSelectedRowKeys.length === 0
+            }
             onClick={() => void handleCreate()}
           >
             {t(`${PS}.generate`)}
@@ -586,6 +627,8 @@ const PartnerStatementsPage: React.FC = () => {
                 setPartnerId(v);
                 clearPreviewLineDetailCache();
                 setPreview(null);
+                setPreviewEditableLines([]);
+                setPreviewSelectedRowKeys([]);
               }}
               filterOption={(input, opt) =>
                 String(opt?.label ?? '').toLowerCase().includes(input.toLowerCase())
@@ -600,6 +643,8 @@ const PartnerStatementsPage: React.FC = () => {
                 }
                 clearPreviewLineDetailCache();
                 setPreview(null);
+                setPreviewEditableLines([]);
+                setPreviewSelectedRowKeys([]);
               }}
               placeholder={[t(`${PS}.startDate`), t(`${PS}.endDate`)]}
             />
@@ -658,22 +703,32 @@ const PartnerStatementsPage: React.FC = () => {
                   title={t(`${PS}.excludedStatedHint`, { count: preview.excluded_from_period })}
                 />
               ) : null}
+              <Alert
+                type="info"
+                showIcon
+                title={t(`${PS}.previewSelectHint`, {
+                  count: previewSelectedRowKeys.length,
+                  total: previewEditableLines.length,
+                })}
+                style={{ marginBottom: 8 }}
+              />
               <Descriptions size="small" bordered column={4}>
                 <Descriptions.Item label={t(`${PS}.col.partner`)}>{preview.partner_name}</Descriptions.Item>
                 <Descriptions.Item label={t(`${PS}.col.periodRange`)}>
                   {preview.start_date} ~ {preview.end_date}
                 </Descriptions.Item>
-                <Descriptions.Item label={t(`${PS}.col.openingBalance`)}>{money(preview.summary.opening_balance)}</Descriptions.Item>
-                <Descriptions.Item label={t(`${PS}.col.closingBalance`)}>{money(preview.summary.closing_balance)}</Descriptions.Item>
-                <Descriptions.Item label={t(`${PS}.col.debitTotal`)}>{money(preview.summary.debit_total)}</Descriptions.Item>
-                <Descriptions.Item label={t(`${PS}.col.creditTotal`)}>{money(preview.summary.credit_total)}</Descriptions.Item>
+                <Descriptions.Item label={t(`${PS}.col.openingBalance`)}>{money(previewSummary?.opening_balance)}</Descriptions.Item>
+                <Descriptions.Item label={t(`${PS}.col.closingBalance`)}>{money(previewSummary?.closing_balance)}</Descriptions.Item>
+                <Descriptions.Item label={t(`${PS}.col.debitTotal`)}>{money(previewSummary?.debit_total)}</Descriptions.Item>
+                <Descriptions.Item label={t(`${PS}.col.creditTotal`)}>{money(previewSummary?.credit_total)}</Descriptions.Item>
               </Descriptions>
               <Table<PartnerStatementLine>
                 size="small"
-                rowKey={(r, i) => `${r.doc_code}-${i}`}
+                rowKey={previewLineKey}
                 pagination={{ pageSize: 8 }}
-                scroll={{ x: 800, y: 280 }}
-                dataSource={preview.lines}
+                scroll={{ x: 1400, y: 280 }}
+                dataSource={previewEditableLines}
+                rowSelection={previewRowSelection}
                 columns={previewLineColumns}
                 expandable={partnerStatementExpandableProps(
                   previewLineDetailCache,

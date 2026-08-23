@@ -30,6 +30,7 @@ import {
   QMS_AUDIT_STATUS_OPTIONS,
 } from '../qms/qmsMeta';
 import QmsIsoClauseSelect from '../qms/QmsIsoClauseSelect';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const RESOURCE = 'kuaizhizao:quality-management-internal-audits';
 
@@ -175,6 +176,8 @@ const InternalAuditsPage: React.FC = () => {
     >
       <ListPageTemplate>
         <UniTable<QmsInternalAudit>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.internalAudit)}
           headerTitle={t('app.kuaizhizao.menu.quality-management.internal-audits')}
           actionRef={actionRef}
           rowKey="id"

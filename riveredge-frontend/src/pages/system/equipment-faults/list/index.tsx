@@ -43,6 +43,7 @@ import { getEquipmentList, Equipment } from '../../../../services/equipment';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 /**
  * 设备故障维修管理列表页面组件
@@ -431,6 +432,8 @@ const EquipmentFaultListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<EquipmentFault>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.equipmentFaults')}
           columnPersistenceId="pages.system.equipment-faults.list"
           actionRef={actionRef}
           columns={columns}

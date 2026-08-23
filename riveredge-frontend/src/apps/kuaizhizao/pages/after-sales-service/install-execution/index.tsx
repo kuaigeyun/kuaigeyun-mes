@@ -59,6 +59,7 @@ import {
   renderAfterSalesTypeMarker,
 } from '../shared/afterSalesListPresentation';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const RESOURCE = 'kuaizhizao:after-sales-install';
 
@@ -655,6 +656,8 @@ const InstallExecutionPage: React.FC = () => {
         <UniTable<InstallExecution>
           actionRef={actionRef}
           rowKey="id"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesInstall)}
           permissionResource={RESOURCE}
           columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.install-execution.v1"
           headerTitle={t('app.kuaizhizao.menu.after-sales-service.install-execution')}

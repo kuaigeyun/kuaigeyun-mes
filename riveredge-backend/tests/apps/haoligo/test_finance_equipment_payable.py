@@ -56,6 +56,33 @@ def test_match_equipment_payable_balance_status():
 
 
 
+def _awaitable_qs(result=None):
+    """Tortoise QuerySet 链式调用后 await 返回 result。"""
+    if result is None:
+        result = []
+
+    class _QS:
+        def filter(self, *args, **kwargs):
+            return self
+
+        def order_by(self, *args, **kwargs):
+            return self
+
+        def offset(self, *args, **kwargs):
+            return self
+
+        def limit(self, *args, **kwargs):
+            return self
+
+        def __await__(self):
+            async def _run():
+                return result
+
+            return _run().__await__()
+
+    return _QS()
+
+
 def _qs_first(row):
     qs = MagicMock()
     qs.filter.return_value = qs
@@ -102,6 +129,9 @@ async def test_unpaid_amount_and_overpay_guard_logic():
     with patch(
         "apps.haoligo.api.routes_finance_equipment_payable.tenant_alive",
         return_value=_qs_first(draft),
+    ), patch(
+        "apps.haoligo.api.routes_finance_equipment_payable.assert_equipment_finance_payable_visible",
+        new=AsyncMock(),
     ):
         with pytest.raises(HTTPException) as exc:
             await create_equipment_payable_payment(
@@ -116,6 +146,9 @@ async def test_unpaid_amount_and_overpay_guard_logic():
     with patch(
         "apps.haoligo.api.routes_finance_equipment_payable.tenant_alive",
         return_value=_qs_first(payable),
+    ), patch(
+        "apps.haoligo.api.routes_finance_equipment_payable.assert_equipment_finance_payable_visible",
+        new=AsyncMock(),
     ), patch(
         "apps.haoligo.api.routes_finance_equipment_payable.unpaid_amount",
         new=AsyncMock(return_value=Decimal("5.00")),
@@ -154,6 +187,9 @@ async def test_submit_allows_missing_invoice_and_acceptance():
     with patch(
         "apps.haoligo.api.routes_finance_equipment_payable.tenant_alive",
         return_value=_qs_first(row),
+    ), patch(
+        "apps.haoligo.api.routes_finance_equipment_payable.assert_equipment_finance_payable_visible",
+        new=AsyncMock(),
     ), patch(
         "apps.haoligo.api.routes_finance_equipment_payable.resolve_business_datetime",
         return_value=datetime(2026, 8, 17, 12, 0, 0, tzinfo=timezone.utc),
@@ -206,6 +242,9 @@ async def test_update_payable_allowed_after_submit():
         "apps.haoligo.api.routes_finance_equipment_payable.tenant_alive",
         return_value=_qs_first(row),
     ), patch(
+        "apps.haoligo.api.routes_finance_equipment_payable.assert_equipment_finance_payable_visible",
+        new=AsyncMock(),
+    ), patch(
         "apps.haoligo.api.routes_finance_equipment_payable.batch_lookup_user_names",
         new=AsyncMock(return_value={}),
     ), patch(
@@ -216,7 +255,7 @@ async def test_update_payable_allowed_after_submit():
             payable_id=5,
             body=body,
             tenant_id=1,
-            _=SimpleNamespace(id=1),
+            user=SimpleNamespace(id=1),
         )
     assert result is out
     assert row.install_location == "二车间"
@@ -239,6 +278,9 @@ async def test_submit_rejects_duplicate():
     with patch(
         "apps.haoligo.api.routes_finance_equipment_payable.tenant_alive",
         return_value=_qs_first(row),
+    ), patch(
+        "apps.haoligo.api.routes_finance_equipment_payable.assert_equipment_finance_payable_visible",
+        new=AsyncMock(),
     ):
         with pytest.raises(HTTPException) as exc:
             await submit_equipment_payable(
@@ -248,6 +290,52 @@ async def test_submit_rejects_duplicate():
             )
     assert exc.value.status_code == 400
     assert "勿重复" in str(exc.value.detail)
+
+
+def test_equipment_finance_data_scope_profiles_registered():
+    from core.services.authorization.data_scope_resource_registry import get_resource_profile
+
+    from apps.haoligo.authorization.data_scope_setup import register_haoligo_data_scope_profiles
+
+    register_haoligo_data_scope_profiles()
+    for resource in (
+        "haoligo:finance-equipment-contracts",
+        "haoligo:finance-equipment-payables",
+        "haoligo:finance-reports-equipment-payable",
+    ):
+        profile = get_resource_profile(resource)
+        assert profile is not None
+        assert profile.partner_code_field == "manufacturer_code"
+        assert profile.partner_dimension == "manufacturer"
+
+
+@pytest.mark.asyncio
+async def test_list_equipment_contracts_applies_data_scope():
+    from apps.haoligo.api.routes_finance_equipment_contract import list_equipment_contracts
+
+    scoped_qs = _awaitable_qs([])
+    base_qs = MagicMock()
+    base_qs.filter.return_value = base_qs
+    with patch(
+        "apps.haoligo.api.routes_finance_equipment_contract.tenant_alive",
+        return_value=base_qs,
+    ), patch(
+        "apps.haoligo.api.routes_finance_equipment_contract.apply_equipment_finance_contract_scope",
+        new=AsyncMock(return_value=scoped_qs),
+    ) as apply_scope, patch(
+        "apps.haoligo.api.routes_finance_equipment_contract.batch_lookup_user_names",
+        new=AsyncMock(return_value={}),
+    ):
+        rows = await list_equipment_contracts(
+            tenant_id=1,
+            user=SimpleNamespace(id=1),
+            manufacturer_id=None,
+            keyword=None,
+            skip=0,
+            limit=50,
+        )
+    assert rows == []
+    apply_scope.assert_awaited_once()
 
 
 def test_equipment_payable_routes_importable():

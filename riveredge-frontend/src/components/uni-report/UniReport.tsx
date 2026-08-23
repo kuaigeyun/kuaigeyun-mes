@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../uni-table';
+import { buildReportHelpViewConfig } from '../page-help-wiki/reportHelpViewConfig';
 import { ListPageTemplate, type StatCard } from '../layout-templates';
 import { UniReportMetaHeader } from './UniReportMetaHeader';
 import { buildUniReportSummaryFooter } from './UniReportSummaryFooter';
@@ -415,7 +416,8 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
           searchParamsRef={searchParamsRef}
           rowKey={rowKey as string}
           columns={columns}
-          viewTypes={['table']}
+          viewTypes={['table', 'help']}
+          helpViewConfig={buildReportHelpViewConfig()}
           reportLayout
           showAdvancedSearch
           searchPlacement="toolbarLeft"

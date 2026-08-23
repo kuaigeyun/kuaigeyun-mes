@@ -49,6 +49,7 @@ import { DowngradeDispositionFields } from '../components/DowngradeDispositionFi
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { NonconformingLedgerDetailDrawer } from './components/NonconformingLedgerDetailDrawer';
 import { sourceInspectionLabel, sourceInspectionTypeText } from './ncLedgerSource';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
 const EIGHT_D_RESOURCE = 'kuaizhizao:quality-management-eight-d-reports';
@@ -469,6 +470,8 @@ const NonconformingLedgerPage: React.FC = () => {
     >
       <ListPageTemplate>
         <UniTable<DefectLedgerItem>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.nonconformingLedger)}
           headerTitle={t('app.kuaizhizao.quality.nc.pageTitle')}
           actionRef={actionRef}
           rowKey="id"

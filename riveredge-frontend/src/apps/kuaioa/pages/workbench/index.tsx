@@ -152,6 +152,7 @@ const WorkbenchPage: React.FC = () => {
 
   return (
     <ModuleCenterLayout
+      moduleHelpKey="kuaioa"
       loading={loading && !summary}
       kpiRow={<ModuleKpiRow items={kpis} colProps={{ xs: 24, sm: 12, lg: 6 }} />}
       shortcutRow={<ModuleShortcutGrid items={shortcuts} />}

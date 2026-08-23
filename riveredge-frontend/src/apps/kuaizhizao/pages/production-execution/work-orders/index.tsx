@@ -278,6 +278,7 @@ import {
 } from '../../../utils/workOrderReporting'
 import ReportableQuantityPanel from '../../../components/ReportableQuantityPanel'
 import ReportingInboundWarehouseField from '../../../components/ReportingInboundWarehouseField'
+import { resolveProxyWorkerFromForm } from '../../../utils/reportingProducerResolve'
 import { ReportingProducerField } from '../../../components/ReportingProducerField'
 import { ReportingWorkTimeFields } from '../../../components/ReportingWorkTimeFields'
 import { resolveReportingWorkTimeForSubmit } from '../../../utils/reportingWorkTime'
@@ -2448,8 +2449,11 @@ const WorkOrdersPage: React.FC = () => {
         }
       }
       setTimeout(() => {
+        const worker = quickReportingProxyWorkerRef.current
         quickReportingFormRef.current?.setFieldsValue({
           proxy_worker_uuid: uuid || undefined,
+          proxy_worker_id: worker?.id,
+          proxy_worker_name: worker ? worker.full_name || worker.username : undefined,
         })
       }, 0)
     })()
@@ -3617,10 +3621,13 @@ const WorkOrdersPage: React.FC = () => {
         reportingData.team_name = teamName
         reportingData.worker_name = teamName
       } else {
+        const proxyWorker = canProxyReporting
+          ? await resolveProxyWorkerFromForm(values, quickReportingProxyWorkerRef.current)
+          : null
         const { worker_id, worker_name } = canProxyReporting
           ? getQuickReportWorkerPayload(
               quickReportingOperation,
-              quickReportingProxyWorkerRef.current,
+              proxyWorker,
               executionConfig?.default_production_worker_mode,
               currentUser
             )
@@ -3720,6 +3727,25 @@ const WorkOrdersPage: React.FC = () => {
       messageApi.success('报工成功')
       showReportingPostActionNotices(messageApi, t, created)
       const reportedWorkOrder = quickReportingWorkOrder
+      const reportedOperationId = quickReportingOperation.id
+      const reportedWorkerPatch =
+        producerMode === 'team'
+          ? {
+              assigned_team_id: reportingData.team_id,
+              assigned_team_name: reportingData.team_name,
+              assigned_worker_id: null,
+              assigned_worker_name: null,
+              assigned_worker_ids: [],
+            }
+          : reportingData.worker_id
+            ? {
+                assigned_worker_id: reportingData.worker_id,
+                assigned_worker_name: reportingData.worker_name,
+                assigned_worker_ids: [reportingData.worker_id],
+                assigned_team_id: null,
+                assigned_team_name: null,
+              }
+            : null
       setQuickReportingModalVisible(false)
       setQuickReportingWorkOrder(null)
       setQuickReportingOperation(null)
@@ -3728,6 +3754,24 @@ const WorkOrdersPage: React.FC = () => {
       quickReportingFormRef.current?.resetFields()
       const panelId = Number(wid)
       const sourceId = getWorkOrderOperationSourceId(reportedWorkOrder) ?? panelId
+      if (reportedOperationId && reportedWorkerPatch) {
+        patchWorkOrderRowExpandOperation(queryClient, panelId, sourceId, {
+          id: reportedOperationId,
+          ...reportedWorkerPatch,
+        })
+        setExpandedOperationsMap((prev) => {
+          const list = prev[panelId] || []
+          if (!list.length) return prev
+          return {
+            ...prev,
+            [panelId]: list.map((op) =>
+              Number(op.id) === Number(reportedOperationId)
+                ? { ...op, ...reportedWorkerPatch }
+                : op,
+            ),
+          }
+        })
+      }
       const bundle = await syncWorkOrderRowExpand(
         queryClient,
         panelId,

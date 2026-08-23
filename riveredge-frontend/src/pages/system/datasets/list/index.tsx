@@ -51,6 +51,7 @@ import {
 import { rowActionKind } from '../../../../components/uni-action';
 import { getAntdModal } from '../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 /**
  * 数据集管理列表页面组件
  */
@@ -645,6 +646,8 @@ const DatasetListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Dataset>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.datasets')}
           columnPersistenceId="pages.system.datasets.list-v1"
           actionRef={actionRef}
           columns={columns}

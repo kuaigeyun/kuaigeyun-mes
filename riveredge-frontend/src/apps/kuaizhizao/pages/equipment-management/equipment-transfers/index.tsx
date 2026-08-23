@@ -39,6 +39,7 @@ import {
   resolveApprovalDocListParams,
 } from '../../../utils/equipmentListCore';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaizhizao.equipmentOps.transfer';
 const RESOURCE = 'kuaizhizao:equipment-transfer';
@@ -351,6 +352,8 @@ const EquipmentTransfersPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<TransferApplication>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.equipmentTransfers)}
           headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-transfers-equip-rank-v1"
           actionRef={actionRef}

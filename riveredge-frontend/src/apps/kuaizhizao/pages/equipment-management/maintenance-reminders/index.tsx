@@ -34,6 +34,7 @@ import {
   resolveReminderListParams,
 } from '../../../utils/equipmentListCore';
 import { ROUTES } from '../../../constants/routes';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaizhizao.maintenanceReminder';
 
@@ -547,6 +548,8 @@ const MaintenanceRemindersPage: React.FC = () => {
             label: t(`${P}.tabMaintenance`),
             children: (
               <UniTable<MaintenanceReminder>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.maintenanceReminders)}
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-reminders"
         actionRef={actionRef}
         showAdvancedSearch

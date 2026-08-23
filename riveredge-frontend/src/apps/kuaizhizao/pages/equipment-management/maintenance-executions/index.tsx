@@ -29,6 +29,7 @@ import { ROUTES } from '../../../constants/routes';
 import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
 import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const P = 'app.kuaizhizao.maintenanceExecution';
 const RESOURCE = 'kuaizhizao:maintenance-plan';
 
@@ -292,6 +293,8 @@ const MaintenanceExecutionsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MaintenanceExecution>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.maintenanceExecutions)}
           headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-executions-equip-rank-v1"
           actionRef={actionRef}

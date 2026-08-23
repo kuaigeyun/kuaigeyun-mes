@@ -12,6 +12,8 @@ import helpPagesZh from './help-pages/zh-CN';
 import helpPagesRichZhPilot from './help-pages/rich/zh-CN-pilot';
 import helpPagesRichZhDocuments from './help-pages/rich/zh-CN/documents';
 import helpPagesRichZhListPages from './help-pages/rich/zh-CN/list-pages';
+import helpPagesRichZhReportCommon from './help-pages/rich/zh-CN/report-common';
+import helpPagesRichZhModuleCenters from './help-pages/rich/zh-CN/module-centers';
 
 export default {
   // 菜单翻译
@@ -14937,8 +14939,10 @@ export default {
   'app.kuaicaiwu.partnerStatement.previewHint': '选择往来单位与对账起止日期后，点击「预览」查看明细。',
   'app.kuaicaiwu.partnerStatement.provisionalPricingHint': '本期尚有 {{count}} 行订单待月结定价',
   'app.kuaicaiwu.partnerStatement.goPriceSettlement': '前往月结定价',
-  'app.kuaicaiwu.partnerStatement.previewFooter': '对账单汇总已审核应收/应付与已确认收/付款；已出现在其它对账单中的单据会自动排除。确认生成后可导出 Excel/PDF 发送给对方核对。',
-  'app.kuaicaiwu.partnerStatement.excludedStatedHint': '已自动排除 {{count}} 笔已纳入其它对账单的单据',
+  'app.kuaicaiwu.partnerStatement.previewFooter': '对账单汇总已审核应收/应付与已确认收/付款；预览表可勾选本次纳入的单据并调整本次对账金额，汇总按已选行计算。同一单据可多次分批对账直至对清；已对清明细不再出现。确认生成后可导出 Excel/PDF 发送给对方核对。',
+  'app.kuaicaiwu.partnerStatement.previewSelectHint': '勾选本次纳入对账单的单据，汇总按已选 {{count}} / {{total}} 行计算',
+  'app.kuaicaiwu.partnerStatement.selectLinesRequired': '请至少勾选一行对账明细',
+  'app.kuaicaiwu.partnerStatement.excludedStatedHint': '已自动排除 {{count}} 笔已对清的单据',
   'app.kuaicaiwu.partnerStatement.periodAlreadyExists': '该往来单位在 {{period}} 已有对账单 {{code}}，同一期间不能重复生成。请打开已有对账单，或删除草稿后重新生成',
   'app.kuaicaiwu.partnerStatement.periodHasPriorStatement': '该往来单位在 {{period}} 已有对账单 {{code}}；下方为尚未纳入的单据，可继续生成新对账单',
   'app.kuaicaiwu.partnerStatement.periodFullyStated': '该往来单位在 {{period}} 的单据已全部纳入对账单 {{code}}，没有可再生成的明细',
@@ -14950,12 +14954,20 @@ export default {
   'app.kuaicaiwu.partnerStatement.col.summary': '摘要',
   'app.kuaicaiwu.partnerStatement.col.debit': '借方',
   'app.kuaicaiwu.partnerStatement.col.credit': '贷方',
+  'app.kuaicaiwu.partnerStatement.col.docAmount': '单据金额',
+  'app.kuaicaiwu.partnerStatement.col.priorStatedAmount': '已对金额',
+  'app.kuaicaiwu.partnerStatement.col.remainingAmount': '未对金额',
+  'app.kuaicaiwu.partnerStatement.col.statementAmount': '本次对账金额',
   'app.kuaicaiwu.partnerStatement.col.periodRange': '期间',
   'app.kuaicaiwu.partnerStatement.col.debitTotal': '本期借方',
   'app.kuaicaiwu.partnerStatement.col.creditTotal': '本期贷方',
   'app.kuaicaiwu.partnerStatement.selectCustomer': '选择客户',
   'app.kuaicaiwu.partnerStatement.selectSupplier': '选择供应商',
   'app.kuaicaiwu.partnerStatement.detail.confirmTitle': '确认对账单',
+  'app.kuaicaiwu.partnerStatement.detail.saveLines': '保存对账金额',
+  'app.kuaicaiwu.partnerStatement.detail.linesSaved': '对账金额已保存',
+  'app.kuaicaiwu.partnerStatement.detail.saveLinesBeforeConfirm': '请先保存对账金额后再确认',
+  'app.kuaicaiwu.partnerStatement.detail.unsavedLinesHint': '对账金额已修改，请点击「保存对账金额」后再确认或导出',
   'app.kuaicaiwu.partnerStatement.detail.confirmContent': '确认对账单 {{code}} 数据无误？',
   'app.kuaicaiwu.partnerStatement.detail.confirmed': '已确认',
   'app.kuaicaiwu.partnerStatement.detail.internalConfirm': '内部确认',
@@ -20199,6 +20211,8 @@ export default {
   'app.kuaizhizao.quality.traceability.noGraphData': '未找到可展示的追溯关系',
   'app.kuaizhizao.quality.traceability.eventTimeline': '事件时间线',
   'app.kuaizhizao.quality.traceability.eventTime': '时间',
+  'app.kuaizhizao.quality.traceability.sankeyLinkSource': '来源',
+  'app.kuaizhizao.quality.traceability.sankeyLinkTarget': '目标',
   'app.kuaizhizao.quality.traceability.documentType': '单据类型',
   'app.kuaizhizao.quality.traceability.documentCode': '单据编号',
   'app.kuaizhizao.quality.traceability.exportReport': '导出追溯报告',
@@ -23674,6 +23688,74 @@ export default {
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.title': '优化采购取单、质检取单与行情列表加载速度',
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.description':
     '采购入库与收货通知取单不再逐张订单写回数量；来料/成品检验取单与入库校验改为批量解析物料质检策略；工程变更列表读取时不再逐行补建审批实例；原料行情当日列表改为只读沿用上日单价、不再在打开列表时写库；收款单列表移除历史数据回填。',
+  'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.title': '生产退料入库数量列表展示修复',
+  'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.description':
+    '入库 Hub 生产退料单列表与详情补汇总退料数量，待退料与已退料不再显示为「-」，入库进度按数量正确展示。',
+  'pages.dashboard.updateLog.entries.sop-create-attachments-payload-fix.title': '新建 SOP 附件字段提交修复',
+  'pages.dashboard.updateLog.entries.sop-create-attachments-payload-fix.description':
+    '修复电子 SOP 新建时无附件仍提交空数组导致创建失败；编辑回填兼容受控扫描件存储格式。',
+  'pages.dashboard.updateLog.entries.invoice-pull-tax-inclusive-rounding-fix.title':
+    '取单开票含税录入价税合计精度修复',
+  'pages.dashboard.updateLog.entries.invoice-pull-tax-inclusive-rounding-fix.description':
+    '销项/进项取单与合并开票在含税录入时以价税合计为真源反算未税与税额，避免按上限开票时出现 60000.00 被算成 60000.01 而报超过可开票金额。',
+  'pages.dashboard.updateLog.entries.invoice-pull-amount-field-grid-fix.title':
+    '取单开票金额录入对齐表单栅格',
+  'pages.dashboard.updateLog.entries.invoice-pull-amount-field-grid-fix.description':
+    '从源单创建销项/进项发票时，「金额录入」分段控件改用 FormModalGridBlock 包裹，标签与输入框与同排字段左缘对齐，不再被裁切或挤出栅格。',
+  'pages.dashboard.updateLog.entries.merge-settlement-code-batch-fix.title':
+    '合并收付款核销单号批量发号修复',
+  'pages.dashboard.updateLog.entries.merge-settlement-code-batch-fix.description':
+    '合并收款/合并付款对多张源单核销时，改为一次事务连续生成不重复核销单号，避免 HX 序号撞唯一约束导致服务器错误。',
+  'pages.dashboard.updateLog.entries.merge-voucher-bank-summary-fix.title':
+    '合并收付款银行流水自动写入摘要',
+  'pages.dashboard.updateLog.entries.merge-voucher-bank-summary-fix.description':
+    '合并收款/合并付款确认入账后，银行流水摘要自动带出收付款单号、往来单位与关联应收/应付单号；历史空摘要可运行 repair_merge_voucher_bank_summaries 脚本批量回填，无需打开银行流水页。',
+  'pages.dashboard.updateLog.entries.merge-invoice-source-allocation-fix.title':
+    '合并开票按源单分摊已开票金额',
+  'pages.dashboard.updateLog.entries.merge-invoice-source-allocation-fix.description':
+    '合并开票后列表按各源单分摊记录已开票/收票金额与状态；历史数据可运行 repair_merge_invoice_allocations 脚本回填分摊关联，避免整票记在第一张应收/应付上。',
+  'pages.dashboard.updateLog.entries.partner-statement-preview-line-selection.title':
+    '往来对账单预览支持勾选纳入单据',
+  'pages.dashboard.updateLog.entries.partner-statement-preview-line-selection.description':
+    '新建对账单预览表增加行勾选，可手动选择本次纳入的单据；生成时仅写入已选行，汇总随勾选实时重算，避免期间内部分已对、部分未对时无法分批生成。',
+  'pages.dashboard.updateLog.entries.partner-statement-partial-reconciliation.title':
+    '往来对账单支持分批对账',
+  'pages.dashboard.updateLog.entries.partner-statement-partial-reconciliation.description':
+    '明细展示单据金额、已对金额与未对金额，本次对账金额可在预览与草稿中编辑；同一单据可多次分批对账直至对清，已对清明细不再纳入后续预览。',
+  'pages.dashboard.updateLog.entries.document-reconciliation-gap-hierarchy.title':
+    '业务单据对账往来缺口展示收付层级',
+  'pages.dashboard.updateLog.entries.document-reconciliation-gap-hierarchy.description':
+    '往来缺口列表中收款单、付款单按核销关系挂在对应应收单、应付单之下缩进展示，与伙伴对账单一致；排序时分组保持父子行不拆散。',
+  'pages.dashboard.updateLog.entries.warehouse-doc-edit-withdraw-unify.title':
+    '出入库单据撤回与编辑逻辑统一',
+  'pages.dashboard.updateLog.entries.warehouse-doc-edit-withdraw-unify.description':
+    '销售出库在确认前可在出库 Hub 详情内编辑仓库、备注与明细数量批号；出库与入库 Hub 的编辑、撤回门禁统一走后端 capabilities，已出库或已入库须先撤回再过账前修改。',
+  'pages.dashboard.updateLog.entries.quality-traceability-ui-polish.title':
+    '追溯管理界面与流向图体验优化',
+  'pages.dashboard.updateLog.entries.quality-traceability-ui-polish.description':
+    '摘要信息框线改为标准 1px；事件时间线时间列加宽单行显示并增加表格外边框；流向图连线悬停提示改为中文来源与目标；桑基图采用明亮配色且同类型单据同色。',
+  'pages.dashboard.updateLog.entries.work-order-reporting-producer-card-sync.title':
+    '工单报工所选生产人员与工序卡一致',
+  'pages.dashboard.updateLog.entries.work-order-reporting-producer-card-sync.description':
+    '快捷报工或报工管理中选择非默认生产人员后，工序卡「人员」会同步为本次报工所选人员，不再仍显示派工默认人员。',
+  'pages.dashboard.updateLog.entries.quality-inspection-inspector-sync.title':
+    '检验单列表检验员与开展检验所选人员一致',
+  'pages.dashboard.updateLog.entries.quality-inspection-inspector-sync.description':
+    '来料、工序、成品与出货检验开展时，表单所选检验人员会正确写入检验员字段；列表与详情不再固定显示当前操作人。',
+  'pages.dashboard.updateLog.entries.purchase-order-header-delivery-sync.title':
+    '采购订单表头要求到货日可同步明细',
+  'pages.dashboard.updateLog.entries.purchase-order-header-delivery-sync.description':
+    '编辑采购订单时，修改表头要求到货日会自动同步到尚未单独改过的明细行；明细行仍可各自调整，与销售订单一致。',
+  'pages.dashboard.updateLog.entries.purchase-order-delivery-date-from-requisition.title':
+    '采购订单要求到货日与采购申请对齐',
+  'pages.dashboard.updateLog.entries.purchase-order-delivery-date-from-requisition.description':
+    '采购申请转采购订单时，表头与明细到货日均按申请行日期、表头要求到货日继承；表头取明细最晚到货日。保存采购订单时表头要求到货日自动与明细同步。',
+  'pages.dashboard.updateLog.entries.purchase-price-auto-fill.title': '采购申请与订单自动带出物料采购价',
+  'pages.dashboard.updateLog.entries.purchase-price-auto-fill.description':
+    '需求计算下推采购申请时会读取物料来源配置或默认采购价填入建议单价；采购申请转采购订单时，若行上单价为空则回退物料档案采购价，与手工选料带价逻辑一致。',
+  'pages.dashboard.updateLog.entries.rich-page-help-views.title': '全站页面帮助视图接入',
+  'pages.dashboard.updateLog.entries.rich-page-help-views.description':
+    '业务单据列表、主数据与系统配置页、模块中心工作台及报表支持切换到帮助视图，按当前页面能力阅读分章说明。已覆盖快制造、快财务、基础资料、PLM、IoT 等模块；报表统一使用通用帮助说明。',
   'pages.dashboard.updateLog.entries.locale-pack-gap-sync.title': '补齐多语言包并提升老挝语覆盖率',
   'pages.dashboard.updateLog.entries.locale-pack-gap-sync.description':
     '繁中、英、日、越、老五语 key 已与简体中文对齐；老挝语补译系统配置、快制造、基础资料等模块，并新增 glossary 人工词条与 locale 同步脚本，界面英文占位由约 58% 降至约 2%。',
@@ -23751,10 +23833,9 @@ export default {
   'pages.dashboard.updateLog.entries.price-settlement.description':
     '支持月结客户零价下单、月结定价工作台批量补价，已出库/入库行自动产生应收应付差额调整单。',
   'pages.dashboard.updateLog.entries.update-log-panel.description': '支持按类型分类展示平台更新，点击更新日志查看全部记录。',
-  'pages.dashboard.updateLog.entries.calendar-monday-first.title': '工作台日历改为以星期一为每周第一天',
-  'pages.dashboard.updateLog.entries.weather-text-contrast.title': '优化天气日历插件顶部文字对比度',
-  'pages.dashboard.updateLog.entries.weather-sky-background.title': '天气日历插件顶部背景模拟天空颜色并与天气联动',
-  'pages.dashboard.updateLog.entries.weather-weekday-time.title': '天气日历插件调整星期位置、时间格式与字号',
+  'pages.dashboard.updateLog.entries.workbench-calendar-weather-polish.title': '工作台日历与天气插件体验优化',
+  'pages.dashboard.updateLog.entries.workbench-calendar-weather-polish.description':
+    '日历改为以星期一为每周第一天；天气插件顶部背景模拟天空颜色并与天气联动，优化文字对比度，调整星期位置、时间格式与字号。',
   'pages.dashboard.operationCardsTitle': '在制工序',
   'pages.dashboard.operationCardsCount': '共 {{count}} 道工序',
   'pages.dashboard.operationCardsEmpty': '暂无在制工序',
@@ -27782,4 +27863,6 @@ export default {
   ...helpPagesRichZhPilot,
   ...helpPagesRichZhDocuments,
   ...helpPagesRichZhListPages,
+  ...helpPagesRichZhReportCommon,
+  ...helpPagesRichZhModuleCenters,
 };

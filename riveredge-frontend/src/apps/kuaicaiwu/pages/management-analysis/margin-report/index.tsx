@@ -7,6 +7,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { managementReportService } from '../../../services/management-report';
 import type { MarginReportRow } from '../../../types/management-report';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   marginReportCustomerSearchColumns,
   marginReportOrderSearchColumns,
@@ -133,6 +134,8 @@ const MarginTable: React.FC<{ dimension: Dimension; days: number }> = ({ dimensi
 
   return (
     <UniTable<MarginReportRow>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaicaiwu.marginReport')}
       actionRef={actionRef}
       rowKey={(r, i) => String(r.product_id ?? r.customer_id ?? r.delivery_id ?? i)}
       columnPersistenceId={`apps.kuaicaiwu.pages.management-analysis.margin-report.${dimension}.list-v1`}

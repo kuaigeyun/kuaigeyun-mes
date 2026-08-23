@@ -81,6 +81,7 @@ import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import { buildDrawingChangeCreateUrl } from '../../../../kuaiplm/services/master-data-links';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const DRAWING_PERMISSION = 'master-data:process:drawing';
 
 const STATUS_COLOR: Record<DrawingStatus, string> = {
@@ -1282,6 +1283,8 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         }}
       >
         <UniTable<EngineeringDrawing>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.drawings')}
           actionRef={actionRef}
           rowKey="uuid"
           columnPersistenceId="apps.master-data.pages.process.drawings.folder-v2"

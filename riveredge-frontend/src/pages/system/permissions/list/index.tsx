@@ -22,6 +22,7 @@ import {
   Permission,
 } from '../../../../services/permission';
 import { extractProTableSort, mergeListKeyword, mapPermissionListSortField } from '../../../../utils/tableQueryKey';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 const PermissionListPage: React.FC = () => {
   const { t } = useTranslation();
@@ -191,6 +192,8 @@ const PermissionListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Permission>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.permissions')}
           columnPersistenceId="pages.system.permissions.list"
           actionRef={actionRef}
           columns={columns}

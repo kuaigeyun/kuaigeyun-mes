@@ -43,6 +43,7 @@ import {
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 /**
  * 模具管理列表页面组件
@@ -393,6 +394,8 @@ const MoldListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Mold>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.molds')}
           columnPersistenceId="pages.system.molds.list"
           actionRef={actionRef}
           columns={columns}

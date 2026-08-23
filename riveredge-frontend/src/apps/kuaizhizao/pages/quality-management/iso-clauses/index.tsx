@@ -51,6 +51,7 @@ import {
   QmsSystemDocument,
 } from '../../../services/quality-qms';
 import QmsIsoClauseSelect from '../qms/QmsIsoClauseSelect';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const RESOURCE = 'kuaizhizao:quality-management-iso-clauses';
 const DEFAULT_STANDARD = 'ISO9001:2015';
@@ -333,6 +334,8 @@ const IsoClausesPage: React.FC = () => {
     <PermissionGuard resource={RESOURCE} action="read">
       <ListPageTemplate>
         <UniTable<QmsIsoClause>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.isoClauses')}
           actionRef={actionRef}
           permissionResource={RESOURCE}
           headerTitle={t('app.kuaizhizao.menu.quality-management.iso-clauses')}

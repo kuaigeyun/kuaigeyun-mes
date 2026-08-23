@@ -64,6 +64,7 @@ import {
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const P = 'app.kuaizhizao.maintenancePlan';
 
 function toApiDateTimeString(value: unknown): string | undefined {
@@ -752,6 +753,8 @@ const MaintenancePlansPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MaintenancePlan>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.maintenancePlans)}
           headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-plans-equip-rank-v1"
           actionRef={actionRef}

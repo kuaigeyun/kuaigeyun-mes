@@ -48,6 +48,7 @@ import { customerApi, unwrapSupplyPagedList } from '../../../../master-data/serv
 import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const DICT_CODE = 'SALES_FOLLOW_UP_TYPE';
 
 function followUpPresetFromRecord(record: CustomerFollowUp): CustomerFollowUpPreset {
@@ -578,6 +579,8 @@ const CustomerFollowUpsPage: React.FC = () => {
       <ListPageTemplate style={{ padding: 0 }}>
         <UniTable<CustomerFollowUp>
           columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-follow-ups"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.customerFollowUps')}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           headerTitle={t('app.kuaizhizao.menu.sales-management.customer-follow-ups')}

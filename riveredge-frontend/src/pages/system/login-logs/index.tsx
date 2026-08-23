@@ -32,6 +32,7 @@ import { useGlobalStore } from '../../../stores';
 import dayjs from 'dayjs';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../utils/format';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
+import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
 
 /**
  * 登录日志页面组件
@@ -293,6 +294,8 @@ const LoginLogsPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<LoginLog>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.loginLogs')}
           columnPersistenceId="pages.system.login-logs.list-v1"
           actionRef={actionRef}
           columns={columns}

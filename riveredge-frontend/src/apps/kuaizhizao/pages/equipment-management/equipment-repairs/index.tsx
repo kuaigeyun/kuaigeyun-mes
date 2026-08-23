@@ -33,6 +33,7 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
 import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const P = 'app.kuaizhizao.equipmentRepair';
 const RESOURCE = 'kuaizhizao:equipment-fault';
 
@@ -306,6 +307,8 @@ const EquipmentRepairsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<EquipmentRepair>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.equipmentRepairs)}
           headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-repairs-equip-rank-v1"
           actionRef={actionRef}

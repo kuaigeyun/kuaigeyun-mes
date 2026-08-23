@@ -63,6 +63,7 @@ import {
 } from '../../../../utils/featurePageDisplay';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 /**
  * 获取所有可用的表名选项（用于关联表名选择框）
@@ -1295,6 +1296,8 @@ const CustomFieldListPage: React.FC = () => {
               <>
                 <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '24px' }}>
                   <UniTable<CustomField>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.customFields')}
                     columnPersistenceId="pages.system.custom-fields.list-v1"
                     actionRef={actionRef}
                     params={{ table_name: selectedPage.tableName }}

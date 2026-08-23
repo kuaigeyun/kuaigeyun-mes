@@ -661,6 +661,8 @@ class InventoryService:
                         existing = await MaterialSerial.filter(tenant_id=tenant_id, serial_no=s_no).first()
                         if existing:
                             if existing.status == "in_stock":
+                                if source_type and str(source_type).endswith("_withdraw"):
+                                    continue
                                 raise BusinessLogicError(f"序列号 {s_no} 已在库，不可重复入库")
                             existing.status = "in_stock"
                             existing.material_id = material_id
@@ -817,12 +819,42 @@ class InventoryService:
         )
 
     @staticmethod
+    async def _mark_serials_out_stock(
+        tenant_id: int,
+        material_id: int,
+        serial_nos: Optional[list[str]],
+    ) -> None:
+        """出库扣减后同步序列号台账为已出库。"""
+        if not serial_nos:
+            return
+        from apps.master_data.models.material_serial import MaterialSerial
+
+        for s_no in serial_nos:
+            sn = str(s_no or "").strip()
+            if not sn:
+                continue
+            existing = await MaterialSerial.filter(
+                tenant_id=tenant_id,
+                serial_no=sn,
+                deleted_at__isnull=True,
+            ).first()
+            if not existing:
+                raise BusinessLogicError(f"序列号 {sn} 不存在，无法出库")
+            if int(existing.material_id) != int(material_id):
+                raise BusinessLogicError(f"序列号 {sn} 不属于当前物料，无法出库")
+            if existing.status != "in_stock":
+                raise BusinessLogicError(f"序列号 {sn} 不在库，无法出库")
+            existing.status = "out_stock"
+            await existing.save()
+
+    @staticmethod
     async def _decrease_stock_no_atomic(
         tenant_id: int,
         material_id: int,
         quantity: Decimal,
         warehouse_id: Optional[int] = None,
         batch_no: Optional[str] = None,
+        serial_nos: Optional[list[str]] = None,
         source_type: Optional[str] = None,
         source_doc_id: Optional[int] = None,
         source_doc_code: Optional[str] = None,
@@ -1133,6 +1165,11 @@ class InventoryService:
                     f"InventoryService.decrease_stock: tenant={tenant_id} material={material_id} "
                     f"qty={quantity} warehouse={warehouse_id} batch={batch_no}"
                 )
+                await InventoryService._mark_serials_out_stock(
+                    tenant_id=tenant_id,
+                    material_id=material_id,
+                    serial_nos=serial_nos,
+                )
             else:
                 # 线边仓（warehouse_type=line_side）：扣减 LineSideInventory
                 from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
@@ -1211,6 +1248,7 @@ class InventoryService:
         quantity: Decimal,
         warehouse_id: Optional[int] = None,
         batch_no: Optional[str] = None,
+        serial_nos: Optional[list[str]] = None,
         source_type: Optional[str] = None,
         source_doc_id: Optional[int] = None,
         source_doc_code: Optional[str] = None,
@@ -1241,6 +1279,7 @@ class InventoryService:
             quantity=quantity,
             warehouse_id=warehouse_id,
             batch_no=batch_no,
+            serial_nos=serial_nos,
             source_type=source_type,
             source_doc_id=source_doc_id,
             source_doc_code=source_doc_code,

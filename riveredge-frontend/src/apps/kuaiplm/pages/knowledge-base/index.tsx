@@ -32,6 +32,7 @@ import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
 import { getKuaiplmKnowledgeStatusOptions, getKuaiplmKnowledgeStatusText } from '../../components/kuaiplmMeta';
 import { UniTableStackedPrimaryCell } from '../../../../components/uni-table/stackedPrimaryColumn';
 import { resolvePlmPreferredAudit } from '../../utils/plmListCore';
+import { ListPageHelpToggle, RichListPageHelpView } from '../../../../components/page-help-wiki';
 
 const KB_QUERY_LIMIT = 100;
 
@@ -400,6 +401,7 @@ const KnowledgeBasePage: React.FC = () => {
 
   return (
     <ListPageTemplate fillMain>
+      <ListPageHelpToggle helpContent={<RichListPageHelpView pageKey="kuaiplm.knowledgeBase" />}>
       <TwoColumnLayout
         style={{ flex: 1, minHeight: 0 }}
         leftPanel={{
@@ -678,6 +680,7 @@ const KnowledgeBasePage: React.FC = () => {
           ),
         }}
       />
+      </ListPageHelpToggle>
     </ListPageTemplate>
   );
 };

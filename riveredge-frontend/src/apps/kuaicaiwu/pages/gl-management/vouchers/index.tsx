@@ -35,6 +35,7 @@ import { useLinkedDocumentDetail } from '../../../../../components/linked-docume
 import { canOpenLinkedDocumentDetail } from '../../../../kuaizhizao/utils/linkedDocumentDetail';
 import { glService, type GlAccount, type GlVoucher, type GlVoucherLine } from '../../../services/gl';
 import { apiRequest } from '../../../../../services/api';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const NS = 'app.kuaicaiwu.gl.vouchers';
 
@@ -787,6 +788,8 @@ const GlVouchersPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<GlVoucher>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.voucher)}
         actionRef={actionRef}
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.gl-management.vouchers.list-v1"

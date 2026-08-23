@@ -40,6 +40,7 @@ import {
   type FreightOrder,
 } from '../../../services/logistics';
 import { FreightBillDetailDrawer } from './components/FreightBillDetailDrawer';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const RESOURCE = 'kuaizhizao:freight-bill';
 
@@ -681,6 +682,8 @@ const FreightBillsPage: React.FC = () => {
         onCancel={pullFreightOrders.closeModal}
         onOk={pullFreightOrders.handleConfirm}
         rowKey="id"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.freightBill)}
         columns={pullColumns}
         dataSource={pullFreightOrders.dataSource}
         loading={pullFreightOrders.loading}

@@ -307,11 +307,12 @@ async def create_sales_invoice(
 ):
     """创建销售发票（从应收拉单时可同时收款）"""
     try:
-        from apps.kuaicaiwu.services.finance_tax import compute_tax_from_excluding
+        from apps.kuaicaiwu.services.finance_tax import resolve_invoice_amounts_for_create
 
-        _, tax_amount, total_amount = compute_tax_from_excluding(
+        amount_excl, tax_amount, total_amount = resolve_invoice_amounts_for_create(
             Decimal(data.invoice_amount),
             Decimal(data.tax_rate),
+            Decimal(data.total_amount) if data.total_amount is not None else None,
         )
 
         concurrent = data.concurrent_settlement
@@ -373,7 +374,7 @@ async def create_sales_invoice(
             "partner_name": customer_name,
             **partner_fields,
             "tax_rate": data.tax_rate / 100,  # API 百分比 → 落库小数
-            "amount_excluding_tax": data.invoice_amount,
+            "amount_excluding_tax": amount_excl,
             "tax_amount": tax_amount,
             "total_amount": total_amount,
             "source_document_code": source_document_code,
@@ -633,7 +634,7 @@ async def update_sales_invoice(
         raise _http_exception_with_trace(
             400, "已审核、已作废或已红冲的发票不能修改", "/sales-invoices/{id}", tenant_id
         )
-    from apps.kuaicaiwu.services.finance_tax import compute_tax_from_excluding
+    from apps.kuaicaiwu.services.finance_tax import resolve_invoice_amounts_for_create
 
     update_data: dict = {}
     if data.invoice_number is not None:
@@ -647,13 +648,13 @@ async def update_sales_invoice(
     tax_rate_percent = data.tax_rate if data.tax_rate is not None else Decimal(str(invoice.tax_rate or 0)) * Decimal("100")
     if data.tax_rate is not None:
         update_data["tax_rate"] = data.tax_rate / 100
-    if data.invoice_amount is not None:
-        update_data["amount_excluding_tax"] = data.invoice_amount
-    if data.invoice_amount is not None or data.tax_rate is not None:
-        _, tax_amount, total_amount = compute_tax_from_excluding(
+    if data.invoice_amount is not None or data.tax_rate is not None or data.total_amount is not None:
+        amount_excl, tax_amount, total_amount = resolve_invoice_amounts_for_create(
             Decimal(amount_excl),
             Decimal(tax_rate_percent),
+            Decimal(data.total_amount) if data.total_amount is not None else None,
         )
+        update_data["amount_excluding_tax"] = amount_excl
         update_data["tax_amount"] = tax_amount
         update_data["total_amount"] = total_amount
     if data.notes is not None:

@@ -16,6 +16,8 @@ export type OutboundSerialPickerFieldProps = {
   loading?: boolean;
   disabled?: boolean;
   materialLabel?: string;
+  /** 打开选择弹窗时触发，可用于懒加载在库序列号选项 */
+  onOpenPicker?: () => void | Promise<void>;
 };
 
 const OutboundSerialPickerField: React.FC<OutboundSerialPickerFieldProps> = ({
@@ -26,6 +28,7 @@ const OutboundSerialPickerField: React.FC<OutboundSerialPickerFieldProps> = ({
   loading = false,
   disabled = false,
   materialLabel,
+  onOpenPicker,
 }) => {
   const { t } = useTranslation();
   const selected = Array.isArray(value) ? value : [];
@@ -43,6 +46,7 @@ const OutboundSerialPickerField: React.FC<OutboundSerialPickerFieldProps> = ({
     setDraft([...selected]);
     setKeyword('');
     setOpen(true);
+    void onOpenPicker?.();
   };
 
   const closePicker = () => {
@@ -96,7 +100,7 @@ const OutboundSerialPickerField: React.FC<OutboundSerialPickerFieldProps> = ({
               ? t('app.kuaizhizao.warehouseOutbound.confirm.serialPicker.summary', { count: selected.length })
               : t('app.kuaizhizao.warehouseOutbound.field.selectSerial')}
         </Typography.Text>
-        <Button size="small" type="link" disabled={disabled || loading} onClick={openPicker}>
+        <Button size="small" type="link" disabled={disabled} onClick={openPicker}>
           {t('common.select')}
         </Button>
       </Space>

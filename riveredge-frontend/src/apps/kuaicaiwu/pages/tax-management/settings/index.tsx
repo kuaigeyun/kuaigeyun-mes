@@ -16,6 +16,7 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { glService, type GlAccount } from '../../../services/gl';
 import { taxService, type TaxSettings } from '../../../services/tax';
+import { ListPageHelpToggle, RichListPageHelpView } from '../../../../../components/page-help-wiki';
 
 const NS = 'app.kuaicaiwu.tax.settings';
 
@@ -149,6 +150,7 @@ const TaxSettingsPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
+      <ListPageHelpToggle helpContent={<RichListPageHelpView pageKey="kuaicaiwu.taxSettings" />}>
       <ProForm
         form={form}
         layout="vertical"
@@ -257,6 +259,7 @@ const TaxSettingsPage: React.FC = () => {
           </Card>
         </Space>
       </ProForm>
+      </ListPageHelpToggle>
     </ListPageTemplate>
   );
 };

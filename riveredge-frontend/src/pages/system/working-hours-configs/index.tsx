@@ -22,6 +22,7 @@ import { fetchAllListItems } from '../../../utils/fetchAllListPages';
 import { pickListSearchKeyword } from '../../../utils/tableQueryKey';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
 
 /**
  * 工作时间段配置接口定义
@@ -348,6 +349,8 @@ const WorkingHoursConfigsPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         columnPersistenceId="pages.system.working-hours-configs"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.workingHoursConfigs')}
         headerTitle={t('pages.system.workingHoursConfigs.headerTitle')}
         actionRef={actionRef}
         rowKey="id"

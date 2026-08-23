@@ -43,6 +43,7 @@ import {
 } from '../../../utils/plmListCore';
 import Phase2ProjectSelect from '../../../components/Phase2ProjectSelect';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   buildPhase2PriorityValueEnum,
   buildPhase2RequirementStatusValueEnum,
@@ -313,6 +314,8 @@ const RequirementsPage: React.FC = () => {
         />
       ) : null}
       <UniTable<RdRequirement>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaiplm.requirements')}
         headerTitle={t('app.kuaiplm.menu.phase2.requirements')}
         actionRef={actionRef}
         rowKey="id"

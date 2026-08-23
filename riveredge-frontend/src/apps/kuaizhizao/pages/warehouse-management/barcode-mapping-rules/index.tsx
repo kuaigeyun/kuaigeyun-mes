@@ -26,6 +26,7 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   normalizeWarehouseListResponse,
   resolveBarcodeMappingRuleListParams,
@@ -335,6 +336,8 @@ const BarcodeMappingRulesPage: React.FC = () => {
         rowKey="id"
         columns={alignProColumns(columns, WAREHOUSE_DOC_LIST_FIELD_RANK)}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.barcode-mapping-rules"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.barcodeMappingRules')}
         showCreateButton={true}
         createButtonText={createButtonLabel}
         onCreate={handleCreate}

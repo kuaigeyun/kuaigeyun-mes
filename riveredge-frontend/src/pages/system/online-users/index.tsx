@@ -29,7 +29,7 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { formatDateTime, todaySiteDateString } from '../../../utils/format';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
-import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
+import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
 
 dayjs.extend(relativeTime);
 

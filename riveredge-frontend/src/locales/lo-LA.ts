@@ -14785,8 +14785,10 @@ export default {
   'app.kuaicaiwu.partnerStatement.provisionalPricingHint': '{{count}} ແຖວໃບສັ່ງຊື້ທີ່ລໍຖ້າການຊຳລະລາຄາລາຍເດືອນໃນຊ່ວງນີ້',
   'app.kuaicaiwu.partnerStatement.goPriceSettlement': 'ໄປຫາການຕົກລົງລາຄາ',
   'app.kuaicaiwu.partnerStatement.previewFooter':
-    'ຖະແຫຼງການສະຫຼຸບຍອດຮັບ/ຈ່າຍທີ່ໄດ້ຮັບການອະນຸມັດ ແລະໃບຮັບ/ການຊໍາລະທີ່ຢືນຢັນ. ເອກະສານທີ່ຢູ່ໃນໃບແຈ້ງຍອດອື່ນແມ່ນຖືກຍົກເວັ້ນ. ສົ່ງອອກ Excel/PDF ຫຼັງຈາກການຜະລິດເພື່ອສົ່ງໃຫ້ຄູ່ຮ່ວມງານ.',
-  'app.kuaicaiwu.partnerStatement.excludedStatedHint': '{{count}} ເອ​ກະ​ສານ​ທີ່​ຢູ່​ແລ້ວ​ໃນ​ຄໍາ​ຖະ​ແຫຼງ​ການ​ອື່ນໆ​ໄດ້​ຖືກ​ຍົກ​ເວັ້ນ​',
+    'ຖະແຫຼງການສະຫຼຸບຍອດຮັບ/ຈ່າຍທີ່ໄດ້ຮັບການອະນຸມັດ ແລະໃບຮັບ/ການຊຳລະທີ່ຢືນຢັນ. ລາຍການສະແດງຈຳນວນເອກະສານ, ຈຳນວນທີ່ກວດແລ້ວ ແລະຍັງບໍ່ກວດ; ປັບຈຳນວນກວດຄັ້ງນີ້ຕາມແຖວກ່ອນສ້າງ. ເອກະສານດຽວກັນສາມາດກວດແບບແບ่งຫຼາຍຄັ້ງຈົນກວດຄົບ; ລາຍການທີ່ກວດຄົບແລ້ວຈະບໍ່ປາກົດອີກ. ສົ່ງອອກ Excel/PDF ຫຼັງສ້າງເພື່ອສົ່ງໃຫ້ຄູ່ຮ່ວມງານ.',
+  'app.kuaicaiwu.partnerStatement.previewSelectHint': 'ເລືອກເອກະສານທີ່ຈະລວມໃນຖະແຫຼງການຄັ້ງນີ້; ຍອດລວມຄິດຕາມ {{count}} / {{total}} ແຖວທີ່ເລືອກ',
+  'app.kuaicaiwu.partnerStatement.selectLinesRequired': 'ກະລຸນາເລືອກຢ່າງໜ້ອຍ 1 ແຖວສຳລັບກວດ',
+  'app.kuaicaiwu.partnerStatement.excludedStatedHint': 'ຍົກເວັ້ນ {{count}} ເອກະສານທີ່ກວດຄົບແລ້ວ',
   'app.kuaicaiwu.partnerStatement.periodAlreadyExists':
     'ຖະແຫຼງການ {{code}} ມີຢູ່ແລ້ວສຳລັບຮຸ້ນສ່ວນນີ້ໃນ {{period}}. ເປີດມັນ, ຫຼືລຶບສະບັບຮ່າງແລະສ້າງອີກເທື່ອຫນຶ່ງ',
   'app.kuaicaiwu.partnerStatement.periodHasPriorStatement':
@@ -14800,12 +14802,20 @@ export default {
   'app.kuaicaiwu.partnerStatement.col.summary': 'ສະຫຼຸບ',
   'app.kuaicaiwu.partnerStatement.col.debit': 'ເດບິດ',
   'app.kuaicaiwu.partnerStatement.col.credit': 'ສິນເຊື່ອ',
+  'app.kuaicaiwu.partnerStatement.col.docAmount': 'ຈຳນວນເອກະສານ',
+  'app.kuaicaiwu.partnerStatement.col.priorStatedAmount': 'ກວດແລ້ວ',
+  'app.kuaicaiwu.partnerStatement.col.remainingAmount': 'ຍັງບໍ່ກວດ',
+  'app.kuaicaiwu.partnerStatement.col.statementAmount': 'ຈຳນວນກວດຄັ້ງນີ້',
   'app.kuaicaiwu.partnerStatement.col.periodRange': 'ໄລຍະເວລາ',
   'app.kuaicaiwu.partnerStatement.col.debitTotal': 'ເດບິດໄລຍະເວລາ',
   'app.kuaicaiwu.partnerStatement.col.creditTotal': 'ສິນເຊື່ອໄລຍະເວລາ',
   'app.kuaicaiwu.partnerStatement.selectCustomer': 'ເລືອກລູກຄ້າ',
   'app.kuaicaiwu.partnerStatement.selectSupplier': 'ເລືອກຜູ້ສະຫນອງ',
   'app.kuaicaiwu.partnerStatement.detail.confirmTitle': 'ຢືນຢັນຖະແຫຼງການ',
+  'app.kuaicaiwu.partnerStatement.detail.saveLines': 'ບັນທຶກຈຳນວນກວດ',
+  'app.kuaicaiwu.partnerStatement.detail.linesSaved': 'ບັນທຶກຈຳນວນກວດແລ້ວ',
+  'app.kuaicaiwu.partnerStatement.detail.saveLinesBeforeConfirm': 'ກະລຸນາບັນທຶກຈຳນວນກວດກ່ອນຢືນຢັນ',
+  'app.kuaicaiwu.partnerStatement.detail.unsavedLinesHint': 'ຈຳນວນກວດຖືກປ່ຽນແລ້ວ. ກົດບັນທຶກຈຳນວນກວດກ່ອນຢືນຢັນ ຫຼືສົ່ງອອກ.',
   'app.kuaicaiwu.partnerStatement.detail.confirmContent': 'ຢືນຢັນຄຳຖະແຫຼງ {{code}} ຖືກຕ້ອງບໍ?',
   'app.kuaicaiwu.partnerStatement.detail.confirmed': 'ຢືນຢັນ',
   'app.kuaicaiwu.partnerStatement.detail.internalConfirm': 'ຢືນຢັນພາຍໃນ',
@@ -19916,6 +19926,8 @@ export default {
   'app.kuaizhizao.quality.traceability.noGraphData': 'ບໍ່ມີການພົວພັນການຕິດຕາມທີ່ຈະສະແດງ',
   'app.kuaizhizao.quality.traceability.eventTimeline': 'ຕາຕະລາງນັດໝາຍ',
   'app.kuaizhizao.quality.traceability.eventTime': 'ເວລາ',
+  'app.kuaizhizao.quality.traceability.sankeyLinkSource': 'ແຫຼ່ງທີ່ມາ',
+  'app.kuaizhizao.quality.traceability.sankeyLinkTarget': 'ເປົ້າໝາຍ',
   'app.kuaizhizao.quality.traceability.documentType': 'ປະເພດເອກະສານ',
   'app.kuaizhizao.quality.traceability.documentCode': 'ເອກະສານເລກທີ.',
   'app.kuaizhizao.quality.traceability.exportReport': 'ສົ່ງອອກລາຍງານການຕິດຕາມ',
@@ -23310,6 +23322,76 @@ export default {
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.title': 'ການດຶງການຊື້ໄວຂຶ້ນ, ດຶງ QC ແລະລາຄາຕະຫຼາດການໂຫຼດ',
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.description':
     'ໃບຮັບເງິນຊື້ ແລະໃບຮັບ-ແຈ້ງການດຶງແບບສອບຖາມບໍ່ຂຽນຄືນປະລິມານຕໍ່ຄໍາສັ່ງ. ສິນຄ້າຂາເຂົ້າແລະສິນຄ້າສໍາເລັດຮູບ QC ດຶງແລະ inbound ການກວດສອບໃນປັດຈຸບັນແກ້ໄຂບັນຫານະໂຍບາຍການກວດກາວັດສະດຸໃນ batch. ລາຍຊື່ການປ່ຽນແປງທາງວິສະວະກໍາຈະບໍ່ສ້າງຕົວຢ່າງການອະນຸມັດແຖວຕໍ່ແຖວທີ່ອ່ານແລ້ວ. ບັນຊີລາຍຊື່ລາຄາຕະຫຼາດໃນມື້ນີ້ປະຕິບັດຕໍ່ລາຄາມື້ກ່ອນຫນ້າອ່ານໄດ້ເທົ່ານັ້ນໂດຍບໍ່ມີການຂຽນເປີດ. ການຕື່ມຂໍ້ມູນໃບຮັບເງິນເກົ່າຖືກລຶບອອກຈາກ API ລາຍຊື່ໃບຮັບ.',
+  'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.title':
+    'ແກ້ຈຳນວນຄືນວັດຖຸການຜະລິດໃນລາຍການ hub ນຳເຂົ້າ',
+  'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.description':
+    'ລາຍການ ແລະລາຍລະອຽດຄືນວັດຖຸການຜະລິດໃນ hub ນຳເຂົ້າລວມຈຳນວນຄືນແລ້ວ; ລໍຖ້າຄືນ/ຄືນແລ້ວບໍ່ສະແດງຂີດຂີດ; ຄວາມຄືບໜ້ານຳເຂົ້າສອດຄ່ອງຈຳນວນ.',
+  'pages.dashboard.updateLog.entries.sop-create-attachments-payload-fix.title':
+    'ແກ້ການສ້າງ SOP ເມື່ອບໍ່ມີໄຟລ໌ແນບ',
+  'pages.dashboard.updateLog.entries.sop-create-attachments-payload-fix.description':
+    'ແກ້ການສ້າງ SOP ແບບອີເລັກທຣອນິກລົ້ມເຫລວເມື່ອບໍ່ມີໄຟລ໌ແນບ; ແກ້ໄຂຮອງຮັບຮູບແບບບັນທຶກໄຟລ໌ສະແກນຄວບຄຸມ.',
+  'pages.dashboard.updateLog.entries.invoice-pull-tax-inclusive-rounding-fix.title':
+    'ແກ້ການປັດເສດລວມພາສີເມື່ອດຶງໃບແຈ້ງ',
+  'pages.dashboard.updateLog.entries.invoice-pull-tax-inclusive-rounding-fix.description':
+    'ດຶງໃບຂາຍ/ຊື້ ແລະລວມໃບໃຊ້ຍອດລວມພາສີເປັນແຫຼ່ງຄວາມຈິງເມື່ອປ້ອນແບບລວມພາສີ ເພື່ອບໍ່ໃຫ້ 60000.00 ກາຍ 60000.01 ແລະເກີນວົງເງິນໃບແຈ້ງ.',
+  'pages.dashboard.updateLog.entries.invoice-pull-amount-field-grid-fix.title':
+    'ຈັດຊ່ອງປ້ອນຈຳນວນເງິນດຶງໃບໃຫ້ຕົງຕາຕະລາງ',
+  'pages.dashboard.updateLog.entries.invoice-pull-amount-field-grid-fix.description':
+    'ເມື່ອສ້າງໃບຂາຍ/ຊື້ຈາກເອກະສານຕົ້ນທາງ ສະວິດເລືອກ « ປ້ອນຈຳນວນ » ຖືກຫໍ່ FormModalGridBlock ໃຫ້ປ້າຍ ແລະຊ່ອງປ້ອນຊิดຊ້າຍກັບຄໍາອື່ນໃນແຖວ ໂດຍບໍ່ຖືກຕັດ.',
+  'pages.dashboard.updateLog.entries.merge-settlement-code-batch-fix.title':
+    'ແກ້ການອອກເລກກົງ HX ລວມຮັບ/ຈ່າຍ',
+  'pages.dashboard.updateLog.entries.merge-settlement-code-batch-fix.description':
+    'ລວມຮັບ/ຈ່າຍຫຼາຍເອກະສານຕົ້ນທາງຈະອອກເລກກົງ HX ບໍ່ຊ້ຳໃນທຸລະກຳດຽວ ເພື່ອບໍ່ໃຫ້ຊື່ຂັດກັນແລະເຊີບເວີຜິດພາດ.',
+  'pages.dashboard.updateLog.entries.merge-voucher-bank-summary-fix.title':
+    'ລວມຮັບ/ຈ່າຍເງິນສ້າງບົດຄຳສະຫຼຸບທະນາຄານອັດຕະໂນມັດ',
+  'pages.dashboard.updateLog.entries.merge-voucher-bank-summary-fix.description':
+    'ຫຼັງບັນທຶກລວມຮັບ/ຈ່າຍເງິນ, ບົດຄຳສະຫຼຸບລາຍການທະນາຄານຈະມີເລກທີ່, ຄູ່ຄ້າ ແລະເລກລວມຄືນ/ຈ່າຍທີ່ກ່ຽວຂ້ອງ. ໃຊ້ repair_merge_voucher_bank_summaries ເຕີມຂໍ້ມູນເກົ່າທີ່ວ່າງໂດຍບໍ່ຕ້ອງເປີດໜ້າລາຍການທະນາຄານ.',
+  'pages.dashboard.updateLog.entries.merge-invoice-source-allocation-fix.title':
+    'ຮວມໃບເກັບເງິນແບ່ງຈຳນວນທີ່ອອກຕາມເອກະສານຕົ້ນທາງ',
+  'pages.dashboard.updateLog.entries.merge-invoice-source-allocation-fix.description':
+    'ຫຼັງຮວມໃບເກັບເງິນ, ລາຍການຮັບ/ຈ່າຍສະແດງຈຳນວນ ແລະສະຖານະຕາມແຕ່ລະແຖວ. ໃຊ້ repair_merge_invoice_allocations ແກ້ຂໍ້ມູນເກົ່າເພື່ອບໍ່ໃຫ້ຍອດທັງໃບໄປຕິດເອກະສານແຖວທຳອິດ.',
+  'pages.dashboard.updateLog.entries.partner-statement-preview-line-selection.title':
+    'ຕົວຢ່າງຖະແຫຼງການຮອງຮັບການເລືອກແຖວ',
+  'pages.dashboard.updateLog.entries.partner-statement-preview-line-selection.description':
+    'ຕາຕະລາງຕົວຢ່າງຕອນສ້າງມີກ່ອງເລືອກແຖວ; ເລືອກເອກະສານທີ່ຈະລວມໃນຄັ້ງນີ້, ລະບົບຈະບັນທຶກແຕ່ແຖວທີ່ເລືອກ ແລະຄິດຍອດລວມຕາມການເລືອກ.',
+  'pages.dashboard.updateLog.entries.partner-statement-partial-reconciliation.title':
+    'ຖະແຫຼງການຄູ່ຮ່ວມງານຮອງຮັບການກວດແບບແບ່ງສ່ວນ',
+  'pages.dashboard.updateLog.entries.partner-statement-partial-reconciliation.description':
+    'ລາຍການສະແດງຈຳນວນເອກະສານ, ຈຳນວນທີ່ກວດແລ້ວ ແລະຍັງບໍ່ກວດ; ຈຳນວນກວດຄັ້ງນີ້ແກ້ໄດ້ໃນຕົວຢ່າງ ແລະຮ່າງ. ເອກະສານດຽວກັນສາມາດກວດແບບແບ່ງຫຼາຍຄັ້ງຈົນກວດຄົບ.',
+  'pages.dashboard.updateLog.entries.document-reconciliation-gap-hierarchy.title':
+    'ຊ່ອງຫວ່າງຄູ່ຮ່ວມງານສະແດງຊັ້ນຮັບ/ຈ່າຍ',
+  'pages.dashboard.updateLog.entries.document-reconciliation-gap-hierarchy.description':
+    'ໃນການກວດກັບເອກະສານທຸລະກິດ, ໃບຮັບ/ໃບຈ່າຍຈະສະແດງໃຕ້ໃບຮັບ/ຈ່າຍຕາມການຕັດຍອດ ເຊິ່ງສອດຄ່ອງກັບໃບແຈ້ງຍອດຄູ່ຮ່ວມງານ; ການຈັດລຽງຍັງຄົງແຖວແມ່-ລູກໄວ້ຮ່ວມກັນ.',
+  'pages.dashboard.updateLog.entries.warehouse-doc-edit-withdraw-unify.title':
+    'ລະບົບແກ້ໄຂ ແລະ ຖອນເອກະສານເຂົ້າ-ອອກສາງໃຫ້ເປັນເອກະພາບ',
+  'pages.dashboard.updateLog.entries.warehouse-doc-edit-withdraw-unify.description':
+    'ກ່ອນຢືນຢັນອອກສາງ ສາມາດແກ້ໄຂສາງ ບັນທຶກ ປະລິມານແຖວ ແລະ ເລກລ໋ອດໃນລາຍລະອຽດ Hub ອອກສາງໄດ້; ປະຕູແກ້ໄຂ ແລະ ຖອນຂອງ Hub ເຂົ້າ/ອອກສາງໃຊ້ capabilities ຝັ່ງ backend ຮ່ວມກັນ ເອກະສານທີ່ລົງບັນຊີແລ້ວຕ້ອງຖອນກ່ອນຈຶ່ງແກ້ໄຂໄດ້.',
+  'pages.dashboard.updateLog.entries.quality-traceability-ui-polish.title':
+    'ປັບປຸງ UI ການຕິດຕາມແລະແຜນຜັງການໄຫຼ',
+  'pages.dashboard.updateLog.entries.quality-traceability-ui-polish.description':
+    'ເສັ້ນຂອบພາບລວມໃຊ້ມາດຕະຖານ 1px; ຖັນເວລາໃນຕາຕະລາງເຫດການກວ້າງຂຶ້ນແລະສະແດງແຖີດດຽວ ພ້ອມເສັ້ນຂອบນອກຕາຕະລາງ; ຄຳແນະນຳ hover ຂອງເສັ້ນເຊື່ອມໃນແຜນຜັງການໄຫຼສະແດງແຫຼ່ງທີ່ມາ ແລະ ເປົ້າໝາຍເປັນພາສາຈີນ; ແຜນຜັງ Sankey ໃຊ້ສີສົດໃສ ແລະ ປະເພດເອກະສານດຽວກັນໃຊ້ສີດຽວກັນ.',
+  'pages.dashboard.updateLog.entries.work-order-reporting-producer-card-sync.title':
+    'ຜູ້ຜະລິດທີ່ເລືອກໃນການລາຍງານງານສອດຄ່ອງກັບບັດຂັ້ນຕອນ',
+  'pages.dashboard.updateLog.entries.work-order-reporting-producer-card-sync.description':
+    'ຫຼັງເລືອກຜູ້ຜະລິດທີ່ບໍ່ແມ່ນຄ່າເລີ່ມຕົ້ນໃນການລາຍງານງານໄວ ຫຼື ການຈັດການລາຍງານງານ ຊື່ຜູ້ປະຕິບັດໃນບັດຂັ້ນຕອນຈະຊິງກັບຜູ້ທີ່ເລືອກໃນຄັ້ງນີ້ ບໍ່ຍັງສະແດງຜູ້ປະຕິບັດເລີ່ມຕົ້ນຈາກການມອບໝາຍອີກ.',
+  'pages.dashboard.updateLog.entries.quality-inspection-inspector-sync.title':
+    'ລາຍການກວດຄຸນນະພາບສະແດງຜູ້ກວດຕາມທີ່ເລືອກໃນຟອມ',
+  'pages.dashboard.updateLog.entries.quality-inspection-inspector-sync.description':
+    'ເມື່ອດຳເນີນການກວດຮັບເຂົ້າ ຂັ້ນຕອນ ສຳເລັດຮູບ ແລະ OQC ຜູ້ກວດທີ່ເລືອກໃນຟອມຈະຖືກບັນທຶກຖືກຕ້ອງ; ລາຍການ ແລະ ລາຍລະອຽດບໍ່ຍັງສະແດງຜູ້ປະຕິບັດປັດຈຸບັນຄົງທີ່ອີກ.',
+  'pages.dashboard.updateLog.entries.purchase-order-header-delivery-sync.title':
+    'ວັນທີຮັບສິນຄ້າຫົວເອກະສານສັ່ງຊື້ຊິງຄ໌ກັບແຖວ',
+  'pages.dashboard.updateLog.entries.purchase-order-header-delivery-sync.description':
+    'ເມື່ອແກ້ໄຂໃບສັ່ງຊື້ ການປ່ຽນວັນທີຮັບສິນຄ້າທີ່ຫົວເອກະສານຈະຊິງຄ໌ໄປແຖວທີ່ຍັງບໍ່ໄດ້ແກ້ແຍກ; ແຕ່ລະແຖວຍັງແກ້ໄດ້ຄົນເດັດ, ຄືກັບໃບສັ່ງຂາຍ.',
+  'pages.dashboard.updateLog.entries.purchase-order-delivery-date-from-requisition.title':
+    'ຊິງວັນຮັບສິນຄ້າຄຳສັ່ງຊື້ກັບຄຳຂໍຊື້',
+  'pages.dashboard.updateLog.entries.purchase-order-delivery-date-from-requisition.description':
+    'ເມື່ອແປງຄຳຂໍຊື້ເປັນຄຳສັ່ງຊື້ ວັນຮັບຂອງຫົວແລະບັນທັດຈະຮັບຊື່ຈາກວັນບັນທັດຄຳຂໍ ແລະວັນຮັບຫົວຄຳຂໍ; ຫົວໃຊ້ວັນຊ້າສຸດໃນບັນທັດ. ບັນທຶກຄຳສັ່ງຊື້ຈະຊິງວັນຮັບຫົວກັບບັນທັດອັດຕະໂນມັດ.',
+  'pages.dashboard.updateLog.entries.purchase-price-auto-fill.title': 'ເຕີມລາຄາຊື້ອັດຕະໂນມັດໃນຄຳຂໍ ແລະຄຳສັ່ງຊື້',
+  'pages.dashboard.updateLog.entries.purchase-price-auto-fill.description':
+    'ເມື່ອດັນນຳຄິດໄລ່ຄວามຕ້ອງການໄປຄຳຂໍຊື້ ລະບົບຈະອ່ານລາຄາຈາກການຕັ້ງຄ່າແຫຼ່ງວັດຖຸ ຫຼືລາຄາຊື້ເລີ່ມຕົ້ນໃສ່ລາຄາແນະນຳ; ເມື່ອແປງຄຳຂໍຊື້ເປັນຄຳສັ່ງຊື້ ຖ້າລາຄາບັນທັດວ່າງຈະກັບໄປໃຊ້ລາຄາຊື້ໃນຂໍ້ມູນວັດຖຸ ເຊື່ອມກັບການເລືອກວັດຖຸດ້ວຍມື.',
+  'pages.dashboard.updateLog.entries.rich-page-help-views.title': 'ເພີ່ມມຸມມອງຊ່ວຍເຫຼືອໃນທົ່ວລະບົບ',
+  'pages.dashboard.updateLog.entries.rich-page-help-views.description':
+    'ລາຍການເອກະສານ, ຂໍ້ມູນຫຼັກ, ການຕັ້ງຄ່າລະບົບ, workbench ໂມດູນ ແລະລາຍງານ ສາມາດສັບໄປມຸມມອງຊ່ວຍເຫຼືອ ເພື່ອອ່ານຄຳແນະນຳຕາມໜ້າທີ່ກຳລັງໃຊ້. ຄຸ້ມ Kuaizhizao, Kuaicaiwu, ຂໍ້ມູນຫຼັກ, PLM, IoT; ລາຍງານໃຊ້ບົດຊ່ວຍເຫຼືອຮ່ວມກັນ.',
   'pages.dashboard.updateLog.entries.locale-pack-gap-sync.title': 'ປັບຄີພາສາໃຫ້ກົງກັນ ແລະເພີ່ມການຄຸ້ມຄອງພາສາລາວ',
   'pages.dashboard.updateLog.entries.locale-pack-gap-sync.description':
     'ຄີ i18n ຂອງຈີນດັ້ງເດີມ, ອັງກິດ, ຍີ່ປຸ່ນ, ຫວຽດນາມ ແລະລາວ ກົງກັບຈີນງ່າຍແລ້ວ; ພາສາລາວໄດ້ຖືກແປເພີ່ມໃນໂມດູນຕັ້ງຄ່າລະບົບ, Kuaizhizao ແລະຂໍ້ມູນຫຼັກ, ພ້ອມ glossary ແລະສຄິບ sync locale. ຂໍ້ຄວາມຄ້າງເປັນອັງກິດໃນ UI ລາວຫຼຸດຈາກປະມານ 58% ເຫຼືອປະມານ 2%.',
@@ -23386,10 +23468,10 @@ export default {
   'pages.dashboard.updateLog.entries.price-settlement.description':
     'Support zero-price orders for monthly partners, batch settlement workbench, and automatic AR/AP delta adjustments.',
   'pages.dashboard.updateLog.entries.update-log-panel.description': 'ສະແດງການອັບເດດແພລດຟອມຕາມປະເພດ ແລະເບິ່ງທັງໝົດຜ່ານບັນທຶກການອັບເດດ.',
-  'pages.dashboard.updateLog.entries.calendar-monday-first.title': 'ປະຕິທິນແຜງຄວບຄຸມເລີ່ມອາທິດທີກວາມ',
-  'pages.dashboard.updateLog.entries.weather-text-contrast.title': 'ປັບປຸງຄວາມຊັດຂອງຕົວອັກສອນສ່ວນຫົວປະຕິທິນອາກາດ',
-  'pages.dashboard.updateLog.entries.weather-sky-background.title': 'ພື້ນຫຼັງສ່ວນຫົວປະຕິທິນອາກາດຈຳລອງສີຟ້າ ແລະເຊື່ອມກັບສະພາບອາກາດ',
-  'pages.dashboard.updateLog.entries.weather-weekday-time.title': 'ປັບຕຳແໜ່ງວັນໃນອາທິດ ຮູບແບບເວລາ ແລະຂະໜາດຕົວເລກປະຕິທິນອາກາດ',
+  'pages.dashboard.updateLog.entries.workbench-calendar-weather-polish.title':
+    'ປັບປຸງປະຕິທິນແຜງຄວບຄຸມ ແລະປຌັກອິນອາກາດ',
+  'pages.dashboard.updateLog.entries.workbench-calendar-weather-polish.description':
+    'ປະຕິທິນເລີ່ມອາທິດທີກວາມ; ສ່ວນຫົວປະຕິທິນອາກາດໃຊ້ພື້ນຫຼັງສີຟ້າເຊື່ອມກັບສະພາບອາກາດ, ປັບຄວາມຊັດຕົວອັກສອນ, ຕຳແໜ່ງວັນ ແລະຮູບແບບເວລາ.',
   'pages.dashboard.operationCardsTitle': 'ການດໍາເນີນງານ WIP',
   'pages.dashboard.operationCardsCount': '{{count}} ການດໍາເນີນງານ',
   'pages.dashboard.operationCardsEmpty': 'ບໍ່ມີການດໍາເນີນງານຢູ່ໃນຄວາມຄືບຫນ້າ',

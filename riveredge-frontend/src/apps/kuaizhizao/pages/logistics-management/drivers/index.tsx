@@ -19,6 +19,7 @@ import {
 } from '../shared/logisticsListPresentation';
 import { deleteDriver, listDrivers, type Driver } from '../../../services/logistics';
 import { DriverFormModal } from '../shared/DriverFormModal';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const DriversPage: React.FC = () => {
   const { t } = useTranslation();
@@ -168,6 +169,8 @@ const DriversPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<Driver>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.drivers')}
         actionRef={actionRef}
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.logistics-management.drivers.v2"

@@ -38,6 +38,7 @@ import {
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaizhizao.moldOps.borrow';
 const RESOURCE = 'kuaizhizao:mold-borrow';
@@ -363,6 +364,8 @@ const MoldBorrowsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MoldBorrow>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.moldBorrows)}
           headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-borrows-equip-rank-v1"
           actionRef={actionRef}

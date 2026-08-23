@@ -187,6 +187,14 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
    * 设备/模具/工装单据：单号 → 资产编码/名称 → 类型/级别/紧急度 → 结果标识 → 日期 → 人员 → lifecycle/status → action
    */
   document_no: 10,
+  /** 好力 GO 品质：单号 → 车间 → 设备 → 类型 → 描述 → 人员 → 时间 → lifecycle */
+  sheet_no: 10,
+  issue_kind: 20.45,
+  stop_kind: 20.45,
+  equipment_display: 25,
+  stop_reason: 40,
+  stop_started_at: 64.4,
+  creator_name: 76.2,
   fault_no: 10,
   repair_no: 10,
   plan_no: 10,

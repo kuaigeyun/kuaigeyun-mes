@@ -50,6 +50,7 @@ export type OutboundDetailDrawerProps = {
   notesEditor?: React.ReactNode;
   traceDocument?: React.ComponentProps<typeof DetailDrawerTemplate>['traceDocument'];
   showReadonlyActions?: boolean;
+  editMode?: boolean;
 };
 
 export const OutboundDetailDrawer: React.FC<OutboundDetailDrawerProps> = ({
@@ -68,6 +69,7 @@ export const OutboundDetailDrawer: React.FC<OutboundDetailDrawerProps> = ({
   timeline,
   notesEditor,
   traceDocument,
+  editMode = false,
 }) => {
   const { t } = useTranslation();
 
@@ -89,7 +91,9 @@ export const OutboundDetailDrawer: React.FC<OutboundDetailDrawerProps> = ({
   const nextSteps = lifecycle?.nextStepSuggestions;
 
   const code = String(effective.delivery_code || effective.picking_code || '').trim();
-  const title = `${t('app.kuaizhizao.warehouseOutbound.detail.title')}${code ? ` - ${code}` : ''}`;
+  const title = editMode
+    ? `${t('common.edit')}${code ? ` - ${code}` : ''}`
+    : `${t('app.kuaizhizao.warehouseOutbound.detail.title')}${code ? ` - ${code}` : ''}`;
 
   const showNotes = Boolean(notesEditor || effective.notes);
 

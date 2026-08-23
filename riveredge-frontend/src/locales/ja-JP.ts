@@ -14707,8 +14707,10 @@ export default {
   'app.kuaicaiwu.partnerStatement.previewHint': '取引先と開始日・終了日を選択し、「プレビュー」をクリックして詳細を表示します。',
   'app.kuaicaiwu.partnerStatement.provisionalPricingHint': '本期間に月次価格決定待ちの明細が {{count}} 行あります',
   'app.kuaicaiwu.partnerStatement.goPriceSettlement': '月次価格決定へ',
-  'app.kuaicaiwu.partnerStatement.previewFooter': '明細書には、承認された売掛金/買掛金と確認された入金/支払いが要約されます。他の明細書に含まれる伝票は自動除外されます。生成後に Excel/PDF をエクスポートしてパートナーに送信します。',
-  'app.kuaicaiwu.partnerStatement.excludedStatedHint': '他の明細書に含まれる {{count}} 件の伝票を自動除外しました',
+  'app.kuaicaiwu.partnerStatement.previewFooter': '明細書には承認済み売掛金/買掛金と確認済み入金/支払いが要約されます。プレビュー表で今回含める伝票にチェックを入れ、今回対賬額を調整できます。合計は選択行に連動します。生成後に Excel/PDF をエクスポートして相手先に送付します。',
+  'app.kuaicaiwu.partnerStatement.previewSelectHint': '今回の明細書に含める伝票にチェックを入れてください。合計は選択 {{count}} / {{total}} 行で計算されます',
+  'app.kuaicaiwu.partnerStatement.selectLinesRequired': '対賬明細を1行以上選択してください',
+  'app.kuaicaiwu.partnerStatement.excludedStatedHint': '対賬済みの {{count}} 件の伝票を自動除外しました',
   'app.kuaicaiwu.partnerStatement.periodAlreadyExists': '{{period}} には既に明細書 {{code}} があります。既存を開くか、下書きを削除してから再生成してください',
   'app.kuaicaiwu.partnerStatement.periodHasPriorStatement': '{{period}} には既に明細書 {{code}} があります。下表は未取り込み分で、新しい明細書を作成できます',
   'app.kuaicaiwu.partnerStatement.periodFullyStated': '{{period}} の伝票はすべて明細書 {{code}} に含まれており、再生成できる明細がありません',
@@ -14720,12 +14722,20 @@ export default {
   'app.kuaicaiwu.partnerStatement.col.summary': 'まとめ',
   'app.kuaicaiwu.partnerStatement.col.debit': 'デビット',
   'app.kuaicaiwu.partnerStatement.col.credit': 'クレジット',
+  'app.kuaicaiwu.partnerStatement.col.docAmount': '伝票金額',
+  'app.kuaicaiwu.partnerStatement.col.priorStatedAmount': '既対賬額',
+  'app.kuaicaiwu.partnerStatement.col.remainingAmount': '未対賬額',
+  'app.kuaicaiwu.partnerStatement.col.statementAmount': '今回対賬額',
   'app.kuaicaiwu.partnerStatement.col.periodRange': '期間',
   'app.kuaicaiwu.partnerStatement.col.debitTotal': '期間借方',
   'app.kuaicaiwu.partnerStatement.col.creditTotal': '期間クレジット',
   'app.kuaicaiwu.partnerStatement.selectCustomer': '顧客を選択してください',
   'app.kuaicaiwu.partnerStatement.selectSupplier': 'サプライヤーを選択してください',
   'app.kuaicaiwu.partnerStatement.detail.confirmTitle': 'ステートメントの確認',
+  'app.kuaicaiwu.partnerStatement.detail.saveLines': '対賬金額を保存',
+  'app.kuaicaiwu.partnerStatement.detail.linesSaved': '対賬金額を保存しました',
+  'app.kuaicaiwu.partnerStatement.detail.saveLinesBeforeConfirm': '確認前に対賬金額を保存してください',
+  'app.kuaicaiwu.partnerStatement.detail.unsavedLinesHint': '対賬金額が変更されています。確認またはエクスポート前に「対賬金額を保存」をクリックしてください',
   'app.kuaicaiwu.partnerStatement.detail.confirmContent': 'ステートメント {{code}} が正しいことを確認しますか?',
   'app.kuaicaiwu.partnerStatement.detail.confirmed': '確認済み',
   'app.kuaicaiwu.partnerStatement.detail.internalConfirm': '内部確認',
@@ -19747,6 +19757,8 @@ export default {
   'app.kuaizhizao.quality.traceability.noGraphData': '表示できるトレーサビリティ関係がありません',
   'app.kuaizhizao.quality.traceability.eventTimeline': 'イベントタイムライン',
   'app.kuaizhizao.quality.traceability.eventTime': '時間',
+  'app.kuaizhizao.quality.traceability.sankeyLinkSource': 'ソース',
+  'app.kuaizhizao.quality.traceability.sankeyLinkTarget': 'ターゲット',
   'app.kuaizhizao.quality.traceability.documentType': '伝票種別',
   'app.kuaizhizao.quality.traceability.documentCode': '伝票番号',
   'app.kuaizhizao.quality.traceability.exportReport': 'トレースレポートをエクスポート',
@@ -23086,6 +23098,76 @@ export default {
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.title': '購買取込、検査取込と相場一覧の読み込みを高速化',
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.description':
     '購買入庫・入荷通知の取込で注文ごとの数量書き戻しを廃止。入荷/完成品検査の取込と入庫確認は物料検査方針を一括解決。工程変更一覧の読み取り時に承認インスタンスを行ごと補建しない。原料相場の当日一覧は前日単価を読み取り専用で表示し、一覧表示時の書き込みを廃止。入金伝票一覧から履歴データのバックフィルを削除。',
+  'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.title':
+    '生産返却入庫数量の一覧表示修正',
+  'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.description':
+    '入庫 Hub の生産返却一覧・詳細で返却数量を集計し、待返却・返却済みが「-」にならないよう修正。入庫進捗も数量に連動。',
+  'pages.dashboard.updateLog.entries.sop-create-attachments-payload-fix.title':
+    'SOP新規作成時の添付送信修正',
+  'pages.dashboard.updateLog.entries.sop-create-attachments-payload-fix.description':
+    '電子SOPを添付なしで新規作成した際の失敗を修正。編集読み込みは管理下スキャン原本の保存形式に対応。',
+  'pages.dashboard.updateLog.entries.invoice-pull-tax-inclusive-rounding-fix.title':
+    '取込開票の税込合計丸め誤差を修正',
+  'pages.dashboard.updateLog.entries.invoice-pull-tax-inclusive-rounding-fix.description':
+    '売上/仕入取込と合并請求で税込入力時は税込合計を真源として税抜・税額を逆算し、上限どおり 60000.00 が 60000.01 となり請求可能額超過になる問題を防止します。',
+  'pages.dashboard.updateLog.entries.invoice-pull-amount-field-grid-fix.title':
+    '取込開票の金額入力をフォーム栅格に揃える',
+  'pages.dashboard.updateLog.entries.invoice-pull-amount-field-grid-fix.description':
+    '源伝票から売上/仕入請求書を作成する際、「金額入力」セグメントを FormModalGridBlock で包み、ラベルと入力が同行フィールドと左揃えになるよう修正しました。',
+  'pages.dashboard.updateLog.entries.merge-settlement-code-batch-fix.title':
+    '合併入金/支払の消込番号を一括採番',
+  'pages.dashboard.updateLog.entries.merge-settlement-code-batch-fix.description':
+    '合併入金・合併支払で複数源伝票を消込する際、1 トランザクションで重複しない HX 番号を連続採番し、一意制約エラーを防止します。',
+  'pages.dashboard.updateLog.entries.merge-voucher-bank-summary-fix.title':
+    '合併入金/支払の銀行明細に摘要を自動付与',
+  'pages.dashboard.updateLog.entries.merge-voucher-bank-summary-fix.description':
+    '合併入金・合併支払の記帳後、銀行明細摘要に伝票番号、取引先、関連売掛/買掛番号を表示します。履歴の空摘要は repair_merge_voucher_bank_summaries で一括回填できます。',
+  'pages.dashboard.updateLog.entries.merge-invoice-source-allocation-fix.title':
+    '合并开票で源伝票ごとに請求済み金額を按分',
+  'pages.dashboard.updateLog.entries.merge-invoice-source-allocation-fix.description':
+    '合并开票後、売掛/買掛リストは源伝票ごとに請求済み金額と状態を表示します。履歴データは repair_merge_invoice_allocations スクリプトで按分関連を回填できます。',
+  'pages.dashboard.updateLog.entries.partner-statement-preview-line-selection.title':
+    '取引先明細書プレビューで行選択に対応',
+  'pages.dashboard.updateLog.entries.partner-statement-preview-line-selection.description':
+    '新規作成プレビュー表にチェック列を追加し、今回含める伝票を手動選択できます。生成時は選択行のみ書き込み、合計も選択に連動して再計算されます。',
+  'pages.dashboard.updateLog.entries.partner-statement-partial-reconciliation.title':
+    '取引先明細書で部分対賬に対応',
+  'pages.dashboard.updateLog.entries.partner-statement-partial-reconciliation.description':
+    '明細に伝票金額、既対賬額、未対賬額を表示し、プレビューと下書きで今回対賬額を編集できます。同一伝票を複数回に分けて対賬でき、対賬済み明細は次回プレビューに含まれません。',
+  'pages.dashboard.updateLog.entries.document-reconciliation-gap-hierarchy.title':
+    '業財対賬の往来ギャップに収支階層を表示',
+  'pages.dashboard.updateLog.entries.document-reconciliation-gap-hierarchy.description':
+    '往来ギャップ一覧で入金伝票・支払伝票を消込関係に基づき売掛・買掛の下にインデント表示（取引先対账单と同様）。並べ替え時も親子行を分離しません。',
+  'pages.dashboard.updateLog.entries.warehouse-doc-edit-withdraw-unify.title':
+    '入出庫伝票の撤回と編集ルールを統一',
+  'pages.dashboard.updateLog.entries.warehouse-doc-edit-withdraw-unify.description':
+    '出庫確認前の販売出庫は出庫 Hub 詳細で倉庫、備考、明細数量、ロット番号を編集できます。入出庫 Hub の編集と撤回ゲートをバックエンド capabilities に統一し、出庫済み・入庫済みは撤回後にのみ編集できます。',
+  'pages.dashboard.updateLog.entries.quality-traceability-ui-polish.title':
+    'トレーサビリティ画面と流向図の表示改善',
+  'pages.dashboard.updateLog.entries.quality-traceability-ui-polish.description':
+    '概要情報の枠線を標準 1px に統一。イベントタイムラインの時刻列を拡幅して 1 行表示にし、表に外枠を追加。流向図リンクのホバー提示を中国語のソースとターゲット表示に変更。サンキー図は明るい配色とし、同一伝票種別は同色で表示。',
+  'pages.dashboard.updateLog.entries.work-order-reporting-producer-card-sync.title':
+    '作業指示書報工の生産担当者と工程カードを一致',
+  'pages.dashboard.updateLog.entries.work-order-reporting-producer-card-sync.description':
+    'クイック報工または報工管理で既定以外の生産担当者を選んだ場合、工程カードの「担当者」が今回の報工で選んだ担当者に同期され、派工の既定担当者のまま表示されなくなります。',
+  'pages.dashboard.updateLog.entries.quality-inspection-inspector-sync.title':
+    '検査一覧の検査員が実施フォームの選択と一致',
+  'pages.dashboard.updateLog.entries.quality-inspection-inspector-sync.description':
+    '入荷、工程、完成品、出荷検査の実施時に選択した検査員が正しく保存されます。一覧と詳細が常に操作者表示になる問題を修正しました。',
+  'pages.dashboard.updateLog.entries.purchase-order-header-delivery-sync.title':
+    '購買発注のヘッダー納期を明細へ同期',
+  'pages.dashboard.updateLog.entries.purchase-order-header-delivery-sync.description':
+    '購買発注の編集時、ヘッダーの要求納期を変更すると、個別に変更していない明細行へ自動反映されます。明細行は個別に編集可能で、受注と同じ動作です。',
+  'pages.dashboard.updateLog.entries.purchase-order-delivery-date-from-requisition.title':
+    '購買発注の要求納期を購買依頼と揃える',
+  'pages.dashboard.updateLog.entries.purchase-order-delivery-date-from-requisition.description':
+    '購買依頼から発注へ転換する際、ヘッダーと明細の要求納期は依頼行の日付と依頼ヘッダーの要求納期を引き継ぎ、ヘッダーは明細の最遅納期を使います。発注保存時もヘッダー納期を明細と自動同期します。',
+  'pages.dashboard.updateLog.entries.purchase-price-auto-fill.title': '購買依頼・発注で物料の購買単価を自動反映',
+  'pages.dashboard.updateLog.entries.purchase-price-auto-fill.description':
+    '需要計算から購買依頼へ下推する際、物料のソース設定または既定購買単価を提案単価に反映します。購買依頼から発注へ転換する際、行単価が空なら物料マスタの購買単価にフォールバックし、手動選定時と同じ挙動に揃えました。',
+  'pages.dashboard.updateLog.entries.rich-page-help-views.title': '全画面ヘルプビューを追加',
+  'pages.dashboard.updateLog.entries.rich-page-help-views.description':
+    '伝票リスト、マスタ・システム設定、モジュールワークベンチ、レポートでヘルプビューに切り替え、各画面の操作に沿った章立て説明を読めます。快製造・快財務・マスタ・PLM・IoT などをカバー。レポートは共通ヘルプを利用します。',
   'pages.dashboard.updateLog.entries.locale-pack-gap-sync.title': '多言語パックを揃え、ラオ語カバレッジを改善',
   'pages.dashboard.updateLog.entries.locale-pack-gap-sync.description':
     '繁体中国語・英語・日本語・ベトナム語・ラオ語の i18n キーを簡体字中国語と一致させました。ラオ語はシステム設定、快製造、マスタデータ等を一括補訳し、用語集と locale 同期スクリプトを追加。ラオ語 UI の英語フォールバックは約 58% から約 2% に減少しました。',
@@ -23162,10 +23244,10 @@ export default {
   'pages.dashboard.updateLog.entries.price-settlement.description':
     '月次取引先の0円受注、一括決定ワークベンチ、出庫/入庫済数量に対する売掛買掛差額調整の自動生成に対応しました。',
   'pages.dashboard.updateLog.entries.update-log-panel.description': '種類別にプラットフォーム更新を表示し、更新ログから全件を確認できます。',
-  'pages.dashboard.updateLog.entries.calendar-monday-first.title': 'ダッシュボードカレンダーの週始まりを月曜日に変更',
-  'pages.dashboard.updateLog.entries.weather-text-contrast.title': '天気カレンダー上部の文字コントラストを改善',
-  'pages.dashboard.updateLog.entries.weather-sky-background.title': '天気カレンダー上部を空色背景にし天気と連動',
-  'pages.dashboard.updateLog.entries.weather-weekday-time.title': '天気カレンダーの曜日表示位置、時刻形式、文字サイズを調整',
+  'pages.dashboard.updateLog.entries.workbench-calendar-weather-polish.title':
+    'ダッシュボードカレンダーと天気プラグインの体験改善',
+  'pages.dashboard.updateLog.entries.workbench-calendar-weather-polish.description':
+    'カレンダーの週始まりを月曜日に変更。天気プラグイン上部は空色背景で天気と連動し、文字コントラストを改善、曜日表示位置・時刻形式・文字サイズを調整。',
   'pages.dashboard.operationCardsTitle': 'WIP オペレーション',
   'pages.dashboard.operationCardsCount': '{{count}} オペレーション',
   'pages.dashboard.operationCardsEmpty': '進行中の操作はありません',

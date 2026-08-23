@@ -63,6 +63,7 @@ import {
   renderMasterActiveTag,
   renderMasterTypeMarker,
 } from '../../../utils/masterListPresentation';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   buildMasterCrudActiveValueEnum,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
@@ -655,6 +656,8 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
           onRowSelectionChange={setSelectedRowKeys}
           columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
           columnPersistenceId={`apps.master-data.pages.supply-chain.partner-price-books.${partnerType}.list-v3`}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.partnerPriceBooks')}
           headerTitle={pageTitle}
           showCreateButton
           createButtonText={createButtonLabel}

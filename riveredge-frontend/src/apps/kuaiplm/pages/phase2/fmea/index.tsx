@@ -39,6 +39,7 @@ import {
   PLM_PHASE2_PINNED_STATUS_FIELD,
   resolvePhase2FmeaListParams,
 } from '../../../utils/plmListCore';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   buildPhase2FmeaStatusValueEnum,
   getPhase2FmeaStatusOptions,
@@ -282,6 +283,8 @@ const FmeaPage: React.FC = () => {
         />
       ) : null}
       <UniTable<RdFmeaRecord>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaiplm.fmea')}
         headerTitle={t('app.kuaiplm.menu.phase2.fmea')}
         actionRef={actionRef}
         rowKey="id"

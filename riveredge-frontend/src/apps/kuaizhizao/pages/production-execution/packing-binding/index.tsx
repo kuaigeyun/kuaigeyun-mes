@@ -77,6 +77,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 /** 与后端 DECIMAL(12,2) 一致 */
 const MAX_PACKING_QUANTITY = 9999999999.99;
@@ -1167,6 +1168,8 @@ const PackingBindingPage: React.FC = () => {
         />
         <UniTable<PackingBinding>
           headerTitle={t('app.kuaizhizao.packingBinding.title')}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.packingBinding)}
           columnPersistenceId="apps.kuaizhizao.pages.production-execution.packing-binding"
           actionRef={actionRef}
           rowKey="id"

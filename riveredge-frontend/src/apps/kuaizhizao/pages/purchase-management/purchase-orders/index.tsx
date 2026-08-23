@@ -101,7 +101,7 @@ import dayjs from 'dayjs';
 import { formatBusinessDateOnly, formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { coerceFormDate, toApiDateString, formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import {
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder,
   deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder,
@@ -503,6 +503,33 @@ const PurchaseOrdersPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<PurchaseOrder | null>(null);
   const formRef = useRef<any>(null);
+  /** 上一次订单头要求到货日，用于改表头时同步曾跟随表头的明细行 */
+  const lastHeaderDeliveryRef = useRef<ReturnType<typeof dayjs> | null>(null);
+
+  const applyHeaderDeliveryToItemLines = useCallback((delivery: unknown) => {
+    const coerced = coerceFormDate(delivery);
+    if (coerced == null) return;
+    const prevHeader = lastHeaderDeliveryRef.current;
+    const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
+    if (!items.length) return;
+    let changed = false;
+    const next = items.map((it: Record<string, unknown>) => {
+      const lineDate = coerceFormDate(it.required_date);
+      if (lineDate == null) {
+        changed = true;
+        return { ...it, required_date: coerced };
+      }
+      if (prevHeader && lineDate.isSame(prevHeader, 'day')) {
+        changed = true;
+        return { ...it, required_date: coerced };
+      }
+      return it;
+    });
+    lastHeaderDeliveryRef.current = coerced;
+    if (changed) {
+      formRef.current?.setFieldsValue({ items: next });
+    }
+  }, []);
 
   const {
     customFields: purchaseOrderFormCustomFields,
@@ -2000,6 +2027,7 @@ const PurchaseOrdersPage: React.FC = () => {
         required_date: it.required_date || it.requiredDate ? dayjs(it.required_date || it.requiredDate) : undefined,
       }));
       window.setTimeout(() => {
+        const deliveryDate = detail.delivery_date ? dayjs(detail.delivery_date) : undefined;
         formRef.current?.setFieldsValue({
           order_code: detail.order_code,
           supplier_id: detail.supplier_id,
@@ -2007,7 +2035,7 @@ const PurchaseOrdersPage: React.FC = () => {
           supplier_contact: detail.supplier_contact,
           supplier_phone: detail.supplier_phone,
           order_date: detail.order_date,
-          delivery_date: detail.delivery_date,
+          delivery_date: deliveryDate,
           prepayment_amount: detail.prepayment_amount,
           prepayment_bank_account_id: detail.prepayment_bank_account_id,
           order_type: detail.order_type || '标准采购',
@@ -2019,6 +2047,7 @@ const PurchaseOrdersPage: React.FC = () => {
           fee_details: (detail as any).fee_details || [],
           items: items.length > 0 ? items : [defaultOrderItem],
         });
+        lastHeaderDeliveryRef.current = coerceFormDate(deliveryDate);
         loadPurchaseOrderFormFieldValues(orderId).then((fieldFormValues) => {
           formRef.current?.setFieldsValue(fieldFormValues);
         });
@@ -2032,6 +2061,7 @@ const PurchaseOrdersPage: React.FC = () => {
   function initPurchaseOrderCreateForm() {
     setIsEdit(false);
     setCurrentOrder(null);
+    lastHeaderDeliveryRef.current = null;
     resetPurchaseOrderFormFieldValues();
     formRef.current?.resetFields();
     window.setTimeout(() => {
@@ -2426,6 +2456,28 @@ const PurchaseOrdersPage: React.FC = () => {
       const priceType = data.price_type ?? 'tax_exclusive';
       data.currency = data.currency || 'CNY';
 
+      const resolveLineDateStr = (raw: unknown): string | undefined => {
+        const coerced = coerceFormDate(raw);
+        return coerced ? coerced.format('YYYY-MM-DD') : undefined;
+      };
+
+      const lineDateStrs = validItems
+        .map((it: any) => resolveLineDateStr(it.required_date))
+        .filter((value): value is string => Boolean(value));
+
+      const headerDeliveryStr =
+        lineDateStrs.length > 0
+          ? lineDateStrs.reduce((max, cur) => (cur > max ? cur : max))
+          : toApiDateString(data.delivery_date);
+
+      if (!headerDeliveryStr) {
+        messageApi.error(t('app.kuaizhizao.purchaseOrder.form.requiredDateRequired'));
+        throw new Error(t('app.kuaizhizao.purchaseOrder.form.requiredDateRequired'));
+      }
+
+      data.delivery_date = headerDeliveryStr;
+      data.order_date = toApiDateString(data.order_date);
+
       const itemsPayload = validItems.map((it: any) => {
         const qty = Number(it.ordered_quantity) || 0;
         let price = Number(it.unit_price) || 0;
@@ -2433,8 +2485,7 @@ const PurchaseOrdersPage: React.FC = () => {
         if (priceType === 'tax_inclusive' && price > 0 && taxRate >= 0) {
           price = price / (1 + taxRate / 100);
         }
-        const reqDate = it.required_date;
-        const dateStr = reqDate ? (dayjs.isDayjs(reqDate) ? reqDate.format('YYYY-MM-DD') : String(reqDate).slice(0, 10)) : undefined;
+        const dateStr = resolveLineDateStr(it.required_date) ?? headerDeliveryStr;
         if (!dateStr) {
           messageApi.error(t('app.kuaizhizao.purchaseOrder.lineRequiredDateMissing', { row: validItems.indexOf(it) + 1 }));
           throw new Error(t('app.kuaizhizao.purchaseOrder.form.requiredDateRequired'));
@@ -2756,6 +2807,15 @@ const PurchaseOrdersPage: React.FC = () => {
                     fieldName: 'delivery_date',
                     baseFieldName: 'order_date',
                     t,
+                    onApply: (date) => {
+                      formRef.current?.setFieldValue?.('delivery_date', date);
+                      applyHeaderDeliveryToItemLines(date);
+                    },
+                    fieldProps: {
+                      onChange: (value: unknown) => {
+                        applyHeaderDeliveryToItemLines(value);
+                      },
+                    },
                   })}
                 />
               </Col>

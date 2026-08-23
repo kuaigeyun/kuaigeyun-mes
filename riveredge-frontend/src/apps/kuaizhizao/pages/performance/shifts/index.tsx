@@ -33,6 +33,7 @@ import {
 } from '../../../utils/performanceListCore';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const SHIFT_RESOURCE = 'kuaizhizao:performance-shifts';
 
@@ -246,6 +247,8 @@ const ShiftsPage: React.FC = () => {
         <UniTable<Shift>
           headerTitle={t('app.kuaizhizao.performance.shifts.pageTitle')}
           columnPersistenceId="apps.kuaizhizao.pages.performance.shifts.v1"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.shifts')}
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}

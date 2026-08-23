@@ -20,6 +20,7 @@ import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { formatQuantity } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
   buildBackflushRecordStatusValueEnum,
@@ -249,6 +250,8 @@ const BackflushRecordsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<BackflushRecordItem>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.backflushRecords')}
         headerTitle={t('app.kuaizhizao.backflushRecords.headerTitle')}
         actionRef={actionRef}
         columns={alignProColumns(columns, WAREHOUSE_DOC_LIST_FIELD_RANK)}

@@ -187,7 +187,7 @@ import {
   uniTableColumnsPreferenceField,
 } from './uniTableColumnPreference'
 
-export { readPersistedUniTableViewType } from './uniTableViewPreference'
+export { readPersistedUniTableViewType, uniTableViewTypePreferencePath } from './uniTableViewPreference'
 
 function isStatusFieldNoSortColumn(col: unknown): boolean {
   if (!col || typeof col !== 'object') return false

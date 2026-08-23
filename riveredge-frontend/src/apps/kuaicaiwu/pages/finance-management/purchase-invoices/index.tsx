@@ -20,7 +20,7 @@ import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../.
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, MODAL_CONFIG, FormModalGridBlock } from '../../../../../components/layout-templates';
 import { financeColFull, financeColHalf, financeFormGridProps } from '../../../utils/financeFormLayout';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -86,6 +86,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaicaiwu.purchaseInvoice';
 
@@ -447,6 +448,7 @@ const PurchaseInvoiceList: React.FC = () => {
         invoice_type: values.invoice_type || '增值税专用发票',
         tax_rate: taxRate,
         invoice_amount: invoiceAmount,
+        ...(amountMode === 'tax_inclusive' ? { total_amount: estimatedTotal } : {}),
         notes:
           String(values.notes ?? '').trim() ||
           t('app.kuaicaiwu.common.createdFromSourceNote', {
@@ -795,6 +797,8 @@ const PurchaseInvoiceList: React.FC = () => {
     <ListPageTemplate>
       <UniTable<PurchaseInvoice>
         headerTitle={t(`${P}.pageTitle`)}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.purchaseInvoice)}
         actionRef={actionRef}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
@@ -1120,31 +1124,33 @@ const PurchaseInvoiceList: React.FC = () => {
                     },
                   }}
                 />
-                <ProFormItem
-                  name="amount_input_mode"
-                  label={t(`${P}.form.amountInputMode`)}
-                  colProps={financeColHalf}
-                >
-                  <ThemedSegmented
-                    options={[
-                      { label: t(`${P}.form.amountModeExcl`), value: 'tax_exclusive' },
-                      { label: t(`${P}.form.amountModeIncl`), value: 'tax_inclusive' },
-                    ]}
-                    onChange={(next) => {
-                      const nextMode = next as InvoiceAmountInputMode;
-                      const prevMode = pullAmountModeRef.current;
-                      const taxRate = Number(pullForm.getFieldValue('tax_rate')) || 13;
-                      const current = Number(pullForm.getFieldValue('invoice_amount')) || 0;
-                      if (current > 0 && prevMode && prevMode !== nextMode) {
-                        pullForm.setFieldValue(
-                          'invoice_amount',
-                          convertInvoiceAmountBetweenModes(current, taxRate, prevMode, nextMode),
-                        );
-                      }
-                      pullAmountModeRef.current = nextMode;
-                    }}
-                  />
-                </ProFormItem>
+                <FormModalGridBlock span={12}>
+                  <ProFormItem
+                    name="amount_input_mode"
+                    label={t(`${P}.form.amountInputMode`)}
+                  >
+                    <ThemedSegmented
+                      block
+                      options={[
+                        { label: t(`${P}.form.amountModeExcl`), value: 'tax_exclusive' },
+                        { label: t(`${P}.form.amountModeIncl`), value: 'tax_inclusive' },
+                      ]}
+                      onChange={(next) => {
+                        const nextMode = next as InvoiceAmountInputMode;
+                        const prevMode = pullAmountModeRef.current;
+                        const taxRate = Number(pullForm.getFieldValue('tax_rate')) || 13;
+                        const current = Number(pullForm.getFieldValue('invoice_amount')) || 0;
+                        if (current > 0 && prevMode && prevMode !== nextMode) {
+                          pullForm.setFieldValue(
+                            'invoice_amount',
+                            convertInvoiceAmountBetweenModes(current, taxRate, prevMode, nextMode),
+                          );
+                        }
+                        pullAmountModeRef.current = nextMode;
+                      }}
+                    />
+                  </ProFormItem>
+                </FormModalGridBlock>
                 <ProFormDigit
                   name="invoice_amount"
                   label={

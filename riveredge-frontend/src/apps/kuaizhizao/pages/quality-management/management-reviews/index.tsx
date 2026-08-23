@@ -22,6 +22,7 @@ import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { qualityQmsApi, QmsManagementReview } from '../../../services/quality-qms';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   parseEvidenceLinksText,
   stringifyEvidenceLinks,
@@ -185,6 +186,8 @@ const ManagementReviewsPage: React.FC = () => {
     >
       <ListPageTemplate>
         <UniTable<QmsManagementReview>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.managementReview)}
           headerTitle={t('app.kuaizhizao.menu.quality-management.management-reviews')}
           actionRef={actionRef}
           rowKey="id"

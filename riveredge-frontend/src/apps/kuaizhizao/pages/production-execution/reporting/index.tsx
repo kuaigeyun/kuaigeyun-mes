@@ -94,6 +94,7 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import ReportingInboundWarehouseField from '../../../components/ReportingInboundWarehouseField';
 import { ReportingWorkTimeFields } from '../../../components/ReportingWorkTimeFields';
 import { ReportingProducerField } from '../../../components/ReportingProducerField';
+import { resolveProxyWorkerFromForm } from '../../../utils/reportingProducerResolve';
 import {
   buildLastInboundHintOptions,
   isInboundWarehouseRequiredForLastOperation,
@@ -123,6 +124,7 @@ import {
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const REPORTING_RESOURCE = 'kuaizhizao:production-execution-reporting';
 const REPORTING_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_reporting_records';
@@ -619,6 +621,8 @@ const ReportingPage: React.FC = () => {
     createModalTeamRef.current = null;
     formRef.current?.setFieldsValue({
       proxy_worker_uuid: undefined,
+      proxy_worker_id: b.worker_id,
+      proxy_worker_name: b.worker_name,
       producer_mode: 'worker',
       report_team_id: undefined,
     });
@@ -865,9 +869,12 @@ const ReportingPage: React.FC = () => {
         reportingData.team_name = teamName;
         reportingData.worker_name = teamName;
       } else {
+        const proxyWorker = canProxyReporting
+          ? await resolveProxyWorkerFromForm(standardValues, createModalProxyWorkerRef.current)
+          : null;
         const { worker_id, worker_name } = resolveProductionWorker(
           operation,
-          createModalProxyWorkerRef.current,
+          proxyWorker,
           t,
         );
         reportingData.worker_id = worker_id;
@@ -1087,6 +1094,8 @@ const ReportingPage: React.FC = () => {
           username: '',
         };
         initialValues.producer_mode = 'worker';
+        initialValues.proxy_worker_id = workerId;
+        initialValues.proxy_worker_name = workerName;
         try {
           const resolved = await resolveUserDisplay({ user_ids: [workerId] });
           const item = resolved.find((u) => Number(u.id) === workerId);
@@ -1159,10 +1168,10 @@ const ReportingPage: React.FC = () => {
         correctPayload.team_name = teamName;
         correctPayload.worker_name = teamName;
       } else {
-        const proxyUser = correctModalProxyWorkerRef.current;
+        const proxyUser = await resolveProxyWorkerFromForm(values, correctModalProxyWorkerRef.current);
         const workerId = Number(proxyUser?.id);
         const workerName = String(
-          proxyUser?.full_name || proxyUser?.username || values.worker_name || '',
+          proxyUser?.full_name || proxyUser?.username || values.proxy_worker_name || '',
         ).trim();
         if (!Number.isFinite(workerId) || workerId <= 0 || !workerName) {
           const workerRequiredMsg = t('app.kuaizhizao.workOrder.formWorkerPlaceholder');
@@ -1624,6 +1633,8 @@ const ReportingPage: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
       <UniTable
         headerTitle={t('app.kuaizhizao.menu.production-execution.reporting')}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.reporting)}
         columnPersistenceId="apps.kuaizhizao.pages.production-execution.reporting.work-start-end-v1"
         actionRef={actionRef}
         rowKey="id"

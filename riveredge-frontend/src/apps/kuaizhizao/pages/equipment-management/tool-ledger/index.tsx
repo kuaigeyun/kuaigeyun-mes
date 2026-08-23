@@ -61,6 +61,7 @@ import {
 import { buildToolLedgerDetailPath } from './toolLedgerPaths';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 interface Tool {
   id?: number;
   uuid?: string;
@@ -380,6 +381,8 @@ const ToolLedgerPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Tool>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.toolsLedger')}
           headerTitle={t('app.kuaizhizao.toolLedger.title')}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-ledger-equip-rank-v1"
           actionRef={actionRef}

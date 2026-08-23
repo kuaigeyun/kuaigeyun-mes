@@ -18,6 +18,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { downloadFile } from '../../../../../utils/fileDownload';
 import { renderReportDocTypeMarker } from '../../../../kuaireport/utils/reportListPresentation';
 import { todaySiteDateString } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   DocumentTimingDetailDrawer,
   type DocumentTiming,
@@ -189,6 +190,8 @@ const DocumentTimingPage: React.FC = () => {
         headerTitle={t('app.kuaireport.analysis.timing.title', { defaultValue: '单据节点耗时' })}
         actionRef={actionRef}
         columnPersistenceId="apps.kuaireport.pages.analysis-center.document-timing.list-v1"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.documentTiming')}
         rowKey={(r) => `${r.document_type}-${r.document_id}-${r.document_code}`}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
         toolBarRender={() => {

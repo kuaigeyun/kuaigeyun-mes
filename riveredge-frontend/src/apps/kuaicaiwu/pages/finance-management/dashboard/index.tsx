@@ -357,6 +357,7 @@ const FinanceCenterDashboard: React.FC = () => {
 
   return (
     <ModuleCenterLayout
+      moduleHelpKey="finance"
       loading={loading}
       kpiRow={<ModuleKpiRow items={kpisRow} />}
       shortcutRow={<ModuleShortcutGrid items={shortcuts} />}

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Col, Form } from 'antd';
+import { Col, Form, Input } from 'antd';
 import { ProFormDigit, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import type { TFunction } from 'i18next';
 import type { Material } from '../../apps/master-data/types/material';
@@ -100,20 +100,28 @@ function InspectionConductInspectorField({ t }: { t: TFunction }) {
   }, [form, currentUser?.id, currentUser?.uuid, currentUser?.full_name, currentUser?.username]);
 
   return (
-    <UniUserSelect
-      name="inspector_uuid"
-      label={t('app.kuaizhizao.quality.common.form.inspector')}
-      placeholder={t('app.kuaizhizao.quality.common.placeholder.inspector')}
-      required
-      colProps={{ span: 8 }}
-      onChange={(_uuid: unknown, user: User | User[] | undefined) => {
-        const picked = Array.isArray(user) ? user[0] : user;
-        form.setFieldsValue({
-          inspector_id: picked?.id,
-          inspector_name: picked ? picked.full_name || picked.username : undefined,
-        });
-      }}
-    />
+    <>
+      <Form.Item name="inspector_id" hidden>
+        <Input />
+      </Form.Item>
+      <Form.Item name="inspector_name" hidden>
+        <Input />
+      </Form.Item>
+      <UniUserSelect
+        name="inspector_uuid"
+        label={t('app.kuaizhizao.quality.common.form.inspector')}
+        placeholder={t('app.kuaizhizao.quality.common.placeholder.inspector')}
+        required
+        colProps={{ span: 8 }}
+        onChange={(_uuid: unknown, user: User | User[] | undefined) => {
+          const picked = Array.isArray(user) ? user[0] : user;
+          form.setFieldsValue({
+            inspector_id: picked?.id,
+            inspector_name: picked ? picked.full_name || picked.username : undefined,
+          });
+        }}
+      />
+    </>
   );
 }
 

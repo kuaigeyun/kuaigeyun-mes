@@ -8,6 +8,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT_PATH = ROOT / "src" / "locales" / "help-pages" / "rich" / "zh-CN" / "list-pages" / "index.ts"
 
+from batch3_list_page_help_content import BATCH3_LIST_PAGE_CONTENT, BATCH3_LIST_PAGE_KEYS
+from batch4_list_page_help_content import BATCH4_LIST_PAGE_CONTENT, BATCH4_LIST_PAGE_KEYS
+
 RICH_LIST_PAGE_HELP_KEYS = [
     "masterData.plants",
     "masterData.workshops",
@@ -31,6 +34,8 @@ RICH_LIST_PAGE_HELP_KEYS = [
     "system.onlineUsers",
     "system.dataBackups",
     "personal.tasks",
+    *BATCH3_LIST_PAGE_KEYS,
+    *BATCH4_LIST_PAGE_KEYS,
 ]
 
 SECTION_KEYS = {
@@ -822,6 +827,9 @@ LIST_PAGE_CONTENT: dict[str, dict[str, str]] = {
         "faq.a4": "A: 取决于源模块；过期后可能自动驳回或仍待处理，请进入源单据查看规则。",
     },
 }
+
+LIST_PAGE_CONTENT.update(BATCH3_LIST_PAGE_CONTENT)
+LIST_PAGE_CONTENT.update(BATCH4_LIST_PAGE_CONTENT)
 
 
 if __name__ == "__main__":

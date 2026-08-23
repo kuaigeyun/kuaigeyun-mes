@@ -38,6 +38,7 @@ import {
   resolveApprovalDocListParams,
 } from '../../../utils/equipmentListCore';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaizhizao.equipmentOps.scrap';
 const RESOURCE = 'kuaizhizao:equipment-scrap';
@@ -375,6 +376,8 @@ const EquipmentScrapPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<ScrapApplication>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.equipmentScrap)}
           headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-scrap-equip-rank-v1"
           actionRef={actionRef}

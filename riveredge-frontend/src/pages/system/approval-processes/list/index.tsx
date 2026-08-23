@@ -36,6 +36,7 @@ import {
 import { rowActionKind } from '../../../../components/uni-action';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 /**
  * 审批流程管理列表页面组件
@@ -385,6 +386,8 @@ const ApprovalProcessListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<ApprovalProcess>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.approvalProcesses')}
         columnPersistenceId="pages.system.approval-processes.list-v1"
         headerTitle={t('pages.system.approvalProcesses.headerTitle')}
         actionRef={actionRef}

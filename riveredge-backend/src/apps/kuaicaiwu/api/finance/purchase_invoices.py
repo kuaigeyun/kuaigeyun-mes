@@ -15,7 +15,7 @@ from apps.kuaicaiwu.schemas.finance import (
     PurchaseInvoiceCreate, PurchaseInvoiceUpdate, PurchaseInvoiceResponse, PurchaseInvoiceListResponse,
 )
 from apps.kuaicaiwu.services.finance_service import PurchaseInvoiceService
-from apps.kuaicaiwu.services.finance_tax import compute_tax_from_excluding
+from apps.kuaicaiwu.services.finance_tax import resolve_invoice_amounts_for_create
 from apps.kuaicaiwu.services.invoice_concurrent_settlement import (
     create_concurrent_payment_for_payable,
 )
@@ -66,10 +66,12 @@ async def create_purchase_invoice(
     tenant_id: int = Depends(get_current_tenant)
 ):
     try:
-        # 价税合计由服务端按未税×税率计算；拉单门禁不得依赖可选入参 total_amount。
-        _, _, total_for_gate = compute_tax_from_excluding(
+        from apps.kuaicaiwu.services.finance_tax import resolve_invoice_amounts_for_create
+
+        _, _, total_for_gate = resolve_invoice_amounts_for_create(
             Decimal(str(data.invoice_amount)),
             Decimal(str(data.tax_rate)),
+            Decimal(str(data.total_amount)) if data.total_amount is not None else None,
         )
         concurrent = data.concurrent_settlement
         want_payment = bool(concurrent and concurrent.enabled)

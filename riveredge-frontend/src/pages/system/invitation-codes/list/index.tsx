@@ -30,6 +30,7 @@ import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { pickListSearchKeyword } from '../../../../utils/tableQueryKey';
 import { getAntdModal } from '../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 const InvitationCodeListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -297,6 +298,8 @@ const InvitationCodeListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<InvitationCode>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.invitationCodes')}
           columnPersistenceId="pages.system.invitation-codes.list"
           actionRef={actionRef}
           columns={columns}

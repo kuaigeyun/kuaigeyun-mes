@@ -67,6 +67,7 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const PURCHASE_ORDER_CHANGE_RESOURCE = 'kuaizhizao:purchase-order-change';
 
@@ -716,6 +717,8 @@ const PurchaseOrderChangesPage: React.FC = () => {
       <UniTable<PurchaseOrderChange>
         actionRef={actionRef}
         rowKey="id"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.purchaseOrderChange)}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}

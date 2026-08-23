@@ -2,6 +2,8 @@
  * 平台更新日志（工作台版本卡展示）
  *
  * 完成一项修复/优化后，在此追加一条记录，并同步补充各语言 i18n 文案。
+ *
+ * 不计入：定制应用 HaoliGO（好力 GO）相关变动，仅在该应用内交付，不写本日志。
  */
 
 import type { TFunction } from 'i18next';
@@ -30,6 +32,147 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  * titleKey / descriptionKey 对应 pages.dashboard.updateLog.entries.{id}.*
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
+  {
+    id: 'production-return-hub-quantity-fix',
+    date: '2026-08-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.description',
+  },
+  {
+    id: 'sop-create-attachments-payload-fix',
+    date: '2026-08-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sop-create-attachments-payload-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sop-create-attachments-payload-fix.description',
+  },
+  {
+    id: 'invoice-pull-tax-inclusive-rounding-fix',
+    date: '2026-08-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.invoice-pull-tax-inclusive-rounding-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.invoice-pull-tax-inclusive-rounding-fix.description',
+  },
+  {
+    id: 'invoice-pull-amount-field-grid-fix',
+    date: '2026-08-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.invoice-pull-amount-field-grid-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.invoice-pull-amount-field-grid-fix.description',
+  },
+  {
+    id: 'merge-settlement-code-batch-fix',
+    date: '2026-08-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.merge-settlement-code-batch-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.merge-settlement-code-batch-fix.description',
+  },
+  {
+    id: 'merge-voucher-bank-summary-fix',
+    date: '2026-08-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.merge-voucher-bank-summary-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.merge-voucher-bank-summary-fix.description',
+  },
+  {
+    id: 'merge-invoice-source-allocation-fix',
+    date: '2026-08-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.merge-invoice-source-allocation-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.merge-invoice-source-allocation-fix.description',
+  },
+  {
+    id: 'partner-statement-preview-line-selection',
+    date: '2026-08-23',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.partner-statement-preview-line-selection.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.partner-statement-preview-line-selection.description',
+  },
+  {
+    id: 'partner-statement-partial-reconciliation',
+    date: '2026-08-23',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.partner-statement-partial-reconciliation.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.partner-statement-partial-reconciliation.description',
+  },
+  {
+    id: 'document-reconciliation-gap-hierarchy',
+    date: '2026-08-23',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-reconciliation-gap-hierarchy.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.document-reconciliation-gap-hierarchy.description',
+  },
+  {
+    id: 'warehouse-doc-edit-withdraw-unify',
+    date: '2026-08-23',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-doc-edit-withdraw-unify.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.warehouse-doc-edit-withdraw-unify.description',
+  },
+  {
+    id: 'quality-traceability-ui-polish',
+    date: '2026-08-23',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-traceability-ui-polish.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.quality-traceability-ui-polish.description',
+  },
+  {
+    id: 'work-order-reporting-producer-card-sync',
+    date: '2026-08-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-reporting-producer-card-sync.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-reporting-producer-card-sync.description',
+  },
+  {
+    id: 'quality-inspection-inspector-sync',
+    date: '2026-08-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-inspection-inspector-sync.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-inspection-inspector-sync.description',
+  },
+  {
+    id: 'purchase-order-header-delivery-sync',
+    date: '2026-08-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-header-delivery-sync.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-header-delivery-sync.description',
+  },
+  {
+    id: 'purchase-order-delivery-date-from-requisition',
+    date: '2026-08-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-delivery-date-from-requisition.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-delivery-date-from-requisition.description',
+  },
+  {
+    id: 'purchase-price-auto-fill',
+    date: '2026-08-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-price-auto-fill.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.purchase-price-auto-fill.description',
+  },
+  {
+    id: 'rich-page-help-views',
+    date: '2026-08-23',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.rich-page-help-views.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.rich-page-help-views.description',
+  },
   {
     id: 'locale-pack-gap-sync',
     date: '2026-08-23',
@@ -293,28 +436,11 @@ export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
     descriptionKey: 'pages.dashboard.updateLog.entries.update-log-panel.description',
   },
   {
-    id: 'calendar-monday-first',
+    id: 'workbench-calendar-weather-polish',
     date: '2026-08-23',
     type: 'improvement',
-    titleKey: 'pages.dashboard.updateLog.entries.calendar-monday-first.title',
-  },
-  {
-    id: 'weather-text-contrast',
-    date: '2026-08-23',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.weather-text-contrast.title',
-  },
-  {
-    id: 'weather-sky-background',
-    date: '2026-08-23',
-    type: 'improvement',
-    titleKey: 'pages.dashboard.updateLog.entries.weather-sky-background.title',
-  },
-  {
-    id: 'weather-weekday-time',
-    date: '2026-08-23',
-    type: 'improvement',
-    titleKey: 'pages.dashboard.updateLog.entries.weather-weekday-time.title',
+    titleKey: 'pages.dashboard.updateLog.entries.workbench-calendar-weather-polish.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.workbench-calendar-weather-polish.description',
   },
 ];
 

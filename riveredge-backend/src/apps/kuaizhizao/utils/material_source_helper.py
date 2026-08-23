@@ -885,6 +885,101 @@ def resolve_computation_item_source_config(
     return merged
 
 
+def _to_positive_decimal(v: Any) -> Optional[Decimal]:
+    if v is None or v == "":
+        return None
+    try:
+        d = Decimal(str(v))
+    except Exception:
+        return None
+    if d <= 0:
+        return None
+    return d
+
+
+def _material_default_tax_rate(material: Any) -> Decimal:
+    defaults = getattr(material, "defaults", None)
+    if not isinstance(defaults, dict):
+        return Decimal(0)
+    finance = defaults.get("finance")
+    if isinstance(finance, dict):
+        d = _to_positive_decimal(finance.get("defaultTaxRate") or finance.get("default_tax_rate"))
+        if d is not None:
+            return d
+    d = _to_positive_decimal(defaults.get("defaultTaxRate") or defaults.get("default_tax_rate"))
+    return d or Decimal(0)
+
+
+def _normalize_purchase_price_type(raw: Any) -> str:
+    return "tax_exclusive" if raw == "tax_exclusive" else "tax_inclusive"
+
+
+def _convert_purchase_default_to_line_unit_price(
+    material: Any,
+    price: Decimal,
+    price_type_container: Optional[Dict[str, Any]],
+) -> Decimal:
+    price_type_raw = None
+    if isinstance(price_type_container, dict):
+        price_type_raw = (
+            price_type_container.get("defaultPurchasePriceType")
+            or price_type_container.get("default_purchase_price_type")
+        )
+    price_type = _normalize_purchase_price_type(price_type_raw)
+    if price_type != "tax_inclusive":
+        return price
+    tax_rate = _material_default_tax_rate(material)
+    if tax_rate <= 0:
+        return price
+    from apps.master_data.services.material_market_price_service import convert_unit_price
+
+    return convert_unit_price(price, tax_rate, "tax_inclusive", "tax_exclusive")
+
+
+def resolve_material_purchase_line_unit_price(
+    *,
+    material: Optional[Any] = None,
+    source_config: Optional[Dict[str, Any]] = None,
+) -> Decimal:
+    """
+    采购单据行单价（不含税口径，与前端 getMaterialDefaultPurchasePrice 对齐）。
+    优先级：来源快照 purchase_price -> defaults.purchase.* -> defaults.defaultPurchasePrice
+    -> material.source_config.purchase_price。
+    """
+    if source_config:
+        d = _to_positive_decimal(source_config.get("purchase_price"))
+        if d is not None:
+            if material is not None:
+                defaults = getattr(material, "defaults", None)
+                container = defaults if isinstance(defaults, dict) else None
+                return _convert_purchase_default_to_line_unit_price(material, d, container)
+            return d
+
+    if material is None:
+        return Decimal(0)
+
+    defaults = getattr(material, "defaults", None)
+    if isinstance(defaults, dict):
+        purchase_defaults = defaults.get("purchase") if isinstance(defaults.get("purchase"), dict) else {}
+        for key in ("standard_price", "purchase_price", "defaultPurchasePrice", "default_purchase_price"):
+            d = _to_positive_decimal(purchase_defaults.get(key))
+            if d is not None:
+                return _convert_purchase_default_to_line_unit_price(material, d, purchase_defaults)
+        for key in ("defaultPurchasePrice", "default_purchase_price"):
+            d = _to_positive_decimal(defaults.get(key))
+            if d is not None:
+                return _convert_purchase_default_to_line_unit_price(material, d, defaults)
+
+    source_cfg = getattr(material, "source_config", None)
+    if isinstance(source_cfg, dict):
+        d = _to_positive_decimal(source_cfg.get("purchase_price"))
+        if d is not None:
+            container = defaults if isinstance(defaults, dict) else None
+            return _convert_purchase_default_to_line_unit_price(material, d, container)
+
+    return Decimal(0)
+
+
 def build_material_source_config(material: Material) -> Dict[str, Any]:
     """
     从已加载 Material 构建来源配置（与 get_material_source_config 同口径）。

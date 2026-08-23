@@ -21,6 +21,7 @@ import {
 import { materialSerialApi, materialApi } from '../../../services/material';
 import type { MaterialSerial, MaterialSerialCreate, MaterialSerialUpdate } from '../../../types/material';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   renderMasterActiveTag,
   renderMasterYesNoTag,
@@ -292,6 +293,8 @@ const SerialsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<MaterialSerial>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.serials')}
         columnPersistenceId="apps.master-data.pages.materials.serials.list-v1"
         headerTitle={t('app.master-data.menu.materials.serials')}
         actionRef={actionRef}

@@ -60,6 +60,7 @@ export type InboundDetailDrawerProps = {
   timeline?: React.ReactNode;
   traceDocument?: React.ComponentProps<typeof DetailDrawerTemplate>['traceDocument'];
   showReadonlyActions?: boolean;
+  editMode?: boolean;
 };
 
 export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
@@ -77,6 +78,7 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
   linesTitle,
   timeline,
   traceDocument,
+  editMode = false,
 }) => {
   const { t } = useTranslation();
 
@@ -98,11 +100,13 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
   const nextSteps = lifecycle?.nextStepSuggestions;
 
   const code = String(effective.receipt_code || effective.return_code || '').trim();
-  const title = `${
-    effective.receipt_type === 'production_return'
-      ? t('app.kuaizhizao.warehouseInbound.detail.productionReturnTitle')
-      : t('app.kuaizhizao.warehouseInbound.detail.title')
-  }${code ? ` - ${code}` : ''}`;
+  const title = editMode
+    ? `${t('common.edit')}${code ? ` - ${code}` : ''}`
+    : `${
+        effective.receipt_type === 'production_return'
+          ? t('app.kuaizhizao.warehouseInbound.detail.productionReturnTitle')
+          : t('app.kuaizhizao.warehouseInbound.detail.title')
+      }${code ? ` - ${code}` : ''}`;
 
   const basicColumns = useMemo(
     () =>

@@ -68,6 +68,7 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import { useTranslation } from 'react-i18next';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const REWORK_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_rework_orders';
 
 interface ReworkOrder {
@@ -1375,6 +1376,8 @@ const ReworkOrdersPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<ReworkOrder>
         columnPersistenceId="apps.kuaizhizao.pages.production-execution.rework-orders.v2"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.reworkOrder)}
         headerTitle={t('app.kuaizhizao.reworkOrder.title')}
         actionRef={actionRef}
         columns={columns}

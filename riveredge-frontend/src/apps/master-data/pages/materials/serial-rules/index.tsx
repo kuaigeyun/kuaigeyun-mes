@@ -29,6 +29,7 @@ import { SERIAL_RULE_AVAILABLE_FIELDS, DEFAULT_SERIAL_RULE_COMPONENTS } from '..
 import type { SerialRule, SerialRuleCreate, SerialRuleUpdate } from '../../../services/batchSerialRules';
 import type { CodeRuleComponent } from '../../../../../types/codeRuleComponent';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   renderMasterActiveTag,
   renderMasterYesNoTag,
@@ -252,6 +253,8 @@ const SerialRulesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<SerialRule>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.serialRules')}
         columnPersistenceId="apps.master-data.pages.materials.serial-rules.list-v1"
         headerTitle={t('app.master-data.serialRules.headerTitle')}
         actionRef={actionRef}

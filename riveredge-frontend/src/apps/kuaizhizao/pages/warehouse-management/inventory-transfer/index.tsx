@@ -45,6 +45,7 @@ import {
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 interface InventoryTransfer {
   id?: number;
   uuid?: string;
@@ -752,6 +753,8 @@ const InventoryTransferPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         headerTitle={t('app.kuaizhizao.inventoryTransfer.headerTitle')}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.inventoryTransfer)}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-transfer.v2"
         actionRef={actionRef}
         rowKey="id"

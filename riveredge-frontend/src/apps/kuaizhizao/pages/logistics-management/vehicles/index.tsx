@@ -21,6 +21,7 @@ import {
 } from '../shared/logisticsListPresentation';
 import { deleteVehicle, listVehicles, type Vehicle } from '../../../services/logistics';
 import { VehicleFormModal } from '../shared/VehicleFormModal';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const VehiclesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -177,6 +178,8 @@ const VehiclesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<Vehicle>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.vehicles')}
         actionRef={actionRef}
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.logistics-management.vehicles.v2"

@@ -142,14 +142,24 @@ export function isOutboundDeletable(record: OutboundHubOrder): boolean {
   return ['待审核', '草稿', 'draft', '已取消', 'cancelled'].includes(st);
 }
 
-/** 生产领料：确认领料前可编辑（capabilities.update） */
+/** 确认出库/领料/借出前可编辑（capabilities.update） */
+const OUTBOUND_EDITABLE_FALLBACK: Partial<Record<OutboundIssueType, Set<string>>> = {
+  production_picking: new Set(['草稿', 'draft', '待审核', '待领料', 'pending']),
+  sales_delivery: new Set(['草稿', 'draft', '待审核', '待出库', 'pending']),
+  other_outbound: new Set(['草稿', 'draft', '待审核', '待出库', 'pending']),
+  material_borrow: new Set(['草稿', 'draft', '待审核', '待借出', 'pending']),
+};
+
 export function isOutboundEditable(record: OutboundHubOrder): boolean {
-  if (record.outbound_type !== 'production_picking') return false;
+  if (record.outbound_type === 'outsource_issue') return false;
   if (record.capabilities?.update != null) {
     return record.capabilities.update.allowed === true;
   }
-  const st = String(record.status || '').trim();
-  return ['草稿', 'draft', '待审核', '待领料', 'pending'].includes(st);
+  const ot = record.outbound_type;
+  if (!ot) return false;
+  const allowed = OUTBOUND_EDITABLE_FALLBACK[ot];
+  if (!allowed) return false;
+  return allowed.has(String(record.status || '').trim());
 }
 
 export function outboundConfirmCapabilityReasonMessage(record: OutboundHubOrder, t: TFunction): string {

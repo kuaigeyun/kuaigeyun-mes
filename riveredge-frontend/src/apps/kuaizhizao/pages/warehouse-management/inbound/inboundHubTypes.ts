@@ -67,7 +67,10 @@ export interface InboundHubOrder {
   updated_at?: string;
   capabilities?: {
     confirm?: { allowed?: boolean; reason?: string };
+    withdraw?: { allowed?: boolean; reason?: string };
     print?: { allowed?: boolean; reason?: string };
+    delete?: { allowed?: boolean; reason?: string };
+    update?: { allowed?: boolean; reason?: string };
   };
   [key: string]: unknown;
 }
@@ -155,6 +158,30 @@ export function inboundReceiptTypeSegmentOptions(
 
 export function isInboundConfirmable(record: InboundHubOrder): boolean {
   return record.capabilities?.confirm?.allowed === true;
+}
+
+export function isInboundWithdrawable(record: InboundHubOrder): boolean {
+  return record.capabilities?.withdraw?.allowed === true;
+}
+
+export function isInboundEditable(record: InboundHubOrder): boolean {
+  if (record.capabilities?.update != null) {
+    return record.capabilities.update.allowed === true;
+  }
+  const st = String(record.status || '').trim();
+  const rt = record.receipt_type;
+  if (rt === 'purchase') {
+    return ['草稿', 'draft', 'DRAFT', '待入库'].includes(st);
+  }
+  return ['草稿', 'draft', 'DRAFT', '待入库', '待退货', '待退料', '待收货', '待归还', '待确认', 'pending'].includes(st);
+}
+
+export function inboundWithdrawCapabilityReasonMessage(record: InboundHubOrder, t: TFunction): string {
+  return inboundHubCapabilityReasonMessage(record.capabilities?.withdraw?.reason, t);
+}
+
+export function inboundUpdateCapabilityReasonMessage(record: InboundHubOrder, t: TFunction): string {
+  return inboundHubCapabilityReasonMessage(record.capabilities?.update?.reason, t);
 }
 
 export function inboundConfirmCapabilityReasonMessage(record: InboundHubOrder, t: TFunction): string {

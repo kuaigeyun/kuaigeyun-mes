@@ -44,6 +44,7 @@ import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-manageme
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { StatusTag } from '../../../../../constants/statusBadges';
 import { UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH } from '../../../../../utils/uniTableLayoutColumns';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   buildProductionExceptionAlertLevelValueEnum,
   buildStandardProductionExceptionStatusValueEnum,
@@ -328,6 +329,8 @@ const MaterialShortageExceptionsPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         columnPersistenceId="apps.kuaizhizao.pages.production-execution.material-shortage-exceptions.v3"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.materialShortageException)}
         headerTitle={t(`${P}.materialShortage.pageTitle`)}
         actionRef={actionRef}
         rowKey="id"

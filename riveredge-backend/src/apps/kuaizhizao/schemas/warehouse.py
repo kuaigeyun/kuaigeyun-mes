@@ -222,6 +222,7 @@ class ProductionReturnResponse(ProductionReturnBase):
         None, description="业务态 capabilities（入库 Hub，document_action_policy）",
     )
     total_items: Optional[int] = Field(None, description="入库品种数（明细行数）")
+    total_quantity: Optional[float] = Field(None, ge=0, description="总退料数量")
 
     class Config:
         from_attributes = True
@@ -626,9 +627,31 @@ class SalesDeliveryCreate(SalesDeliveryBase):
     items: Optional[List["SalesDeliveryItemCreate"]] = Field(None, description="出库明细列表")
 
 
-class SalesDeliveryUpdate(SalesDeliveryBase):
-    """销售出库单更新schema"""
+class SalesDeliveryItemEditLine(BaseSchema):
+    """销售出库单明细编辑行（确认出库前）"""
+    id: int = Field(..., description="明细ID")
+    delivery_quantity: Optional[float] = Field(None, gt=0, description="出库数量")
+    batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
+    notes: Optional[str] = Field(None, description="明细备注")
+
+
+class SalesDeliveryUpdate(BaseSchema):
+    """销售出库单更新（确认出库前可改表头/明细）"""
     delivery_code: Optional[str] = Field(None, max_length=50, description="出库单编码")
+    customer_id: Optional[int] = Field(None, description="客户ID")
+    customer_name: Optional[str] = Field(None, max_length=200, description="客户名称")
+    warehouse_id: Optional[int] = Field(None, description="出库仓库ID")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="出库仓库名称")
+    delivery_time: Optional[datetime] = Field(None, description="实际出库时间")
+    deliverer_id: Optional[int] = Field(None, description="出库人ID")
+    deliverer_name: Optional[str] = Field(None, max_length=100, description="出库人姓名")
+    shipping_method: Optional[str] = Field(None, max_length=50, description="发货方式")
+    tracking_number: Optional[str] = Field(None, max_length=100, description="物流单号")
+    shipping_address: Optional[str] = Field(None, description="收货地址")
+    notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    items: Optional[List[SalesDeliveryItemEditLine]] = Field(None, description="明细编辑行")
 
 
 class SalesDeliveryResponse(SalesDeliveryBase):

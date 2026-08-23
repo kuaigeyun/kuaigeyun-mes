@@ -54,6 +54,7 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 interface MaterialBorrow {
   id?: number;
   uuid?: string;
@@ -622,6 +623,8 @@ const MaterialBorrowsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           headerTitle={t('app.kuaizhizao.materialBorrow.title')}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.materialBorrow)}
           columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.material-borrows.v2"
           actionRef={actionRef}
           rowKey="id"

@@ -34,3 +34,20 @@ def compute_tax_from_including(
     excl = (total / factor).quantize(_MONEY_SCALE)
     tax = (total - excl).quantize(_MONEY_SCALE)
     return excl, tax, total
+
+
+def resolve_invoice_amounts_for_create(
+    invoice_amount: Decimal,
+    tax_rate_percent: Decimal,
+    total_amount: Decimal | None = None,
+) -> tuple[Decimal, Decimal, Decimal]:
+    """
+    开票价税拆分。
+
+    含税录入时客户端显式传入价税合计，以合计为真源反算未税/税额，避免
+    「先除税率再乘税率」产生 0.01 漂移（如 60000/1.13→53097.35→60000.01）。
+    不含税录入时按未税金额正算。
+    """
+    if total_amount is not None:
+        return compute_tax_from_including(total_amount, tax_rate_percent)
+    return compute_tax_from_excluding(invoice_amount, tax_rate_percent)

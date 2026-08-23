@@ -737,16 +737,28 @@ def _assert_unqualified_qty_when_steps_fail(
     )
 
 
-def _resolve_conduct_inspector_id(inspection_data: Dict[str, Any], inspected_by: int) -> int:
-    """开展检验：优先表单检验人员，缺省为当前操作人。"""
+async def _resolve_conduct_inspector_id(
+    tenant_id: int,
+    inspection_data: Dict[str, Any],
+    inspected_by: int,
+) -> int:
+    """开展检验：优先表单检验人员（id 或 uuid），缺省为当前操作人。"""
     raw = inspection_data.get("inspector_id")
-    if raw is None or raw == "":
-        return inspected_by
-    try:
-        inspector_id = int(raw)
-    except (TypeError, ValueError):
-        return inspected_by
-    return inspector_id if inspector_id > 0 else inspected_by
+    if raw is not None and raw != "":
+        try:
+            inspector_id = int(raw)
+        except (TypeError, ValueError):
+            inspector_id = 0
+        if inspector_id > 0:
+            return inspector_id
+    raw_uuid = inspection_data.get("inspector_uuid")
+    if raw_uuid not in (None, ""):
+        from infra.models.user import User
+
+        user = await User.get_or_none(tenant_id=tenant_id, uuid=str(raw_uuid).strip())
+        if user and user.id:
+            return int(user.id)
+    return inspected_by
 
 
 _CONDUCT_PAYLOAD_SKIP_KEYS = frozenset({
@@ -1075,7 +1087,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 raise NotFoundError(f"来料检验单不存在: {inspection_id}")
             assert_quality_inspection_capability(inspection_model, "conduct")
 
-            inspector_id = _resolve_conduct_inspector_id(inspection_data, inspected_by)
+            inspector_id = await _resolve_conduct_inspector_id(tenant_id, inspection_data, inspected_by)
             inspector_name = await self.get_user_name(inspector_id)
             operator_name = await self.get_user_name(inspected_by)
 
@@ -3011,7 +3023,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 raise NotFoundError(f"过程检验单不存在: {inspection_id}")
             assert_quality_inspection_capability(inspection_model, "conduct")
 
-            inspector_id = _resolve_conduct_inspector_id(inspection_data, inspected_by)
+            inspector_id = await _resolve_conduct_inspector_id(tenant_id, inspection_data, inspected_by)
             inspector_name = await self.get_user_name(inspector_id)
             operator_name = await self.get_user_name(inspected_by)
 
@@ -4309,7 +4321,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 raise NotFoundError(f"成品检验单不存在: {inspection_id}")
             assert_quality_inspection_capability(inspection_model, "conduct")
 
-            inspector_id = _resolve_conduct_inspector_id(inspection_data, inspected_by)
+            inspector_id = await _resolve_conduct_inspector_id(tenant_id, inspection_data, inspected_by)
             inspector_name = await self.get_user_name(inspector_id)
             operator_name = await self.get_user_name(inspected_by)
 

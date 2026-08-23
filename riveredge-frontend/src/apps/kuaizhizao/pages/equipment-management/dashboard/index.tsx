@@ -330,6 +330,7 @@ const EquipmentDashboard: React.FC = () => {
 
   return (
     <ModuleCenterLayout
+      moduleHelpKey="equipment"
       loading={summaryLoading && !s}
       kpiRow={<ModuleKpiRow items={kpis} />}
       shortcutRow={

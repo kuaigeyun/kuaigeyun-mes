@@ -668,7 +668,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         _assert_unqualified_qty_when_steps_fail(
             row, "other_checks", conduct_data, unqualified_quantity
         )
-        inspector_id = _resolve_conduct_inspector_id(conduct_data, user_id)
+        inspector_id = await _resolve_conduct_inspector_id(tenant_id, conduct_data, user_id)
         inspector_info = await self.get_user_info(inspector_id) if inspector_id != user_id else user_info
         conduct_extra = _apply_template_conduct_to_payload(row, "other_checks", conduct_data)
         row.inspection_result = payload.inspection_result

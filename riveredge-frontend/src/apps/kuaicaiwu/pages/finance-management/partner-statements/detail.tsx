@@ -28,7 +28,12 @@ import {
 } from '../../../utils/financeSharedOptions';
 import { formatDateTime } from '../../../../../utils/format';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { renderPartnerStatementDocType } from '../../../utils/partnerStatementLineDisplay';
+import {
+  buildLineAmountPayload,
+  patchLineStatementAmount,
+  recalcPartnerStatementLines,
+} from '../../../utils/partnerStatementAmountUtils';
+import { usePartnerStatementLineColumns } from '../../../utils/partnerStatementLineColumns';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 const PS = 'app.kuaicaiwu.partnerStatement';
 const PARTNER_STATEMENT_RESOURCE = 'kuaicaiwu:partner-statement';
@@ -44,7 +49,15 @@ const PartnerStatementDetailPage: React.FC = () => {
   const printRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<PartnerStatement | null>(null);
-  const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null);
+  const [localLines, setLocalLines] = useState<PartnerStatementLine[]>([]);
+  const [localSummary, setLocalSummary] = useState<{
+    opening_balance?: number;
+    debit_total?: number;
+    credit_total?: number;
+    closing_balance?: number;
+  } | null>(null);
+  const [linesDirty, setLinesDirty] = useState(false);
+  const [savingLines, setSavingLines] = useState(false);
   const { cache: lineDetailCache, loadLineDetail, clearCache: clearLineDetailCache } = usePartnerStatementInboundDetail();
 
   const statusEnum = useMemo(() => buildPartnerStatementStatusEnum(t), [t]);
@@ -68,10 +81,65 @@ const PartnerStatementDetailPage: React.FC = () => {
     void load();
   }, [load]);
 
-  const lines: PartnerStatementLine[] =
-    data?.transaction_details?.lines ||
-    [];
-  const summary = data?.transaction_details?.summary || {
+  useEffect(() => {
+    if (!data) {
+      setLocalLines([]);
+      setLocalSummary(null);
+      setLinesDirty(false);
+      return;
+    }
+    const opening = Number(
+      data.transaction_details?.summary?.opening_balance ?? data.opening_balance ?? 0,
+    );
+    const srcLines = data.transaction_details?.lines || [];
+    const recalc = recalcPartnerStatementLines(opening, srcLines);
+    setLocalLines(recalc.lines);
+    setLocalSummary({
+      opening_balance: opening,
+      debit_total: recalc.debitTotal,
+      credit_total: recalc.creditTotal,
+      closing_balance: recalc.closingBalance,
+    });
+    setLinesDirty(false);
+  }, [data]);
+
+  const linesEditable =
+    !!data &&
+    (data.status === 'Draft' || data.status === 'Disputed') &&
+    statementPerms.canUpdate;
+
+  const handleStatementAmountChange = useCallback(
+    (lineKey: string, amount: number) => {
+      setLocalLines((prev) => {
+        const next = prev.map((ln, idx) => {
+          const key = `${ln.doc_type}-${ln.doc_id}-${idx}`;
+          if (key !== lineKey) return ln;
+          return patchLineStatementAmount(ln, amount);
+        });
+        const opening = Number(
+          localSummary?.opening_balance ?? data?.opening_balance ?? 0,
+        );
+        const recalc = recalcPartnerStatementLines(opening, next);
+        setLocalSummary((s) => ({
+          ...s,
+          debit_total: recalc.debitTotal,
+          credit_total: recalc.creditTotal,
+          closing_balance: recalc.closingBalance,
+        }));
+        return recalc.lines;
+      });
+      setLinesDirty(true);
+    },
+    [data?.opening_balance, localSummary?.opening_balance],
+  );
+
+  const lineKeyFn = useCallback(
+    (ln: PartnerStatementLine, idx: number) => `${ln.doc_type}-${ln.doc_id}-${idx}`,
+    [],
+  );
+
+  const lines = localLines;
+  const summary = localSummary || {
     opening_balance: data?.opening_balance,
     debit_total: data?.debit_total,
     credit_total: data?.credit_total,
@@ -87,41 +155,35 @@ const PartnerStatementDetailPage: React.FC = () => {
   }, [data, t]);
   const snap = data?.transaction_details?.partner_snapshot || {};
 
-  const lineColumns = useMemo(() => [
-    { title: t(`${PS}.col.date`), dataIndex: 'date', width: 110 },
-    {
-      title: t(`${PS}.col.docType`),
-      dataIndex: 'doc_type',
-      width: 120,
-      render: (v: string, record: PartnerStatementLine) => renderPartnerStatementDocType(v, record),
-    },
-    { title: t(`${PS}.col.docCode`), dataIndex: 'doc_code', width: 150 },
-    { title: t(`${PS}.col.summary`), dataIndex: 'summary', ellipsis: true },
-    {
-      title: t(`${PS}.col.debit`),
-      dataIndex: 'debit',
-      width: 110,
-      align: 'right' as const,
-      render: (v: unknown) => (v ? money(v as number) : '—'),
-    },
-    {
-      title: t(`${PS}.col.credit`),
-      dataIndex: 'credit',
-      width: 110,
-      align: 'right' as const,
-      render: (v: unknown) => (v ? money(v as number) : '—'),
-    },
-    {
-      title: balanceLabel,
-      dataIndex: 'balance',
-      width: 120,
-      align: 'right' as const,
-      render: (v: unknown) => money(v as number),
-    },
-  ], [t, balanceLabel]);
+  const lineColumns = usePartnerStatementLineColumns({
+    t,
+    balanceLabel,
+    editable: linesEditable,
+    onStatementAmountChange: handleStatementAmountChange,
+    lineKey: lineKeyFn,
+  });
+
+  const handleSaveLines = async () => {
+    if (!data) return;
+    setSavingLines(true);
+    try {
+      await partnerStatementService.updateLines(data.id, buildLineAmountPayload(localLines));
+      message.success(t(`${PS}.detail.linesSaved`));
+      setLinesDirty(false);
+      await load();
+    } catch (e: any) {
+      message.error(e?.message || t('common.saveFailed'));
+    } finally {
+      setSavingLines(false);
+    }
+  };
 
   const handleConfirm = () => {
     if (!data) return;
+    if (linesDirty) {
+      message.warning(t(`${PS}.detail.saveLinesBeforeConfirm`));
+      return;
+    }
     getAntdModal().confirm({
       title: t(`${PS}.detail.confirmTitle`),
       content: t(`${PS}.detail.confirmContent`, { code: data.statement_code }),
@@ -228,6 +290,11 @@ const PartnerStatementDetailPage: React.FC = () => {
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyItems: 'center', justifyContent: 'space-between', width: '100%' }}>
       <Space wrap size={8}>
         <Button onClick={() => navigate('/apps/kuaicaiwu/finance-management/partner-statements')}>{t('common.back')}</Button>
+        {linesEditable ? (
+          <Button loading={savingLines} disabled={!linesDirty} onClick={() => void handleSaveLines()}>
+            {t(`${PS}.detail.saveLines`)}
+          </Button>
+        ) : null}
         {data.status === 'Draft' || data.status === 'Disputed' ? (
           statementPerms.canUpdate ? (
           <Button type="primary" onClick={handleConfirm}>{t(`${PS}.detail.internalConfirm`)}</Button>
@@ -319,13 +386,21 @@ const PartnerStatementDetailPage: React.FC = () => {
           </Descriptions>
 
           <Alert type="info" showIcon message={t(`${PS}.dataSourceNote`)} style={{ marginBottom: 12 }} />
+          {linesEditable && linesDirty ? (
+            <Alert
+              type="warning"
+              showIcon
+              message={t(`${PS}.detail.unsavedLinesHint`)}
+              style={{ marginBottom: 12 }}
+            />
+          ) : null}
 
           <Table
             size="small"
-            rowKey={(r, i) => `${r.doc_code}-${i}`}
+            rowKey={(r, i) => `${r.doc_type}-${r.doc_id}-${i}`}
             pagination={false}
             dataSource={lines}
-            scroll={{ x: 900 }}
+            scroll={{ x: 1400 }}
             columns={lineColumns}
             expandable={partnerStatementExpandableProps(lineDetailCache, loadLineDetail)}
           />

@@ -84,6 +84,7 @@ import {
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 /**
  * 供应商管理列表页面组件
  */
@@ -997,6 +998,8 @@ const SuppliersPage: React.FC = () => {
     <>
       <ListPageTemplate>
       <UniTable<Supplier>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.suppliers')}
         columnPersistenceId="apps.master-data.pages.supply-chain.suppliers.list-v2"
         actionRef={actionRef}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}

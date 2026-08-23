@@ -18,6 +18,7 @@ import { warehouseApi } from '../../../../master-data/services/warehouse';
 import { resolveInventoryBatchLineListParams } from '../../../utils/warehouseListCore';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 interface InTransitBreakdown {
   purchase_quantity: number;
@@ -576,6 +577,8 @@ const BatchInventoryQuery: React.FC = () => {
       statCardsPreferenceKey="apps.kuaizhizao.pages.warehouse-management.batch-inventory-query"
     >
       <UniTable<BatchInventoryItem>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.batchInventoryQuery')}
         headerActions={tableHeaderActions}
         actionRef={actionRef}
         columns={alignProColumns(columns, WAREHOUSE_DOC_LIST_FIELD_RANK)}

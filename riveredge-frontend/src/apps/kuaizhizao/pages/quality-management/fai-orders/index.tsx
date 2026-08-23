@@ -34,6 +34,7 @@ import { faiOrderApi, FaiCharacteristic, FaiOrder } from '../../../services/fai-
 import { inspectionPlanApi } from '../../../services/production';
 import { renderFaiConclusionTag, renderFaiStatusTag } from '../components/qualityMeta';
 import { faiBalloonPath } from './paths';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const RESOURCE = 'kuaizhizao:quality-management-fai-orders';
 
@@ -689,6 +690,8 @@ const FaiOrdersPage: React.FC = () => {
     >
       <ListPageTemplate>
         <UniTable<FaiOrder>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.faiOrder)}
           headerTitle={t('app.kuaizhizao.menu.quality-management.fai-orders')}
           actionRef={actionRef}
           rowKey="id"

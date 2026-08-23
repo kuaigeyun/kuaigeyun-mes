@@ -5,36 +5,17 @@ export type RichDocHelpProfile = 'detailTable' | 'workOrder';
 
 const docPrefix = (docKey: string) => `help.document.${docKey}`;
 
-/** 第一批次及后续已编写富文本帮助的单据 */
-export const RICH_DOCUMENT_HELP_KEYS: DocumentListHelpKey[] = [
-  DOCUMENT_LIST_HELP_KEYS.salesOrder,
-  DOCUMENT_LIST_HELP_KEYS.purchaseOrder,
-  DOCUMENT_LIST_HELP_KEYS.workOrder,
-  DOCUMENT_LIST_HELP_KEYS.quotation,
-  DOCUMENT_LIST_HELP_KEYS.purchaseRequisition,
-  DOCUMENT_LIST_HELP_KEYS.shipmentNotice,
-  DOCUMENT_LIST_HELP_KEYS.receiptNotice,
-  DOCUMENT_LIST_HELP_KEYS.salesContract,
-  DOCUMENT_LIST_HELP_KEYS.salesReturn,
-  DOCUMENT_LIST_HELP_KEYS.salesForecast,
-  DOCUMENT_LIST_HELP_KEYS.purchaseInquiry,
-  DOCUMENT_LIST_HELP_KEYS.purchaseReturn,
-];
+/** 已编写富文本帮助的单据（含 batch1–3） */
+export const RICH_DOCUMENT_HELP_KEYS: DocumentListHelpKey[] = Object.values(
+  DOCUMENT_LIST_HELP_KEYS,
+) as DocumentListHelpKey[];
 
-export const RICH_DOC_HELP_PROFILES: Record<DocumentListHelpKey, RichDocHelpProfile> = {
-  [DOCUMENT_LIST_HELP_KEYS.salesOrder]: 'detailTable',
-  [DOCUMENT_LIST_HELP_KEYS.purchaseOrder]: 'detailTable',
-  [DOCUMENT_LIST_HELP_KEYS.quotation]: 'detailTable',
-  [DOCUMENT_LIST_HELP_KEYS.purchaseRequisition]: 'detailTable',
-  [DOCUMENT_LIST_HELP_KEYS.shipmentNotice]: 'detailTable',
-  [DOCUMENT_LIST_HELP_KEYS.receiptNotice]: 'detailTable',
-  [DOCUMENT_LIST_HELP_KEYS.salesContract]: 'detailTable',
-  [DOCUMENT_LIST_HELP_KEYS.salesForecast]: 'detailTable',
-  [DOCUMENT_LIST_HELP_KEYS.salesReturn]: 'detailTable',
-  [DOCUMENT_LIST_HELP_KEYS.purchaseInquiry]: 'detailTable',
-  [DOCUMENT_LIST_HELP_KEYS.purchaseReturn]: 'detailTable',
-  [DOCUMENT_LIST_HELP_KEYS.workOrder]: 'workOrder',
-};
+export const RICH_DOC_HELP_PROFILES = Object.fromEntries(
+  (Object.values(DOCUMENT_LIST_HELP_KEYS) as DocumentListHelpKey[]).map((key) => [
+    key,
+    key === DOCUMENT_LIST_HELP_KEYS.workOrder ? ('workOrder' as const) : ('detailTable' as const),
+  ]),
+) as Record<DocumentListHelpKey, RichDocHelpProfile>;
 
 export function isRichDocumentHelpKey(docKey: string): docKey is DocumentListHelpKey {
   return (RICH_DOCUMENT_HELP_KEYS as string[]).includes(docKey);

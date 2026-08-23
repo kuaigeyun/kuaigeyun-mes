@@ -160,6 +160,7 @@ import {
 } from '../../../../../hooks/useDocumentCapabilities'
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut'
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut'
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const DEMAND_COMPUTATION_RESOURCE = 'plan-management-demand-computation'
 const MATERIAL_RESOURCE = 'master-data:material'
@@ -2533,6 +2534,8 @@ const DemandComputationPage: React.FC = () => {
       <>
       <UniTable<DemandComputation>
         columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-computation-source-label-v1"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.demandComputation)}
         actionRef={actionRef}
         columns={columns}
         showAdvancedSearch={true}

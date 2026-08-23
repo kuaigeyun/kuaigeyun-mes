@@ -1,1 +1,0 @@
-import{R as o}from"./routes-yxoaDZG1.js";function c(i={}){const t=new URLSearchParams,n=i.id!=null?String(i.id).trim():"",u=i.uuid!=null?String(i.uuid).trim():"";n&&t.set("id",n),u&&t.set("uuid",u);const r=t.toString();return r?`${o.LOGISTICS_TRACKING}?${r}`:o.LOGISTICS_TRACKING}export{c as b};

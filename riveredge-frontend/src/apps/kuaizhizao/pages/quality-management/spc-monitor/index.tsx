@@ -16,6 +16,7 @@ import {
 } from '../../../utils/qualityImprovementListCore';
 import SpcImrChart from './SpcImrChart';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const SPC_RESOURCE = 'kuaizhizao:quality-management-spc-monitor';
 
@@ -162,6 +163,8 @@ const SPCMonitorPage: React.FC = () => {
                 }}
               >
                 <UniTable<SPCSample>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.spcMonitor')}
                 headerTitle={t('app.kuaizhizao.quality.spc.pageTitle')}
                 actionRef={actionRef}
                 rowKey="id"

@@ -59,6 +59,7 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { ROUTES } from '../../../constants/routes';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const P = 'app.kuaizhizao.equipmentFault';
 const FAULT_RESOURCE = 'kuaizhizao:equipment-fault';
 const MAINT_RESOURCE = 'kuaizhizao:maintenance-plan';
@@ -764,6 +765,8 @@ const EquipmentFaultsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<EquipmentFault>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.equipmentFaults)}
           headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-faults-equip-rank-v1"
           actionRef={actionRef}

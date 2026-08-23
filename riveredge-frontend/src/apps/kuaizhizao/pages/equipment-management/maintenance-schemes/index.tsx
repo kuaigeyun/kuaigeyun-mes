@@ -37,6 +37,7 @@ import {
   renderIsActiveTag,
 } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaizhizao.equipmentOps.maintenanceScheme';
 const RESOURCE = 'kuaizhizao:equipment-maintenance-scheme';
@@ -280,6 +281,8 @@ const MaintenanceSchemesPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MaintenanceScheme>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.maintenanceSchemes)}
           headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-schemes"
           actionRef={actionRef}
