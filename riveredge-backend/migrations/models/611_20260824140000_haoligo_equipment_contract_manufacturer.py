@@ -131,10 +131,10 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
         JOIN "haoligo_manufacturer" m
           ON m."tenant_id" = fs."tenant_id"
          AND m."deleted_at" IS NULL
-         AND m."code" = 'EQP-S-' || p."id"::text
         WHERE p."supplier_id" = fs."id"
           AND p."deleted_at" IS NULL
-          AND p."manufacturer_id" IS NULL;
+          AND p."manufacturer_id" IS NULL
+          AND m."code" = 'EQP-S-' || p."id"::text;
 
         INSERT INTO "haoligo_manufacturer" ("uuid", "tenant_id", "created_at", "updated_at", "code", "name")
         SELECT
