@@ -7,17 +7,6 @@ RUN_IN_TRANSACTION = True
 
 async def upgrade(db: BaseDBAsyncClient) -> str:
     return """
-        DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'haoligo_finance_equipment_contract'
-                  AND column_name = 'manufacturer_id'
-            ) THEN
-                RETURN;
-            END IF;
-        END $$;
-
         INSERT INTO "haoligo_manufacturer" ("uuid", "tenant_id", "created_at", "updated_at", "code", "name")
         SELECT
             gen_random_uuid()::text,
